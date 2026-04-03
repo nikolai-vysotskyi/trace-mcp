@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const DDL = `
 -- ============================================================
@@ -137,6 +137,24 @@ CREATE TABLE IF NOT EXISTS rn_screens (
 );
 
 -- ============================================================
+-- ENV VARS (keys only — values are never stored)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS env_vars (
+    id              INTEGER PRIMARY KEY,
+    file_id         INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    key             TEXT NOT NULL,
+    value_type      TEXT NOT NULL,
+    value_format    TEXT,
+    comment         TEXT,
+    quoted          INTEGER NOT NULL DEFAULT 0,
+    line            INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_env_vars_file ON env_vars(file_id);
+CREATE INDEX IF NOT EXISTS idx_env_vars_key  ON env_vars(key);
+
+-- ============================================================
 -- UNIFIED EDGES
 -- ============================================================
 
@@ -231,11 +249,19 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 const SEED_NODE_TYPES = ['symbol', 'file', 'route', 'component', 'migration', 'orm_model', 'rn_screen'];
 
 const SEED_EDGE_TYPES = [
+  // Core edges (added in v2 migration, must also be in seed for fresh DBs)
+  { name: 'calls', category: 'core', description: 'Direct function/method call' },
+  { name: 'references', category: 'core', description: 'Symbol reference (read/write)' },
+  { name: 'unresolved', category: 'core', description: 'Phantom edge for unresolved targets' },
+  { name: 'test_covers', category: 'core', description: 'Test file covers a symbol or file' },
+  { name: 'esm_imports', category: 'core', description: 'ESM import (file→file)' },
+  { name: 'graphql_resolves', category: 'graphql', description: 'Resolver implements a GraphQL field' },
+  { name: 'graphql_references_type', category: 'graphql', description: 'Resolver/field references a GraphQL type' },
+  // PHP language edges
   { name: 'imports', category: 'php', description: 'PHP use/import statement' },
   { name: 'extends', category: 'php', description: 'Class/interface extends' },
   { name: 'implements', category: 'php', description: 'Class implements interface' },
   { name: 'uses_trait', category: 'php', description: 'Class uses trait' },
-  { name: 'unresolved', category: 'core', description: 'Phantom edge for unresolved targets' },
   // TypeScript language edges
   { name: 'ts_extends', category: 'typescript', description: 'TypeScript class/interface extends' },
   { name: 'ts_implements', category: 'typescript', description: 'TypeScript class implements interface' },
@@ -460,6 +486,23 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
         ttl_days    INTEGER DEFAULT 90
       );
       CREATE INDEX IF NOT EXISTS idx_inference_cache_model ON inference_cache(model);
+    `);
+  },
+  5: (db) => {
+    // v5: env_vars table — stores .env keys with type metadata, never stores values
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS env_vars (
+          id              INTEGER PRIMARY KEY,
+          file_id         INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+          key             TEXT NOT NULL,
+          value_type      TEXT NOT NULL,
+          value_format    TEXT,
+          comment         TEXT,
+          quoted          INTEGER NOT NULL DEFAULT 0,
+          line            INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_env_vars_file ON env_vars(file_id);
+      CREATE INDEX IF NOT EXISTS idx_env_vars_key  ON env_vars(key);
     `);
   },
 };

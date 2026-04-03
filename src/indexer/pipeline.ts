@@ -59,7 +59,7 @@ export class IndexingPipeline {
   deleteFiles(filePaths: string[]): void {
     for (const fp of filePaths) {
       const relPath = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
-      const file = this.store.getFileByPath(relPath);
+      const file = this.store.getFile(relPath);
       if (file) {
         this.store.deleteFile(file.id);
         logger.info({ file: relPath }, 'Deleted file from index');
@@ -151,6 +151,16 @@ export class IndexingPipeline {
     if (pathCheck.isErr()) {
       logger.warn({ file: relPath }, 'Path traversal blocked');
       return 'error';
+    }
+
+    // Reject symlinks to prevent escaping the project root
+    try {
+      if (fs.lstatSync(absPath).isSymbolicLink()) {
+        logger.warn({ file: relPath }, 'Symlink skipped');
+        return 'error';
+      }
+    } catch {
+      // lstat failed — file may not exist; readFileSync below will catch it
     }
 
     let content: Buffer;
@@ -444,7 +454,8 @@ export class IndexingPipeline {
     let created = 0;
 
     for (const sym of symbolsWithHeritage) {
-      const meta = sym.metadata ? (JSON.parse(sym.metadata) as Record<string, unknown>) : {};
+      let meta: Record<string, unknown> = {};
+      try { if (sym.metadata) meta = JSON.parse(sym.metadata) as Record<string, unknown>; } catch { continue; }
       const sourceNodeId = this.store.getNodeId('symbol', sym.id);
       if (sourceNodeId == null) continue;
 
@@ -605,72 +616,119 @@ export class IndexingPipeline {
   private storeRawEdges(edges: RawEdge[]): void {
     if (edges.length === 0) return;
 
-    // Pre-load symbolIdStr → nodeId for all symbol-based edge endpoints in one batch query,
-    // avoiding N×2 individual SELECT calls inside the transaction.
+    // ── Pre-load all caches to eliminate per-edge SELECTs ──
+
+    // 1. symbolIdStr → nodeId
     const symbolIdStrs = new Set<string>();
     for (const edge of edges) {
       if (edge.sourceSymbolId) symbolIdStrs.add(edge.sourceSymbolId);
       if (edge.targetSymbolId) symbolIdStrs.add(edge.targetSymbolId);
     }
 
-    const symbolNodeCache = new Map<string, number>(); // symbolIdStr → nodeId
+    const symbolNodeCache = new Map<string, number>();
     if (symbolIdStrs.size > 0) {
-      const placeholders = Array.from(symbolIdStrs).map(() => '?').join(',');
+      const arr = Array.from(symbolIdStrs);
+      const placeholders = arr.map(() => '?').join(',');
       const rows = this.store.db.prepare(
         `SELECT s.symbol_id, n.id AS node_id
            FROM symbols s
            JOIN nodes n ON n.node_type = 'symbol' AND n.ref_id = s.id
           WHERE s.symbol_id IN (${placeholders})`,
-      ).all(...Array.from(symbolIdStrs)) as Array<{ symbol_id: string; node_id: number }>;
+      ).all(...arr) as Array<{ symbol_id: string; node_id: number }>;
       for (const row of rows) {
         symbolNodeCache.set(row.symbol_id, row.node_id);
       }
     }
 
-    // Batch edge inserts in a single transaction for performance
+    // 2. (nodeType, refId) → nodeId — batch by nodeType
+    const refIdsByType = new Map<string, Set<number>>();
+    for (const edge of edges) {
+      if (edge.sourceNodeType && edge.sourceRefId != null) {
+        let s = refIdsByType.get(edge.sourceNodeType);
+        if (!s) { s = new Set(); refIdsByType.set(edge.sourceNodeType, s); }
+        s.add(edge.sourceRefId);
+      }
+      if (edge.targetNodeType && edge.targetRefId != null) {
+        let s = refIdsByType.get(edge.targetNodeType);
+        if (!s) { s = new Set(); refIdsByType.set(edge.targetNodeType, s); }
+        s.add(edge.targetRefId);
+      }
+    }
+    const typeRefCache = new Map<string, number>(); // "type:refId" → nodeId
+    for (const [nodeType, refIds] of refIdsByType) {
+      const batch = this.store.getNodeIdsBatch(nodeType, Array.from(refIds));
+      for (const [refId, nodeId] of batch) {
+        typeRefCache.set(`${nodeType}:${refId}`, nodeId);
+      }
+    }
+
+    // 3. edgeTypeName → edgeTypeId (avoids per-edge SELECT in insertEdge)
+    const edgeTypeNames = new Set<string>();
+    for (const edge of edges) edgeTypeNames.add(edge.edgeType);
+    const edgeTypeCache = new Map<string, number>();
+    for (const name of edgeTypeNames) {
+      const row = this.store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get(name) as { id: number } | undefined;
+      if (row) edgeTypeCache.set(name, row.id);
+    }
+
+    // ── Batch all inserts in a single transaction with a prepared statement ──
+    const insertStmt = this.store.db.prepare(
+      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+
     const insertBatch = this.store.db.transaction(() => {
       for (const edge of edges) {
-        const sourceNodeId = this.resolveNodeId(edge, symbolNodeCache);
+        const sourceNodeId = this.resolveNodeId(edge, symbolNodeCache, typeRefCache);
         if (sourceNodeId == null) continue;
         // For source-only edges (e.g. livewire_dispatches, livewire_listens) where
         // there is no target node, use the source as target to preserve the edge + metadata.
-        const targetNodeId = this.resolveTargetNodeId(edge, symbolNodeCache) ?? sourceNodeId;
+        const targetNodeId = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache) ?? sourceNodeId;
+
+        const edgeTypeId = edgeTypeCache.get(edge.edgeType);
+        if (edgeTypeId == null) continue;
 
         const isCrossWs = this.isEdgeCrossWorkspace(sourceNodeId, targetNodeId);
 
-        this.store.insertEdge(
+        insertStmt.run(
           sourceNodeId,
           targetNodeId,
-          edge.edgeType,
-          edge.resolved ?? true,
-          edge.metadata,
-          isCrossWs,
+          edgeTypeId,
+          (edge.resolved ?? true) ? 1 : 0,
+          edge.metadata ? JSON.stringify(edge.metadata) : null,
+          isCrossWs ? 1 : 0,
         );
       }
     });
     insertBatch();
   }
 
-  private resolveNodeId(edge: RawEdge, symbolNodeCache?: Map<string, number>): number | undefined {
+  private resolveNodeId(
+    edge: RawEdge,
+    symbolNodeCache: Map<string, number>,
+    typeRefCache: Map<string, number>,
+  ): number | undefined {
     if (edge.sourceNodeType && edge.sourceRefId != null) {
-      return this.store.getNodeId(edge.sourceNodeType, edge.sourceRefId);
+      return typeRefCache.get(`${edge.sourceNodeType}:${edge.sourceRefId}`)
+        ?? this.store.getNodeId(edge.sourceNodeType, edge.sourceRefId);
     }
     if (edge.sourceSymbolId) {
-      if (symbolNodeCache) return symbolNodeCache.get(edge.sourceSymbolId);
-      const sym = this.store.getSymbolBySymbolId(edge.sourceSymbolId);
-      if (sym) return this.store.getNodeId('symbol', sym.id);
+      return symbolNodeCache.get(edge.sourceSymbolId);
     }
     return undefined;
   }
 
-  private resolveTargetNodeId(edge: RawEdge, symbolNodeCache?: Map<string, number>): number | undefined {
+  private resolveTargetNodeId(
+    edge: RawEdge,
+    symbolNodeCache: Map<string, number>,
+    typeRefCache: Map<string, number>,
+  ): number | undefined {
     if (edge.targetNodeType && edge.targetRefId != null) {
-      return this.store.getNodeId(edge.targetNodeType, edge.targetRefId);
+      return typeRefCache.get(`${edge.targetNodeType}:${edge.targetRefId}`)
+        ?? this.store.getNodeId(edge.targetNodeType, edge.targetRefId);
     }
     if (edge.targetSymbolId) {
-      if (symbolNodeCache) return symbolNodeCache.get(edge.targetSymbolId);
-      const sym = this.store.getSymbolBySymbolId(edge.targetSymbolId);
-      if (sym) return this.store.getNodeId('symbol', sym.id);
+      return symbolNodeCache.get(edge.targetSymbolId);
     }
     return undefined;
   }
@@ -849,6 +907,71 @@ export class IndexingPipeline {
       onlyFiles: true,
     });
     return entries;
+  }
+
+  // ─── .env file indexing ───────────────────────────────────────────
+
+  private static readonly ENV_GLOB = ['.env', '.env.*', '.env.local', '**/.env', '**/.env.*'];
+
+  private async indexEnvFiles(force: boolean): Promise<void> {
+    const envPaths = await fg(IndexingPipeline.ENV_GLOB, {
+      cwd: this.rootPath,
+      ignore: this.config.exclude,
+      dot: true,
+      absolute: false,
+      onlyFiles: true,
+    });
+
+    if (envPaths.length === 0) return;
+
+    logger.info({ count: envPaths.length }, 'Indexing .env files (keys only)');
+
+    for (const relPath of envPaths) {
+      const absPath = path.resolve(this.rootPath, relPath);
+
+      // Defence-in-depth
+      const pathCheck = validatePath(relPath, this.rootPath);
+      if (pathCheck.isErr()) continue;
+
+      let content: string;
+      try {
+        content = fs.readFileSync(absPath, 'utf-8');
+      } catch {
+        logger.warn({ file: relPath }, 'Cannot read .env file');
+        continue;
+      }
+
+      const hash = hashContent(Buffer.from(content));
+      const existing = this.store.getFile(relPath);
+
+      if (!force && existing && existing.content_hash === hash) continue;
+
+      const entries = parseEnvFile(content);
+
+      // Upsert file record (language = 'env', framework_role = 'config')
+      let fileId: number;
+      if (existing) {
+        fileId = existing.id;
+        this.store.deleteEnvVarsByFile(fileId);
+        this.store.updateFileHash(fileId, hash, content.length);
+      } else {
+        fileId = this.store.insertFile(relPath, 'env', hash, content.length);
+        this.store.updateFileStatus(fileId, 'ok', 'config');
+      }
+
+      for (const entry of entries) {
+        this.store.insertEnvVar(fileId, {
+          key: entry.key,
+          valueType: entry.valueType,
+          valueFormat: entry.valueFormat,
+          comment: entry.comment,
+          quoted: entry.quoted,
+          line: entry.line,
+        });
+      }
+
+      logger.debug({ file: relPath, keys: entries.length }, '.env file indexed');
+    }
   }
 
   private detectLanguage(filePath: string): string {

@@ -633,6 +633,30 @@ export class Store {
     return map;
   }
 
+  /**
+   * Fetch all edges where any of the given node IDs appear as source or target.
+   * Returns edges annotated with edge_type_name and the pivot node id (the one from the input set).
+   */
+  getEdgesForNodesBatch(
+    nodeIds: number[],
+  ): Array<EdgeRow & { edge_type_name: string; pivot_node_id: number }> {
+    if (nodeIds.length === 0) return [];
+    const placeholders = nodeIds.map(() => '?').join(',');
+    const rows = this.db.prepare(
+      `SELECT e.*, et.name AS edge_type_name
+         FROM edges e
+         JOIN edge_types et ON e.edge_type_id = et.id
+        WHERE e.source_node_id IN (${placeholders})
+           OR e.target_node_id IN (${placeholders})`,
+    ).all(...nodeIds, ...nodeIds) as (EdgeRow & { edge_type_name: string })[];
+
+    const nodeSet = new Set(nodeIds);
+    return rows.map((row) => ({
+      ...row,
+      pivot_node_id: nodeSet.has(row.source_node_id) ? row.source_node_id : row.target_node_id,
+    }));
+  }
+
   /** Find a class/interface symbol by name with optional framework_role filter. Single query with JOIN. */
   findSymbolByRole(name: string, frameworkRole?: string): SymbolRow | undefined {
     if (frameworkRole) {
@@ -647,6 +671,90 @@ export class Store {
     return this.db.prepare(
       'SELECT * FROM symbols WHERE name = ? AND kind = ? LIMIT 1',
     ).get(name, 'class') as SymbolRow | undefined;
+  }
+
+  // --- Env vars ---
+
+  insertEnvVar(fileId: number, entry: {
+    key: string;
+    valueType: string;
+    valueFormat: string | null;
+    comment: string | null;
+    quoted: boolean;
+    line: number;
+  }): number {
+    return (this.db.prepare(
+      `INSERT INTO env_vars (file_id, key, value_type, value_format, comment, quoted, line)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      fileId, entry.key, entry.valueType, entry.valueFormat,
+      entry.comment, entry.quoted ? 1 : 0, entry.line,
+    ) as { lastInsertRowid: number }).lastInsertRowid as number;
+  }
+
+  deleteEnvVarsByFile(fileId: number): void {
+    this.db.prepare('DELETE FROM env_vars WHERE file_id = ?').run(fileId);
+  }
+
+  getEnvVarsByFile(fileId: number): EnvVarRow[] {
+    return this.db.prepare(
+      'SELECT * FROM env_vars WHERE file_id = ? ORDER BY line',
+    ).all(fileId) as EnvVarRow[];
+  }
+
+  getAllEnvVars(): (EnvVarRow & { file_path: string })[] {
+    return this.db.prepare(
+      `SELECT ev.*, f.path as file_path
+       FROM env_vars ev
+       JOIN files f ON ev.file_id = f.id
+       ORDER BY f.path, ev.line`,
+    ).all() as (EnvVarRow & { file_path: string })[];
+  }
+
+  searchEnvVars(pattern: string): (EnvVarRow & { file_path: string })[] {
+    return this.db.prepare(
+      `SELECT ev.*, f.path as file_path
+       FROM env_vars ev
+       JOIN files f ON ev.file_id = f.id
+       WHERE ev.key LIKE ?
+       ORDER BY f.path, ev.line`,
+    ).all(`%${pattern}%`) as (EnvVarRow & { file_path: string })[];
+  }
+
+  // --- AI Summarization ---
+
+  updateSymbolSummary(symbolId: number, summary: string): void {
+    this.db.prepare('UPDATE symbols SET summary = ? WHERE id = ?').run(summary, symbolId);
+  }
+
+  getUnsummarizedSymbols(kinds: string[], limit: number): {
+    id: number;
+    name: string;
+    fqn: string | null;
+    kind: string;
+    signature: string | null;
+    file_path: string;
+    byte_start: number;
+    byte_end: number;
+  }[] {
+    if (kinds.length === 0) return [];
+    const placeholders = kinds.map(() => '?').join(',');
+    return this.db.prepare(`
+      SELECT s.id, s.name, s.fqn, s.kind, s.signature, f.path as file_path, s.byte_start, s.byte_end
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      WHERE s.summary IS NULL AND s.kind IN (${placeholders})
+      LIMIT ?
+    `).all(...kinds, limit) as {
+      id: number;
+      name: string;
+      fqn: string | null;
+      kind: string;
+      signature: string | null;
+      file_path: string;
+      byte_start: number;
+      byte_end: number;
+    }[];
   }
 
   // --- Stats ---
@@ -783,6 +891,17 @@ export interface RnScreenRow {
   options: string | null;
   deep_link: string | null;
   metadata: string | null;
+}
+
+export interface EnvVarRow {
+  id: number;
+  file_id: number;
+  key: string;
+  value_type: string;
+  value_format: string | null;
+  comment: string | null;
+  quoted: number;
+  line: number | null;
 }
 
 export interface SymbolWithFilePath extends SymbolRow {

@@ -5,7 +5,8 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports } from '../../src/tools/introspect.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, selfAudit } from '../../src/tools/introspect.js';
+import { search } from '../../src/tools/navigation.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/ts-heritage');
@@ -323,10 +324,11 @@ describe('getUntestedExports', () => {
     expect(Array.isArray(result.untested)).toBe(true);
   });
 
-  it('marks exports as untested when no test file matches', () => {
-    // Our fixture has no test files, so all exports should be untested
+  it('detects some exports as untested (not all files have test coverage)', () => {
+    // Fixture has classes.test.ts (covers classes.ts) but no tests for interfaces.ts/utils.ts
     const result = getUntestedExports(store);
-    expect(result.total_untested).toBe(result.total_exports);
+    expect(result.total_untested).toBeGreaterThan(0);
+    expect(result.total_untested).toBeLessThanOrEqual(result.total_exports);
   });
 
   it('each untested item has required fields', () => {
@@ -337,5 +339,87 @@ describe('getUntestedExports', () => {
       expect(typeof item.kind).toBe('string');
       expect(typeof item.file).toBe('string');
     }
+  });
+});
+
+// ─── test_covers edges ──────────────────────────────────────
+
+describe('test_covers edges', () => {
+  it('creates test_covers edges from test file imports', () => {
+    const testCoversEdges = store.getEdgesByType('test_covers');
+    expect(testCoversEdges.length).toBeGreaterThan(0);
+  });
+
+  it('test_covers edge points from test file to source file', () => {
+    const edges = store.getEdgesByType('test_covers');
+    for (const edge of edges) {
+      const sourceRef = store.getNodeRef(edge.source_node_id);
+      const targetRef = store.getNodeRef(edge.target_node_id);
+      expect(sourceRef?.nodeType).toBe('file');
+      expect(targetRef?.nodeType).toBe('file');
+
+      // Source should be a test file
+      if (sourceRef) {
+        const f = store.getFileById(sourceRef.refId);
+        expect(f?.path).toMatch(/\.(test|spec)\./);
+      }
+    }
+  });
+});
+
+// ─── search with heritage filters ───────────────────────────
+
+describe('search with heritage filters', () => {
+  it('filters by implements', async () => {
+    const result = await search(store, 'class', { implements: 'Serializable' });
+    const names = result.items.map((i) => i.symbol.name);
+    expect(names).toContain('JsonSerializer');
+    // DatabaseRecord does NOT implement Serializable directly
+    expect(names).not.toContain('DatabaseRecord');
+  });
+
+  it('filters by extends', async () => {
+    const result = await search(store, 'class', { extends: 'JsonSerializer' });
+    const names = result.items.map((i) => i.symbol.name);
+    expect(names).toContain('DatabaseRecord');
+    expect(names).not.toContain('JsonSerializer');
+  });
+
+  it('returns empty when no match for heritage filter', async () => {
+    const result = await search(store, 'class', { implements: 'NonExistentInterface' });
+    expect(result.items).toHaveLength(0);
+  });
+});
+
+// ─── self_audit ─────────────────────────────────────────────
+
+describe('selfAudit', () => {
+  it('returns comprehensive audit result', () => {
+    const result = selfAudit(store);
+    expect(result.summary.total_files).toBeGreaterThan(0);
+    expect(result.summary.total_symbols).toBeGreaterThan(0);
+    expect(result.summary.total_exports).toBeGreaterThan(0);
+    expect(typeof result.summary.dead_exports).toBe('number');
+    expect(typeof result.summary.untested_exports).toBe('number');
+    expect(typeof result.summary.import_edges).toBe('number');
+    expect(typeof result.summary.heritage_edges).toBe('number');
+    expect(typeof result.summary.test_covers_edges).toBe('number');
+  });
+
+  it('includes dead exports top 10', () => {
+    const result = selfAudit(store);
+    expect(Array.isArray(result.dead_exports_top10)).toBe(true);
+    expect(result.dead_exports_top10.length).toBeLessThanOrEqual(10);
+  });
+
+  it('includes dependency hotspots', () => {
+    const result = selfAudit(store);
+    expect(Array.isArray(result.most_imported_files)).toBe(true);
+    expect(Array.isArray(result.most_dependent_files)).toBe(true);
+  });
+
+  it('includes test_covers_edges count > 0 (fixture has a test file)', () => {
+    const result = selfAudit(store);
+    expect(result.summary.test_covers_edges).toBeGreaterThan(0);
   });
 });

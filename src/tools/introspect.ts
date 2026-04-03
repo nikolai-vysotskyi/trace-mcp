@@ -11,6 +11,12 @@
 import type { Store, SymbolWithFilePath, SymbolRow } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 
+/** Safely parse JSON metadata — returns empty object on malformed input. */
+function safeParseMeta(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
+}
+
 // ---------------------------------------------------------------------------
 // get_implementations
 // ---------------------------------------------------------------------------
@@ -40,7 +46,7 @@ export function getImplementations(
   const rows = store.findImplementors(name);
 
   const implementors: ImplementorItem[] = rows.map((row) => {
-    const meta = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : {};
+    const meta = safeParseMeta(row.metadata);
     const imp = meta['implements'];
     const ext = meta['extends'];
 
@@ -100,7 +106,7 @@ export function getApiSurface(
   // Group by file
   const byFile = new Map<string, ApiSurfaceSymbol[]>();
   for (const row of rows) {
-    const meta = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : {};
+    const meta = safeParseMeta(row.metadata);
     const sym: ApiSurfaceSymbol = {
       symbol_id: row.symbol_id,
       name: row.name,
@@ -311,7 +317,7 @@ function walkDescendants(
   const implementors = store.findImplementors(name);
 
   for (const row of implementors) {
-    const meta = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : {};
+    const meta = safeParseMeta(row.metadata);
     const impl = meta['implements'];
     const ext = meta['extends'];
 
@@ -564,4 +570,126 @@ function toKebab(name: string): string {
     .replace(/([a-z])([A-Z])/g, '$1-$2')
     .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
     .toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
+// self_audit
+// ---------------------------------------------------------------------------
+
+export interface SelfAuditResult {
+  summary: {
+    total_files: number;
+    total_symbols: number;
+    total_edges: number;
+    total_exports: number;
+    dead_exports: number;
+    untested_exports: number;
+    test_files: number;
+    import_edges: number;
+    heritage_edges: number;
+    test_covers_edges: number;
+  };
+  dead_exports_top10: DeadExportItem[];
+  untested_top10: UntestedExportItem[];
+  /** Files with most incoming import edges (most depended-on) */
+  most_imported_files: { file: string; imported_by_count: number }[];
+  /** Files with most outgoing import edges (most dependencies) */
+  most_dependent_files: { file: string; imports_count: number }[];
+  /** Interfaces/classes with the most implementors */
+  widest_interfaces: { name: string; implementor_count: number }[];
+}
+
+/**
+ * One-shot project health audit — combines dead exports, untested exports,
+ * dependency hotspots, and heritage metrics into a single report.
+ */
+export function selfAudit(store: Store): SelfAuditResult {
+  const stats = store.getStats();
+
+  // Dead exports
+  const deadResult = getDeadExports(store);
+
+  // Untested exports
+  const untestedResult = getUntestedExports(store);
+
+  // Edge type counts
+  const importEdges = store.getEdgesByType('imports');
+  const heritageExtends = store.getEdgesByType('ts_extends');
+  const heritageImplements = store.getEdgesByType('ts_implements');
+  const testCovers = store.getEdgesByType('test_covers');
+
+  // Test files count
+  const allFiles = store.getAllFiles();
+  const testFileCount = allFiles.filter((f) =>
+    /\.(test|spec)\.[jt]sx?$|__tests__\//.test(f.path),
+  ).length;
+
+  // Most imported files (incoming import edges per file)
+  const importedByCount = new Map<number, number>();
+  for (const edge of importEdges) {
+    importedByCount.set(
+      edge.target_node_id,
+      (importedByCount.get(edge.target_node_id) ?? 0) + 1,
+    );
+  }
+  const mostImported = [...importedByCount.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([nodeId, count]) => {
+      const ref = store.getNodeRef(nodeId);
+      const file = ref?.nodeType === 'file' ? store.getFileById(ref.refId) : undefined;
+      return { file: file?.path ?? `[node:${nodeId}]`, imported_by_count: count };
+    });
+
+  // Most dependent files (outgoing import edges per file)
+  const importsCount = new Map<number, number>();
+  for (const edge of importEdges) {
+    importsCount.set(
+      edge.source_node_id,
+      (importsCount.get(edge.source_node_id) ?? 0) + 1,
+    );
+  }
+  const mostDependent = [...importsCount.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([nodeId, count]) => {
+      const ref = store.getNodeRef(nodeId);
+      const file = ref?.nodeType === 'file' ? store.getFileById(ref.refId) : undefined;
+      return { file: file?.path ?? `[node:${nodeId}]`, imports_count: count };
+    });
+
+  // Widest interfaces (most implementors via heritage metadata)
+  const allClassesAndInterfaces = store.db.prepare(
+    "SELECT name, kind FROM symbols WHERE kind IN ('class', 'interface') AND json_extract(metadata, '$.exported') = 1",
+  ).all() as { name: string; kind: string }[];
+
+  const interfaceCounts: { name: string; implementor_count: number }[] = [];
+  for (const sym of allClassesAndInterfaces) {
+    if (sym.kind !== 'interface') continue;
+    const impls = store.findImplementors(sym.name);
+    if (impls.length > 0) {
+      interfaceCounts.push({ name: sym.name, implementor_count: impls.length });
+    }
+  }
+  interfaceCounts.sort((a, b) => b.implementor_count - a.implementor_count);
+
+  return {
+    summary: {
+      total_files: stats.totalFiles,
+      total_symbols: stats.totalSymbols,
+      total_edges: stats.totalEdges,
+      total_exports: deadResult.total_exports,
+      dead_exports: deadResult.total_dead,
+      untested_exports: untestedResult.total_untested,
+      test_files: testFileCount,
+      import_edges: importEdges.length,
+      heritage_edges: heritageExtends.length + heritageImplements.length,
+      test_covers_edges: testCovers.length,
+    },
+    dead_exports_top10: deadResult.dead_exports.slice(0, 10),
+    untested_top10: untestedResult.untested.slice(0, 10),
+    most_imported_files: mostImported,
+    most_dependent_files: mostDependent,
+    widest_interfaces: interfaceCounts.slice(0, 10),
+  };
 }

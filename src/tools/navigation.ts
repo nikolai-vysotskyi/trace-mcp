@@ -7,7 +7,7 @@ import { computePageRank } from '../scoring/pagerank.js';
 import { notFound, type TraceMcpResult } from '../errors.js';
 import { ok, err } from 'neverthrow';
 import { hybridSearch as aiHybridSearch } from '../ai/search.js';
-import type { VectorStore, EmbeddingService } from '../ai/interfaces.js';
+import type { VectorStore, EmbeddingService, RerankerService } from '../ai/interfaces.js';
 
 // ─── get_symbol ─────────────────────────────────────────────
 
@@ -65,6 +65,10 @@ export interface SearchFilters {
   kind?: string;
   language?: string;
   filePattern?: string;
+  /** Filter to symbols that implement this interface (metadata.implements contains value) */
+  implements?: string;
+  /** Filter to symbols that extend this class/interface (metadata.extends contains value) */
+  extends?: string;
 }
 
 export interface SearchResultItem {
@@ -89,6 +93,7 @@ export interface SearchResultItemProjected {
 export interface SearchAIOptions {
   vectorStore?: VectorStore | null;
   embeddingService?: EmbeddingService | null;
+  reranker?: RerankerService | null;
 }
 
 export interface SearchResult {
@@ -119,6 +124,7 @@ export async function search(
       aiOptions!.vectorStore!,
       aiOptions!.embeddingService!,
       fetchLimit,
+      aiOptions?.reranker,
     );
     if (hybridResults.length === 0) return { items: [], total: 0, search_mode: 'hybrid_ai' };
     // Normalize RRF scores (already positive, descending)
@@ -168,9 +174,30 @@ export async function search(
   const symIds = allSymbols.map((s) => s.id);
   const nodeMap = store.getNodeIdsBatch('symbol', symIds);
 
+  // Heritage post-filter: implements / extends (checks symbol metadata)
+  const heritageFilter = filters?.implements || filters?.extends;
+
   for (const candidate of candidates) {
     const symbol = symbolByIdStr.get(candidate.symbolIdStr);
     if (!symbol) continue;
+
+    if (heritageFilter && symbol.metadata) {
+      const meta = typeof symbol.metadata === 'string'
+        ? JSON.parse(symbol.metadata) as Record<string, unknown>
+        : symbol.metadata as Record<string, unknown>;
+
+      if (filters?.implements) {
+        const impl = meta['implements'];
+        if (!Array.isArray(impl) || !(impl as string[]).includes(filters.implements)) continue;
+      }
+      if (filters?.extends) {
+        const ext = meta['extends'];
+        const extArr = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
+        if (!extArr.includes(filters.extends)) continue;
+      }
+    } else if (heritageFilter) {
+      continue; // no metadata → can't match heritage filter
+    }
 
     const file = fileMap.get(symbol.file_id);
     if (!file) continue;
