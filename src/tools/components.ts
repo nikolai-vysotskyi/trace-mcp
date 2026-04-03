@@ -1,6 +1,7 @@
 import type { Store, ComponentRow } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
+import { estimateTokens } from '../utils/token-counter.js';
 
 export interface ComponentTreeNode {
   name: string;
@@ -15,6 +16,7 @@ export interface ComponentTreeNode {
 export interface ComponentTreeResult {
   root: ComponentTreeNode;
   totalComponents: number;
+  truncated?: boolean;
 }
 
 /**
@@ -27,6 +29,7 @@ export function getComponentTree(
   store: Store,
   componentPath: string,
   depth = 3,
+  tokenBudget = 8000,
 ): TraceMcpResult<ComponentTreeResult> {
   const file = store.getFile(componentPath);
   if (!file) {
@@ -39,11 +42,13 @@ export function getComponentTree(
   }
 
   const visited = new Set<string>();
-  const root = buildNode(store, component, file.path, depth, visited);
+  const budgetRef = { remaining: tokenBudget, truncated: false };
+  const root = buildNode(store, component, file.path, depth, visited, budgetRef);
 
   return ok({
     root,
     totalComponents: visited.size,
+    ...(budgetRef.truncated ? { truncated: true } : {}),
   });
 }
 
@@ -53,6 +58,7 @@ function buildNode(
   filePath: string,
   remainingDepth: number,
   visited: Set<string>,
+  budget: { remaining: number; truncated: boolean },
 ): ComponentTreeNode {
   visited.add(filePath);
 
@@ -77,7 +83,8 @@ function buildNode(
     node.composables = JSON.parse(comp.composables) as string[];
   }
 
-  if (remainingDepth <= 0) return node;
+  budget.remaining -= estimateTokens(JSON.stringify(node));
+  if (budget.remaining <= 0 || remainingDepth <= 0) return node;
 
   // Find child components via renders_component edges
   const symbols = store.getSymbolsByFile(
@@ -93,6 +100,11 @@ function buildNode(
   const renderEdges = outEdges.filter((e) => e.edge_type_name === 'renders_component');
 
   for (const edge of renderEdges) {
+    if (budget.remaining <= 0) {
+      budget.truncated = true;
+      break;
+    }
+
     const targetRef = store.getNodeByNodeId(edge.target_node_id);
     if (!targetRef || targetRef.node_type !== 'symbol') continue;
 
@@ -105,7 +117,7 @@ function buildNode(
     const targetComp = store.getComponentByFileId(targetFile.id);
     if (!targetComp) continue;
 
-    const childNode = buildNode(store, targetComp, targetFile.path, remainingDepth - 1, visited);
+    const childNode = buildNode(store, targetComp, targetFile.path, remainingDepth - 1, visited, budget);
     node.children.push(childNode);
   }
 

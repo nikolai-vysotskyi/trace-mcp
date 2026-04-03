@@ -4,7 +4,7 @@ import type { Store } from './db/store.js';
 import type { PluginRegistry } from './plugin-api/registry.js';
 import type { TraceMcpConfig } from './config.js';
 import { getIndexHealth, getProjectMap } from './tools/project.js';
-import { getSymbol, search, getFileOutline } from './tools/navigation.js';
+import { getSymbol, search, getFileOutline, type SearchResultItemProjected } from './tools/navigation.js';
 import { getComponentTree } from './tools/components.js';
 import { getChangeImpact } from './tools/impact.js';
 import { getFeatureContext } from './tools/context.js';
@@ -16,6 +16,16 @@ import { getMiddlewareChain } from './tools/middleware-chain.js';
 import { getModuleGraph } from './tools/module-graph.js';
 import { getDITree } from './tools/di-tree.js';
 import { getNavigationGraph } from './tools/rn-navigation.js';
+import { getScreenContext } from './tools/screen-context.js';
+import { getRequestFlow } from './tools/flow.js';
+import { getModelContext } from './tools/model.js';
+import { getSchema } from './tools/schema.js';
+import { getEventGraph } from './tools/events.js';
+
+/** Compact JSON — no pretty-printing; saves 25–35% tokens on every response */
+function j(value: unknown): string {
+  return JSON.stringify(value);
+}
 
 export function createServer(
   store: Store,
@@ -35,7 +45,13 @@ export function createServer(
   const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
   const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
 
-  // --- Tools ---
+  // Determine which framework plugins are registered → drives dynamic tool registration
+  const frameworkNames = new Set(
+    registry.getAllFrameworkPlugins().map((p) => p.manifest.name),
+  );
+  const has = (...names: string[]) => names.some((n) => frameworkNames.has(n));
+
+  // --- Core Tools (always registered) ---
 
   server.tool(
     'get_index_health',
@@ -43,9 +59,7 @@ export function createServer(
     {},
     async () => {
       const result = getIndexHealth(store, config);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return { content: [{ type: 'text', text: j(result) }] };
     },
   );
 
@@ -60,34 +74,23 @@ export function createServer(
       logger.info({ path: indexPath, force }, 'Reindex requested');
       const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
 
-      let result;
-      if (indexPath) {
-        result = await pipeline.indexFiles([indexPath]);
-      } else {
-        result = await pipeline.indexAll(force ?? false);
-      }
+      const result = indexPath
+        ? await pipeline.indexFiles([indexPath])
+        : await pipeline.indexAll(force ?? false);
 
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            status: 'completed',
-            ...result,
-          }, null, 2),
-        }],
-      };
+      return { content: [{ type: 'text', text: j({ status: 'completed', ...result }) }] };
     },
   );
 
   server.tool(
     'get_project_map',
-    'Get project overview: frameworks, statistics, structure, key entry points',
-    {},
-    async () => {
-      const result = getProjectMap(store, registry);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+    'Get project overview: frameworks, statistics, languages. Use summary_only=true for a lightweight token-saving version.',
+    {
+      summary_only: z.boolean().optional().describe('Return only framework list + counts (default false)'),
+    },
+    async ({ summary_only }) => {
+      const result = getProjectMap(store, registry, summary_only ?? false);
+      return { content: [{ type: 'text', text: j(result) }] };
     },
   );
 
@@ -99,18 +102,31 @@ export function createServer(
     {
       symbol_id: z.string().optional().describe('The symbol_id to look up'),
       fqn: z.string().optional().describe('The fully qualified name to look up'),
+      max_lines: z.number().optional().describe('Truncate source to this many lines (omit for full source)'),
     },
-    async ({ symbol_id, fqn }) => {
-      const result = getSymbol(store, projectRoot, { symbolId: symbol_id, fqn });
+    async ({ symbol_id, fqn, max_lines }) => {
+      const result = getSymbol(store, projectRoot, { symbolId: symbol_id, fqn, maxLines: max_lines });
       if (result.isErr()) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      const { symbol, file, source } = result.value;
+      const { symbol, file, source, truncated } = result.value;
       return {
-        content: [{ type: 'text', text: JSON.stringify({ symbol, file: file.path, source }, null, 2) }],
+        content: [{
+          type: 'text',
+          text: j({
+            symbol_id: symbol.symbol_id,
+            name: symbol.name,
+            kind: symbol.kind,
+            fqn: symbol.fqn,
+            signature: symbol.signature,
+            summary: symbol.summary,
+            file: file.path,
+            line_start: symbol.line_start,
+            line_end: symbol.line_end,
+            source,
+            ...(truncated ? { truncated: true } : {}),
+          }),
+        }],
       };
     },
   );
@@ -127,7 +143,7 @@ export function createServer(
       offset: z.number().optional().describe('Offset for pagination'),
     },
     async ({ query, kind, language, file_pattern, limit, offset }) => {
-      const result = search(
+      const result = await search(
         store,
         query,
         { kind, language, filePattern: file_pattern },
@@ -135,9 +151,19 @@ export function createServer(
         offset ?? 0,
         { vectorStore, embeddingService },
       );
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
+      const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => ({
+        symbol_id: symbol.symbol_id,
+        name: symbol.name,
+        kind: symbol.kind,
+        fqn: symbol.fqn,
+        signature: symbol.signature,
+        summary: symbol.summary,
+        file: file.path,
+        line: symbol.line_start,
+        score,
+      }));
+      return { content: [{ type: 'text', text: j({ items, total: result.total, search_mode: result.search_mode }) }] };
     },
   );
 
@@ -150,37 +176,9 @@ export function createServer(
     async ({ path: filePath }) => {
       const result = getFileOutline(store, filePath);
       if (result.isErr()) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
-      };
-    },
-  );
-
-  // --- Level 2 Framework Tools ---
-
-  server.tool(
-    'get_component_tree',
-    'Build a component render tree starting from a given .vue file',
-    {
-      component_path: z.string().describe('Relative path to the root .vue file'),
-      depth: z.number().optional().describe('Max tree depth (default 3)'),
-    },
-    async ({ component_path, depth }) => {
-      const result = getComponentTree(store, component_path, depth ?? 3);
-      if (result.isErr()) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
-          isError: true,
-        };
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
-      };
+      return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
 
@@ -190,19 +188,20 @@ export function createServer(
     {
       file_path: z.string().optional().describe('Relative file path to analyze'),
       symbol_id: z.string().optional().describe('Symbol ID to analyze'),
-      depth: z.number().optional().describe('Max traversal depth (default 5)'),
+      depth: z.number().optional().describe('Max traversal depth (default 3)'),
+      max_dependents: z.number().optional().describe('Cap on returned dependents (default 200)'),
     },
-    async ({ file_path, symbol_id, depth }) => {
-      const result = getChangeImpact(store, { filePath: file_path, symbolId: symbol_id }, depth ?? 5);
+    async ({ file_path, symbol_id, depth, max_dependents }) => {
+      const result = getChangeImpact(
+        store,
+        { filePath: file_path, symbolId: symbol_id },
+        depth ?? 3,
+        max_dependents ?? 200,
+      );
       if (result.isErr()) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
-          isError: true,
-        };
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
-      };
+      return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
 
@@ -215,91 +214,178 @@ export function createServer(
     },
     async ({ description, token_budget }) => {
       const result = getFeatureContext(store, projectRoot, description, token_budget ?? 4000);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return { content: [{ type: 'text', text: j(result) }] };
     },
   );
+
+  // --- Level 2 Framework Tools ---
+
+  if (has('vue', 'nuxt', 'inertia')) {
+    server.tool(
+      'get_component_tree',
+      'Build a component render tree starting from a given .vue file',
+      {
+        component_path: z.string().describe('Relative path to the root .vue file'),
+        depth: z.number().optional().describe('Max tree depth (default 3)'),
+        token_budget: z.number().optional().describe('Max tokens for the tree (default 8000)'),
+      },
+      async ({ component_path, depth, token_budget }) => {
+        const result = getComponentTree(store, component_path, depth ?? 3, token_budget ?? 8000);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
 
   // --- Level 3 Framework-Specific Tools ---
 
-  server.tool(
-    'get_middleware_chain',
-    'Trace middleware chain for a route URL (Express: app->router->route; NestJS: guards->pipes->interceptors)',
-    {
-      url: z.string().describe('Route URL to trace middleware for'),
-    },
-    async ({ url }) => {
-      const result = getMiddlewareChain(store, projectRoot, url);
-      if (result.isErr()) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
-          isError: true,
-        };
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
-      };
-    },
-  );
+  if (has('express', 'nestjs', 'laravel')) {
+    server.tool(
+      'get_request_flow',
+      'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS)',
+      {
+        url: z.string().describe('Route URL (e.g. /api/users)'),
+        method: z.string().optional().describe('HTTP method (default GET)'),
+      },
+      async ({ url, method }) => {
+        const result = getRequestFlow(store, url, method ?? 'GET');
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
 
-  server.tool(
-    'get_module_graph',
-    'Build NestJS module dependency graph (module -> imports -> controllers -> providers -> exports)',
-    {
-      module_name: z.string().describe('NestJS module class name (e.g. AppModule)'),
-    },
-    async ({ module_name }) => {
-      const result = getModuleGraph(store, projectRoot, module_name);
-      if (result.isErr()) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
-          isError: true,
-        };
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
-      };
-    },
-  );
+  if (has('express', 'nestjs')) {
+    server.tool(
+      'get_middleware_chain',
+      'Trace middleware chain for a route URL (Express: app->router->route; NestJS: guards->pipes->interceptors)',
+      {
+        url: z.string().describe('Route URL to trace middleware for'),
+      },
+      async ({ url }) => {
+        const result = getMiddlewareChain(store, projectRoot, url);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
 
-  server.tool(
-    'get_di_tree',
-    'Trace NestJS dependency injection tree (what a service injects + who injects it)',
-    {
-      service_name: z.string().describe('NestJS service/provider class name'),
-    },
-    async ({ service_name }) => {
-      const result = getDITree(store, service_name);
-      if (result.isErr()) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
-          isError: true,
-        };
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
-      };
-    },
-  );
+  if (has('nestjs')) {
+    server.tool(
+      'get_module_graph',
+      'Build NestJS module dependency graph (module -> imports -> controllers -> providers -> exports)',
+      {
+        module_name: z.string().describe('NestJS module class name (e.g. AppModule)'),
+      },
+      async ({ module_name }) => {
+        const result = getModuleGraph(store, projectRoot, module_name);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
 
-  server.tool(
-    'get_navigation_graph',
-    'Build React Native navigation tree from screens, navigators, and deep links',
-    {},
-    async () => {
-      const result = getNavigationGraph(store);
-      if (result.isErr()) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
-          isError: true,
-        };
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
-      };
-    },
-  );
+    server.tool(
+      'get_di_tree',
+      'Trace NestJS dependency injection tree (what a service injects + who injects it)',
+      {
+        service_name: z.string().describe('NestJS service/provider class name'),
+      },
+      async ({ service_name }) => {
+        const result = getDITree(store, service_name);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
+
+  if (has('react-native')) {
+    server.tool(
+      'get_navigation_graph',
+      'Build React Native navigation tree from screens, navigators, and deep links',
+      {},
+      async () => {
+        const result = getNavigationGraph(store);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'get_screen_context',
+      'Get full context for a React Native screen: navigator, navigation edges, deep link, platform variants, native modules',
+      {
+        screen_name: z.string().describe('Screen name (e.g. ProfileScreen or Profile)'),
+      },
+      async ({ screen_name }) => {
+        const result = getScreenContext(store, screen_name);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
+
+  if (has('laravel', 'mongoose', 'sequelize')) {
+    server.tool(
+      'get_model_context',
+      'Get full model context: relationships, schema, and metadata (Eloquent/Mongoose/Sequelize)',
+      {
+        model_name: z.string().describe('Model class name (e.g. User, Post)'),
+      },
+      async ({ model_name }) => {
+        const result = getModelContext(store, model_name);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'get_schema',
+      'Get database schema reconstructed from migrations, or Mongoose/Sequelize model schemas',
+      {
+        table_name: z.string().optional().describe('Table/collection/model name (omit for all)'),
+      },
+      async ({ table_name }) => {
+        const result = getSchema(store, table_name);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
+
+  if (has('laravel', 'nestjs')) {
+    server.tool(
+      'get_event_graph',
+      'Get event dispatch/listener graph (Laravel events, NestJS events)',
+      {
+        event_name: z.string().optional().describe('Filter to a specific event class name'),
+      },
+      async ({ event_name }) => {
+        const result = getEventGraph(store, event_name);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
 
   // --- Resources ---
 
@@ -310,11 +396,7 @@ export function createServer(
     async () => {
       const result = getProjectMap(store, registry);
       return {
-        contents: [{
-          uri: 'project://map',
-          mimeType: 'application/json',
-          text: JSON.stringify(result, null, 2),
-        }],
+        contents: [{ uri: 'project://map', mimeType: 'application/json', text: j(result) }],
       };
     },
   );
@@ -326,11 +408,7 @@ export function createServer(
     async () => {
       const result = getIndexHealth(store, config);
       return {
-        contents: [{
-          uri: 'project://health',
-          mimeType: 'application/json',
-          text: JSON.stringify(result, null, 2),
-        }],
+        contents: [{ uri: 'project://health', mimeType: 'application/json', text: j(result) }],
       };
     },
   );

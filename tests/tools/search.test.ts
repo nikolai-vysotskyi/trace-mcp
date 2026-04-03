@@ -43,58 +43,58 @@ describe('Navigation tools', () => {
   });
 
   describe('search()', () => {
-    it('finds symbols by name', () => {
-      const result = search(store, 'User');
+    it('finds symbols by name', async () => {
+      const result = await search(store, 'User');
       expect(result.items.length).toBeGreaterThan(0);
       expect(result.items.some((r) => r.symbol.name === 'User')).toBe(true);
     });
 
-    it('finds functions by name', () => {
-      const result = search(store, 'add');
+    it('finds functions by name', async () => {
+      const result = await search(store, 'add');
       expect(result.items.length).toBeGreaterThan(0);
       expect(result.items.some((r) => r.symbol.name === 'add')).toBe(true);
     });
 
-    it('filters by kind', () => {
-      const result = search(store, 'User', { kind: 'class' });
+    it('filters by kind', async () => {
+      const result = await search(store, 'User', { kind: 'class' });
       for (const item of result.items) {
         expect(item.symbol.kind).toBe('class');
       }
     });
 
-    it('filters by language', () => {
-      const result = search(store, 'User', { language: 'php' });
+    it('filters by language', async () => {
+      const result = await search(store, 'User', { language: 'php' });
       for (const item of result.items) {
         expect(item.file.language).toBe('php');
       }
     });
 
-    it('returns scored results sorted by score', () => {
-      const result = search(store, 'User');
+    it('returns scored results sorted by score', async () => {
+      const result = await search(store, 'User');
       for (let i = 1; i < result.items.length; i++) {
         expect(result.items[i - 1].score).toBeGreaterThanOrEqual(result.items[i].score);
       }
     });
 
-    it('returns empty for nonsense query', () => {
-      const result = search(store, 'zzzxyznonexistent999');
+    it('returns empty for nonsense query', async () => {
+      const result = await search(store, 'zzzxyznonexistent999');
       expect(result.items).toHaveLength(0);
     });
 
-    it('supports pagination with limit/offset', () => {
-      const all = search(store, 'User', undefined, 100, 0);
+    it('supports pagination with limit/offset', async () => {
+      const all = await search(store, 'User', undefined, 100, 0);
       if (all.items.length >= 2) {
-        const page1 = search(store, 'User', undefined, 1, 0);
-        const page2 = search(store, 'User', undefined, 1, 1);
+        const page1 = await search(store, 'User', undefined, 1, 0);
+        const page2 = await search(store, 'User', undefined, 1, 1);
         expect(page1.items[0].symbol.symbol_id).not.toBe(page2.items[0].symbol.symbol_id);
       }
     });
   });
 
   describe('getSymbol()', () => {
-    it('returns symbol source by symbol_id', () => {
+    it('returns symbol source by symbol_id', async () => {
       // First find a symbol
-      const searchResult = search(store, 'add');
+      const searchResult = await search(store, 'add');
       expect(searchResult.items.length).toBeGreaterThan(0);
 
       const symbolId = searchResult.items[0].symbol.symbol_id;

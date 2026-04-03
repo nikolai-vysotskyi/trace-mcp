@@ -15,12 +15,13 @@ export interface GetSymbolResult {
   symbol: SymbolRow;
   file: FileRow;
   source: string;
+  truncated?: boolean;
 }
 
 export function getSymbol(
   store: Store,
   rootPath: string,
-  opts: { symbolId?: string; fqn?: string },
+  opts: { symbolId?: string; fqn?: string; maxLines?: number },
 ): TraceMcpResult<GetSymbolResult> {
   let symbol: SymbolRow | undefined;
 
@@ -41,13 +42,21 @@ export function getSymbol(
 
   const absPath = path.resolve(rootPath, file.path);
   let source: string;
+  let truncated: boolean | undefined;
   try {
     source = readByteRange(absPath, symbol.byte_start, symbol.byte_end);
+    if (opts.maxLines != null) {
+      const lines = source.split('\n');
+      if (lines.length > opts.maxLines) {
+        source = lines.slice(0, opts.maxLines).join('\n') + '\n// ... truncated';
+        truncated = true;
+      }
+    }
   } catch {
     source = symbol.signature ?? '// source unavailable';
   }
 
-  return ok({ symbol, file, source });
+  return ok({ symbol, file, source, ...(truncated ? { truncated: true } : {}) });
 }
 
 // ─── search ─────────────────────────────────────────────────
@@ -64,9 +73,17 @@ export interface SearchResultItem {
   score: number;
 }
 
-export interface SearchResult {
-  items: SearchResultItem[];
-  total: number;
+/** Projected search item: only fields useful to an AI client */
+export interface SearchResultItemProjected {
+  symbol_id: string;
+  name: string;
+  kind: string;
+  fqn: string | null;
+  signature: string | null;
+  summary: string | null;
+  file: string;
+  line: number | null;
+  score: number;
 }
 
 export interface SearchAIOptions {
@@ -74,36 +91,65 @@ export interface SearchAIOptions {
   embeddingService?: EmbeddingService | null;
 }
 
-export function search(
+export interface SearchResult {
+  items: SearchResultItem[];
+  total: number;
+  search_mode?: 'hybrid_ai' | 'fts';
+}
+
+export async function search(
   store: Store,
   query: string,
   filters?: SearchFilters,
   limit = 20,
   offset = 0,
-  _aiOptions?: SearchAIOptions,
-): SearchResult {
-  // Get raw FTS results (fetch more to allow for post-filtering)
+  aiOptions?: SearchAIOptions,
+): Promise<SearchResult> {
   const fetchLimit = limit + offset + 50;
-  const ftsResults = searchFts(store.db, query, fetchLimit, 0);
+  const useAI = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
 
-  if (ftsResults.length === 0) {
-    return { items: [], total: 0 };
+  // Build initial candidates: (symbolIdStr, relevance [0,1])
+  let candidates: Array<{ symbolIdStr: string; relevance: number }>;
+  let searchMode: 'hybrid_ai' | 'fts';
+
+  if (useAI) {
+    const hybridResults = await aiHybridSearch(
+      store.db,
+      query,
+      aiOptions!.vectorStore!,
+      aiOptions!.embeddingService!,
+      fetchLimit,
+    );
+    if (hybridResults.length === 0) return { items: [], total: 0, search_mode: 'hybrid_ai' };
+    // Normalize RRF scores (already positive, descending)
+    const maxScore = hybridResults[0].score || 1;
+    candidates = hybridResults.map((r) => ({
+      symbolIdStr: r.symbolIdStr,
+      relevance: r.score / maxScore,
+    }));
+    searchMode = 'hybrid_ai';
+  } else {
+    const ftsResults = searchFts(store.db, query, fetchLimit, 0);
+    if (ftsResults.length === 0) return { items: [], total: 0, search_mode: 'fts' };
+    // BM25 ranks are negative: lower = better match
+    const minRank = Math.min(...ftsResults.map((r) => r.rank));
+    const maxRank = Math.max(...ftsResults.map((r) => r.rank));
+    const rankSpread = maxRank - minRank || 1;
+    candidates = ftsResults.map((r) => ({
+      symbolIdStr: r.symbolIdStr,
+      relevance: 1 - (r.rank - minRank) / rankSpread,
+    }));
+    searchMode = 'fts';
   }
 
-  // Build PageRank map (cached per search is fine for now)
+  // Build PageRank map
   const pagerankMap = computePageRank(store.db);
   const maxPr = Math.max(...pagerankMap.values(), 0.001);
-
-  // Normalize FTS ranks (BM25 ranks are negative, lower = better)
-  const minRank = Math.min(...ftsResults.map((r) => r.rank));
-  const maxRank = Math.max(...ftsResults.map((r) => r.rank));
-  const rankSpread = maxRank - minRank || 1;
-
   const now = new Date();
   const scored: SearchResultItem[] = [];
 
-  for (const fts of ftsResults) {
-    const symbol = store.getSymbolBySymbolId(fts.symbolIdStr);
+  for (const candidate of candidates) {
+    const symbol = store.getSymbolBySymbolId(candidate.symbolIdStr);
     if (!symbol) continue;
 
     const file = store.getFileById(symbol.file_id);
@@ -114,24 +160,20 @@ export function search(
     if (filters?.language && file.language !== filters.language) continue;
     if (filters?.filePattern && !file.path.includes(filters.filePattern)) continue;
 
-    // Compute hybrid score
-    const relevance = 1 - (fts.rank - minRank) / rankSpread;
     const nodeId = store.getNodeId('symbol', symbol.id);
     const pr = nodeId ? (pagerankMap.get(nodeId) ?? 0) / maxPr : 0;
     const recency = computeRecency(file.indexed_at, now);
     const typeBonus = getTypeBonus(symbol.kind);
 
-    const score = hybridScore({ relevance, pagerank: pr, recency, typeBonus });
+    const score = hybridScore({ relevance: candidate.relevance, pagerank: pr, recency, typeBonus });
     scored.push({ symbol, file, score });
   }
 
-  // Sort by hybrid score descending
   scored.sort((a, b) => b.score - a.score);
-
   const total = scored.length;
   const items = scored.slice(offset, offset + limit);
 
-  return { items, total };
+  return { items, total, search_mode: searchMode };
 }
 
 // ─── get_file_outline ───────────────────────────────────────

@@ -24,6 +24,16 @@ export interface TableSchema {
 
 export interface SchemaResult {
   tables: TableSchema[];
+  /** Mongoose/Sequelize ORM schemas (collections or model schemas) */
+  ormSchemas?: OrmSchema[];
+}
+
+export interface OrmSchema {
+  name: string;
+  orm: string;
+  collection: string | undefined;
+  fields: Record<string, unknown>[];
+  indexes?: Record<string, unknown>[];
 }
 
 export function getSchema(
@@ -31,21 +41,54 @@ export function getSchema(
   tableName?: string,
 ): TraceMcpResult<SchemaResult> {
   const tables: TableSchema[] = [];
+  const ormSchemas: OrmSchema[] = [];
 
   if (tableName) {
+    // Try SQL migrations first
     const schema = reconstructTable(store, tableName);
     if (schema) tables.push(schema);
+
+    // Also try ORM model by name or collection
+    const allOrm = store.getAllOrmModels();
+    const ormMatch = allOrm.find(
+      (m) =>
+        m.name.toLowerCase() === tableName.toLowerCase() ||
+        m.collection_or_table?.toLowerCase() === tableName.toLowerCase(),
+    );
+    if (ormMatch) {
+      ormSchemas.push(buildOrmSchema(ormMatch));
+    }
   } else {
-    // Get all unique table names
+    // All SQL tables
     const migrations = store.getAllMigrations();
     const tableNames = [...new Set(migrations.map((m) => m.table_name))];
     for (const name of tableNames) {
       const schema = reconstructTable(store, name);
       if (schema) tables.push(schema);
     }
+
+    // All ORM models
+    for (const m of store.getAllOrmModels()) {
+      ormSchemas.push(buildOrmSchema(m));
+    }
   }
 
-  return ok({ tables });
+  return ok({
+    tables,
+    ...(ormSchemas.length > 0 ? { ormSchemas } : {}),
+  });
+}
+
+function buildOrmSchema(model: { name: string; orm: string; collection_or_table: string | null; fields: string | null; metadata: string | null }): OrmSchema {
+  const fields: Record<string, unknown>[] = model.fields ? JSON.parse(model.fields) : [];
+  const meta: Record<string, unknown> = model.metadata ? JSON.parse(model.metadata) : {};
+  return {
+    name: model.name,
+    orm: model.orm,
+    collection: model.collection_or_table ?? undefined,
+    fields,
+    ...(meta.indexes ? { indexes: meta.indexes as Record<string, unknown>[] } : {}),
+  };
 }
 
 function reconstructTable(store: Store, tableName: string): TableSchema | null {

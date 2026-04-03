@@ -1,8 +1,8 @@
 /**
- * get_model_context tool — assembles full context for an Eloquent model.
+ * get_model_context tool — assembles full context for an Eloquent, Mongoose, or Sequelize model.
  * Returns model symbol + relationships + schema + related controllers/requests.
  */
-import type { Store, SymbolRow } from '../db/store.js';
+import type { Store, SymbolRow, OrmModelRow, OrmAssociationRow } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 
@@ -26,28 +26,34 @@ export interface ModelContextResult {
     fqn: string;
     symbolId: string;
     filePath: string;
+    orm?: string;
+    collection?: string;
   };
   relationships: ModelRelationship[];
   schema: ModelSchema[];
   relatedControllers: { name: string; symbolId: string; fqn: string | null }[];
   relatedRequests: { name: string; symbolId: string; fqn: string | null }[];
+  ormMetadata?: Record<string, unknown>;
 }
 
 export function getModelContext(
   store: Store,
   modelName: string,
 ): TraceMcpResult<ModelContextResult> {
-  // Find the model symbol by name or FQN
+  // --- Try Mongoose / Sequelize ORM models first ---
+  const ormModel = store.getOrmModelByName(modelName);
+  if (ormModel) {
+    return buildOrmModelContext(store, ormModel);
+  }
+
+  // --- Fall back to Eloquent (symbol-based) ---
   let modelSymbol: SymbolRow | undefined;
 
-  // Try FQN first
   modelSymbol = store.getSymbolByFqn(modelName);
   if (!modelSymbol) {
-    // Try with App\Models\ prefix
     modelSymbol = store.getSymbolByFqn(`App\\Models\\${modelName}`);
   }
   if (!modelSymbol) {
-    // Search by name and kind
     const allSymbols = store.db.prepare(
       "SELECT * FROM symbols WHERE name = ? AND kind = 'class'",
     ).all(modelName) as SymbolRow[];
@@ -63,16 +69,9 @@ export function getModelContext(
     return err(notFound(`file for model:${modelName}`));
   }
 
-  // Get relationships via edges
   const relationships = getRelationships(store, modelSymbol);
-
-  // Get schema from migrations
   const schema = getModelSchema(store, modelName);
-
-  // Get related controllers (those that have edges to this model)
   const relatedControllers = getRelatedByRole(store, modelSymbol, 'controller');
-
-  // Get related FormRequests
   const relatedRequests = getRelatedByRole(store, modelSymbol, 'form_request');
 
   return ok({
@@ -86,6 +85,53 @@ export function getModelContext(
     schema,
     relatedControllers,
     relatedRequests,
+  });
+}
+
+function buildOrmModelContext(
+  store: Store,
+  ormModel: OrmModelRow,
+): TraceMcpResult<ModelContextResult> {
+  const file = store.getFileById(ormModel.file_id);
+  const metadata: Record<string, unknown> = ormModel.metadata
+    ? JSON.parse(ormModel.metadata)
+    : {};
+
+  // Associations from orm_associations table
+  const assocRows: OrmAssociationRow[] = store.getOrmAssociationsByModel(ormModel.id);
+  const relationships: ModelRelationship[] = assocRows.map((a) => ({
+    type: a.kind,
+    relatedModel: a.target_model_name ?? '',
+    method: a.options ? (JSON.parse(a.options) as { as?: string }).as : undefined,
+  }));
+
+  // Schema from fields column (Mongoose/Sequelize)
+  const fields: Record<string, unknown>[] = ormModel.fields
+    ? JSON.parse(ormModel.fields)
+    : [];
+
+  const schema: ModelSchema[] = fields.length > 0
+    ? [{
+        tableName: ormModel.collection_or_table ?? ormModel.name.toLowerCase() + 's',
+        columns: fields,
+        operation: 'schema',
+      }]
+    : [];
+
+  return ok({
+    model: {
+      name: ormModel.name,
+      fqn: ormModel.name,
+      symbolId: `orm:${ormModel.name}`,
+      filePath: file?.path ?? '',
+      orm: ormModel.orm,
+      collection: ormModel.collection_or_table ?? undefined,
+    },
+    relationships,
+    schema,
+    relatedControllers: [],
+    relatedRequests: [],
+    ormMetadata: metadata,
   });
 }
 

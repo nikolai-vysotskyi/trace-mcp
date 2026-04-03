@@ -11,6 +11,7 @@ export interface ChangeImpactResult {
     depth: number;
   }[];
   totalAffected: number;
+  truncated?: boolean;
 }
 
 /**
@@ -22,7 +23,8 @@ export interface ChangeImpactResult {
 export function getChangeImpact(
   store: Store,
   opts: { filePath?: string; symbolId?: string },
-  depth = 5,
+  depth = 3,
+  maxDependents = 200,
 ): TraceMcpResult<ChangeImpactResult> {
   let startNodeId: number | undefined;
   let targetPath: string;
@@ -70,12 +72,15 @@ export function getChangeImpact(
   const visited = new Set<number>();
   visited.add(startNodeId);
 
-  traverseIncoming(store, startNodeId, 1, depth, visited, dependents);
+  traverseIncoming(store, startNodeId, 1, depth, visited, dependents, maxDependents);
+
+  const truncated = dependents.length >= maxDependents;
 
   return ok({
     target: { path: targetPath, symbolId: targetSymbolId },
     dependents,
     totalAffected: dependents.length,
+    ...(truncated ? { truncated: true } : {}),
   });
 }
 
@@ -86,12 +91,16 @@ function traverseIncoming(
   maxDepth: number,
   visited: Set<number>,
   dependents: ChangeImpactResult['dependents'],
+  maxDependents: number,
 ): void {
   if (currentDepth > maxDepth) return;
+  if (dependents.length >= maxDependents) return;
 
   const incomingEdges = store.getIncomingEdges(nodeId);
 
   for (const edge of incomingEdges) {
+    if (dependents.length >= maxDependents) break;
+
     const sourceNodeId = edge.source_node_id;
     if (visited.has(sourceNodeId)) continue;
     visited.add(sourceNodeId);
@@ -124,6 +133,6 @@ function traverseIncoming(
     }
 
     // Continue traversal
-    traverseIncoming(store, sourceNodeId, currentDepth + 1, maxDepth, visited, dependents);
+    traverseIncoming(store, sourceNodeId, currentDepth + 1, maxDepth, visited, dependents, maxDependents);
   }
 }
