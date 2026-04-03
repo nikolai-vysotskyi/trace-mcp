@@ -8,6 +8,7 @@ import type { ResolveContext, RawEdge } from '../plugin-api/types.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes, executeFrameworkResolveEdges } from '../plugin-api/executor.js';
 import { hashContent } from '../utils/hasher.js';
 import { logger } from '../logger.js';
+import { detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 
 export interface IndexingResult {
   totalFiles: number;
@@ -25,8 +26,14 @@ export class IndexingPipeline {
     private rootPath: string,
   ) {}
 
+  private workspaces: WorkspaceInfo[] = [];
+
   async indexAll(force?: boolean): Promise<IndexingResult> {
     const start = Date.now();
+    this.workspaces = detectWorkspaces(this.rootPath);
+    if (this.workspaces.length > 0) {
+      logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Detected workspaces');
+    }
     const filePaths = await this.collectFiles();
     return this.runPipeline(filePaths, force ?? false, start);
   }
@@ -110,6 +117,9 @@ export class IndexingPipeline {
     const parsed = parseResult.value;
     const language = parsed.language ?? this.detectLanguage(relPath);
 
+    // Determine workspace for this file
+    const workspace = this.resolveWorkspace(relPath);
+
     // Upsert file record
     let fileId: number;
     if (existing) {
@@ -118,8 +128,9 @@ export class IndexingPipeline {
       this.store.deleteEdgesForFileNodes(fileId);
       this.store.updateFileHash(fileId, hash, content.length);
       this.store.updateFileStatus(fileId, parsed.status, parsed.frameworkRole);
+      if (workspace) this.store.updateFileWorkspace(fileId, workspace);
     } else {
-      fileId = this.store.insertFile(relPath, language, hash, content.length);
+      fileId = this.store.insertFile(relPath, language, hash, content.length, workspace);
       if (parsed.status !== 'ok' || parsed.frameworkRole) {
         this.store.updateFileStatus(fileId, parsed.status, parsed.frameworkRole);
       }
@@ -208,12 +219,15 @@ export class IndexingPipeline {
       const targetNodeId = this.resolveTargetNodeId(edge);
       if (sourceNodeId == null || targetNodeId == null) continue;
 
+      const isCrossWs = this.isEdgeCrossWorkspace(sourceNodeId, targetNodeId);
+
       this.store.insertEdge(
         sourceNodeId,
         targetNodeId,
         edge.edgeType,
         edge.resolved ?? true,
         edge.metadata,
+        isCrossWs,
       );
     }
   }
@@ -307,6 +321,42 @@ export class IndexingPipeline {
       getNodeId: (nodeType: string, refId: number) => store.getNodeId(nodeType, refId),
       createNodeIfNeeded: (nodeType: string, refId: number) => store.createNode(nodeType, refId),
     };
+  }
+
+  private resolveWorkspace(relPath: string): string | null {
+    for (const ws of this.workspaces) {
+      if (relPath.startsWith(ws.path + '/') || relPath === ws.path) {
+        return ws.name;
+      }
+    }
+    return null;
+  }
+
+  private isEdgeCrossWorkspace(sourceNodeId: number, targetNodeId: number): boolean {
+    if (this.workspaces.length === 0) return false;
+
+    const sourceWs = this.getWorkspaceForNode(sourceNodeId);
+    const targetWs = this.getWorkspaceForNode(targetNodeId);
+
+    if (sourceWs == null || targetWs == null) return false;
+    return sourceWs !== targetWs;
+  }
+
+  private getWorkspaceForNode(nodeId: number): string | null {
+    const ref = this.store.getNodeRef(nodeId);
+    if (!ref) return null;
+
+    if (ref.nodeType === 'file') {
+      const file = this.store.getFileById(ref.refId);
+      return file?.workspace ?? null;
+    }
+    if (ref.nodeType === 'symbol') {
+      const sym = this.store.getSymbolById(ref.refId);
+      if (!sym) return null;
+      const file = this.store.getFileById(sym.file_id);
+      return file?.workspace ?? null;
+    }
+    return null;
   }
 
   private async collectFiles(): Promise<string[]> {

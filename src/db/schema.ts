@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS files (
     content_hash    TEXT,
     byte_length     INTEGER,
     indexed_at      TEXT NOT NULL,
-    metadata        TEXT
+    metadata        TEXT,
+    workspace       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS symbols (
@@ -105,6 +106,7 @@ CREATE TABLE IF NOT EXISTS edges (
     edge_type_id    INTEGER NOT NULL REFERENCES edge_types(id),
     resolved        INTEGER NOT NULL DEFAULT 1,
     metadata        TEXT,
+    is_cross_ws     INTEGER NOT NULL DEFAULT 0,
     UNIQUE(source_node_id, target_node_id, edge_type_id)
 );
 
@@ -214,6 +216,10 @@ const SEED_EDGE_TYPES = [
   { name: 'express_route', category: 'express', description: 'Express route handler' },
   { name: 'express_middleware', category: 'express', description: 'Express middleware' },
   { name: 'express_mounts', category: 'express', description: 'Router mount via app.use' },
+  // Workspace edges
+  { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
+  { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },
+  { name: 'type_import', category: 'workspace', description: 'Cross-workspace type import' },
 ];
 
 export function initializeDatabase(dbPath: string): Database.Database {

@@ -13,11 +13,12 @@ export class Store {
     language: string | null,
     contentHash: string | null,
     byteLength: number | null,
+    workspace?: string | null,
   ): number {
     const result = this.db.prepare(
-      `INSERT INTO files (path, language, content_hash, byte_length, indexed_at)
-       VALUES (?, ?, ?, ?, datetime('now'))`,
-    ).run(path, language, contentHash, byteLength);
+      `INSERT INTO files (path, language, content_hash, byte_length, indexed_at, workspace)
+       VALUES (?, ?, ?, ?, datetime('now'), ?)`,
+    ).run(path, language, contentHash, byteLength, workspace ?? null);
     const fileId = Number(result.lastInsertRowid);
 
     // Create node in unified address space
@@ -35,6 +36,14 @@ export class Store {
 
   getAllFiles(): FileRow[] {
     return this.db.prepare('SELECT * FROM files').all() as FileRow[];
+  }
+
+  updateFileWorkspace(fileId: number, workspace: string): void {
+    this.db.prepare('UPDATE files SET workspace = ? WHERE id = ?').run(workspace, fileId);
+  }
+
+  getFilesByWorkspace(workspace: string): FileRow[] {
+    return this.db.prepare('SELECT * FROM files WHERE workspace = ?').all(workspace) as FileRow[];
   }
 
   updateFileHash(fileId: number, hash: string, byteLength: number): void {
@@ -142,6 +151,7 @@ export class Store {
     edgeTypeName: string,
     resolved = true,
     metadata?: Record<string, unknown>,
+    isCrossWs = false,
   ): TraceMcpResult<number> {
     const edgeType = this.db.prepare('SELECT id FROM edge_types WHERE name = ?').get(edgeTypeName) as { id: number } | undefined;
     if (!edgeType) {
@@ -150,9 +160,9 @@ export class Store {
 
     try {
       const result = this.db.prepare(
-        `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata)
-         VALUES (?, ?, ?, ?, ?)`,
-      ).run(sourceNodeId, targetNodeId, edgeType.id, resolved ? 1 : 0, metadata ? JSON.stringify(metadata) : null);
+        `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(sourceNodeId, targetNodeId, edgeType.id, resolved ? 1 : 0, metadata ? JSON.stringify(metadata) : null, isCrossWs ? 1 : 0);
       return ok(Number(result.lastInsertRowid));
     } catch (e) {
       return err(dbError(e instanceof Error ? e.message : String(e)));
@@ -430,6 +440,7 @@ export interface FileRow {
   byte_length: number | null;
   indexed_at: string;
   metadata: string | null;
+  workspace: string | null;
 }
 
 export interface SymbolRow {
@@ -456,6 +467,7 @@ export interface EdgeRow {
   edge_type_id: number;
   resolved: number;
   metadata: string | null;
+  is_cross_ws: number;
 }
 
 export interface RouteRow {
