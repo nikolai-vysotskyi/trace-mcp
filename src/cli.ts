@@ -26,6 +26,7 @@ import { SequelizePlugin } from './indexer/plugins/framework/sequelize/index.js'
 import { ReactNativePlugin } from './indexer/plugins/framework/react-native/index.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import { FileWatcher } from './indexer/watcher.js';
+import { createAIProvider, BlobVectorStore, EmbeddingPipeline } from './ai/index.js';
 
 function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerLanguagePlugin(new PhpLanguagePlugin());
@@ -77,13 +78,28 @@ program
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
     const watcher = new FileWatcher();
 
+    const aiProvider = createAIProvider(config);
+    const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
+    const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
+    const embeddingPipeline = vectorStore && embeddingService
+      ? new EmbeddingPipeline(store, embeddingService, vectorStore)
+      : null;
+
+    const runEmbeddings = () => {
+      if (!embeddingPipeline) return;
+      embeddingPipeline.indexUnembedded().catch((err) => {
+        logger.error({ error: err }, 'Embedding indexing failed');
+      });
+    };
+
     // Initial index runs in background so the server starts immediately
-    pipeline.indexAll().catch((err) => {
+    pipeline.indexAll().then(runEmbeddings).catch((err) => {
       logger.error({ error: err }, 'Initial indexing failed');
     });
 
     await watcher.start(projectRoot, config, async (paths) => {
       await pipeline.indexFiles(paths);
+      runEmbeddings();
     });
 
     const shutdown = async () => {
