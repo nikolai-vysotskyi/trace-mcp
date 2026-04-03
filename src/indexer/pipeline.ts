@@ -7,7 +7,7 @@ import type { TraceMcpConfig } from '../config.js';
 import type { ResolveContext, RawEdge } from '../plugin-api/types.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes, executeFrameworkResolveEdges } from '../plugin-api/executor.js';
 import { hashContent } from '../utils/hasher.js';
-import { validatePath, validateFileSize } from '../utils/security.js';
+import { validatePath, validateFileSize, isSensitiveFile } from '../utils/security.js';
 import { logger } from '../logger.js';
 import { detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import { EsModuleResolver } from './resolvers/es-modules.js';
@@ -161,6 +161,12 @@ export class IndexingPipeline {
       }
     } catch {
       // lstat failed — file may not exist; readFileSync below will catch it
+    }
+
+    // Block sensitive files (credentials, keys, secrets) from indexing
+    if (isSensitiveFile(relPath)) {
+      logger.warn({ file: relPath }, 'Sensitive file blocked from indexing');
+      return 'skipped';
     }
 
     let content: Buffer;

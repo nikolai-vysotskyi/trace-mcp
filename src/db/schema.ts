@@ -443,6 +443,10 @@ const SEED_EDGE_TYPES = [
   // Hono edges
   { name: 'hono_route', category: 'hono', description: 'Hono route handler' },
   { name: 'hono_middleware', category: 'hono', description: 'Hono middleware usage' },
+  // Data fetching (React Query / SWR) edges
+  { name: 'fetches_endpoint', category: 'data-fetching', description: 'useQuery/useSWR call referencing an API endpoint' },
+  // Zod edges
+  { name: 'zod_schema', category: 'zod', description: 'Zod schema definition' },
   // Workspace edges
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },

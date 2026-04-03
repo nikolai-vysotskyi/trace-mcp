@@ -127,7 +127,11 @@ export function extractSuperTypes(node: TSNode): { extends_?: string; implements
 
   const superclass = node.childForFieldName('superclass');
   if (superclass) {
-    result.extends_ = superclass.text;
+    // superclass node may be a type_identifier itself, or a wrapper containing one
+    const typeNode = superclass.type === 'type_identifier' || superclass.type === 'generic_type' || superclass.type === 'scoped_type_identifier'
+      ? superclass
+      : superclass.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'generic_type' || c.type === 'scoped_type_identifier');
+    result.extends_ = typeNode ? typeNode.text : superclass.text.replace(/^extends\s+/, '').trim();
   }
 
   const interfaces = node.childForFieldName('interfaces');

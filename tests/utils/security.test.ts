@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validatePath, detectSecrets, validateFileSize, validateArtisanCommand, escapeRegExp } from '../../src/utils/security.js';
+import { validatePath, detectSecrets, validateFileSize, validateArtisanCommand, escapeRegExp, isSensitiveFile } from '../../src/utils/security.js';
 
 describe('security', () => {
   describe('path traversal', () => {
@@ -119,6 +119,83 @@ describe('security', () => {
       // Should match the literal string, not behave as a nested quantifier
       expect(re.test('(a+)+b')).toBe(true);
       expect(re.test('aaaaab')).toBe(false);
+    });
+  });
+
+  describe('sensitive file detection', () => {
+    // Env files
+    it('blocks .env files', () => {
+      expect(isSensitiveFile('.env')).toBe(true);
+      expect(isSensitiveFile('.env.local')).toBe(true);
+      expect(isSensitiveFile('.env.production')).toBe(true);
+      expect(isSensitiveFile('config/.env')).toBe(true);
+    });
+
+    // Certificates & keys
+    it('blocks certificate and key files', () => {
+      expect(isSensitiveFile('server.pem')).toBe(true);
+      expect(isSensitiveFile('private.key')).toBe(true);
+      expect(isSensitiveFile('cert.p12')).toBe(true);
+      expect(isSensitiveFile('store.pfx')).toBe(true);
+      expect(isSensitiveFile('ca.crt')).toBe(true);
+      expect(isSensitiveFile('root.cer')).toBe(true);
+    });
+
+    // Keystores
+    it('blocks keystore files', () => {
+      expect(isSensitiveFile('debug.keystore')).toBe(true);
+      expect(isSensitiveFile('release.jks')).toBe(true);
+    });
+
+    // Credential files
+    it('blocks credential and token files', () => {
+      expect(isSensitiveFile('app.credentials')).toBe(true);
+      expect(isSensitiveFile('auth.token')).toBe(true);
+      expect(isSensitiveFile('api.secrets')).toBe(true);
+      expect(isSensitiveFile('credentials.json')).toBe(true);
+      expect(isSensitiveFile('service-account-prod.json')).toBe(true);
+      expect(isSensitiveFile('service-account.json')).toBe(true);
+    });
+
+    // SSH keys
+    it('blocks SSH key files', () => {
+      expect(isSensitiveFile('id_rsa')).toBe(true);
+      expect(isSensitiveFile('id_rsa.pub')).toBe(true);
+      expect(isSensitiveFile('id_ed25519')).toBe(true);
+      expect(isSensitiveFile('id_ed25519.pub')).toBe(true);
+      expect(isSensitiveFile('id_dsa')).toBe(true);
+      expect(isSensitiveFile('id_ecdsa')).toBe(true);
+    });
+
+    // Auth config files
+    it('blocks auth config files', () => {
+      expect(isSensitiveFile('.htpasswd')).toBe(true);
+      expect(isSensitiveFile('.netrc')).toBe(true);
+      expect(isSensitiveFile('.npmrc')).toBe(true);
+      expect(isSensitiveFile('.pypirc')).toBe(true);
+    });
+
+    // Broad *secret* pattern
+    it('blocks files with "secret" in the name', () => {
+      expect(isSensitiveFile('app-secret.yml')).toBe(true);
+      expect(isSensitiveFile('secrets.yaml')).toBe(true);
+    });
+
+    // Doc exemption for *secret*
+    it('allows documentation files with "secret" in the name', () => {
+      expect(isSensitiveFile('secrets-handling.md')).toBe(false);
+      expect(isSensitiveFile('secret-rotation.rst')).toBe(false);
+      expect(isSensitiveFile('managing-secrets.txt')).toBe(false);
+      expect(isSensitiveFile('secrets.html')).toBe(false);
+    });
+
+    // Safe files that should NOT be blocked
+    it('allows normal source files', () => {
+      expect(isSensitiveFile('app/Models/User.php')).toBe(false);
+      expect(isSensitiveFile('src/index.ts')).toBe(false);
+      expect(isSensitiveFile('package.json')).toBe(false);
+      expect(isSensitiveFile('config/database.php')).toBe(false);
+      expect(isSensitiveFile('README.md')).toBe(false);
     });
   });
 });

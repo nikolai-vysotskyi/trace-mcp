@@ -78,7 +78,8 @@ export function isAllCaps(name: string): boolean {
 export function extractSuperclass(node: TSNode): string | undefined {
   const superNode = node.childForFieldName('superclass');
   if (superNode) {
-    return superNode.text;
+    // tree-sitter may include the `< ` prefix in the text
+    return superNode.text.replace(/^<\s*/, '').trim();
   }
   return undefined;
 }

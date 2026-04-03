@@ -184,15 +184,15 @@ export class RailsPlugin implements FrameworkPlugin {
     const tsMatch = filePath.match(/(\d{14})_/);
     const timestamp = tsMatch?.[1];
 
-    const createRe = /create_table\s+[:"'](\w+)['"]/g;
+    const createRe = /create_table\s+:(\w+)|create_table\s+['"](\w+)['"]/g;
     let m: RegExpExecArray | null;
     while ((m = createRe.exec(source)) !== null) {
-      const tableName = m[1];
+      const tableName = m[1] ?? m[2];
       const columns: Record<string, unknown>[] = [];
 
       // Find column definitions after create_table up to next end
       const afterTable = source.substring(m.index);
-      const colRe = /t\.(\w+)\s+[:"'](\w+)['"]?/g;
+      const colRe = /t\.(\w+)\s+:(\w+)/g;
       let cm: RegExpExecArray | null;
       while ((cm = colRe.exec(afterTable)) !== null) {
         if (cm[1] === 'end') break;
