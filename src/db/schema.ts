@@ -242,6 +242,13 @@ const SEED_EDGE_TYPES = [
   { name: 'blade_extends', category: 'blade', description: '@extends directive' },
   { name: 'blade_includes', category: 'blade', description: '@include directive' },
   { name: 'blade_component', category: 'blade', description: '<x-component> or @component' },
+  // Filament edges
+  { name: 'filament_resource_for', category: 'filament', description: 'Resource → Eloquent Model' },
+  { name: 'filament_relation_manager', category: 'filament', description: 'Resource → RelationManager' },
+  { name: 'filament_form_relationship', category: 'filament', description: 'Form field →relationship() → Model' },
+  { name: 'filament_page_for', category: 'filament', description: 'Page registered on Resource' },
+  { name: 'filament_panel_registers', category: 'filament', description: 'PanelProvider → Resource/Page/Widget' },
+  { name: 'filament_widget_queries', category: 'filament', description: 'Widget → Eloquent Model' },
   // Livewire edges
   { name: 'livewire_renders', category: 'livewire', description: 'Component class → Blade view' },
   { name: 'livewire_dispatches', category: 'livewire', description: 'Component dispatches event' },
