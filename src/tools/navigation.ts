@@ -6,6 +6,8 @@ import { hybridScore, getTypeBonus, computeRecency } from '../scoring/hybrid.js'
 import { computePageRank } from '../scoring/pagerank.js';
 import { notFound, type TraceMcpResult } from '../errors.js';
 import { ok, err } from 'neverthrow';
+import { hybridSearch as aiHybridSearch } from '../ai/search.js';
+import type { VectorStore, EmbeddingService } from '../ai/interfaces.js';
 
 // ─── get_symbol ─────────────────────────────────────────────
 
@@ -67,12 +69,18 @@ export interface SearchResult {
   total: number;
 }
 
+export interface SearchAIOptions {
+  vectorStore?: VectorStore | null;
+  embeddingService?: EmbeddingService | null;
+}
+
 export function search(
   store: Store,
   query: string,
   filters?: SearchFilters,
   limit = 20,
   offset = 0,
+  _aiOptions?: SearchAIOptions,
 ): SearchResult {
   // Get raw FTS results (fetch more to allow for post-filtering)
   const fetchLimit = limit + offset + 50;

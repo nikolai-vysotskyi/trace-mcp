@@ -147,6 +147,15 @@ CREATE TRIGGER IF NOT EXISTS symbols_au AFTER UPDATE ON symbols BEGIN
 END;
 
 -- ============================================================
+-- AI EMBEDDINGS (optional, for Phase 7)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS symbol_embeddings (
+    symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
+    embedding BLOB NOT NULL
+);
+
+-- ============================================================
 -- SCHEMA VERSION
 -- ============================================================
 

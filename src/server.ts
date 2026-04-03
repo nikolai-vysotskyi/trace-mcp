@@ -11,6 +11,7 @@ import { getFeatureContext } from './tools/context.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import { formatToolError } from './errors.js';
 import { logger } from './logger.js';
+import { createAIProvider, BlobVectorStore, type AIProvider } from './ai/index.js';
 
 export function createServer(
   store: Store,
@@ -24,6 +25,11 @@ export function createServer(
   });
 
   const projectRoot = rootPath ?? process.cwd();
+
+  // AI layer (optional)
+  const aiProvider: AIProvider = createAIProvider(config);
+  const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
+  const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
 
   // --- Tools ---
 
@@ -123,6 +129,7 @@ export function createServer(
         { kind, language, filePattern: file_pattern },
         limit ?? 20,
         offset ?? 0,
+        { vectorStore, embeddingService },
       );
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
