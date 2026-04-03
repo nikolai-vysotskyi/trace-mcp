@@ -23,8 +23,9 @@ const FrameworkConfigSchema = z.object({
 
 const AiConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  provider: z.string().default('ollama'),
+  provider: z.enum(['ollama', 'openai']).default('ollama'),
   base_url: z.string().optional(),
+  api_key: z.string().optional(),
   inference_model: z.string().optional(),
   fast_model: z.string().optional(),
   embedding_model: z.string().optional(),
