@@ -72,35 +72,46 @@ export function getRequestFlow(
     });
 
     // 4. FormRequest — find validates_with edges from controller method
-    // 5. Inertia — find inertia_renders edges from controller/method
-    const symbolToCheck = methodSymbol ?? controllerSymbol;
-    if (symbolToCheck) {
-      const nodeId = store.getNodeId('symbol', symbolToCheck.id);
-      if (nodeId) {
-        const outEdges = store.getOutgoingEdges(nodeId);
-        for (const edge of outEdges) {
-          if (edge.edge_type_name === 'validates_with') {
-            const targetNode = store.getNodeByNodeId(edge.target_node_id);
-            if (targetNode && targetNode.node_type === 'symbol') {
-              const targetSym = store.getSymbolById(targetNode.ref_id);
-              if (targetSym) {
-                steps.push({
-                  type: 'form_request',
-                  name: targetSym.fqn ?? targetSym.name,
-                  symbolId: targetSym.symbol_id,
-                  fqn: targetSym.fqn ?? undefined,
-                });
-              }
+    // 5. Inertia — find inertia_renders edges from controller method OR class
+    // Edges may be on the method or on the class symbol, so check both
+    const symbolsToCheck = [methodSymbol, controllerSymbol].filter(Boolean) as typeof controllerSymbol[];
+    const seenEdgeTypes = new Set<string>();
+
+    for (const sym of symbolsToCheck) {
+      if (!sym) continue;
+      const nodeId = store.getNodeId('symbol', sym.id);
+      if (!nodeId) continue;
+
+      const outEdges = store.getOutgoingEdges(nodeId);
+      for (const edge of outEdges) {
+        if (edge.edge_type_name === 'validates_with' && !seenEdgeTypes.has('validates_with')) {
+          const targetNode = store.getNodeByNodeId(edge.target_node_id);
+          if (targetNode && targetNode.node_type === 'symbol') {
+            const targetSym = store.getSymbolById(targetNode.ref_id);
+            if (targetSym) {
+              seenEdgeTypes.add('validates_with');
+              steps.push({
+                type: 'form_request',
+                name: targetSym.fqn ?? targetSym.name,
+                symbolId: targetSym.symbol_id,
+                fqn: targetSym.fqn ?? undefined,
+              });
             }
           }
+        }
 
-          if (edge.edge_type_name === 'inertia_renders') {
-            const targetNode = store.getNodeByNodeId(edge.target_node_id);
-            if (targetNode && targetNode.node_type === 'symbol') {
-              const targetSym = store.getSymbolById(targetNode.ref_id);
-              if (targetSym) {
-                const meta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
-                const file = store.getFileById(targetSym.file_id);
+        if (edge.edge_type_name === 'inertia_renders') {
+          const targetNode = store.getNodeByNodeId(edge.target_node_id);
+          if (targetNode && targetNode.node_type === 'symbol') {
+            const targetSym = store.getSymbolById(targetNode.ref_id);
+            if (targetSym) {
+              const meta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
+              const file = store.getFileById(targetSym.file_id);
+              // Only include Inertia pages that are NOT already in steps
+              const alreadyAdded = steps.some(
+                (s) => s.type === 'inertia_page' && s.details?.pageName === meta.pageName,
+              );
+              if (!alreadyAdded) {
                 steps.push({
                   type: 'inertia_page',
                   name: targetSym.name,

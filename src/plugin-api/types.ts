@@ -134,7 +134,7 @@ export interface FrameworkPlugin {
 export interface ResolveContext {
   rootPath: string;
   getAllFiles(): { id: number; path: string; language: string | null }[];
-  getSymbolsByFile(fileId: number): { id: number; symbolId: string; name: string; kind: string; fqn: string | null; metadata?: Record<string, unknown> | null }[];
+  getSymbolsByFile(fileId: number): { id: number; symbolId: string; name: string; kind: string; fqn: string | null; lineStart?: number | null; lineEnd?: number | null; metadata?: Record<string, unknown> | null }[];
   getSymbolByFqn(fqn: string): { id: number; symbolId: string } | undefined;
   getNodeId(nodeType: string, refId: number): number | undefined;
   createNodeIfNeeded(nodeType: string, refId: number): number;

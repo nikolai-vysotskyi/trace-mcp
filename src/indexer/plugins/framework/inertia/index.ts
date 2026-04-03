@@ -165,9 +165,12 @@ export class InertiaPlugin implements FrameworkPlugin {
         const pageComponent = pageSymbols.find((s) => s.kind === 'class');
         if (!pageComponent) continue;
 
-        // Find the method that contains this render call
+        // Find the method that contains this render call by line range
         const method = symbols.find(
-          (s) => s.kind === 'method' && s.metadata?.inertiaPage === render.pageName,
+          (s) => s.kind === 'method' &&
+            s.lineStart != null && s.lineEnd != null &&
+            render.line >= s.lineStart &&
+            render.line <= s.lineEnd,
         );
         const sourceSymbol = method ?? controllerClass;
 

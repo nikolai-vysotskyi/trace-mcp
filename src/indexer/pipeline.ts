@@ -312,6 +312,8 @@ export class IndexingPipeline {
           name: s.name,
           kind: s.kind,
           fqn: s.fqn,
+          lineStart: s.line_start,
+          lineEnd: s.line_end,
           metadata: s.metadata ? JSON.parse(s.metadata) as Record<string, unknown> : null,
         })),
       getSymbolByFqn: (fqn: string) => {
