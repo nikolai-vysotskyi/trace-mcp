@@ -247,6 +247,32 @@ export class ReactNativePlugin implements FrameworkPlugin {
       }
     }
 
+    // Create rn_platform_specific edges: Button.ios.tsx → Button.tsx (base file)
+    const filePathToId = new Map<string, number>();
+    for (const file of allFiles) {
+      filePathToId.set(file.path, file.id);
+    }
+
+    for (const file of allFiles) {
+      if (!isPlatformSpecificFile(file.path)) continue;
+      const platform = getPlatform(file.path);
+      if (!platform) continue;
+
+      // Strip platform suffix: Button.ios.tsx → Button.tsx
+      const basePath = file.path.replace(`.${platform}.`, '.');
+      const baseFileId = filePathToId.get(basePath);
+      if (baseFileId == null) continue;
+
+      edges.push({
+        sourceNodeType: 'file',
+        sourceRefId: file.id,
+        targetNodeType: 'file',
+        targetRefId: baseFileId,
+        edgeType: 'rn_platform_specific',
+        metadata: { platform },
+      });
+    }
+
     return ok(edges);
   }
 }

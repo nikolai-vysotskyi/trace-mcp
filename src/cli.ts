@@ -15,6 +15,10 @@ import { PhpLanguagePlugin } from './indexer/plugins/language/php.js';
 import { TypeScriptLanguagePlugin } from './indexer/plugins/language/typescript.js';
 import { VueLanguagePlugin } from './indexer/plugins/language/vue.js';
 import { PythonLanguagePlugin } from './indexer/plugins/language/python.js';
+import { JavaLanguagePlugin } from './indexer/plugins/language/java.js';
+import { KotlinLanguagePlugin } from './indexer/plugins/language/kotlin.js';
+import { RubyLanguagePlugin } from './indexer/plugins/language/ruby.js';
+import { GoLanguagePlugin } from './indexer/plugins/language/go.js';
 import { LaravelPlugin } from './indexer/plugins/framework/laravel/index.js';
 import { VueFrameworkPlugin } from './indexer/plugins/framework/vue/index.js';
 import { InertiaPlugin } from './indexer/plugins/framework/inertia/index.js';
@@ -36,6 +40,8 @@ import { CeleryPlugin } from './indexer/plugins/framework/celery/index.js';
 import { FastAPIPlugin } from './indexer/plugins/framework/fastapi/index.js';
 import { FlaskPlugin } from './indexer/plugins/framework/flask/index.js';
 import { SQLAlchemyPlugin } from './indexer/plugins/framework/sqlalchemy/index.js';
+import { SpringPlugin } from './indexer/plugins/framework/spring/index.js';
+import { RailsPlugin } from './indexer/plugins/framework/rails/index.js';
 import { DjangoPlugin } from './indexer/plugins/framework/django/index.js';
 import { ReactPlugin } from './indexer/plugins/framework/react/index.js';
 import { TrpcPlugin } from './indexer/plugins/framework/trpc/index.js';
@@ -55,6 +61,10 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
   registry.registerLanguagePlugin(new VueLanguagePlugin());
   registry.registerLanguagePlugin(new PythonLanguagePlugin());
+  registry.registerLanguagePlugin(new JavaLanguagePlugin());
+  registry.registerLanguagePlugin(new KotlinLanguagePlugin());
+  registry.registerLanguagePlugin(new RubyLanguagePlugin());
+  registry.registerLanguagePlugin(new GoLanguagePlugin());
   registry.registerLanguagePlugin(new PrismaLanguagePlugin());
   registry.registerLanguagePlugin(new GraphQLLanguagePlugin());
   registry.registerFrameworkPlugin(new LaravelPlugin());
@@ -86,6 +96,8 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerFrameworkPlugin(new ZustandReduxPlugin());
   registry.registerFrameworkPlugin(new ReactPlugin());
   registry.registerFrameworkPlugin(new N8nPlugin());
+  registry.registerFrameworkPlugin(new SpringPlugin());
+  registry.registerFrameworkPlugin(new RailsPlugin());
 }
 
 const program = new Command();

@@ -312,10 +312,10 @@ export function createServer(
 
   // --- Level 3 Framework-Specific Tools ---
 
-  if (has('express', 'nestjs', 'laravel', 'fastapi', 'flask', 'drf')) {
+  if (has('express', 'nestjs', 'laravel', 'fastapi', 'flask', 'drf', 'spring', 'rails', 'fastify', 'hono', 'trpc')) {
     server.tool(
       'get_request_flow',
-      'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS/FastAPI/Flask/DRF)',
+      'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS/Fastify/Hono/tRPC/FastAPI/Flask/DRF)',
       {
         url: z.string().max(512).describe('Route URL (e.g. /api/users)'),
         method: z.string().max(64).optional().describe('HTTP method (default GET)'),
@@ -330,7 +330,7 @@ export function createServer(
     );
   }
 
-  if (has('express', 'nestjs', 'fastapi', 'flask')) {
+  if (has('express', 'nestjs', 'fastapi', 'flask', 'spring')) {
     server.tool(
       'get_middleware_chain',
       'Trace middleware chain for a route URL (Express/NestJS/FastAPI/Flask)',
@@ -441,10 +441,10 @@ export function createServer(
     );
   }
 
-  if (has('laravel', 'nestjs', 'celery', 'django')) {
+  if (has('laravel', 'nestjs', 'celery', 'django', 'socketio')) {
     server.tool(
       'get_event_graph',
-      'Get event/signal/task dispatch graph (Laravel events, Django signals, NestJS events, Celery tasks)',
+      'Get event/signal/task dispatch graph (Laravel events, Django signals, NestJS events, Celery tasks, Socket.io events)',
       {
         event_name: z.string().max(256).optional().describe('Filter to a specific event class name'),
       },

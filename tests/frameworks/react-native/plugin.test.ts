@@ -217,3 +217,78 @@ const MyView = requireNativeComponent('RCTMyNativeView');
     expect(hasNativeModuleUsage(source)).toBe(false);
   });
 });
+
+// ── Expo Router navigation calls ─────────────────────────────
+
+describe('extractExpoNavigationCalls()', () => {
+  it('extracts router.push() with string path', () => {
+    const source = `router.push('/settings');`;
+    expect(extractExpoNavigationCalls(source)).toContain('/settings');
+  });
+
+  it('extracts router.replace() with string path', () => {
+    const source = `router.replace('/login');`;
+    expect(extractExpoNavigationCalls(source)).toContain('/login');
+  });
+
+  it('extracts router.navigate() with string path', () => {
+    const source = `router.navigate('/home');`;
+    expect(extractExpoNavigationCalls(source)).toContain('/home');
+  });
+
+  it('extracts template literal paths with :param placeholder', () => {
+    const source = 'router.push(`/profile/${id}`);';
+    const calls = extractExpoNavigationCalls(source);
+    expect(calls).toContain('/profile/:param');
+  });
+
+  it('extracts <Link href="..." />', () => {
+    const source = `<Link href="/profile/123" />`;
+    expect(extractExpoNavigationCalls(source)).toContain('/profile/123');
+  });
+
+  it('extracts router.push({ pathname: ... })', () => {
+    const source = `router.push({ pathname: '/settings', params: { tab: 'general' } });`;
+    expect(extractExpoNavigationCalls(source)).toContain('/settings');
+  });
+
+  it('deduplicates paths', () => {
+    const source = `router.push('/home'); router.push('/home');`;
+    expect(extractExpoNavigationCalls(source).filter((p) => p === '/home')).toHaveLength(1);
+  });
+
+  it('returns empty for non-expo source', () => {
+    const source = `const x = 1;`;
+    expect(extractExpoNavigationCalls(source)).toHaveLength(0);
+  });
+});
+
+describe('matchExpoRoute()', () => {
+  it('matches exact path', () => {
+    expect(matchExpoRoute('/settings', '/settings')).toBe(true);
+  });
+
+  it('matches dynamic segment', () => {
+    expect(matchExpoRoute('/profile/123', '/profile/:id')).toBe(true);
+  });
+
+  it('matches :param placeholder from template literals', () => {
+    expect(matchExpoRoute('/profile/:param', '/profile/:id')).toBe(true);
+  });
+
+  it('does not match different path lengths', () => {
+    expect(matchExpoRoute('/profile/123/posts', '/profile/:id')).toBe(false);
+  });
+
+  it('does not match different static segments', () => {
+    expect(matchExpoRoute('/users/123', '/profile/:id')).toBe(false);
+  });
+
+  it('matches root path', () => {
+    expect(matchExpoRoute('/', '/')).toBe(true);
+  });
+
+  it('matches catch-all route', () => {
+    expect(matchExpoRoute('/blog/2024/hello-world', '/blog/*')).toBe(true);
+  });
+});
