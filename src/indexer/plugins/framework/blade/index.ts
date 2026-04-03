@@ -161,10 +161,8 @@ export class BladePlugin implements FrameworkPlugin {
     for (const file of allFiles) {
       if (!file.path.endsWith('.blade.php')) continue;
 
-      let source: string;
-      try {
-        source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
-      } catch { continue; }
+      const source = ctx.readFile(file.path);
+      if (!source) continue;
 
       const directives = extractBladeDirectives(source);
       if (directives.length === 0) continue;

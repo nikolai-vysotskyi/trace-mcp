@@ -275,12 +275,8 @@ export class NestJSPlugin implements FrameworkPlugin {
     for (const file of allFiles) {
       if (file.language !== 'typescript') continue;
 
-      let source: string;
-      try {
-        source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
-      } catch {
-        continue;
-      }
+      const source = ctx.readFile(file.path);
+      if (!source) continue;
 
       // Module edges
       const moduleInfo = extractModuleInfo(source);

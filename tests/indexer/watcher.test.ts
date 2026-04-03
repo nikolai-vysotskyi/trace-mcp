@@ -17,25 +17,46 @@ const mockConfig: TraceMcpConfig = {
 
 type WatchCallback = (err: Error | null, events: parcelWatcher.Event[]) => Promise<void>;
 
-/**
- * Flush the debounce timer.
- * We use debounceMs=0 in tests so the timer fires in the next event-loop tick.
- * A single `await Promise.resolve()` drains that tick.
- */
-async function flushDebounce() {
-  // setTimeout(fn, 0) in the watcher fires after macrotask queue drains.
-  // We need two macrotask ticks: one for the timer to fire, one for its async body.
-  await new Promise((r) => setTimeout(r, 10));
-  await new Promise((r) => setTimeout(r, 10));
+// ── Controlled timer stub ────────────────────────────────────
+let timerId = 0;
+
+function makeControlledTimer() {
+  let pendingFn: (() => void | Promise<void>) | null = null;
+
+  const set = vi.fn((fn: () => void | Promise<void>, _ms: number) => {
+    pendingFn = fn;
+    return (++timerId) as unknown as ReturnType<typeof setTimeout>;
+  });
+
+  const clear = vi.fn(() => {
+    pendingFn = null;
+  });
+
+  const flush = async () => {
+    if (pendingFn) {
+      const fn = pendingFn;
+      pendingFn = null;
+      await fn();
+    }
+  };
+
+  const hasPending = () => pendingFn !== null;
+
+  return { set, clear, flush, hasPending };
 }
 
 describe('FileWatcher', () => {
   let watcher: FileWatcher;
+  let timer: ReturnType<typeof makeControlledTimer>;
   let mockUnsubscribe: ReturnType<typeof vi.fn>;
   let capturedCallback: WatchCallback;
 
   beforeEach(() => {
-    watcher = new FileWatcher();
+    timer = makeControlledTimer();
+    watcher = new FileWatcher(
+      timer.set as unknown as typeof setTimeout,
+      timer.clear as unknown as typeof clearTimeout,
+    );
     mockUnsubscribe = vi.fn().mockResolvedValue(undefined);
 
     vi.mocked(parcelWatcher.subscribe).mockImplementation(async (_root, cb) => {
@@ -68,7 +89,7 @@ describe('FileWatcher', () => {
 
   it('calls onChanges after debounce for create and update events', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
     await capturedCallback(null, [
       { type: 'create', path: '/project/src/foo.ts' },
@@ -77,8 +98,9 @@ describe('FileWatcher', () => {
 
     // Not fired yet — debounce pending
     expect(onChanges).not.toHaveBeenCalled();
+    expect(timer.hasPending()).toBe(true);
 
-    await flushDebounce();
+    await timer.flush();
 
     expect(onChanges).toHaveBeenCalledOnce();
     const [paths] = onChanges.mock.calls[0];
@@ -88,47 +110,47 @@ describe('FileWatcher', () => {
 
   it('ignores delete events', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
     await capturedCallback(null, [{ type: 'delete', path: '/project/src/gone.ts' }]);
-    await flushDebounce();
+    await timer.flush();
 
     expect(onChanges).not.toHaveBeenCalled();
   });
 
   it('filters out files inside ignored directories', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
     await capturedCallback(null, [
       { type: 'update', path: '/project/node_modules/pkg/index.js' },
       { type: 'update', path: '/project/vendor/lib/Foo.php' },
       { type: 'update', path: '/project/src/app.ts' },
     ]);
-    await flushDebounce();
+    await timer.flush();
 
     expect(onChanges).toHaveBeenCalledWith(['/project/src/app.ts']);
   });
 
   it('does not call onChanges when event list is empty', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
     await capturedCallback(null, []);
-    await flushDebounce();
+    await timer.flush();
 
     expect(onChanges).not.toHaveBeenCalled();
   });
 
   it('does not call onChanges when all events are filtered out', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
     await capturedCallback(null, [
       { type: 'delete', path: '/project/src/old.ts' },
       { type: 'update', path: '/project/node_modules/x/y.js' },
     ]);
-    await flushDebounce();
+    await timer.flush();
 
     expect(onChanges).not.toHaveBeenCalled();
   });
@@ -137,15 +159,18 @@ describe('FileWatcher', () => {
 
   it('coalesces rapid events into a single onChanges call', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
-    // Three rapid bursts without flushing in between
+    // Three rapid bursts — each resets the timer
     await capturedCallback(null, [{ type: 'update', path: '/project/src/a.ts' }]);
     await capturedCallback(null, [{ type: 'update', path: '/project/src/b.ts' }]);
     await capturedCallback(null, [{ type: 'update', path: '/project/src/c.ts' }]);
 
+    // Timer was rescheduled; clear was called twice
+    expect(timer.clear).toHaveBeenCalledTimes(2);
     expect(onChanges).not.toHaveBeenCalled();
-    await flushDebounce();
+
+    await timer.flush();
 
     // All paths collapsed into one call
     expect(onChanges).toHaveBeenCalledOnce();
@@ -157,13 +182,13 @@ describe('FileWatcher', () => {
 
   it('deduplicates paths that appear in multiple rapid events', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
     // Same path saved twice (editor write + format-on-save)
     await capturedCallback(null, [{ type: 'update', path: '/project/src/foo.ts' }]);
     await capturedCallback(null, [{ type: 'update', path: '/project/src/foo.ts' }]);
 
-    await flushDebounce();
+    await timer.flush();
 
     expect(onChanges).toHaveBeenCalledOnce();
     const [paths] = onChanges.mock.calls[0];
@@ -173,27 +198,28 @@ describe('FileWatcher', () => {
 
   it('stop before debounce fires cancels the pending call', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
     await capturedCallback(null, [{ type: 'update', path: '/project/src/foo.ts' }]);
-    expect(onChanges).not.toHaveBeenCalled(); // not fired yet
+    expect(timer.hasPending()).toBe(true);
 
     // Stop cancels the pending debounce timer
     await watcher.stop();
-    await flushDebounce(); // nothing to flush
+    expect(timer.hasPending()).toBe(false);
 
+    await timer.flush(); // nothing to flush
     expect(onChanges).not.toHaveBeenCalled();
   });
 
   it('two separate event batches after debounce each fire once', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
-    await watcher.start('/project', mockConfig, onChanges, 0);
+    await watcher.start('/project', mockConfig, onChanges);
 
     await capturedCallback(null, [{ type: 'update', path: '/project/src/a.ts' }]);
-    await flushDebounce();
+    await timer.flush();
 
     await capturedCallback(null, [{ type: 'update', path: '/project/src/b.ts' }]);
-    await flushDebounce();
+    await timer.flush();
 
     expect(onChanges).toHaveBeenCalledTimes(2);
     expect(onChanges.mock.calls[0][0]).toContain('/project/src/a.ts');

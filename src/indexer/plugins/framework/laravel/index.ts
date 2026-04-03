@@ -437,15 +437,8 @@ export class LaravelPlugin implements FrameworkPlugin {
     }
 
     for (const file of files) {
-      let source: string;
-      try {
-        source = fs.readFileSync(
-          path.resolve(ctx.rootPath, file.path),
-          'utf-8',
-        );
-      } catch {
-        continue;
-      }
+      const source = ctx.readFile(file.path);
+      if (!source) continue;
 
       if (file.language === 'php') {
         // Resolve Eloquent relationships

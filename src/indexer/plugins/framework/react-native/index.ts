@@ -172,10 +172,8 @@ export class ReactNativePlugin implements FrameworkPlugin {
     for (const file of allFiles) {
       if (file.language !== 'typescript' && file.language !== 'javascript') continue;
 
-      let source: string;
-      try {
-        source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
-      } catch { continue; }
+      const source = ctx.readFile(file.path);
+      if (!source) continue;
 
       // Screens defined in this file (navigator JSX)
       const screens = extractNavigatorScreens(source, file.path);

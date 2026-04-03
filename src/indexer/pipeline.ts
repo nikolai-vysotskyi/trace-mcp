@@ -92,6 +92,9 @@ export class IndexingPipeline {
     // Pass 2b: ORM associations → graph edges (resolved after all entities indexed)
     this.resolveOrmAssociationEdges();
 
+    // Release memory — file content is no longer needed after Pass 2
+    this._fileContentCache.clear();
+
     result.durationMs = Date.now() - startMs;
     logger.info(result, 'Indexing pipeline completed');
     return result;
@@ -323,22 +326,28 @@ export class IndexingPipeline {
   }
 
   private storeRawEdges(edges: RawEdge[]): void {
-    for (const edge of edges) {
-      const sourceNodeId = this.resolveNodeId(edge);
-      const targetNodeId = this.resolveTargetNodeId(edge);
-      if (sourceNodeId == null || targetNodeId == null) continue;
+    if (edges.length === 0) return;
 
-      const isCrossWs = this.isEdgeCrossWorkspace(sourceNodeId, targetNodeId);
+    // Batch edge inserts in a single transaction for performance
+    const insertBatch = this.store.db.transaction(() => {
+      for (const edge of edges) {
+        const sourceNodeId = this.resolveNodeId(edge);
+        const targetNodeId = this.resolveTargetNodeId(edge);
+        if (sourceNodeId == null || targetNodeId == null) continue;
 
-      this.store.insertEdge(
-        sourceNodeId,
-        targetNodeId,
-        edge.edgeType,
-        edge.resolved ?? true,
-        edge.metadata,
-        isCrossWs,
-      );
-    }
+        const isCrossWs = this.isEdgeCrossWorkspace(sourceNodeId, targetNodeId);
+
+        this.store.insertEdge(
+          sourceNodeId,
+          targetNodeId,
+          edge.edgeType,
+          edge.resolved ?? true,
+          edge.metadata,
+          isCrossWs,
+        );
+      }
+    });
+    insertBatch();
   }
 
   private resolveNodeId(edge: RawEdge): number | undefined {
