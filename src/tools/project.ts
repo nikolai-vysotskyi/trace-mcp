@@ -51,14 +51,32 @@ export interface ProjectMapResult {
   languages: { language: string; count: number }[];
 }
 
-export function getProjectMap(store: Store, registry: PluginRegistry): ProjectMapResult {
+export interface ProjectMapSummary {
+  frameworks: string[];
+  fileCount: number;
+  symbolCount: number;
+  languages: string[];
+}
+
+export function getProjectMap(store: Store, registry: PluginRegistry, summaryOnly?: boolean): ProjectMapResult | ProjectMapSummary {
   const stats = store.getStats();
+  const frameworks = registry.getAllFrameworkPlugins().map((p) => p.manifest.name);
+
+  if (summaryOnly) {
+    const languageRows = store.db.prepare(
+      'SELECT language FROM files WHERE language IS NOT NULL GROUP BY language ORDER BY COUNT(*) DESC',
+    ).all() as { language: string }[];
+    return {
+      frameworks,
+      fileCount: stats.totalFiles,
+      symbolCount: stats.totalSymbols,
+      languages: languageRows.map((r) => r.language),
+    };
+  }
 
   const languageRows = store.db.prepare(
     'SELECT language, COUNT(*) as count FROM files WHERE language IS NOT NULL GROUP BY language ORDER BY count DESC',
   ).all() as { language: string; count: number }[];
-
-  const frameworks = registry.getAllFrameworkPlugins().map((p) => p.manifest.name);
 
   return {
     frameworks,

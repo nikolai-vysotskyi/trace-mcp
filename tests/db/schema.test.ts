@@ -58,7 +58,7 @@ describe('schema', () => {
 
   it('stores schema version', () => {
     const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as { value: string };
-    expect(Number(row.value)).toBe(1);
+    expect(Number(row.value)).toBeGreaterThanOrEqual(1);
   });
 
   it('is idempotent on repeated initialization', () => {

@@ -69,6 +69,34 @@ export function extractExpressMiddleware(source: string): ExpressMiddleware[] {
   return middlewares;
 }
 
+/** Detect 4-arg error handler middleware: (err, req, res, next) => {} */
+export function extractErrorHandlers(source: string): { path: string }[] {
+  const handlers: { path: string }[] = [];
+  // function form
+  const funcRe = /(?:app|router)\s*\.\s*use\s*\([^;]*?function\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = funcRe.exec(source)) !== null) {
+    handlers.push({ path: '/' });
+  }
+  // arrow form with err/error as first param
+  const arrowRe = /(?:app|router)\s*\.\s*use\s*\([^;]*?\(\s*(?:err|error)\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)\s*=>/g;
+  while ((m = arrowRe.exec(source)) !== null) {
+    handlers.push({ path: '/' });
+  }
+  return handlers;
+}
+
+/** Extract app.param() handlers */
+export function extractParamHandlers(source: string): string[] {
+  const params: string[] = [];
+  const re = /(?:app|router)\s*\.\s*param\s*\(\s*['"`]([^'"`]+)['"`]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    if (m[1]) params.push(m[1]);
+  }
+  return params;
+}
+
 export class ExpressPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
     name: 'express',
@@ -106,6 +134,8 @@ export class ExpressPlugin implements FrameworkPlugin {
         { name: 'express_route', category: 'express', description: 'Express route handler' },
         { name: 'express_middleware', category: 'express', description: 'Express middleware' },
         { name: 'express_mounts', category: 'express', description: 'Router mount via app.use' },
+        { name: 'express_error_handler', category: 'express', description: '4-arg error handling middleware' },
+        { name: 'express_param_handler', category: 'express', description: 'app.param() route parameter handler' },
       ],
     };
   }
@@ -136,6 +166,16 @@ export class ExpressPlugin implements FrameworkPlugin {
     const middlewares = extractExpressMiddleware(source);
     if (middlewares.length > 0) {
       result.frameworkRole = result.frameworkRole ?? 'express_middleware';
+    }
+
+    const errorHandlers = extractErrorHandlers(source);
+    if (errorHandlers.length > 0) {
+      result.frameworkRole = result.frameworkRole ?? 'express_error_handler';
+    }
+
+    const paramHandlers = extractParamHandlers(source);
+    if (paramHandlers.length > 0) {
+      result.frameworkRole = result.frameworkRole ?? 'express_param_handler';
     }
 
     return ok(result);

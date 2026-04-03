@@ -25,6 +25,10 @@ const USE_GUARDS_RE = /@UseGuards\(\s*([^)]+)\s*\)/g;
 const USE_PIPES_RE = /@UsePipes\(\s*([^)]+)\s*\)/g;
 const USE_INTERCEPTORS_RE = /@UseInterceptors\(\s*([^)]+)\s*\)/g;
 const CONSTRUCTOR_RE = /constructor\s*\(([^)]*)\)/s;
+const GATEWAY_RE = /@WebSocketGateway\s*\(/;
+const SUBSCRIBE_RE = /@SubscribeMessage\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
+const EVENT_PATTERN_RE = /@EventPattern\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
+const MICROSERVICE_RE = /@(MessagePattern|EventPattern)\s*\(/;
 
 /** Extract array items from a module decorator property like `imports: [A, B]`. */
 function extractModuleArray(body: string, prop: string): string[] {
@@ -92,6 +96,35 @@ export function extractControllerRoutes(
   return { basePath, routes, guards };
 }
 
+export function extractGatewayEvents(source: string): string[] {
+  const events: string[] = [];
+  const re = new RegExp(SUBSCRIBE_RE.source, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    if (m[1]) events.push(m[1]);
+  }
+  return events;
+}
+
+export function extractMicroservicePatterns(source: string): { type: 'message' | 'event'; pattern: string }[] {
+  const results: { type: 'message' | 'event'; pattern: string }[] = [];
+  const eventRe = new RegExp(EVENT_PATTERN_RE.source, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = eventRe.exec(source)) !== null) {
+    if (m[1]) results.push({ type: 'event', pattern: m[1] });
+  }
+  // @MessagePattern('cmd') or @MessagePattern({ cmd: 'sum' })
+  const msgStr = /@MessagePattern\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
+  while ((m = msgStr.exec(source)) !== null) {
+    if (m[1]) results.push({ type: 'message', pattern: m[1] });
+  }
+  const msgObj = /@MessagePattern\s*\(\s*\{[^}]*cmd\s*:\s*['"`]([^'"`]+)['"`]/g;
+  while ((m = msgObj.exec(source)) !== null) {
+    if (m[1]) results.push({ type: 'message', pattern: m[1] });
+  }
+  return results;
+}
+
 /** Extract module metadata. */
 export function extractModuleInfo(source: string): {
   imports: string[];
@@ -150,6 +183,9 @@ export class NestJSPlugin implements FrameworkPlugin {
         { name: 'nest_guards', category: 'nestjs', description: 'UseGuards on controller/method' },
         { name: 'nest_pipes', category: 'nestjs', description: 'UsePipes on controller/method' },
         { name: 'nest_interceptors', category: 'nestjs', description: 'UseInterceptors on controller/method' },
+        { name: 'nest_gateway_event', category: 'nestjs', description: 'WebSocket gateway @SubscribeMessage handler' },
+        { name: 'nest_message_pattern', category: 'nestjs', description: 'Microservice @MessagePattern handler' },
+        { name: 'nest_event_pattern', category: 'nestjs', description: 'Microservice @EventPattern handler' },
       ],
     };
   }
@@ -186,12 +222,55 @@ export class NestJSPlugin implements FrameworkPlugin {
       result.frameworkRole = result.frameworkRole ?? 'nest_injectable';
     }
 
+    // WebSocket Gateway
+    if (GATEWAY_RE.test(source)) {
+      result.frameworkRole = 'nest_gateway';
+      const events = extractGatewayEvents(source);
+      if (events.length > 0) {
+        result.warnings = result.warnings ?? [];
+        // store gateway events in metadata via a synthetic warning-free mechanism
+        // Use routes as gateway event placeholders
+        if (!result.routes) result.routes = [];
+        for (const evt of events) {
+          result.routes.push({ method: 'WS', uri: evt });
+        }
+      }
+    }
+
+    // Microservice handlers
+    if (MICROSERVICE_RE.test(source)) {
+      result.frameworkRole = result.frameworkRole ?? 'nest_microservice';
+      const patterns = extractMicroservicePatterns(source);
+      if (patterns.length > 0) {
+        if (!result.routes) result.routes = [];
+        for (const p of patterns) {
+          result.routes.push({ method: p.type === 'message' ? 'MSG' : 'EVT', uri: p.pattern });
+        }
+      }
+    }
+
     return ok(result);
   }
 
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
+
+    // TypeScript symbols don't carry PHP-style FQNs, so build a class-name → symbol
+    // map as a fallback for DI/module resolution.
+    const classSymbolByName = new Map<string, { id: number }>();
+    for (const file of allFiles) {
+      if (file.language !== 'typescript') continue;
+      for (const sym of ctx.getSymbolsByFile(file.id)) {
+        if (sym.kind === 'class') {
+          classSymbolByName.set(sym.name, { id: sym.id });
+        }
+      }
+    }
+
+    /** Try FQN first (PHP-style), fall back to plain class name (TypeScript). */
+    const resolve = (name: string) =>
+      ctx.getSymbolByFqn(name) ?? classSymbolByName.get(name);
 
     for (const file of allFiles) {
       if (file.language !== 'typescript') continue;
@@ -211,7 +290,7 @@ export class NestJSPlugin implements FrameworkPlugin {
         if (moduleClass) {
           // imports
           for (const imp of moduleInfo.imports) {
-            const target = ctx.getSymbolByFqn(imp);
+            const target = resolve(imp);
             if (target) {
               edges.push({
                 sourceNodeType: 'symbol',
@@ -224,7 +303,7 @@ export class NestJSPlugin implements FrameworkPlugin {
           }
           // providers
           for (const prov of moduleInfo.providers) {
-            const target = ctx.getSymbolByFqn(prov);
+            const target = resolve(prov);
             if (target) {
               edges.push({
                 sourceNodeType: 'symbol',
@@ -245,7 +324,7 @@ export class NestJSPlugin implements FrameworkPlugin {
         const cls = symbols.find((s) => s.kind === 'class');
         if (cls) {
           for (const dep of deps) {
-            const target = ctx.getSymbolByFqn(dep);
+            const target = resolve(dep);
             if (target) {
               edges.push({
                 sourceNodeType: 'symbol',

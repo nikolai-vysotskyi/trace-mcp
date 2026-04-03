@@ -12,6 +12,7 @@ import { getMiddlewareChain } from '../../src/tools/middleware-chain.js';
 import { getModuleGraph } from '../../src/tools/module-graph.js';
 import { getDITree } from '../../src/tools/di-tree.js';
 import { getNavigationGraph } from '../../src/tools/rn-navigation.js';
+import { getScreenContext } from '../../src/tools/screen-context.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const NESTJS_FIXTURE = path.resolve(__dirname, '../fixtures/nestjs-basic');
@@ -239,5 +240,55 @@ describe('get_navigation_graph', () => {
       const screensWithLinks = allScreens.filter((s) => s.deep_link);
       expect(result.value.deepLinks.length).toBe(screensWithLinks.length);
     }
+  });
+});
+
+describe('get_screen_context (pipeline)', () => {
+  let store: Store;
+
+  beforeAll(async () => {
+    const db = initializeDatabase(':memory:');
+    store = new Store(db);
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    registry.registerFrameworkPlugin(new ReactNativePlugin());
+
+    const config = makeConfig(RN_FIXTURE, ['**/*.tsx', '**/*.ts']);
+    const pipeline = new IndexingPipeline(store, registry, config, RN_FIXTURE);
+    await pipeline.indexAll();
+  });
+
+  it('returns NOT_FOUND for unknown screen name', () => {
+    const result = getScreenContext(store, 'NoSuchScreenXYZ');
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe('NOT_FOUND');
+    }
+  });
+
+  it('finds a screen if any were indexed', () => {
+    const allScreens = store.getAllRnScreens();
+    if (allScreens.length === 0) return; // no screens in fixture — skip
+
+    const firstName = allScreens[0].name;
+    const result = getScreenContext(store, firstName);
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    expect(result.value.screen).toBe(firstName);
+    expect(Array.isArray(result.value.navigatedFrom)).toBe(true);
+    expect(Array.isArray(result.value.navigatesTo)).toBe(true);
+    expect(typeof result.value.platformSpecific).toBe('object');
+    expect(Array.isArray(result.value.nativeModulesUsed)).toBe(true);
+  });
+
+  it('partial name match works for indexed screens', () => {
+    const allScreens = store.getAllRnScreens();
+    if (allScreens.length === 0) return;
+
+    // Use partial name (first 3 chars, lowercased)
+    const partial = allScreens[0].name.slice(0, 3).toLowerCase();
+    const result = getScreenContext(store, partial);
+    expect(result.isOk()).toBe(true);
   });
 });

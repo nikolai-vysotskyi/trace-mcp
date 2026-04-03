@@ -38,6 +38,7 @@ import {
   extractFilamentPanel,
   extractFilamentWidget,
 } from './filament.js';
+import { extractNovaResource, extractNovaMetric } from './nova.js';
 import {
   parseKernelMiddleware,
   parseBootstrapMiddleware,
@@ -72,6 +73,9 @@ export class LaravelPlugin implements FrameworkPlugin {
   /** Whether filament/filament or filament/support is detected. */
   private hasFilament = false;
 
+  /** Whether laravel/nova is detected. */
+  private hasNova = false;
+
   detect(ctx: ProjectContext): boolean {
     // Check if composer.json has laravel/framework in require
     let deps: Record<string, string> | undefined;
@@ -91,6 +95,11 @@ export class LaravelPlugin implements FrameworkPlugin {
     }
 
     if (!deps?.['laravel/framework']) return false;
+
+    // Detect Nova
+    if (deps['laravel/nova']) {
+      this.hasNova = true;
+    }
 
     // Detect Filament
     if (deps['filament/filament'] || deps['filament/support']) {
@@ -122,6 +131,13 @@ export class LaravelPlugin implements FrameworkPlugin {
         { name: 'listens_to', category: 'laravel', description: 'Listener -> Event' },
         { name: 'middleware_guards', category: 'laravel', description: 'Route -> Middleware' },
         { name: 'migrates', category: 'laravel', description: 'Migration -> table' },
+        // Nova edges
+        { name: 'nova_resource_for', category: 'nova', description: 'Nova Resource → Eloquent Model' },
+        { name: 'nova_field_relationship', category: 'nova', description: 'Nova Resource → related Nova Resource via field' },
+        { name: 'nova_action_on', category: 'nova', description: 'Action → Resource' },
+        { name: 'nova_filter_on', category: 'nova', description: 'Filter → Resource' },
+        { name: 'nova_lens_on', category: 'nova', description: 'Lens → Resource' },
+        { name: 'nova_metric_queries', category: 'nova', description: 'Metric → Eloquent Model' },
         // Filament edges
         { name: 'filament_resource_for', category: 'filament', description: 'Resource → Eloquent Model' },
         { name: 'filament_relation_manager', category: 'filament', description: 'Resource → RelationManager' },
@@ -211,6 +227,11 @@ export class LaravelPlugin implements FrameworkPlugin {
     // EventServiceProvider
     if (filePath.includes('EventServiceProvider')) {
       result.frameworkRole = 'event_provider';
+    }
+
+    // Nova files
+    if (this.hasNova) {
+      this.processNovaNode(source, filePath, result);
     }
 
     // Filament files
@@ -327,6 +348,11 @@ export class LaravelPlugin implements FrameworkPlugin {
         // Resolve Livewire PHP-side edges
         if (this.hasLivewire) {
           this.resolveLivewirePhpEdges(source, file, ctx, edges, fileMap);
+        }
+
+        // Resolve Nova edges
+        if (this.hasNova) {
+          this.resolveNovaEdges(source, file, ctx, edges);
         }
 
         // Resolve Filament edges
@@ -519,6 +545,82 @@ export class LaravelPlugin implements FrameworkPlugin {
 
   private isRouteServiceProvider(filePath: string): boolean {
     return /Providers\/RouteServiceProvider\.php$/.test(filePath);
+  }
+
+  private processNovaNode(
+    source: string,
+    filePath: string,
+    result: FileParseResult,
+  ): void {
+    result.edges = result.edges ?? [];
+
+    const resource = extractNovaResource(source, filePath);
+    if (resource) {
+      result.frameworkRole = 'nova_resource';
+      if (resource.modelFqn) {
+        result.edges.push({ edgeType: 'nova_resource_for', metadata: { sourceFqn: resource.fqn, targetFqn: resource.modelFqn } });
+      }
+      for (const rel of resource.fieldRelationships) {
+        result.edges.push({ edgeType: 'nova_field_relationship', metadata: { sourceFqn: resource.fqn, targetFqn: rel.targetResourceFqn, fieldType: rel.fieldType } });
+      }
+      for (const a of resource.actions) {
+        result.edges.push({ edgeType: 'nova_action_on', metadata: { sourceFqn: a, targetFqn: resource.fqn } });
+      }
+      for (const f of resource.filters) {
+        result.edges.push({ edgeType: 'nova_filter_on', metadata: { sourceFqn: f, targetFqn: resource.fqn } });
+      }
+      for (const l of resource.lenses) {
+        result.edges.push({ edgeType: 'nova_lens_on', metadata: { sourceFqn: l, targetFqn: resource.fqn } });
+      }
+      return;
+    }
+
+    const metric = extractNovaMetric(source, filePath);
+    if (metric) {
+      result.frameworkRole = 'nova_metric';
+      for (const m of metric.queriedModels) {
+        result.edges.push({ edgeType: 'nova_metric_queries', metadata: { sourceFqn: metric.fqn, targetFqn: m } });
+      }
+    }
+  }
+
+  private resolveNovaEdges(
+    source: string,
+    file: { id: number; path: string },
+    ctx: ResolveContext,
+    edges: RawEdge[],
+  ): void {
+    const resource = extractNovaResource(source, file.path);
+    if (resource) {
+      const sourceSymbol = ctx.getSymbolByFqn(resource.fqn);
+      if (!sourceSymbol) return;
+
+      if (resource.modelFqn) {
+        const modelSymbol = ctx.getSymbolByFqn(resource.modelFqn);
+        if (modelSymbol) {
+          edges.push({ sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id, targetNodeType: 'symbol', targetRefId: modelSymbol.id, edgeType: 'nova_resource_for' });
+        }
+      }
+      for (const rel of resource.fieldRelationships) {
+        const targetSymbol = ctx.getSymbolByFqn(rel.targetResourceFqn);
+        if (targetSymbol) {
+          edges.push({ sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id, targetNodeType: 'symbol', targetRefId: targetSymbol.id, edgeType: 'nova_field_relationship', metadata: { fieldType: rel.fieldType } });
+        }
+      }
+      return;
+    }
+
+    const metric = extractNovaMetric(source, file.path);
+    if (metric) {
+      const metricSymbol = ctx.getSymbolByFqn(metric.fqn);
+      if (!metricSymbol) return;
+      for (const modelFqn of metric.queriedModels) {
+        const modelSymbol = ctx.getSymbolByFqn(modelFqn);
+        if (modelSymbol) {
+          edges.push({ sourceNodeType: 'symbol', sourceRefId: metricSymbol.id, targetNodeType: 'symbol', targetRefId: modelSymbol.id, edgeType: 'nova_metric_queries' });
+        }
+      }
+    }
   }
 
   private processFilamentNode(

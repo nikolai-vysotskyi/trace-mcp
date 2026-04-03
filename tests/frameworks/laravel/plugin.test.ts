@@ -80,7 +80,7 @@ describe('LaravelPlugin', () => {
     it('all edge types have laravel or livewire category', () => {
       const schema = plugin.registerSchema();
       for (const et of schema.edgeTypes!) {
-        expect(['laravel', 'livewire', 'filament']).toContain(et.category);
+        expect(['laravel', 'livewire', 'filament', 'nova', 'blade']).toContain(et.category);
       }
     });
   });

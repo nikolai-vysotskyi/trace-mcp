@@ -21,6 +21,7 @@ import { getRequestFlow } from './tools/flow.js';
 import { getModelContext } from './tools/model.js';
 import { getSchema } from './tools/schema.js';
 import { getEventGraph } from './tools/events.js';
+import { findReferences } from './tools/references.js';
 
 /** Compact JSON — no pretty-printing; saves 25–35% tokens on every response */
 function j(value: unknown): string {
@@ -386,6 +387,23 @@ export function createServer(
       },
     );
   }
+
+  server.tool(
+    'find_references',
+    'Find all places that reference a symbol or file (incoming edges: imports, calls, renders, dispatches, etc.)',
+    {
+      symbol_id: z.string().optional().describe('Symbol ID to find references for'),
+      fqn: z.string().optional().describe('Fully qualified name to find references for'),
+      file_path: z.string().optional().describe('File path to find references for'),
+    },
+    async ({ symbol_id, fqn, file_path }) => {
+      const result = findReferences(store, { symbolId: symbol_id, fqn, filePath: file_path });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
 
   // --- Resources ---
 

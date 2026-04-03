@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import path from 'node:path';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
@@ -89,5 +89,132 @@ describe('get_model_context', () => {
     if (result.isErr()) {
       expect(result.error.code).toBe('NOT_FOUND');
     }
+  });
+});
+
+describe('get_model_context — Mongoose ORM path', () => {
+  let store: Store;
+
+  beforeEach(() => {
+    const db = initializeDatabase(':memory:');
+    store = new Store(db);
+  });
+
+  it('finds Mongoose model by name', () => {
+    const fileId = store.insertFile('models/user.ts', 'typescript', 'h1', 100);
+    store.insertOrmModel(
+      {
+        name: 'User',
+        orm: 'mongoose',
+        collectionOrTable: 'users',
+        fields: [
+          { name: 'email', type: 'String', required: true },
+          { name: 'name', type: 'String' },
+        ],
+        metadata: { virtuals: ['fullName'], methods: ['comparePassword'] },
+      },
+      fileId,
+    );
+
+    const result = getModelContext(store, 'User');
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    const ctx = result.value;
+    expect(ctx.model.name).toBe('User');
+    expect(ctx.model.orm).toBe('mongoose');
+    expect(ctx.model.collection).toBe('users');
+    expect(ctx.model.filePath).toContain('user.ts');
+  });
+
+  it('returns fields as schema rows', () => {
+    const fileId = store.insertFile('models/post.ts', 'typescript', 'h2', 100);
+    store.insertOrmModel(
+      {
+        name: 'Post',
+        orm: 'mongoose',
+        fields: [{ name: 'title', type: 'String' }, { name: 'body', type: 'String' }],
+      },
+      fileId,
+    );
+
+    const result = getModelContext(store, 'Post');
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value.schema.length).toBe(1);
+    expect(result.value.schema[0].columns.length).toBe(2);
+  });
+
+  it('returns associations from orm_associations', () => {
+    const fileId = store.insertFile('models/assoc.ts', 'typescript', 'h3', 100);
+    const userId = store.insertOrmModel({ name: 'User', orm: 'mongoose' }, fileId);
+    const postId = store.insertOrmModel({ name: 'Post', orm: 'mongoose' }, fileId);
+    store.insertOrmAssociation(userId, postId, 'Post', 'hasMany');
+
+    const result = getModelContext(store, 'User');
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+
+    const rels = result.value.relationships;
+    expect(rels.length).toBe(1);
+    expect(rels[0].type).toBe('hasMany');
+    expect(rels[0].relatedModel).toBe('Post');
+  });
+
+  it('includes ormMetadata', () => {
+    const fileId = store.insertFile('models/cat.ts', 'typescript', 'h4', 100);
+    store.insertOrmModel(
+      {
+        name: 'Cat',
+        orm: 'mongoose',
+        metadata: { virtuals: ['fullName'], middleware: [{ hook: 'pre', event: 'save' }] },
+      },
+      fileId,
+    );
+
+    const result = getModelContext(store, 'Cat');
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value.ormMetadata).toBeDefined();
+    expect((result.value.ormMetadata as any).virtuals).toContain('fullName');
+  });
+});
+
+describe('get_model_context — Sequelize ORM path', () => {
+  let store: Store;
+
+  beforeEach(() => {
+    const db = initializeDatabase(':memory:');
+    store = new Store(db);
+  });
+
+  it('finds Sequelize model by name', () => {
+    const fileId = store.insertFile('models/order.ts', 'typescript', 'h5', 100);
+    store.insertOrmModel(
+      {
+        name: 'Order',
+        orm: 'sequelize',
+        collectionOrTable: 'orders',
+        fields: [{ name: 'status', type: 'STRING' }],
+      },
+      fileId,
+    );
+
+    const result = getModelContext(store, 'Order');
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value.model.orm).toBe('sequelize');
+    expect(result.value.model.collection).toBe('orders');
+  });
+
+  it('Eloquent lookup not confused by ORM model', () => {
+    // ORM model takes priority — Eloquent fallback only if ORM not found
+    const fileId = store.insertFile('models/item.ts', 'typescript', 'h6', 100);
+    store.insertOrmModel({ name: 'Item', orm: 'sequelize' }, fileId);
+
+    const result = getModelContext(store, 'Item');
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) return;
+    expect(result.value.model.orm).toBe('sequelize');
   });
 });

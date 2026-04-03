@@ -25,6 +25,31 @@ import type {
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 
+/** Map an Expo Router app/ file path to a route string. Returns null if not in app/ dir. */
+export function expoFileToRoute(filePath: string): { route: string; isLayout: boolean; is404: boolean } | null {
+  // Normalize to forward slashes
+  const normalized = filePath.replace(/\\/g, '/');
+  const match = normalized.match(/(?:^|\/)app\/(.+)\.(tsx?|jsx?)$/);
+  if (!match) return null;
+
+  let routePart = match[1];
+  const isLayout = routePart.endsWith('_layout') || routePart === '_layout';
+  const is404 = routePart.includes('+not-found');
+
+  // Remove route groups: (tabs)/ → (keep for grouping but don't add to path)
+  routePart = routePart.replace(/\([^)]+\)\//g, '');
+  // Dynamic segments: [id] → :id, [...slug] → *
+  routePart = routePart.replace(/\[\.\.\.([^\]]+)\]/g, '*');
+  routePart = routePart.replace(/\[([^\]]+)\]/g, ':$1');
+  // Remove _layout suffix
+  routePart = routePart.replace(/_layout$/, '');
+  // index → empty
+  routePart = routePart.replace(/\/index$|^index$/, '');
+
+  const route = '/' + routePart.replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
+  return { route: route || '/', isLayout, is404 };
+}
+
 export class ReactNativePlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
     name: 'react-native',
@@ -33,18 +58,26 @@ export class ReactNativePlugin implements FrameworkPlugin {
     dependencies: [],
   };
 
+  private hasExpoRouter = false;
+
   detect(ctx: ProjectContext): boolean {
     const deps = {
       ...(ctx.packageJson?.dependencies as Record<string, string> | undefined),
       ...(ctx.packageJson?.devDependencies as Record<string, string> | undefined),
     };
-    if ('react-native' in deps) return true;
+    if ('react-native' in deps) {
+      if ('expo-router' in deps) {
+        this.hasExpoRouter = true;
+      }
+      return true;
+    }
 
     try {
       const pkgPath = path.join(ctx.rootPath, 'package.json');
       const content = fs.readFileSync(pkgPath, 'utf-8');
       const json = JSON.parse(content);
       const allDeps = { ...json.dependencies, ...json.devDependencies };
+      if ('expo-router' in allDeps) this.hasExpoRouter = true;
       return 'react-native' in allDeps;
     } catch {
       return false;
@@ -59,6 +92,8 @@ export class ReactNativePlugin implements FrameworkPlugin {
         { name: 'rn_uses_native_module', category: 'react-native', description: 'Uses NativeModules/TurboModuleRegistry' },
         { name: 'rn_platform_specific', category: 'react-native', description: 'Platform-specific file variant' },
         { name: 'rn_deep_links_to', category: 'react-native', description: 'Deep link maps to screen' },
+        { name: 'expo_route', category: 'expo-router', description: 'Expo Router file-based route' },
+        { name: 'expo_layout', category: 'expo-router', description: 'Expo Router layout file' },
       ],
     };
   }
@@ -79,6 +114,32 @@ export class ReactNativePlugin implements FrameworkPlugin {
       rnScreens: [],
       warnings: [],
     };
+
+    // Expo Router: file-based routing from app/ directory
+    if (this.hasExpoRouter) {
+      const expoRoute = expoFileToRoute(filePath);
+      if (expoRoute && !expoRoute.is404) {
+        if (expoRoute.isLayout) {
+          result.frameworkRole = 'expo_layout';
+        } else {
+          // Navigation calls in this screen
+          const navCalls = extractNavigationCalls(source);
+          result.rnScreens = [{
+            name: expoRoute.route,
+            componentPath: filePath,
+            navigatorType: 'native-stack',
+            deepLink: expoRoute.route,
+            metadata: {
+              expoRoute: true,
+              navigationCalls: navCalls,
+              nativeModules: hasNativeModuleUsage(source) ? extractNativeModuleNames(source) : [],
+            },
+          }];
+          result.frameworkRole = 'expo_route';
+        }
+        return ok(result);
+      }
+    }
 
     // Extract screens from navigator definitions
     const screens = extractNavigatorScreens(source, filePath);

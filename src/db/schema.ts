@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const DDL = `
 -- ============================================================
@@ -206,6 +206,12 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Applied migration log (one row per migration that has been run)
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TEXT NOT NULL
+);
 `;
 
 const SEED_NODE_TYPES = ['symbol', 'file', 'route', 'component', 'migration', 'orm_model', 'rn_screen'];
@@ -242,6 +248,13 @@ const SEED_EDGE_TYPES = [
   { name: 'blade_extends', category: 'blade', description: '@extends directive' },
   { name: 'blade_includes', category: 'blade', description: '@include directive' },
   { name: 'blade_component', category: 'blade', description: '<x-component> or @component' },
+  // Nova edges
+  { name: 'nova_resource_for', category: 'nova', description: 'Nova Resource → Eloquent Model' },
+  { name: 'nova_field_relationship', category: 'nova', description: 'Nova Resource → related Nova Resource via field' },
+  { name: 'nova_action_on', category: 'nova', description: 'Action → Resource' },
+  { name: 'nova_filter_on', category: 'nova', description: 'Filter → Resource' },
+  { name: 'nova_lens_on', category: 'nova', description: 'Lens → Resource' },
+  { name: 'nova_metric_queries', category: 'nova', description: 'Metric → Eloquent Model' },
   // Filament edges
   { name: 'filament_resource_for', category: 'filament', description: 'Resource → Eloquent Model' },
   { name: 'filament_relation_manager', category: 'filament', description: 'Resource → RelationManager' },
@@ -264,6 +277,9 @@ const SEED_EDGE_TYPES = [
   { name: 'nest_guards', category: 'nestjs', description: 'UseGuards on controller/method' },
   { name: 'nest_pipes', category: 'nestjs', description: 'UsePipes on controller/method' },
   { name: 'nest_interceptors', category: 'nestjs', description: 'UseInterceptors on controller/method' },
+  { name: 'nest_gateway_event', category: 'nestjs', description: 'WebSocket gateway @SubscribeMessage handler' },
+  { name: 'nest_message_pattern', category: 'nestjs', description: 'Microservice @MessagePattern handler' },
+  { name: 'nest_event_pattern', category: 'nestjs', description: 'Microservice @EventPattern handler' },
   // Next.js edges
   { name: 'next_renders_page', category: 'nextjs', description: 'Layout renders page' },
   { name: 'next_server_action', category: 'nextjs', description: 'Server action reference' },
@@ -272,6 +288,8 @@ const SEED_EDGE_TYPES = [
   { name: 'express_route', category: 'express', description: 'Express route handler' },
   { name: 'express_middleware', category: 'express', description: 'Express middleware' },
   { name: 'express_mounts', category: 'express', description: 'Router mount via app.use' },
+  { name: 'express_error_handler', category: 'express', description: '4-arg error handling middleware' },
+  { name: 'express_param_handler', category: 'express', description: 'app.param() route parameter handler' },
   // Mongoose edges
   { name: 'mongoose_references', category: 'mongoose', description: 'ObjectId ref to another model' },
   { name: 'mongoose_has_virtual', category: 'mongoose', description: 'Schema virtual field' },
@@ -295,11 +313,60 @@ const SEED_EDGE_TYPES = [
   { name: 'rn_uses_native_module', category: 'react-native', description: 'Uses NativeModules/TurboModuleRegistry' },
   { name: 'rn_platform_specific', category: 'react-native', description: 'Platform-specific file variant' },
   { name: 'rn_deep_links_to', category: 'react-native', description: 'Deep link maps to screen' },
+  { name: 'expo_route', category: 'expo-router', description: 'Expo Router file-based route' },
+  { name: 'expo_layout', category: 'expo-router', description: 'Expo Router layout file' },
   // Workspace edges
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },
   { name: 'type_import', category: 'workspace', description: 'Cross-workspace type import' },
 ];
+
+/**
+ * Incremental migrations, keyed by target schema version.
+ * Each entry runs exactly once, in version order.
+ * Add new entries here whenever the schema changes.
+ */
+const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
+  2: (db) => {
+    // v2: add schema_migrations table (already in DDL via CREATE TABLE IF NOT EXISTS,
+    // but mark it as applied for all future installs)
+    db.exec(`
+      INSERT OR IGNORE INTO edge_types (name, category, directed, description)
+      VALUES
+        ('calls',         'core', 1, 'Direct function/method call'),
+        ('references',    'core', 1, 'Symbol reference (read/write)'),
+        ('test_covers',   'core', 1, 'Test file covers a symbol or file'),
+        ('graphql_resolves', 'graphql', 1, 'Resolver implements a GraphQL field'),
+        ('graphql_references_type', 'graphql', 1, 'Resolver/field references a GraphQL type');
+    `);
+  },
+};
+
+function runMigrations(db: Database.Database, fromVersion: number): void {
+  const versions = Object.keys(MIGRATIONS)
+    .map(Number)
+    .filter((v) => v > fromVersion)
+    .sort((a, b) => a - b);
+
+  if (versions.length === 0) return;
+
+  const insertMigration = db.prepare(
+    "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+  );
+  const updateVersion = db.prepare(
+    "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('schema_version', ?)",
+  );
+
+  for (const version of versions) {
+    logger.info({ version }, 'Running schema migration');
+    db.transaction(() => {
+      MIGRATIONS[version](db);
+      insertMigration.run(version, new Date().toISOString());
+      updateVersion.run(String(version));
+    })();
+    logger.info({ version }, 'Schema migration applied');
+  }
+}
 
 export function initializeDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
@@ -311,12 +378,27 @@ export function initializeDatabase(dbPath: string): Database.Database {
 
   db.exec(DDL);
 
-  // Check schema version
+  // Check schema version and run any pending migrations
   const versionRow = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
 
   if (!versionRow) {
-    db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
+    // Fresh database — seed and stamp with current version
     seedDatabase(db);
+    db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
+    // Mark all migrations as already applied (they're baked into seed/DDL)
+    const insertMigration = db.prepare(
+      "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+    );
+    const now = new Date().toISOString();
+    for (const v of Object.keys(MIGRATIONS).map(Number)) {
+      insertMigration.run(v, now);
+    }
+  } else {
+    const currentVersion = parseInt(versionRow.value, 10);
+    if (currentVersion < SCHEMA_VERSION) {
+      logger.info({ from: currentVersion, to: SCHEMA_VERSION }, 'Schema upgrade required');
+      runMigrations(db, currentVersion);
+    }
   }
 
   logger.debug({ dbPath, schemaVersion: SCHEMA_VERSION }, 'Database initialized');

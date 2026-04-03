@@ -53,15 +53,13 @@ describe('NestJS e2e through pipeline', () => {
   it('creates DI injection edges', () => {
     const edges = store.getEdgesByType('nest_injects');
     // UsersController constructor injects UsersService
-    // At minimum we should see some injection edges
-    // (depends on whether the plugin resolves FQNs in Pass 2)
-    // Even if 0, the test documents the current state
-    console.log(`nest_injects edges: ${edges.length}`);
+    expect(edges.length).toBeGreaterThan(0);
   });
 
   it('creates module import edges', () => {
     const edges = store.getEdgesByType('nest_module_imports');
-    console.log(`nest_module_imports edges: ${edges.length}`);
+    // AppModule imports UsersModule
+    expect(edges.length).toBeGreaterThan(0);
   });
 
   it('extracts symbols from NestJS files', () => {

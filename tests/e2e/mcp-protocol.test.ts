@@ -78,7 +78,7 @@ describe('MCP Protocol E2E', () => {
   });
 
   describe('search', () => {
-    it('returns results for matching symbols', () => {
+    it('returns results for matching symbols', async () => {
       const fileId = store.insertFile('app/User.php', 'php', 'h1', 100);
       store.insertSymbol(fileId, {
         symbolId: 'app/User.php::User#class',
@@ -89,13 +89,13 @@ describe('MCP Protocol E2E', () => {
         byteEnd: 100,
       });
 
-      const result = search(store, 'User', {}, 20, 0, {});
+      const result = await search(store, 'User', {}, 20, 0, {});
       expect(result.items.length).toBeGreaterThan(0);
       expect(result.items[0]!.symbol.name).toBe('User');
     });
 
-    it('returns empty results for no match', () => {
-      const result = search(store, 'nonexistent_xyzzy', {}, 20, 0, {});
+    it('returns empty results for no match', async () => {
+      const result = await search(store, 'nonexistent_xyzzy', {}, 20, 0, {});
       expect(result.items).toHaveLength(0);
     });
   });
