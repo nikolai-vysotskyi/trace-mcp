@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.db
+*.db-wal
+*.db-shm
+.trace-mcp/
+.env
+.env.local
+coverage/
+.idea/

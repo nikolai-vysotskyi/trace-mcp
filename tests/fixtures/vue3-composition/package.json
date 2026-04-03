@@ -1,0 +1,6 @@
+{
+  "name": "vue3-composition-fixture",
+  "dependencies": {
+    "vue": "^3.4.0"
+  }
+}

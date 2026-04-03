@@ -1,0 +1,48 @@
+{
+  "name": "trace-mcp",
+  "version": "0.1.0",
+  "description": "Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "trace-mcp": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "serve": "tsx src/cli.ts serve"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "ELv2",
+  "author": "Nikolai Vysotskyi",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@parcel/watcher": "^2.5.6",
+    "@vue/compiler-sfc": "^3.5.32",
+    "better-sqlite3": "^11.7.0",
+    "commander": "^13.1.0",
+    "cosmiconfig": "^9.0.0",
+    "fast-glob": "^3.3.3",
+    "neverthrow": "^8.2.0",
+    "oxc-resolver": "^11.19.1",
+    "pino": "^9.6.0",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-php": "^0.22.8",
+    "tree-sitter-typescript": "^0.23.2",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.0",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.1.0"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "inertia-laravel-vue-fixture",
+  "dependencies": {
+    "vue": "^3.4.0",
+    "@inertiajs/vue3": "^1.0.0"
+  }
+}

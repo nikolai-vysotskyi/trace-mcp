@@ -1,0 +1,7 @@
+{
+  "name": "nuxt3-fixture",
+  "dependencies": {
+    "nuxt": "^3.10.0",
+    "vue": "^3.4.0"
+  }
+}

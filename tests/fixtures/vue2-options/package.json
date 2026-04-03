@@ -1,0 +1,6 @@
+{
+  "name": "vue2-options-fixture",
+  "dependencies": {
+    "vue": "^2.7.0"
+  }
+}
