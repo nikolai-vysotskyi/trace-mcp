@@ -50,6 +50,7 @@ export const TraceMcpConfigSchema = z.object({
   exclude: z.array(z.string()).default([
     'vendor/**', 'node_modules/**', '.git/**',
     'storage/**', 'bootstrap/cache/**', '.nuxt/**',
+    '**/.env', '**/.env.*',
   ]),
   db: z.object({
     path: z.string().default('.trace-mcp/index.db'),

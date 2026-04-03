@@ -83,7 +83,11 @@ function buildCallNode(
   const node = makeNode(symbol, file?.path ?? '', symbol.line_start, [], []);
   visited.add(nodeId);
 
-  if (depth <= 0) return node;
+  if (depth <= 0) {
+    delete node.calls;
+    delete node.called_by;
+    return node;
+  }
 
   // Outgoing: what this symbol calls
   const outgoing = store.getOutgoingEdges(nodeId);

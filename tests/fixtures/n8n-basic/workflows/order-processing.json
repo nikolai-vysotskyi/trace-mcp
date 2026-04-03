@@ -1,0 +1,98 @@
+{
+  "name": "Order Processing",
+  "nodes": [
+    {
+      "id": "trigger-1",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "parameters": {
+        "path": "/orders/new",
+        "httpMethod": "POST"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "validate-1",
+      "name": "Validate Order",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300],
+      "parameters": {
+        "jsCode": "const order = $input.first().json;\nif (!order.items || order.items.length === 0) {\n  throw new Error('No items in order');\n}\nreturn [{ json: { ...order, validated: true } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "db-1",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.postgres",
+      "position": [650, 200],
+      "parameters": {
+        "operation": "insert",
+        "table": "orders"
+      },
+      "credentials": {
+        "postgres": { "id": "1", "name": "Production DB" }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "notify-1",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [650, 400],
+      "parameters": {
+        "url": "https://api.slack.com/webhook/notify",
+        "method": "POST"
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "sub-1",
+      "name": "Process Payment",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [850, 300],
+      "parameters": {
+        "workflowId": "payment-flow"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "cron-1",
+      "name": "Daily Cleanup",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 600],
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 24 }] }
+      },
+      "typeVersion": 1,
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          { "node": "Validate Order", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validate Order": {
+      "main": [
+        [
+          { "node": "Save to Database", "type": "main", "index": 0 },
+          { "node": "Send Notification", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Save to Database": {
+      "main": [
+        [
+          { "node": "Process Payment", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "tags": ["orders", "production"]
+}

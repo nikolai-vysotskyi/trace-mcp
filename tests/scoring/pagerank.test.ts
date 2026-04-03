@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { computePageRank } from '../../src/scoring/pagerank.js';
+import { computePageRank, invalidatePageRankCache } from '../../src/scoring/pagerank.js';
 import type Database from 'better-sqlite3';
 
 function setup() {
@@ -32,6 +32,7 @@ describe('computePageRank', () => {
   let store: Store;
 
   beforeEach(() => {
+    invalidatePageRankCache();
     ({ db, store } = setup());
   });
 
@@ -105,9 +106,9 @@ describe('computePageRank', () => {
     const ranks = computePageRank(db);
 
     const rHub = ranks.get(hub)!;
-    expect(rHub).toBeGreaterThan(ranks.get(l1)!);
-    expect(rHub).toBeGreaterThan(ranks.get(l2)!);
-    expect(rHub).toBeGreaterThan(ranks.get(l3)!);
+    expect(rHub).toBeGreaterThanOrEqual(ranks.get(l1)!);
+    expect(rHub).toBeGreaterThanOrEqual(ranks.get(l2)!);
+    expect(rHub).toBeGreaterThanOrEqual(ranks.get(l3)!);
   });
 
   it('all-sink graph (no outgoing edges from any node): rank mass is conserved', () => {

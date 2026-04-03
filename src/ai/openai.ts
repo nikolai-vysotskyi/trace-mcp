@@ -35,6 +35,7 @@ class OpenAIEmbeddingService implements EmbeddingService {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({ model: this.model, input: texts }),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!resp.ok) {
@@ -81,6 +82,7 @@ class OpenAIInferenceService implements InferenceService {
         ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
       }),
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!resp.ok) {

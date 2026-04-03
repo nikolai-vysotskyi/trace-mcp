@@ -4,7 +4,7 @@
  */
 import type Database from 'better-sqlite3';
 import { searchFts, type FtsResult } from '../db/fts.js';
-import type { VectorStore, EmbeddingService } from './interfaces.js';
+import type { VectorStore, EmbeddingService, RerankerService } from './interfaces.js';
 
 export interface HybridSearchResult {
   symbolId: number;
@@ -29,6 +29,7 @@ export async function hybridSearch(
   vectorStore: VectorStore | null,
   embeddingService: EmbeddingService | null,
   limit: number,
+  reranker?: RerankerService | null,
 ): Promise<HybridSearchResult[]> {
   // 1. FTS5 search
   const ftsResults = searchFts(db, query, limit * 3);
@@ -104,7 +105,31 @@ export async function hybridSearch(
     }
   }
 
-  // 4. Sort by RRF score descending, return top limit
+  // 4. Sort by RRF score descending
   fused.sort((a, b) => b.score - a.score);
+
+  // 5. Optional reranking
+  if (reranker && fused.length > 1) {
+    try {
+      const candidates = fused.slice(0, limit * 2);
+      const docs = candidates.map((c) => ({
+        id: c.symbolId,
+        text: [c.kind, c.fqn ?? c.name, c.name].join(' '),
+      }));
+      const reranked = await reranker.rerank(query, docs, limit);
+      const rerankedIds = new Map(reranked.map((r) => [r.id, r.score]));
+      const result: HybridSearchResult[] = [];
+      for (const r of reranked) {
+        const original = candidates.find((c) => c.symbolId === r.id);
+        if (original) {
+          result.push({ ...original, score: r.score });
+        }
+      }
+      return result;
+    } catch {
+      // Reranker failed, fall through to RRF-only results
+    }
+  }
+
   return fused.slice(0, limit);
 }

@@ -440,6 +440,9 @@ const SEED_EDGE_TYPES = [
   { name: 'react_custom_hook_uses', category: 'react', description: 'Component calls a custom hook' },
   { name: 'react_use_client', category: 'react', description: "'use client' directive (React 19)" },
   { name: 'react_use_server', category: 'react', description: "'use server' directive (React 19)" },
+  // Hono edges
+  { name: 'hono_route', category: 'hono', description: 'Hono route handler' },
+  { name: 'hono_middleware', category: 'hono', description: 'Hono middleware usage' },
   // Workspace edges
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },

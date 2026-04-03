@@ -1,0 +1,36 @@
+{
+  "name": "payment-flow",
+  "nodes": [
+    {
+      "id": "wf-trigger",
+      "name": "Workflow Trigger",
+      "type": "n8n-nodes-base.workflowTrigger",
+      "position": [250, 300],
+      "typeVersion": 1
+    },
+    {
+      "id": "stripe-1",
+      "name": "Charge Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [450, 300],
+      "parameters": {
+        "url": "https://api.stripe.com/v1/charges",
+        "method": "POST"
+      },
+      "credentials": {
+        "httpHeaderAuth": { "id": "2", "name": "Stripe API Key" }
+      },
+      "typeVersion": 3
+    }
+  ],
+  "connections": {
+    "Workflow Trigger": {
+      "main": [
+        [
+          { "node": "Charge Card", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false
+}

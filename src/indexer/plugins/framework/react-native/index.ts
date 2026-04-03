@@ -168,6 +168,7 @@ export class ReactNativePlugin implements FrameworkPlugin {
     // Build screen-name → file ID map, and collect navigation calls per file
     const screenNameToFileId = new Map<string, number>();
     const fileNavCalls = new Map<number, string[]>();
+    const fileExpoNavCalls = new Map<number, string[]>();
 
     for (const file of allFiles) {
       if (file.language !== 'typescript' && file.language !== 'javascript') continue;
@@ -189,14 +190,24 @@ export class ReactNativePlugin implements FrameworkPlugin {
         }
       }
 
-      // Navigation calls in any file
+      // React Navigation calls (screen-name based)
       const navCalls = extractNavigationCalls(source);
       if (navCalls.length > 0) {
         fileNavCalls.set(file.id, navCalls);
       }
+
+      // Expo Router calls (path-based)
+      if (this.hasExpoRouter) {
+        const expoCalls = extractExpoNavigationCalls(source);
+        if (expoCalls.length > 0) {
+          const existing = fileExpoNavCalls.get(file.id) ?? [];
+          existing.push(...expoCalls);
+          fileExpoNavCalls.set(file.id, existing);
+        }
+      }
     }
 
-    // Create rn_navigates_to edges: source file → target screen's file
+    // Create rn_navigates_to edges from React Navigation calls (name-based)
     for (const [sourceFileId, calls] of fileNavCalls) {
       for (const targetName of calls) {
         const targetFileId = screenNameToFileId.get(targetName);
@@ -209,6 +220,29 @@ export class ReactNativePlugin implements FrameworkPlugin {
           targetRefId: targetFileId,
           edgeType: 'rn_navigates_to',
           metadata: { targetScreen: targetName },
+        });
+      }
+    }
+
+    // Create rn_navigates_to edges from Expo Router calls (path-based)
+    const routePatterns = Array.from(screenNameToFileId.keys());
+    for (const [sourceFileId, paths] of fileExpoNavCalls) {
+      for (const navPath of paths) {
+        // Try exact match first, then pattern match
+        let targetFileId = screenNameToFileId.get(navPath);
+        if (targetFileId == null) {
+          const matched = routePatterns.find((rp) => matchExpoRoute(navPath, rp));
+          if (matched) targetFileId = screenNameToFileId.get(matched);
+        }
+        if (targetFileId == null) continue;
+
+        edges.push({
+          sourceNodeType: 'file',
+          sourceRefId: sourceFileId,
+          targetNodeType: 'file',
+          targetRefId: targetFileId,
+          edgeType: 'rn_navigates_to',
+          metadata: { targetScreen: navPath, expoRouter: true },
         });
       }
     }
@@ -315,6 +349,70 @@ export function extractNavigationCalls(source: string): string[] {
     targets.push(match[2]);
   }
   return [...new Set(targets)];
+}
+
+/**
+ * Extract Expo Router navigation calls:
+ * - router.push('/path'), router.replace('/path'), router.navigate('/path')
+ * - <Link href="/path" />
+ * - router.push({ pathname: '/path' })
+ *
+ * Returns raw path strings (e.g. '/settings', '/profile/123').
+ */
+export function extractExpoNavigationCalls(source: string): string[] {
+  const paths: string[] = [];
+
+  // router.push('/path'), router.replace('/path'), router.navigate('/path')
+  const routerCallRegex = /router\.(push|replace|navigate)\s*\(\s*['"]([^'"]+)['"]/g;
+  let match: RegExpExecArray | null;
+  while ((match = routerCallRegex.exec(source)) !== null) {
+    paths.push(match[2]);
+  }
+
+  // router.push(`/path/${id}`) — template literal with simple interpolation
+  const templateRegex = /router\.(push|replace|navigate)\s*\(\s*`([^`]+)`/g;
+  while ((match = templateRegex.exec(source)) !== null) {
+    // Replace ${...} with :param placeholder for route matching
+    const path = match[2].replace(/\$\{[^}]+\}/g, ':param');
+    paths.push(path);
+  }
+
+  // <Link href="/path" /> or <Link href={"/path"} />
+  const linkRegex = /<Link\s+[^>]*href\s*=\s*(?:\{?\s*)?['"]([^'"]+)['"]/g;
+  while ((match = linkRegex.exec(source)) !== null) {
+    paths.push(match[1]);
+  }
+
+  // router.push({ pathname: '/path' })
+  const objectRegex = /router\.(push|replace|navigate)\s*\(\s*\{[^}]*pathname\s*:\s*['"]([^'"]+)['"]/g;
+  while ((match = objectRegex.exec(source)) !== null) {
+    paths.push(match[2]);
+  }
+
+  return [...new Set(paths)];
+}
+
+/**
+ * Match a concrete URL path (e.g. '/profile/123') against an Expo Router
+ * route pattern (e.g. '/profile/:id'). Returns true if they match.
+ */
+export function matchExpoRoute(path: string, routePattern: string): boolean {
+  if (path === routePattern) return true;
+
+  const pathParts = path.split('/').filter(Boolean);
+  const routeParts = routePattern.split('/').filter(Boolean);
+
+  if (pathParts.length !== routeParts.length) {
+    // Check for catch-all (*) at end
+    if (routeParts[routeParts.length - 1] === '*' && pathParts.length >= routeParts.length - 1) {
+      return routeParts.slice(0, -1).every((rp, i) => rp.startsWith(':') || rp === pathParts[i]);
+    }
+    return false;
+  }
+
+  return routeParts.every((rp, i) =>
+    rp.startsWith(':') || rp === ':param' || rp === pathParts[i],
+  );
 }
 
 /**

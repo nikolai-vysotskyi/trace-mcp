@@ -129,6 +129,10 @@ export function getFeatureContext(
 
   const now = new Date();
 
+  // Batch-resolve node IDs for all FTS results in one query (avoids 100× getNodeId)
+  const ftsSymIds = ftsResults.map((r) => r.symbolId);
+  const ftsNodeMap = store.getNodeIdsBatch('symbol', ftsSymIds);
+
   // Score FTS results — no extra DB lookups needed, all data from the JOIN above
   type ScoredSymbol = { symbol: SymbolRow; file: FileRow; score: number };
   const scored: ScoredSymbol[] = [];
@@ -139,7 +143,7 @@ export function getFeatureContext(
     seenIds.add(fts.symbolId);
 
     const relevance = 1 - (fts.rank - minRank) / rankSpread;
-    const nodeId = store.getNodeId('symbol', fts.symbolId);
+    const nodeId = ftsNodeMap.get(fts.symbolId);
     const pr = nodeId ? (pagerankMap.get(nodeId) ?? 0) / maxPr : 0;
     const recency = computeRecency(fts.indexedAt, now);
     const typeBonus = getTypeBonus(fts.kind);
@@ -173,25 +177,19 @@ export function getFeatureContext(
   // Sort by initial score before graph expansion so we expand the best matches
   scored.sort((a, b) => b.score - a.score);
 
-  // Graph expansion: follow edges 1-2 hops for top results
+  // Graph expansion: follow edges 1 hop for top results
   const topResults = scored.slice(0, 10);
-  // Batch-resolve node IDs for top results
+
+  // Batch-resolve node IDs for top results (1 query)
   const topSymIds = topResults.map((item) => item.symbol.id);
   const topNodeMap = store.getNodeIdsBatch('symbol', topSymIds);
+  const topNodeIds = topResults.map((item) => topNodeMap.get(item.symbol.id)).filter((id): id is number => id != null);
 
-  // Collect all edges for top results first, then batch-resolve refs/symbols/files
-  const allEdges: Array<{ nodeId: number; edge: { source_node_id: number; target_node_id: number } }> = [];
-  for (const item of topResults) {
-    const nodeId = topNodeMap.get(item.symbol.id);
-    if (!nodeId) continue;
-    for (const edge of [...store.getOutgoingEdges(nodeId), ...store.getIncomingEdges(nodeId)]) {
-      allEdges.push({ nodeId, edge });
-    }
-  }
+  // Fetch all adjacent edges in one query, then batch-resolve refs/symbols/files
+  const allEdges = store.getEdgesForNodesBatch(topNodeIds);
 
-  // Batch-resolve all "other" node IDs
-  const otherNodeIds = [...new Set(allEdges.map(({ nodeId, edge }) =>
-    edge.source_node_id === nodeId ? edge.target_node_id : edge.source_node_id,
+  const otherNodeIds = [...new Set(allEdges.map((e) =>
+    e.pivot_node_id === e.source_node_id ? e.target_node_id : e.source_node_id,
   ))];
   const nodeRefs = store.getNodeRefsBatch(otherNodeIds);
   const symbolRefIds = [...nodeRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
@@ -199,8 +197,8 @@ export function getFeatureContext(
   const fileIds = [...new Set([...symbolMap.values()].map((s) => s.file_id))];
   const fileMap = store.getFilesByIds(fileIds);
 
-  for (const { nodeId, edge } of allEdges) {
-    const otherNodeId = edge.source_node_id === nodeId
+  for (const edge of allEdges) {
+    const otherNodeId = edge.pivot_node_id === edge.source_node_id
       ? edge.target_node_id
       : edge.source_node_id;
 

@@ -40,11 +40,14 @@ import { DjangoPlugin } from './indexer/plugins/framework/django/index.js';
 import { ReactPlugin } from './indexer/plugins/framework/react/index.js';
 import { TrpcPlugin } from './indexer/plugins/framework/trpc/index.js';
 import { FastifyPlugin } from './indexer/plugins/framework/fastify/index.js';
+import { HonoPlugin } from './indexer/plugins/framework/hono/index.js';
 import { SocketIoPlugin } from './indexer/plugins/framework/socketio/index.js';
 import { ZustandReduxPlugin } from './indexer/plugins/framework/zustand/index.js';
+import { N8nPlugin } from './indexer/plugins/framework/n8n/index.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import { FileWatcher } from './indexer/watcher.js';
-import { createAIProvider, BlobVectorStore, EmbeddingPipeline } from './ai/index.js';
+import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from './ai/index.js';
+import { SummarizationPipeline } from './ai/summarization-pipeline.js';
 import http from 'node:http';
 
 function registerDefaultPlugins(registry: PluginRegistry): void {
@@ -79,8 +82,10 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerFrameworkPlugin(new TrpcPlugin());
   registry.registerFrameworkPlugin(new FastifyPlugin());
   registry.registerFrameworkPlugin(new SocketIoPlugin());
+  registry.registerFrameworkPlugin(new HonoPlugin());
   registry.registerFrameworkPlugin(new ZustandReduxPlugin());
   registry.registerFrameworkPlugin(new ReactPlugin());
+  registry.registerFrameworkPlugin(new N8nPlugin());
 }
 
 const program = new Command();
@@ -123,6 +128,20 @@ program
       ? new EmbeddingPipeline(store, embeddingService, vectorStore)
       : null;
 
+    // Summarization pipeline (uses fast model + inference cache)
+    const inferenceCache = config.ai?.enabled ? new InferenceCache(store.db) : null;
+    const summarizationPipeline = config.ai?.enabled && config.ai.summarize_on_index !== false
+      ? new SummarizationPipeline(
+          store,
+          new CachedInferenceService(aiProvider.fastInference(), inferenceCache!, config.ai.fast_model ?? 'fast'),
+          projectRoot,
+          {
+            batchSize: config.ai.summarize_batch_size ?? 20,
+            kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
+          },
+        )
+      : null;
+
     const runEmbeddings = () => {
       if (!embeddingPipeline) return;
       embeddingPipeline.indexUnembedded().catch((err) => {
@@ -130,13 +149,22 @@ program
       });
     };
 
+    const runSummarization = () => {
+      if (!summarizationPipeline) return;
+      summarizationPipeline.summarizeUnsummarized().catch((err) => {
+        logger.error({ error: err }, 'Summarization failed');
+      });
+    };
+
     // Initial index runs in background so the server starts immediately
-    pipeline.indexAll().then(runEmbeddings).catch((err) => {
+    // Summarization runs first (populates summaries), then embeddings (uses summaries for richer text)
+    pipeline.indexAll().then(() => { runSummarization(); runEmbeddings(); }).catch((err) => {
       logger.error({ error: err }, 'Initial indexing failed');
     });
 
     await watcher.start(projectRoot, config, async (paths) => {
       await pipeline.indexFiles(paths);
+      runSummarization();
       runEmbeddings();
     }, undefined, async (deleted) => {
       pipeline.deleteFiles(deleted);
@@ -191,6 +219,19 @@ program
       ? new EmbeddingPipeline(store, embeddingService, vectorStore)
       : null;
 
+    const inferenceCache2 = config.ai?.enabled ? new InferenceCache(store.db) : null;
+    const summarizationPipeline2 = config.ai?.enabled && config.ai.summarize_on_index !== false
+      ? new SummarizationPipeline(
+          store,
+          new CachedInferenceService(aiProvider.fastInference(), inferenceCache2!, config.ai.fast_model ?? 'fast'),
+          projectRoot,
+          {
+            batchSize: config.ai.summarize_batch_size ?? 20,
+            kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
+          },
+        )
+      : null;
+
     const runEmbeddings = () => {
       if (!embeddingPipeline) return;
       embeddingPipeline.indexUnembedded().catch((err) => {
@@ -198,12 +239,20 @@ program
       });
     };
 
-    pipeline.indexAll().then(runEmbeddings).catch((err) => {
+    const runSummarization2 = () => {
+      if (!summarizationPipeline2) return;
+      summarizationPipeline2.summarizeUnsummarized().catch((err) => {
+        logger.error({ error: err }, 'Summarization failed');
+      });
+    };
+
+    pipeline.indexAll().then(() => { runSummarization2(); runEmbeddings(); }).catch((err) => {
       logger.error({ error: err }, 'Initial indexing failed');
     });
 
     await watcher.start(projectRoot, config, async (paths) => {
       await pipeline.indexFiles(paths);
+      runSummarization2();
       runEmbeddings();
     }, undefined, async (deleted) => {
       pipeline.deleteFiles(deleted);
@@ -227,6 +276,15 @@ program
       bucket.count++;
       return bucket.count > RATE_LIMIT;
     }
+
+    // Periodically evict expired rate-limit buckets to prevent memory leak
+    const rateBucketCleanup = setInterval(() => {
+      const now = Date.now();
+      for (const [ip, bucket] of rateBuckets) {
+        if (now > bucket.resetAt) rateBuckets.delete(ip);
+      }
+    }, RATE_WINDOW_MS);
+    rateBucketCleanup.unref(); // Don't block process exit
 
     // Max request body size (5 MB)
     const MAX_BODY_SIZE = 5 * 1024 * 1024;

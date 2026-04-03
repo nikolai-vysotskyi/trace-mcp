@@ -5,6 +5,8 @@ import {
   ReactNativePlugin,
   extractNavigatorScreens,
   extractNavigationCalls,
+  extractExpoNavigationCalls,
+  matchExpoRoute,
   isPlatformSpecificFile,
   getPlatform,
   hasNativeModuleUsage,

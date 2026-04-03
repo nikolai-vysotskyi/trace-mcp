@@ -5,15 +5,30 @@ interface EdgeRecord {
   target_node_id: number;
 }
 
+/** Cached PageRank result keyed by DB filename + edge count */
+let _cache: { dbName: string; edgeCount: number; result: Map<number, number> } | null = null;
+
+/** Invalidate the cache (call after bulk edge inserts, e.g. reindex) */
+export function invalidatePageRankCache(): void {
+  _cache = null;
+}
+
 /**
  * Simple PageRank on the edges graph.
- * Returns a map of nodeId -> score.
+ * Results are cached and invalidated when the edge count changes.
  */
 export function computePageRank(
   db: Database.Database,
   iterations = 20,
   dampingFactor = 0.85,
 ): Map<number, number> {
+  // Fast cache check: if same DB and edge count hasn't changed, reuse
+  const dbName = db.name;
+  const countRow = db.prepare('SELECT COUNT(*) as cnt FROM edges WHERE resolved = 1').get() as { cnt: number };
+  if (_cache && _cache.dbName === dbName && _cache.edgeCount === countRow.cnt) {
+    return _cache.result;
+  }
+
   const edges = db.prepare(
     'SELECT source_node_id, target_node_id FROM edges WHERE resolved = 1',
   ).all() as EdgeRecord[];
@@ -84,5 +99,6 @@ export function computePageRank(
     }
   }
 
+  _cache = { dbName, edgeCount: countRow.cnt, result: scores };
   return scores;
 }
