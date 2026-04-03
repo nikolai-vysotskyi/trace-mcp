@@ -8,13 +8,24 @@ const IGNORE_DIRS = [
   'bootstrap/cache', '.nuxt', '.next', 'dist', 'build', '.idea',
 ];
 
+/** Debounce window in ms — coalesces rapid saves from editors. */
+export const DEFAULT_DEBOUNCE_MS = 300;
+
 export class FileWatcher {
   private subscription: parcelWatcher.AsyncSubscription | null = null;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPaths: Set<string> = new Set();
+
+  constructor(
+    private readonly _setTimeout: typeof setTimeout = setTimeout,
+    private readonly _clearTimeout: typeof clearTimeout = clearTimeout,
+  ) {}
 
   async start(
     rootPath: string,
     config: TraceMcpConfig,
     onChanges: (paths: string[]) => Promise<void>,
+    debounceMs = DEFAULT_DEBOUNCE_MS,
   ): Promise<void> {
     const ignoreDirs = IGNORE_DIRS.map((d) => path.join(rootPath, d));
 
@@ -31,10 +42,19 @@ export class FileWatcher {
           .map((e) => e.path)
           .filter((p) => !ignoreDirs.some((d) => p.startsWith(d)));
 
-        if (changed.length > 0) {
-          logger.debug({ count: changed.length }, 'File changes detected');
-          await onChanges(changed);
-        }
+        if (changed.length === 0) return;
+
+        // Accumulate paths and debounce — multiple rapid saves collapse into one call
+        for (const p of changed) this.pendingPaths.add(p);
+
+        if (this.debounceTimer) this._clearTimeout(this.debounceTimer);
+        this.debounceTimer = this._setTimeout(async () => {
+          const paths = Array.from(this.pendingPaths);
+          this.pendingPaths.clear();
+          this.debounceTimer = null;
+          logger.debug({ count: paths.length }, 'File changes detected');
+          await onChanges(paths);
+        }, debounceMs);
       },
       {
         ignore: ignoreDirs,
@@ -45,6 +65,11 @@ export class FileWatcher {
   }
 
   async stop(): Promise<void> {
+    if (this.debounceTimer) {
+      this._clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+      this.pendingPaths.clear();
+    }
     if (this.subscription) {
       await this.subscription.unsubscribe();
       this.subscription = null;

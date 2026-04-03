@@ -315,6 +315,61 @@ const SEED_EDGE_TYPES = [
   { name: 'rn_deep_links_to', category: 'react-native', description: 'Deep link maps to screen' },
   { name: 'expo_route', category: 'expo-router', description: 'Expo Router file-based route' },
   { name: 'expo_layout', category: 'expo-router', description: 'Expo Router layout file' },
+  // Python language edges
+  { name: 'py_imports', category: 'python', description: 'Python import statement' },
+  { name: 'py_reexports', category: 'python', description: '__init__.py re-export' },
+  { name: 'py_param_type', category: 'python', description: 'Function parameter type annotation' },
+  { name: 'py_return_type', category: 'python', description: 'Function return type annotation' },
+  { name: 'py_inherits', category: 'python', description: 'Class inheritance' },
+  { name: 'py_uses_decorator', category: 'python', description: 'Function/class uses decorator' },
+  // Django edges
+  { name: 'django_url_routes_to', category: 'django', description: 'URL pattern routes to view' },
+  { name: 'django_includes_urls', category: 'django', description: 'include() sub-URL config' },
+  { name: 'django_view_uses_model', category: 'django', description: 'View references model' },
+  { name: 'django_view_template', category: 'django', description: 'View renders template' },
+  { name: 'django_signal_receiver', category: 'django', description: '@receiver signal handler' },
+  { name: 'django_admin_registers', category: 'django', description: 'Admin registers model' },
+  { name: 'django_form_meta_model', category: 'django', description: 'ModelForm Meta.model' },
+  { name: 'django_migrates', category: 'django', description: 'Django migration operation' },
+  // FastAPI edges
+  { name: 'fastapi_route', category: 'fastapi', description: 'FastAPI route decorator' },
+  { name: 'fastapi_depends', category: 'fastapi', description: 'Depends() dependency injection' },
+  { name: 'fastapi_request_model', category: 'fastapi', description: 'Request body Pydantic model' },
+  { name: 'fastapi_response_model', category: 'fastapi', description: 'response_model parameter' },
+  { name: 'fastapi_router_mounts', category: 'fastapi', description: 'include_router() mount' },
+  // Flask edges
+  { name: 'flask_route', category: 'flask', description: 'Flask @app.route decorator' },
+  { name: 'flask_blueprint_mounts', category: 'flask', description: 'register_blueprint() mount' },
+  { name: 'flask_before_request', category: 'flask', description: '@before_request hook' },
+  { name: 'flask_error_handler', category: 'flask', description: '@errorhandler hook' },
+  // SQLAlchemy edges
+  { name: 'sqla_relationship', category: 'sqlalchemy', description: 'SQLAlchemy relationship()' },
+  { name: 'sqla_fk', category: 'sqlalchemy', description: 'ForeignKey reference' },
+  { name: 'sqla_migrates', category: 'sqlalchemy', description: 'Alembic migration operation' },
+  // DRF edges
+  { name: 'drf_serializer_model', category: 'drf', description: 'ModelSerializer Meta.model' },
+  { name: 'drf_viewset_serializer', category: 'drf', description: 'ViewSet serializer_class' },
+  { name: 'drf_router_registers', category: 'drf', description: 'router.register() ViewSet' },
+  { name: 'drf_permission_guards', category: 'drf', description: 'permission_classes on ViewSet' },
+  // Pydantic edges
+  { name: 'pydantic_field_type', category: 'pydantic', description: 'BaseModel field type reference' },
+  { name: 'pydantic_from_orm', category: 'pydantic', description: 'Model with from_attributes → ORM model' },
+  // Celery edges
+  { name: 'celery_task_registered', category: 'celery', description: '@app.task / @shared_task registration' },
+  { name: 'celery_beat_schedule', category: 'celery', description: 'Beat schedule task entry' },
+  { name: 'celery_dispatches', category: 'celery', description: '.delay() / .apply_async() dispatch' },
+  // Pennant (feature flags) edges
+  { name: 'feature_defined_in', category: 'pennant', description: 'Feature flag defined via Feature::define()' },
+  { name: 'feature_checked_by', category: 'pennant', description: 'Feature flag checked in PHP/Blade' },
+  { name: 'feature_gates_route', category: 'pennant', description: 'Route protected by features middleware' },
+  // Broadcasting / Reverb edges
+  { name: 'broadcasts_on', category: 'broadcasting', description: 'Event broadcasts on a channel' },
+  { name: 'channel_authorized_by', category: 'broadcasting', description: 'Channel authorization callback or class' },
+  { name: 'broadcast_as', category: 'broadcasting', description: 'Event broadcast name override' },
+  // laravel-data edges
+  { name: 'data_wraps', category: 'laravel-data', description: 'Data class wraps an Eloquent model' },
+  { name: 'data_property_type', category: 'laravel-data', description: 'Data class property references another Data class' },
+  { name: 'data_collection', category: 'laravel-data', description: 'DataCollection<T> references a Data class' },
   // Workspace edges
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },

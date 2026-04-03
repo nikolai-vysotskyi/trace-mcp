@@ -27,24 +27,39 @@ export class IndexingPipeline {
   ) {}
 
   private workspaces: WorkspaceInfo[] = [];
+  // Serializes concurrent indexAll/indexFiles calls — prevents a watcher-triggered
+  // indexFiles from racing with an in-progress indexAll (which would overwrite files
+  // the watcher already re-indexed with stale content).
+  private _lock: Promise<unknown> = Promise.resolve();
+  // Cached once per pipeline instance — package.json / composer.json don't change mid-run.
+  private _projectContext: ReturnType<typeof this._buildProjectContext> | undefined;
+  // File content cache: avoids re-reading files from disk during resolveEdges (Pass 2).
+  private _fileContentCache = new Map<string, string>();
 
   async indexAll(force?: boolean): Promise<IndexingResult> {
-    const start = Date.now();
-    this.workspaces = detectWorkspaces(this.rootPath);
-    if (this.workspaces.length > 0) {
-      logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Detected workspaces');
-    }
-    const filePaths = await this.collectFiles();
-    return this.runPipeline(filePaths, force ?? false, start);
+    const result = this._lock.then(async () => {
+      const start = Date.now();
+      this.workspaces = detectWorkspaces(this.rootPath);
+      if (this.workspaces.length > 0) {
+        logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Detected workspaces');
+      }
+      const filePaths = await this.collectFiles();
+      return this.runPipeline(filePaths, force ?? false, start);
+    });
+    this._lock = result.catch(() => {});
+    return result as Promise<IndexingResult>;
   }
 
   async indexFiles(filePaths: string[]): Promise<IndexingResult> {
-    const start = Date.now();
-    // Normalize to relative paths
-    const relPaths = filePaths.map((fp) =>
-      path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp,
-    );
-    return this.runPipeline(relPaths, false, start);
+    const result = this._lock.then(async () => {
+      const start = Date.now();
+      const relPaths = filePaths.map((fp) =>
+        path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp,
+      );
+      return this.runPipeline(relPaths, false, start);
+    });
+    this._lock = result.catch(() => {});
+    return result as Promise<IndexingResult>;
   }
 
   private async runPipeline(
@@ -71,8 +86,11 @@ export class IndexingPipeline {
       else result.errors++;
     }
 
-    // Pass 2: resolve edges
+    // Pass 2: resolve edges (framework plugins)
     await this.resolveEdges();
+
+    // Pass 2b: ORM associations → graph edges (resolved after all entities indexed)
+    this.resolveOrmAssociationEdges();
 
     result.durationMs = Date.now() - startMs;
     logger.info(result, 'Indexing pipeline completed');
@@ -146,7 +164,7 @@ export class IndexingPipeline {
       this.storeRawEdges(parsed.edges);
     }
 
-    // Insert routes, components, migrations
+    // Insert routes, components, migrations, ORM models
     if (parsed.routes?.length) {
       for (const r of parsed.routes) this.store.insertRoute(r, fileId);
     }
@@ -155,6 +173,9 @@ export class IndexingPipeline {
     }
     if (parsed.migrations?.length) {
       for (const m of parsed.migrations) this.store.insertMigration(m, fileId);
+    }
+    if (parsed.ormModels?.length) {
+      this.storeOrmResults(parsed.ormModels, parsed.ormAssociations ?? [], fileId);
     }
 
     // Framework extractNodes (pass 1)
@@ -171,7 +192,10 @@ export class IndexingPipeline {
   ): Promise<void> {
     const ctx = this.buildProjectContext();
     const activeResult = this.registry.getActiveFrameworkPlugins(ctx);
-    if (activeResult.isErr()) return;
+    if (activeResult.isErr()) {
+      logger.warn({ error: activeResult.error }, 'Failed to get active framework plugins');
+      return;
+    }
 
     for (const plugin of activeResult.value) {
       const result = await executeFrameworkExtractNodes(plugin, relPath, content, language);
@@ -193,9 +217,48 @@ export class IndexingPipeline {
       if (fwResult.migrations?.length) {
         for (const m of fwResult.migrations) this.store.insertMigration(m, fileId);
       }
+      if (fwResult.ormModels?.length) {
+        this.storeOrmResults(fwResult.ormModels, fwResult.ormAssociations ?? [], fileId);
+      }
+      if (fwResult.rnScreens?.length) {
+        for (const s of fwResult.rnScreens) this.store.insertRnScreen(s, fileId);
+      }
       if (fwResult.frameworkRole) {
         this.store.updateFileStatus(fileId, fwResult.status, fwResult.frameworkRole);
       }
+    }
+  }
+
+  private storeOrmResults(
+    models: import('../plugin-api/types.js').RawOrmModel[],
+    associations: import('../plugin-api/types.js').RawOrmAssociation[],
+    fileId: number,
+  ): void {
+    // Insert models first, collect name → id map
+    const modelIdMap = new Map<string, number>();
+    for (const m of models) {
+      const id = this.store.insertOrmModel(m, fileId);
+      modelIdMap.set(m.name, id);
+    }
+
+    // Insert associations — resolve target ID best-effort (may be null if not indexed yet)
+    for (const assoc of associations) {
+      const sourceId = modelIdMap.get(assoc.sourceModelName)
+        ?? this.store.getOrmModelByName(assoc.sourceModelName)?.id;
+      if (sourceId == null) continue;
+
+      const targetId = modelIdMap.get(assoc.targetModelName)
+        ?? this.store.getOrmModelByName(assoc.targetModelName)?.id
+        ?? null;
+
+      this.store.insertOrmAssociation(
+        sourceId,
+        targetId,
+        assoc.targetModelName,
+        assoc.kind,
+        assoc.options,
+        fileId,
+      );
     }
   }
 
@@ -210,6 +273,49 @@ export class IndexingPipeline {
       const result = await executeFrameworkResolveEdges(plugin, resolveCtx);
       if (result.isErr()) continue;
       this.storeRawEdges(result.value);
+    }
+  }
+
+  /** Convert ORM associations (orm_associations table) into graph edges. */
+  private resolveOrmAssociationEdges(): void {
+    const associations = this.store.getAllOrmAssociations();
+    if (associations.length === 0) return;
+
+    // Map: ORM association kind → edge type name
+    const kindToEdgeType: Record<string, string> = {
+      // Mongoose
+      ref: 'mongoose_references',
+      discriminator: 'mongoose_discriminates',
+      // Sequelize
+      hasMany: 'sequelize_has_many',
+      belongsTo: 'sequelize_belongs_to',
+      belongsToMany: 'sequelize_belongs_to_many',
+      hasOne: 'sequelize_has_one',
+      // TypeORM
+      OneToMany: 'typeorm_one_to_many',
+      ManyToOne: 'typeorm_many_to_one',
+      OneToOne: 'typeorm_one_to_one',
+      ManyToMany: 'typeorm_many_to_many',
+    };
+
+    for (const assoc of associations) {
+      // Resolve target model if it wasn't available during Pass 1
+      let targetModelId = assoc.target_model_id;
+      if (targetModelId == null && assoc.target_model_name) {
+        const target = this.store.getOrmModelByName(assoc.target_model_name);
+        if (target) targetModelId = target.id;
+      }
+      if (targetModelId == null) continue;
+
+      const sourceNodeId = this.store.getNodeId('orm_model', assoc.source_model_id);
+      const targetNodeId = this.store.getNodeId('orm_model', targetModelId);
+      if (sourceNodeId == null || targetNodeId == null) continue;
+
+      const edgeType = kindToEdgeType[assoc.kind] ?? `orm_${assoc.kind}`;
+      const insertResult = this.store.insertEdge(sourceNodeId, targetNodeId, edgeType, true, undefined, false);
+      if (insertResult.isErr()) {
+        logger.warn({ edgeType, error: insertResult.error }, 'Failed to insert ORM edge');
+      }
     }
   }
 
@@ -255,6 +361,13 @@ export class IndexingPipeline {
   }
 
   private buildProjectContext() {
+    if (!this._projectContext) {
+      this._projectContext = this._buildProjectContext();
+    }
+    return this._projectContext;
+  }
+
+  private _buildProjectContext() {
     let packageJson: Record<string, unknown> | undefined;
     try {
       const pkgPath = path.resolve(this.rootPath, 'package.json');
@@ -273,10 +386,53 @@ export class IndexingPipeline {
       // No composer.json found
     }
 
+    let pyprojectToml: Record<string, unknown> | undefined;
+    try {
+      const tomlPath = path.resolve(this.rootPath, 'pyproject.toml');
+      const content = fs.readFileSync(tomlPath, 'utf-8');
+      // Lightweight TOML parse — extract [project] dependencies and [tool.poetry] dependencies
+      const deps: string[] = [];
+      const depBlockRe = /\[(?:project|tool\.poetry)\.?dependencies\]([^[]*)/g;
+      let m: RegExpExecArray | null;
+      while ((m = depBlockRe.exec(content)) !== null) {
+        const block = m[1];
+        for (const line of block.split('\n')) {
+          const pkg = line.match(/^\s*([a-zA-Z0-9_-]+)/);
+          if (pkg) deps.push(pkg[1].toLowerCase());
+        }
+      }
+      // Also parse inline dependencies array: dependencies = ["fastapi>=0.100", ...]
+      const inlineDeps = content.match(/dependencies\s*=\s*\[([^\]]*)\]/);
+      if (inlineDeps) {
+        const items = inlineDeps[1].matchAll(/["']([a-zA-Z0-9_-]+)[^"']*["']/g);
+        for (const item of items) {
+          deps.push(item[1].toLowerCase());
+        }
+      }
+      pyprojectToml = { _parsedDeps: deps, _raw: content } as Record<string, unknown>;
+    } catch {
+      // No pyproject.toml found
+    }
+
+    let requirementsTxt: string[] | undefined;
+    try {
+      const reqPath = path.resolve(this.rootPath, 'requirements.txt');
+      const content = fs.readFileSync(reqPath, 'utf-8');
+      requirementsTxt = content
+        .split('\n')
+        .map((l) => l.replace(/#.*/, '').trim())
+        .filter((l) => l && !l.startsWith('-'))
+        .map((l) => l.split(/[>=<!\[;]/)[0].trim().toLowerCase());
+    } catch {
+      // No requirements.txt found
+    }
+
     return {
       rootPath: this.rootPath,
       packageJson,
       composerJson,
+      pyprojectToml,
+      requirementsTxt,
       configFiles: [],
     };
   }

@@ -32,7 +32,8 @@ export interface RawSymbol {
 export type SymbolKind =
   | 'class' | 'method' | 'function' | 'constant' | 'property'
   | 'interface' | 'trait' | 'enum' | 'type' | 'variable'
-  | 'enum_case' | 'namespace';
+  | 'enum_case' | 'namespace'
+  | 'decorator';
 
 // --- Raw edges from FrameworkPlugin ---
 
@@ -80,7 +81,7 @@ export interface RawMigration {
 
 export interface RawOrmModel {
   name: string;
-  orm: 'mongoose' | 'sequelize';
+  orm: 'mongoose' | 'sequelize' | 'sqlalchemy' | 'django' | 'prisma' | 'typeorm' | 'drizzle';
   collectionOrTable?: string;
   fields?: Record<string, unknown>[];
   options?: Record<string, unknown>;
@@ -136,6 +137,8 @@ export interface ProjectContext {
   rootPath: string;
   composerJson?: Record<string, unknown>;
   packageJson?: Record<string, unknown>;
+  pyprojectToml?: Record<string, unknown>;
+  requirementsTxt?: string[];
   configFiles: string[];
 }
 

@@ -102,10 +102,11 @@ export class Store {
   }
 
   deleteSymbolsByFile(fileId: number): void {
-    const symbols = this.db.prepare('SELECT id FROM symbols WHERE file_id = ?').all(fileId) as { id: number }[];
-    for (const sym of symbols) {
-      this.db.prepare('DELETE FROM nodes WHERE node_type = ? AND ref_id = ?').run('symbol', sym.id);
-    }
+    // Single subquery instead of N individual per-symbol DELETEs
+    this.db.prepare(
+      `DELETE FROM nodes WHERE node_type = 'symbol'
+         AND ref_id IN (SELECT id FROM symbols WHERE file_id = ?)`,
+    ).run(fileId);
     this.db.prepare('DELETE FROM symbols WHERE file_id = ?').run(fileId);
   }
 
@@ -448,6 +449,10 @@ export class Store {
     return Number(result.lastInsertRowid);
   }
 
+  getAllOrmAssociations(): OrmAssociationRow[] {
+    return this.db.prepare('SELECT * FROM orm_associations').all() as OrmAssociationRow[];
+  }
+
   getOrmAssociationsByModel(modelId: number): OrmAssociationRow[] {
     return this.db.prepare(
       'SELECT * FROM orm_associations WHERE source_model_id = ?',
@@ -490,6 +495,46 @@ export class Store {
     return this.db.prepare(
       'SELECT node_type, ref_id FROM nodes WHERE id = ?',
     ).get(nodeId) as { node_type: string; ref_id: number } | undefined;
+  }
+
+  // --- Introspection queries ---
+
+  findImplementors(name: string): SymbolWithFilePath[] {
+    return this.db.prepare(
+      `SELECT s.*, f.path as file_path
+       FROM symbols s
+       JOIN files f ON s.file_id = f.id
+       WHERE s.metadata IS NOT NULL AND (
+         json_extract(s.metadata, '$.implements') LIKE '%"' || ? || '"%'
+         OR json_extract(s.metadata, '$.extends') LIKE '%"' || ? || '"%'
+         OR json_extract(s.metadata, '$.extends') = ?
+       )`,
+    ).all(name, name, name) as SymbolWithFilePath[];
+  }
+
+  getExportedSymbols(filePattern?: string): SymbolWithFilePath[] {
+    if (filePattern) {
+      const likePattern = filePattern.replace(/\*/g, '%').replace(/\?/g, '_');
+      return this.db.prepare(
+        `SELECT s.*, f.path as file_path
+         FROM symbols s
+         JOIN files f ON s.file_id = f.id
+         WHERE json_extract(s.metadata, '$.exported') = 1
+         AND f.path LIKE ?`,
+      ).all(likePattern) as SymbolWithFilePath[];
+    }
+    return this.db.prepare(
+      `SELECT s.*, f.path as file_path
+       FROM symbols s
+       JOIN files f ON s.file_id = f.id
+       WHERE json_extract(s.metadata, '$.exported') = 1`,
+    ).all() as SymbolWithFilePath[];
+  }
+
+  getEdgeTypes(): EdgeTypeRow[] {
+    return this.db.prepare(
+      `SELECT name, category, COALESCE(description, '') as description FROM edge_types ORDER BY name`,
+    ).all() as EdgeTypeRow[];
   }
 
   // --- Stats ---
@@ -626,6 +671,16 @@ export interface RnScreenRow {
   options: string | null;
   deep_link: string | null;
   metadata: string | null;
+}
+
+export interface SymbolWithFilePath extends SymbolRow {
+  file_path: string;
+}
+
+export interface EdgeTypeRow {
+  name: string;
+  category: string;
+  description: string;
 }
 
 export interface IndexStats {

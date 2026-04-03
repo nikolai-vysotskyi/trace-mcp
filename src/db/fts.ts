@@ -10,15 +10,42 @@ export interface FtsResult {
   symbolIdStr: string;
 }
 
+export interface FtsFilters {
+  kind?: string;
+  language?: string;
+  filePattern?: string;
+}
+
 export function searchFts(
   db: Database.Database,
   query: string,
   limit = 20,
   offset = 0,
+  filters?: FtsFilters,
 ): FtsResult[] {
   // Escape FTS5 special characters
   const escaped = escapeFtsQuery(query);
   if (!escaped) return [];
+
+  const conditions: string[] = ['symbols_fts MATCH ?'];
+  const params: unknown[] = [escaped];
+
+  // Push filters into SQL to avoid fetching excess rows
+  if (filters?.kind) {
+    conditions.push('s.kind = ?');
+    params.push(filters.kind);
+  }
+  if (filters?.language) {
+    conditions.push('f.language = ?');
+    params.push(filters.language);
+  }
+  if (filters?.filePattern) {
+    conditions.push('f.path LIKE ?');
+    params.push(`%${filters.filePattern}%`);
+  }
+
+  const needsFileJoin = filters?.language || filters?.filePattern;
+  const fileJoin = needsFileJoin ? 'JOIN files f ON f.id = s.file_id' : '';
 
   const sql = `
     SELECT
@@ -31,12 +58,14 @@ export function searchFts(
       s.symbol_id as symbolIdStr
     FROM symbols_fts fts
     JOIN symbols s ON s.id = fts.rowid
-    WHERE symbols_fts MATCH ?
+    ${fileJoin}
+    WHERE ${conditions.join(' AND ')}
     ORDER BY rank
     LIMIT ? OFFSET ?
   `;
 
-  return db.prepare(sql).all(escaped, limit, offset) as FtsResult[];
+  params.push(limit, offset);
+  return db.prepare(sql).all(...params) as FtsResult[];
 }
 
 export function escapeFtsQuery(query: string): string {

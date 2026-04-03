@@ -166,6 +166,8 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
     if (!name) return;
     const symbolId = makeSymbolId(filePath, name, 'class');
 
+    const heritage = this.extractHeritage(node);
+
     symbols.push({
       symbolId,
       name,
@@ -178,6 +180,8 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       metadata: {
         exported: isExported(node),
         default: isDefaultExport(node),
+        ...(heritage.extends ? { extends: heritage.extends } : {}),
+        ...(heritage.implements.length > 0 ? { implements: heritage.implements } : {}),
       },
     });
 
@@ -235,6 +239,9 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
   private extractInterface(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
     const name = getNodeName(node);
     if (!name) return;
+
+    const heritage = this.extractHeritage(node);
+
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'interface'),
       name,
@@ -247,8 +254,39 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       metadata: {
         exported: isExported(node),
         default: isDefaultExport(node),
+        ...(heritage.extends ? { extends: heritage.extends } : {}),
+        ...(heritage.implements.length > 0 ? { implements: heritage.implements } : {}),
       },
     });
+  }
+
+  private extractHeritage(node: TSNode): { extends: string | null; implements: string[] } {
+    const result: { extends: string | null; implements: string[] } = { extends: null, implements: [] };
+    for (let i = 0; i < node.namedChildCount; i++) {
+      const child = node.namedChild(i);
+      if (!child) continue;
+
+      if (child.type === 'class_heritage') {
+        // class_heritage contains extends_clause and/or implements_clause
+        for (const clause of child.namedChildren) {
+          if (clause.type === 'extends_clause') {
+            const typeNode = clause.namedChildren[0];
+            if (typeNode) result.extends = typeNode.text;
+          } else if (clause.type === 'implements_clause') {
+            for (const impl of clause.namedChildren) {
+              result.implements.push(impl.text);
+            }
+          }
+        }
+      } else if (child.type === 'extends_type_clause') {
+        // interface Foo extends Bar, Baz
+        for (const nc of child.namedChildren) {
+          if (!result.extends) result.extends = nc.text;
+          else result.implements.push(nc.text);
+        }
+      }
+    }
+    return result;
   }
 
   private extractEnum(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
