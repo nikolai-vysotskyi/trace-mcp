@@ -24,6 +24,8 @@ import { ExpressPlugin } from './indexer/plugins/framework/express/index.js';
 import { MongoosePlugin } from './indexer/plugins/framework/mongoose/index.js';
 import { SequelizePlugin } from './indexer/plugins/framework/sequelize/index.js';
 import { ReactNativePlugin } from './indexer/plugins/framework/react-native/index.js';
+import { IndexingPipeline } from './indexer/pipeline.js';
+import { FileWatcher } from './indexer/watcher.js';
 
 function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerLanguagePlugin(new PhpLanguagePlugin());
@@ -71,7 +73,27 @@ program
     const registry = new PluginRegistry();
     registerDefaultPlugins(registry);
 
-    const server = createServer(store, registry, config);
+    const projectRoot = process.cwd();
+    const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+    const watcher = new FileWatcher();
+
+    // Initial index runs in background so the server starts immediately
+    pipeline.indexAll().catch((err) => {
+      logger.error({ error: err }, 'Initial indexing failed');
+    });
+
+    await watcher.start(projectRoot, config, async (paths) => {
+      await pipeline.indexFiles(paths);
+    });
+
+    const shutdown = async () => {
+      await watcher.stop();
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+
+    const server = createServer(store, registry, config, projectRoot);
     const transport = new StdioServerTransport();
 
     logger.info('Starting trace-mcp MCP server...');
@@ -105,12 +127,14 @@ program
 
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
+    const registry = new PluginRegistry();
+    registerDefaultPlugins(registry);
 
     logger.info({ dir: resolvedDir, dbPath, force: opts.force ?? false }, 'Indexing started');
 
-    // Phase 2 will add actual pipeline logic
-    const stats = store.getStats();
-    logger.info({ stats }, 'Indexing completed');
+    const pipeline = new IndexingPipeline(store, registry, config, resolvedDir);
+    const result = await pipeline.indexAll(opts.force ?? false);
+    logger.info(result, 'Indexing completed');
 
     db.close();
   });
