@@ -549,6 +549,38 @@ export function createServer(
     );
   }
 
+  if (has('zustand-redux')) {
+    server.tool(
+      'get_state_stores',
+      'List all Zustand stores and Redux Toolkit slices with their state fields, actions/reducers, and dispatch sites',
+      {},
+      async () => {
+        const routes = store.getAllRoutes();
+        const stores = routes.filter((r) => r.method === 'STORE' || r.method === 'SLICE');
+        const dispatches = routes.filter((r) => r.method === 'DISPATCH');
+        return {
+          content: [{
+            type: 'text',
+            text: j({
+              stores: stores.map((s) => ({
+                type: s.method === 'STORE' ? 'zustand' : 'redux',
+                name: s.uri.replace(/^(zustand|redux):/, ''),
+                handler: s.handler,
+                metadata: s.metadata ? JSON.parse(s.metadata) : null,
+              })),
+              dispatches: dispatches.map((d) => ({
+                action: d.uri.replace(/^action:/, ''),
+                file: store.getFileById(d.file_id)?.path,
+              })),
+              totalStores: stores.length,
+              totalDispatches: dispatches.length,
+            }),
+          }],
+        };
+      },
+    );
+  }
+
   // --- Self-Development / Introspection Tools ---
 
   server.tool(
