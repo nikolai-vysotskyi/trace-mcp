@@ -190,6 +190,21 @@ const SEED_EDGE_TYPES = [
   { name: 'blade_extends', category: 'blade', description: '@extends directive' },
   { name: 'blade_includes', category: 'blade', description: '@include directive' },
   { name: 'blade_component', category: 'blade', description: '<x-component> or @component' },
+  // NestJS edges
+  { name: 'nest_module_imports', category: 'nestjs', description: 'Module imports another module' },
+  { name: 'nest_provides', category: 'nestjs', description: 'Module provides a service' },
+  { name: 'nest_injects', category: 'nestjs', description: 'Constructor dependency injection' },
+  { name: 'nest_guards', category: 'nestjs', description: 'UseGuards on controller/method' },
+  { name: 'nest_pipes', category: 'nestjs', description: 'UsePipes on controller/method' },
+  { name: 'nest_interceptors', category: 'nestjs', description: 'UseInterceptors on controller/method' },
+  // Next.js edges
+  { name: 'next_renders_page', category: 'nextjs', description: 'Layout renders page' },
+  { name: 'next_server_action', category: 'nextjs', description: 'Server action reference' },
+  { name: 'next_middleware', category: 'nextjs', description: 'Middleware applies to routes' },
+  // Express edges
+  { name: 'express_route', category: 'express', description: 'Express route handler' },
+  { name: 'express_middleware', category: 'express', description: 'Express middleware' },
+  { name: 'express_mounts', category: 'express', description: 'Router mount via app.use' },
 ];
 
 export function initializeDatabase(dbPath: string): Database.Database {

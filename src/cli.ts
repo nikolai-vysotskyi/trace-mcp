@@ -18,6 +18,9 @@ import { VueFrameworkPlugin } from './indexer/plugins/framework/vue/index.js';
 import { InertiaPlugin } from './indexer/plugins/framework/inertia/index.js';
 import { NuxtPlugin } from './indexer/plugins/framework/nuxt/index.js';
 import { BladePlugin } from './indexer/plugins/framework/blade/index.js';
+import { NestJSPlugin } from './indexer/plugins/framework/nestjs/index.js';
+import { NextJSPlugin } from './indexer/plugins/framework/nextjs/index.js';
+import { ExpressPlugin } from './indexer/plugins/framework/express/index.js';
 
 function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerLanguagePlugin(new PhpLanguagePlugin());
@@ -28,6 +31,9 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerFrameworkPlugin(new InertiaPlugin());
   registry.registerFrameworkPlugin(new NuxtPlugin());
   registry.registerFrameworkPlugin(new BladePlugin());
+  registry.registerFrameworkPlugin(new NestJSPlugin());
+  registry.registerFrameworkPlugin(new NextJSPlugin());
+  registry.registerFrameworkPlugin(new ExpressPlugin());
 }
 
 const program = new Command();
