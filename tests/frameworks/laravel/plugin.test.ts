@@ -77,10 +77,10 @@ describe('LaravelPlugin', () => {
       expect(edgeNames).toContain('migrates');
     });
 
-    it('all edge types have laravel category', () => {
+    it('all edge types have laravel or livewire category', () => {
       const schema = plugin.registerSchema();
       for (const et of schema.edgeTypes!) {
-        expect(et.category).toBe('laravel');
+        expect(['laravel', 'livewire', 'filament']).toContain(et.category);
       }
     });
   });

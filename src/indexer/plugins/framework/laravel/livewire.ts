@@ -138,8 +138,13 @@ export function extractLivewireComponent(
   const viewName = viewMatch?.[1] ?? null;
   const conventionViewPath = classToConventionView(fqn, version);
 
-  // Properties
+  // Properties (resolve short type names through use map)
   const properties = extractProperties(source);
+  for (const prop of properties) {
+    if (prop.type && !prop.type.includes('\\')) {
+      prop.type = resolveClass(prop.type, useMap);
+    }
+  }
 
   // Actions (public methods minus lifecycle)
   const actions = extractActions(source);
@@ -213,12 +218,13 @@ export function extractWireDirectives(source: string): LivewireWireDirective[] {
 
   // wire:click="methodName" or wire:click.prevent="methodName"
   // wire:submit="methodName" or wire:submit.prevent="methodName"
-  const wireRe = /wire:(click|submit)(?:\.\w+)*\s*=\s*['"]([\w.()$]+)['"]/g;
+  // Value may contain blade interpolations: refreshList({{ $id }})
+  const wireRe = /wire:(click|submit)(?:\.\w+)*\s*=\s*['"]([^'"]+)['"]/g;
   let match: RegExpExecArray | null;
   while ((match = wireRe.exec(source)) !== null) {
-    let value = match[2];
-    // Strip parentheses: "submit()" -> "submit"
-    value = value.replace(/\(.*\)$/, '');
+    let value = match[2].trim();
+    // Strip arguments including blade interpolations: "refreshList({{ $id }})" -> "refreshList"
+    value = value.replace(/\(.*$/s, '');
     directives.push({
       directive: match[1],
       value,
@@ -507,8 +513,8 @@ function extractFormProperty(
     const propName = match[2];
     const resolvedType = resolveClass(typeName, useMap);
 
-    // Heuristic: type name ends with Form, or known to extend Livewire\Form
-    if (typeName.endsWith('Form') || resolvedType.endsWith('Form')) {
+    // Heuristic: type name contains 'Form' (covers OrderFormData, PostForm, etc.)
+    if (typeName.includes('Form') || resolvedType.includes('Form')) {
       return { propertyName: propName, formClass: resolvedType };
     }
   }

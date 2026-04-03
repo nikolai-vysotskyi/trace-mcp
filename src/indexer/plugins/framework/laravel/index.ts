@@ -26,6 +26,19 @@ import { extractMigrations } from './migrations.js';
 import { extractFormRequest, detectFormRequestUsage } from './requests.js';
 import { extractEventListeners, detectEventDispatches } from './events.js';
 import {
+  extractLivewireComponent,
+  extractLivewireBladeUsages,
+  extractWireDirectives,
+  resolveComponentName,
+  type LivewireComponentInfo,
+} from './livewire.js';
+import {
+  extractFilamentResource,
+  extractFilamentRelationManager,
+  extractFilamentPanel,
+  extractFilamentWidget,
+} from './filament.js';
+import {
   parseKernelMiddleware,
   parseBootstrapMiddleware,
   parseRouteServiceProviderNamespace,
@@ -50,23 +63,49 @@ export class LaravelPlugin implements FrameworkPlugin {
   /** Route file paths from bootstrap/app.php (Laravel 11+). */
   private bootstrapRouting: Record<string, string> | null = null;
 
+  /** Whether livewire/livewire is detected as a dependency. */
+  private hasLivewire = false;
+
+  /** Detected Livewire version (2 or 3), null if not detected. */
+  private livewireVersion: 2 | 3 | null = null;
+
+  /** Whether filament/filament or filament/support is detected. */
+  private hasFilament = false;
+
   detect(ctx: ProjectContext): boolean {
     // Check if composer.json has laravel/framework in require
+    let deps: Record<string, string> | undefined;
+
     if (ctx.composerJson) {
-      const require = ctx.composerJson.require as Record<string, string> | undefined;
-      if (require?.['laravel/framework']) return true;
+      deps = ctx.composerJson.require as Record<string, string> | undefined;
+    } else {
+      // Fallback: read composer.json from disk
+      try {
+        const composerPath = path.join(ctx.rootPath, 'composer.json');
+        const content = fs.readFileSync(composerPath, 'utf-8');
+        const json = JSON.parse(content);
+        deps = json.require as Record<string, string> | undefined;
+      } catch {
+        return false;
+      }
     }
 
-    // Fallback: read composer.json from disk
-    try {
-      const composerPath = path.join(ctx.rootPath, 'composer.json');
-      const content = fs.readFileSync(composerPath, 'utf-8');
-      const json = JSON.parse(content);
-      const require = json.require as Record<string, string> | undefined;
-      return !!require?.['laravel/framework'];
-    } catch {
-      return false;
+    if (!deps?.['laravel/framework']) return false;
+
+    // Detect Filament
+    if (deps['filament/filament'] || deps['filament/support']) {
+      this.hasFilament = true;
     }
+
+    // Detect Livewire
+    if (deps['livewire/livewire']) {
+      this.hasLivewire = true;
+      // Detect v2 vs v3 from version constraint
+      const lwVersion = deps['livewire/livewire'];
+      this.livewireVersion = /^\^?3|^3/.test(lwVersion) ? 3 : 2;
+    }
+
+    return true;
   }
 
   registerSchema() {
@@ -83,6 +122,21 @@ export class LaravelPlugin implements FrameworkPlugin {
         { name: 'listens_to', category: 'laravel', description: 'Listener -> Event' },
         { name: 'middleware_guards', category: 'laravel', description: 'Route -> Middleware' },
         { name: 'migrates', category: 'laravel', description: 'Migration -> table' },
+        // Filament edges
+        { name: 'filament_resource_for', category: 'filament', description: 'Resource → Eloquent Model' },
+        { name: 'filament_relation_manager', category: 'filament', description: 'Resource → RelationManager' },
+        { name: 'filament_form_relationship', category: 'filament', description: 'Form field →relationship() → Model' },
+        { name: 'filament_page_for', category: 'filament', description: 'Page registered on Resource' },
+        { name: 'filament_panel_registers', category: 'filament', description: 'PanelProvider → Resource/Page/Widget' },
+        { name: 'filament_widget_queries', category: 'filament', description: 'Widget → Eloquent Model' },
+        // Livewire edges
+        { name: 'livewire_renders', category: 'livewire', description: 'Component class → Blade view' },
+        { name: 'livewire_dispatches', category: 'livewire', description: 'Component dispatches event' },
+        { name: 'livewire_listens', category: 'livewire', description: 'Component listens for event' },
+        { name: 'livewire_child_of', category: 'livewire', description: 'Blade <livewire:child/> → Component' },
+        { name: 'livewire_uses_model', category: 'livewire', description: 'Component → Eloquent Model' },
+        { name: 'livewire_form', category: 'livewire', description: 'Component → Form class (v3)' },
+        { name: 'livewire_action', category: 'livewire', description: 'wire:click → Component method' },
       ],
     };
   }
@@ -159,6 +213,74 @@ export class LaravelPlugin implements FrameworkPlugin {
       result.frameworkRole = 'event_provider';
     }
 
+    // Filament files
+    if (this.hasFilament) {
+      this.processFilamentNode(source, filePath, result);
+    }
+
+    // Livewire component files
+    if (this.hasLivewire && this.isLivewireFile(filePath)) {
+      const componentInfo = extractLivewireComponent(source, filePath);
+      if (componentInfo) {
+        result.frameworkRole = 'livewire_component';
+        result.edges = result.edges ?? [];
+        // Attach component metadata for pass 2 via edges with FQN metadata
+        result.edges.push({
+          edgeType: 'livewire_renders',
+          metadata: {
+            sourceFqn: componentInfo.fqn,
+            targetViewPath: componentInfo.viewName
+              ? `resources/views/${componentInfo.viewName.replace(/\./g, '/')}.blade.php`
+              : componentInfo.conventionViewPath,
+            viewName: componentInfo.viewName,
+            convention: !componentInfo.viewName,
+          },
+        });
+        for (const dispatch of componentInfo.dispatches) {
+          result.edges.push({
+            edgeType: 'livewire_dispatches',
+            metadata: {
+              sourceFqn: componentInfo.fqn,
+              eventName: dispatch.eventName,
+              method: dispatch.method,
+            },
+          });
+        }
+        for (const listener of componentInfo.listeners) {
+          result.edges.push({
+            edgeType: 'livewire_listens',
+            metadata: {
+              sourceFqn: componentInfo.fqn,
+              eventName: listener.eventName,
+              handlerMethod: listener.handlerMethod,
+            },
+          });
+        }
+        if (componentInfo.formProperty) {
+          result.edges.push({
+            edgeType: 'livewire_form',
+            metadata: {
+              sourceFqn: componentInfo.fqn,
+              targetFqn: componentInfo.formProperty.formClass,
+              propertyName: componentInfo.formProperty.propertyName,
+            },
+          });
+        }
+        for (const prop of componentInfo.properties) {
+          if (prop.type && /\\Models\\/.test(prop.type)) {
+            result.edges.push({
+              edgeType: 'livewire_uses_model',
+              metadata: {
+                sourceFqn: componentInfo.fqn,
+                targetFqn: prop.type,
+                propertyName: prop.name,
+              },
+            });
+          }
+        }
+      }
+    }
+
     // Detect event dispatches in any file
     const dispatches = detectEventDispatches(source);
     if (dispatches.length > 0) {
@@ -172,9 +294,13 @@ export class LaravelPlugin implements FrameworkPlugin {
     const edges: RawEdge[] = [];
     const files = ctx.getAllFiles();
 
-    for (const file of files) {
-      if (file.language !== 'php') continue;
+    // Build a file-path → file map for Livewire view resolution
+    const fileMap = new Map<string, { id: number; path: string }>();
+    for (const f of files) {
+      fileMap.set(f.path, f);
+    }
 
+    for (const file of files) {
       let source: string;
       try {
         source = fs.readFileSync(
@@ -185,17 +311,34 @@ export class LaravelPlugin implements FrameworkPlugin {
         continue;
       }
 
-      // Resolve Eloquent relationships
-      this.resolveEloquentEdges(source, file, ctx, edges);
+      if (file.language === 'php') {
+        // Resolve Eloquent relationships
+        this.resolveEloquentEdges(source, file, ctx, edges);
 
-      // Resolve FormRequest -> Controller edges
-      this.resolveFormRequestEdges(source, file, ctx, edges);
+        // Resolve FormRequest -> Controller edges
+        this.resolveFormRequestEdges(source, file, ctx, edges);
 
-      // Resolve Event listener edges
-      this.resolveEventEdges(source, file, ctx, edges);
+        // Resolve Event listener edges
+        this.resolveEventEdges(source, file, ctx, edges);
 
-      // Resolve event dispatch edges
-      this.resolveDispatchEdges(source, file, ctx, edges);
+        // Resolve event dispatch edges
+        this.resolveDispatchEdges(source, file, ctx, edges);
+
+        // Resolve Livewire PHP-side edges
+        if (this.hasLivewire) {
+          this.resolveLivewirePhpEdges(source, file, ctx, edges, fileMap);
+        }
+
+        // Resolve Filament edges
+        if (this.hasFilament) {
+          this.resolveFilamentEdges(source, file, ctx, edges);
+        }
+      }
+
+      // Resolve Livewire Blade-side edges (<livewire:name/>, wire:click)
+      if (this.hasLivewire && file.path.endsWith('.blade.php')) {
+        this.resolveLivewireBladeEdges(source, file, ctx, edges);
+      }
     }
 
     return ok(edges);
@@ -376,5 +519,231 @@ export class LaravelPlugin implements FrameworkPlugin {
 
   private isRouteServiceProvider(filePath: string): boolean {
     return /Providers\/RouteServiceProvider\.php$/.test(filePath);
+  }
+
+  private processFilamentNode(
+    source: string,
+    filePath: string,
+    result: FileParseResult,
+  ): void {
+    result.edges = result.edges ?? [];
+
+    const resource = extractFilamentResource(source, filePath);
+    if (resource) {
+      result.frameworkRole = 'filament_resource';
+      if (resource.modelFqn) {
+        result.edges.push({ edgeType: 'filament_resource_for', metadata: { sourceFqn: resource.fqn, targetFqn: resource.modelFqn } });
+      }
+      for (const rm of resource.relationManagers) {
+        result.edges.push({ edgeType: 'filament_relation_manager', metadata: { sourceFqn: resource.fqn, targetFqn: rm } });
+      }
+      for (const rel of resource.formRelationships) {
+        result.edges.push({ edgeType: 'filament_form_relationship', metadata: { sourceFqn: resource.fqn, relationName: rel.relationName } });
+      }
+      return;
+    }
+
+    const rm = extractFilamentRelationManager(source, filePath);
+    if (rm) {
+      result.frameworkRole = 'filament_relation_manager';
+      return;
+    }
+
+    const panel = extractFilamentPanel(source, filePath);
+    if (panel) {
+      result.frameworkRole = 'filament_panel';
+      for (const fqn of [...panel.resources, ...panel.pages, ...panel.widgets]) {
+        result.edges.push({ edgeType: 'filament_panel_registers', metadata: { sourceFqn: panel.fqn, targetFqn: fqn, panelId: panel.panelId } });
+      }
+      return;
+    }
+
+    const widget = extractFilamentWidget(source, filePath);
+    if (widget) {
+      result.frameworkRole = 'filament_widget';
+      const targets = [...(widget.modelFqn ? [widget.modelFqn] : []), ...widget.queriedModels];
+      for (const modelFqn of [...new Set(targets)]) {
+        result.edges.push({ edgeType: 'filament_widget_queries', metadata: { sourceFqn: widget.fqn, targetFqn: modelFqn } });
+      }
+    }
+  }
+
+  private resolveFilamentEdges(
+    source: string,
+    file: { id: number; path: string },
+    ctx: ResolveContext,
+    edges: RawEdge[],
+  ): void {
+    // Resource → Model
+    const resource = extractFilamentResource(source, file.path);
+    if (resource) {
+      if (resource.modelFqn) {
+        const sourceSymbol = ctx.getSymbolByFqn(resource.fqn);
+        const targetSymbol = ctx.getSymbolByFqn(resource.modelFqn);
+        if (sourceSymbol && targetSymbol) {
+          edges.push({
+            sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id,
+            targetNodeType: 'symbol', targetRefId: targetSymbol.id,
+            edgeType: 'filament_resource_for',
+          });
+        }
+      }
+      // Resource → RelationManagers
+      const resourceSymbol = ctx.getSymbolByFqn(resource.fqn);
+      if (resourceSymbol) {
+        for (const rmFqn of resource.relationManagers) {
+          const rmSymbol = ctx.getSymbolByFqn(rmFqn);
+          if (rmSymbol) {
+            edges.push({
+              sourceNodeType: 'symbol', sourceRefId: resourceSymbol.id,
+              targetNodeType: 'symbol', targetRefId: rmSymbol.id,
+              edgeType: 'filament_relation_manager',
+            });
+          }
+        }
+      }
+      return;
+    }
+
+    // Widget → Model
+    const widget = extractFilamentWidget(source, file.path);
+    if (widget) {
+      const widgetSymbol = ctx.getSymbolByFqn(widget.fqn);
+      if (!widgetSymbol) return;
+      const targets = [...(widget.modelFqn ? [widget.modelFqn] : []), ...widget.queriedModels];
+      for (const modelFqn of [...new Set(targets)]) {
+        const modelSymbol = ctx.getSymbolByFqn(modelFqn);
+        if (!modelSymbol) continue;
+        edges.push({
+          sourceNodeType: 'symbol', sourceRefId: widgetSymbol.id,
+          targetNodeType: 'symbol', targetRefId: modelSymbol.id,
+          edgeType: 'filament_widget_queries',
+        });
+      }
+    }
+  }
+
+  private isLivewireFile(filePath: string): boolean {
+    // v3: app/Livewire/**/*.php
+    // v2: app/Http/Livewire/**/*.php
+    return /app\/(?:Http\/)?Livewire\//.test(filePath);
+  }
+
+  private resolveLivewirePhpEdges(
+    source: string,
+    file: { id: number; path: string },
+    ctx: ResolveContext,
+    edges: RawEdge[],
+    fileMap: Map<string, { id: number; path: string }>,
+  ): void {
+    const componentInfo = extractLivewireComponent(source, file.path);
+    if (!componentInfo) return;
+
+    const sourceSymbol = ctx.getSymbolByFqn(componentInfo.fqn);
+    if (!sourceSymbol) return;
+
+    // livewire_renders: Component → Blade view file
+    const viewPath = componentInfo.viewName
+      ? `resources/views/${componentInfo.viewName.replace(/\./g, '/')}.blade.php`
+      : componentInfo.conventionViewPath;
+    const viewFile = fileMap.get(viewPath);
+    if (viewFile) {
+      edges.push({
+        sourceNodeType: 'symbol',
+        sourceRefId: sourceSymbol.id,
+        targetNodeType: 'file',
+        targetRefId: viewFile.id,
+        edgeType: 'livewire_renders',
+        metadata: { viewPath, convention: !componentInfo.viewName },
+      });
+    }
+
+    // livewire_dispatches
+    for (const dispatch of componentInfo.dispatches) {
+      edges.push({
+        sourceNodeType: 'symbol',
+        sourceRefId: sourceSymbol.id,
+        edgeType: 'livewire_dispatches',
+        metadata: { eventName: dispatch.eventName, method: dispatch.method },
+      });
+    }
+
+    // livewire_listens
+    for (const listener of componentInfo.listeners) {
+      edges.push({
+        sourceNodeType: 'symbol',
+        sourceRefId: sourceSymbol.id,
+        edgeType: 'livewire_listens',
+        metadata: { eventName: listener.eventName, handlerMethod: listener.handlerMethod },
+      });
+    }
+
+    // livewire_form: Component → Form class
+    if (componentInfo.formProperty) {
+      const formSymbol = ctx.getSymbolByFqn(componentInfo.formProperty.formClass);
+      if (formSymbol) {
+        edges.push({
+          sourceNodeType: 'symbol',
+          sourceRefId: sourceSymbol.id,
+          targetNodeType: 'symbol',
+          targetRefId: formSymbol.id,
+          edgeType: 'livewire_form',
+          metadata: { propertyName: componentInfo.formProperty.propertyName },
+        });
+      }
+    }
+
+    // livewire_uses_model: Component → Eloquent Model
+    for (const prop of componentInfo.properties) {
+      if (!prop.type || !/\\Models\\/.test(prop.type)) continue;
+      const modelSymbol = ctx.getSymbolByFqn(prop.type);
+      if (!modelSymbol) continue;
+      edges.push({
+        sourceNodeType: 'symbol',
+        sourceRefId: sourceSymbol.id,
+        targetNodeType: 'symbol',
+        targetRefId: modelSymbol.id,
+        edgeType: 'livewire_uses_model',
+        metadata: { propertyName: prop.name },
+      });
+    }
+  }
+
+  private resolveLivewireBladeEdges(
+    source: string,
+    file: { id: number; path: string },
+    ctx: ResolveContext,
+    edges: RawEdge[],
+  ): void {
+    const version = this.livewireVersion ?? 3;
+
+    // <livewire:component-name /> and @livewire('component-name')
+    const usages = extractLivewireBladeUsages(source);
+    for (const usage of usages) {
+      const componentFqn = resolveComponentName(usage.componentName, version);
+      const componentSymbol = ctx.getSymbolByFqn(componentFqn);
+      if (!componentSymbol) continue;
+
+      edges.push({
+        sourceNodeType: 'file',
+        sourceRefId: file.id,
+        targetNodeType: 'symbol',
+        targetRefId: componentSymbol.id,
+        edgeType: 'livewire_child_of',
+        metadata: { componentName: usage.componentName, line: usage.line, syntax: usage.syntax },
+      });
+    }
+
+    // wire:click="method" → livewire_action
+    const wireDirectives = extractWireDirectives(source);
+    for (const directive of wireDirectives) {
+      if (directive.directive === 'model') continue; // model is informational
+      edges.push({
+        sourceNodeType: 'file',
+        sourceRefId: file.id,
+        edgeType: 'livewire_action',
+        metadata: { directive: directive.directive, method: directive.value, line: directive.line },
+      });
+    }
   }
 }
