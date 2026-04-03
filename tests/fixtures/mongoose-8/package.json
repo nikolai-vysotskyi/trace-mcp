@@ -1,0 +1,6 @@
+{
+  "name": "mongoose-8-fixture",
+  "dependencies": {
+    "mongoose": "^8.0.0"
+  }
+}

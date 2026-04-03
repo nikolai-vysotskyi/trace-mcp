@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { RawSymbol, RawEdge, RawRoute, RawComponent, RawMigration } from '../plugin-api/types.js';
+import type { RawSymbol, RawEdge, RawRoute, RawComponent, RawMigration, RawOrmModel, RawOrmAssociation, RawRnScreen } from '../plugin-api/types.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { dbError } from '../errors.js';
 
@@ -390,6 +390,98 @@ export class Store {
     ).all(nodeId) as (EdgeRow & { edge_type_name: string })[];
   }
 
+  // --- ORM Models ---
+
+  insertOrmModel(model: RawOrmModel, fileId: number): number {
+    const result = this.db.prepare(
+      `INSERT INTO orm_models (file_id, name, orm, collection_or_table, fields, options, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      fileId,
+      model.name,
+      model.orm,
+      model.collectionOrTable ?? null,
+      model.fields ? JSON.stringify(model.fields) : null,
+      model.options ? JSON.stringify(model.options) : null,
+      model.metadata ? JSON.stringify(model.metadata) : null,
+    );
+    const modelId = Number(result.lastInsertRowid);
+    this.createNode('orm_model', modelId);
+    return modelId;
+  }
+
+  getOrmModelByName(name: string): OrmModelRow | undefined {
+    return this.db.prepare('SELECT * FROM orm_models WHERE name = ?').get(name) as OrmModelRow | undefined;
+  }
+
+  getOrmModelsByOrm(orm: string): OrmModelRow[] {
+    return this.db.prepare('SELECT * FROM orm_models WHERE orm = ?').all(orm) as OrmModelRow[];
+  }
+
+  getAllOrmModels(): OrmModelRow[] {
+    return this.db.prepare('SELECT * FROM orm_models').all() as OrmModelRow[];
+  }
+
+  // --- ORM Associations ---
+
+  insertOrmAssociation(
+    sourceModelId: number,
+    targetModelId: number | null,
+    targetModelName: string,
+    kind: string,
+    options?: Record<string, unknown>,
+    fileId?: number,
+    line?: number,
+  ): number {
+    const result = this.db.prepare(
+      `INSERT INTO orm_associations (source_model_id, target_model_id, target_model_name, kind, options, file_id, line)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      sourceModelId,
+      targetModelId,
+      targetModelName,
+      kind,
+      options ? JSON.stringify(options) : null,
+      fileId ?? null,
+      line ?? null,
+    );
+    return Number(result.lastInsertRowid);
+  }
+
+  getOrmAssociationsByModel(modelId: number): OrmAssociationRow[] {
+    return this.db.prepare(
+      'SELECT * FROM orm_associations WHERE source_model_id = ?',
+    ).all(modelId) as OrmAssociationRow[];
+  }
+
+  // --- React Native Screens ---
+
+  insertRnScreen(screen: RawRnScreen, fileId: number): number {
+    const result = this.db.prepare(
+      `INSERT INTO rn_screens (file_id, name, component_path, navigator_type, options, deep_link, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      fileId,
+      screen.name,
+      screen.componentPath ?? null,
+      screen.navigatorType ?? null,
+      screen.options ? JSON.stringify(screen.options) : null,
+      screen.deepLink ?? null,
+      screen.metadata ? JSON.stringify(screen.metadata) : null,
+    );
+    const screenId = Number(result.lastInsertRowid);
+    this.createNode('rn_screen', screenId);
+    return screenId;
+  }
+
+  getRnScreenByName(name: string): RnScreenRow | undefined {
+    return this.db.prepare('SELECT * FROM rn_screens WHERE name = ?').get(name) as RnScreenRow | undefined;
+  }
+
+  getAllRnScreens(): RnScreenRow[] {
+    return this.db.prepare('SELECT * FROM rn_screens').all() as RnScreenRow[];
+  }
+
   getSymbolById(id: number): SymbolRow | undefined {
     return this.db.prepare('SELECT * FROM symbols WHERE id = ?').get(id) as SymbolRow | undefined;
   }
@@ -501,6 +593,39 @@ export interface ComponentRow {
   slots: string | null;
   composables: string | null;
   framework: string;
+}
+
+export interface OrmModelRow {
+  id: number;
+  file_id: number;
+  name: string;
+  orm: string;
+  collection_or_table: string | null;
+  fields: string | null;
+  options: string | null;
+  metadata: string | null;
+}
+
+export interface OrmAssociationRow {
+  id: number;
+  source_model_id: number;
+  target_model_id: number | null;
+  target_model_name: string | null;
+  kind: string;
+  options: string | null;
+  file_id: number | null;
+  line: number | null;
+}
+
+export interface RnScreenRow {
+  id: number;
+  file_id: number;
+  name: string;
+  component_path: string | null;
+  navigator_type: string | null;
+  options: string | null;
+  deep_link: string | null;
+  metadata: string | null;
 }
 
 export interface IndexStats {

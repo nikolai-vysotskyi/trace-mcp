@@ -21,6 +21,9 @@ import { BladePlugin } from './indexer/plugins/framework/blade/index.js';
 import { NestJSPlugin } from './indexer/plugins/framework/nestjs/index.js';
 import { NextJSPlugin } from './indexer/plugins/framework/nextjs/index.js';
 import { ExpressPlugin } from './indexer/plugins/framework/express/index.js';
+import { MongoosePlugin } from './indexer/plugins/framework/mongoose/index.js';
+import { SequelizePlugin } from './indexer/plugins/framework/sequelize/index.js';
+import { ReactNativePlugin } from './indexer/plugins/framework/react-native/index.js';
 
 function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerLanguagePlugin(new PhpLanguagePlugin());
@@ -34,6 +37,9 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerFrameworkPlugin(new NestJSPlugin());
   registry.registerFrameworkPlugin(new NextJSPlugin());
   registry.registerFrameworkPlugin(new ExpressPlugin());
+  registry.registerFrameworkPlugin(new MongoosePlugin());
+  registry.registerFrameworkPlugin(new SequelizePlugin());
+  registry.registerFrameworkPlugin(new ReactNativePlugin());
 }
 
 const program = new Command();

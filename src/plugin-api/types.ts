@@ -78,6 +78,32 @@ export interface RawMigration {
   timestamp?: string;
 }
 
+export interface RawOrmModel {
+  name: string;
+  orm: 'mongoose' | 'sequelize';
+  collectionOrTable?: string;
+  fields?: Record<string, unknown>[];
+  options?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RawOrmAssociation {
+  sourceModelName: string;
+  targetModelName: string;
+  kind: string;  // 'hasMany', 'belongsTo', 'ref', 'discriminator', etc.
+  options?: Record<string, unknown>;
+  line?: number;
+}
+
+export interface RawRnScreen {
+  name: string;
+  componentPath?: string;
+  navigatorType?: 'stack' | 'tab' | 'drawer' | 'native-stack';
+  options?: Record<string, unknown>;
+  deepLink?: string;
+  metadata?: Record<string, unknown>;
+}
+
 // --- Plugin file result ---
 
 export interface FileParseResult {
@@ -89,6 +115,9 @@ export interface FileParseResult {
   routes?: RawRoute[];
   components?: RawComponent[];
   migrations?: RawMigration[];
+  ormModels?: RawOrmModel[];
+  ormAssociations?: RawOrmAssociation[];
+  rnScreens?: RawRnScreen[];
   warnings?: string[];
 }
 

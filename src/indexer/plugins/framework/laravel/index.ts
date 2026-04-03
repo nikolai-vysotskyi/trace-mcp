@@ -1,6 +1,12 @@
 /**
  * LaravelPlugin — Framework plugin for Laravel applications.
- * Orchestrates route, Eloquent, migration, FormRequest, and event extraction.
+ * Orchestrates route, Eloquent, migration, FormRequest, event, and middleware extraction.
+ *
+ * Supports Laravel 6–13:
+ * - L6-8: string controller syntax, Route::namespace(), Kernel.php middleware
+ * - L8+: class array syntax, invokable controllers
+ * - L9+: Route::controller() groups
+ * - L11+: bootstrap/app.php (withRouting, withMiddleware)
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,6 +25,13 @@ import { extractEloquentModel } from './eloquent.js';
 import { extractMigrations } from './migrations.js';
 import { extractFormRequest, detectFormRequestUsage } from './requests.js';
 import { extractEventListeners, detectEventDispatches } from './events.js';
+import {
+  parseKernelMiddleware,
+  parseBootstrapMiddleware,
+  parseRouteServiceProviderNamespace,
+  parseBootstrapRouting,
+  type MiddlewareConfig,
+} from './middleware.js';
 
 export class LaravelPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -27,6 +40,15 @@ export class LaravelPlugin implements FrameworkPlugin {
     priority: 0,
     dependencies: [],
   };
+
+  /** Cached middleware configuration (populated during extractNodes). */
+  private middlewareConfig: MiddlewareConfig | null = null;
+
+  /** Controller namespace from RouteServiceProvider (Laravel 6-8). */
+  private controllerNamespace: string | null = null;
+
+  /** Route file paths from bootstrap/app.php (Laravel 11+). */
+  private bootstrapRouting: Record<string, string> | null = null;
 
   detect(ctx: ProjectContext): boolean {
     // Check if composer.json has laravel/framework in require
@@ -83,6 +105,25 @@ export class LaravelPlugin implements FrameworkPlugin {
       migrations: [],
       warnings: [],
     };
+
+    // Kernel.php — middleware config (Laravel 6-10)
+    if (this.isKernelFile(filePath)) {
+      this.middlewareConfig = parseKernelMiddleware(source);
+      result.frameworkRole = 'middleware_config';
+    }
+
+    // bootstrap/app.php — middleware + routing config (Laravel 11+)
+    if (this.isBootstrapAppFile(filePath)) {
+      this.middlewareConfig = parseBootstrapMiddleware(source);
+      this.bootstrapRouting = parseBootstrapRouting(source);
+      result.frameworkRole = 'bootstrap_config';
+    }
+
+    // RouteServiceProvider — controller namespace (Laravel 6-8)
+    if (this.isRouteServiceProvider(filePath)) {
+      this.controllerNamespace = parseRouteServiceProviderNamespace(source);
+      result.frameworkRole = 'route_provider';
+    }
 
     // Route files
     if (this.isRouteFile(filePath)) {
@@ -160,6 +201,43 @@ export class LaravelPlugin implements FrameworkPlugin {
     return ok(edges);
   }
 
+  /** Get the parsed middleware config (for use by tools like get_request_flow). */
+  getMiddlewareConfig(): MiddlewareConfig | null {
+    return this.middlewareConfig;
+  }
+
+  /** Get the controller namespace from RouteServiceProvider (Laravel 6-8). */
+  getControllerNamespace(): string | null {
+    return this.controllerNamespace;
+  }
+
+  /** Get bootstrap routing config (Laravel 11+). */
+  getBootstrapRouting(): Record<string, string> | null {
+    return this.bootstrapRouting;
+  }
+
+  /**
+   * Resolve a middleware alias to its class FQN.
+   * Returns the alias itself if no resolution found.
+   */
+  resolveMiddlewareAlias(alias: string): string {
+    if (!this.middlewareConfig) return alias;
+    return this.middlewareConfig.aliases[alias] ?? alias;
+  }
+
+  /**
+   * Get the full middleware chain for a route, resolving aliases.
+   * Combines route-level middleware with group middleware.
+   */
+  getMiddlewareChain(routeMiddleware?: string[]): string[] {
+    if (!routeMiddleware || routeMiddleware.length === 0) return [];
+    return routeMiddleware.map((m) => {
+      const baseName = m.split(':')[0]; // 'auth:sanctum' -> 'auth'
+      const resolved = this.resolveMiddlewareAlias(baseName);
+      return resolved !== baseName ? `${resolved}${m.includes(':') ? ':' + m.split(':').slice(1).join(':') : ''}` : m;
+    });
+  }
+
   private resolveEloquentEdges(
     source: string,
     file: { id: number; path: string },
@@ -175,9 +253,6 @@ export class LaravelPlugin implements FrameworkPlugin {
     for (const rel of modelInfo.relationships) {
       const targetSymbol = ctx.getSymbolByFqn(rel.relatedClass);
       if (!targetSymbol) continue;
-
-      const sourceNodeId = ctx.createNodeIfNeeded('symbol', sourceSymbol.id);
-      const targetNodeId = ctx.createNodeIfNeeded('symbol', targetSymbol.id);
 
       edges.push({
         sourceNodeType: 'symbol',
@@ -289,5 +364,17 @@ export class LaravelPlugin implements FrameworkPlugin {
 
   private isMigrationFile(filePath: string): boolean {
     return filePath.includes('database/migrations/');
+  }
+
+  private isKernelFile(filePath: string): boolean {
+    return /app\/Http\/Kernel\.php$/.test(filePath);
+  }
+
+  private isBootstrapAppFile(filePath: string): boolean {
+    return /bootstrap\/app\.php$/.test(filePath);
+  }
+
+  private isRouteServiceProvider(filePath: string): boolean {
+    return /Providers\/RouteServiceProvider\.php$/.test(filePath);
   }
 }

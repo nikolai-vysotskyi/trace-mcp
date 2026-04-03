@@ -1,0 +1,7 @@
+{
+  "name": "sequelize-6-fixture",
+  "dependencies": {
+    "sequelize": "^6.0.0",
+    "pg": "^8.0.0"
+  }
+}

@@ -96,6 +96,47 @@ CREATE TABLE IF NOT EXISTS migrations (
 );
 
 -- ============================================================
+-- ORM MODELS (Mongoose + Sequelize)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS orm_models (
+    id                  INTEGER PRIMARY KEY,
+    file_id             INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    name                TEXT NOT NULL,
+    orm                 TEXT NOT NULL,
+    collection_or_table TEXT,
+    fields              TEXT,
+    options             TEXT,
+    metadata            TEXT
+);
+
+CREATE TABLE IF NOT EXISTS orm_associations (
+    id                  INTEGER PRIMARY KEY,
+    source_model_id     INTEGER NOT NULL REFERENCES orm_models(id) ON DELETE CASCADE,
+    target_model_id     INTEGER REFERENCES orm_models(id),
+    target_model_name   TEXT,
+    kind                TEXT NOT NULL,
+    options             TEXT,
+    file_id             INTEGER REFERENCES files(id),
+    line                INTEGER
+);
+
+-- ============================================================
+-- REACT NATIVE SCREENS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS rn_screens (
+    id              INTEGER PRIMARY KEY,
+    file_id         INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    component_path  TEXT,
+    navigator_type  TEXT,
+    options         TEXT,
+    deep_link       TEXT,
+    metadata        TEXT
+);
+
+-- ============================================================
 -- UNIFIED EDGES
 -- ============================================================
 
@@ -167,7 +208,7 @@ CREATE TABLE IF NOT EXISTS schema_meta (
 );
 `;
 
-const SEED_NODE_TYPES = ['symbol', 'file', 'route', 'component', 'migration'];
+const SEED_NODE_TYPES = ['symbol', 'file', 'route', 'component', 'migration', 'orm_model', 'rn_screen'];
 
 const SEED_EDGE_TYPES = [
   { name: 'imports', category: 'php', description: 'PHP use/import statement' },
@@ -201,6 +242,14 @@ const SEED_EDGE_TYPES = [
   { name: 'blade_extends', category: 'blade', description: '@extends directive' },
   { name: 'blade_includes', category: 'blade', description: '@include directive' },
   { name: 'blade_component', category: 'blade', description: '<x-component> or @component' },
+  // Livewire edges
+  { name: 'livewire_renders', category: 'livewire', description: 'Component class → Blade view' },
+  { name: 'livewire_dispatches', category: 'livewire', description: 'Component dispatches event' },
+  { name: 'livewire_listens', category: 'livewire', description: 'Component listens for event' },
+  { name: 'livewire_child_of', category: 'livewire', description: 'Blade <livewire:child/> → Component' },
+  { name: 'livewire_uses_model', category: 'livewire', description: 'Component → Eloquent Model' },
+  { name: 'livewire_form', category: 'livewire', description: 'Component → Form class (v3)' },
+  { name: 'livewire_action', category: 'livewire', description: 'wire:click → Component method' },
   // NestJS edges
   { name: 'nest_module_imports', category: 'nestjs', description: 'Module imports another module' },
   { name: 'nest_provides', category: 'nestjs', description: 'Module provides a service' },
@@ -216,6 +265,29 @@ const SEED_EDGE_TYPES = [
   { name: 'express_route', category: 'express', description: 'Express route handler' },
   { name: 'express_middleware', category: 'express', description: 'Express middleware' },
   { name: 'express_mounts', category: 'express', description: 'Router mount via app.use' },
+  // Mongoose edges
+  { name: 'mongoose_references', category: 'mongoose', description: 'ObjectId ref to another model' },
+  { name: 'mongoose_has_virtual', category: 'mongoose', description: 'Schema virtual field' },
+  { name: 'mongoose_has_middleware', category: 'mongoose', description: 'Schema pre/post hook' },
+  { name: 'mongoose_has_method', category: 'mongoose', description: 'Schema instance method' },
+  { name: 'mongoose_has_static', category: 'mongoose', description: 'Schema static method' },
+  { name: 'mongoose_discriminates', category: 'mongoose', description: 'Model discriminator' },
+  { name: 'mongoose_has_index', category: 'mongoose', description: 'Schema index' },
+  { name: 'mongoose_uses_plugin', category: 'mongoose', description: 'Schema plugin' },
+  // Sequelize edges
+  { name: 'sequelize_has_many', category: 'sequelize', description: 'Sequelize hasMany association' },
+  { name: 'sequelize_belongs_to', category: 'sequelize', description: 'Sequelize belongsTo association' },
+  { name: 'sequelize_belongs_to_many', category: 'sequelize', description: 'Sequelize belongsToMany association' },
+  { name: 'sequelize_has_one', category: 'sequelize', description: 'Sequelize hasOne association' },
+  { name: 'sequelize_has_hook', category: 'sequelize', description: 'Sequelize lifecycle hook' },
+  { name: 'sequelize_has_scope', category: 'sequelize', description: 'Sequelize named scope' },
+  { name: 'sequelize_migrates', category: 'sequelize', description: 'Migration changes table schema' },
+  // React Native edges
+  { name: 'rn_navigates_to', category: 'react-native', description: 'navigation.navigate() to screen' },
+  { name: 'rn_screen_in_navigator', category: 'react-native', description: 'Screen registered in navigator' },
+  { name: 'rn_uses_native_module', category: 'react-native', description: 'Uses NativeModules/TurboModuleRegistry' },
+  { name: 'rn_platform_specific', category: 'react-native', description: 'Platform-specific file variant' },
+  { name: 'rn_deep_links_to', category: 'react-native', description: 'Deep link maps to screen' },
   // Workspace edges
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },

@@ -12,6 +12,10 @@ import { IndexingPipeline } from './indexer/pipeline.js';
 import { formatToolError } from './errors.js';
 import { logger } from './logger.js';
 import { createAIProvider, BlobVectorStore, type AIProvider } from './ai/index.js';
+import { getMiddlewareChain } from './tools/middleware-chain.js';
+import { getModuleGraph } from './tools/module-graph.js';
+import { getDITree } from './tools/di-tree.js';
+import { getNavigationGraph } from './tools/rn-navigation.js';
 
 export function createServer(
   store: Store,
@@ -213,6 +217,86 @@ export function createServer(
       const result = getFeatureContext(store, projectRoot, description, token_budget ?? 4000);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    },
+  );
+
+  // --- Level 3 Framework-Specific Tools ---
+
+  server.tool(
+    'get_middleware_chain',
+    'Trace middleware chain for a route URL (Express: app->router->route; NestJS: guards->pipes->interceptors)',
+    {
+      url: z.string().describe('Route URL to trace middleware for'),
+    },
+    async ({ url }) => {
+      const result = getMiddlewareChain(store, projectRoot, url);
+      if (result.isErr()) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
+      };
+    },
+  );
+
+  server.tool(
+    'get_module_graph',
+    'Build NestJS module dependency graph (module -> imports -> controllers -> providers -> exports)',
+    {
+      module_name: z.string().describe('NestJS module class name (e.g. AppModule)'),
+    },
+    async ({ module_name }) => {
+      const result = getModuleGraph(store, projectRoot, module_name);
+      if (result.isErr()) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
+      };
+    },
+  );
+
+  server.tool(
+    'get_di_tree',
+    'Trace NestJS dependency injection tree (what a service injects + who injects it)',
+    {
+      service_name: z.string().describe('NestJS service/provider class name'),
+    },
+    async ({ service_name }) => {
+      const result = getDITree(store, service_name);
+      if (result.isErr()) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
+      };
+    },
+  );
+
+  server.tool(
+    'get_navigation_graph',
+    'Build React Native navigation tree from screens, navigators, and deep links',
+    {},
+    async () => {
+      const result = getNavigationGraph(store);
+      if (result.isErr()) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(formatToolError(result.error), null, 2) }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result.value, null, 2) }],
       };
     },
   );

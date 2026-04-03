@@ -72,7 +72,7 @@ describe('schema', () => {
     expect(tables).toContain('files');
 
     const nodeTypes = db.prepare('SELECT COUNT(*) as c FROM node_types').get() as { c: number };
-    expect(nodeTypes.c).toBe(5);
+    expect(nodeTypes.c).toBe(7);
   });
 
   it('has WAL journal mode (file-backed DB)', () => {
