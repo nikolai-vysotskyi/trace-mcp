@@ -36,4 +36,8 @@ export class FallbackProvider implements AIProvider {
   inference(): InferenceService {
     return new FallbackInferenceService();
   }
+
+  fastInference(): InferenceService {
+    return new FallbackInferenceService();
+  }
 }

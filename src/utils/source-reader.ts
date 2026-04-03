@@ -8,12 +8,13 @@ export function readByteRange(
   byteStart: number,
   byteEnd: number,
 ): string {
+  if (byteEnd <= byteStart || byteStart < 0) return '';
   const fd = fs.openSync(filePath, 'r');
   try {
     const length = byteEnd - byteStart;
     const buffer = Buffer.alloc(length);
-    fs.readSync(fd, buffer, 0, length, byteStart);
-    return buffer.toString('utf8');
+    const bytesRead = fs.readSync(fd, buffer, 0, length, byteStart);
+    return buffer.subarray(0, bytesRead).toString('utf8');
   } finally {
     fs.closeSync(fd);
   }

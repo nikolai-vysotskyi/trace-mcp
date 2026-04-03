@@ -25,6 +25,7 @@ import type {
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { escapeRegExp } from '../../../../utils/security.js';
 
 const require = createRequire(import.meta.url);
 const Parser = require('tree-sitter');
@@ -68,7 +69,7 @@ function hasPythonDep(rootPath: string, depName: string): boolean {
   for (const reqFile of ['requirements.txt', 'requirements/base.txt', 'requirements/prod.txt']) {
     try {
       const content = fs.readFileSync(path.join(rootPath, reqFile), 'utf-8');
-      if (new RegExp(`^${depName}\\b`, 'm').test(content)) return true;
+      if (new RegExp(`^${escapeRegExp(depName)}\\b`, 'm').test(content)) return true;
     } catch { /* not found */ }
   }
 

@@ -162,16 +162,7 @@ export function getNovaResource(
 }
 
 function findNovaSymbol(store: Store, name: string) {
-  const allFiles = store.getAllFiles();
-  for (const file of allFiles) {
-    if (file.framework_role !== 'nova_resource') continue;
-    const symbols = store.getSymbolsByFile(file.id);
-    const match = symbols.find(
-      (s) => s.name === name || s.fqn?.endsWith(`\\${name}`),
-    );
-    if (match) return match;
-  }
-  return undefined;
+  return store.findSymbolByRole(name, 'nova_resource');
 }
 
 function resolveTargetName(

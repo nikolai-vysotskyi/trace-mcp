@@ -26,6 +26,7 @@ export class FileWatcher {
     config: TraceMcpConfig,
     onChanges: (paths: string[]) => Promise<void>,
     debounceMs = DEFAULT_DEBOUNCE_MS,
+    onDeletes?: (paths: string[]) => Promise<void>,
   ): Promise<void> {
     const ignoreDirs = IGNORE_DIRS.map((d) => path.join(rootPath, d));
 
@@ -37,10 +38,22 @@ export class FileWatcher {
           return;
         }
 
+        const notIgnored = (p: string) => !ignoreDirs.some((d) => p.startsWith(d));
+
         const changed = events
           .filter((e) => e.type === 'create' || e.type === 'update')
           .map((e) => e.path)
-          .filter((p) => !ignoreDirs.some((d) => p.startsWith(d)));
+          .filter(notIgnored);
+
+        const deleted = events
+          .filter((e) => e.type === 'delete')
+          .map((e) => e.path)
+          .filter(notIgnored);
+
+        if (deleted.length > 0 && onDeletes) {
+          logger.debug({ count: deleted.length }, 'File deletions detected');
+          await onDeletes(deleted);
+        }
 
         if (changed.length === 0) return;
 

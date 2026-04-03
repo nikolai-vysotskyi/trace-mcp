@@ -6,6 +6,8 @@
  * - Laravel 11+:  bootstrap/app.php (->withMiddleware() callback with alias/web/api methods)
  */
 
+import { escapeRegExp } from '../../../../utils/security.js';
+
 export interface MiddlewareConfig {
   /** Global middleware applied to every request. */
   global: string[];
@@ -75,7 +77,7 @@ export function parseBootstrapMiddleware(source: string): MiddlewareConfig {
  * e.g. protected $middleware = [ \App\Http\Middleware\X::class, ... ];
  */
 function extractPropertyArray(source: string, propName: string): string[] {
-  const escaped = propName.replace('$', '\\$');
+  const escaped = escapeRegExp(propName);
   const regex = new RegExp(
     `protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`,
   );
@@ -92,7 +94,7 @@ function extractPropertyGroups(
   source: string,
   propName: string,
 ): Record<string, string[]> {
-  const escaped = propName.replace('$', '\\$');
+  const escaped = escapeRegExp(propName);
   const regex = new RegExp(
     `protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`,
   );
@@ -120,7 +122,7 @@ function extractPropertyMap(
   source: string,
   propName: string,
 ): Record<string, string> {
-  const escaped = propName.replace('$', '\\$');
+  const escaped = escapeRegExp(propName);
   const regex = new RegExp(
     `protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`,
   );
@@ -135,7 +137,7 @@ function extractPropertyMap(
  */
 function extractCallMap(body: string, methodName: string): Record<string, string> {
   const regex = new RegExp(
-    `\\$middleware->${methodName}\\s*\\(\\s*\\[([\\s\\S]*?)\\]\\s*\\)`,
+    `\\$middleware->${escapeRegExp(methodName)}\\s*\\(\\s*\\[([\\s\\S]*?)\\]\\s*\\)`,
   );
   const match = body.match(regex);
   if (!match) return {};
@@ -147,7 +149,7 @@ function extractCallMap(body: string, methodName: string): Record<string, string
  */
 function extractCallArray(body: string, methodName: string): string[] {
   const regex = new RegExp(
-    `\\$middleware->${methodName}\\s*\\((?:append|prepend):\\s*\\[([\\s\\S]*?)\\]\\s*\\)`,
+    `\\$middleware->${escapeRegExp(methodName)}\\s*\\((?:append|prepend):\\s*\\[([\\s\\S]*?)\\]\\s*\\)`,
   );
   const match = body.match(regex);
   if (!match) return [];

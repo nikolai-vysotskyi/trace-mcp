@@ -24,6 +24,7 @@ import type {
   EdgeTypeDeclaration,
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
+import { escapeRegExp } from '../../../../utils/security.js';
 import { extractDjangoModels } from './models.js';
 import { extractUrlPatterns } from './urls.js';
 import { extractSignalConnections } from './signals.js';
@@ -225,7 +226,7 @@ export class DjangoPlugin implements FrameworkPlugin {
       'RetrieveUpdateDestroyAPIView',
     ];
 
-    const basesPattern = cbvBases.join('|');
+    const basesPattern = cbvBases.map(escapeRegExp).join('|');
     const classRegex = new RegExp(
       `class\\s+(\\w+)\\s*\\((?:[\\w.,\\s]*(?:${basesPattern})[\\w.,\\s]*)\\)\\s*:`,
       'g',
@@ -493,7 +494,7 @@ export class DjangoPlugin implements FrameworkPlugin {
       'ListView', 'DetailView', 'CreateView', 'UpdateView', 'DeleteView',
       'FormView', 'TemplateView', 'ModelViewSet', 'ReadOnlyModelViewSet',
     ];
-    const basesPattern = cbvBases.join('|');
+    const basesPattern = cbvBases.map(escapeRegExp).join('|');
     const classRegex = new RegExp(
       `class\\s+(\\w+)\\s*\\((?:[\\w.,\\s]*(?:${basesPattern})[\\w.,\\s]*)\\)\\s*:`,
       'g',

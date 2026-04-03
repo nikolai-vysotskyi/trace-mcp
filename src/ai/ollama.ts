@@ -122,4 +122,11 @@ export class OllamaProvider implements AIProvider {
       this.config.inferenceModel,
     );
   }
+
+  fastInference(): InferenceService {
+    return new OllamaInferenceService(
+      this.config.baseUrl,
+      this.config.fastModel,
+    );
+  }
 }

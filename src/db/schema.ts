@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const DDL = `
 -- ============================================================
@@ -197,6 +197,20 @@ CREATE TABLE IF NOT EXISTS symbol_embeddings (
     symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
     embedding BLOB NOT NULL
 );
+
+-- ============================================================
+-- AI INFERENCE CACHE (optional, for cached summarization)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS inference_cache (
+    cache_key   TEXT PRIMARY KEY,
+    model       TEXT NOT NULL,
+    prompt_hash TEXT NOT NULL,
+    response    TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    ttl_days    INTEGER DEFAULT 90
+);
+CREATE INDEX IF NOT EXISTS idx_inference_cache_model ON inference_cache(model);
 
 -- ============================================================
 -- SCHEMA VERSION
@@ -432,6 +446,20 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       VALUES
         ('ts_extends',    'typescript', 1, 'TypeScript class/interface extends'),
         ('ts_implements', 'typescript', 1, 'TypeScript class implements interface');
+    `);
+  },
+  4: (db) => {
+    // v4: AI inference cache for summarization pipeline
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS inference_cache (
+        cache_key   TEXT PRIMARY KEY,
+        model       TEXT NOT NULL,
+        prompt_hash TEXT NOT NULL,
+        response    TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        ttl_days    INTEGER DEFAULT 90
+      );
+      CREATE INDEX IF NOT EXISTS idx_inference_cache_model ON inference_cache(model);
     `);
   },
 };

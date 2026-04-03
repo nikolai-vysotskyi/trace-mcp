@@ -406,3 +406,162 @@ export function getDeadExports(
     total_dead: dead.length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// get_dependency_graph
+// ---------------------------------------------------------------------------
+
+export interface DependencyEdge {
+  source: string;
+  target: string;
+  specifiers: string[];
+}
+
+export interface GetDependencyGraphResult {
+  file: string;
+  imports: DependencyEdge[];
+  imported_by: DependencyEdge[];
+}
+
+/**
+ * Show file-level dependency graph: what a file imports and what imports it.
+ * Requires ESM import edges (resolved by the pipeline in Pass 2d).
+ */
+export function getDependencyGraph(
+  store: Store,
+  filePath: string,
+): GetDependencyGraphResult {
+  const file = store.getFile(filePath);
+  if (!file) {
+    return { file: filePath, imports: [], imported_by: [] };
+  }
+
+  const nodeId = store.getNodeId('file', file.id);
+  if (nodeId == null) {
+    return { file: filePath, imports: [], imported_by: [] };
+  }
+
+  // Outgoing imports (what this file imports)
+  const outgoing = store.getOutgoingEdges(nodeId)
+    .filter((e) => e.edge_type_name === 'imports');
+  const imports: DependencyEdge[] = [];
+  for (const edge of outgoing) {
+    const targetRef = store.getNodeRef(edge.target_node_id);
+    if (!targetRef || targetRef.nodeType !== 'file') continue;
+    const targetFile = store.getFileById(targetRef.refId);
+    if (!targetFile) continue;
+    const meta = edge.metadata
+      ? (typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata) as Record<string, unknown>
+      : {};
+    imports.push({
+      source: filePath,
+      target: targetFile.path,
+      specifiers: (meta['specifiers'] as string[]) ?? [],
+    });
+  }
+
+  // Incoming imports (what imports this file)
+  const incoming = store.getIncomingEdges(nodeId)
+    .filter((e) => e.edge_type_name === 'imports');
+  const importedBy: DependencyEdge[] = [];
+  for (const edge of incoming) {
+    const sourceRef = store.getNodeRef(edge.source_node_id);
+    if (!sourceRef || sourceRef.nodeType !== 'file') continue;
+    const sourceFile = store.getFileById(sourceRef.refId);
+    if (!sourceFile) continue;
+    const meta = edge.metadata
+      ? (typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata) as Record<string, unknown>
+      : {};
+    importedBy.push({
+      source: sourceFile.path,
+      target: filePath,
+      specifiers: (meta['specifiers'] as string[]) ?? [],
+    });
+  }
+
+  return { file: filePath, imports, imported_by: importedBy };
+}
+
+// ---------------------------------------------------------------------------
+// get_untested_exports
+// ---------------------------------------------------------------------------
+
+export interface UntestedExportItem {
+  symbol_id: string;
+  name: string;
+  kind: string;
+  file: string;
+  line: number | null;
+  signature: string | null;
+}
+
+export interface GetUntestedExportsResult {
+  file_pattern: string | null;
+  untested: UntestedExportItem[];
+  total_exports: number;
+  total_untested: number;
+}
+
+/**
+ * Find exported public symbols that have no associated test coverage.
+ * Uses heuristic path matching: for each exported symbol, checks if any
+ * test file in the project matches its file name or symbol name pattern.
+ */
+export function getUntestedExports(
+  store: Store,
+  filePattern?: string,
+): GetUntestedExportsResult {
+  const exported = store.getExportedSymbols(filePattern)
+    .filter((s) => s.kind !== 'method'); // methods inherit from class
+
+  // Collect all test file paths
+  const allFiles = store.getAllFiles();
+  const testFiles = allFiles
+    .filter((f) => /\.(test|spec)\.(ts|js|tsx|jsx)$/.test(f.path))
+    .map((f) => f.path.toLowerCase());
+
+  const untested: UntestedExportItem[] = [];
+
+  for (const sym of exported) {
+    // Normalize the source file name for matching
+    const baseName = sym.file_path
+      .replace(/\.[^.]+$/, '') // strip extension
+      .split('/').pop()!       // get filename
+      .toLowerCase();
+
+    // Check if any test file references this source file
+    const hasTest = testFiles.some((testPath) => {
+      const testBase = testPath.split('/').pop()!;
+      return (
+        testBase.includes(baseName) ||
+        testBase.includes(toKebab(sym.name))
+      );
+    });
+
+    if (!hasTest) {
+      untested.push({
+        symbol_id: sym.symbol_id,
+        name: sym.name,
+        kind: sym.kind,
+        file: sym.file_path,
+        line: sym.line_start,
+        signature: sym.signature,
+      });
+    }
+  }
+
+  return {
+    file_pattern: filePattern ?? null,
+    untested,
+    total_exports: exported.length,
+    total_untested: untested.length,
+  };
+}
+
+/** Convert PascalCase/camelCase to kebab-case for test file matching */
+function toKebab(name: string): string {
+  return name
+    .replace(/([a-z])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+}

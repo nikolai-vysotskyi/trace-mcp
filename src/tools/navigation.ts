@@ -153,14 +153,29 @@ export async function search(
   const now = new Date();
   const scored: SearchResultItem[] = [];
 
+  // Batch-fetch all candidate symbols in one query
+  const symbolIdStrs = candidates.map((c) => c.symbolIdStr);
+  const allSymbols = symbolIdStrs.length > 0
+    ? store.db.prepare(
+        `SELECT * FROM symbols WHERE symbol_id IN (${symbolIdStrs.map(() => '?').join(',')})`,
+      ).all(...symbolIdStrs) as import('../db/store.js').SymbolRow[]
+    : [];
+  const symbolByIdStr = new Map(allSymbols.map((s) => [s.symbol_id, s]));
+
+  // Batch-fetch files and node IDs
+  const fileIds = [...new Set(allSymbols.map((s) => s.file_id))];
+  const fileMap = store.getFilesByIds(fileIds);
+  const symIds = allSymbols.map((s) => s.id);
+  const nodeMap = store.getNodeIdsBatch('symbol', symIds);
+
   for (const candidate of candidates) {
-    const symbol = store.getSymbolBySymbolId(candidate.symbolIdStr);
+    const symbol = symbolByIdStr.get(candidate.symbolIdStr);
     if (!symbol) continue;
 
-    const file = store.getFileById(symbol.file_id);
+    const file = fileMap.get(symbol.file_id);
     if (!file) continue;
 
-    const nodeId = store.getNodeId('symbol', symbol.id);
+    const nodeId = nodeMap.get(symbol.id);
     const pr = nodeId ? (pagerankMap.get(nodeId) ?? 0) / maxPr : 0;
     const recency = computeRecency(file.indexed_at, now);
     const typeBonus = getTypeBonus(symbol.kind);

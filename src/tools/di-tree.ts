@@ -94,12 +94,5 @@ function findSymbolByName(
   store: Store,
   name: string,
 ): ReturnType<Store['getSymbolByFqn']> {
-  // Search all files for a class symbol matching the name
-  const allFiles = store.getAllFiles();
-  for (const file of allFiles) {
-    const symbols = store.getSymbolsByFile(file.id);
-    const match = symbols.find((s) => s.name === name && s.kind === 'class');
-    if (match) return match;
-  }
-  return undefined;
+  return store.getSymbolByName(name, 'class');
 }

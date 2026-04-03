@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../errors.js';
+import { escapeRegExp } from '../../../../utils/security.js';
 import type {
   FrameworkPlugin,
   PluginManifest,
@@ -18,7 +19,7 @@ import type {
 const HTTP_METHODS = ['Get', 'Post', 'Put', 'Delete', 'Patch', 'Head', 'Options'] as const;
 const CONTROLLER_RE = /@Controller\(\s*['"`]([^'"`]*)['"`]\s*\)/;
 const METHOD_DECORATOR_RE = (method: string) =>
-  new RegExp(`@${method}\\(\\s*(?:['"\`]([^'"\`]*)['"\`])?\\s*\\)`, 'g');
+  new RegExp(`@${escapeRegExp(method)}\\(\\s*(?:['"\`]([^'"\`]*)['"\`])?\\s*\\)`, 'g');
 const MODULE_RE = /@Module\(\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}\s*\)/s;
 const INJECTABLE_RE = /@Injectable\(\)/;
 const USE_GUARDS_RE = /@UseGuards\(\s*([^)]+)\s*\)/g;
@@ -32,7 +33,7 @@ const MICROSERVICE_RE = /@(MessagePattern|EventPattern)\s*\(/;
 
 /** Extract array items from a module decorator property like `imports: [A, B]`. */
 function extractModuleArray(body: string, prop: string): string[] {
-  const re = new RegExp(`${prop}\\s*:\\s*\\[([^\\]]*?)\\]`, 's');
+  const re = new RegExp(`${escapeRegExp(prop)}\\s*:\\s*\\[([^\\]]*?)\\]`, 's');
   const m = body.match(re);
   if (!m) return [];
   return m[1]

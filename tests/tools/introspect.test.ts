@@ -5,7 +5,7 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports } from '../../src/tools/introspect.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports } from '../../src/tools/introspect.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/ts-heritage');
@@ -249,6 +249,89 @@ describe('getDeadExports', () => {
   it('each dead export has required fields', () => {
     const result = getDeadExports(store);
     for (const item of result.dead_exports) {
+      expect(typeof item.symbol_id).toBe('string');
+      expect(typeof item.name).toBe('string');
+      expect(typeof item.kind).toBe('string');
+      expect(typeof item.file).toBe('string');
+    }
+  });
+});
+
+// ─── ESM import edge resolution ─────────────────────────────
+
+describe('ESM import edge resolution', () => {
+  it('creates file→file import edges in the graph', () => {
+    // classes.ts imports from interfaces.ts and utils.ts
+    const importEdges = store.getEdgesByType('imports');
+    expect(importEdges.length).toBeGreaterThan(0);
+  });
+
+  it('stores specifiers in edge metadata', () => {
+    const importEdges = store.getEdgesByType('imports');
+    const withSpecifiers = importEdges.filter((e) => {
+      if (!e.metadata) return false;
+      const meta = typeof e.metadata === 'string'
+        ? JSON.parse(e.metadata) as Record<string, unknown>
+        : e.metadata;
+      return Array.isArray(meta['specifiers']) && (meta['specifiers'] as string[]).length > 0;
+    });
+    expect(withSpecifiers.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── get_dependency_graph ───────────────────────────────────
+
+describe('getDependencyGraph', () => {
+  it('shows imports of a file', () => {
+    const result = getDependencyGraph(store, 'src/classes.ts');
+    expect(result.file).toBe('src/classes.ts');
+    expect(result.imports.length).toBeGreaterThan(0);
+    const targets = result.imports.map((e) => e.target);
+    // classes.ts imports interfaces.ts and utils.ts
+    expect(targets.some((t) => t.includes('interfaces'))).toBe(true);
+  });
+
+  it('shows imported_by for an imported file', () => {
+    const result = getDependencyGraph(store, 'src/interfaces.ts');
+    expect(result.imported_by.length).toBeGreaterThan(0);
+    const sources = result.imported_by.map((e) => e.source);
+    expect(sources.some((s) => s.includes('classes'))).toBe(true);
+  });
+
+  it('returns empty for unknown file', () => {
+    const result = getDependencyGraph(store, 'nonexistent.ts');
+    expect(result.imports).toHaveLength(0);
+    expect(result.imported_by).toHaveLength(0);
+  });
+
+  it('includes specifiers in edges', () => {
+    const result = getDependencyGraph(store, 'src/classes.ts');
+    const interfaceImport = result.imports.find((e) => e.target.includes('interfaces'));
+    if (interfaceImport) {
+      expect(interfaceImport.specifiers.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ─── get_untested_exports ───────────────────────────────────
+
+describe('getUntestedExports', () => {
+  it('returns untested export analysis', () => {
+    const result = getUntestedExports(store);
+    expect(result.total_exports).toBeGreaterThan(0);
+    expect(typeof result.total_untested).toBe('number');
+    expect(Array.isArray(result.untested)).toBe(true);
+  });
+
+  it('marks exports as untested when no test file matches', () => {
+    // Our fixture has no test files, so all exports should be untested
+    const result = getUntestedExports(store);
+    expect(result.total_untested).toBe(result.total_exports);
+  });
+
+  it('each untested item has required fields', () => {
+    const result = getUntestedExports(store);
+    for (const item of result.untested) {
       expect(typeof item.symbol_id).toBe('string');
       expect(typeof item.name).toBe('string');
       expect(typeof item.kind).toBe('string');

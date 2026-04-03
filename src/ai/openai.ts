@@ -11,6 +11,7 @@ export interface OpenAIConfig {
   embeddingModel: string;
   embeddingDimensions: number;
   inferenceModel: string;
+  fastModel: string;
 }
 
 class OpenAIEmbeddingService implements EmbeddingService {
@@ -38,7 +39,9 @@ class OpenAIEmbeddingService implements EmbeddingService {
 
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
-      throw new Error(`OpenAI embeddings failed: ${resp.status} ${resp.statusText} — ${body}`);
+      // Truncate body to avoid leaking sensitive data in error messages
+      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+      throw new Error(`OpenAI embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
     }
 
     const data = (await resp.json()) as { data: { index: number; embedding: number[] }[] };
@@ -82,7 +85,8 @@ class OpenAIInferenceService implements InferenceService {
 
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
-      throw new Error(`OpenAI chat failed: ${resp.status} ${resp.statusText} — ${body}`);
+      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+      throw new Error(`OpenAI chat failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
     }
 
     const data = (await resp.json()) as { choices: { message: { content: string } }[] };
@@ -124,6 +128,14 @@ export class OpenAIProvider implements AIProvider {
       this.config.baseUrl,
       this.config.apiKey,
       this.config.inferenceModel,
+    );
+  }
+
+  fastInference(): InferenceService {
+    return new OpenAIInferenceService(
+      this.config.baseUrl,
+      this.config.apiKey,
+      this.config.fastModel,
     );
   }
 }

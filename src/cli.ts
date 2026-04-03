@@ -138,6 +138,8 @@ program
     await watcher.start(projectRoot, config, async (paths) => {
       await pipeline.indexFiles(paths);
       runEmbeddings();
+    }, undefined, async (deleted) => {
+      pipeline.deleteFiles(deleted);
     });
 
     const shutdown = async () => {
@@ -203,13 +205,53 @@ program
     await watcher.start(projectRoot, config, async (paths) => {
       await pipeline.indexFiles(paths);
       runEmbeddings();
+    }, undefined, async (deleted) => {
+      pipeline.deleteFiles(deleted);
     });
 
     const port = parseInt(opts.port, 10);
     const host = opts.host;
 
+    // Simple per-IP rate limiter (token bucket: 60 requests/minute per IP)
+    const RATE_WINDOW_MS = 60_000;
+    const RATE_LIMIT = 60;
+    const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+    function isRateLimited(ip: string): boolean {
+      const now = Date.now();
+      const bucket = rateBuckets.get(ip);
+      if (!bucket || now > bucket.resetAt) {
+        rateBuckets.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+        return false;
+      }
+      bucket.count++;
+      return bucket.count > RATE_LIMIT;
+    }
+
+    // Max request body size (5 MB)
+    const MAX_BODY_SIZE = 5 * 1024 * 1024;
+
     // Stateless HTTP transport: each request gets its own transport instance
     const httpServer = http.createServer(async (req, res) => {
+      const clientIp = req.socket.remoteAddress ?? 'unknown';
+
+      if (isRateLimited(clientIp)) {
+        res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '60' });
+        res.end(JSON.stringify({ error: 'Too many requests' }));
+        return;
+      }
+
+      // Enforce max body size
+      let bodySize = 0;
+      req.on('data', (chunk: Buffer) => {
+        bodySize += chunk.length;
+        if (bodySize > MAX_BODY_SIZE) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Request body too large' }));
+          req.destroy();
+        }
+      });
+
       if (req.method === 'POST' && req.url === '/mcp') {
         const server = createServer(store, registry, config, projectRoot);
         const transport = new StreamableHTTPServerTransport({

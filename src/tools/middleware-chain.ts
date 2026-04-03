@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
+import { escapeRegExp } from '../utils/security.js';
 import { notFound } from '../errors.js';
 
 export interface MiddlewareEntry {
@@ -36,7 +37,12 @@ export function getMiddlewareChain(
 
   // Find matching route
   const matchingRoute = allRoutes.find((r) => {
-    const pattern = r.uri.replace(/:[^/]+/g, '[^/]+').replace(/\{[^}]+\}/g, '[^/]+');
+    const pattern = r.uri
+      .replace(/:[^/]+/g, '\0PARAM\0')
+      .replace(/\{[^}]+\}/g, '\0PARAM\0')
+      .split('\0PARAM\0')
+      .map(escapeRegExp)
+      .join('[^/]+');
     return new RegExp(`^${pattern}$`).test(url) || r.uri === url;
   });
 

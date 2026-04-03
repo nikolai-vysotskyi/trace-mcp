@@ -334,8 +334,8 @@ function modelNameToTable(name: string): string {
   const short = name.includes('\\') ? name.split('\\').pop()! : name;
   // Simple snake_case + plural
   const snake = short.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
-  // Very simple pluralization
-  if (snake.endsWith('y')) return snake.slice(0, -1) + 'ies';
-  if (snake.endsWith('s')) return snake;
+  // Simple pluralization
+  if (snake.endsWith('y') && !/[aeiou]y$/.test(snake)) return snake.slice(0, -1) + 'ies';
+  if (/(?:s|sh|ch|x|z)$/.test(snake)) return snake + 'es';
   return snake + 's';
 }

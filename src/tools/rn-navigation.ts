@@ -68,26 +68,24 @@ function buildNavigatesMap(
 ): Map<string, string[]> {
   const map = new Map<string, string[]>();
 
+  // Pre-build nodeId → screenName lookup in one batch query (avoids O(edges*screens) N+1)
+  const screenIds = allScreens.map((s) => s.id);
+  const nodeIdMap = store.getNodeIdsBatch('rn_screen', screenIds);
+  const nodeToScreen = new Map<number, string>();
+  for (const screen of allScreens) {
+    const nodeId = nodeIdMap.get(screen.id);
+    if (nodeId !== undefined) nodeToScreen.set(nodeId, screen.name);
+  }
+
   const navEdges = store.getEdgesByType('rn_navigates_to');
   for (const edge of navEdges) {
-    const sourceRef = store.getNodeByNodeId(edge.source_node_id);
-    const targetRef = store.getNodeByNodeId(edge.target_node_id);
-    if (!sourceRef || !targetRef) continue;
+    const sourceName = nodeToScreen.get(edge.source_node_id);
+    const targetName = nodeToScreen.get(edge.target_node_id);
 
-    // Find screen names from ref IDs
-    const sourceScreen = allScreens.find((s) => {
-      const nodeId = store.getNodeId('rn_screen', s.id);
-      return nodeId === edge.source_node_id;
-    });
-    const targetScreen = allScreens.find((s) => {
-      const nodeId = store.getNodeId('rn_screen', s.id);
-      return nodeId === edge.target_node_id;
-    });
-
-    if (sourceScreen && targetScreen) {
-      const existing = map.get(sourceScreen.name) ?? [];
-      existing.push(targetScreen.name);
-      map.set(sourceScreen.name, existing);
+    if (sourceName && targetName) {
+      const existing = map.get(sourceName) ?? [];
+      existing.push(targetName);
+      map.set(sourceName, existing);
     }
   }
 

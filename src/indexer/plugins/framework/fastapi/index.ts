@@ -23,6 +23,7 @@ import type {
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { escapeRegExp } from '../../../../utils/security.js';
 
 const require = createRequire(import.meta.url);
 const Parser = require('tree-sitter');
@@ -52,14 +53,14 @@ function hasPythonDep(ctx: ProjectContext, pkg: string): boolean {
   try {
     const pyprojectPath = path.join(ctx.rootPath, 'pyproject.toml');
     const content = fs.readFileSync(pyprojectPath, 'utf-8');
-    const re = new RegExp(`["']${pkg}[>=<\\[!~\\s"']`, 'i');
+    const re = new RegExp(`["']${escapeRegExp(pkg)}[>=<\\[!~\\s"']`, 'i');
     if (re.test(content)) return true;
   } catch { /* not found */ }
 
   try {
     const reqPath = path.join(ctx.rootPath, 'requirements.txt');
     const content = fs.readFileSync(reqPath, 'utf-8');
-    const re = new RegExp(`^${pkg}\\b`, 'im');
+    const re = new RegExp(`^${escapeRegExp(pkg)}\\b`, 'im');
     if (re.test(content)) return true;
   } catch { /* not found */ }
 

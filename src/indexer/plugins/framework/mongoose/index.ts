@@ -27,6 +27,7 @@ import type {
   ResolveContext,
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
+import { escapeRegExp } from '../../../../utils/security.js';
 
 export class MongoosePlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -144,7 +145,7 @@ function extractPlainMongooseSchema(
 
   // Find model name: mongoose.model('Name', schema) or model('Name', schema)
   const modelRegex = new RegExp(
-    `(?:mongoose\\.)?model\\s*\\(\\s*['"]([^'"]+)['"]\\s*,\\s*${schemaVarName}\\s*\\)`,
+    `(?:mongoose\\.)?model\\s*\\(\\s*['"]([^'"]+)['"]\\s*,\\s*${escapeRegExp(schemaVarName)}\\s*\\)`,
   );
   const modelMatch = source.match(modelRegex);
   const modelName = modelMatch?.[1] ?? schemaVarName.replace(/Schema$/, '');
@@ -374,7 +375,7 @@ function parsePropOptions(body: string): Record<string, unknown> {
 
 function extractVirtuals(source: string, schemaVar: string): string[] {
   const virtuals: string[] = [];
-  const regex = new RegExp(`${schemaVar}\\.virtual\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
+  const regex = new RegExp(`${escapeRegExp(schemaVar)}\\.virtual\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     virtuals.push(m[1]);
@@ -384,7 +385,7 @@ function extractVirtuals(source: string, schemaVar: string): string[] {
 
 function extractMiddleware(source: string, schemaVar: string): Array<{ hook: string; event: string }> {
   const middleware: Array<{ hook: string; event: string }> = [];
-  const regex = new RegExp(`${schemaVar}\\.(pre|post)\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
+  const regex = new RegExp(`${escapeRegExp(schemaVar)}\\.(pre|post)\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     middleware.push({ hook: m[1], event: m[2] });
@@ -394,7 +395,7 @@ function extractMiddleware(source: string, schemaVar: string): Array<{ hook: str
 
 function extractMethods(source: string, schemaVar: string): string[] {
   const methods: string[] = [];
-  const regex = new RegExp(`${schemaVar}\\.methods\\.(\\w+)`, 'g');
+  const regex = new RegExp(`${escapeRegExp(schemaVar)}\\.methods\\.(\\w+)`, 'g');
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     methods.push(m[1]);
@@ -404,7 +405,7 @@ function extractMethods(source: string, schemaVar: string): string[] {
 
 function extractStatics(source: string, schemaVar: string): string[] {
   const statics: string[] = [];
-  const regex = new RegExp(`${schemaVar}\\.statics\\.(\\w+)`, 'g');
+  const regex = new RegExp(`${escapeRegExp(schemaVar)}\\.statics\\.(\\w+)`, 'g');
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     statics.push(m[1]);
@@ -414,7 +415,7 @@ function extractStatics(source: string, schemaVar: string): string[] {
 
 function extractPlugins(source: string, schemaVar: string): string[] {
   const plugins: string[] = [];
-  const regex = new RegExp(`${schemaVar}\\.plugin\\s*\\(\\s*(\\w+)`, 'g');
+  const regex = new RegExp(`${escapeRegExp(schemaVar)}\\.plugin\\s*\\(\\s*(\\w+)`, 'g');
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     plugins.push(m[1]);
@@ -424,7 +425,7 @@ function extractPlugins(source: string, schemaVar: string): string[] {
 
 function extractIndexes(source: string, schemaVar: string): string[] {
   const indexes: string[] = [];
-  const regex = new RegExp(`${schemaVar}\\.index\\s*\\(\\s*\\{([^}]+)\\}`, 'g');
+  const regex = new RegExp(`${escapeRegExp(schemaVar)}\\.index\\s*\\(\\s*\\{([^}]+)\\}`, 'g');
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     indexes.push(m[1].trim());
@@ -434,7 +435,7 @@ function extractIndexes(source: string, schemaVar: string): string[] {
 
 function extractDiscriminators(source: string, modelName: string): string[] {
   const discriminators: string[] = [];
-  const regex = new RegExp(`${modelName}\\.discriminator\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
+  const regex = new RegExp(`${escapeRegExp(modelName)}\\.discriminator\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     discriminators.push(m[1]);

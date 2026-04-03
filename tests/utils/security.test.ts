@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validatePath, detectSecrets, validateFileSize, validateArtisanCommand } from '../../src/utils/security.js';
+import { validatePath, detectSecrets, validateFileSize, validateArtisanCommand, escapeRegExp } from '../../src/utils/security.js';
 
 describe('security', () => {
   describe('path traversal', () => {
@@ -90,6 +90,35 @@ describe('security', () => {
     it('blocks arbitrary commands', () => {
       expect(validateArtisanCommand('tinker').isErr()).toBe(true);
       expect(validateArtisanCommand('db:seed').isErr()).toBe(true);
+    });
+  });
+
+  describe('escapeRegExp', () => {
+    it('escapes all regex metacharacters', () => {
+      const input = '.*+?^${}()|[]\\';
+      const escaped = escapeRegExp(input);
+      // The escaped string should match the literal input
+      const re = new RegExp(escaped);
+      expect(re.test(input)).toBe(true);
+    });
+
+    it('leaves alphanumeric strings unchanged', () => {
+      expect(escapeRegExp('hello123')).toBe('hello123');
+    });
+
+    it('escapes dots and asterisks', () => {
+      expect(escapeRegExp('file.ts')).toBe('file\\.ts');
+      expect(escapeRegExp('a*b')).toBe('a\\*b');
+    });
+
+    it('prevents ReDoS from malicious input', () => {
+      // This pattern would cause catastrophic backtracking if unescaped
+      const malicious = '(a+)+b';
+      const escaped = escapeRegExp(malicious);
+      const re = new RegExp(`^${escaped}$`);
+      // Should match the literal string, not behave as a nested quantifier
+      expect(re.test('(a+)+b')).toBe(true);
+      expect(re.test('aaaaab')).toBe(false);
     });
   });
 });

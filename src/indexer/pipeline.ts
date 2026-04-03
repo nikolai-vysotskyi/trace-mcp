@@ -7,8 +7,10 @@ import type { TraceMcpConfig } from '../config.js';
 import type { ResolveContext, RawEdge } from '../plugin-api/types.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes, executeFrameworkResolveEdges } from '../plugin-api/executor.js';
 import { hashContent } from '../utils/hasher.js';
+import { validatePath, validateFileSize } from '../utils/security.js';
 import { logger } from '../logger.js';
 import { detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
+import { EsModuleResolver } from './resolvers/es-modules.js';
 
 export interface IndexingResult {
   totalFiles: number;
@@ -35,6 +37,8 @@ export class IndexingPipeline {
   private _projectContext: ReturnType<typeof this._buildProjectContext> | undefined;
   // File content cache: avoids re-reading files from disk during resolveEdges (Pass 2).
   private _fileContentCache = new Map<string, string>();
+  // Pending import edges: collected in Pass 1, resolved to file→file edges in Pass 2d.
+  private _pendingImports = new Map<number, { from: string; specifiers: string[]; relPath: string }[]>();
 
   async indexAll(force?: boolean): Promise<IndexingResult> {
     const result = this._lock.then(async () => {
@@ -50,12 +54,31 @@ export class IndexingPipeline {
     return result as Promise<IndexingResult>;
   }
 
+  /** Remove deleted files from the index. */
+  deleteFiles(filePaths: string[]): void {
+    for (const fp of filePaths) {
+      const relPath = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+      const file = this.store.getFileByPath(relPath);
+      if (file) {
+        this.store.deleteFile(file.id);
+        logger.info({ file: relPath }, 'Deleted file from index');
+      }
+    }
+  }
+
   async indexFiles(filePaths: string[]): Promise<IndexingResult> {
     const result = this._lock.then(async () => {
       const start = Date.now();
-      const relPaths = filePaths.map((fp) =>
-        path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp,
-      );
+      const relPaths: string[] = [];
+      for (const fp of filePaths) {
+        const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+        const check = validatePath(rel, this.rootPath);
+        if (check.isErr()) {
+          logger.warn({ file: fp }, 'Path traversal blocked in indexFiles');
+          continue;
+        }
+        relPaths.push(rel);
+      }
       return this.runPipeline(relPaths, false, start);
     });
     this._lock = result.catch(() => {});
@@ -74,6 +97,9 @@ export class IndexingPipeline {
       errors: 0,
       durationMs: 0,
     };
+
+    // Clear cached project context so framework activation uses fresh package.json/composer.json
+    this._projectContext = undefined;
 
     // Register edge types from framework plugins
     this.registerFrameworkEdgeTypes();
@@ -95,8 +121,12 @@ export class IndexingPipeline {
     // Pass 2c: TypeScript heritage → graph edges (extends/implements → find_references)
     this.resolveTypeScriptHeritageEdges();
 
+    // Pass 2d: ES module imports → file→file edges (enables dependency graph + dead export analysis)
+    this.resolveEsmImportEdges();
+
     // Release memory — file content is no longer needed after Pass 2
     this._fileContentCache.clear();
+    this._pendingImports.clear();
 
     result.durationMs = Date.now() - startMs;
     logger.info(result, 'Indexing pipeline completed');
@@ -109,11 +139,25 @@ export class IndexingPipeline {
   ): Promise<'indexed' | 'skipped' | 'error'> {
     const absPath = path.resolve(this.rootPath, relPath);
 
+    // Defence-in-depth: reject paths that escape the project root
+    const pathCheck = validatePath(relPath, this.rootPath);
+    if (pathCheck.isErr()) {
+      logger.warn({ file: relPath }, 'Path traversal blocked');
+      return 'error';
+    }
+
     let content: Buffer;
     try {
       content = fs.readFileSync(absPath);
     } catch {
       logger.warn({ file: relPath }, 'Cannot read file');
+      return 'error';
+    }
+
+    // Reject oversized files (default 1 MB) to prevent OOM
+    const sizeCheck = validateFileSize(content.length);
+    if (sizeCheck.isErr()) {
+      logger.warn({ file: relPath, size: content.length }, 'File too large, skipping');
       return 'error';
     }
 
@@ -153,6 +197,7 @@ export class IndexingPipeline {
       fileId = existing.id;
       this.store.deleteSymbolsByFile(fileId);
       this.store.deleteEdgesForFileNodes(fileId);
+      this.store.deleteEntitiesByFile(fileId);
       this.store.updateFileHash(fileId, hash, content.length);
       this.store.updateFileStatus(fileId, parsed.status, parsed.frameworkRole);
       if (workspace) this.store.updateFileWorkspace(fileId, workspace);
@@ -170,7 +215,27 @@ export class IndexingPipeline {
 
     // Insert edges from language plugin
     if (parsed.edges?.length) {
-      this.storeRawEdges(parsed.edges);
+      // Separate import edges (need ESM resolution in pass 2d) from other edges
+      const importEdges: typeof parsed.edges = [];
+      const otherEdges: typeof parsed.edges = [];
+      for (const edge of parsed.edges) {
+        if (edge.edgeType === 'imports' && !edge.sourceNodeType && !edge.sourceSymbolId) {
+          importEdges.push(edge);
+        } else {
+          otherEdges.push(edge);
+        }
+      }
+      if (otherEdges.length > 0) this.storeRawEdges(otherEdges);
+      if (importEdges.length > 0) {
+        this._pendingImports.set(
+          fileId,
+          importEdges.map((e) => ({
+            from: (e.metadata as Record<string, unknown>)?.['from'] as string ?? '',
+            specifiers: ((e.metadata as Record<string, unknown>)?.['specifiers'] as string[]) ?? [],
+            relPath,
+          })),
+        );
+      }
     }
 
     // Insert routes, components, migrations, ORM models
@@ -389,6 +454,76 @@ export class IndexingPipeline {
     }
   }
 
+  /**
+   * Pass 2d: Resolve ES module import specifiers to file→file graph edges.
+   * Uses the pending imports collected during Pass 1 + the EsModuleResolver.
+   */
+  private resolveEsmImportEdges(): void {
+    if (this._pendingImports.size === 0) return;
+
+    let resolver: EsModuleResolver;
+    try {
+      const tsconfigPath = fs.existsSync(path.join(this.rootPath, 'tsconfig.json'))
+        ? path.join(this.rootPath, 'tsconfig.json')
+        : undefined;
+      resolver = new EsModuleResolver(this.rootPath, tsconfigPath);
+    } catch {
+      logger.warn('EsModuleResolver init failed — skipping import edge resolution');
+      return;
+    }
+
+    let created = 0;
+
+    // Pre-build lookup maps to avoid N+1 per file/import
+    const pendingFileIds = Array.from(this._pendingImports.keys());
+    const fileMap = this.store.getFilesByIds(pendingFileIds);
+    const fileNodeMap = this.store.getNodeIdsBatch('file', pendingFileIds);
+
+    // Pre-build path → file lookup for target resolution
+    const allFiles = this.store.getAllFiles();
+    const pathToFile = new Map<string, { id: number }>();
+    for (const f of allFiles) pathToFile.set(f.path, f);
+    const allFileIds = allFiles.map((f) => f.id);
+    const allFileNodeMap = this.store.getNodeIdsBatch('file', allFileIds);
+
+    for (const [fileId, imports] of this._pendingImports) {
+      const file = fileMap.get(fileId);
+      if (!file) continue;
+
+      const absSource = path.resolve(this.rootPath, file.path);
+      const sourceNodeId = fileNodeMap.get(fileId);
+      if (sourceNodeId == null) continue;
+
+      for (const { from, specifiers } of imports) {
+        // Skip bare specifiers (node_modules) — only resolve project-local imports
+        if (!from.startsWith('.') && !from.startsWith('/') && !from.startsWith('@/') && !from.startsWith('~')) continue;
+
+        const resolved = resolver.resolve(from, absSource);
+        if (!resolved) continue;
+
+        const relTarget = path.relative(this.rootPath, resolved);
+        const targetFile = pathToFile.get(relTarget);
+        if (!targetFile) continue;
+
+        const targetNodeId = allFileNodeMap.get(targetFile.id);
+        if (targetNodeId == null) continue;
+
+        this.store.insertEdge(
+          sourceNodeId,
+          targetNodeId,
+          'imports',
+          true,
+          { from, specifiers },
+        );
+        created++;
+      }
+    }
+
+    if (created > 0) {
+      logger.info({ edges: created }, 'ES module import edges resolved');
+    }
+  }
+
   private storeRawEdges(edges: RawEdge[]): void {
     if (edges.length === 0) return;
 
@@ -418,8 +553,10 @@ export class IndexingPipeline {
     const insertBatch = this.store.db.transaction(() => {
       for (const edge of edges) {
         const sourceNodeId = this.resolveNodeId(edge, symbolNodeCache);
-        const targetNodeId = this.resolveTargetNodeId(edge, symbolNodeCache);
-        if (sourceNodeId == null || targetNodeId == null) continue;
+        if (sourceNodeId == null) continue;
+        // For source-only edges (e.g. livewire_dispatches, livewire_listens) where
+        // there is no target node, use the source as target to preserve the edge + metadata.
+        const targetNodeId = this.resolveTargetNodeId(edge, symbolNodeCache) ?? sourceNodeId;
 
         const isCrossWs = this.isEdgeCrossWorkspace(sourceNodeId, targetNodeId);
 

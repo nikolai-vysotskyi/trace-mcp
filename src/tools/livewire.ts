@@ -91,7 +91,9 @@ export function getLivewireContext(
         case 'livewire_renders': {
           const ref = store.getNodeRef(edge.target_node_id);
           if (ref) {
-            const target = store.getFileById(ref.refId) ?? store.getSymbolById(ref.refId);
+            const target = ref.nodeType === 'file'
+              ? store.getFileById(ref.refId)
+              : store.getSymbolById(ref.refId);
             if (target && 'path' in target) viewPath = target.path;
             else if (target && 'symbol_id' in target) {
               viewSymbolId = target.symbol_id;
@@ -154,17 +156,7 @@ export function getLivewireContext(
 }
 
 function findLivewireSymbol(store: Store, name: string) {
-  // Try partial FQN match
-  const allFiles = store.getAllFiles();
-  for (const file of allFiles) {
-    if (file.framework_role !== 'livewire_component') continue;
-    const symbols = store.getSymbolsByFile(file.id);
-    const match = symbols.find(
-      (s) => s.name === name || s.name.endsWith(`\\${name}`) || s.fqn?.endsWith(`\\${name}`),
-    );
-    if (match) return match;
-  }
-  return undefined;
+  return store.findSymbolByRole(name, 'livewire_component');
 }
 
 function detectVersion(meta: Record<string, unknown>): 'v2' | 'v3' | undefined {

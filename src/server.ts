@@ -10,6 +10,7 @@ import { getChangeImpact } from './tools/impact.js';
 import { getFeatureContext } from './tools/context.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import { formatToolError } from './errors.js';
+import { validatePath } from './utils/security.js';
 import { logger } from './logger.js';
 import { createAIProvider, BlobVectorStore, type AIProvider } from './ai/index.js';
 import { getMiddlewareChain } from './tools/middleware-chain.js';
@@ -26,7 +27,7 @@ import { getCallGraph } from './tools/call-graph.js';
 import { getLivewireContext } from './tools/livewire.js';
 import { getNovaResource } from './tools/nova.js';
 import { getTestsFor } from './tools/tests.js';
-import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports } from './tools/introspect.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports } from './tools/introspect.js';
 
 /** Compact JSON — no pretty-printing; saves 25–35% tokens on every response */
 function j(value: unknown): string {
@@ -57,6 +58,15 @@ export function createServer(
   );
   const has = (...names: string[]) => names.some((n) => frameworkNames.has(n));
 
+  /** Validate a user-supplied path stays within projectRoot; returns error response on failure */
+  function guardPath(filePath: string): { content: [{ type: 'text'; text: string }]; isError: true } | null {
+    const check = validatePath(filePath, projectRoot);
+    if (check.isErr()) {
+      return { content: [{ type: 'text', text: j(formatToolError(check.error)) }], isError: true };
+    }
+    return null;
+  }
+
   // --- Core Tools (always registered) ---
 
   server.tool(
@@ -77,6 +87,10 @@ export function createServer(
       force: z.boolean().optional().describe('Skip hash check and reindex all files'),
     },
     async ({ path: indexPath, force }) => {
+      if (indexPath) {
+        const blocked = guardPath(indexPath);
+        if (blocked) return blocked;
+      }
       logger.info({ path: indexPath, force }, 'Reindex requested');
       const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
 
@@ -180,6 +194,8 @@ export function createServer(
       path: z.string().describe('Relative file path'),
     },
     async ({ path: filePath }) => {
+      const blocked = guardPath(filePath);
+      if (blocked) return blocked;
       const result = getFileOutline(store, filePath);
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
@@ -198,6 +214,10 @@ export function createServer(
       max_dependents: z.number().optional().describe('Cap on returned dependents (default 200)'),
     },
     async ({ file_path, symbol_id, depth, max_dependents }) => {
+      if (file_path) {
+        const blocked = guardPath(file_path);
+        if (blocked) return blocked;
+      }
       const result = getChangeImpact(
         store,
         { filePath: file_path, symbolId: symbol_id },
@@ -236,6 +256,8 @@ export function createServer(
         token_budget: z.number().optional().describe('Max tokens for the tree (default 8000)'),
       },
       async ({ component_path, depth, token_budget }) => {
+        const blocked = guardPath(component_path);
+        if (blocked) return blocked;
         const result = getComponentTree(store, component_path, depth ?? 3, token_budget ?? 8000);
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
@@ -402,6 +424,10 @@ export function createServer(
       file_path: z.string().optional().describe('File path to find references for'),
     },
     async ({ symbol_id, fqn, file_path }) => {
+      if (file_path) {
+        const blocked = guardPath(file_path);
+        if (blocked) return blocked;
+      }
       const result = findReferences(store, { symbolId: symbol_id, fqn, filePath: file_path });
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
@@ -436,6 +462,10 @@ export function createServer(
       file_path: z.string().optional().describe('File path to find tests for'),
     },
     async ({ symbol_id, fqn, file_path }) => {
+      if (file_path) {
+        const blocked = guardPath(file_path);
+        if (blocked) return blocked;
+      }
       const result = getTestsFor(store, { symbolId: symbol_id, fqn, filePath: file_path });
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
@@ -513,24 +543,6 @@ export function createServer(
   );
 
   server.tool(
-    'get_tests_for',
-    'Find test files that cover a given symbol or file (edge-based + heuristic path matching)',
-    {
-      symbol_id: z.string().optional().describe('Symbol ID to find tests for'),
-      fqn: z.string().optional().describe('FQN to find tests for'),
-      file_path: z.string().optional().describe('File path to find tests for'),
-    },
-    async ({ symbol_id, fqn, file_path }) => {
-      const { getTestsFor } = await import('./tools/tests.js');
-      const result = getTestsFor(store, { symbolId: symbol_id, fqn, filePath: file_path });
-      if (result.isErr()) {
-        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
-      }
-      return { content: [{ type: 'text', text: j(result.value) }] };
-    },
-  );
-
-  server.tool(
     'get_type_hierarchy',
     'Walk TypeScript class/interface hierarchy: ancestors (what it extends/implements) and descendants (what extends/implements it)',
     {
@@ -551,6 +563,32 @@ export function createServer(
     },
     async ({ file_pattern }) => {
       const result = getDeadExports(store, file_pattern);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'get_dependency_graph',
+    'Show file-level dependency graph: what a file imports and what imports it (requires reindex for ESM edge resolution)',
+    {
+      file_path: z.string().describe('Relative file path to analyze (e.g. "src/server.ts")'),
+    },
+    async ({ file_path }) => {
+      const blocked = guardPath(file_path);
+      if (blocked) return blocked;
+      const result = getDependencyGraph(store, file_path);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'get_untested_exports',
+    'Find exported public symbols with no matching test file — test coverage gaps',
+    {
+      file_pattern: z.string().optional().describe('Filter by file glob pattern (e.g. "src/tools/%")'),
+    },
+    async ({ file_pattern }) => {
+      const result = getUntestedExports(store, file_pattern);
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );

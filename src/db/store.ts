@@ -61,8 +61,28 @@ export class Store {
   deleteFile(fileId: number): void {
     // Cascade deletes symbols, edges via nodes
     this.deleteEdgesForFileNodes(fileId);
+    this.deleteEntitiesByFile(fileId);
     this.db.prepare('DELETE FROM nodes WHERE node_type = ? AND ref_id = ?').run('file', fileId);
     this.db.prepare('DELETE FROM files WHERE id = ?').run(fileId);
+  }
+
+  /** Delete routes, components, migrations, ORM models, and RN screens for a file (and their nodes). */
+  deleteEntitiesByFile(fileId: number): void {
+    for (const [table, nodeType] of [
+      ['routes', 'route'],
+      ['components', 'component'],
+      ['migrations', 'migration'],
+      ['orm_models', 'orm_model'],
+      ['rn_screens', 'rn_screen'],
+    ] as const) {
+      const ids = this.db.prepare(`SELECT id FROM ${table} WHERE file_id = ?`).all(fileId) as { id: number }[];
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        const idValues = ids.map((r) => r.id);
+        this.db.prepare(`DELETE FROM nodes WHERE node_type = ? AND ref_id IN (${placeholders})`).run(nodeType, ...idValues);
+        this.db.prepare(`DELETE FROM ${table} WHERE file_id = ?`).run(fileId);
+      }
+    }
   }
 
   // --- Symbols ---
@@ -171,22 +191,18 @@ export class Store {
   }
 
   deleteEdgesForFileNodes(fileId: number): void {
-    // Delete edges where source or target is a node belonging to this file
-    const symbolIds = this.db.prepare('SELECT id FROM symbols WHERE file_id = ?').all(fileId) as { id: number }[];
-    const nodeIds: number[] = [];
-
-    const fileNodeId = this.getNodeId('file', fileId);
-    if (fileNodeId) nodeIds.push(fileNodeId);
-
-    for (const sym of symbolIds) {
-      const nid = this.getNodeId('symbol', sym.id);
-      if (nid) nodeIds.push(nid);
-    }
-
-    if (nodeIds.length > 0) {
-      const placeholders = nodeIds.map(() => '?').join(',');
-      this.db.prepare(`DELETE FROM edges WHERE source_node_id IN (${placeholders}) OR target_node_id IN (${placeholders})`).run(...nodeIds, ...nodeIds);
-    }
+    // Collect all node IDs for this file's symbols + file node in a single subquery
+    this.db.prepare(`
+      DELETE FROM edges WHERE source_node_id IN (
+        SELECT n.id FROM nodes n
+        WHERE (n.node_type = 'file' AND n.ref_id = ?)
+           OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
+      ) OR target_node_id IN (
+        SELECT n.id FROM nodes n
+        WHERE (n.node_type = 'file' AND n.ref_id = ?)
+           OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
+      )
+    `).run(fileId, fileId, fileId, fileId);
   }
 
   // --- Graph Traversal ---
@@ -565,6 +581,72 @@ export class Store {
     return this.db.prepare(
       'SELECT * FROM symbols WHERE name = ? LIMIT 1',
     ).get(name) as SymbolRow | undefined;
+  }
+
+  // --- Batch queries (avoid N+1) ---
+
+  /** Resolve multiple node IDs in one query. Returns Map<refId, nodeId>. */
+  getNodeIdsBatch(nodeType: string, refIds: number[]): Map<number, number> {
+    const map = new Map<number, number>();
+    if (refIds.length === 0) return map;
+    const placeholders = refIds.map(() => '?').join(',');
+    const rows = this.db.prepare(
+      `SELECT ref_id, id FROM nodes WHERE node_type = ? AND ref_id IN (${placeholders})`,
+    ).all(nodeType, ...refIds) as { ref_id: number; id: number }[];
+    for (const row of rows) map.set(row.ref_id, row.id);
+    return map;
+  }
+
+  /** Resolve multiple node refs in one query. Returns Map<nodeId, {nodeType, refId}>. */
+  getNodeRefsBatch(nodeIds: number[]): Map<number, { nodeType: string; refId: number }> {
+    const map = new Map<number, { nodeType: string; refId: number }>();
+    if (nodeIds.length === 0) return map;
+    const placeholders = nodeIds.map(() => '?').join(',');
+    const rows = this.db.prepare(
+      `SELECT id, node_type, ref_id FROM nodes WHERE id IN (${placeholders})`,
+    ).all(...nodeIds) as { id: number; node_type: string; ref_id: number }[];
+    for (const row of rows) map.set(row.id, { nodeType: row.node_type, refId: row.ref_id });
+    return map;
+  }
+
+  /** Batch-fetch symbols by internal IDs. Returns Map<id, SymbolRow>. */
+  getSymbolsByIds(ids: number[]): Map<number, SymbolRow> {
+    const map = new Map<number, SymbolRow>();
+    if (ids.length === 0) return map;
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = this.db.prepare(
+      `SELECT * FROM symbols WHERE id IN (${placeholders})`,
+    ).all(...ids) as SymbolRow[];
+    for (const row of rows) map.set(row.id, row);
+    return map;
+  }
+
+  /** Batch-fetch files by internal IDs. Returns Map<id, FileRow>. */
+  getFilesByIds(ids: number[]): Map<number, FileRow> {
+    const map = new Map<number, FileRow>();
+    if (ids.length === 0) return map;
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = this.db.prepare(
+      `SELECT * FROM files WHERE id IN (${placeholders})`,
+    ).all(...ids) as FileRow[];
+    for (const row of rows) map.set(row.id, row);
+    return map;
+  }
+
+  /** Find a class/interface symbol by name with optional framework_role filter. Single query with JOIN. */
+  findSymbolByRole(name: string, frameworkRole?: string): SymbolRow | undefined {
+    if (frameworkRole) {
+      return this.db.prepare(
+        `SELECT s.* FROM symbols s
+         JOIN files f ON s.file_id = f.id
+         WHERE f.framework_role = ?
+           AND (s.name = ? OR s.fqn LIKE ?)
+         LIMIT 1`,
+      ).get(frameworkRole, name, `%\\${name}`) as SymbolRow | undefined;
+    }
+    return this.db.prepare(
+      'SELECT * FROM symbols WHERE name = ? AND kind = ? LIMIT 1',
+    ).get(name, 'class') as SymbolRow | undefined;
   }
 
   // --- Stats ---

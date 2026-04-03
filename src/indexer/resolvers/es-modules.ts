@@ -14,6 +14,13 @@ export class EsModuleResolver {
       conditionNames: ['import', 'require', 'node', 'default'],
       extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
       mainFields: ['module', 'main'],
+      // TypeScript emits `import './foo.js'` but the source file is `foo.ts`.
+      // extensionAlias maps .js → [.ts, .tsx, .js, .jsx] so the resolver finds .ts files.
+      extensionAlias: {
+        '.js': ['.ts', '.tsx', '.js', '.jsx'],
+        '.mjs': ['.mts', '.mjs'],
+        '.cjs': ['.cts', '.cjs'],
+      },
     };
 
     if (tsconfigPath) {

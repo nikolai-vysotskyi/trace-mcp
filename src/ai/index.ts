@@ -26,6 +26,7 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       embeddingModel: config.ai.embedding_model ?? 'text-embedding-3-small',
       embeddingDimensions: config.ai.embedding_dimensions ?? 1536,
       inferenceModel: config.ai.inference_model ?? 'gpt-4o-mini',
+      fastModel: config.ai.fast_model ?? 'gpt-4o-mini',
     });
   }
 
@@ -33,8 +34,8 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
     return new OllamaProvider({
       baseUrl: config.ai.base_url ?? 'http://localhost:11434',
       embeddingModel: config.ai.embedding_model ?? 'nomic-embed-text',
-      inferenceModel: config.ai.inference_model ?? 'llama3.2',
-      fastModel: config.ai.fast_model ?? 'llama3.2',
+      inferenceModel: config.ai.inference_model ?? 'qwen2.5-coder:7b',
+      fastModel: config.ai.fast_model ?? 'qwen2.5-coder:1.5b',
       embeddingDimensions: config.ai.embedding_dimensions,
     });
   }
@@ -42,7 +43,7 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
   return new FallbackProvider();
 }
 
-export type { AIProvider, EmbeddingService, InferenceService, VectorStore } from './interfaces.js';
+export type { AIProvider, EmbeddingService, InferenceService, VectorStore, RerankerService } from './interfaces.js';
 export { FallbackProvider } from './fallback.js';
 export { OllamaProvider } from './ollama.js';
 export { OpenAIProvider } from './openai.js';

@@ -37,9 +37,14 @@ export function detectSecrets(
   content: string,
   patterns?: string[],
 ): { found: boolean; matches: string[] } {
-  const regexes = patterns?.length
-    ? patterns.map((p) => new RegExp(p, 'i'))
-    : DEFAULT_SECRET_PATTERNS;
+  const regexes: RegExp[] = [];
+  if (patterns?.length) {
+    for (const p of patterns) {
+      try { regexes.push(new RegExp(p, 'i')); } catch { /* skip invalid regex */ }
+    }
+  } else {
+    regexes.push(...DEFAULT_SECRET_PATTERNS);
+  }
 
   const matches: string[] = [];
   for (const regex of regexes) {
@@ -62,6 +67,11 @@ export function validateFileSize(
     );
   }
   return ok(undefined);
+}
+
+/** Escape a string for safe interpolation into a RegExp constructor. */
+export function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function validateArtisanCommand(command: string): TraceMcpResult<string> {

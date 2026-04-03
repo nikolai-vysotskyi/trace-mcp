@@ -12,6 +12,7 @@
  * - v4–v5: fields() + fieldsForIndex/Detail/Create/Update + Panel::make([...fields...])
  */
 import type { RawEdge } from '../../../../plugin-api/types.js';
+import { escapeRegExp } from '../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 
@@ -226,7 +227,7 @@ function collectFieldBodies(source: string): string {
   const parts: string[] = [];
 
   for (const method of FIELD_METHODS) {
-    const re = new RegExp(`function\\s+${method}\\s*\\([^)]*\\)[^{]*\\{`, 'g');
+    const re = new RegExp(`function\\s+${escapeRegExp(method)}\\s*\\([^)]*\\)[^{]*\\{`, 'g');
     let match: RegExpExecArray | null;
     while ((match = re.exec(source)) !== null) {
       const openBrace = source.indexOf('{', match.index + match[0].length - 1);
@@ -278,7 +279,7 @@ function extractRegisteredClasses(
 ): string[] {
   const results: string[] = [];
 
-  const methodRe = new RegExp(`function\\s+${method}\\s*\\([^)]*\\)[^{]*\\{`, 'g');
+  const methodRe = new RegExp(`function\\s+${escapeRegExp(method)}\\s*\\([^)]*\\)[^{]*\\{`, 'g');
   let mMatch: RegExpExecArray | null;
   while ((mMatch = methodRe.exec(source)) !== null) {
     const openBrace = source.indexOf('{', mMatch.index + mMatch[0].length - 1);

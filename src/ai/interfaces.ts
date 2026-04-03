@@ -18,8 +18,13 @@ export interface VectorStore {
   delete(id: number): void;
 }
 
+export interface RerankerService {
+  rerank(query: string, documents: { id: number; text: string }[], topK: number): Promise<{ id: number; score: number }[]>;
+}
+
 export interface AIProvider {
   isAvailable(): Promise<boolean>;
   embedding(): EmbeddingService;
   inference(): InferenceService;
+  fastInference(): InferenceService;
 }

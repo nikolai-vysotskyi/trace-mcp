@@ -29,11 +29,14 @@ const CALL_EDGE_TYPES = new Set([
 /**
  * Build call graph centered on a symbol: who calls it (callers) and who it calls (callees).
  */
+const MAX_DEPTH = 10;
+
 export function getCallGraph(
   store: Store,
   opts: { symbolId?: string; fqn?: string },
   depth = 2,
 ): TraceMcpResult<CallGraphResult> {
+  depth = Math.min(depth, MAX_DEPTH);
   let symbol = opts.symbolId
     ? store.getSymbolBySymbolId(opts.symbolId)
     : opts.fqn ? store.getSymbolByFqn(opts.fqn) : undefined;

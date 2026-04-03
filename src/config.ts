@@ -30,6 +30,12 @@ const AiConfigSchema = z.object({
   fast_model: z.string().optional(),
   embedding_model: z.string().optional(),
   embedding_dimensions: z.number().optional(),
+  summarize_on_index: z.boolean().default(true),
+  summarize_batch_size: z.number().positive().default(20),
+  summarize_kinds: z.array(z.string()).default([
+    'class', 'function', 'method', 'interface', 'trait', 'enum', 'type',
+  ]),
+  reranker_model: z.string().optional(),
 }).optional();
 
 export const TraceMcpConfigSchema = z.object({

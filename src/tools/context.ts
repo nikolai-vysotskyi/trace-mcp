@@ -170,40 +170,59 @@ export function getFeatureContext(
     scoredById.set(fts.symbolIdStr, entry);
   }
 
+  // Sort by initial score before graph expansion so we expand the best matches
+  scored.sort((a, b) => b.score - a.score);
+
   // Graph expansion: follow edges 1-2 hops for top results
   const topResults = scored.slice(0, 10);
+  // Batch-resolve node IDs for top results
+  const topSymIds = topResults.map((item) => item.symbol.id);
+  const topNodeMap = store.getNodeIdsBatch('symbol', topSymIds);
+
+  // Collect all edges for top results first, then batch-resolve refs/symbols/files
+  const allEdges: Array<{ nodeId: number; edge: { source_node_id: number; target_node_id: number } }> = [];
   for (const item of topResults) {
-    const nodeId = store.getNodeId('symbol', item.symbol.id);
+    const nodeId = topNodeMap.get(item.symbol.id);
     if (!nodeId) continue;
-
-    const outEdges = store.getOutgoingEdges(nodeId);
-    const inEdges = store.getIncomingEdges(nodeId);
-
-    for (const edge of [...outEdges, ...inEdges]) {
-      const otherNodeId = edge.source_node_id === nodeId
-        ? edge.target_node_id
-        : edge.source_node_id;
-
-      const nodeRef = store.getNodeByNodeId(otherNodeId);
-      if (!nodeRef || nodeRef.node_type !== 'symbol') continue;
-
-      const sym = store.getSymbolById(nodeRef.ref_id);
-      if (!sym || seenIds.has(sym.id)) continue;
-      seenIds.add(sym.id);
-
-      const file = store.getFileById(sym.file_id);
-      if (!file) continue;
-
-      const pr = (pagerankMap.get(otherNodeId) ?? 0) / maxPr;
-      const recency = computeRecency(file.indexed_at, now);
-      const typeBonus = getTypeBonus(sym.kind);
-
-      // Graph-expanded items get a reduced relevance score
-      const score = hybridScore({ relevance: 0.3, pagerank: pr, recency, typeBonus });
-      const entry: ScoredSymbol = { symbol: sym, file, score };
-      scored.push(entry);
-      scoredById.set(sym.symbol_id, entry);
+    for (const edge of [...store.getOutgoingEdges(nodeId), ...store.getIncomingEdges(nodeId)]) {
+      allEdges.push({ nodeId, edge });
     }
+  }
+
+  // Batch-resolve all "other" node IDs
+  const otherNodeIds = [...new Set(allEdges.map(({ nodeId, edge }) =>
+    edge.source_node_id === nodeId ? edge.target_node_id : edge.source_node_id,
+  ))];
+  const nodeRefs = store.getNodeRefsBatch(otherNodeIds);
+  const symbolRefIds = [...nodeRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const symbolMap = store.getSymbolsByIds(symbolRefIds);
+  const fileIds = [...new Set([...symbolMap.values()].map((s) => s.file_id))];
+  const fileMap = store.getFilesByIds(fileIds);
+
+  for (const { nodeId, edge } of allEdges) {
+    const otherNodeId = edge.source_node_id === nodeId
+      ? edge.target_node_id
+      : edge.source_node_id;
+
+    const nodeRef = nodeRefs.get(otherNodeId);
+    if (!nodeRef || nodeRef.nodeType !== 'symbol') continue;
+
+    const sym = symbolMap.get(nodeRef.refId);
+    if (!sym || seenIds.has(sym.id)) continue;
+    seenIds.add(sym.id);
+
+    const file = fileMap.get(sym.file_id);
+    if (!file) continue;
+
+    const pr = (pagerankMap.get(otherNodeId) ?? 0) / maxPr;
+    const recency = computeRecency(file.indexed_at, now);
+    const typeBonus = getTypeBonus(sym.kind);
+
+    // Graph-expanded items get a reduced relevance score
+    const score = hybridScore({ relevance: 0.3, pagerank: pr, recency, typeBonus });
+    const entry: ScoredSymbol = { symbol: sym, file, score };
+    scored.push(entry);
+    scoredById.set(sym.symbol_id, entry);
   }
 
   // Sort by score

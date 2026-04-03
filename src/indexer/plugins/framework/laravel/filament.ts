@@ -11,6 +11,7 @@
  * - getPages() → Page class array
  */
 import type { RawEdge } from '../../../../plugin-api/types.js';
+import { escapeRegExp } from '../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 
@@ -323,7 +324,7 @@ function extractClassList(
 ): string[] {
   const results: string[] = [];
   // ->resources([ ... ]) — allow multiline
-  const methodRe = new RegExp(`->${method}\\(\\s*\\[([\\s\\S]*?)\\]\\s*\\)`, 'g');
+  const methodRe = new RegExp(`->${escapeRegExp(method)}\\(\\s*\\[([\\s\\S]*?)\\]\\s*\\)`, 'g');
   let mMatch: RegExpExecArray | null;
   while ((mMatch = methodRe.exec(source)) !== null) {
     const block = mMatch[1];
