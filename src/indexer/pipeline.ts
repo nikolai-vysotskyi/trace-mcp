@@ -11,6 +11,7 @@ import { validatePath, validateFileSize } from '../utils/security.js';
 import { logger } from '../logger.js';
 import { detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import { EsModuleResolver } from './resolvers/es-modules.js';
+import { parseEnvFile } from '../utils/env-parser.js';
 
 export interface IndexingResult {
   totalFiles: number;
@@ -123,6 +124,12 @@ export class IndexingPipeline {
 
     // Pass 2d: ES module imports → file→file edges (enables dependency graph + dead export analysis)
     this.resolveEsmImportEdges();
+
+    // Pass 2e: test_covers edges — test file imports source file → test_covers edge
+    this.resolveTestCoversEdges();
+
+    // Pass 3: Index .env files (keys + type metadata only, never store values)
+    await this.indexEnvFiles(force);
 
     // Release memory — file content is no longer needed after Pass 2
     this._fileContentCache.clear();
@@ -355,21 +362,39 @@ export class IndexingPipeline {
     const associations = this.store.getAllOrmAssociations();
     if (associations.length === 0) return;
 
-    // Map: ORM association kind → edge type name
-    const kindToEdgeType: Record<string, string> = {
-      // Mongoose
-      ref: 'mongoose_references',
-      discriminator: 'mongoose_discriminates',
-      // Sequelize
-      hasMany: 'sequelize_has_many',
-      belongsTo: 'sequelize_belongs_to',
-      belongsToMany: 'sequelize_belongs_to_many',
-      hasOne: 'sequelize_has_one',
-      // TypeORM
-      OneToMany: 'typeorm_one_to_many',
-      ManyToOne: 'typeorm_many_to_one',
-      OneToOne: 'typeorm_one_to_one',
-      ManyToMany: 'typeorm_many_to_many',
+    // Build model ID → ORM type map
+    const allModels = this.store.getAllOrmModels();
+    const modelOrmMap = new Map<number, string>();
+    for (const m of allModels) {
+      modelOrmMap.set(m.id, m.orm);
+    }
+
+    // ORM-specific kind → edge type name mapping
+    const ormKindToEdgeType: Record<string, Record<string, string>> = {
+      mongoose: {
+        ref: 'mongoose_references',
+        discriminator: 'mongoose_discriminates',
+      },
+      sequelize: {
+        hasMany: 'sequelize_has_many',
+        belongsTo: 'sequelize_belongs_to',
+        belongsToMany: 'sequelize_belongs_to_many',
+        hasOne: 'sequelize_has_one',
+      },
+      typeorm: {
+        OneToMany: 'typeorm_one_to_many',
+        ManyToOne: 'typeorm_many_to_one',
+        OneToOne: 'typeorm_one_to_one',
+        ManyToMany: 'typeorm_many_to_many',
+      },
+      prisma: {
+        hasMany: 'prisma_relation',
+        belongsTo: 'prisma_relation',
+      },
+      drizzle: {
+        hasMany: 'drizzle_relation',
+        belongsTo: 'drizzle_relation',
+      },
     };
 
     for (const assoc of associations) {
@@ -385,10 +410,12 @@ export class IndexingPipeline {
       const targetNodeId = this.store.getNodeId('orm_model', targetModelId);
       if (sourceNodeId == null || targetNodeId == null) continue;
 
-      const edgeType = kindToEdgeType[assoc.kind] ?? `orm_${assoc.kind}`;
+      const orm = modelOrmMap.get(assoc.source_model_id) ?? 'unknown';
+      const ormMap = ormKindToEdgeType[orm];
+      const edgeType = ormMap?.[assoc.kind] ?? `orm_${assoc.kind}`;
       const insertResult = this.store.insertEdge(sourceNodeId, targetNodeId, edgeType, true, undefined, false);
       if (insertResult.isErr()) {
-        logger.warn({ edgeType, error: insertResult.error }, 'Failed to insert ORM edge');
+        logger.warn({ edgeType, orm, kind: assoc.kind, error: insertResult.error }, 'Failed to insert ORM edge');
       }
     }
   }
@@ -521,6 +548,57 @@ export class IndexingPipeline {
 
     if (created > 0) {
       logger.info({ edges: created }, 'ES module import edges resolved');
+    }
+  }
+
+  private static readonly TEST_PATH_RE = /\.(test|spec)\.[jt]sx?$|__tests__\//;
+
+  /**
+   * Pass 2e: Create test_covers edges.
+   * For each test file, examine its outgoing `imports` edges.
+   * If the imported file is NOT a test file, create a `test_covers` edge:
+   *   test_file →[test_covers]→ source_file
+   */
+  private resolveTestCoversEdges(): void {
+    const allFiles = this.store.getAllFiles();
+    const testFiles = allFiles.filter((f) => IndexingPipeline.TEST_PATH_RE.test(f.path));
+    if (testFiles.length === 0) return;
+
+    let created = 0;
+
+    for (const testFile of testFiles) {
+      const testNodeId = this.store.getNodeId('file', testFile.id);
+      if (testNodeId == null) continue;
+
+      // Get outgoing import edges from this test file
+      const outgoing = this.store.getOutgoingEdges(testNodeId);
+
+      for (const edge of outgoing) {
+        if (edge.edge_type_name !== 'imports') continue;
+
+        const targetRef = this.store.getNodeRef(edge.target_node_id);
+        if (!targetRef || targetRef.nodeType !== 'file') continue;
+
+        const targetFile = this.store.getFileById(targetRef.refId);
+        if (!targetFile) continue;
+
+        // Skip if target is also a test file
+        if (IndexingPipeline.TEST_PATH_RE.test(targetFile.path)) continue;
+
+        // Create test_covers edge: test → source
+        this.store.insertEdge(
+          testNodeId,
+          edge.target_node_id,
+          'test_covers',
+          true,
+          { test_file: testFile.path },
+        );
+        created++;
+      }
+    }
+
+    if (created > 0) {
+      logger.info({ edges: created }, 'test_covers edges resolved');
     }
   }
 
