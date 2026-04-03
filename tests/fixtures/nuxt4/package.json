@@ -1,0 +1,6 @@
+{
+  "name": "nuxt4-fixture",
+  "dependencies": {
+    "nuxt": "^4.0.0"
+  }
+}

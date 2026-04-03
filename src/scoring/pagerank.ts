@@ -54,13 +54,28 @@ export function computePageRank(
       newScores.set(nodeId, base);
     }
 
+    // Accumulate rank mass lost to sink nodes (no outgoing edges) and redistribute
+    // evenly across all nodes to conserve total rank mass.
+    let sinkMass = 0;
+
     for (const nodeId of nodes) {
       const targets = outgoing.get(nodeId);
-      if (!targets || targets.length === 0) continue;
+      if (!targets || targets.length === 0) {
+        sinkMass += (scores.get(nodeId) ?? 0) * dampingFactor;
+        continue;
+      }
 
       const share = (scores.get(nodeId) ?? 0) * dampingFactor / targets.length;
       for (const target of targets) {
         newScores.set(target, (newScores.get(target) ?? base) + share);
+      }
+    }
+
+    // Distribute sink mass equally to all nodes
+    if (sinkMass > 0) {
+      const sinkShare = sinkMass / n;
+      for (const nodeId of nodes) {
+        newScores.set(nodeId, (newScores.get(nodeId) ?? base) + sinkShare);
       }
     }
 

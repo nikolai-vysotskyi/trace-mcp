@@ -92,6 +92,9 @@ export class IndexingPipeline {
     // Pass 2b: ORM associations → graph edges (resolved after all entities indexed)
     this.resolveOrmAssociationEdges();
 
+    // Pass 2c: TypeScript heritage → graph edges (extends/implements → find_references)
+    this.resolveTypeScriptHeritageEdges();
+
     // Release memory — file content is no longer needed after Pass 2
     this._fileContentCache.clear();
 
@@ -325,14 +328,97 @@ export class IndexingPipeline {
     }
   }
 
+  /**
+   * Pass 2c: Resolve TypeScript extends/implements metadata into graph edges.
+   * Builds a class/interface name → symbol DB id map, then creates
+   * ts_extends and ts_implements edges for all symbols that have heritage metadata.
+   */
+  private resolveTypeScriptHeritageEdges(): void {
+    const symbolsWithHeritage = this.store.getSymbolsWithHeritage();
+    if (symbolsWithHeritage.length === 0) return;
+
+    // Build name → {id, kind} index across ALL TypeScript symbols (classes + interfaces)
+    const nameIndex = new Map<string, { id: number; kind: string }[]>();
+    const allSymbols = this.store.db.prepare(
+      "SELECT id, name, kind FROM symbols WHERE kind IN ('class', 'interface')",
+    ).all() as { id: number; name: string; kind: string }[];
+
+    for (const s of allSymbols) {
+      const list = nameIndex.get(s.name) ?? [];
+      list.push({ id: s.id, kind: s.kind });
+      nameIndex.set(s.name, list);
+    }
+
+    let created = 0;
+
+    for (const sym of symbolsWithHeritage) {
+      const meta = sym.metadata ? (JSON.parse(sym.metadata) as Record<string, unknown>) : {};
+      const sourceNodeId = this.store.getNodeId('symbol', sym.id);
+      if (sourceNodeId == null) continue;
+
+      // Process extends
+      const ext = meta['extends'];
+      const extNames = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
+      for (const targetName of extNames) {
+        const targets = nameIndex.get(targetName);
+        if (!targets?.length) continue;
+        const target = targets[0]; // first match
+        const targetNodeId = this.store.getNodeId('symbol', target.id);
+        if (targetNodeId == null) continue;
+        this.store.insertEdge(sourceNodeId, targetNodeId, 'ts_extends', true);
+        created++;
+      }
+
+      // Process implements
+      const impl = meta['implements'];
+      if (Array.isArray(impl)) {
+        for (const targetName of impl as string[]) {
+          const targets = nameIndex.get(targetName);
+          if (!targets?.length) continue;
+          const target = targets.find((t) => t.kind === 'interface') ?? targets[0];
+          const targetNodeId = this.store.getNodeId('symbol', target.id);
+          if (targetNodeId == null) continue;
+          this.store.insertEdge(sourceNodeId, targetNodeId, 'ts_implements', true);
+          created++;
+        }
+      }
+    }
+
+    if (created > 0) {
+      logger.info({ edges: created }, 'TypeScript heritage edges resolved');
+    }
+  }
+
   private storeRawEdges(edges: RawEdge[]): void {
     if (edges.length === 0) return;
+
+    // Pre-load symbolIdStr → nodeId for all symbol-based edge endpoints in one batch query,
+    // avoiding N×2 individual SELECT calls inside the transaction.
+    const symbolIdStrs = new Set<string>();
+    for (const edge of edges) {
+      if (edge.sourceSymbolId) symbolIdStrs.add(edge.sourceSymbolId);
+      if (edge.targetSymbolId) symbolIdStrs.add(edge.targetSymbolId);
+    }
+
+    const symbolNodeCache = new Map<string, number>(); // symbolIdStr → nodeId
+    if (symbolIdStrs.size > 0) {
+      const placeholders = Array.from(symbolIdStrs).map(() => '?').join(',');
+      const rows = this.store.db.prepare(
+        `SELECT s.symbol_id, n.id AS node_id
+           FROM symbols s
+           JOIN nodes n ON n.node_type = 'symbol' AND n.ref_id = s.id
+          WHERE s.symbol_id IN (${placeholders})`,
+      ).all(...Array.from(symbolIdStrs)) as Array<{ symbol_id: string; node_id: number }>;
+      for (const row of rows) {
+        symbolNodeCache.set(row.symbol_id, row.node_id);
+      }
+    }
 
     // Batch edge inserts in a single transaction for performance
     const insertBatch = this.store.db.transaction(() => {
       for (const edge of edges) {
-        const sourceNodeId = this.resolveNodeId(edge);
-        const targetNodeId = this.resolveTargetNodeId(edge);
+        const sourceNodeId = this.resolveNodeId(edge, symbolNodeCache);
+        const targetNodeId = this.resolveTargetNodeId(edge, symbolNodeCache);
         if (sourceNodeId == null || targetNodeId == null) continue;
 
         const isCrossWs = this.isEdgeCrossWorkspace(sourceNodeId, targetNodeId);
@@ -350,22 +436,24 @@ export class IndexingPipeline {
     insertBatch();
   }
 
-  private resolveNodeId(edge: RawEdge): number | undefined {
+  private resolveNodeId(edge: RawEdge, symbolNodeCache?: Map<string, number>): number | undefined {
     if (edge.sourceNodeType && edge.sourceRefId != null) {
       return this.store.getNodeId(edge.sourceNodeType, edge.sourceRefId);
     }
     if (edge.sourceSymbolId) {
+      if (symbolNodeCache) return symbolNodeCache.get(edge.sourceSymbolId);
       const sym = this.store.getSymbolBySymbolId(edge.sourceSymbolId);
       if (sym) return this.store.getNodeId('symbol', sym.id);
     }
     return undefined;
   }
 
-  private resolveTargetNodeId(edge: RawEdge): number | undefined {
+  private resolveTargetNodeId(edge: RawEdge, symbolNodeCache?: Map<string, number>): number | undefined {
     if (edge.targetNodeType && edge.targetRefId != null) {
       return this.store.getNodeId(edge.targetNodeType, edge.targetRefId);
     }
     if (edge.targetSymbolId) {
+      if (symbolNodeCache) return symbolNodeCache.get(edge.targetSymbolId);
       const sym = this.store.getSymbolBySymbolId(edge.targetSymbolId);
       if (sym) return this.store.getNodeId('symbol', sym.id);
     }

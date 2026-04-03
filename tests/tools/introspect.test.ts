@@ -5,7 +5,7 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { getImplementations, getApiSurface, getPluginRegistry } from '../../src/tools/introspect.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports } from '../../src/tools/introspect.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/ts-heritage');
@@ -174,6 +174,85 @@ describe('getPluginRegistry', () => {
       expect(typeof p.version).toBe('string');
       expect(typeof p.priority).toBe('number');
       expect(Array.isArray(p.extensions)).toBe(true);
+    }
+  });
+});
+
+// ─── get_type_hierarchy ─────────────────────────────────────
+
+describe('getTypeHierarchy', () => {
+  it('finds ancestors of a class (extends chain)', () => {
+    // DatabaseRecord extends JsonSerializer → JsonSerializer implements Serializable
+    const result = getTypeHierarchy(store, 'DatabaseRecord');
+    expect(result.root).toBe('DatabaseRecord');
+    expect(result.ancestors.length).toBeGreaterThan(0);
+    const ancestorNames = result.ancestors.map((a) => a.name);
+    expect(ancestorNames).toContain('JsonSerializer');
+    expect(ancestorNames).toContain('Persistable');
+  });
+
+  it('finds descendants of an interface', () => {
+    const result = getTypeHierarchy(store, 'Serializable');
+    expect(result.descendants.length).toBeGreaterThan(0);
+    const descNames = result.descendants.map((d) => d.name);
+    // JsonSerializer implements Serializable
+    expect(descNames).toContain('JsonSerializer');
+    // Persistable extends Serializable (interface extends interface)
+    expect(descNames).toContain('Persistable');
+  });
+
+  it('finds descendants recursively (multi-level)', () => {
+    // Serializable → JsonSerializer → DatabaseRecord → LoggingRecord
+    const result = getTypeHierarchy(store, 'JsonSerializer');
+    const descNames = result.descendants.map((d) => d.name);
+    expect(descNames).toContain('DatabaseRecord');
+  });
+
+  it('returns empty for unknown type', () => {
+    const result = getTypeHierarchy(store, 'NotARealType');
+    expect(result.ancestors).toHaveLength(0);
+    expect(result.descendants).toHaveLength(0);
+  });
+
+  it('each node has required shape', () => {
+    const result = getTypeHierarchy(store, 'Logger');
+    for (const node of result.descendants) {
+      expect(typeof node.name).toBe('string');
+      expect(typeof node.kind).toBe('string');
+      expect(['extends', 'implements', 'root']).toContain(node.relation);
+      expect(Array.isArray(node.children)).toBe(true);
+    }
+  });
+});
+
+// ─── get_dead_exports ───────────────────────────────────────
+
+describe('getDeadExports', () => {
+  it('returns dead export analysis', () => {
+    const result = getDeadExports(store);
+    expect(result.total_exports).toBeGreaterThan(0);
+    expect(typeof result.total_dead).toBe('number');
+    expect(Array.isArray(result.dead_exports)).toBe(true);
+  });
+
+  it('InternalHelper is not in dead exports (it is not exported)', () => {
+    const result = getDeadExports(store);
+    const deadNames = result.dead_exports.map((d) => d.name);
+    expect(deadNames).not.toContain('InternalHelper');
+  });
+
+  it('filters by file pattern', () => {
+    const result = getDeadExports(store, 'src/interfaces%');
+    expect(result.file_pattern).toBe('src/interfaces%');
+  });
+
+  it('each dead export has required fields', () => {
+    const result = getDeadExports(store);
+    for (const item of result.dead_exports) {
+      expect(typeof item.symbol_id).toBe('string');
+      expect(typeof item.name).toBe('string');
+      expect(typeof item.kind).toBe('string');
+      expect(typeof item.file).toBe('string');
     }
   });
 });

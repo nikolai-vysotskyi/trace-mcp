@@ -141,4 +141,37 @@ describe('escapeFtsQuery', () => {
   it('handles single term correctly', () => {
     expect(escapeFtsQuery('User')).toBe('"User"');
   });
+
+  it('strips FTS5 boolean operator OR', () => {
+    const result = escapeFtsQuery('user OR admin');
+    expect(result).not.toContain('OR');
+    expect(result).toContain('"user"');
+    expect(result).toContain('"admin"');
+  });
+
+  it('strips FTS5 boolean operator AND', () => {
+    const result = escapeFtsQuery('user AND password');
+    expect(result).not.toContain('AND');
+    expect(result).toContain('"user"');
+    expect(result).toContain('"password"');
+  });
+
+  it('strips FTS5 boolean operator NOT', () => {
+    const result = escapeFtsQuery('admin NOT guest');
+    expect(result).not.toContain('NOT');
+    expect(result).toContain('"admin"');
+    expect(result).toContain('"guest"');
+  });
+
+  it('strips mixed boolean operators case-insensitively', () => {
+    const result = escapeFtsQuery('user or admin AND NOT guest');
+    expect(result).not.toMatch(/\b(or|and|not|OR|AND|NOT)\b/);
+    expect(result).toContain('"user"');
+    expect(result).toContain('"admin"');
+    expect(result).toContain('"guest"');
+  });
+
+  it('handles query that is only boolean operators', () => {
+    expect(escapeFtsQuery('OR AND NOT')).toBe('');
+  });
 });

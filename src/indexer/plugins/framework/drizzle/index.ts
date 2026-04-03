@@ -69,15 +69,16 @@ export class DrizzlePlugin implements FrameworkPlugin {
     // Extract table definitions:
     // export const users = pgTable('users', { ... })
     // export const usersTable = pgTable('users', { ... }, (table) => ({ ... }))
-    const tableRegex = /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:pgTable|mysqlTable|mySqlTable|sqliteTable)\s*\(\s*['"]([^'"]+)['"]\s*,\s*\{([\s\S]*?)\}\s*(?:,[\s\S]*?)?\)/g;
+    // Use two-step approach: regex to find the declaration header, then brace-matching for body
+    const tableHeaderRegex = /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:pgTable|mysqlTable|mySqlTable|sqliteTable)\s*\(\s*['"]([^'"]+)['"]\s*,\s*/g;
     let tableMatch: RegExpExecArray | null;
-    while ((tableMatch = tableRegex.exec(source)) !== null) {
+    while ((tableMatch = tableHeaderRegex.exec(source)) !== null) {
       const varName = tableMatch[1];
       const tableName = tableMatch[2];
-      const columnsBody = tableMatch[3];
+      const bodyStart = tableMatch.index + tableMatch[0].length;
+      const columnsBody = extractBracedBody(source, bodyStart);
 
       const fields = parseDrizzleColumns(columnsBody);
-      // Convert varName to model name (camelCase → PascalCase, strip trailing 'Table')
       const modelName = toModelName(varName);
 
       models.push({
@@ -97,9 +98,12 @@ export class DrizzlePlugin implements FrameworkPlugin {
       const sourceVar = relMatch[2];
       const sourceModel = toModelName(sourceVar);
 
-      // Find the body of the relations call
+      // Find the arrow function body: relations(table, (helpers) => ({ ... }))
+      // Skip past '=>' to reach the return value object, not the argument list.
       const startPos = relMatch.index + relMatch[0].length;
-      const relBody = extractBracedBody(source, startPos);
+      const arrowPos = source.indexOf('=>', startPos);
+      if (arrowPos === -1) continue;
+      const relBody = extractBracedBody(source, arrowPos + 2);
 
       // one(targetTable) or many(targetTable)
       const oneRegex = /\bone\s*\(\s*(\w+)/g;
@@ -146,12 +150,14 @@ function parseDrizzleColumns(body: string): Record<string, unknown>[] {
   const fields: Record<string, unknown>[] = [];
 
   // fieldName: integer('col_name').primaryKey().notNull()
-  const fieldRegex = /(\w+)\s*:\s*(\w+)\s*\(\s*['"]?([^'")?]*?)['"]?\s*\)((?:\.\w+\([^)]*\))*)/g;
+  // Also handles: varchar('col', { length: 255 }).unique()
+  // Also handles: .references(() => users.id) with nested parens
+  const fieldRegex = /(\w+)\s*:\s*(\w+)\s*\([^)]*\)([^\n,]*)/g;
   let match: RegExpExecArray | null;
   while ((match = fieldRegex.exec(body)) !== null) {
     const name = match[1];
     const colType = match[2];
-    const chain = match[4] ?? '';
+    const chain = match[3] ?? '';
 
     if (['one', 'many', 'relations'].includes(name)) continue;
 

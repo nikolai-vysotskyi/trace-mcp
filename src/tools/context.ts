@@ -4,7 +4,6 @@
  */
 import path from 'node:path';
 import type { Store, SymbolRow, FileRow } from '../db/store.js';
-import { searchFts, type FtsResult } from '../db/fts.js';
 import { hybridScore, getTypeBonus, computeRecency } from '../scoring/hybrid.js';
 import { computePageRank } from '../scoring/pagerank.js';
 import { assembleContext, type ContextItem } from '../scoring/assembly.js';
@@ -77,16 +76,43 @@ export function getFeatureContext(
   // Build FTS5 query: each token as a quoted term joined by OR
   const ftsQuery = tokens.map((t) => `"${t}"`).join(' OR ');
 
-  // Query FTS5 directly (searchFts escapes, which would break our OR syntax)
+  // Single query: join symbols + files to avoid N+1 lookups in the scoring loop
+  interface FtsFullRow {
+    symbolId: number;
+    symbolIdStr: string;
+    rank: number;
+    name: string;
+    fqn: string | null;
+    kind: string;
+    byteStart: number;
+    byteEnd: number;
+    signature: string | null;
+    fileId: number;
+    filePath: string;
+    indexedAt: string;
+  }
+
   const ftsResults = store.db.prepare(`
-    SELECT s.id as symbolId, rank, s.name, s.fqn, s.kind,
-           s.file_id as fileId, s.symbol_id as symbolIdStr
+    SELECT
+      s.id        AS symbolId,
+      s.symbol_id AS symbolIdStr,
+      rank        AS rank,
+      s.name,
+      s.fqn,
+      s.kind,
+      s.byte_start  AS byteStart,
+      s.byte_end    AS byteEnd,
+      s.signature,
+      f.id        AS fileId,
+      f.path      AS filePath,
+      f.indexed_at  AS indexedAt
     FROM symbols_fts fts
     JOIN symbols s ON s.id = fts.rowid
+    JOIN files   f ON f.id = s.file_id
     WHERE symbols_fts MATCH ?
     ORDER BY rank
     LIMIT 100
-  `).all(ftsQuery) as FtsResult[];
+  `).all(ftsQuery) as FtsFullRow[];
 
   if (ftsResults.length === 0) {
     return { description, items: [], totalTokens: 0, truncated: false };
@@ -103,27 +129,45 @@ export function getFeatureContext(
 
   const now = new Date();
 
-  // Score FTS results
+  // Score FTS results — no extra DB lookups needed, all data from the JOIN above
   type ScoredSymbol = { symbol: SymbolRow; file: FileRow; score: number };
   const scored: ScoredSymbol[] = [];
+  const scoredById = new Map<string, ScoredSymbol>(); // symbolIdStr → entry for O(1) lookup later
   const seenIds = new Set<number>();
 
   for (const fts of ftsResults) {
-    const symbol = store.getSymbolBySymbolId(fts.symbolIdStr);
-    if (!symbol) continue;
-    seenIds.add(symbol.id);
-
-    const file = store.getFileById(symbol.file_id);
-    if (!file) continue;
+    seenIds.add(fts.symbolId);
 
     const relevance = 1 - (fts.rank - minRank) / rankSpread;
-    const nodeId = store.getNodeId('symbol', symbol.id);
+    const nodeId = store.getNodeId('symbol', fts.symbolId);
     const pr = nodeId ? (pagerankMap.get(nodeId) ?? 0) / maxPr : 0;
-    const recency = computeRecency(file.indexed_at, now);
-    const typeBonus = getTypeBonus(symbol.kind);
+    const recency = computeRecency(fts.indexedAt, now);
+    const typeBonus = getTypeBonus(fts.kind);
 
     const score = hybridScore({ relevance, pagerank: pr, recency, typeBonus });
-    scored.push({ symbol, file, score });
+
+    // Reconstruct minimal SymbolRow / FileRow shapes needed downstream
+    const symbol = {
+      id: fts.symbolId,
+      symbol_id: fts.symbolIdStr,
+      name: fts.name,
+      kind: fts.kind,
+      fqn: fts.fqn,
+      byte_start: fts.byteStart,
+      byte_end: fts.byteEnd,
+      signature: fts.signature,
+      file_id: fts.fileId,
+    } as SymbolRow;
+
+    const file = {
+      id: fts.fileId,
+      path: fts.filePath,
+      indexed_at: fts.indexedAt,
+    } as FileRow;
+
+    const entry: ScoredSymbol = { symbol, file, score };
+    scored.push(entry);
+    scoredById.set(fts.symbolIdStr, entry);
   }
 
   // Graph expansion: follow edges 1-2 hops for top results
@@ -156,7 +200,9 @@ export function getFeatureContext(
 
       // Graph-expanded items get a reduced relevance score
       const score = hybridScore({ relevance: 0.3, pagerank: pr, recency, typeBonus });
-      scored.push({ symbol: sym, file, score });
+      const entry: ScoredSymbol = { symbol: sym, file, score };
+      scored.push(entry);
+      scoredById.set(sym.symbol_id, entry);
     }
   }
 
@@ -187,7 +233,7 @@ export function getFeatureContext(
 
   // Build result items
   const items: FeatureContextItem[] = assembled.items.map((ai) => {
-    const sym = scored.find((s) => s.symbol.symbol_id === ai.id)!;
+    const sym = scoredById.get(ai.id)!;
     return {
       symbolId: ai.id,
       name: sym.symbol.name,

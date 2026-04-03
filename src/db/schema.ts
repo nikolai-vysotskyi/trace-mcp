@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const DDL = `
 -- ============================================================
@@ -222,6 +222,9 @@ const SEED_EDGE_TYPES = [
   { name: 'implements', category: 'php', description: 'Class implements interface' },
   { name: 'uses_trait', category: 'php', description: 'Class uses trait' },
   { name: 'unresolved', category: 'core', description: 'Phantom edge for unresolved targets' },
+  // TypeScript language edges
+  { name: 'ts_extends', category: 'typescript', description: 'TypeScript class/interface extends' },
+  { name: 'ts_implements', category: 'typescript', description: 'TypeScript class implements interface' },
   // Laravel framework edges
   { name: 'routes_to', category: 'laravel', description: 'Route -> Controller' },
   { name: 'has_many', category: 'laravel', description: 'Eloquent hasMany' },
@@ -244,6 +247,7 @@ const SEED_EDGE_TYPES = [
   // Nuxt edges
   { name: 'nuxt_auto_imports', category: 'nuxt', description: 'Auto-imported composable' },
   { name: 'api_calls', category: 'nuxt', description: 'fetch/useFetch API call' },
+  { name: 'nuxt_shared_import', category: 'nuxt', description: 'Auto-imported shared utility or type' },
   // Blade edges
   { name: 'blade_extends', category: 'blade', description: '@extends directive' },
   { name: 'blade_includes', category: 'blade', description: '@include directive' },
@@ -284,6 +288,10 @@ const SEED_EDGE_TYPES = [
   { name: 'next_renders_page', category: 'nextjs', description: 'Layout renders page' },
   { name: 'next_server_action', category: 'nextjs', description: 'Server action reference' },
   { name: 'next_middleware', category: 'nextjs', description: 'Middleware applies to routes' },
+  { name: 'next_parallel_slot', category: 'nextjs', description: 'Parallel route slot' },
+  { name: 'next_intercepting', category: 'nextjs', description: 'Intercepting route' },
+  { name: 'next_data_fetching', category: 'nextjs', description: 'Pages Router data fetching function' },
+  { name: 'next_template', category: 'nextjs', description: 'Template component for route segment' },
   // Express edges
   { name: 'express_route', category: 'express', description: 'Express route handler' },
   { name: 'express_middleware', category: 'express', description: 'Express middleware' },
@@ -370,6 +378,28 @@ const SEED_EDGE_TYPES = [
   { name: 'data_wraps', category: 'laravel-data', description: 'Data class wraps an Eloquent model' },
   { name: 'data_property_type', category: 'laravel-data', description: 'Data class property references another Data class' },
   { name: 'data_collection', category: 'laravel-data', description: 'DataCollection<T> references a Data class' },
+  // State management (Zustand / Redux Toolkit)
+  { name: 'zustand_store', category: 'state-management', description: 'Zustand store definition' },
+  { name: 'redux_slice', category: 'state-management', description: 'Redux Toolkit slice definition' },
+  { name: 'dispatches_action', category: 'state-management', description: 'Component dispatches a Redux/Zustand action' },
+  { name: 'selects_state', category: 'state-management', description: 'Component selects state from store' },
+  // tRPC edges
+  { name: 'trpc_procedure', category: 'trpc', description: 'Procedure defined in router' },
+  // Fastify edges
+  { name: 'fastify_route', category: 'fastify', description: 'Route handler' },
+  { name: 'fastify_hook', category: 'fastify', description: 'Lifecycle hook' },
+  { name: 'fastify_plugin', category: 'fastify', description: 'Plugin registration' },
+  // Socket.io edges
+  { name: 'socketio_event', category: 'socketio', description: 'Event listener/emitter' },
+  { name: 'socketio_namespace', category: 'socketio', description: 'Namespace definition' },
+  // React (standalone) edges
+  { name: 'react_renders', category: 'react', description: 'Parent component renders child via JSX' },
+  { name: 'react_context_provides', category: 'react', description: 'Context.Provider usage' },
+  { name: 'react_context_consumes', category: 'react', description: 'useContext() or use() call' },
+  { name: 'react_lazy_loads', category: 'react', description: 'React.lazy(() => import("./X"))' },
+  { name: 'react_custom_hook_uses', category: 'react', description: 'Component calls a custom hook' },
+  { name: 'react_use_client', category: 'react', description: "'use client' directive (React 19)" },
+  { name: 'react_use_server', category: 'react', description: "'use server' directive (React 19)" },
   // Workspace edges
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },
@@ -393,6 +423,15 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
         ('test_covers',   'core', 1, 'Test file covers a symbol or file'),
         ('graphql_resolves', 'graphql', 1, 'Resolver implements a GraphQL field'),
         ('graphql_references_type', 'graphql', 1, 'Resolver/field references a GraphQL type');
+    `);
+  },
+  3: (db) => {
+    // v3: TypeScript heritage edges — enables find_references for extends/implements
+    db.exec(`
+      INSERT OR IGNORE INTO edge_types (name, category, directed, description)
+      VALUES
+        ('ts_extends',    'typescript', 1, 'TypeScript class/interface extends'),
+        ('ts_implements', 'typescript', 1, 'TypeScript class implements interface');
     `);
   },
 };

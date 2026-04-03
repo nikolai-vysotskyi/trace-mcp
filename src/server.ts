@@ -24,8 +24,9 @@ import { getEventGraph } from './tools/events.js';
 import { findReferences } from './tools/references.js';
 import { getCallGraph } from './tools/call-graph.js';
 import { getLivewireContext } from './tools/livewire.js';
+import { getNovaResource } from './tools/nova.js';
 import { getTestsFor } from './tools/tests.js';
-import { getImplementations, getApiSurface, getPluginRegistry } from './tools/introspect.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports } from './tools/introspect.js';
 
 /** Compact JSON — no pretty-printing; saves 25–35% tokens on every response */
 function j(value: unknown): string {
@@ -246,10 +247,10 @@ export function createServer(
 
   // --- Level 3 Framework-Specific Tools ---
 
-  if (has('express', 'nestjs', 'laravel')) {
+  if (has('express', 'nestjs', 'laravel', 'fastapi', 'flask', 'drf')) {
     server.tool(
       'get_request_flow',
-      'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS)',
+      'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS/FastAPI/Flask/DRF)',
       {
         url: z.string().describe('Route URL (e.g. /api/users)'),
         method: z.string().optional().describe('HTTP method (default GET)'),
@@ -264,10 +265,10 @@ export function createServer(
     );
   }
 
-  if (has('express', 'nestjs')) {
+  if (has('express', 'nestjs', 'fastapi', 'flask')) {
     server.tool(
       'get_middleware_chain',
-      'Trace middleware chain for a route URL (Express: app->router->route; NestJS: guards->pipes->interceptors)',
+      'Trace middleware chain for a route URL (Express/NestJS/FastAPI/Flask)',
       {
         url: z.string().describe('Route URL to trace middleware for'),
       },
@@ -343,10 +344,10 @@ export function createServer(
     );
   }
 
-  if (has('laravel', 'mongoose', 'sequelize', 'prisma', 'typeorm', 'drizzle')) {
+  if (has('laravel', 'mongoose', 'sequelize', 'prisma', 'typeorm', 'drizzle', 'sqlalchemy')) {
     server.tool(
       'get_model_context',
-      'Get full model context: relationships, schema, and metadata (Eloquent/Mongoose/Sequelize)',
+      'Get full model context: relationships, schema, and metadata (Eloquent/Mongoose/Sequelize/SQLAlchemy/Prisma/TypeORM/Drizzle)',
       {
         model_name: z.string().describe('Model class name (e.g. User, Post)'),
       },
@@ -361,7 +362,7 @@ export function createServer(
 
     server.tool(
       'get_schema',
-      'Get database schema reconstructed from migrations, or Mongoose/Sequelize model schemas',
+      'Get database schema reconstructed from migrations or ORM model definitions',
       {
         table_name: z.string().optional().describe('Table/collection/model name (omit for all)'),
       },
@@ -375,10 +376,10 @@ export function createServer(
     );
   }
 
-  if (has('laravel', 'nestjs')) {
+  if (has('laravel', 'nestjs', 'celery', 'django')) {
     server.tool(
       'get_event_graph',
-      'Get event dispatch/listener graph (Laravel events, NestJS events)',
+      'Get event/signal/task dispatch graph (Laravel events, Django signals, NestJS events, Celery tasks)',
       {
         event_name: z.string().optional().describe('Filter to a specific event class name'),
       },
@@ -458,6 +459,21 @@ export function createServer(
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
     );
+
+    server.tool(
+      'get_nova_resource',
+      'Get full context for a Laravel Nova resource: model, fields, actions, filters, lenses, metrics',
+      {
+        resource_name: z.string().describe('Nova resource class name or FQN (e.g. User or App\\Nova\\User)'),
+      },
+      async ({ resource_name }) => {
+        const result = getNovaResource(store, resource_name);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
   }
 
   // --- Self-Development / Introspection Tools ---
@@ -492,6 +508,49 @@ export function createServer(
     {},
     async () => {
       const result = getPluginRegistry(store, registry, frameworkNames);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'get_tests_for',
+    'Find test files that cover a given symbol or file (edge-based + heuristic path matching)',
+    {
+      symbol_id: z.string().optional().describe('Symbol ID to find tests for'),
+      fqn: z.string().optional().describe('FQN to find tests for'),
+      file_path: z.string().optional().describe('File path to find tests for'),
+    },
+    async ({ symbol_id, fqn, file_path }) => {
+      const { getTestsFor } = await import('./tools/tests.js');
+      const result = getTestsFor(store, { symbolId: symbol_id, fqn, filePath: file_path });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_type_hierarchy',
+    'Walk TypeScript class/interface hierarchy: ancestors (what it extends/implements) and descendants (what extends/implements it)',
+    {
+      name: z.string().describe('Class or interface name (e.g. "LanguagePlugin", "Store")'),
+      max_depth: z.number().optional().describe('Max traversal depth (default 10)'),
+    },
+    async ({ name, max_depth }) => {
+      const result = getTypeHierarchy(store, name, max_depth ?? 10);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'get_dead_exports',
+    'Find exported symbols never imported by any other file — dead code candidates',
+    {
+      file_pattern: z.string().optional().describe('Filter files by glob pattern (e.g. "src/tools/*.ts")'),
+    },
+    async ({ file_pattern }) => {
+      const result = getDeadExports(store, file_pattern);
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );

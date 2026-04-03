@@ -2,6 +2,19 @@ import type { Store } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 
+export interface PennantUsageSite {
+  filePath: string;
+  line: number;
+  usageType: string;
+}
+
+export interface PennantImpactResult {
+  featureName: string;
+  definedIn: { filePath: string; line: number }[];
+  checkedBy: PennantUsageSite[];
+  gatedRoutes: { filePath: string; line: number }[];
+}
+
 export interface ChangeImpactResult {
   target: { path: string; symbolId?: string };
   dependents: {
@@ -12,6 +25,8 @@ export interface ChangeImpactResult {
   }[];
   totalAffected: number;
   truncated?: boolean;
+  /** Populated when the target is a Pennant feature flag name */
+  pennant?: PennantImpactResult;
 }
 
 /**
@@ -59,6 +74,9 @@ export function getChangeImpact(
     return err(notFound('', ['Provide either filePath or symbolId']));
   }
 
+  // Check if this might be a Pennant feature flag name (if no node found via symbol/file)
+  const pennant = getPennantImpact(store, opts.symbolId ?? opts.filePath ?? '');
+
   if (startNodeId == null) {
     return ok({
       target: { path: targetPath, symbolId: targetSymbolId },
@@ -81,6 +99,7 @@ export function getChangeImpact(
     dependents,
     totalAffected: dependents.length,
     ...(truncated ? { truncated: true } : {}),
+    ...(pennant ? { pennant } : {}),
   });
 }
 
@@ -135,4 +154,40 @@ function traverseIncoming(
     // Continue traversal
     traverseIncoming(store, sourceNodeId, currentDepth + 1, maxDepth, visited, dependents, maxDependents);
   }
+}
+
+/**
+ * Search Pennant feature flag edges for a given feature name.
+ * Returns null if no matches found.
+ */
+function getPennantImpact(store: Store, name: string): PennantImpactResult | null {
+  if (!name) return null;
+
+  const definedIn: { filePath: string; line: number }[] = [];
+  const checkedBy: PennantUsageSite[] = [];
+  const gatedRoutes: { filePath: string; line: number }[] = [];
+
+  for (const edgeType of ['feature_defined_in', 'feature_checked_by', 'feature_gates_route']) {
+    const edges = store.getEdgesByType(edgeType);
+    for (const edge of edges) {
+      if (!edge.metadata) continue;
+      let meta: Record<string, unknown>;
+      try { meta = JSON.parse(edge.metadata) as Record<string, unknown>; } catch { continue; }
+      if (meta.featureName !== name) continue;
+
+      const filePath = String(meta.filePath ?? '');
+      const line = Number(meta.line ?? 0);
+
+      if (edgeType === 'feature_defined_in') {
+        definedIn.push({ filePath, line });
+      } else if (edgeType === 'feature_checked_by') {
+        checkedBy.push({ filePath, line, usageType: String(meta.usageType ?? '') });
+      } else if (edgeType === 'feature_gates_route') {
+        gatedRoutes.push({ filePath, line });
+      }
+    }
+  }
+
+  if (definedIn.length === 0 && checkedBy.length === 0 && gatedRoutes.length === 0) return null;
+  return { featureName: name, definedIn, checkedBy, gatedRoutes };
 }

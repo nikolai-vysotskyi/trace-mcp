@@ -69,11 +69,14 @@ export function searchFts(
 }
 
 export function escapeFtsQuery(query: string): string {
-  // Remove special FTS5 characters, wrap terms in quotes for exact matching
-  const cleaned = query.replace(/['"(){}[\]*:^~!@#$%&]/g, ' ').trim();
+  // Remove special FTS5 characters, then strip boolean keywords that survive as whole words
+  const cleaned = query
+    .replace(/['"(){}[\]*:^~!@#$%&]/g, ' ')
+    .replace(/\b(OR|AND|NOT)\b/gi, ' ')
+    .trim();
   if (!cleaned) return '';
 
-  // Split into terms and wrap each in quotes
+  // Split into terms and wrap each in quotes for exact phrase matching
   const terms = cleaned.split(/\s+/).filter(Boolean);
   return terms.map((t) => `"${t}"`).join(' ');
 }

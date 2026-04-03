@@ -36,6 +36,12 @@ import { CeleryPlugin } from './indexer/plugins/framework/celery/index.js';
 import { FastAPIPlugin } from './indexer/plugins/framework/fastapi/index.js';
 import { FlaskPlugin } from './indexer/plugins/framework/flask/index.js';
 import { SQLAlchemyPlugin } from './indexer/plugins/framework/sqlalchemy/index.js';
+import { DjangoPlugin } from './indexer/plugins/framework/django/index.js';
+import { ReactPlugin } from './indexer/plugins/framework/react/index.js';
+import { TrpcPlugin } from './indexer/plugins/framework/trpc/index.js';
+import { FastifyPlugin } from './indexer/plugins/framework/fastify/index.js';
+import { SocketIoPlugin } from './indexer/plugins/framework/socketio/index.js';
+import { ZustandReduxPlugin } from './indexer/plugins/framework/zustand/index.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import { FileWatcher } from './indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline } from './ai/index.js';
@@ -69,6 +75,12 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerFrameworkPlugin(new FastAPIPlugin());
   registry.registerFrameworkPlugin(new FlaskPlugin());
   registry.registerFrameworkPlugin(new SQLAlchemyPlugin());
+  registry.registerFrameworkPlugin(new DjangoPlugin());
+  registry.registerFrameworkPlugin(new TrpcPlugin());
+  registry.registerFrameworkPlugin(new FastifyPlugin());
+  registry.registerFrameworkPlugin(new SocketIoPlugin());
+  registry.registerFrameworkPlugin(new ZustandReduxPlugin());
+  registry.registerFrameworkPlugin(new ReactPlugin());
 }
 
 const program = new Command();

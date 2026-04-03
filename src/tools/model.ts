@@ -20,6 +20,12 @@ export interface ModelSchema {
   timestamp?: string;
 }
 
+export interface EcosystemRef {
+  name: string;
+  fqn?: string;
+  symbolId?: string;
+}
+
 export interface ModelContextResult {
   model: {
     name: string;
@@ -34,6 +40,14 @@ export interface ModelContextResult {
   relatedControllers: { name: string; symbolId: string; fqn: string | null }[];
   relatedRequests: { name: string; symbolId: string; fqn: string | null }[];
   ormMetadata?: Record<string, unknown>;
+  /** Nova resource referencing this model */
+  nova?: { resource: EcosystemRef; actions: string[]; filters: string[]; lenses: string[]; metrics: string[] };
+  /** Filament resource referencing this model */
+  filament?: { resource: EcosystemRef; relationManagers: string[]; pages: string[]; widgets: string[] };
+  /** Livewire components using this model */
+  livewireComponents?: EcosystemRef[];
+  /** Data classes (DTOs) wrapping this model */
+  dataClasses?: EcosystemRef[];
 }
 
 export function getModelContext(
@@ -74,6 +88,9 @@ export function getModelContext(
   const relatedControllers = getRelatedByRole(store, modelSymbol, 'controller');
   const relatedRequests = getRelatedByRole(store, modelSymbol, 'form_request');
 
+  // Ecosystem: find Nova/Filament/Livewire/Data referencing this model
+  const eco = getEcosystemRefs(store, modelSymbol);
+
   return ok({
     model: {
       name: modelSymbol.name,
@@ -85,6 +102,7 @@ export function getModelContext(
     schema,
     relatedControllers,
     relatedRequests,
+    ...eco,
   });
 }
 
@@ -205,6 +223,109 @@ function getRelatedByRole(
   // For now, return empty — this requires more complex graph traversal
   // that would need checking file framework_roles
   return [];
+}
+
+/**
+ * Find Nova, Filament, Livewire, and laravel-data references to a model.
+ * Searches incoming edges targeting the model's node.
+ */
+function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelContextResult> {
+  const nodeId = store.getNodeId('symbol', modelSymbol.id);
+  if (!nodeId) return {};
+
+  const incoming = store.getIncomingEdges(nodeId);
+  const result: Partial<ModelContextResult> = {};
+
+  // Nova
+  for (const edge of incoming) {
+    if (edge.edge_type_name !== 'nova_resource_for') continue;
+    const src = resolveSourceSymbol(store, edge.source_node_id);
+    if (!src) continue;
+    const srcNodeId = store.getNodeId('symbol', src.id);
+    const actions: string[] = [];
+    const filters: string[] = [];
+    const lenses: string[] = [];
+    const metrics: string[] = [];
+    if (srcNodeId) {
+      for (const out of store.getOutgoingEdges(srcNodeId)) {
+        const name = resolveTargetName(store, out.target_node_id, out.metadata);
+        if (out.edge_type_name === 'nova_action_on' && name) actions.push(name);
+        if (out.edge_type_name === 'nova_filter_on' && name) filters.push(name);
+        if (out.edge_type_name === 'nova_lens_on' && name) lenses.push(name);
+        if (out.edge_type_name === 'nova_metric_queries' && name) metrics.push(name);
+      }
+    }
+    result.nova = {
+      resource: { name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id },
+      actions, filters, lenses, metrics,
+    };
+    break;
+  }
+
+  // Filament
+  for (const edge of incoming) {
+    if (edge.edge_type_name !== 'filament_resource_for') continue;
+    const src = resolveSourceSymbol(store, edge.source_node_id);
+    if (!src) continue;
+    const srcNodeId = store.getNodeId('symbol', src.id);
+    const relationManagers: string[] = [];
+    const pages: string[] = [];
+    const widgets: string[] = [];
+    if (srcNodeId) {
+      for (const out of store.getOutgoingEdges(srcNodeId)) {
+        const name = resolveTargetName(store, out.target_node_id, out.metadata);
+        if (out.edge_type_name === 'filament_relation_manager' && name) relationManagers.push(name);
+        if (out.edge_type_name === 'filament_page_for' && name) pages.push(name);
+        if (out.edge_type_name === 'filament_widget_queries' && name) widgets.push(name);
+      }
+    }
+    result.filament = {
+      resource: { name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id },
+      relationManagers, pages, widgets,
+    };
+    break;
+  }
+
+  // Livewire components using this model
+  const lwComponents: EcosystemRef[] = [];
+  for (const edge of incoming) {
+    if (edge.edge_type_name !== 'livewire_uses_model') continue;
+    const src = resolveSourceSymbol(store, edge.source_node_id);
+    if (src) lwComponents.push({ name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id });
+  }
+  if (lwComponents.length > 0) result.livewireComponents = lwComponents;
+
+  // Data classes wrapping this model
+  const dataClasses: EcosystemRef[] = [];
+  for (const edge of incoming) {
+    if (edge.edge_type_name !== 'data_wraps') continue;
+    const src = resolveSourceSymbol(store, edge.source_node_id);
+    if (src) dataClasses.push({ name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id });
+  }
+  if (dataClasses.length > 0) result.dataClasses = dataClasses;
+
+  return result;
+}
+
+function resolveSourceSymbol(store: Store, sourceNodeId: number): SymbolRow | undefined {
+  const sourceNode = store.getNodeByNodeId(sourceNodeId);
+  if (!sourceNode || sourceNode.node_type !== 'symbol') return undefined;
+  return store.getSymbolById(sourceNode.ref_id);
+}
+
+function resolveTargetName(store: Store, targetNodeId: number, metadataStr: string | null): string | undefined {
+  const targetNode = store.getNodeByNodeId(targetNodeId);
+  if (targetNode?.node_type === 'symbol') {
+    const sym = store.getSymbolById(targetNode.ref_id);
+    if (sym) return sym.fqn ?? sym.name;
+  }
+  if (metadataStr) {
+    try {
+      const meta = JSON.parse(metadataStr) as Record<string, unknown>;
+      if (meta.targetFqn) return String(meta.targetFqn);
+    } catch { /* ignore */ }
+  }
+  return undefined;
 }
 
 /** Convert a model class name to a table name (simple pluralization). */

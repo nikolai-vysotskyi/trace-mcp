@@ -56,14 +56,16 @@ export interface RawRoute {
   uri: string;
   name?: string;
   controllerSymbolId?: string;
+  handler?: string;
   middleware?: string[];
   fileId?: number;
   line?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface RawComponent {
   name: string;
-  kind: 'page' | 'component' | 'layout';
+  kind: 'page' | 'component' | 'layout' | 'context' | 'provider' | 'hook';
   props?: Record<string, unknown>;
   emits?: string[];
   slots?: string[];
@@ -120,6 +122,7 @@ export interface FileParseResult {
   ormAssociations?: RawOrmAssociation[];
   rnScreens?: RawRnScreen[];
   warnings?: string[];
+  metadata?: Record<string, unknown>;
 }
 
 // --- Plugin manifest ---

@@ -537,6 +537,36 @@ export class Store {
     ).all() as EdgeTypeRow[];
   }
 
+  /**
+   * Get all symbols that have heritage metadata (extends/implements).
+   * Used by the TypeScript heritage resolver in the pipeline.
+   */
+  getSymbolsWithHeritage(): (SymbolRow & { file_path: string })[] {
+    return this.db.prepare(`
+      SELECT s.*, f.path AS file_path
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      WHERE s.metadata IS NOT NULL
+        AND (json_extract(s.metadata, '$.extends') IS NOT NULL
+          OR json_extract(s.metadata, '$.implements') IS NOT NULL)
+    `).all() as (SymbolRow & { file_path: string })[];
+  }
+
+  /**
+   * Find a symbol by name and optional kind.
+   * Returns the first match (prefers exact name match over substring).
+   */
+  getSymbolByName(name: string, kind?: string): SymbolRow | undefined {
+    if (kind) {
+      return this.db.prepare(
+        'SELECT * FROM symbols WHERE name = ? AND kind = ? LIMIT 1',
+      ).get(name, kind) as SymbolRow | undefined;
+    }
+    return this.db.prepare(
+      'SELECT * FROM symbols WHERE name = ? LIMIT 1',
+    ).get(name) as SymbolRow | undefined;
+  }
+
   // --- Stats ---
 
   getStats(): IndexStats {
