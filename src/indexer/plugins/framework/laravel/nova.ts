@@ -83,6 +83,10 @@ export function extractNovaResource(
 ): NovaResourceInfo | null {
   if (!EXTENDS_RESOURCE_RE.test(source)) return null;
 
+  // Exclude Filament/Moonshine/Backpack resources that also extend Resource
+  const parentMatch = source.match(/class\s+\w+\s+extends\s+([\w\\]+)/);
+  if (parentMatch && /Filament|Moonshine|Backpack/i.test(parentMatch[1])) return null;
+
   const useMap = buildUseMap(source);
   const nsMatch = source.match(NAMESPACE_RE);
   const namespace = nsMatch?.[1] ?? '';
@@ -208,8 +212,9 @@ function buildUseMap(source: string): Map<string, string> {
 }
 
 function resolveClass(ref: string, useMap: Map<string, string>): string {
-  if (ref.includes('\\')) return ref;
-  return useMap.get(ref) ?? ref;
+  const clean = ref.startsWith('\\') ? ref.slice(1) : ref;
+  if (clean.includes('\\')) return clean;
+  return useMap.get(clean) ?? clean;
 }
 
 /**

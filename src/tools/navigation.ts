@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { Store, SymbolRow, FileRow } from '../db/store.js';
-import { searchFts, type FtsResult } from '../db/fts.js';
+import { searchFts, type FtsResult, type FtsFilters } from '../db/fts.js';
 import { readByteRange } from '../utils/source-reader.js';
 import { hybridScore, getTypeBonus, computeRecency } from '../scoring/hybrid.js';
 import { computePageRank } from '../scoring/pagerank.js';
@@ -129,7 +129,12 @@ export async function search(
     }));
     searchMode = 'hybrid_ai';
   } else {
-    const ftsResults = searchFts(store.db, query, fetchLimit, 0);
+    const ftsFilters: FtsFilters = {
+      kind: filters?.kind,
+      language: filters?.language,
+      filePattern: filters?.filePattern,
+    };
+    const ftsResults = searchFts(store.db, query, fetchLimit, 0, ftsFilters);
     if (ftsResults.length === 0) return { items: [], total: 0, search_mode: 'fts' };
     // BM25 ranks are negative: lower = better match
     const minRank = Math.min(...ftsResults.map((r) => r.rank));
@@ -154,11 +159,6 @@ export async function search(
 
     const file = store.getFileById(symbol.file_id);
     if (!file) continue;
-
-    // Apply filters
-    if (filters?.kind && symbol.kind !== filters.kind) continue;
-    if (filters?.language && file.language !== filters.language) continue;
-    if (filters?.filePattern && !file.path.includes(filters.filePattern)) continue;
 
     const nodeId = store.getNodeId('symbol', symbol.id);
     const pr = nodeId ? (pagerankMap.get(nodeId) ?? 0) / maxPr : 0;

@@ -19,6 +19,7 @@ import type {
   PluginManifest,
   ProjectContext,
   FileParseResult,
+  RawRoute,
   EdgeTypeDeclaration,
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';

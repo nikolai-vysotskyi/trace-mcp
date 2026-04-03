@@ -170,4 +170,6 @@ export interface ResolveContext {
   getSymbolByFqn(fqn: string): { id: number; symbolId: string } | undefined;
   getNodeId(nodeType: string, refId: number): number | undefined;
   createNodeIfNeeded(nodeType: string, refId: number): number;
+  /** Read file content — uses Pass 1 cache when available, falls back to disk. */
+  readFile(relPath: string): string | undefined;
 }

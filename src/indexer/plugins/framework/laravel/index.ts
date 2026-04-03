@@ -40,6 +40,17 @@ import {
 } from './filament.js';
 import { extractNovaResource, extractNovaMetric } from './nova.js';
 import {
+  extractBroadcastingEvent,
+  extractChannelAuthorizations,
+} from './broadcasting.js';
+import { extractDataClass, buildDataClassEdges, extractInertiaDataProps } from './laravel-data.js';
+import {
+  extractFeatureDefinitions,
+  extractFeatureUsages,
+  extractFeatureBladeUsages,
+  extractFeatureMiddlewareUsages,
+} from './pennant.js';
+import {
   parseKernelMiddleware,
   parseBootstrapMiddleware,
   parseRouteServiceProviderNamespace,
@@ -75,6 +86,15 @@ export class LaravelPlugin implements FrameworkPlugin {
 
   /** Whether laravel/nova is detected. */
   private hasNova = false;
+
+  /** Whether spatie/laravel-data is detected. */
+  private hasLaravelData = false;
+
+  /** Whether laravel/reverb or pusher/pusher-php-server is detected. */
+  private hasBroadcasting = false;
+
+  /** Whether laravel/pennant is detected. */
+  private hasPennant = false;
 
   detect(ctx: ProjectContext): boolean {
     // Check if composer.json has laravel/framework in require
@@ -112,6 +132,21 @@ export class LaravelPlugin implements FrameworkPlugin {
       // Detect v2 vs v3 from version constraint
       const lwVersion = deps['livewire/livewire'];
       this.livewireVersion = /^\^?3|^3/.test(lwVersion) ? 3 : 2;
+    }
+
+    // Detect laravel-data
+    if (deps['spatie/laravel-data']) {
+      this.hasLaravelData = true;
+    }
+
+    // Detect Broadcasting (Reverb or Pusher)
+    if (deps['laravel/reverb'] || deps['pusher/pusher-php-server']) {
+      this.hasBroadcasting = true;
+    }
+
+    // Detect Pennant
+    if (deps['laravel/pennant']) {
+      this.hasPennant = true;
     }
 
     return true;
@@ -153,6 +188,18 @@ export class LaravelPlugin implements FrameworkPlugin {
         { name: 'livewire_uses_model', category: 'livewire', description: 'Component → Eloquent Model' },
         { name: 'livewire_form', category: 'livewire', description: 'Component → Form class (v3)' },
         { name: 'livewire_action', category: 'livewire', description: 'wire:click → Component method' },
+        // Pennant edges
+        { name: 'feature_defined_in', category: 'pennant', description: 'Feature flag defined via Feature::define()' },
+        { name: 'feature_checked_by', category: 'pennant', description: 'Feature flag checked in PHP/Blade' },
+        { name: 'feature_gates_route', category: 'pennant', description: 'Route protected by features middleware' },
+        // Broadcasting edges
+        { name: 'broadcasts_on', category: 'broadcasting', description: 'Event broadcasts on a channel' },
+        { name: 'channel_authorized_by', category: 'broadcasting', description: 'Channel authorization callback or class' },
+        { name: 'broadcast_as', category: 'broadcasting', description: 'Event broadcast name override' },
+        // laravel-data edges
+        { name: 'data_wraps', category: 'laravel-data', description: 'Data class wraps an Eloquent model' },
+        { name: 'data_property_type', category: 'laravel-data', description: 'Data class property references another Data class' },
+        { name: 'data_collection', category: 'laravel-data', description: 'DataCollection<T> references a Data class' },
       ],
     };
   }
@@ -302,6 +349,74 @@ export class LaravelPlugin implements FrameworkPlugin {
       }
     }
 
+    // Broadcasting events
+    if (this.hasBroadcasting) {
+      const eventInfo = extractBroadcastingEvent(source, filePath);
+      if (eventInfo) {
+        result.frameworkRole = 'broadcasting_event';
+        result.edges = result.edges ?? [];
+        for (const ch of eventInfo.channels) {
+          result.edges.push({
+            edgeType: 'broadcasts_on',
+            metadata: { sourceFqn: eventInfo.fqn, channelName: ch.name, channelType: ch.type },
+          });
+        }
+        if (eventInfo.broadcastAs) {
+          result.edges.push({
+            edgeType: 'broadcast_as',
+            metadata: { sourceFqn: eventInfo.fqn, broadcastAs: eventInfo.broadcastAs },
+          });
+        }
+      }
+      // Channel authorization in channels.php
+      if (filePath.endsWith('channels.php')) {
+        const mappings = extractChannelAuthorizations(source);
+        result.edges = result.edges ?? [];
+        for (const m of mappings) {
+          result.edges.push({
+            edgeType: 'channel_authorized_by',
+            metadata: { pattern: m.pattern, authClass: m.authClass },
+          });
+        }
+      }
+    }
+
+    // Pennant feature flags
+    if (this.hasPennant) {
+      result.edges = result.edges ?? [];
+      const defs = extractFeatureDefinitions(source, filePath);
+      for (const def of defs) {
+        result.edges.push({
+          edgeType: 'feature_defined_in',
+          metadata: { featureName: def.name, filePath: def.location, line: def.line },
+        });
+      }
+      const usages = extractFeatureUsages(source);
+      for (const u of usages) {
+        result.edges.push({
+          edgeType: 'feature_checked_by',
+          metadata: { featureName: u.name, filePath, line: u.line, usageType: u.usageType },
+        });
+      }
+      const middlewareUsages = extractFeatureMiddlewareUsages(source);
+      for (const u of middlewareUsages) {
+        result.edges.push({
+          edgeType: 'feature_gates_route',
+          metadata: { featureName: u.name, filePath, line: u.line },
+        });
+      }
+    }
+
+    // laravel-data classes
+    if (this.hasLaravelData) {
+      const dataInfo = extractDataClass(source, filePath);
+      if (dataInfo) {
+        result.frameworkRole = 'data_class';
+        result.edges = result.edges ?? [];
+        result.edges.push(...buildDataClassEdges(dataInfo));
+      }
+    }
+
     // Detect event dispatches in any file
     const dispatches = detectEventDispatches(source);
     if (dispatches.length > 0) {
@@ -364,6 +479,17 @@ export class LaravelPlugin implements FrameworkPlugin {
       // Resolve Livewire Blade-side edges (<livewire:name/>, wire:click)
       if (this.hasLivewire && file.path.endsWith('.blade.php')) {
         this.resolveLivewireBladeEdges(source, file, ctx, edges);
+      }
+
+      // Pennant @feature directives in Blade
+      if (this.hasPennant && file.path.endsWith('.blade.php')) {
+        const bladeUsages = extractFeatureBladeUsages(source);
+        for (const usage of bladeUsages) {
+          edges.push({
+            edgeType: 'feature_checked_by',
+            metadata: { featureName: usage.name, filePath: file.path, line: usage.line, usageType: 'blade' },
+          });
+        }
       }
     }
 

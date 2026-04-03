@@ -111,6 +111,9 @@ export class IndexingPipeline {
       return 'error';
     }
 
+    // Cache content for Pass 2 (resolveEdges reads files again)
+    this._fileContentCache.set(relPath, content.toString('utf-8'));
+
     const hash = hashContent(content);
     const existing = this.store.getFile(relPath);
 
@@ -478,6 +481,14 @@ export class IndexingPipeline {
       },
       getNodeId: (nodeType: string, refId: number) => store.getNodeId(nodeType, refId),
       createNodeIfNeeded: (nodeType: string, refId: number) => store.createNode(nodeType, refId),
+      readFile: (relPath: string) => {
+        // Use Pass 1 cache first, fall back to disk
+        const cached = this._fileContentCache.get(relPath);
+        if (cached !== undefined) return cached;
+        try {
+          return fs.readFileSync(path.resolve(this.rootPath, relPath), 'utf-8');
+        } catch { return undefined; }
+      },
     };
   }
 

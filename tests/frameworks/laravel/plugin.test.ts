@@ -77,10 +77,14 @@ describe('LaravelPlugin', () => {
       expect(edgeNames).toContain('migrates');
     });
 
-    it('all edge types have laravel or livewire category', () => {
+    it('all edge types have a recognised Laravel ecosystem category', () => {
+      const ALLOWED = new Set([
+        'laravel', 'livewire', 'filament', 'nova', 'blade',
+        'pennant', 'broadcasting', 'laravel-data',
+      ]);
       const schema = plugin.registerSchema();
       for (const et of schema.edgeTypes!) {
-        expect(['laravel', 'livewire', 'filament', 'nova', 'blade']).toContain(et.category);
+        expect(ALLOWED.has(et.category), `unexpected category: ${et.category}`).toBe(true);
       }
     });
   });

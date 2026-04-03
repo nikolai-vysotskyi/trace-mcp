@@ -22,6 +22,10 @@ import { getModelContext } from './tools/model.js';
 import { getSchema } from './tools/schema.js';
 import { getEventGraph } from './tools/events.js';
 import { findReferences } from './tools/references.js';
+import { getCallGraph } from './tools/call-graph.js';
+import { getLivewireContext } from './tools/livewire.js';
+import { getTestsFor } from './tools/tests.js';
+import { getImplementations, getApiSurface, getPluginRegistry } from './tools/introspect.js';
 
 /** Compact JSON — no pretty-printing; saves 25–35% tokens on every response */
 function j(value: unknown): string {
@@ -339,7 +343,7 @@ export function createServer(
     );
   }
 
-  if (has('laravel', 'mongoose', 'sequelize')) {
+  if (has('laravel', 'mongoose', 'sequelize', 'prisma', 'typeorm', 'drizzle')) {
     server.tool(
       'get_model_context',
       'Get full model context: relationships, schema, and metadata (Eloquent/Mongoose/Sequelize)',
@@ -402,6 +406,93 @@ export function createServer(
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
       return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_call_graph',
+    'Build a bidirectional call graph centered on a symbol (who it calls + who calls it)',
+    {
+      symbol_id: z.string().optional().describe('Symbol ID to center the graph on'),
+      fqn: z.string().optional().describe('Fully qualified name to center the graph on'),
+      depth: z.number().optional().describe('Traversal depth on each side (default 2)'),
+    },
+    async ({ symbol_id, fqn, depth }) => {
+      const result = getCallGraph(store, { symbolId: symbol_id, fqn }, depth ?? 2);
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_tests_for',
+    'Find test files and test functions that cover a given symbol or file',
+    {
+      symbol_id: z.string().optional().describe('Symbol ID to find tests for'),
+      fqn: z.string().optional().describe('Fully qualified name to find tests for'),
+      file_path: z.string().optional().describe('File path to find tests for'),
+    },
+    async ({ symbol_id, fqn, file_path }) => {
+      const result = getTestsFor(store, { symbolId: symbol_id, fqn, filePath: file_path });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  if (has('laravel')) {
+    server.tool(
+      'get_livewire_context',
+      'Get full context for a Livewire component: properties, actions, events, view, child components',
+      {
+        component_name: z.string().describe('Livewire component class name or FQN (e.g. UserProfile or App\\Livewire\\UserProfile)'),
+      },
+      async ({ component_name }) => {
+        const result = getLivewireContext(store, component_name);
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
+
+  // --- Self-Development / Introspection Tools ---
+
+  server.tool(
+    'get_implementations',
+    'Find all classes that implement or extend a given interface or base class',
+    {
+      name: z.string().describe('Interface or base class name (e.g. UserRepositoryInterface)'),
+    },
+    async ({ name }) => {
+      const result = getImplementations(store, name);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'get_api_surface',
+    'List all exported symbols (public API) of a file or matching files',
+    {
+      file_pattern: z.string().optional().describe('Glob-style pattern to filter files (e.g. src/services/*.ts)'),
+    },
+    async ({ file_pattern }) => {
+      const result = getApiSurface(store, file_pattern);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'get_plugin_registry',
+    'List all registered indexer plugins and the edge types they emit',
+    {},
+    async () => {
+      const result = getPluginRegistry(store, registry, frameworkNames);
+      return { content: [{ type: 'text', text: j(result) }] };
     },
   );
 

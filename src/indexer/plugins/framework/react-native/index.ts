@@ -162,7 +162,60 @@ export class ReactNativePlugin implements FrameworkPlugin {
   }
 
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
-    return ok([]);
+    const edges: RawEdge[] = [];
+    const allFiles = ctx.getAllFiles();
+
+    // Build screen-name → file ID map, and collect navigation calls per file
+    const screenNameToFileId = new Map<string, number>();
+    const fileNavCalls = new Map<number, string[]>();
+
+    for (const file of allFiles) {
+      if (file.language !== 'typescript' && file.language !== 'javascript') continue;
+
+      let source: string;
+      try {
+        source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
+      } catch { continue; }
+
+      // Screens defined in this file (navigator JSX)
+      const screens = extractNavigatorScreens(source, file.path);
+      for (const s of screens) {
+        screenNameToFileId.set(s.name, file.id);
+      }
+
+      // Expo Router file-based screens
+      if (this.hasExpoRouter) {
+        const expoRoute = expoFileToRoute(file.path);
+        if (expoRoute && !expoRoute.is404 && !expoRoute.isLayout) {
+          screenNameToFileId.set(expoRoute.route, file.id);
+        }
+      }
+
+      // Navigation calls in any file
+      const navCalls = extractNavigationCalls(source);
+      if (navCalls.length > 0) {
+        fileNavCalls.set(file.id, navCalls);
+      }
+    }
+
+    // Create rn_navigates_to edges: source file → target screen's file
+    for (const [sourceFileId, calls] of fileNavCalls) {
+      for (const targetName of calls) {
+        const targetFileId = screenNameToFileId.get(targetName);
+        if (targetFileId == null) continue;
+
+        edges.push({
+          sourceNodeType: 'file',
+          sourceRefId: sourceFileId,
+          targetNodeType: 'file',
+          targetRefId: targetFileId,
+          edgeType: 'rn_navigates_to',
+          metadata: { targetScreen: targetName },
+        });
+      }
+    }
+
+    return ok(edges);
   }
 }
 

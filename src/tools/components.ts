@@ -68,20 +68,22 @@ function buildNode(
     children: [],
   };
 
-  // Parse stored JSON fields
-  if (comp.props) {
-    const parsed = JSON.parse(comp.props) as Record<string, unknown>;
-    node.props = Object.keys(parsed);
-  }
-  if (comp.emits) {
-    node.emits = JSON.parse(comp.emits) as string[];
-  }
-  if (comp.slots) {
-    node.slots = JSON.parse(comp.slots) as string[];
-  }
-  if (comp.composables) {
-    node.composables = JSON.parse(comp.composables) as string[];
-  }
+  // Parse stored JSON fields (gracefully handle corrupted data)
+  try {
+    if (comp.props) {
+      const parsed = JSON.parse(comp.props) as Record<string, unknown>;
+      node.props = Object.keys(parsed);
+    }
+  } catch { /* corrupted JSON */ }
+  try {
+    if (comp.emits) node.emits = JSON.parse(comp.emits) as string[];
+  } catch { /* corrupted JSON */ }
+  try {
+    if (comp.slots) node.slots = JSON.parse(comp.slots) as string[];
+  } catch { /* corrupted JSON */ }
+  try {
+    if (comp.composables) node.composables = JSON.parse(comp.composables) as string[];
+  } catch { /* corrupted JSON */ }
 
   budget.remaining -= estimateTokens(JSON.stringify(node));
   if (budget.remaining <= 0 || remainingDepth <= 0) return node;
