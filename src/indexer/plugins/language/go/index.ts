@@ -6,6 +6,7 @@ import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { detectMinGoVersionFromSource } from './version-features.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -40,6 +41,7 @@ export class GoLanguagePlugin implements LanguagePlugin {
   };
 
   supportedExtensions = ['.go'];
+  supportedVersions = ['1.11', '1.13', '1.14', '1.16', '1.17', '1.18', '1.19', '1.20', '1.21', '1.22', '1.23'];
 
   extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
     try {
@@ -79,12 +81,17 @@ export class GoLanguagePlugin implements LanguagePlugin {
 
       const edges = extractImportEdges(root);
 
+      const minGoVer = detectMinGoVersionFromSource(sourceCode);
+      const metadata: Record<string, unknown> = {};
+      if (minGoVer) metadata.minGoVersion = minGoVer;
+
       return ok({
         language: 'go',
         status: hasError ? 'partial' : 'ok',
         symbols,
         edges: edges.length > 0 ? edges : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

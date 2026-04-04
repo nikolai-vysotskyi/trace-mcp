@@ -6,6 +6,7 @@ import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { detectMinKotlinVersion } from './version-features.js';
 
 export class KotlinLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
@@ -15,6 +16,7 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
   };
 
   supportedExtensions = ['.kt', '.kts'];
+  supportedVersions = ['1.0', '1.1', '1.3', '1.4', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1'];
 
   extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
     try {
@@ -152,11 +154,16 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
         });
       }
 
+      const minKotlinVer = detectMinKotlinVersion(source);
+      const metadata: Record<string, unknown> = {};
+      if (minKotlinVer) metadata.minKotlinVersion = minKotlinVer;
+
       return ok({
         language: 'kotlin',
         status: 'ok',
         symbols,
         edges: edges.length > 0 ? edges : undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

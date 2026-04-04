@@ -6,6 +6,7 @@ import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { detectMinRubyVersionFromSource } from './version-features.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -42,6 +43,7 @@ export class RubyLanguagePlugin implements LanguagePlugin {
   };
 
   supportedExtensions = ['.rb', '.rake'];
+  supportedVersions = ['2.0', '2.3', '2.5', '2.6', '2.7', '3.0', '3.1', '3.2', '3.3'];
 
   extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
     try {
@@ -62,12 +64,17 @@ export class RubyLanguagePlugin implements LanguagePlugin {
 
       const edges = extractImportEdges(root);
 
+      const minRubyVer = detectMinRubyVersionFromSource(sourceCode);
+      const metadata: Record<string, unknown> = {};
+      if (minRubyVer) metadata.minRubyVersion = minRubyVer;
+
       return ok({
         language: 'ruby',
         status: hasError ? 'partial' : 'ok',
         symbols,
         edges: edges.length > 0 ? edges : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

@@ -6,6 +6,7 @@ import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { detectMinJavaVersionFromSource } from './version-features.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -44,6 +45,7 @@ export class JavaLanguagePlugin implements LanguagePlugin {
   };
 
   supportedExtensions = ['.java'];
+  supportedVersions = ['8', '9', '10', '11', '14', '15', '16', '17', '21', '22', '23'];
 
   extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
     try {
@@ -65,12 +67,17 @@ export class JavaLanguagePlugin implements LanguagePlugin {
 
       const edges = extractImportEdges(root);
 
+      const minJavaVer = detectMinJavaVersionFromSource(sourceCode);
+      const metadata: Record<string, unknown> = {};
+      if (minJavaVer) metadata.minJavaVersion = minJavaVer;
+
       return ok({
         language: 'java',
         status: hasError ? 'partial' : 'ok',
         symbols,
         edges: edges.length > 0 ? edges : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
