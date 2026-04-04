@@ -4,15 +4,17 @@ import fg from 'fast-glob';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { ResolveContext, RawEdge, ProjectContext } from '../plugin-api/types.js';
+import type { ResolveContext, RawEdge, RawRoute, RawComponent, RawMigration, RawOrmModel, RawOrmAssociation, RawRnScreen, ProjectContext, FileParseResult } from '../plugin-api/types.js';
 import { buildProjectContext } from './project-context.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes, executeFrameworkResolveEdges } from '../plugin-api/executor.js';
 import { hashContent } from '../utils/hasher.js';
-import { validatePath, validateFileSize, isSensitiveFile } from '../utils/security.js';
+import { validatePath, validateFileSize, isSensitiveFile, isBinaryBuffer } from '../utils/security.js';
 import { logger } from '../logger.js';
 import { detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import { EsModuleResolver } from './resolvers/es-modules.js';
 import { parseEnvFile } from '../utils/env-parser.js';
+import { computeComplexity } from '../tools/complexity.js';
+import { GitignoreMatcher } from '../utils/gitignore.js';
 
 export interface IndexingResult {
   totalFiles: number;
@@ -20,6 +22,29 @@ export interface IndexingResult {
   skipped: number;
   errors: number;
   durationMs: number;
+}
+
+/** Pre-computed extraction for a single file — no DB writes performed yet. */
+interface FileExtraction {
+  relPath: string;
+  existingId: number | null;
+  hash: string;
+  contentSize: number;
+  language: string;
+  workspace: string | null;
+  gitignored: boolean;
+  status: string;
+  frameworkRole?: string;
+  symbols: import('../plugin-api/types.js').RawSymbol[];
+  otherEdges: RawEdge[];
+  importEdges: { from: string; specifiers: string[]; relPath: string }[];
+  routes: RawRoute[];
+  components: RawComponent[];
+  migrations: RawMigration[];
+  ormModels: RawOrmModel[];
+  ormAssociations: RawOrmAssociation[];
+  rnScreens: RawRnScreen[];
+  frameworkExtracts: FileParseResult[];
 }
 
 export class IndexingPipeline {
@@ -41,6 +66,8 @@ export class IndexingPipeline {
   private _fileContentCache = new Map<string, string>();
   // Pending import edges: collected in Pass 1, resolved to file→file edges in Pass 2d.
   private _pendingImports = new Map<number, { from: string; specifiers: string[]; relPath: string }[]>();
+  // Gitignore matcher — flags files whose content should not be served to AI.
+  private _gitignore: GitignoreMatcher | undefined;
 
   async indexAll(force?: boolean): Promise<IndexingResult> {
     const result = this._lock.then(async () => {
@@ -56,16 +83,19 @@ export class IndexingPipeline {
     return result as Promise<IndexingResult>;
   }
 
-  /** Remove deleted files from the index. */
+  /** Remove deleted files from the index (batched in single transaction). */
   deleteFiles(filePaths: string[]): void {
-    for (const fp of filePaths) {
-      const relPath = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
-      const file = this.store.getFile(relPath);
-      if (file) {
-        this.store.deleteFile(file.id);
-        logger.info({ file: relPath }, 'Deleted file from index');
+    if (filePaths.length === 0) return;
+    this.store.db.transaction(() => {
+      for (const fp of filePaths) {
+        const relPath = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+        const file = this.store.getFile(relPath);
+        if (file) {
+          this.store.deleteFile(file.id);
+          logger.info({ file: relPath }, 'Deleted file from index');
+        }
       }
-    }
+    })();
   }
 
   async indexFiles(filePaths: string[]): Promise<IndexingResult> {
@@ -100,51 +130,77 @@ export class IndexingPipeline {
       durationMs: 0,
     };
 
-    // Clear cached project context so framework activation uses fresh package.json/composer.json
+    // Clear cached project context and plugin detection so framework activation uses fresh manifests
     this._projectContext = undefined;
+    this.registry.clearCaches();
+
+    // Load .gitignore rules (lazy — reloaded per pipeline run to pick up changes)
+    this._gitignore = new GitignoreMatcher(this.rootPath);
 
     // Register edge types from framework plugins
     this.registerFrameworkEdgeTypes();
 
-    // Pass 1: per-file extraction
-    for (const relPath of relPaths) {
-      const ok = await this.indexSingleFile(relPath, force);
-      if (ok === 'indexed') result.indexed++;
-      else if (ok === 'skipped') result.skipped++;
-      else result.errors++;
+    try {
+      // Pass 1: extract + persist in batched transactions for throughput.
+      // Splitting extract (CPU/IO) from persist (DB) lets us wrap each batch
+      // in a single SQLite transaction instead of one per file.
+      {
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < relPaths.length; i += BATCH_SIZE) {
+          const batch = relPaths.slice(i, i + BATCH_SIZE);
+          const extractions: FileExtraction[] = [];
+
+          for (const relPath of batch) {
+            const ext = await this.extractFile(relPath, force);
+            if (ext === 'skipped') { result.skipped++; continue; }
+            if (ext === 'error') { result.errors++; continue; }
+            extractions.push(ext);
+          }
+
+          if (extractions.length > 0) {
+            this.persistBatch(extractions);
+            result.indexed += extractions.length;
+          }
+        }
+      }
+
+      // Pass 2: resolve edges (framework plugins)
+      await this.resolveEdges();
+
+      // Pass 2b: ORM associations → graph edges (resolved after all entities indexed)
+      this.resolveOrmAssociationEdges();
+
+      // Pass 2c: TypeScript heritage → graph edges (extends/implements → find_usages)
+      this.resolveTypeScriptHeritageEdges();
+
+      // Pass 2d: ES module imports → file→file edges (enables dependency graph + dead export analysis)
+      this.resolveEsmImportEdges();
+
+      // Pass 2e: test_covers edges — test file imports source file → test_covers edge
+      this.resolveTestCoversEdges();
+
+      // Pass 3: Index .env files (keys + type metadata only, never store values)
+      await this.indexEnvFiles(force);
+    } finally {
+      // Release memory — file content is no longer needed after Pass 2.
+      // In a finally block so caches are freed even if a pass throws.
+      this._fileContentCache.clear();
+      this._pendingImports.clear();
     }
-
-    // Pass 2: resolve edges (framework plugins)
-    await this.resolveEdges();
-
-    // Pass 2b: ORM associations → graph edges (resolved after all entities indexed)
-    this.resolveOrmAssociationEdges();
-
-    // Pass 2c: TypeScript heritage → graph edges (extends/implements → find_references)
-    this.resolveTypeScriptHeritageEdges();
-
-    // Pass 2d: ES module imports → file→file edges (enables dependency graph + dead export analysis)
-    this.resolveEsmImportEdges();
-
-    // Pass 2e: test_covers edges — test file imports source file → test_covers edge
-    this.resolveTestCoversEdges();
-
-    // Pass 3: Index .env files (keys + type metadata only, never store values)
-    await this.indexEnvFiles(force);
-
-    // Release memory — file content is no longer needed after Pass 2
-    this._fileContentCache.clear();
-    this._pendingImports.clear();
 
     result.durationMs = Date.now() - startMs;
     logger.info(result, 'Indexing pipeline completed');
     return result;
   }
 
-  private async indexSingleFile(
+  /**
+   * Extract phase: read file, parse with plugin, compute complexity.
+   * Pure computation — no DB writes.
+   */
+  private async extractFile(
     relPath: string,
     force: boolean,
-  ): Promise<'indexed' | 'skipped' | 'error'> {
+  ): Promise<FileExtraction | 'skipped' | 'error'> {
     const absPath = path.resolve(this.rootPath, relPath);
 
     // Defence-in-depth: reject paths that escape the project root
@@ -178,6 +234,12 @@ export class IndexingPipeline {
       return 'error';
     }
 
+    // Reject binary files (null-byte in first 8 KB)
+    if (isBinaryBuffer(content)) {
+      logger.warn({ file: relPath }, 'Binary file detected, skipping');
+      return 'skipped';
+    }
+
     // Reject oversized files (default 1 MB) to prevent OOM
     const sizeCheck = validateFileSize(content.length);
     if (sizeCheck.isErr()) {
@@ -186,7 +248,8 @@ export class IndexingPipeline {
     }
 
     // Cache content for Pass 2 (resolveEdges reads files again)
-    this._fileContentCache.set(relPath, content.toString('utf-8'));
+    const contentStr = content.toString('utf-8');
+    this._fileContentCache.set(relPath, contentStr);
 
     const hash = hashContent(content);
     const existing = this.store.getFile(relPath);
@@ -211,125 +274,262 @@ export class IndexingPipeline {
 
     const parsed = parseResult.value;
     const language = parsed.language ?? this.detectLanguage(relPath);
-
-    // Determine workspace for this file
     const workspace = this.resolveWorkspace(relPath);
 
-    // Upsert file record
-    let fileId: number;
-    if (existing) {
-      fileId = existing.id;
-      this.store.deleteSymbolsByFile(fileId);
-      this.store.deleteEdgesForFileNodes(fileId);
-      this.store.deleteEntitiesByFile(fileId);
-      this.store.updateFileHash(fileId, hash, content.length);
-      this.store.updateFileStatus(fileId, parsed.status, parsed.frameworkRole);
-      if (workspace) this.store.updateFileWorkspace(fileId, workspace);
-    } else {
-      fileId = this.store.insertFile(relPath, language, hash, content.length, workspace);
-      if (parsed.status !== 'ok' || parsed.frameworkRole) {
-        this.store.updateFileStatus(fileId, parsed.status, parsed.frameworkRole);
+    // Compute complexity metrics and attach to symbol metadata.
+    // Skip trivial symbols (≤2 lines) — they always have cyclomatic=1, nesting=0.
+    for (const sym of parsed.symbols) {
+      if (sym.kind === 'function' || sym.kind === 'method' || sym.kind === 'class') {
+        const lines = (sym.lineEnd ?? sym.lineStart ?? 0) - (sym.lineStart ?? 0);
+        if (lines <= 2) {
+          sym.metadata = {
+            ...(sym.metadata ?? {}),
+            cyclomatic: 1,
+            max_nesting: 0,
+            param_count: sym.signature ? computeComplexity('', sym.signature, language).param_count : 0,
+          };
+          continue;
+        }
+        const source = contentStr.slice(sym.byteStart, sym.byteEnd);
+        const metrics = computeComplexity(source, sym.signature, language);
+        sym.metadata = {
+          ...(sym.metadata ?? {}),
+          cyclomatic: metrics.cyclomatic,
+          max_nesting: metrics.max_nesting,
+          param_count: metrics.param_count,
+        };
       }
     }
 
-    // Insert symbols
-    if (parsed.symbols.length > 0) {
-      this.store.insertSymbols(fileId, parsed.symbols);
-    }
-
-    // Insert edges from language plugin
+    // Separate import edges from other edges
+    const otherEdges: RawEdge[] = [];
+    const importEdges: { from: string; specifiers: string[]; relPath: string }[] = [];
     if (parsed.edges?.length) {
-      // Separate import edges (need ESM resolution in pass 2d) from other edges
-      const importEdges: typeof parsed.edges = [];
-      const otherEdges: typeof parsed.edges = [];
       for (const edge of parsed.edges) {
         if (edge.edgeType === 'imports' && !edge.sourceNodeType && !edge.sourceSymbolId) {
-          importEdges.push(edge);
+          importEdges.push({
+            from: (edge.metadata as Record<string, unknown>)?.['from'] as string ?? '',
+            specifiers: ((edge.metadata as Record<string, unknown>)?.['specifiers'] as string[]) ?? [],
+            relPath,
+          });
         } else {
           otherEdges.push(edge);
         }
       }
-      if (otherEdges.length > 0) this.storeRawEdges(otherEdges);
-      if (importEdges.length > 0) {
-        this._pendingImports.set(
-          fileId,
-          importEdges.map((e) => ({
-            from: (e.metadata as Record<string, unknown>)?.['from'] as string ?? '',
-            specifiers: ((e.metadata as Record<string, unknown>)?.['specifiers'] as string[]) ?? [],
-            relPath,
-          })),
-        );
-      }
     }
 
-    // Insert routes, components, migrations, ORM models
-    if (parsed.routes?.length) {
-      for (const r of parsed.routes) this.store.insertRoute(r, fileId);
-    }
-    if (parsed.components?.length) {
-      for (const c of parsed.components) this.store.insertComponent(c, fileId);
-    }
-    if (parsed.migrations?.length) {
-      for (const m of parsed.migrations) this.store.insertMigration(m, fileId);
-    }
-    if (parsed.ormModels?.length) {
-      this.storeOrmResults(parsed.ormModels, parsed.ormAssociations ?? [], fileId);
-    }
+    // Collect framework extract results (no DB writes)
+    const frameworkExtracts = await this.collectFrameworkExtracts(relPath, content, language);
 
-    // Framework extractNodes (pass 1)
-    await this.runFrameworkExtractNodes(relPath, content, language, fileId);
-
-    return 'indexed';
+    return {
+      relPath,
+      existingId: existing?.id ?? null,
+      hash,
+      contentSize: content.length,
+      language,
+      workspace,
+      gitignored: this._gitignore?.isIgnored(relPath) ?? false,
+      status: parsed.status,
+      frameworkRole: parsed.frameworkRole,
+      symbols: parsed.symbols,
+      otherEdges,
+      importEdges,
+      routes: parsed.routes ?? [],
+      components: parsed.components ?? [],
+      migrations: parsed.migrations ?? [],
+      ormModels: parsed.ormModels ?? [],
+      ormAssociations: parsed.ormAssociations ?? [],
+      rnScreens: parsed.rnScreens ?? [],
+      frameworkExtracts,
+    };
   }
 
-  private async runFrameworkExtractNodes(
+  /** Collect framework plugin results without persisting to DB. */
+  private async collectFrameworkExtracts(
     relPath: string,
     content: Buffer,
     language: string,
-    fileId: number,
-  ): Promise<void> {
+  ): Promise<FileParseResult[]> {
     const ctx = this.buildProjectContext();
     const activeResult = this.registry.getActiveFrameworkPlugins(ctx);
-    if (activeResult.isErr()) {
-      logger.warn({ error: activeResult.error }, 'Failed to get active framework plugins');
-      return;
-    }
+    if (activeResult.isErr()) return [];
 
+    const results: FileParseResult[] = [];
     for (const plugin of activeResult.value) {
+      // Skip plugins without extractNodes — avoids the async overhead entirely
+      if (!plugin.extractNodes) continue;
+
       const result = await executeFrameworkExtractNodes(plugin, relPath, content, language);
       if (result.isErr() || !result.value) continue;
+      results.push(result.value);
+    }
+    return results;
+  }
 
-      const fwResult = result.value;
+  /**
+   * Persist phase: write a batch of extractions to DB in a single transaction.
+   * Reduces SQLite journal syncs from N to 1 per batch.
+   */
+  private persistBatch(extractions: FileExtraction[]): void {
+    this.store.db.transaction(() => {
+      for (const ext of extractions) {
+        this.persistExtraction(ext);
+      }
+    })();
+  }
+
+  /** Write a single file extraction to DB (must be called inside a transaction). */
+  private persistExtraction(ext: FileExtraction): void {
+    // Upsert file record
+    let fileId: number;
+    if (ext.existingId != null) {
+      fileId = ext.existingId;
+
+      // Fast path: if symbols are structurally identical (same symbolIds, names,
+      // kinds, signatures), only update byte positions + complexity metrics.
+      // This avoids the expensive delete+reinsert cycle and FTS5 trigger churn.
+      if (this.tryFastSymbolUpdate(fileId, ext)) {
+        this.store.updateFileHash(fileId, ext.hash, ext.contentSize);
+        if (ext.gitignored) this.store.updateFileGitignored(fileId, true);
+        if (ext.importEdges.length > 0) {
+          this._pendingImports.set(fileId, ext.importEdges);
+        }
+        return;
+      }
+
+      // Full reindex path
+      this.store.deleteSymbolsByFile(fileId);
+      this.store.deleteEdgesForFileNodes(fileId);
+      this.store.deleteEntitiesByFile(fileId);
+      this.store.updateFileHash(fileId, ext.hash, ext.contentSize);
+      this.store.updateFileStatus(fileId, ext.status, ext.frameworkRole);
+      if (ext.workspace) this.store.updateFileWorkspace(fileId, ext.workspace);
+    } else {
+      fileId = this.store.insertFile(ext.relPath, ext.language, ext.hash, ext.contentSize, ext.workspace);
+      if (ext.status !== 'ok' || ext.frameworkRole) {
+        this.store.updateFileStatus(fileId, ext.status, ext.frameworkRole);
+      }
+    }
+
+    // Flag gitignored files — indexed for graph metadata, content not served to AI
+    if (ext.gitignored) {
+      this.store.updateFileGitignored(fileId, true);
+    }
+
+    // Insert symbols
+    if (ext.symbols.length > 0) {
+      this.store.insertSymbols(fileId, ext.symbols);
+    }
+
+    // Insert edges from language plugin
+    if (ext.otherEdges.length > 0) this.storeRawEdges(ext.otherEdges);
+    if (ext.importEdges.length > 0) {
+      this._pendingImports.set(fileId, ext.importEdges);
+    }
+
+    // Insert routes, components, migrations, ORM models
+    for (const r of ext.routes) this.store.insertRoute(r, fileId);
+    for (const c of ext.components) this.store.insertComponent(c, fileId);
+    for (const m of ext.migrations) this.store.insertMigration(m, fileId);
+    if (ext.ormModels.length > 0) {
+      this.storeOrmResults(ext.ormModels, ext.ormAssociations, fileId);
+    }
+    for (const s of ext.rnScreens) this.store.insertRnScreen(s, fileId);
+
+    // Persist framework extract results
+    for (const fwResult of ext.frameworkExtracts) {
       if (fwResult.symbols.length > 0) {
         this.store.insertSymbols(fileId, fwResult.symbols);
       }
       if (fwResult.edges?.length) {
         this.storeRawEdges(fwResult.edges);
       }
-      if (fwResult.routes?.length) {
-        for (const r of fwResult.routes) this.store.insertRoute(r, fileId);
-      }
-      if (fwResult.components?.length) {
-        for (const c of fwResult.components) this.store.insertComponent(c, fileId);
-      }
-      if (fwResult.migrations?.length) {
-        for (const m of fwResult.migrations) this.store.insertMigration(m, fileId);
-      }
+      for (const r of fwResult.routes ?? []) this.store.insertRoute(r, fileId);
+      for (const c of fwResult.components ?? []) this.store.insertComponent(c, fileId);
+      for (const m of fwResult.migrations ?? []) this.store.insertMigration(m, fileId);
       if (fwResult.ormModels?.length) {
         this.storeOrmResults(fwResult.ormModels, fwResult.ormAssociations ?? [], fileId);
       }
-      if (fwResult.rnScreens?.length) {
-        for (const s of fwResult.rnScreens) this.store.insertRnScreen(s, fileId);
-      }
+      for (const s of fwResult.rnScreens ?? []) this.store.insertRnScreen(s, fileId);
       if (fwResult.frameworkRole) {
         this.store.updateFileStatus(fileId, fwResult.status, fwResult.frameworkRole);
       }
     }
   }
 
+  /**
+   * Fast path for incremental re-indexing: if the set of symbols is structurally
+   * identical (same symbolIds, names, kinds, fqns, signatures), only update byte
+   * positions and complexity metrics via UPDATE — avoids the expensive
+   * delete+reinsert cycle and FTS5 trigger churn (2 FTS ops per symbol saved).
+   *
+   * Returns true if the fast path was taken.
+   */
+  private tryFastSymbolUpdate(fileId: number, ext: FileExtraction): boolean {
+    // Only viable when there are no framework-injected symbols, edges, or entities
+    // that would also need to be diffed.
+    if (ext.frameworkExtracts.some((fw) =>
+      fw.symbols.length > 0
+      || (fw.edges?.length ?? 0) > 0
+      || (fw.routes?.length ?? 0) > 0
+      || (fw.components?.length ?? 0) > 0
+      || (fw.migrations?.length ?? 0) > 0
+      || (fw.ormModels?.length ?? 0) > 0
+      || (fw.rnScreens?.length ?? 0) > 0
+    )) return false;
+
+    // Also skip fast path if language plugin produced entities (routes, components, etc.)
+    if (ext.routes.length > 0 || ext.components.length > 0 || ext.migrations.length > 0
+      || ext.ormModels.length > 0 || ext.rnScreens.length > 0) return false;
+
+    const existing = this.store.getSymbolsByFile(fileId);
+    if (existing.length !== ext.symbols.length) return false;
+    if (existing.length === 0) return false;
+
+    // Build symbolId → existing row map
+    const existingMap = new Map<string, { id: number; name: string; kind: string; fqn: string | null; signature: string | null }>();
+    for (const s of existing) {
+      existingMap.set(s.symbol_id, { id: s.id, name: s.name, kind: s.kind, fqn: s.fqn, signature: s.signature });
+    }
+
+    // Verify all new symbols match an existing symbol structurally
+    for (const sym of ext.symbols) {
+      const ex = existingMap.get(sym.symbolId);
+      if (!ex) return false;
+      if (ex.name !== sym.name || ex.kind !== sym.kind) return false;
+      if ((ex.fqn ?? null) !== (sym.fqn ?? null)) return false;
+      if ((ex.signature ?? null) !== (sym.signature ?? null)) return false;
+    }
+
+    // All match — bulk-update positions + complexity (no FTS triggers fire
+    // because name, fqn, signature, summary are untouched).
+    const updateStmt = this.store.db.prepare(
+      `UPDATE symbols
+         SET byte_start = ?, byte_end = ?, line_start = ?, line_end = ?,
+             cyclomatic = ?, max_nesting = ?, param_count = ?, metadata = ?
+       WHERE id = ?`,
+    );
+
+    for (const sym of ext.symbols) {
+      const ex = existingMap.get(sym.symbolId)!;
+      const cyclomatic = (sym.metadata as Record<string, unknown> | undefined)?.['cyclomatic'] as number | undefined ?? null;
+      const maxNesting = (sym.metadata as Record<string, unknown> | undefined)?.['max_nesting'] as number | undefined ?? null;
+      const paramCount = (sym.metadata as Record<string, unknown> | undefined)?.['param_count'] as number | undefined ?? null;
+      updateStmt.run(
+        sym.byteStart, sym.byteEnd,
+        sym.lineStart ?? null, sym.lineEnd ?? null,
+        cyclomatic, maxNesting, paramCount,
+        sym.metadata ? JSON.stringify(sym.metadata) : null,
+        ex.id,
+      );
+    }
+
+    return true;
+  }
+
   private storeOrmResults(
-    models: import('../plugin-api/types.js').RawOrmModel[],
-    associations: import('../plugin-api/types.js').RawOrmAssociation[],
+    models: RawOrmModel[],
+    associations: RawOrmAssociation[],
     fileId: number,
   ): void {
     // Insert models first, collect name → id map
@@ -414,27 +614,50 @@ export class IndexingPipeline {
       },
     };
 
-    for (const assoc of associations) {
-      // Resolve target model if it wasn't available during Pass 1
-      let targetModelId = assoc.target_model_id;
-      if (targetModelId == null && assoc.target_model_name) {
-        const target = this.store.getOrmModelByName(assoc.target_model_name);
-        if (target) targetModelId = target.id;
-      }
-      if (targetModelId == null) continue;
+    // Pre-load: model name → id map for unresolved target lookups
+    const modelNameMap = new Map<string, number>();
+    for (const m of allModels) modelNameMap.set(m.name, m.id);
 
-      const sourceNodeId = this.store.getNodeId('orm_model', assoc.source_model_id);
-      const targetNodeId = this.store.getNodeId('orm_model', targetModelId);
-      if (sourceNodeId == null || targetNodeId == null) continue;
+    // Pre-load: all orm_model node IDs in one batch query
+    const allModelIds = allModels.map((m) => m.id);
+    const ormNodeMap = this.store.getNodeIdsBatch('orm_model', allModelIds);
 
-      const orm = modelOrmMap.get(assoc.source_model_id) ?? 'unknown';
-      const ormMap = ormKindToEdgeType[orm];
-      const edgeType = ormMap?.[assoc.kind] ?? `orm_${assoc.kind}`;
-      const insertResult = this.store.insertEdge(sourceNodeId, targetNodeId, edgeType, true, undefined, false);
-      if (insertResult.isErr()) {
-        logger.warn({ edgeType, orm, kind: assoc.kind, error: insertResult.error }, 'Failed to insert ORM edge');
+    // Pre-load: edge type IDs for all ORM edge types we might need
+    const edgeTypeCache = new Map<string, number>();
+    const edgeTypeStmt = this.store.db.prepare('SELECT id FROM edge_types WHERE name = ?');
+
+    const insertStmt = this.store.db.prepare(
+      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+       VALUES (?, ?, ?, 1, NULL, 0)`,
+    );
+
+    this.store.db.transaction(() => {
+      for (const assoc of associations) {
+        let targetModelId = assoc.target_model_id;
+        if (targetModelId == null && assoc.target_model_name) {
+          targetModelId = modelNameMap.get(assoc.target_model_name) ?? null;
+        }
+        if (targetModelId == null) continue;
+
+        const sourceNodeId = ormNodeMap.get(assoc.source_model_id);
+        const targetNodeId = ormNodeMap.get(targetModelId);
+        if (sourceNodeId == null || targetNodeId == null) continue;
+
+        const orm = modelOrmMap.get(assoc.source_model_id) ?? 'unknown';
+        const ormMap = ormKindToEdgeType[orm];
+        const edgeType = ormMap?.[assoc.kind] ?? `orm_${assoc.kind}`;
+
+        let edgeTypeId = edgeTypeCache.get(edgeType);
+        if (edgeTypeId == null) {
+          const row = edgeTypeStmt.get(edgeType) as { id: number } | undefined;
+          if (!row) continue;
+          edgeTypeId = row.id;
+          edgeTypeCache.set(edgeType, edgeTypeId);
+        }
+
+        insertStmt.run(sourceNodeId, targetNodeId, edgeTypeId);
       }
-    }
+    })();
   }
 
   /**
@@ -458,41 +681,59 @@ export class IndexingPipeline {
       nameIndex.set(s.name, list);
     }
 
+    // Pre-load all symbol node IDs in one batch query
+    const allSymbolIds = allSymbols.map((s) => s.id);
+    const heritageSymbolIds = symbolsWithHeritage.map((s) => s.id);
+    const symbolNodeMap = this.store.getNodeIdsBatch(
+      'symbol',
+      [...new Set([...allSymbolIds, ...heritageSymbolIds])],
+    );
+
+    // Pre-load edge type IDs
+    const tsExtendsType = this.store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('ts_extends') as { id: number } | undefined;
+    const tsImplementsType = this.store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('ts_implements') as { id: number } | undefined;
+    if (!tsExtendsType || !tsImplementsType) return;
+
     let created = 0;
+    const insertStmt = this.store.db.prepare(
+      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+       VALUES (?, ?, ?, 1, NULL, 0)`,
+    );
 
-    for (const sym of symbolsWithHeritage) {
-      let meta: Record<string, unknown> = {};
-      try { if (sym.metadata) meta = JSON.parse(sym.metadata) as Record<string, unknown>; } catch { continue; }
-      const sourceNodeId = this.store.getNodeId('symbol', sym.id);
-      if (sourceNodeId == null) continue;
+    this.store.db.transaction(() => {
+      for (const sym of symbolsWithHeritage) {
+        let meta: Record<string, unknown> = {};
+        try { if (sym.metadata) meta = JSON.parse(sym.metadata) as Record<string, unknown>; } catch { continue; }
+        const sourceNodeId = symbolNodeMap.get(sym.id);
+        if (sourceNodeId == null) continue;
 
-      // Process extends
-      const ext = meta['extends'];
-      const extNames = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
-      for (const targetName of extNames) {
-        const targets = nameIndex.get(targetName);
-        if (!targets?.length) continue;
-        const target = targets[0]; // first match
-        const targetNodeId = this.store.getNodeId('symbol', target.id);
-        if (targetNodeId == null) continue;
-        this.store.insertEdge(sourceNodeId, targetNodeId, 'ts_extends', true);
-        created++;
-      }
-
-      // Process implements
-      const impl = meta['implements'];
-      if (Array.isArray(impl)) {
-        for (const targetName of impl as string[]) {
+        // Process extends
+        const ext = meta['extends'];
+        const extNames = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
+        for (const targetName of extNames) {
           const targets = nameIndex.get(targetName);
           if (!targets?.length) continue;
-          const target = targets.find((t) => t.kind === 'interface') ?? targets[0];
-          const targetNodeId = this.store.getNodeId('symbol', target.id);
+          const targetNodeId = symbolNodeMap.get(targets[0].id);
           if (targetNodeId == null) continue;
-          this.store.insertEdge(sourceNodeId, targetNodeId, 'ts_implements', true);
+          insertStmt.run(sourceNodeId, targetNodeId, tsExtendsType.id);
           created++;
         }
+
+        // Process implements
+        const impl = meta['implements'];
+        if (Array.isArray(impl)) {
+          for (const targetName of impl as string[]) {
+            const targets = nameIndex.get(targetName);
+            if (!targets?.length) continue;
+            const target = targets.find((t) => t.kind === 'interface') ?? targets[0];
+            const targetNodeId = symbolNodeMap.get(target.id);
+            if (targetNodeId == null) continue;
+            insertStmt.run(sourceNodeId, targetNodeId, tsImplementsType.id);
+            created++;
+          }
+        }
       }
-    }
+    })();
 
     if (created > 0) {
       logger.info({ edges: created }, 'TypeScript heritage edges resolved');
@@ -519,50 +760,66 @@ export class IndexingPipeline {
 
     let created = 0;
 
-    // Pre-build lookup maps to avoid N+1 per file/import
+    // Pre-build lookup maps for source files only (not ALL files)
     const pendingFileIds = Array.from(this._pendingImports.keys());
     const fileMap = this.store.getFilesByIds(pendingFileIds);
     const fileNodeMap = this.store.getNodeIdsBatch('file', pendingFileIds);
 
-    // Pre-build path → file lookup for target resolution
-    const allFiles = this.store.getAllFiles();
-    const pathToFile = new Map<string, { id: number }>();
-    for (const f of allFiles) pathToFile.set(f.path, f);
-    const allFileIds = allFiles.map((f) => f.id);
-    const allFileNodeMap = this.store.getNodeIdsBatch('file', allFileIds);
+    // Lazy cache for resolved target paths — avoids loading ALL files into memory.
+    // On a 100K-file project, this saves ~50 MB of heap and thousands of Map insertions.
+    const targetFileCache = new Map<string, { id: number; nodeId: number } | null>();
 
-    for (const [fileId, imports] of this._pendingImports) {
-      const file = fileMap.get(fileId);
-      if (!file) continue;
+    const resolveTargetFile = (relPath: string): { id: number; nodeId: number } | null => {
+      const cached = targetFileCache.get(relPath);
+      if (cached !== undefined) return cached;
+      const f = this.store.getFile(relPath);
+      if (!f) { targetFileCache.set(relPath, null); return null; }
+      const nodeId = this.store.getNodeId('file', f.id);
+      if (nodeId == null) { targetFileCache.set(relPath, null); return null; }
+      const entry = { id: f.id, nodeId };
+      targetFileCache.set(relPath, entry);
+      return entry;
+    };
 
-      const absSource = path.resolve(this.rootPath, file.path);
-      const sourceNodeId = fileNodeMap.get(fileId);
-      if (sourceNodeId == null) continue;
+    // Pre-resolve imports edge type
+    const importsEdgeType = this.store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('imports') as { id: number } | undefined;
+    if (!importsEdgeType) return;
 
-      for (const { from, specifiers } of imports) {
-        // Skip bare specifiers (node_modules) — only resolve project-local imports
-        if (!from.startsWith('.') && !from.startsWith('/') && !from.startsWith('@/') && !from.startsWith('~')) continue;
+    const insertStmt = this.store.db.prepare(
+      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+       VALUES (?, ?, ?, 1, ?, 0)`,
+    );
 
-        const resolved = resolver.resolve(from, absSource);
-        if (!resolved) continue;
+    this.store.db.transaction(() => {
+      for (const [fileId, imports] of this._pendingImports) {
+        const file = fileMap.get(fileId);
+        if (!file) continue;
 
-        const relTarget = path.relative(this.rootPath, resolved);
-        const targetFile = pathToFile.get(relTarget);
-        if (!targetFile) continue;
+        const absSource = path.resolve(this.rootPath, file.path);
+        const sourceNodeId = fileNodeMap.get(fileId);
+        if (sourceNodeId == null) continue;
 
-        const targetNodeId = allFileNodeMap.get(targetFile.id);
-        if (targetNodeId == null) continue;
+        for (const { from, specifiers } of imports) {
+          // Skip bare specifiers (node_modules) — only resolve project-local imports
+          if (!from.startsWith('.') && !from.startsWith('/') && !from.startsWith('@/') && !from.startsWith('~')) continue;
 
-        this.store.insertEdge(
-          sourceNodeId,
-          targetNodeId,
-          'imports',
-          true,
-          { from, specifiers },
-        );
-        created++;
+          const resolved = resolver.resolve(from, absSource);
+          if (!resolved) continue;
+
+          const relTarget = path.relative(this.rootPath, resolved);
+          const target = resolveTargetFile(relTarget);
+          if (!target) continue;
+
+          insertStmt.run(
+            sourceNodeId,
+            target.nodeId,
+            importsEdgeType.id,
+            JSON.stringify({ from, specifiers }),
+          );
+          created++;
+        }
       }
-    }
+    })();
 
     if (created > 0) {
       logger.info({ edges: created }, 'ES module import edges resolved');
@@ -582,38 +839,71 @@ export class IndexingPipeline {
     const testFiles = allFiles.filter((f) => IndexingPipeline.TEST_PATH_RE.test(f.path));
     if (testFiles.length === 0) return;
 
+    // Pre-load all file node IDs in one batch
+    const allFileIds = allFiles.map((f) => f.id);
+    const fileNodeMap = this.store.getNodeIdsBatch('file', allFileIds);
+
+    // Collect all test file node IDs
+    const testNodeIds: number[] = [];
+    const testNodeToFile = new Map<number, typeof testFiles[0]>();
+    for (const tf of testFiles) {
+      const nodeId = fileNodeMap.get(tf.id);
+      if (nodeId != null) {
+        testNodeIds.push(nodeId);
+        testNodeToFile.set(nodeId, tf);
+      }
+    }
+    if (testNodeIds.length === 0) return;
+
+    // Batch-fetch all edges for test file nodes
+    const allEdges = this.store.getEdgesForNodesBatch(testNodeIds);
+
+    // Build file path set for fast test-file check
+    const testPathSet = new Set(testFiles.map((f) => f.path));
+
+    // Pre-load all target node refs in one batch
+    const targetNodeIds = [...new Set(allEdges.map((e) => e.target_node_id))];
+    const targetRefs = this.store.getNodeRefsBatch(targetNodeIds);
+
+    // Pre-load file rows for all target file refs
+    const targetFileRefIds = [...targetRefs.values()]
+      .filter((r) => r.nodeType === 'file')
+      .map((r) => r.refId);
+    const targetFileMap = this.store.getFilesByIds(targetFileRefIds);
+
+    // Resolve test_covers edge type
+    const testCoversType = this.store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('test_covers') as { id: number } | undefined;
+    if (!testCoversType) return;
+
     let created = 0;
+    const insertStmt = this.store.db.prepare(
+      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+       VALUES (?, ?, ?, 1, ?, 0)`,
+    );
 
-    for (const testFile of testFiles) {
-      const testNodeId = this.store.getNodeId('file', testFile.id);
-      if (testNodeId == null) continue;
-
-      // Get outgoing import edges from this test file
-      const outgoing = this.store.getOutgoingEdges(testNodeId);
-
-      for (const edge of outgoing) {
+    this.store.db.transaction(() => {
+      for (const edge of allEdges) {
         if (edge.edge_type_name !== 'imports') continue;
+        // Only outgoing edges from test files
+        if (!testNodeToFile.has(edge.source_node_id)) continue;
 
-        const targetRef = this.store.getNodeRef(edge.target_node_id);
+        const targetRef = targetRefs.get(edge.target_node_id);
         if (!targetRef || targetRef.nodeType !== 'file') continue;
 
-        const targetFile = this.store.getFileById(targetRef.refId);
+        const targetFile = targetFileMap.get(targetRef.refId);
         if (!targetFile) continue;
+        if (testPathSet.has(targetFile.path)) continue;
 
-        // Skip if target is also a test file
-        if (IndexingPipeline.TEST_PATH_RE.test(targetFile.path)) continue;
-
-        // Create test_covers edge: test → source
-        this.store.insertEdge(
-          testNodeId,
+        const testFile = testNodeToFile.get(edge.source_node_id)!;
+        insertStmt.run(
+          edge.source_node_id,
           edge.target_node_id,
-          'test_covers',
-          true,
-          { test_file: testFile.path },
+          testCoversType.id,
+          JSON.stringify({ test_file: testFile.path }),
         );
         created++;
       }
-    }
+    })();
 
     if (created > 0) {
       logger.info({ edges: created }, 'test_covers edges resolved');
@@ -678,6 +968,34 @@ export class IndexingPipeline {
       if (row) edgeTypeCache.set(name, row.id);
     }
 
+    // 4. Pre-load workspace info for all node IDs to avoid per-edge DB lookups.
+    // Without this, isEdgeCrossWorkspace does 4-6 DB calls per edge.
+    const nodeWorkspaceCache = new Map<number, string | null>();
+    if (this.workspaces.length > 0) {
+      // Collect all node IDs that will participate in edges
+      const allNodeIds = new Set<number>();
+      for (const edge of edges) {
+        const src = this.resolveNodeId(edge, symbolNodeCache, typeRefCache);
+        if (src != null) allNodeIds.add(src);
+        const tgt = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache);
+        if (tgt != null) allNodeIds.add(tgt);
+      }
+
+      if (allNodeIds.size > 0) {
+        const nodeIdArr = Array.from(allNodeIds);
+        const ph = nodeIdArr.map(() => '?').join(',');
+        // Single query: node → file → workspace (covers both file and symbol nodes)
+        const rows = this.store.db.prepare(`
+          SELECT n.id AS node_id, f.workspace
+          FROM nodes n
+          LEFT JOIN files f ON (n.node_type = 'file' AND n.ref_id = f.id)
+            OR (n.node_type = 'symbol' AND f.id = (SELECT file_id FROM symbols WHERE id = n.ref_id))
+          WHERE n.id IN (${ph})
+        `).all(...nodeIdArr) as Array<{ node_id: number; workspace: string | null }>;
+        for (const row of rows) nodeWorkspaceCache.set(row.node_id, row.workspace);
+      }
+    }
+
     // ── Batch all inserts in a single transaction with a prepared statement ──
     const insertStmt = this.store.db.prepare(
       `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
@@ -688,14 +1006,18 @@ export class IndexingPipeline {
       for (const edge of edges) {
         const sourceNodeId = this.resolveNodeId(edge, symbolNodeCache, typeRefCache);
         if (sourceNodeId == null) continue;
-        // For source-only edges (e.g. livewire_dispatches, livewire_listens) where
-        // there is no target node, use the source as target to preserve the edge + metadata.
         const targetNodeId = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache) ?? sourceNodeId;
 
         const edgeTypeId = edgeTypeCache.get(edge.edgeType);
         if (edgeTypeId == null) continue;
 
-        const isCrossWs = this.isEdgeCrossWorkspace(sourceNodeId, targetNodeId);
+        // O(1) workspace check via pre-loaded cache instead of 4-6 DB queries per edge
+        let isCrossWs = false;
+        if (this.workspaces.length > 0) {
+          const srcWs = nodeWorkspaceCache.get(sourceNodeId);
+          const tgtWs = nodeWorkspaceCache.get(targetNodeId);
+          isCrossWs = srcWs != null && tgtWs != null && srcWs !== tgtWs;
+        }
 
         insertStmt.run(
           sourceNodeId,
@@ -839,6 +1161,8 @@ export class IndexingPipeline {
     return null;
   }
 
+  private static readonly DEFAULT_MAX_FILES = 10_000;
+
   private async collectFiles(): Promise<string[]> {
     const entries = await fg(this.config.include, {
       cwd: this.rootPath,
@@ -847,6 +1171,16 @@ export class IndexingPipeline {
       absolute: false,
       onlyFiles: true,
     });
+
+    const maxFiles = this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES;
+    if (entries.length > maxFiles) {
+      logger.warn(
+        { found: entries.length, limit: maxFiles },
+        'File count exceeds limit — truncating. Increase security.max_files to index more.',
+      );
+      return entries.slice(0, maxFiles);
+    }
+
     return entries;
   }
 

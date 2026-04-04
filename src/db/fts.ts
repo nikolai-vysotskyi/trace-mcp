@@ -47,10 +47,13 @@ export function searchFts(
   const needsFileJoin = filters?.language || filters?.filePattern;
   const fileJoin = needsFileJoin ? 'JOIN files f ON f.id = s.file_id' : '';
 
+  // FTS5 columns: name, fqn, signature, summary
+  // Weights: name 10x, fqn 5x, signature 3x, summary 1x
+  // bm25() returns negative scores (lower = better match)
   const sql = `
     SELECT
       s.id as symbolId,
-      rank as rank,
+      bm25(symbols_fts, 10.0, 5.0, 3.0, 1.0) as rank,
       s.name,
       s.fqn,
       s.kind,
@@ -60,7 +63,7 @@ export function searchFts(
     JOIN symbols s ON s.id = fts.rowid
     ${fileJoin}
     WHERE ${conditions.join(' AND ')}
-    ORDER BY rank
+    ORDER BY bm25(symbols_fts, 10.0, 5.0, 3.0, 1.0)
     LIMIT ? OFFSET ?
   `;
 

@@ -15,7 +15,6 @@ const DEFAULT_SECRET_PATTERNS = [
 // ─── Sensitive file detection ─────────────────────────────────────────
 // Filename/extension patterns that indicate credential or key files.
 
-
 const SENSITIVE_FILE_PATTERNS = [
   // Env files (handled specially by env-parser, but still blocked from raw indexing)
   '.env', '.env.*', '*.env',
@@ -161,6 +160,18 @@ export function validateFileSize(
 /** Escape a string for safe interpolation into a RegExp constructor. */
 export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Detect binary content by scanning for null bytes in the first 8 KB.
+ * Returns true if the buffer likely contains binary data.
+ */
+export function isBinaryBuffer(buf: Buffer): boolean {
+  const checkLen = Math.min(buf.length, 8192);
+  for (let i = 0; i < checkLen; i++) {
+    if (buf[i] === 0x00) return true;
+  }
+  return false;
 }
 
 export function validateArtisanCommand(command: string): TraceMcpResult<string> {

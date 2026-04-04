@@ -66,7 +66,11 @@ export class FileWatcher {
           this.pendingPaths.clear();
           this.debounceTimer = null;
           logger.debug({ count: paths.length }, 'File changes detected');
-          await onChanges(paths);
+          try {
+            await onChanges(paths);
+          } catch (e) {
+            logger.error({ error: e }, 'File change handler failed');
+          }
         }, debounceMs);
       },
       {
