@@ -62,7 +62,7 @@ describe('MCP Tools E2E — Laravel', () => {
     }
   });
 
-  it('get_file_outline: returns symbols for controller file', () => {
+  it('get_outline: returns symbols for controller file', () => {
     const result = getFileOutline(store, 'app/Http/Controllers/UserController.php');
     expect(result.isOk()).toBe(true);
     const { symbols } = result._unsafeUnwrap();
@@ -94,7 +94,7 @@ describe('MCP Tools E2E — Laravel', () => {
     expect(impact.totalAffected).toBeGreaterThanOrEqual(0);
   });
 
-  it('find_references: finds references to User model', () => {
+  it('find_usages: finds usages of User model', () => {
     const result = findReferences(store, { fqn: 'App\\Models\\User' });
     expect(result.isOk()).toBe(true);
     const refs = result._unsafeUnwrap();

@@ -103,56 +103,100 @@ export function getChangeImpact(
   });
 }
 
+/**
+ * BFS traversal with batched queries per wave (replaces recursive N+1).
+ * Each depth level: 1 batch edge query + 1 batch node resolution.
+ */
 function traverseIncoming(
   store: Store,
-  nodeId: number,
-  currentDepth: number,
+  startNodeId: number,
+  _currentDepth: number,
   maxDepth: number,
   visited: Set<number>,
   dependents: ChangeImpactResult['dependents'],
   maxDependents: number,
 ): void {
-  if (currentDepth > maxDepth) return;
-  if (dependents.length >= maxDependents) return;
+  let frontier = [startNodeId];
 
-  const incomingEdges = store.getIncomingEdges(nodeId);
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    if (frontier.length === 0 || dependents.length >= maxDependents) break;
 
-  for (const edge of incomingEdges) {
-    if (dependents.length >= maxDependents) break;
+    // Batch: get all incoming edges for the entire frontier
+    const allEdges = store.getEdgesForNodesBatch(frontier);
 
-    const sourceNodeId = edge.source_node_id;
-    if (visited.has(sourceNodeId)) continue;
-    visited.add(sourceNodeId);
+    // Filter to incoming edges: pivot_node_id is the target, source is what we want
+    const frontierSet = new Set(frontier);
+    const newFrontier: number[] = [];
+    const sourceNodeIds: number[] = [];
+    const edgeBySource = new Map<number, string>(); // source_node_id → edge_type_name
 
-    const nodeRef = store.getNodeByNodeId(sourceNodeId);
-    if (!nodeRef) continue;
+    for (const edge of allEdges) {
+      if (dependents.length + sourceNodeIds.length >= maxDependents) break;
+      // incoming = edge.target_node_id is in frontier (pivot matches target)
+      if (!frontierSet.has(edge.target_node_id)) continue;
+      if (edge.source_node_id === edge.target_node_id) continue;
 
-    let filePath: string | undefined;
-    let symbolId: string | undefined;
+      const srcId = edge.source_node_id;
+      if (visited.has(srcId)) continue;
+      visited.add(srcId);
 
-    if (nodeRef.node_type === 'symbol') {
-      const sym = store.getSymbolById(nodeRef.ref_id);
-      if (sym) {
-        symbolId = sym.symbol_id;
-        const file = store.getFileById(sym.file_id);
-        filePath = file?.path;
+      sourceNodeIds.push(srcId);
+      edgeBySource.set(srcId, edge.edge_type_name);
+      newFrontier.push(srcId);
+    }
+
+    if (sourceNodeIds.length === 0) break;
+
+    // Batch resolve node refs
+    const nodeRefs = store.getNodeRefsBatch(sourceNodeIds);
+
+    // Collect symbol and file IDs to batch-fetch
+    const symbolIds: number[] = [];
+    const fileIds: number[] = [];
+    for (const [, ref] of nodeRefs) {
+      if (ref.nodeType === 'symbol') symbolIds.push(ref.refId);
+      else if (ref.nodeType === 'file') fileIds.push(ref.refId);
+    }
+
+    const symbolMap = symbolIds.length > 0 ? store.getSymbolsByIds(symbolIds) : new Map();
+    const fileMap = fileIds.length > 0 ? store.getFilesByIds(fileIds) : new Map();
+
+    // Also fetch files for symbols
+    const symFileIds = new Set<number>();
+    for (const sym of symbolMap.values()) symFileIds.add(sym.file_id);
+    const symFiles = symFileIds.size > 0 ? store.getFilesByIds([...symFileIds]) : new Map();
+
+    // Build dependents
+    for (const srcId of sourceNodeIds) {
+      if (dependents.length >= maxDependents) break;
+
+      const ref = nodeRefs.get(srcId);
+      if (!ref) continue;
+
+      let filePath: string | undefined;
+      let symbolId: string | undefined;
+
+      if (ref.nodeType === 'symbol') {
+        const sym = symbolMap.get(ref.refId);
+        if (sym) {
+          symbolId = sym.symbol_id;
+          filePath = symFiles.get(sym.file_id)?.path;
+        }
+      } else if (ref.nodeType === 'file') {
+        filePath = fileMap.get(ref.refId)?.path;
       }
-    } else if (nodeRef.node_type === 'file') {
-      const file = store.getFileById(nodeRef.ref_id);
-      filePath = file?.path;
+
+      if (filePath) {
+        dependents.push({
+          path: filePath,
+          symbolId,
+          edgeType: edgeBySource.get(srcId) ?? 'unknown',
+          depth,
+        });
+      }
     }
 
-    if (filePath) {
-      dependents.push({
-        path: filePath,
-        symbolId,
-        edgeType: edge.edge_type_name,
-        depth: currentDepth,
-      });
-    }
-
-    // Continue traversal
-    traverseIncoming(store, sourceNodeId, currentDepth + 1, maxDepth, visited, dependents, maxDependents);
+    frontier = newFrontier;
   }
 }
 

@@ -280,7 +280,7 @@ describe('ESM import edge resolution', () => {
   });
 });
 
-// ─── get_dependency_graph ───────────────────────────────────
+// ─── get_import_graph ───────────────────────────────────
 
 describe('getDependencyGraph', () => {
   it('shows imports of a file', () => {

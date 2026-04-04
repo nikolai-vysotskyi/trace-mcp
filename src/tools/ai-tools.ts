@@ -28,7 +28,7 @@ function j(value: unknown): string {
 }
 
 function symbolToContextItem(sym: SymbolRow, file: FileRow, projectRoot: string, score = 1): ContextItem {
-  const source = readSourceSafe(file.path, sym.byte_start, sym.byte_end, projectRoot);
+  const source = readSourceSafe(file.path, sym.byte_start, sym.byte_end, projectRoot, !!file.gitignored);
   return {
     id: sym.symbol_id,
     score,
@@ -38,10 +38,10 @@ function symbolToContextItem(sym: SymbolRow, file: FileRow, projectRoot: string,
   };
 }
 
-function readSourceSafe(filePath: string, byteStart: number, byteEnd: number, projectRoot: string): string | null {
+function readSourceSafe(filePath: string, byteStart: number, byteEnd: number, projectRoot: string, gitignored?: boolean): string | null {
   try {
     const absPath = path.resolve(projectRoot, filePath);
-    return readByteRange(absPath, byteStart, byteEnd);
+    return readByteRange(absPath, byteStart, byteEnd, gitignored);
   } catch {
     return null;
   }

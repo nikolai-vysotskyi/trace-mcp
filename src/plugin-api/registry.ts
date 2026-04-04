@@ -5,9 +5,14 @@ import { pluginError } from '../errors.js';
 export class PluginRegistry {
   private languagePlugins: LanguagePlugin[] = [];
   private frameworkPlugins: FrameworkPlugin[] = [];
+  // O(1) extension → plugin lookup (built lazily on first query)
+  private _extMap: Map<string, LanguagePlugin> | undefined;
+  // Cached framework detection results (invalidated by clearCaches)
+  private _activeFrameworkCache: TraceMcpResult<FrameworkPlugin[]> | undefined;
 
   registerLanguagePlugin(plugin: LanguagePlugin): void {
     this.languagePlugins.push(plugin);
+    this._extMap = undefined; // invalidate cache
   }
 
   registerFrameworkPlugin(plugin: FrameworkPlugin): void {
@@ -19,8 +24,15 @@ export class PluginRegistry {
   }
 
   getActiveFrameworkPlugins(ctx: ProjectContext): TraceMcpResult<FrameworkPlugin[]> {
+    if (this._activeFrameworkCache) return this._activeFrameworkCache;
     const active = this.frameworkPlugins.filter((p) => p.detect(ctx));
-    return this.topologicalSort(active);
+    this._activeFrameworkCache = this.topologicalSort(active);
+    return this._activeFrameworkCache;
+  }
+
+  /** Clear per-pipeline-run caches. Call at start of each indexing run. */
+  clearCaches(): void {
+    this._activeFrameworkCache = undefined;
   }
 
   getAllFrameworkPlugins(): FrameworkPlugin[] {
@@ -29,8 +41,20 @@ export class PluginRegistry {
 
   getLanguagePluginForFile(filePath: string): LanguagePlugin | undefined {
     const ext = filePath.slice(filePath.lastIndexOf('.'));
-    const sorted = this.getLanguagePlugins();
-    return sorted.find((p) => p.supportedExtensions.includes(ext));
+    return this.getExtensionMap().get(ext);
+  }
+
+  private getExtensionMap(): Map<string, LanguagePlugin> {
+    if (this._extMap) return this._extMap;
+    this._extMap = new Map();
+    // Lower priority number = higher priority → process in reverse so higher priority wins
+    const sorted = this.getLanguagePlugins().reverse();
+    for (const plugin of sorted) {
+      for (const ext of plugin.supportedExtensions) {
+        this._extMap.set(ext, plugin);
+      }
+    }
+    return this._extMap;
   }
 
   private sortByPriority<T extends { manifest: PluginManifest }>(plugins: T[]): T[] {
