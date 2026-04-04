@@ -13,9 +13,9 @@ import { TraceMcpConfigSchema } from '../../src/config.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/vue/index.js';
-import { InertiaPlugin } from '../../src/indexer/plugins/integration/inertia/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
+import { InertiaPlugin } from '../../src/indexer/plugins/integration/view/inertia/index.js';
 import { getRequestFlow } from '../../src/tools/flow.js';
 
 describe('get_request_flow end-to-end (laravel-10)', () => {

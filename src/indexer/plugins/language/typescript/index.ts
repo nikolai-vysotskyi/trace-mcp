@@ -21,7 +21,13 @@ import {
   extractClassMethods,
   collectNodeTypes,
 } from './helpers.js';
-import { detectMinNodeVersion, detectMinNodeVersionFromAPIs } from './version-features.js';
+import {
+  detectMinNodeVersion,
+  detectMinNodeVersionFromAPIs,
+  detectMinTsVersion,
+  detectMinTsVersionFromSource,
+  detectMinEsVersion,
+} from './version-features.js';
 
 const require = createRequire(import.meta.url);
 const Parser = require('tree-sitter');
@@ -46,6 +52,7 @@ function getParser(tsx: boolean): InstanceType<typeof Parser> {
 }
 
 const TSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
+const JS_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs']);
 
 export class TypeScriptLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
@@ -78,16 +85,18 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
 
       const edges = extractImportEdges(root);
 
-      // Detect minimum Node.js version from API usage at file level
+      // Detect minimum versions from API usage / source patterns at file level
       const apiVersion = detectMinNodeVersionFromAPIs(sourceCode);
+      const tsSourceVersion = detectMinTsVersionFromSource(sourceCode);
 
       // Determine language label: JS files get 'javascript', TS files get 'typescript'
-      const JS_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs']);
-      const language = JS_EXTENSIONS.has(ext) ? 'javascript' : 'typescript';
+      const isJs = JS_EXTENSIONS.has(ext);
+      const language = isJs ? 'javascript' : 'typescript';
 
       // Build file-level metadata with detected version info
       const metadata: Record<string, unknown> = {};
       if (apiVersion) metadata.minNodeVersion = apiVersion;
+      if (!isJs && tsSourceVersion) metadata.minTsVersion = tsSourceVersion;
 
       return ok({
         language,
@@ -156,9 +165,26 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
     }
   }
 
+  /** Detect and attach version info to a symbol's metadata based on its AST subtree. */
+  private attachVersionInfo(node: TSNode, metadata: Record<string, unknown>): void {
+    const nodeTypes = collectNodeTypes(node);
+    const minNode = detectMinNodeVersion(nodeTypes);
+    const minTs = detectMinTsVersion(nodeTypes);
+    const minEs = detectMinEsVersion(nodeTypes);
+    if (minNode) metadata.minNodeVersion = minNode;
+    if (minTs) metadata.minTsVersion = minTs;
+    if (minEs) metadata.minEsVersion = minEs;
+  }
+
   private extractFunction(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
     const name = getNodeName(node);
     if (!name) return;
+    const metadata: Record<string, unknown> = {
+      exported: isExported(node),
+      default: isDefaultExport(node),
+      async: isAsync(node),
+    };
+    this.attachVersionInfo(node, metadata);
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'function'),
       name,
@@ -168,11 +194,7 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       byteEnd: node.endIndex,
       lineStart: node.startPosition.row + 1,
       lineEnd: node.endPosition.row + 1,
-      metadata: {
-        exported: isExported(node),
-        default: isDefaultExport(node),
-        async: isAsync(node),
-      },
+      metadata,
     });
   }
 
@@ -182,6 +204,13 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
     const symbolId = makeSymbolId(filePath, name, 'class');
 
     const heritage = this.extractHeritage(node);
+    const metadata: Record<string, unknown> = {
+      exported: isExported(node),
+      default: isDefaultExport(node),
+      ...(heritage.extends ? { extends: heritage.extends } : {}),
+      ...(heritage.implements.length > 0 ? { implements: heritage.implements } : {}),
+    };
+    this.attachVersionInfo(node, metadata);
 
     symbols.push({
       symbolId,
@@ -192,12 +221,7 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       byteEnd: node.endIndex,
       lineStart: node.startPosition.row + 1,
       lineEnd: node.endPosition.row + 1,
-      metadata: {
-        exported: isExported(node),
-        default: isDefaultExport(node),
-        ...(heritage.extends ? { extends: heritage.extends } : {}),
-        ...(heritage.implements.length > 0 ? { implements: heritage.implements } : {}),
-      },
+      metadata,
     });
 
     const body = node.childForFieldName('body');

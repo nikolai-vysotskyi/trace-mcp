@@ -3,7 +3,7 @@ import {
   resolveComponentTag,
   toKebabCase,
   toPascalCase,
-} from '../../../src/indexer/plugins/integration/vue/resolver.js';
+} from '../../../src/indexer/plugins/integration/view/vue/resolver.js';
 
 describe('toKebabCase', () => {
   it('converts PascalCase to kebab-case', () => {

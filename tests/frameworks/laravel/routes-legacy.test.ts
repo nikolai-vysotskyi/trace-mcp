@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { extractRoutes } from '../../../src/indexer/plugins/integration/laravel/routes.js';
+import { extractRoutes } from '../../../src/indexer/plugins/integration/framework/laravel/routes.js';
 
 const L6_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-6');
 const L8_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-8');

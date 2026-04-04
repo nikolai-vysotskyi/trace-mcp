@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SpringPlugin } from '../../../src/indexer/plugins/integration/spring/index.js';
+import { SpringPlugin } from '../../../src/indexer/plugins/integration/framework/spring/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 function makeCtx(overrides: Partial<ProjectContext> = {}): ProjectContext {

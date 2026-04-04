@@ -12,9 +12,9 @@ import { TraceMcpConfigSchema } from '../../src/config.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/vue/index.js';
-import { BladePlugin } from '../../src/indexer/plugins/integration/blade/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
+import { BladePlugin } from '../../src/indexer/plugins/integration/view/blade/index.js';
 
 // Tools under test
 import { search, getFileOutline, getSymbol } from '../../src/tools/navigation.js';

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { extractEloquentModel } from '../../../src/indexer/plugins/integration/laravel/eloquent.js';
+import { extractEloquentModel } from '../../../src/indexer/plugins/integration/framework/laravel/eloquent.js';
 
 const L10_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');
 

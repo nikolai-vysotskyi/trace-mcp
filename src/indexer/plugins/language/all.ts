@@ -7,8 +7,10 @@ import { JavaLanguagePlugin } from './java/index.js';
 import { KotlinLanguagePlugin } from './kotlin/index.js';
 import { RubyLanguagePlugin } from './ruby/index.js';
 import { GoLanguagePlugin } from './go/index.js';
-import { PrismaLanguagePlugin } from '../integration/prisma/index.js';
-import { GraphQLLanguagePlugin } from '../integration/graphql/index.js';
+import { HtmlLanguagePlugin } from './html/index.js';
+import { CssLanguagePlugin } from './css/index.js';
+import { PrismaLanguagePlugin } from '../integration/orm/prisma/index.js';
+import { GraphQLLanguagePlugin } from '../integration/api/graphql/index.js';
 
 export function createAllLanguagePlugins(): LanguagePlugin[] {
   return [
@@ -20,6 +22,8 @@ export function createAllLanguagePlugins(): LanguagePlugin[] {
     new KotlinLanguagePlugin(),
     new RubyLanguagePlugin(),
     new GoLanguagePlugin(),
+    new HtmlLanguagePlugin(),
+    new CssLanguagePlugin(),
     new PrismaLanguagePlugin(),
     new GraphQLLanguagePlugin(),
   ];

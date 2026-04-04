@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
-import { VueFrameworkPlugin } from '../../../src/indexer/plugins/integration/vue/index.js';
+import { VueFrameworkPlugin } from '../../../src/indexer/plugins/integration/view/vue/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const VUE3_FIXTURE = path.resolve(__dirname, '../../fixtures/vue3-composition');

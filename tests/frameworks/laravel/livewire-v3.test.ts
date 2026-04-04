@@ -12,7 +12,7 @@ import {
   extractWireDirectives,
   isLivewireForm,
   resolveComponentName,
-} from '../../../src/indexer/plugins/integration/laravel/livewire.js';
+} from '../../../src/indexer/plugins/integration/framework/laravel/livewire.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/livewire-v3');
 

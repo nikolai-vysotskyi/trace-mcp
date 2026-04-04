@@ -5,7 +5,7 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import { getRequestFlow } from '../../src/tools/flow.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 

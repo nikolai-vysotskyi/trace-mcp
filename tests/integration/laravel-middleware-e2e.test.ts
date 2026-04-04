@@ -12,13 +12,13 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import {
   parseKernelMiddleware,
   parseBootstrapMiddleware,
   parseRouteServiceProviderNamespace,
   parseBootstrapRouting,
-} from '../../src/indexer/plugins/integration/laravel/middleware.js';
+} from '../../src/indexer/plugins/integration/framework/laravel/middleware.js';
 
 describe('Laravel middleware parsing', () => {
   it('parses Kernel.php middleware (Laravel 8 style)', () => {

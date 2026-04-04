@@ -10,8 +10,8 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { MongoosePlugin } from '../../src/indexer/plugins/integration/mongoose/index.js';
-import { SequelizePlugin } from '../../src/indexer/plugins/integration/sequelize/index.js';
+import { MongoosePlugin } from '../../src/indexer/plugins/integration/orm/mongoose/index.js';
+import { SequelizePlugin } from '../../src/indexer/plugins/integration/orm/sequelize/index.js';
 import { getSchema } from '../../src/tools/schema.js';
 
 describe('Mongoose ORM e2e', () => {

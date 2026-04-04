@@ -14,7 +14,7 @@ import { TraceMcpConfigSchema } from '../../src/config.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 
 function createTmpFixture(files: Record<string, string>): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-err-'));

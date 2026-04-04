@@ -11,8 +11,8 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
-import { BladePlugin } from '../../src/indexer/plugins/integration/blade/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { BladePlugin } from '../../src/indexer/plugins/integration/view/blade/index.js';
 
 describe('Blade @extends / @include e2e', () => {
   let store: Store;

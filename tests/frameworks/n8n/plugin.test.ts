@@ -20,7 +20,18 @@ import {
   extractExpressionDeps,
   getServiceDomain,
   isTriggerNode,
-} from '../../../src/indexer/plugins/integration/n8n/index.js';
+  parseExpressions,
+  createExpressionInfo,
+  extractWorkflowExpressionInfo,
+  computeWorkflowComplexity,
+  findDisconnectedNodes,
+  extractCustomNodeDefinitions,
+} from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
+import type {
+  ExpressionInfo,
+  WorkflowComplexity,
+  CustomNodeDefinition,
+} from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/n8n-basic');
@@ -121,7 +132,8 @@ describe('N8nPlugin', () => {
       expect(names).toContain('n8n_error_workflow');
       expect(names).toContain('n8n_conditional_branch');
       expect(names).toContain('n8n_external_service');
-      expect(names.length).toBe(12);
+      expect(names).toContain('n8n_shared_credential');
+      expect(names.length).toBe(13);
     });
 
     it('all edge types have n8n category', () => {
@@ -1007,4 +1019,380 @@ describe('N8nPlugin', () => {
       expect(plugin.manifest.priority).toBe(30);
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Feature 1: Custom n8n Node Package Detection
+  // ══════════════════════════════════════════════════════════════════════
+
+  describe('extractCustomNodeDefinitions()', () => {
+    it('finds *.node.ts files in nodes/ directory', () => {
+      const ctx: ProjectContext = { rootPath: FIXTURE_DIR, configFiles: [] };
+      const defs = extractCustomNodeDefinitions(ctx);
+      expect(defs.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('extracts name and displayName from custom node', () => {
+      const ctx: ProjectContext = { rootPath: FIXTURE_DIR, configFiles: [] };
+      const defs = extractCustomNodeDefinitions(ctx);
+      const custom = defs.find((d) => d.name === 'myCustom');
+      expect(custom).toBeDefined();
+      expect(custom!.displayName).toBe('My Custom Node');
+    });
+
+    it('extracts group and version from custom node', () => {
+      const ctx: ProjectContext = { rootPath: FIXTURE_DIR, configFiles: [] };
+      const defs = extractCustomNodeDefinitions(ctx);
+      const custom = defs.find((d) => d.name === 'myCustom')!;
+      expect(custom.group).toContain('transform');
+      expect(custom.version).toBe(1);
+    });
+
+    it('extracts credential types from custom node', () => {
+      const ctx: ProjectContext = { rootPath: FIXTURE_DIR, configFiles: [] };
+      const defs = extractCustomNodeDefinitions(ctx);
+      const custom = defs.find((d) => d.name === 'myCustom')!;
+      expect(custom.credentialTypes).toContain('myCustomApi');
+    });
+
+    it('extracts parameter names from custom node', () => {
+      const ctx: ProjectContext = { rootPath: FIXTURE_DIR, configFiles: [] };
+      const defs = extractCustomNodeDefinitions(ctx);
+      const custom = defs.find((d) => d.name === 'myCustom')!;
+      expect(custom.parameterNames).toContain('operation');
+      expect(custom.parameterNames).toContain('resource');
+    });
+
+    it('extracts operation names from custom node', () => {
+      const ctx: ProjectContext = { rootPath: FIXTURE_DIR, configFiles: [] };
+      const defs = extractCustomNodeDefinitions(ctx);
+      const custom = defs.find((d) => d.name === 'myCustom')!;
+      expect(custom.operationNames).toContain('create');
+      expect(custom.operationNames).toContain('delete');
+    });
+
+    it('returns empty array for non-existent directories', () => {
+      const ctx: ProjectContext = { rootPath: '/tmp/nonexistent-n8n-test', configFiles: [] };
+      const defs = extractCustomNodeDefinitions(ctx);
+      expect(defs).toEqual([]);
+    });
+
+    it('detect() returns true for projects with *.node.ts files', () => {
+      const ctx: ProjectContext = { rootPath: FIXTURE_DIR, configFiles: [] };
+      expect(plugin.detect(ctx)).toBe(true);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Feature 2: Deep Expression Parsing
+  // ══════════════════════════════════════════════════════════════════════
+
+  describe('parseExpressions()', () => {
+    it('parses $("Node Name") shorthand syntax', () => {
+      const info = createExpressionInfo();
+      parseExpressions('={{ $(\'My Node\').item.json.field }}', info);
+      expect(info.nodeDeps.has('My Node')).toBe(true);
+    });
+
+    it('parses $("Node") with double quotes', () => {
+      const info = createExpressionInfo();
+      parseExpressions('={{ $("Other Node").json.x }}', info);
+      expect(info.nodeDeps.has('Other Node')).toBe(true);
+    });
+
+    it('parses $env.VAR_NAME references', () => {
+      const info = createExpressionInfo();
+      parseExpressions('={{ $env.API_KEY }}', info);
+      expect(info.envVars.has('API_KEY')).toBe(true);
+    });
+
+    it('detects $execution usage', () => {
+      const info = createExpressionInfo();
+      parseExpressions('={{ $execution.id }}', info);
+      expect(info.usesExecution).toBe(true);
+    });
+
+    it('detects $workflow usage', () => {
+      const info = createExpressionInfo();
+      parseExpressions('={{ $workflow.name }}', info);
+      expect(info.usesWorkflow).toBe(true);
+    });
+
+    it('detects $binary usage', () => {
+      const info = createExpressionInfo();
+      parseExpressions('={{ $binary.data }}', info);
+      expect(info.usesBinary).toBe(true);
+    });
+
+    it('detects $input usage', () => {
+      const info = createExpressionInfo();
+      parseExpressions('={{ $input.first().json }}', info);
+      expect(info.usesInput).toBe(true);
+    });
+
+    it('combines all patterns in a single expression', () => {
+      const info = createExpressionInfo();
+      parseExpressions({
+        a: '={{ $node["A"].json.x }}',
+        b: '={{ $("B").item.json.y }}',
+        c: '={{ $env.SECRET }}',
+        d: '={{ $execution.mode }}',
+      }, info);
+      expect(info.nodeDeps.has('A')).toBe(true);
+      expect(info.nodeDeps.has('B')).toBe(true);
+      expect(info.envVars.has('SECRET')).toBe(true);
+      expect(info.usesExecution).toBe(true);
+    });
+
+    it('backward-compatible extractExpressionDeps includes shorthand', () => {
+      const deps = new Set<string>();
+      extractExpressionDeps('={{ $(\'ShortNode\').json }}', deps);
+      expect(deps.has('ShortNode')).toBe(true);
+    });
+  });
+
+  describe('extractWorkflowExpressionInfo()', () => {
+    it('aggregates expression info across all nodes', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const info = extractWorkflowExpressionInfo(wf);
+      // Format Response has $env.API_KEY and $execution.id
+      expect(info.envVars.has('API_KEY')).toBe(true);
+      expect(info.usesExecution).toBe(true);
+      // Format Response has $node["Save to Database"] and $("Process Payment")
+      expect(info.nodeDeps.has('Save to Database')).toBe(true);
+      expect(info.nodeDeps.has('Process Payment')).toBe(true);
+    });
+
+    it('detects $input usage in code nodes', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const info = extractWorkflowExpressionInfo(wf);
+      // Validate Order has $input.first() in its code
+      expect(info.usesInput).toBe(true);
+    });
+  });
+
+  describe('extractNodes() expression metadata', () => {
+    it('includes envVars in workflow metadata', () => {
+      const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+      expect(parsed.metadata!.envVars).toBeDefined();
+      expect((parsed.metadata!.envVars as string[])).toContain('API_KEY');
+    });
+
+    it('includes usesExecution in workflow metadata', () => {
+      const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+      expect(parsed.metadata!.usesExecution).toBe(true);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Feature 3: Workflow Complexity Metrics
+  // ══════════════════════════════════════════════════════════════════════
+
+  describe('computeWorkflowComplexity()', () => {
+    it('computes nodeCount and connectionCount', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const complexity = computeWorkflowComplexity(wf);
+      expect(complexity.nodeCount).toBe(wf.nodes.length);
+      expect(complexity.connectionCount).toBeGreaterThan(0);
+    });
+
+    it('counts triggers', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const complexity = computeWorkflowComplexity(wf);
+      expect(complexity.triggerCount).toBe(2);
+    });
+
+    it('counts merge nodes', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const complexity = computeWorkflowComplexity(wf);
+      expect(complexity.mergeCount).toBe(1);
+    });
+
+    it('computes maxDepth via BFS from triggers', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const complexity = computeWorkflowComplexity(wf);
+      // Webhook -> Validate -> Check Amount -> Save to DB -> Merge -> Process Payment -> Format -> Respond = 7
+      expect(complexity.maxDepth).toBeGreaterThanOrEqual(7);
+    });
+
+    it('computes branchingFactor > 1 for branching workflows', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const complexity = computeWorkflowComplexity(wf);
+      // Check Amount has 3 outgoing (2 true + 1 false), most have 1
+      expect(complexity.branchingFactor).toBeGreaterThan(1);
+    });
+
+    it('computes cyclomaticComplexity based on conditionals', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const complexity = computeWorkflowComplexity(wf);
+      // 1 IF node + 1 = 2
+      expect(complexity.cyclomaticComplexity).toBe(2);
+    });
+
+    it('computes cyclomaticComplexity with switch and filter', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ERROR_WF))!;
+      const complexity = computeWorkflowComplexity(wf);
+      // 1 switch + 1 filter + 1 = 3
+      expect(complexity.cyclomaticComplexity).toBe(3);
+    });
+
+    it('detects hasLoop=false when no splitInBatches cycle', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const complexity = computeWorkflowComplexity(wf);
+      // Process Items splitInBatches has no connection back to itself
+      expect(complexity.hasLoop).toBe(false);
+    });
+
+    it('reports complexity in extractNodes metadata', () => {
+      const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+      const complexity = parsed.metadata!.complexity as WorkflowComplexity;
+      expect(complexity).toBeDefined();
+      expect(complexity.nodeCount).toBe(12);
+      expect(complexity.triggerCount).toBe(2);
+      expect(complexity.mergeCount).toBe(1);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Feature 4: Disconnected Node Detection
+  // ══════════════════════════════════════════════════════════════════════
+
+  describe('findDisconnectedNodes()', () => {
+    it('does not flag trigger nodes as disconnected', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const conns = extractConnections(wf);
+      const disconnected = findDisconnectedNodes(wf, conns);
+      const names = disconnected.map((n) => n.name);
+      expect(names).not.toContain('Webhook Trigger');
+      expect(names).not.toContain('Daily Cleanup');
+    });
+
+    it('does not flag sticky notes as disconnected', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const conns = extractConnections(wf);
+      const disconnected = findDisconnectedNodes(wf, conns);
+      const names = disconnected.map((n) => n.name);
+      expect(names).not.toContain('Sticky Note');
+    });
+
+    it('does not flag connected nodes as disconnected', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ORDER_WF))!;
+      const conns = extractConnections(wf);
+      const disconnected = findDisconnectedNodes(wf, conns);
+      const names = disconnected.map((n) => n.name);
+      expect(names).not.toContain('Validate Order');
+      expect(names).not.toContain('Save to Database');
+    });
+
+    it('detects truly disconnected non-trigger nodes', () => {
+      // Create a minimal workflow with a disconnected node
+      const wf: any = {
+        nodes: [
+          { name: 'Trigger', type: 'n8n-nodes-base.webhook', position: [0, 0] },
+          { name: 'Connected', type: 'n8n-nodes-base.set', position: [100, 0] },
+          { name: 'Orphan', type: 'n8n-nodes-base.set', position: [200, 200] },
+        ],
+        connections: {
+          'Trigger': { main: [[{ node: 'Connected', type: 'main', index: 0 }]] },
+        },
+      };
+      const conns = extractConnections(wf);
+      const disconnected = findDisconnectedNodes(wf, conns);
+      expect(disconnected.length).toBe(1);
+      expect(disconnected[0].name).toBe('Orphan');
+    });
+
+    it('reports disconnectedNodes in extractNodes metadata when present', () => {
+      // Create workflow with orphan
+      const wfJson = JSON.stringify({
+        name: 'Test',
+        nodes: [
+          { name: 'Trigger', type: 'n8n-nodes-base.webhook', position: [0, 0] },
+          { name: 'Action', type: 'n8n-nodes-base.set', position: [100, 0] },
+          { name: 'Orphan', type: 'n8n-nodes-base.set', position: [200, 200] },
+        ],
+        connections: {
+          'Trigger': { main: [[{ node: 'Action', type: 'main', index: 0 }]] },
+        },
+      });
+      const parsed = plugin.extractNodes('test.json', Buffer.from(wfJson), 'json')._unsafeUnwrap();
+      expect(parsed.metadata!.disconnectedNodes).toBeDefined();
+      expect((parsed.metadata!.disconnectedNodes as string[])).toContain('Orphan');
+    });
+
+    it('omits disconnectedNodes from metadata when none exist', () => {
+      const wf = parseN8nWorkflow(fs.readFileSync(ERROR_WF))!;
+      const conns = extractConnections(wf);
+      const disconnected = findDisconnectedNodes(wf, conns);
+      // Error handler has all nodes connected
+      expect(disconnected.length).toBe(0);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Feature 5: Shared Credentials Graph in resolveEdges
+  // ══════════════════════════════════════════════════════════════════════
+
+  describe('resolveEdges() shared credentials', () => {
+    it('emits n8n_shared_credential edges for credentials used across workflows', () => {
+      // order-processing uses postgres cred id=1
+      // error-handler also uses postgres cred id=1
+      // They should be linked by a shared credential edge
+      const mockCtx = createMockResolveContext();
+      const result = plugin.resolveEdges!(mockCtx);
+      expect(result.isOk()).toBe(true);
+      const edges = result._unsafeUnwrap();
+      const sharedCreds = edges.filter((e) => e.edgeType === 'n8n_shared_credential');
+      expect(sharedCreds.length).toBeGreaterThanOrEqual(1);
+
+      // postgres:1 is shared between order-processing and error-handler
+      const pgShared = sharedCreds.find((e) =>
+        e.metadata!.credentialType === 'postgres' && e.metadata!.credentialId === '1',
+      );
+      expect(pgShared).toBeDefined();
+      expect(pgShared!.resolved).toBe(true);
+    });
+
+    it('does not emit shared credential edges for credentials used in only one workflow', () => {
+      const mockCtx = createMockResolveContext();
+      const result = plugin.resolveEdges!(mockCtx);
+      const edges = result._unsafeUnwrap();
+      const sharedCreds = edges.filter((e) => e.edgeType === 'n8n_shared_credential');
+
+      // httpHeaderAuth id=5 is only in order-processing, should NOT appear
+      const httpShared = sharedCreds.find((e) =>
+        e.metadata!.credentialType === 'httpHeaderAuth' && e.metadata!.credentialId === '5',
+      );
+      expect(httpShared).toBeUndefined();
+    });
+  });
 });
+
+// ── Helper: mock ResolveContext for resolveEdges tests ───────────────────
+
+function createMockResolveContext() {
+  const workflowFiles = [
+    { id: 1, path: 'workflows/order-processing.json' },
+    { id: 2, path: 'workflows/ai-chatbot.json' },
+    { id: 3, path: 'workflows/error-handler.json' },
+    { id: 4, path: 'workflows/payment-flow.json' },
+  ];
+
+  const fileContents: Record<string, string> = {};
+  for (const f of workflowFiles) {
+    fileContents[f.path] = fs.readFileSync(path.join(FIXTURE_DIR, f.path), 'utf-8');
+  }
+
+  return {
+    getAllFiles: () => workflowFiles,
+    readFile: (p: string) => fileContents[p] ?? null,
+    getSymbolsByFile: (fileId: number) => {
+      const file = workflowFiles.find((f) => f.id === fileId);
+      if (!file) return [];
+      const content = fileContents[file.path];
+      if (!content) return [];
+      const wf = parseN8nWorkflow(Buffer.from(content));
+      if (!wf || !wf.nodes.length) return [];
+      return [{ symbolId: `${file.path}::${wf.nodes[0].name}#constant` }];
+    },
+  } as any;
+}

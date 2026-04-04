@@ -4,7 +4,7 @@ import path from 'node:path';
 import {
   extractMigrations,
   extractTimestamp,
-} from '../../../src/indexer/plugins/integration/laravel/migrations.js';
+} from '../../../src/indexer/plugins/integration/framework/laravel/migrations.js';
 
 const L10_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');
 

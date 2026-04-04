@@ -5,7 +5,7 @@ import {
   extractTestedRoutes,
   extractTestedComponents,
   extractTestNames,
-} from '../../../src/indexer/plugins/integration/testing/index.js';
+} from '../../../src/indexer/plugins/integration/testing/testing/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('TestingPlugin', () => {

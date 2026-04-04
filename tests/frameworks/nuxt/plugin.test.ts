@@ -6,7 +6,7 @@ import {
   serverApiToRoute,
   serverRoutesToRoute,
   extractFetchCalls,
-} from '../../../src/indexer/plugins/integration/nuxt/index.js';
+} from '../../../src/indexer/plugins/integration/framework/nuxt/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/nuxt3');

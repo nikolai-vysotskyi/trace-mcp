@@ -10,7 +10,7 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { NestJSPlugin } from '../../src/indexer/plugins/integration/nestjs/index.js';
+import { NestJSPlugin } from '../../src/indexer/plugins/integration/framework/nestjs/index.js';
 
 describe('NestJS e2e through pipeline', () => {
   let store: Store;

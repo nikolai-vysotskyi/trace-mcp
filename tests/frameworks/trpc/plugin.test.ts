@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   TrpcPlugin,
   extractTrpcProcedures,
-} from '../../../src/indexer/plugins/integration/trpc/index.js';
+} from '../../../src/indexer/plugins/integration/api/trpc/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('TrpcPlugin', () => {

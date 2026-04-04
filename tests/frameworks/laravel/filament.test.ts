@@ -11,7 +11,7 @@ import {
   extractFilamentRelationManager,
   extractFilamentPanel,
   extractFilamentWidget,
-} from '../../../src/indexer/plugins/integration/laravel/filament.js';
+} from '../../../src/indexer/plugins/integration/framework/laravel/filament.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/filament-v3');
 

@@ -90,7 +90,9 @@
         "values": {
           "string": [
             { "name": "status", "value": "={{ $node[\"Save to Database\"].json.status }}" },
-            { "name": "paymentRef", "value": "={{ $node[\"Process Payment\"].json.ref }}" }
+            { "name": "paymentRef", "value": "={{ $('Process Payment').item.json.ref }}" },
+            { "name": "apiKey", "value": "={{ $env.API_KEY }}" },
+            { "name": "execId", "value": "={{ $execution.id }}" }
           ]
         }
       },

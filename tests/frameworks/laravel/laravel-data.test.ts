@@ -8,7 +8,7 @@ import path from 'node:path';
 import {
   extractDataClass,
   extractInertiaDataProps,
-} from '../../../src/indexer/plugins/integration/laravel/laravel-data.js';
+} from '../../../src/indexer/plugins/integration/framework/laravel/laravel-data.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-data');
 

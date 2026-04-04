@@ -9,7 +9,7 @@ import path from 'node:path';
 import {
   extractNovaResource,
   extractNovaMetric,
-} from '../../../src/indexer/plugins/integration/laravel/nova.js';
+} from '../../../src/indexer/plugins/integration/framework/laravel/nova.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/nova-v5');
 

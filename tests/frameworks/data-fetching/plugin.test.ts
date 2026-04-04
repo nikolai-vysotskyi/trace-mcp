@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   DataFetchingPlugin,
   extractDataFetchingHooks,
-} from '../../../src/indexer/plugins/integration/data-fetching/index.js';
+} from '../../../src/indexer/plugins/integration/tooling/data-fetching/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('DataFetchingPlugin', () => {

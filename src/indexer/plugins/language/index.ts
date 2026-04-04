@@ -6,3 +6,5 @@ export { JavaLanguagePlugin } from './java/index.js';
 export { KotlinLanguagePlugin } from './kotlin/index.js';
 export { RubyLanguagePlugin } from './ruby/index.js';
 export { GoLanguagePlugin } from './go/index.js';
+export { HtmlLanguagePlugin } from './html/index.js';
+export { CssLanguagePlugin } from './css/index.js';

@@ -6,7 +6,7 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/vue/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { getComponentTree } from '../../src/tools/components.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 

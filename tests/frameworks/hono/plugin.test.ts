@@ -3,7 +3,7 @@ import {
   HonoPlugin,
   extractHonoRoutes,
   extractHonoMiddleware,
-} from '../../../src/indexer/plugins/integration/hono/index.js';
+} from '../../../src/indexer/plugins/integration/framework/hono/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('HonoPlugin', () => {

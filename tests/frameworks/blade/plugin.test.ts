@@ -7,7 +7,7 @@ import {
   extractBladeYields,
   bladeNameToPath,
   xComponentToPath,
-} from '../../../src/indexer/plugins/integration/blade/index.js';
+} from '../../../src/indexer/plugins/integration/view/blade/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/blade-laravel');

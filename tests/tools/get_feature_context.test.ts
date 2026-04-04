@@ -7,8 +7,8 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/vue/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { getFeatureContext, tokenizeDescription } from '../../src/tools/context.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 

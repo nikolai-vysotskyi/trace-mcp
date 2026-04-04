@@ -1,52 +1,41 @@
 /**
- * Node.js / ECMAScript version feature mapping.
- * Maps AST constructs and API patterns to the minimum Node.js version that introduced them.
+ * Version feature mapping for Node.js, TypeScript compiler, and ECMAScript standard.
  *
- * Covers Node.js 12 through 24.
+ * Three orthogonal version axes:
+ * - Node.js runtime (12–24)     → minNodeVersion
+ * - TypeScript compiler (4.0–5.8) → minTsVersion
+ * - ECMAScript standard (ES2015–ES2025) → minEsVersion
  */
 
-/** Minimum Node.js version required for specific AST constructs. */
+// ═══════════════════════════════════════════════════════
+// Node.js runtime — AST constructs → minimum Node version
+// ═══════════════════════════════════════════════════════
+
 export const NODEJS_MIN_VERSION: Record<string, string> = {
-  // --- Node.js 12 (V8 7.4) — ES2019 baseline ---
-  // flat, flatMap, Object.fromEntries, optional catch binding — baseline, no AST signal
+  // Node 14 (V8 8.4) — ES2020
+  'optional_chaining': '14',
+  'nullish_coalescing': '14',
 
-  // --- Node.js 14 (V8 8.4) — ES2020 ---
-  'optional_chaining': '14',           // a?.b
-  'nullish_coalescing': '14',          // a ?? b
+  // Node 15 (V8 8.6)
+  'logical_assignment': '15',
 
-  // --- Node.js 15 (V8 8.6) ---
-  'logical_assignment': '15',          // a ??= b, a ||= b, a &&= b
+  // Node 16 (V8 9.4) — ES2022
+  'class_static_block': '16',
+  'private_property_identifier': '16',
+  'hash_bang_line': '16',
 
-  // --- Node.js 16 (V8 9.4) — ES2022 ---
-  'class_static_block': '16',          // static { ... }
-  'private_property_identifier': '16', // #privateField
-  'hash_bang_line': '16',              // #!/usr/bin/env node (top-level)
+  // Node 18 (V8 10.1)
+  'array_pattern_with_rest': '18',
 
-  // --- Node.js 17 (V8 9.5) ---
-  // structuredClone — API, not AST. Array.findLast is V8 9.7 (node 17.4+)
+  // Node 22 (V8 12.4) — ES2024+
+  'using_declaration': '22',
+  'await_using_declaration': '22',
 
-  // --- Node.js 18 (V8 10.1) ---
-  // Array.findLast/findLastIndex stable, fetch API — no specific AST construct
-  'array_pattern_with_rest': '18',     // destructuring rest in more positions
-
-  // --- Node.js 20 (V8 11.3) — ES2023 ---
-  // Array grouping, no new syntax node
-
-  // --- Node.js 21 (V8 11.8) — ES2024 ---
-  // ArrayBuffer.transfer, Atomics.waitAsync — API only
-
-  // --- Node.js 22 (V8 12.4) — ES2024+ ---
-  'using_declaration': '22',           // using x = resource (explicit resource management)
-  'await_using_declaration': '22',     // await using x = resource
-
-  // --- Decorators (stage 3, Node.js 24 / V8 13+) ---
-  'decorator': '24',                   // @decorator (TC39 stage 3)
+  // Node 24 (V8 13+)
+  'decorator': '24',
 };
 
-/**
- * Known API identifiers that signal a minimum Node.js version.
- * These are checked via simple string matching in source code.
- */
+/** API identifiers → minimum Node.js version (string-match in source). */
 export const NODEJS_API_VERSIONS: Record<string, string> = {
   'structuredClone': '17',
   'fetch': '18',
@@ -60,41 +49,180 @@ export const NODEJS_API_VERSIONS: Record<string, string> = {
   'node:sqlite': '22',
 };
 
-/**
- * Determine the minimum Node.js version required for a symbol based on its AST features.
- * Returns undefined if the symbol uses only Node 12-compatible features.
- */
+// ═══════════════════════════════════════════════════════
+// TypeScript compiler — AST constructs → minimum TS version
+// ═══════════════════════════════════════════════════════
+
+export const TS_MIN_VERSION: Record<string, string> = {
+  // TS 4.0 — variadic tuple types, labeled tuple elements
+  'labeled_tuple_member': '4.0',
+
+  // TS 4.1 — template literal types, key remapping in mapped types
+  'template_literal_type': '4.1',
+
+  // TS 4.2 — abstract constructor types, smarter type alias preservation
+  'abstract_construct_type': '4.2',
+
+  // TS 4.3 — override keyword
+  'override_modifier': '4.3',
+
+  // TS 4.5 — type-only import/export specifiers (import { type X })
+  'type_import_specifier': '4.5',
+  'type_export_specifier': '4.5',
+
+  // TS 4.7 — instantiation expressions, extends constraints on infer
+  'instantiation_expression': '4.7',
+
+  // TS 4.9 — satisfies operator
+  'satisfies_expression': '4.9',
+
+  // TS 5.0 — const type parameters, decorator metadata (stage 3)
+  'const_type_parameter': '5.0',
+  'decorator': '5.0',
+
+  // TS 5.2 — using / await using (explicit resource management)
+  'using_declaration': '5.2',
+  'await_using_declaration': '5.2',
+};
+
+/** TS source-level patterns (regex-matched). */
+export const TS_SOURCE_PATTERNS: [RegExp, string][] = [
+  // TS 4.9 — satisfies
+  [/\bsatisfies\s+[A-Z]/, '4.9'],
+  // TS 5.0 — const type parameter: <const T>
+  [/<const\s+[A-Z]/, '5.0'],
+  // TS 5.2 — using declarations
+  [/\busing\s+[a-zA-Z]/, '5.2'],
+  // TS 5.3 — import attributes: import ... with { type: "json" }
+  [/\bwith\s*\{/, '5.3'],
+];
+
+// ═══════════════════════════════════════════════════════
+// ECMAScript standard — AST constructs → minimum ES version
+// ═══════════════════════════════════════════════════════
+
+export const ES_MIN_VERSION: Record<string, string> = {
+  // ES2015 (ES6)
+  'arrow_function': 'ES2015',
+  'class_declaration': 'ES2015',
+  'template_string': 'ES2015',
+  'for_in_statement': 'ES2015',
+  'spread_element': 'ES2015',
+  'computed_property_name': 'ES2015',
+  'shorthand_property_identifier_pattern': 'ES2015',
+  'generator_function_declaration': 'ES2015',
+  'yield_expression': 'ES2015',
+
+  // ES2016
+  'binary_expression:exponentiation': 'ES2016', // handled via special check
+
+  // ES2017
+  'await_expression': 'ES2017',
+
+  // ES2018
+  'for_await_statement': 'ES2018',         // for await...of
+  'regex_flags:s': 'ES2018',               // dotAll flag
+
+  // ES2019
+  'optional_catch_binding': 'ES2019',      // catch {}  (no param)
+
+  // ES2020
+  'optional_chaining': 'ES2020',
+  'nullish_coalescing': 'ES2020',
+  'import_expression': 'ES2020',           // dynamic import()
+  'bigint': 'ES2020',
+
+  // ES2021
+  'logical_assignment': 'ES2021',          // ??=, ||=, &&=
+
+  // ES2022
+  'class_static_block': 'ES2022',
+  'private_property_identifier': 'ES2022',
+  'hash_bang_line': 'ES2022',
+
+  // ES2024
+  'using_declaration': 'ES2024',
+  'await_using_declaration': 'ES2024',
+
+  // ES2025
+  'decorator': 'ES2025',
+};
+
+/** Map ES year labels to sortable integers for comparison. */
+const ES_YEAR_NUM: Record<string, number> = {
+  'ES2015': 2015, 'ES2016': 2016, 'ES2017': 2017, 'ES2018': 2018,
+  'ES2019': 2019, 'ES2020': 2020, 'ES2021': 2021, 'ES2022': 2022,
+  'ES2023': 2023, 'ES2024': 2024, 'ES2025': 2025,
+};
+
+// ═══════════════════════════════════════════════════════
+// Detection functions
+// ═══════════════════════════════════════════════════════
+
+/** Detect minimum Node.js version from AST node types. */
 export function detectMinNodeVersion(nodeTypes: string[]): string | undefined {
-  let maxVersion: number | undefined;
-  let maxVersionStr: string | undefined;
+  let max = 0;
+  let result: string | undefined;
   for (const nt of nodeTypes) {
     const ver = NODEJS_MIN_VERSION[nt];
     if (ver) {
       const num = Number(ver);
-      if (!maxVersion || num > maxVersion) {
-        maxVersion = num;
-        maxVersionStr = ver;
-      }
+      if (num > max) { max = num; result = ver; }
     }
   }
-  return maxVersionStr;
+  return result;
 }
 
-/**
- * Detect minimum Node.js version from API usage in source text.
- * Lightweight check — scans for known global/module identifiers.
- */
+/** Detect minimum Node.js version from API usage in source text. */
 export function detectMinNodeVersionFromAPIs(sourceCode: string): string | undefined {
-  let maxVersion: number | undefined;
-  let maxVersionStr: string | undefined;
+  let max = 0;
+  let result: string | undefined;
   for (const [api, ver] of Object.entries(NODEJS_API_VERSIONS)) {
     if (sourceCode.includes(api)) {
       const num = Number(ver);
-      if (!maxVersion || num > maxVersion) {
-        maxVersion = num;
-        maxVersionStr = ver;
-      }
+      if (num > max) { max = num; result = ver; }
     }
   }
-  return maxVersionStr;
+  return result;
+}
+
+/** Detect minimum TypeScript compiler version from AST node types. */
+export function detectMinTsVersion(nodeTypes: string[]): string | undefined {
+  let max = 0;
+  let result: string | undefined;
+  for (const nt of nodeTypes) {
+    const ver = TS_MIN_VERSION[nt];
+    if (ver) {
+      const num = parseFloat(ver);
+      if (num > max) { max = num; result = ver; }
+    }
+  }
+  return result;
+}
+
+/** Detect minimum TypeScript version from source-level patterns. */
+export function detectMinTsVersionFromSource(sourceCode: string): string | undefined {
+  let max = 0;
+  let result: string | undefined;
+  for (const [re, ver] of TS_SOURCE_PATTERNS) {
+    if (re.test(sourceCode)) {
+      const num = parseFloat(ver);
+      if (num > max) { max = num; result = ver; }
+    }
+  }
+  return result;
+}
+
+/** Detect minimum ECMAScript version from AST node types. */
+export function detectMinEsVersion(nodeTypes: string[]): string | undefined {
+  let max = 0;
+  let result: string | undefined;
+  for (const nt of nodeTypes) {
+    const ver = ES_MIN_VERSION[nt];
+    if (ver) {
+      const num = ES_YEAR_NUM[ver] ?? 0;
+      if (num > max) { max = num; result = ver; }
+    }
+  }
+  return result;
 }

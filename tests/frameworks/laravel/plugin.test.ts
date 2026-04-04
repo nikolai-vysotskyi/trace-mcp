@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
-import { LaravelPlugin } from '../../../src/indexer/plugins/integration/laravel/index.js';
+import { LaravelPlugin } from '../../../src/indexer/plugins/integration/framework/laravel/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const L10_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');

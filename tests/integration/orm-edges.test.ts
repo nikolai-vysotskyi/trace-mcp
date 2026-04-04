@@ -9,9 +9,9 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { MongoosePlugin } from '../../src/indexer/plugins/integration/mongoose/index.js';
-import { SequelizePlugin } from '../../src/indexer/plugins/integration/sequelize/index.js';
-import { PrismaPlugin, PrismaLanguagePlugin } from '../../src/indexer/plugins/integration/prisma/index.js';
+import { MongoosePlugin } from '../../src/indexer/plugins/integration/orm/mongoose/index.js';
+import { SequelizePlugin } from '../../src/indexer/plugins/integration/orm/sequelize/index.js';
+import { PrismaPlugin, PrismaLanguagePlugin } from '../../src/indexer/plugins/integration/orm/prisma/index.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
 import path from 'node:path';
 
