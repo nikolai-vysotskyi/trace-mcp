@@ -4,6 +4,7 @@ import type { Store } from './db/store.js';
 import type { PluginRegistry } from './plugin-api/registry.js';
 import type { TraceMcpConfig } from './config.js';
 import { getIndexHealth, getProjectMap } from './tools/project.js';
+import { buildProjectContext } from './indexer/project-context.js';
 import { getSymbol, search, getFileOutline, type SearchResultItemProjected } from './tools/navigation.js';
 import { getComponentTree } from './tools/components.js';
 import { getChangeImpact } from './tools/impact.js';
@@ -114,7 +115,8 @@ export function createServer(
       summary_only: z.boolean().optional().describe('Return only framework list + counts (default false)'),
     },
     async ({ summary_only }) => {
-      const result = getProjectMap(store, registry, summary_only ?? false);
+      const ctx = buildProjectContext(projectRoot);
+      const result = getProjectMap(store, registry, summary_only ?? false, ctx);
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );
@@ -679,7 +681,8 @@ export function createServer(
     'project://map',
     { mimeType: 'application/json', description: 'Project map (frameworks, stats, structure)' },
     async () => {
-      const result = getProjectMap(store, registry);
+      const ctx = buildProjectContext(projectRoot);
+      const result = getProjectMap(store, registry, false, ctx);
       return {
         contents: [{ uri: 'project://map', mimeType: 'application/json', text: j(result) }],
       };

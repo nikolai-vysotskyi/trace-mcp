@@ -4,7 +4,7 @@ import {
   extractFastifyRoutes,
   extractFastifyHooks,
   extractFastifyPlugins,
-} from '../../../src/indexer/plugins/framework/fastify/index.js';
+} from '../../../src/indexer/plugins/integration/fastify/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('FastifyPlugin', () => {

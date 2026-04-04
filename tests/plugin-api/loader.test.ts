@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { loadExternalPlugins } from '../../src/plugin-api/loader.js';
 import { createTestHarness } from '../../src/plugin-api/test-harness.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 
 let tmpDir: string;
 

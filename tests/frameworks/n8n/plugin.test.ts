@@ -18,7 +18,9 @@ import {
   classifyNode,
   classifyAiNode,
   extractExpressionDeps,
-} from '../../../src/indexer/plugins/framework/n8n/index.js';
+  getServiceDomain,
+  isTriggerNode,
+} from '../../../src/indexer/plugins/integration/n8n/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/n8n-basic');
@@ -118,7 +120,8 @@ describe('N8nPlugin', () => {
       expect(names).toContain('n8n_expression_dep');
       expect(names).toContain('n8n_error_workflow');
       expect(names).toContain('n8n_conditional_branch');
-      expect(names.length).toBe(11);
+      expect(names).toContain('n8n_external_service');
+      expect(names.length).toBe(12);
     });
 
     it('all edge types have n8n category', () => {
@@ -287,6 +290,163 @@ describe('N8nPlugin', () => {
     it('classifies document_loader', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.documentDefaultDataLoader')).toBe('document_loader'));
     it('classifies text_splitter', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter')).toBe('text_splitter'));
     it('classifies standalone', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.openAi')).toBe('standalone'));
+  });
+
+  // ── isTriggerNode() — pattern-based trigger detection ──────────────────
+
+  describe('isTriggerNode()', () => {
+    it('matches core triggers', () => {
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.webhook', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.cron', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.emailReadImap', position: [0, 0] })).toBe(true);
+    });
+
+    it('matches ANY node ending in Trigger (pattern-based)', () => {
+      // These are NOT in any hardcoded set — they work by suffix matching
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.shopifyTrigger', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.hubspotTrigger', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.notionTrigger', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.typeformTrigger', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.jiraTrigger', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.woocommerceTrigger', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.salesforceTrigger', position: [0, 0] })).toBe(true);
+    });
+
+    it('matches community/custom node triggers', () => {
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-custom.myServiceTrigger', position: [0, 0] })).toBe(true);
+    });
+
+    it('does not match action nodes', () => {
+      expect(isTriggerNode({ name: 'N', type: 'n8n-nodes-base.slack', position: [0, 0] })).toBe(false);
+      expect(isTriggerNode({ name: 'N', type: 'n8n-nodes-base.postgres', position: [0, 0] })).toBe(false);
+    });
+  });
+
+  // ── getServiceDomain() — full taxonomy ────────────────────────────────
+
+  describe('getServiceDomain()', () => {
+    it('resolves communication services', () => {
+      expect(getServiceDomain('n8n-nodes-base.slack')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.discord')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.telegram')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.microsoftTeams')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.gmail')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.twilio')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.sendgrid')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.whatsApp')).toBe('communication');
+    });
+
+    it('resolves trigger variants to same domain', () => {
+      expect(getServiceDomain('n8n-nodes-base.slackTrigger')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.gmailTrigger')).toBe('communication');
+      expect(getServiceDomain('n8n-nodes-base.telegramTrigger')).toBe('communication');
+    });
+
+    it('resolves database services', () => {
+      expect(getServiceDomain('n8n-nodes-base.postgres')).toBe('database');
+      expect(getServiceDomain('n8n-nodes-base.mysql')).toBe('database');
+      expect(getServiceDomain('n8n-nodes-base.mongodb')).toBe('database');
+      expect(getServiceDomain('n8n-nodes-base.redis')).toBe('database');
+      expect(getServiceDomain('n8n-nodes-base.elasticsearch')).toBe('database');
+      expect(getServiceDomain('n8n-nodes-base.supabase')).toBe('database');
+      expect(getServiceDomain('n8n-nodes-base.snowflake')).toBe('database');
+    });
+
+    it('resolves cloud storage', () => {
+      expect(getServiceDomain('n8n-nodes-base.s3')).toBe('cloud_storage');
+      expect(getServiceDomain('n8n-nodes-base.googleDrive')).toBe('cloud_storage');
+      expect(getServiceDomain('n8n-nodes-base.dropbox')).toBe('cloud_storage');
+      expect(getServiceDomain('n8n-nodes-base.ftp')).toBe('cloud_storage');
+    });
+
+    it('resolves dev tools', () => {
+      expect(getServiceDomain('n8n-nodes-base.github')).toBe('dev_tools');
+      expect(getServiceDomain('n8n-nodes-base.gitlab')).toBe('dev_tools');
+      expect(getServiceDomain('n8n-nodes-base.jira')).toBe('dev_tools');
+      expect(getServiceDomain('n8n-nodes-base.linear')).toBe('dev_tools');
+      expect(getServiceDomain('n8n-nodes-base.sentry')).toBe('dev_tools');
+    });
+
+    it('resolves CRM & sales', () => {
+      expect(getServiceDomain('n8n-nodes-base.salesforce')).toBe('crm_sales');
+      expect(getServiceDomain('n8n-nodes-base.hubspot')).toBe('crm_sales');
+      expect(getServiceDomain('n8n-nodes-base.pipedrive')).toBe('crm_sales');
+    });
+
+    it('resolves productivity', () => {
+      expect(getServiceDomain('n8n-nodes-base.googleSheets')).toBe('productivity');
+      expect(getServiceDomain('n8n-nodes-base.airtable')).toBe('productivity');
+      expect(getServiceDomain('n8n-nodes-base.notion')).toBe('productivity');
+      expect(getServiceDomain('n8n-nodes-base.asana')).toBe('productivity');
+      expect(getServiceDomain('n8n-nodes-base.trello')).toBe('productivity');
+    });
+
+    it('resolves marketing', () => {
+      expect(getServiceDomain('n8n-nodes-base.mailchimp')).toBe('marketing');
+      expect(getServiceDomain('n8n-nodes-base.convertKit')).toBe('marketing');
+    });
+
+    it('resolves finance', () => {
+      expect(getServiceDomain('n8n-nodes-base.stripe')).toBe('finance');
+      expect(getServiceDomain('n8n-nodes-base.paypal')).toBe('finance');
+      expect(getServiceDomain('n8n-nodes-base.quickBooks')).toBe('finance');
+    });
+
+    it('resolves ecommerce', () => {
+      expect(getServiceDomain('n8n-nodes-base.shopify')).toBe('ecommerce');
+      expect(getServiceDomain('n8n-nodes-base.woocommerce')).toBe('ecommerce');
+    });
+
+    it('resolves CMS', () => {
+      expect(getServiceDomain('n8n-nodes-base.wordpress')).toBe('cms');
+      expect(getServiceDomain('n8n-nodes-base.strapi')).toBe('cms');
+      expect(getServiceDomain('n8n-nodes-base.ghost')).toBe('cms');
+    });
+
+    it('resolves social media', () => {
+      expect(getServiceDomain('n8n-nodes-base.twitter')).toBe('social_media');
+      expect(getServiceDomain('n8n-nodes-base.facebook')).toBe('social_media');
+      expect(getServiceDomain('n8n-nodes-base.linkedin')).toBe('social_media');
+    });
+
+    it('resolves security', () => {
+      expect(getServiceDomain('n8n-nodes-base.theHive')).toBe('security');
+      expect(getServiceDomain('n8n-nodes-base.virusTotal')).toBe('security');
+    });
+
+    it('resolves support/helpdesk', () => {
+      expect(getServiceDomain('n8n-nodes-base.zendesk')).toBe('support');
+      expect(getServiceDomain('n8n-nodes-base.freshdesk')).toBe('support');
+    });
+
+    it('resolves cloud infrastructure', () => {
+      expect(getServiceDomain('n8n-nodes-base.awsLambda')).toBe('cloud_infra');
+      expect(getServiceDomain('n8n-nodes-base.awsSqs')).toBe('cloud_infra');
+    });
+
+    it('resolves forms/surveys', () => {
+      expect(getServiceDomain('n8n-nodes-base.typeform')).toBe('forms_surveys');
+      expect(getServiceDomain('n8n-nodes-base.jotform')).toBe('forms_surveys');
+    });
+
+    it('resolves HR/recruiting', () => {
+      expect(getServiceDomain('n8n-nodes-base.bambooHr')).toBe('hr_recruiting');
+    });
+
+    it('resolves design/media', () => {
+      expect(getServiceDomain('n8n-nodes-base.figma')).toBe('design');
+    });
+
+    it('resolves IoT', () => {
+      expect(getServiceDomain('n8n-nodes-base.mqtt')).toBe('iot_hardware');
+    });
+
+    it('returns undefined for utility/core nodes', () => {
+      expect(getServiceDomain('n8n-nodes-base.set')).toBeUndefined();
+      expect(getServiceDomain('n8n-nodes-base.if')).toBeUndefined();
+      expect(getServiceDomain('n8n-nodes-base.code')).toBeUndefined();
+      expect(getServiceDomain('n8n-nodes-base.httpRequest')).toBeUndefined();
+    });
   });
 
   // ── extractTriggers() ────────────────────────────────────────────────
@@ -665,6 +825,20 @@ describe('N8nPlugin', () => {
         expect(parsed.symbols.find((s) => s.name === 'Merge Results')!.metadata!.mergeMode).toBe('multiplex');
         expect(parsed.symbols.find((s) => s.name === 'Process Items')!.metadata!.batchSize).toBe(5);
       });
+
+      it('captures serviceDomain on integration nodes', () => {
+        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const db = parsed.symbols.find((s) => s.name === 'Save to Database');
+        expect(db!.metadata!.serviceDomain).toBe('database');
+      });
+
+      it('captures serviceDomain on error handler nodes', () => {
+        const parsed = plugin.extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')._unsafeUnwrap();
+        const slack = parsed.symbols.find((s) => s.name === 'Alert Slack Critical');
+        expect(slack!.metadata!.serviceDomain).toBe('communication');
+        const pg = parsed.symbols.find((s) => s.name === 'Log to DB');
+        expect(pg!.metadata!.serviceDomain).toBe('database');
+      });
     });
 
     describe('metadata', () => {
@@ -767,6 +941,30 @@ describe('N8nPlugin', () => {
         const httpEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_http_request');
         expect(httpEdges.length).toBe(1);
         expect(httpEdges[0].metadata!.authentication).toBe('headerAuth');
+      });
+
+      it('creates external service edges with domain', () => {
+        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const svcEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_external_service');
+        expect(svcEdges.length).toBeGreaterThanOrEqual(1);
+        const pgEdge = svcEdges.find((e) => e.metadata!.service === 'postgres');
+        expect(pgEdge).toBeDefined();
+        expect(pgEdge!.metadata!.serviceDomain).toBe('database');
+      });
+
+      it('aggregates serviceDomains in workflow metadata', () => {
+        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const domains = parsed.metadata!.serviceDomains as string[];
+        expect(domains).toBeDefined();
+        expect(domains).toContain('database');
+      });
+
+      it('creates external service edges for error handler', () => {
+        const parsed = plugin.extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')._unsafeUnwrap();
+        const svcEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_external_service');
+        const domains = new Set(svcEdges.map((e) => e.metadata!.serviceDomain));
+        expect(domains.has('communication')).toBe(true); // slack nodes
+        expect(domains.has('database')).toBe(true); // postgres node
       });
     });
 

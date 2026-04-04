@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue.js';
+import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
 function parse(code: string, filePath = 'src/components/MyComponent.vue') {

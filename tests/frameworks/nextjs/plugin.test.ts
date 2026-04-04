@@ -5,7 +5,7 @@ import {
   NextJSPlugin,
   appRouterPathToRoute,
   pagesRouterPathToRoute,
-} from '../../../src/indexer/plugins/framework/nextjs/index.js';
+} from '../../../src/indexer/plugins/integration/nextjs/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/nextjs-app');

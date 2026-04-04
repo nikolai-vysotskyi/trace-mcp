@@ -5,7 +5,7 @@ import {
   SequelizePlugin,
   extractSequelizeModel,
   extractSequelizeMigration,
-} from '../../../src/indexer/plugins/framework/sequelize/index.js';
+} from '../../../src/indexer/plugins/integration/sequelize/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const S6_FIXTURE = path.resolve(__dirname, '../../fixtures/sequelize-6');

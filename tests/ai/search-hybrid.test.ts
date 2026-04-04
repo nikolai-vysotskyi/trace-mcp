@@ -8,7 +8,7 @@ import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { BlobVectorStore } from '../../src/ai/vector-store.js';
 import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
 import { search } from '../../src/tools/navigation.js';

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ReactPlugin } from '../../../src/indexer/plugins/framework/react/index.js';
+import { ReactPlugin } from '../../../src/indexer/plugins/integration/react/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('ReactPlugin', () => {

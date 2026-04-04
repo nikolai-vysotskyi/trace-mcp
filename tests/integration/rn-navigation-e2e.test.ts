@@ -9,8 +9,8 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { ReactNativePlugin } from '../../src/indexer/plugins/framework/react-native/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { ReactNativePlugin } from '../../src/indexer/plugins/integration/react-native/index.js';
 
 describe('React Navigation v6 e2e', () => {
   let store: Store;

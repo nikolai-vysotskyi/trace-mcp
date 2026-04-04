@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { extractRoutes } from '../../../src/indexer/plugins/framework/laravel/routes.js';
+import { extractRoutes } from '../../../src/indexer/plugins/integration/laravel/routes.js';
 
 const L10_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');
 

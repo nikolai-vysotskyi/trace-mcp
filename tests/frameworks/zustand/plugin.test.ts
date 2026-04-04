@@ -8,7 +8,7 @@ import {
   extractZustandStores,
   extractReduxSlices,
   extractDispatches,
-} from '../../../src/indexer/plugins/framework/zustand/index.js';
+} from '../../../src/indexer/plugins/integration/zustand/index.js';
 
 // ── detect() ──────────────────────────────────────────────────
 

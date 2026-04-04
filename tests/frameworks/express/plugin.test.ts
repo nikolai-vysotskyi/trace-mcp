@@ -5,7 +5,7 @@ import {
   ExpressPlugin,
   extractExpressRoutes,
   extractExpressMiddleware,
-} from '../../../src/indexer/plugins/framework/express/index.js';
+} from '../../../src/indexer/plugins/integration/express/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/express-basic');

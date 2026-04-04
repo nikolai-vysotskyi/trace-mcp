@@ -8,7 +8,7 @@ import path from 'node:path';
 import type { Store } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
-import { extractModuleInfo } from '../indexer/plugins/framework/nestjs/index.js';
+import { extractModuleInfo } from '../indexer/plugins/integration/nestjs/index.js';
 
 export interface ModuleGraphNode {
   name: string;

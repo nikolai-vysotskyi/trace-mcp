@@ -4,7 +4,7 @@ import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, selfAudit } from '../../src/tools/introspect.js';
 import { search } from '../../src/tools/navigation.js';
 import type { TraceMcpConfig } from '../../src/config.js';

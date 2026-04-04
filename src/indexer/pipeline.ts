@@ -4,7 +4,8 @@ import fg from 'fast-glob';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { ResolveContext, RawEdge } from '../plugin-api/types.js';
+import type { ResolveContext, RawEdge, ProjectContext } from '../plugin-api/types.js';
+import { buildProjectContext } from './project-context.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes, executeFrameworkResolveEdges } from '../plugin-api/executor.js';
 import { hashContent } from '../utils/hasher.js';
 import { validatePath, validateFileSize, isSensitiveFile } from '../utils/security.js';
@@ -746,74 +747,8 @@ export class IndexingPipeline {
     return this._projectContext;
   }
 
-  private _buildProjectContext() {
-    let packageJson: Record<string, unknown> | undefined;
-    try {
-      const pkgPath = path.resolve(this.rootPath, 'package.json');
-      const content = fs.readFileSync(pkgPath, 'utf-8');
-      packageJson = JSON.parse(content) as Record<string, unknown>;
-    } catch {
-      // No package.json found
-    }
-
-    let composerJson: Record<string, unknown> | undefined;
-    try {
-      const composerPath = path.resolve(this.rootPath, 'composer.json');
-      const content = fs.readFileSync(composerPath, 'utf-8');
-      composerJson = JSON.parse(content) as Record<string, unknown>;
-    } catch {
-      // No composer.json found
-    }
-
-    let pyprojectToml: Record<string, unknown> | undefined;
-    try {
-      const tomlPath = path.resolve(this.rootPath, 'pyproject.toml');
-      const content = fs.readFileSync(tomlPath, 'utf-8');
-      // Lightweight TOML parse — extract [project] dependencies and [tool.poetry] dependencies
-      const deps: string[] = [];
-      const depBlockRe = /\[(?:project|tool\.poetry)\.?dependencies\]([^[]*)/g;
-      let m: RegExpExecArray | null;
-      while ((m = depBlockRe.exec(content)) !== null) {
-        const block = m[1];
-        for (const line of block.split('\n')) {
-          const pkg = line.match(/^\s*([a-zA-Z0-9_-]+)/);
-          if (pkg) deps.push(pkg[1].toLowerCase());
-        }
-      }
-      // Also parse inline dependencies array: dependencies = ["fastapi>=0.100", ...]
-      const inlineDeps = content.match(/dependencies\s*=\s*\[([^\]]*)\]/);
-      if (inlineDeps) {
-        const items = inlineDeps[1].matchAll(/["']([a-zA-Z0-9_-]+)[^"']*["']/g);
-        for (const item of items) {
-          deps.push(item[1].toLowerCase());
-        }
-      }
-      pyprojectToml = { _parsedDeps: deps, _raw: content } as Record<string, unknown>;
-    } catch {
-      // No pyproject.toml found
-    }
-
-    let requirementsTxt: string[] | undefined;
-    try {
-      const reqPath = path.resolve(this.rootPath, 'requirements.txt');
-      const content = fs.readFileSync(reqPath, 'utf-8');
-      requirementsTxt = content
-        .split('\n')
-        .map((l) => l.replace(/#.*/, '').trim())
-        .filter((l) => l && !l.startsWith('-'))
-        .map((l) => l.split(/[>=<!\[;]/)[0].trim().toLowerCase());
-    } catch {
-      // No requirements.txt found
-    }
-
-    return {
-      rootPath: this.rootPath,
-      packageJson,
-      composerJson,
-      pyprojectToml,
-      requirementsTxt,
-      configFiles: [],
-    };
+  private _buildProjectContext(): ProjectContext {
+    return buildProjectContext(this.rootPath);
   }
 
   private registerFrameworkEdgeTypes(): void {

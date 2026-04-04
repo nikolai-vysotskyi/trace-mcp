@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
 function parse(code: string, filePath = 'app/Models/User.php') {

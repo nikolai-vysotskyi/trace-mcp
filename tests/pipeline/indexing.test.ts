@@ -4,9 +4,9 @@ import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline, type IndexingResult } from '../../src/indexer/pipeline.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');

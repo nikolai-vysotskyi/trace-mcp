@@ -9,7 +9,7 @@ import path from 'node:path';
 import {
   extractBroadcastingEvent,
   extractChannelAuthorizations,
-} from '../../../src/indexer/plugins/framework/laravel/broadcasting.js';
+} from '../../../src/indexer/plugins/integration/laravel/broadcasting.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');
 

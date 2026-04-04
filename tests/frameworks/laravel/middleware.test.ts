@@ -10,7 +10,7 @@ import {
   parseBootstrapMiddleware,
   parseRouteServiceProviderNamespace,
   parseBootstrapRouting,
-} from '../../../src/indexer/plugins/framework/laravel/middleware.js';
+} from '../../../src/indexer/plugins/integration/laravel/middleware.js';
 
 const L6_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-6');
 const L8_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-8');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { KotlinLanguagePlugin } from '../../src/indexer/plugins/language/kotlin.js';
+import { KotlinLanguagePlugin } from '../../src/indexer/plugins/language/kotlin/index.js';
 
 const plugin = new KotlinLanguagePlugin();
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
 function parse(code: string, filePath = 'src/utils.ts') {

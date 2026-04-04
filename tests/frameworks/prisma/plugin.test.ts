@@ -3,7 +3,7 @@ import {
   PrismaPlugin,
   PrismaLanguagePlugin,
   parsePrismaSchema,
-} from '../../../src/indexer/plugins/framework/prisma/index.js';
+} from '../../../src/indexer/plugins/integration/prisma/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 // ── parsePrismaSchema ─────────────────────────────────────────────────────────

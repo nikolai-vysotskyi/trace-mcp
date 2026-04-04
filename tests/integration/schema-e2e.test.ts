@@ -10,8 +10,8 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/framework/laravel/index.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
 import { getSchema } from '../../src/tools/schema.js';
 
 describe('get_schema e2e', () => {

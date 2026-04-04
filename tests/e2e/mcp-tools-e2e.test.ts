@@ -9,12 +9,12 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/framework/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/framework/vue/index.js';
-import { BladePlugin } from '../../src/indexer/plugins/framework/blade/index.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/vue/index.js';
+import { BladePlugin } from '../../src/indexer/plugins/integration/blade/index.js';
 
 // Tools under test
 import { search, getFileOutline, getSymbol } from '../../src/tools/navigation.js';

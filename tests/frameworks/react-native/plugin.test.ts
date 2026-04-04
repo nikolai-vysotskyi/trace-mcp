@@ -11,7 +11,7 @@ import {
   getPlatform,
   hasNativeModuleUsage,
   extractNativeModuleNames,
-} from '../../../src/indexer/plugins/framework/react-native/index.js';
+} from '../../../src/indexer/plugins/integration/react-native/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const RN6_FIXTURE = path.resolve(__dirname, '../../fixtures/react-navigation-6');

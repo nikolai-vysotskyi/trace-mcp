@@ -3,7 +3,7 @@ import {
   ZodPlugin,
   extractZodSchemas,
   extractZodInferences,
-} from '../../../src/indexer/plugins/framework/zod/index.js';
+} from '../../../src/indexer/plugins/integration/zod/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('ZodPlugin', () => {

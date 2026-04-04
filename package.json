@@ -1,7 +1,7 @@
 {
   "name": "trace-mcp",
   "version": "0.1.0",
-  "description": "Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt",
+  "description": "Framework-aware code intelligence MCP server — 35+ frameworks, 8 languages",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

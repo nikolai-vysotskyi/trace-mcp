@@ -8,8 +8,8 @@ import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { TrpcPlugin } from '../../src/indexer/plugins/framework/trpc/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { TrpcPlugin } from '../../src/indexer/plugins/integration/trpc/index.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/trpc-app');

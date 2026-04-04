@@ -9,7 +9,7 @@ import {
   extractLivewireComponent,
   extractLivewireBladeUsages,
   extractWireDirectives,
-} from '../../../src/indexer/plugins/framework/laravel/livewire.js';
+} from '../../../src/indexer/plugins/integration/laravel/livewire.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/livewire-v2');
 

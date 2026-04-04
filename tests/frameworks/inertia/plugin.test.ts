@@ -4,7 +4,7 @@ import {
   InertiaPlugin,
   extractInertiaRenders,
   resolvePagePath,
-} from '../../../src/indexer/plugins/framework/inertia/index.js';
+} from '../../../src/indexer/plugins/integration/inertia/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/inertia-laravel-vue');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RubyLanguagePlugin } from '../../src/indexer/plugins/language/ruby.js';
+import { RubyLanguagePlugin } from '../../src/indexer/plugins/language/ruby/index.js';
 
 const plugin = new RubyLanguagePlugin();
 

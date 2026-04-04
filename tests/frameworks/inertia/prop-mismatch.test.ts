@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectPropMismatches } from '../../../src/indexer/plugins/framework/inertia/index.js';
+import { detectPropMismatches } from '../../../src/indexer/plugins/integration/inertia/index.js';
 
 describe('Inertia prop mismatch detection', () => {
   it('detects when PHP passes props that Vue does not expect', () => {

@@ -6,7 +6,7 @@ import {
   extractControllerRoutes,
   extractModuleInfo,
   extractConstructorDeps,
-} from '../../../src/indexer/plugins/framework/nestjs/index.js';
+} from '../../../src/indexer/plugins/integration/nestjs/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/nestjs-basic');

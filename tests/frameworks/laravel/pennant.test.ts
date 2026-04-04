@@ -12,7 +12,7 @@ import {
   extractFeatureBladeUsages,
   extractFeatureMiddlewareUsages,
   buildPennantEdges,
-} from '../../../src/indexer/plugins/framework/laravel/pennant.js';
+} from '../../../src/indexer/plugins/integration/laravel/pennant.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');
 

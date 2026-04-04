@@ -3,7 +3,7 @@ import {
   SocketIoPlugin,
   extractSocketEvents,
   extractSocketNamespaces,
-} from '../../../src/indexer/plugins/framework/socketio/index.js';
+} from '../../../src/indexer/plugins/integration/socketio/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('SocketIoPlugin', () => {

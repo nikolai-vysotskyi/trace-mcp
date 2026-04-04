@@ -127,21 +127,54 @@ export interface FileParseResult {
 
 // --- Plugin manifest ---
 
+export type PluginCategory = 'framework' | 'orm' | 'validation' | 'state' | 'api' | 'realtime' | 'testing' | 'tooling' | 'view';
+
 export interface PluginManifest {
   name: string;
   version: string;
   priority: number;        // lower = earlier
   dependencies?: string[]; // names of plugins this depends on
+  category?: PluginCategory;
 }
 
 // --- Project context (passed to FrameworkPlugin.detect) ---
 
+/** Detected runtime/language version from manifest files. */
+export interface DetectedVersion {
+  runtime: string;       // 'node', 'php', 'python', 'ruby', 'go', 'java', 'rust'
+  version?: string;      // e.g. '20.11.0', '>=8.2', '^3.12'
+  source: string;        // file that provided this version, e.g. '.nvmrc', 'package.json#engines.node'
+}
+
+/** Parsed dependency entry from any manifest. */
+export interface ParsedDependency {
+  name: string;
+  version?: string;      // raw version constraint, e.g. '^3.5.0', '>=1.21'
+  dev?: boolean;
+}
+
 export interface ProjectContext {
   rootPath: string;
+
+  // --- Existing manifest files ---
   composerJson?: Record<string, unknown>;
   packageJson?: Record<string, unknown>;
   pyprojectToml?: Record<string, unknown>;
   requirementsTxt?: string[];
+
+  // --- Newly supported manifest files ---
+  goMod?: { module: string; goVersion?: string; deps: ParsedDependency[] };
+  cargoToml?: { package?: Record<string, unknown>; deps: ParsedDependency[] };
+  gemfile?: { deps: ParsedDependency[] };
+  pomXml?: { groupId?: string; artifactId?: string; version?: string; deps: ParsedDependency[] };
+  buildGradle?: { deps: ParsedDependency[] };
+
+  // --- Aggregated version detection ---
+  detectedVersions: DetectedVersion[];
+
+  // --- Aggregated dependencies from all manifests ---
+  allDependencies: ParsedDependency[];
+
   configFiles: string[];
 }
 
@@ -150,6 +183,7 @@ export interface ProjectContext {
 export interface LanguagePlugin {
   manifest: PluginManifest;
   supportedExtensions: string[];
+  supportedVersions?: string[];  // e.g. ['7.0', '7.1', ..., '8.4'] or ['3.9', ..., '3.14']
   extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult>;
 }
 

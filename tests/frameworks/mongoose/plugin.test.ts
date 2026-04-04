@@ -4,7 +4,7 @@ import path from 'node:path';
 import {
   MongoosePlugin,
   extractMongooseSchema,
-} from '../../../src/indexer/plugins/framework/mongoose/index.js';
+} from '../../../src/indexer/plugins/integration/mongoose/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const M8_FIXTURE = path.resolve(__dirname, '../../fixtures/mongoose-8');

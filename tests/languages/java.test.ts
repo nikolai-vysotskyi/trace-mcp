@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { JavaLanguagePlugin } from '../../src/indexer/plugins/language/java.js';
+import { JavaLanguagePlugin } from '../../src/indexer/plugins/language/java/index.js';
 
 const plugin = new JavaLanguagePlugin();
 

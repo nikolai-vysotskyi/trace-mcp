@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   TypeORMPlugin,
   extractTypeORMEntity,
-} from '../../../src/indexer/plugins/framework/typeorm/index.js';
+} from '../../../src/indexer/plugins/integration/typeorm/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 // ── extractTypeORMEntity ──────────────────────────────────────────────────────

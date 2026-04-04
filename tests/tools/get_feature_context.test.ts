@@ -4,11 +4,11 @@ import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/framework/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/framework/vue/index.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/laravel/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/vue/index.js';
 import { getFeatureContext, tokenizeDescription } from '../../src/tools/context.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 

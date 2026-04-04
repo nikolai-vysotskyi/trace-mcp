@@ -10,9 +10,9 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript.js';
-import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue.js';
-import { NuxtPlugin } from '../../src/indexer/plugins/framework/nuxt/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
+import { NuxtPlugin } from '../../src/indexer/plugins/integration/nuxt/index.js';
 
 describe('Nuxt file-based routing e2e', () => {
   let store: Store;
