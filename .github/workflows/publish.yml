@@ -8,6 +8,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: npm
     permissions:
       contents: write
       id-token: write
@@ -24,8 +25,6 @@ jobs:
       - run: npm test
 
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         run: gh release create "${{ github.ref_name }}" --generate-notes

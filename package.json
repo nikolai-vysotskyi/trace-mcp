@@ -53,7 +53,7 @@
     "oxc-resolver": "^11.19.1",
     "pino": "^9.6.0",
     "tree-sitter": "^0.22.4",
-    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-go": "^0.23.4",
     "tree-sitter-java": "^0.23.5",
     "tree-sitter-kotlin": "^0.3.8",
     "tree-sitter-php": "^0.22.8",

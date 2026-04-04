@@ -15,8 +15,10 @@ import type {
   ResolveContext,
 } from '../../../../plugin-api/types.js';
 
+// Match procedure name + type. Uses [\s\S]{0,500}? to bridge .input(...) chains
+// with nested parens that [^)]* can't handle.
 const PROCEDURE_RE =
-  /(\w+)\s*:\s*\w*[Pp]rocedure(?:\.\w+\([^)]*\))*\.(query|mutation|subscription)\s*\(/g;
+  /(\w+)\s*:\s*\w*[Pp]rocedure[\s\S]{0,500}?\.(query|mutation|subscription)\s*\(/g;
 
 const ROUTER_RE =
   /(?:t\.router|router)\s*\(\s*\{/g;

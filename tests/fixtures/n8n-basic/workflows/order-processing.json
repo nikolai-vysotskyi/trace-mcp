@@ -1,4 +1,5 @@
 {
+  "id": "wf-001",
   "name": "Order Processing",
   "nodes": [
     {
@@ -10,7 +11,8 @@
         "path": "/orders/new",
         "httpMethod": "POST"
       },
-      "typeVersion": 1
+      "typeVersion": 1,
+      "webhookId": "wh-abc-123"
     },
     {
       "id": "validate-1",
@@ -19,6 +21,22 @@
       "position": [450, 300],
       "parameters": {
         "jsCode": "const order = $input.first().json;\nif (!order.items || order.items.length === 0) {\n  throw new Error('No items in order');\n}\nreturn [{ json: { ...order, validated: true } }];"
+      },
+      "typeVersion": 2,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "if-1",
+      "name": "Check Amount",
+      "type": "n8n-nodes-base.if",
+      "position": [550, 300],
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.total }}", "operation": "largerEqual", "value2": 100 }]
+        }
       },
       "typeVersion": 2
     },
@@ -34,7 +52,9 @@
       "credentials": {
         "postgres": { "id": "1", "name": "Production DB" }
       },
-      "typeVersion": 1
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "notes": "Insert into orders table, continue on duplicate key"
     },
     {
       "id": "notify-1",
@@ -43,7 +63,11 @@
       "position": [650, 400],
       "parameters": {
         "url": "https://api.slack.com/webhook/notify",
-        "method": "POST"
+        "method": "POST",
+        "authentication": "headerAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": { "id": "5", "name": "Slack Webhook Auth" }
       },
       "typeVersion": 3
     },
@@ -58,6 +82,31 @@
       "typeVersion": 1
     },
     {
+      "id": "set-1",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.set",
+      "position": [1050, 300],
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "status", "value": "={{ $node[\"Save to Database\"].json.status }}" },
+            { "name": "paymentRef", "value": "={{ $node[\"Process Payment\"].json.ref }}" }
+          ]
+        }
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "respond-1",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1250, 300],
+      "parameters": {
+        "respondWith": "json"
+      },
+      "typeVersion": 1
+    },
+    {
       "id": "cron-1",
       "name": "Daily Cleanup",
       "type": "n8n-nodes-base.scheduleTrigger",
@@ -67,6 +116,38 @@
       },
       "typeVersion": 1,
       "disabled": true
+    },
+    {
+      "id": "merge-1",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "position": [950, 250],
+      "parameters": {
+        "mode": "multiplex"
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "sticky-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [200, 100],
+      "parameters": {
+        "content": "## Order Processing Pipeline\nThis workflow handles incoming orders via webhook.",
+        "width": 300,
+        "height": 100
+      },
+      "color": 1
+    },
+    {
+      "id": "loop-1",
+      "name": "Process Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [750, 500],
+      "parameters": {
+        "batchSize": 5
+      },
+      "typeVersion": 3
     }
   ],
   "connections": {
@@ -80,19 +161,69 @@
     "Validate Order": {
       "main": [
         [
+          { "node": "Check Amount", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Check Amount": {
+      "main": [
+        [
           { "node": "Save to Database", "type": "main", "index": 0 },
           { "node": "Send Notification", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Process Items", "type": "main", "index": 0 }
         ]
       ]
     },
     "Save to Database": {
       "main": [
         [
+          { "node": "Merge Results", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Notification": {
+      "main": [
+        [
+          { "node": "Merge Results", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
           { "node": "Process Payment", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Process Payment": {
+      "main": [
+        [
+          { "node": "Format Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
         ]
       ]
     }
   },
   "active": true,
-  "tags": ["orders", "production"]
+  "settings": {
+    "timezone": "America/New_York",
+    "errorWorkflow": "wf-err-001",
+    "executionTimeout": 300,
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "callerPolicy": "none"
+  },
+  "pinData": {
+    "Webhook Trigger": [{ "json": { "orderId": "test-001", "items": [{ "sku": "A1", "qty": 2 }], "total": 150 } }]
+  },
+  "tags": ["orders", "production"],
+  "meta": { "templateId": "tmpl-orders-v2" }
 }

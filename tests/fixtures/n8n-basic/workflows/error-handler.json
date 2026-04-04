@@ -1,0 +1,114 @@
+{
+  "id": "wf-err-001",
+  "name": "Error Handler",
+  "nodes": [
+    {
+      "id": "err-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "position": [250, 300],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "switch-1",
+      "name": "Route by Severity",
+      "type": "n8n-nodes-base.switch",
+      "position": [450, 300],
+      "parameters": {
+        "rules": {
+          "rules": [
+            { "value": "critical", "output": 0 },
+            { "value": "warning", "output": 1 },
+            { "value": "info", "output": 2 }
+          ]
+        }
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "slack-crit",
+      "name": "Alert Slack Critical",
+      "type": "n8n-nodes-base.slack",
+      "position": [650, 200],
+      "parameters": {
+        "channel": "#critical-alerts",
+        "text": "={{ $json.message }}"
+      },
+      "credentials": {
+        "slackApi": { "id": "20", "name": "Workspace Bot" }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "slack-warn",
+      "name": "Alert Slack Warning",
+      "type": "n8n-nodes-base.slack",
+      "position": [650, 400],
+      "parameters": {
+        "channel": "#warnings"
+      },
+      "credentials": {
+        "slackApi": { "id": "20", "name": "Workspace Bot" }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "log-1",
+      "name": "Log to DB",
+      "type": "n8n-nodes-base.postgres",
+      "position": [650, 600],
+      "parameters": {
+        "operation": "insert",
+        "table": "error_log"
+      },
+      "credentials": {
+        "postgres": { "id": "1", "name": "Production DB" }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "filter-1",
+      "name": "Skip Duplicates",
+      "type": "n8n-nodes-base.filter",
+      "position": [350, 300],
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.errorId }}", "operation": "isNotEmpty" }]
+        }
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          { "node": "Skip Duplicates", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Skip Duplicates": {
+      "main": [
+        [
+          { "node": "Route by Severity", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Route by Severity": {
+      "main": [
+        [
+          { "node": "Alert Slack Critical", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Alert Slack Warning", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Log to DB", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "tags": [{ "name": "error-handling" }, { "name": "infrastructure" }]
+}

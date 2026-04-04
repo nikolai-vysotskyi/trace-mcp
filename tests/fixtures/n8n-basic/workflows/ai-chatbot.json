@@ -1,0 +1,200 @@
+{
+  "id": "wf-ai-001",
+  "name": "AI Customer Support",
+  "nodes": [
+    {
+      "id": "chat-trigger",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "position": [250, 300],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "agent-1",
+      "name": "Support Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [500, 300],
+      "parameters": {
+        "systemMessage": "You are a customer support agent. Use the available tools to look up orders and answer questions."
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "llm-1",
+      "name": "OpenAI Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [500, 500],
+      "parameters": {
+        "model": "gpt-4o",
+        "temperature": 0.3
+      },
+      "credentials": {
+        "openAiApi": { "id": "10", "name": "OpenAI Production" }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "memory-1",
+      "name": "Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [600, 500],
+      "parameters": {
+        "sessionIdType": "fromInput",
+        "windowSize": 20
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "tool-search",
+      "name": "Search Orders Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "position": [400, 500],
+      "parameters": {
+        "workflowId": "wf-001",
+        "description": "Search for customer orders by ID or email"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "tool-http",
+      "name": "Inventory Check Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [300, 500],
+      "parameters": {
+        "url": "https://api.inventory.example.com/check",
+        "method": "GET",
+        "description": "Check current inventory levels for a product SKU"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "embed-1",
+      "name": "Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "position": [700, 600],
+      "parameters": {
+        "model": "text-embedding-3-small"
+      },
+      "credentials": {
+        "openAiApi": { "id": "10", "name": "OpenAI Production" }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "vs-1",
+      "name": "FAQ Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "position": [700, 500],
+      "parameters": {
+        "collectionName": "customer-faq"
+      },
+      "credentials": {
+        "qdrantApi": { "id": "15", "name": "Qdrant Cloud" }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "retriever-1",
+      "name": "FAQ Retriever",
+      "type": "@n8n/n8n-nodes-langchain.retrieverVectorStore",
+      "position": [600, 600],
+      "parameters": {
+        "topK": 5
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "code-post",
+      "name": "Format Answer",
+      "type": "n8n-nodes-base.code",
+      "position": [750, 300],
+      "parameters": {
+        "jsCode": "const answer = $node[\"Support Agent\"].json.output;\nreturn [{ json: { answer, timestamp: new Date().toISOString() } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "sticky-ai",
+      "name": "AI Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [100, 100],
+      "parameters": {
+        "content": "## AI Customer Support Bot\nUses GPT-4o with RAG retrieval from FAQ knowledge base.\nTools: order search, inventory check.",
+        "width": 400,
+        "height": 120
+      },
+      "color": 2
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          { "node": "Support Agent", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "OpenAI Model": {
+      "ai_languageModel": [
+        [
+          { "node": "Support Agent", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Chat Memory": {
+      "ai_memory": [
+        [
+          { "node": "Support Agent", "type": "ai_memory", "index": 0 }
+        ]
+      ]
+    },
+    "Search Orders Tool": {
+      "ai_tool": [
+        [
+          { "node": "Support Agent", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "Inventory Check Tool": {
+      "ai_tool": [
+        [
+          { "node": "Support Agent", "type": "ai_tool", "index": 1 }
+        ]
+      ]
+    },
+    "FAQ Retriever": {
+      "ai_retriever": [
+        [
+          { "node": "Support Agent", "type": "ai_retriever", "index": 0 }
+        ]
+      ]
+    },
+    "FAQ Store": {
+      "ai_vectorStore": [
+        [
+          { "node": "FAQ Retriever", "type": "ai_vectorStore", "index": 0 }
+        ]
+      ]
+    },
+    "Embeddings": {
+      "ai_embedding": [
+        [
+          { "node": "FAQ Store", "type": "ai_embedding", "index": 0 }
+        ]
+      ]
+    },
+    "Support Agent": {
+      "main": [
+        [
+          { "node": "Format Answer", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["ai", "customer-support"]
+}

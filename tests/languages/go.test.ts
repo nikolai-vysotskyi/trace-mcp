@@ -1,15 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { GoLanguagePlugin } from '../../src/indexer/plugins/language/go.js';
 
 const plugin = new GoLanguagePlugin();
 
 function extract(code: string, filePath = 'pkg/service/user.go') {
   const result = plugin.extractSymbols(filePath, Buffer.from(code));
-  expect(result.isOk()).toBe(true);
+  if (!result.isOk()) {
+    // Surface the actual error so full-suite failures are diagnosable
+    throw new Error(`Go extractSymbols failed: ${JSON.stringify(result._unsafeUnwrapErr())}`);
+  }
   return result._unsafeUnwrap();
 }
 
 describe('GoLanguagePlugin', () => {
+  // Eagerly initialise the parser to catch native-module loading issues
+  // that can surface when other tree-sitter plugins run first in the suite.
+  beforeAll(() => {
+    const probe = plugin.extractSymbols('probe.go', Buffer.from('package probe\n'));
+    expect(probe.isOk(), `Go parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+  });
   it('has correct manifest', () => {
     expect(plugin.manifest.name).toBe('go-language');
     expect(plugin.supportedExtensions).toContain('.go');

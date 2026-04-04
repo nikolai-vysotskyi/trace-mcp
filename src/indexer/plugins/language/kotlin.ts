@@ -42,7 +42,7 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
       }
 
       // Classes, interfaces, objects, enums
-      const classRe = /^(\s*)(?:(@\w+(?:\([^)]*\))?)\s+)*(?:(abstract|sealed|data|open|inner|enum|annotation)\s+)*(?:(class|interface|object))\s+(\w+)(?:\s*(?:<[^>]+>)?)?(?:\s*\(([^)]*)\))?(?:\s*:\s*([^\{]+?))?(?:\s*\{)?/gm;
+      const classRe = /^(\s*)(?:(@\w+(?:\([^)]*\))?)\s+)*(?:(abstract|sealed|data|open|inner|enum|annotation)\s+)*(?:(class|interface|object))\s+(\w+)(?:\s*(?:<[^>]+>)?)?(?:\s*\(([^)]*)\))?(?:\s*:\s*([^\{]+))?(?:\s*\{)?/gm;
       let cm: RegExpExecArray | null;
       while ((cm = classRe.exec(source)) !== null) {
         const modifiers = cm[3] ?? '';
