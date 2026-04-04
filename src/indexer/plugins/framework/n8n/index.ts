@@ -226,9 +226,9 @@ export function classifyNode(node: N8nNode): N8nNodeCategory {
   if (CODE_TYPES.has(node.type)) return 'code';
   if (FLOW_CONTROL_TYPES.has(node.type)) return 'flow_control';
   if (DATA_TRANSFORM_TYPES.has(node.type)) return 'data_transform';
-  if (isAiNode(node)) return 'ai';
   if (SUBWORKFLOW_TYPES.has(node.type)) return 'subworkflow';
   if (HTTP_REQUEST_TYPES.has(node.type)) return 'http_request';
+  if (isAiNode(node)) return 'ai';
   return 'action';
 }
 
