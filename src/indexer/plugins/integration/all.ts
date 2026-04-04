@@ -13,6 +13,8 @@ import { HonoPlugin } from './framework/hono/index.js';
 import { FastifyPlugin } from './framework/fastify/index.js';
 import { NuxtPlugin } from './framework/nuxt/index.js';
 import { NextJSPlugin } from './framework/nextjs/index.js';
+import { GinPlugin } from './framework/gin/index.js';
+import { EchoPlugin } from './framework/echo/index.js';
 
 // --- orm ---
 import { PrismaPlugin } from './orm/prisma/index.js';
@@ -33,6 +35,8 @@ import { MuiPlugin } from './view/mui/index.js';
 import { AntDesignPlugin } from './view/antd/index.js';
 import { HeadlessUiPlugin } from './view/headless-ui/index.js';
 import { NuxtUiPlugin } from './view/nuxt-ui/index.js';
+import { AngularPlugin } from './view/angular/index.js';
+import { SveltePlugin } from './view/svelte/index.js';
 
 // --- api ---
 import { GraphQLPlugin } from './api/graphql/index.js';
@@ -72,6 +76,8 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new FastifyPlugin(),
     new NuxtPlugin(),
     new NextJSPlugin(),
+    new GinPlugin(),
+    new EchoPlugin(),
     // orm
     new PrismaPlugin(),
     new TypeORMPlugin(),
@@ -90,6 +96,8 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new AntDesignPlugin(),
     new HeadlessUiPlugin(),
     new NuxtUiPlugin(),
+    new AngularPlugin(),
+    new SveltePlugin(),
     // api
     new GraphQLPlugin(),
     new TrpcPlugin(),
