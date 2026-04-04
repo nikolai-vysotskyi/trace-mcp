@@ -570,7 +570,7 @@ export function createServer(
               })),
               dispatches: dispatches.map((d) => ({
                 action: d.uri.replace(/^action:/, ''),
-                file: store.getFileById(d.file_id)?.path,
+                file: d.file_id ? store.getFileById(d.file_id)?.path : null,
               })),
               totalStores: stores.length,
               totalDispatches: dispatches.length,

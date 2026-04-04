@@ -67,8 +67,10 @@ CREATE TABLE IF NOT EXISTS routes (
     method                  TEXT NOT NULL,
     uri                     TEXT NOT NULL,
     name                    TEXT,
+    handler                 TEXT,
     controller_symbol_id    INTEGER REFERENCES symbols(id),
     middleware              TEXT,
+    metadata                TEXT,
     file_id                 INTEGER REFERENCES files(id),
     line                    INTEGER
 );

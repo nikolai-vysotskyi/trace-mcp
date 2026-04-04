@@ -832,8 +832,10 @@ export interface RouteRow {
   method: string;
   uri: string;
   name: string | null;
+  handler: string | null;
   controller_symbol_id: string | null;
   middleware: string | null;
+  metadata: string | null;
   file_id: number | null;
   line: number | null;
 }
