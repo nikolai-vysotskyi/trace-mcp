@@ -3,6 +3,7 @@
  */
 import type { AIProvider, EmbeddingService, InferenceService } from './interfaces.js';
 import { logger } from '../logger.js';
+import { withRetry } from '../utils/retry.js';
 
 export interface OllamaConfig {
   baseUrl: string;
@@ -20,35 +21,26 @@ class OllamaEmbeddingService implements EmbeddingService {
   ) {}
 
   async embed(text: string): Promise<number[]> {
-    const resp = await fetch(`${this.baseUrl}/api/embed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: this.model, input: text }),
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (!resp.ok) {
-      throw new Error(`Ollama embed failed: ${resp.status} ${resp.statusText}`);
-    }
-
-    const data = (await resp.json()) as { embeddings: number[][] };
-    return data.embeddings[0] ?? [];
+    const results = await this.embedBatch([text]);
+    return results[0] ?? [];
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
-    const resp = await fetch(`${this.baseUrl}/api/embed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: this.model, input: texts }),
-      signal: AbortSignal.timeout(30_000),
-    });
+    return withRetry(async () => {
+      const resp = await fetch(`${this.baseUrl}/api/embed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: this.model, input: texts }),
+        signal: AbortSignal.timeout(30_000),
+      });
 
-    if (!resp.ok) {
-      throw new Error(`Ollama embed batch failed: ${resp.status} ${resp.statusText}`);
-    }
+      if (!resp.ok) {
+        throw new Error(`Ollama embed batch failed: ${resp.status} ${resp.statusText}`);
+      }
 
-    const data = (await resp.json()) as { embeddings: number[][] };
-    return data.embeddings;
+      const data = (await resp.json()) as { embeddings: number[][] };
+      return data.embeddings;
+    }, { label: 'Ollama embeddings' });
   }
 
   dimensions(): number {
@@ -63,32 +55,34 @@ class OllamaInferenceService implements InferenceService {
   ) {}
 
   async generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string> {
-    const body: Record<string, unknown> = {
-      model: this.model,
-      prompt,
-      stream: false,
-    };
-
-    if (options?.maxTokens || options?.temperature !== undefined) {
-      body.options = {
-        ...(options.maxTokens ? { num_predict: options.maxTokens } : {}),
-        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+    return withRetry(async () => {
+      const body: Record<string, unknown> = {
+        model: this.model,
+        prompt,
+        stream: false,
       };
-    }
 
-    const resp = await fetch(`${this.baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
-    });
+      if (options?.maxTokens || options?.temperature !== undefined) {
+        body.options = {
+          ...(options.maxTokens ? { num_predict: options.maxTokens } : {}),
+          ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+        };
+      }
 
-    if (!resp.ok) {
-      throw new Error(`Ollama generate failed: ${resp.status} ${resp.statusText}`);
-    }
+      const resp = await fetch(`${this.baseUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60_000),
+      });
 
-    const data = (await resp.json()) as { response: string };
-    return data.response;
+      if (!resp.ok) {
+        throw new Error(`Ollama generate failed: ${resp.status} ${resp.statusText}`);
+      }
+
+      const data = (await resp.json()) as { response: string };
+      return data.response;
+    }, { label: 'Ollama generate' });
   }
 }
 
