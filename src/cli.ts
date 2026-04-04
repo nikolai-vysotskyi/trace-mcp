@@ -18,10 +18,28 @@ import { FileWatcher } from './indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from './ai/index.js';
 import { SummarizationPipeline } from './ai/summarization-pipeline.js';
 import http from 'node:http';
+import { initCommand } from './cli-init.js';
+import { upgradeCommand } from './cli-upgrade.js';
+import { addCommand } from './cli-add.js';
+import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
+import { getDbPath, ensureGlobalDirs } from './global.js';
+import { getProject, listProjects, registerProject } from './registry.js';
+import { findProjectRoot } from './project-root.js';
 
 function registerDefaultPlugins(registry: PluginRegistry): void {
   for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
   for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
+}
+
+/**
+ * Resolve DB path for a project:
+ * 1. Check registry for the project root
+ * 2. Fall back to global path computed from project root
+ */
+function resolveDbPath(projectRoot: string): string {
+  const entry = getProject(projectRoot);
+  if (entry) return entry.dbPath;
+  return getDbPath(projectRoot);
 }
 
 const program = new Command();
@@ -35,25 +53,36 @@ program
   .command('serve')
   .description('Start MCP server (stdio transport)')
   .action(async () => {
-    const configResult = await loadConfig(process.cwd());
+    const projectRoot = process.cwd();
+
+    // Auto-register project if not in registry
+    const existing = getProject(projectRoot);
+    if (!existing) {
+      try {
+        const root = findProjectRoot(projectRoot);
+        ensureGlobalDirs();
+        registerProject(root);
+        logger.info({ root }, 'Auto-registered project');
+      } catch {
+        // Not a project dir — will still try to serve with defaults
+      }
+    }
+
+    const configResult = await loadConfig(projectRoot);
     if (configResult.isErr()) {
       logger.error({ error: configResult.error }, 'Failed to load config');
       process.exit(1);
     }
     const config = configResult.value;
 
-    const dbPath = path.resolve(process.cwd(), config.db.path);
-    const dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
+    const dbPath = resolveDbPath(projectRoot);
+    ensureGlobalDirs();
 
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
     const registry = new PluginRegistry();
     registerDefaultPlugins(registry);
 
-    const projectRoot = process.cwd();
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
     const watcher = new FileWatcher();
 
@@ -66,6 +95,7 @@ program
 
     // Summarization pipeline (uses fast model + inference cache)
     const inferenceCache = config.ai?.enabled ? new InferenceCache(store.db) : null;
+    inferenceCache?.evictExpired();
     const summarizationPipeline = config.ai?.enabled && config.ai.summarize_on_index !== false
       ? new SummarizationPipeline(
           store,
@@ -93,7 +123,6 @@ program
     };
 
     // Initial index runs in background so the server starts immediately
-    // Summarization runs first (populates summaries), then embeddings (uses summaries for richer text)
     pipeline.indexAll().then(() => { runSummarization(); runEmbeddings(); }).catch((err) => {
       logger.error({ error: err }, 'Initial indexing failed');
     });
@@ -116,7 +145,7 @@ program
     const server = createServer(store, registry, config, projectRoot);
     const transport = new StdioServerTransport();
 
-    logger.info('Starting trace-mcp MCP server...');
+    logger.info({ projectRoot, dbPath }, 'Starting trace-mcp MCP server...');
     await server.connect(transport);
   });
 
@@ -126,25 +155,23 @@ program
   .option('-p, --port <port>', 'Port to listen on', '3741')
   .option('--host <host>', 'Host to bind to', '127.0.0.1')
   .action(async (opts: { port: string; host: string }) => {
-    const configResult = await loadConfig(process.cwd());
+    const projectRoot = process.cwd();
+
+    const configResult = await loadConfig(projectRoot);
     if (configResult.isErr()) {
       logger.error({ error: configResult.error }, 'Failed to load config');
       process.exit(1);
     }
     const config = configResult.value;
 
-    const dbPath = path.resolve(process.cwd(), config.db.path);
-    const dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
+    const dbPath = resolveDbPath(projectRoot);
+    ensureGlobalDirs();
 
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
     const registry = new PluginRegistry();
     registerDefaultPlugins(registry);
 
-    const projectRoot = process.cwd();
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
     const watcher = new FileWatcher();
 
@@ -156,6 +183,7 @@ program
       : null;
 
     const inferenceCache2 = config.ai?.enabled ? new InferenceCache(store.db) : null;
+    inferenceCache2?.evictExpired();
     const summarizationPipeline2 = config.ai?.enabled && config.ai.summarize_on_index !== false
       ? new SummarizationPipeline(
           store,
@@ -200,12 +228,21 @@ program
     // Simple per-IP rate limiter (token bucket: 60 requests/minute per IP)
     const RATE_WINDOW_MS = 60_000;
     const RATE_LIMIT = 60;
+    const MAX_RATE_BUCKETS = 10_000;
     const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
     function isRateLimited(ip: string): boolean {
       const now = Date.now();
       const bucket = rateBuckets.get(ip);
       if (!bucket || now > bucket.resetAt) {
+        // Evict expired entries if map is at capacity
+        if (!bucket && rateBuckets.size >= MAX_RATE_BUCKETS) {
+          for (const [key, b] of rateBuckets) {
+            if (now > b.resetAt) rateBuckets.delete(key);
+          }
+          // Still full after eviction — reject to bound memory
+          if (rateBuckets.size >= MAX_RATE_BUCKETS) return true;
+        }
         rateBuckets.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
         return false;
       }
@@ -220,12 +257,10 @@ program
         if (now > bucket.resetAt) rateBuckets.delete(ip);
       }
     }, RATE_WINDOW_MS);
-    rateBucketCleanup.unref(); // Don't block process exit
+    rateBucketCleanup.unref();
 
-    // Max request body size (5 MB)
     const MAX_BODY_SIZE = 5 * 1024 * 1024;
 
-    // Stateless HTTP transport: each request gets its own transport instance
     const httpServer = http.createServer(async (req, res) => {
       const clientIp = req.socket.remoteAddress ?? 'unknown';
 
@@ -235,13 +270,16 @@ program
         return;
       }
 
-      // Enforce max body size
       let bodySize = 0;
+      let bodySizeExceeded = false;
       req.on('data', (chunk: Buffer) => {
+        if (bodySizeExceeded) return;
         bodySize += chunk.length;
         if (bodySize > MAX_BODY_SIZE) {
+          bodySizeExceeded = true;
           res.writeHead(413, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Request body too large' }));
+          req.removeAllListeners('data');
           req.destroy();
         }
       });
@@ -249,7 +287,7 @@ program
       if (req.method === 'POST' && req.url === '/mcp') {
         const server = createServer(store, registry, config, projectRoot);
         const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined, // stateless
+          sessionIdGenerator: undefined,
         });
         res.on('close', () => {
           transport.close().catch(() => {});
@@ -301,11 +339,8 @@ program
     }
     const config = configResult.value;
 
-    const dbPath = path.resolve(resolvedDir, config.db.path);
-    const dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
+    const dbPath = resolveDbPath(resolvedDir);
+    ensureGlobalDirs();
 
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
@@ -320,5 +355,49 @@ program
 
     db.close();
   });
+
+program
+  .command('setup-hooks')
+  .description('Install Claude Code PreToolUse guard hook (alias: use `trace-mcp init` instead)')
+  .option('--global', 'Install to ~/.claude/settings.json (default: project-level .claude/settings.local.json)')
+  .option('--uninstall', 'Remove the hook')
+  .action((opts: { global?: boolean; uninstall?: boolean }) => {
+    if (opts.uninstall) {
+      uninstallGuardHook({ global: opts.global });
+      console.log('trace-mcp hook removed.');
+      return;
+    }
+    const result = installGuardHook({ global: opts.global });
+    console.log(`Hook ${result.action}: ${result.target}`);
+    if (result.detail) console.log(`  ${result.detail}`);
+  });
+
+program
+  .command('list')
+  .description('List all registered projects')
+  .option('--json', 'Output as JSON')
+  .action((opts: { json?: boolean }) => {
+    const projects = listProjects();
+    if (opts.json) {
+      console.log(JSON.stringify(projects, null, 2));
+    } else if (projects.length === 0) {
+      console.log('No projects registered. Run `trace-mcp add` in a project directory.');
+    } else {
+      console.log('Registered projects:\n');
+      for (const p of projects) {
+        const lastIdx = p.lastIndexed ? new Date(p.lastIndexed).toLocaleString() : 'never';
+        const dbExists = fs.existsSync(p.dbPath) ? 'ok' : 'missing';
+        console.log(`  ${p.name}`);
+        console.log(`    Root: ${p.root}`);
+        console.log(`    DB: ${dbExists}`);
+        console.log(`    Last indexed: ${lastIdx}`);
+        console.log();
+      }
+    }
+  });
+
+program.addCommand(initCommand);
+program.addCommand(upgradeCommand);
+program.addCommand(addCommand);
 
 program.parse();
