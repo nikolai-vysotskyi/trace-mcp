@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 12;
 
 const DDL = `
 -- ============================================================
@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS files (
     byte_length     INTEGER,
     indexed_at      TEXT NOT NULL,
     metadata        TEXT,
-    workspace       TEXT
+    workspace       TEXT,
+    gitignored      INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS symbols (
@@ -59,7 +60,10 @@ CREATE TABLE IF NOT EXISTS symbols (
     byte_end    INTEGER NOT NULL,
     line_start  INTEGER,
     line_end    INTEGER,
-    metadata    TEXT
+    metadata    TEXT,
+    cyclomatic  INTEGER,
+    max_nesting INTEGER,
+    param_count INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS routes (
@@ -174,10 +178,15 @@ CREATE TABLE IF NOT EXISTS edges (
 CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_node_id);
 CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_node_id);
 CREATE INDEX IF NOT EXISTS idx_edges_type   ON edges(edge_type_id);
+CREATE INDEX IF NOT EXISTS idx_edges_src_tgt_type ON edges(source_node_id, target_node_id, edge_type_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
 CREATE INDEX IF NOT EXISTS idx_symbols_fqn  ON symbols(fqn);
+CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_nodes_type   ON nodes(node_type);
+CREATE INDEX IF NOT EXISTS idx_orm_models_name ON orm_models(name);
+CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace);
+CREATE INDEX IF NOT EXISTS idx_edges_cross_ws ON edges(is_cross_ws) WHERE is_cross_ws = 1;
 
 -- ============================================================
 -- FTS5 FULL-TEXT SEARCH
@@ -248,7 +257,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 `;
 
-const SEED_NODE_TYPES = ['symbol', 'file', 'route', 'component', 'migration', 'orm_model', 'rn_screen'];
+const SEED_NODE_TYPES = ['symbol', 'file', 'route', 'component', 'migration', 'orm_model', 'rn_screen', 'service'];
 
 const SEED_EDGE_TYPES = [
   // Core edges (added in v2 migration, must also be in seed for fresh DBs)
@@ -457,6 +466,13 @@ const SEED_EDGE_TYPES = [
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },
   { name: 'type_import', category: 'workspace', description: 'Cross-workspace type import' },
+  // Runtime Intelligence edges (from OTel traces)
+  { name: 'runtime_calls', category: 'runtime', description: 'Observed runtime call between symbols' },
+  { name: 'runtime_routes_to', category: 'runtime', description: 'Observed HTTP request to route handler' },
+  { name: 'runtime_queries', category: 'runtime', description: 'Runtime DB query from code to database service' },
+  { name: 'runtime_calls_service', category: 'runtime', description: 'Runtime call to external service' },
+  { name: 'runtime_publishes', category: 'runtime', description: 'Runtime message publish to queue/topic' },
+  { name: 'runtime_consumes', category: 'runtime', description: 'Runtime message consumption from queue/topic' },
 ];
 
 /**
@@ -479,7 +495,7 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     `);
   },
   3: (db) => {
-    // v3: TypeScript heritage edges — enables find_references for extends/implements
+    // v3: TypeScript heritage edges — enables find_usages for extends/implements
     db.exec(`
       INSERT OR IGNORE INTO edge_types (name, category, directed, description)
       VALUES
@@ -518,6 +534,232 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       CREATE INDEX IF NOT EXISTS idx_env_vars_key  ON env_vars(key);
     `);
   },
+  6: (db) => {
+    // v6: complexity metrics on symbols — cyclomatic, max_nesting, param_count
+    db.exec(`
+      ALTER TABLE symbols ADD COLUMN cyclomatic   INTEGER;
+      ALTER TABLE symbols ADD COLUMN max_nesting  INTEGER;
+      ALTER TABLE symbols ADD COLUMN param_count  INTEGER;
+    `);
+  },
+  7: (db) => {
+    // v7: gitignored flag on files — indexed for graph metadata,
+    // but source content not served to AI models
+    db.exec(`ALTER TABLE files ADD COLUMN gitignored INTEGER NOT NULL DEFAULT 0;`);
+  },
+  8: (db) => {
+    // v8: Predictive Intelligence — bug prediction, drift detection, tech debt scoring
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pi_snapshots (
+          id              INTEGER PRIMARY KEY,
+          snapshot_type   TEXT NOT NULL,
+          created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+          git_head        TEXT,
+          config_hash     TEXT,
+          file_count      INTEGER,
+          duration_ms     INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_pi_snapshots_type ON pi_snapshots(snapshot_type);
+
+      CREATE TABLE IF NOT EXISTS pi_bug_scores (
+          id              INTEGER PRIMARY KEY,
+          snapshot_id     INTEGER NOT NULL REFERENCES pi_snapshots(id) ON DELETE CASCADE,
+          file_id         INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+          score           REAL NOT NULL,
+          churn_signal    REAL,
+          fix_ratio_signal REAL,
+          complexity_signal REAL,
+          coupling_signal REAL,
+          pagerank_signal REAL,
+          author_signal   REAL,
+          factors         TEXT,
+          UNIQUE(snapshot_id, file_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_pi_bug_scores_snapshot ON pi_bug_scores(snapshot_id);
+      CREATE INDEX IF NOT EXISTS idx_pi_bug_scores_score ON pi_bug_scores(score DESC);
+
+      CREATE TABLE IF NOT EXISTS pi_co_changes (
+          id              INTEGER PRIMARY KEY,
+          snapshot_id     INTEGER NOT NULL REFERENCES pi_snapshots(id) ON DELETE CASCADE,
+          file_a_id       INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+          file_b_id       INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+          co_change_count INTEGER NOT NULL,
+          total_a         INTEGER NOT NULL,
+          total_b         INTEGER NOT NULL,
+          confidence      REAL NOT NULL,
+          same_module     INTEGER NOT NULL,
+          UNIQUE(snapshot_id, file_a_id, file_b_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_pi_co_changes_snapshot ON pi_co_changes(snapshot_id);
+
+      CREATE TABLE IF NOT EXISTS pi_tech_debt (
+          id              INTEGER PRIMARY KEY,
+          snapshot_id     INTEGER NOT NULL REFERENCES pi_snapshots(id) ON DELETE CASCADE,
+          module_path     TEXT NOT NULL,
+          score           REAL NOT NULL,
+          complexity_score REAL,
+          coupling_score  REAL,
+          test_gap_score  REAL,
+          churn_score     REAL,
+          recommendations TEXT,
+          UNIQUE(snapshot_id, module_path)
+      );
+      CREATE INDEX IF NOT EXISTS idx_pi_tech_debt_snapshot ON pi_tech_debt(snapshot_id);
+
+      CREATE TABLE IF NOT EXISTS pi_health_history (
+          id              INTEGER PRIMARY KEY,
+          file_path       TEXT NOT NULL,
+          recorded_at     TEXT NOT NULL DEFAULT (datetime('now')),
+          bug_score       REAL,
+          complexity_avg  REAL,
+          coupling_ce     REAL,
+          churn_per_week  REAL,
+          test_coverage   REAL
+      );
+      CREATE INDEX IF NOT EXISTS idx_pi_health_file ON pi_health_history(file_path);
+      CREATE INDEX IF NOT EXISTS idx_pi_health_date ON pi_health_history(recorded_at);
+    `);
+  },
+  9: (db) => {
+    // v9: Workspace indices for cross-workspace queries
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace);
+      CREATE INDEX IF NOT EXISTS idx_edges_cross_ws ON edges(is_cross_ws) WHERE is_cross_ws = 1;
+    `);
+  },
+  10: (db) => {
+    // v10: Missing indexes for indexing pipeline performance.
+    // - symbols(name): heritage resolution, findImplementors, getSymbolByName
+    // - orm_models(name): ORM association target resolution
+    // - edges compound: edge existence checks during batch insert
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+      CREATE INDEX IF NOT EXISTS idx_orm_models_name ON orm_models(name);
+      CREATE INDEX IF NOT EXISTS idx_edges_src_tgt_type ON edges(source_node_id, target_node_id, edge_type_id);
+    `);
+  },
+  11: (db) => {
+    // v11: Intent Layer — business domain mapping
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS domains (
+          id          INTEGER PRIMARY KEY,
+          name        TEXT NOT NULL,
+          parent_id   INTEGER REFERENCES domains(id) ON DELETE SET NULL,
+          description TEXT,
+          path_hints  TEXT,
+          confidence  REAL NOT NULL DEFAULT 1.0,
+          is_manual   INTEGER NOT NULL DEFAULT 0,
+          metadata    TEXT,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(name, parent_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_domains_parent ON domains(parent_id);
+
+      CREATE TABLE IF NOT EXISTS symbol_domains (
+          id          INTEGER PRIMARY KEY,
+          symbol_id   INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+          domain_id   INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+          relevance   REAL NOT NULL DEFAULT 1.0,
+          is_manual   INTEGER NOT NULL DEFAULT 0,
+          inferred_by TEXT NOT NULL DEFAULT 'heuristic',
+          metadata    TEXT,
+          UNIQUE(symbol_id, domain_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_symbol_domains_symbol ON symbol_domains(symbol_id);
+      CREATE INDEX IF NOT EXISTS idx_symbol_domains_domain ON symbol_domains(domain_id);
+
+      CREATE TABLE IF NOT EXISTS file_domains (
+          id          INTEGER PRIMARY KEY,
+          file_id     INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+          domain_id   INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+          relevance   REAL NOT NULL DEFAULT 1.0,
+          is_manual   INTEGER NOT NULL DEFAULT 0,
+          inferred_by TEXT NOT NULL DEFAULT 'heuristic',
+          UNIQUE(file_id, domain_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_file_domains_file ON file_domains(file_id);
+      CREATE INDEX IF NOT EXISTS idx_file_domains_domain ON file_domains(domain_id);
+
+      CREATE TABLE IF NOT EXISTS domain_embeddings (
+          domain_id   INTEGER PRIMARY KEY REFERENCES domains(id) ON DELETE CASCADE,
+          embedding   BLOB NOT NULL
+      );
+    `);
+  },
+  12: (db) => {
+    // v12: Runtime Intelligence — OTel trace ingestion, span mapping, aggregates
+    db.exec(`
+      INSERT OR IGNORE INTO node_types (name) VALUES ('service');
+
+      INSERT OR IGNORE INTO edge_types (name, category, directed, description) VALUES
+        ('runtime_calls', 'runtime', 1, 'Observed runtime call between symbols'),
+        ('runtime_routes_to', 'runtime', 1, 'Observed HTTP request to route handler'),
+        ('runtime_queries', 'runtime', 1, 'Runtime DB query from code to database service'),
+        ('runtime_calls_service', 'runtime', 1, 'Runtime call to external service'),
+        ('runtime_publishes', 'runtime', 1, 'Runtime message publish to queue/topic'),
+        ('runtime_consumes', 'runtime', 1, 'Runtime message consumption from queue/topic');
+
+      CREATE TABLE IF NOT EXISTS runtime_traces (
+          id              INTEGER PRIMARY KEY,
+          trace_id        TEXT NOT NULL UNIQUE,
+          root_service    TEXT,
+          root_operation  TEXT,
+          started_at      TEXT NOT NULL,
+          duration_us     INTEGER,
+          status          TEXT DEFAULT 'ok',
+          ingested_at     TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_rt_traces_started ON runtime_traces(started_at);
+
+      CREATE TABLE IF NOT EXISTS runtime_spans (
+          id              INTEGER PRIMARY KEY,
+          trace_id        INTEGER NOT NULL REFERENCES runtime_traces(id) ON DELETE CASCADE,
+          span_id         TEXT NOT NULL,
+          parent_span_id  TEXT,
+          service_name    TEXT NOT NULL,
+          operation       TEXT NOT NULL,
+          kind            TEXT NOT NULL,
+          started_at      TEXT NOT NULL,
+          duration_us     INTEGER NOT NULL,
+          status_code     INTEGER DEFAULT 0,
+          status_message  TEXT,
+          attributes      TEXT,
+          mapped_node_id  INTEGER REFERENCES nodes(id),
+          mapping_method  TEXT,
+          UNIQUE(trace_id, span_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_rs_trace ON runtime_spans(trace_id);
+      CREATE INDEX IF NOT EXISTS idx_rs_mapped_node ON runtime_spans(mapped_node_id);
+      CREATE INDEX IF NOT EXISTS idx_rs_service ON runtime_spans(service_name);
+      CREATE INDEX IF NOT EXISTS idx_rs_started ON runtime_spans(started_at);
+
+      CREATE TABLE IF NOT EXISTS runtime_services (
+          id              INTEGER PRIMARY KEY,
+          name            TEXT NOT NULL UNIQUE,
+          kind            TEXT,
+          first_seen_at   TEXT NOT NULL,
+          last_seen_at    TEXT NOT NULL,
+          metadata        TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS runtime_aggregates (
+          id              INTEGER PRIMARY KEY,
+          node_id         INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+          bucket          TEXT NOT NULL,
+          call_count      INTEGER NOT NULL DEFAULT 0,
+          error_count     INTEGER NOT NULL DEFAULT 0,
+          total_duration_us INTEGER NOT NULL DEFAULT 0,
+          min_duration_us INTEGER,
+          max_duration_us INTEGER,
+          percentiles     TEXT,
+          UNIQUE(node_id, bucket)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ra_node ON runtime_aggregates(node_id);
+      CREATE INDEX IF NOT EXISTS idx_ra_bucket ON runtime_aggregates(bucket);
+      CREATE INDEX IF NOT EXISTS idx_rs_trace_parent ON runtime_spans(trace_id, parent_span_id);
+    `);
+  },
 };
 
 function runMigrations(db: Database.Database, fromVersion: number): void {
@@ -549,10 +791,17 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
 export function initializeDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
 
-  // WAL mode for concurrent reads
+  // WAL mode for concurrent reads + write performance
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
+  // NORMAL is safe in WAL mode (data survives process crash, not OS crash) and
+  // avoids an fsync per transaction — major win for batched indexing.
+  db.pragma('synchronous = NORMAL');
+  // 64 MB page cache (default is ~2 MB) — keeps hot pages in memory during indexing
+  db.pragma('cache_size = -65536');
+  // 256 MB mmap — lets SQLite access pages via mmap instead of read() syscalls
+  db.pragma('mmap_size = 268435456');
 
   db.exec(DDL);
 

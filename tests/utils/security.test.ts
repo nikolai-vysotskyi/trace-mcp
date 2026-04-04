@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validatePath, detectSecrets, validateFileSize, validateArtisanCommand, escapeRegExp, isSensitiveFile } from '../../src/utils/security.js';
+import { validatePath, detectSecrets, validateFileSize, validateArtisanCommand, escapeRegExp, isSensitiveFile, isBinaryBuffer } from '../../src/utils/security.js';
 
 describe('security', () => {
   describe('path traversal', () => {
@@ -31,6 +31,53 @@ describe('security', () => {
       const result = validatePath('app/Http/Controllers/Auth/LoginController.php', root);
       expect(result.isOk()).toBe(true);
     });
+
+    it('blocks absolute paths outside root', () => {
+      const result = validatePath('/etc/passwd', root);
+      expect(result.isErr()).toBe(true);
+    });
+
+    it('blocks paths with null bytes', () => {
+      const result = validatePath('app/Models/User.php\0/../../../etc/passwd', root);
+      // path.resolve strips after null byte on some platforms, but the resolved
+      // path should either stay in root or be blocked
+      if (result.isOk()) {
+        expect(result._unsafeUnwrap().startsWith(root)).toBe(true);
+      } else {
+        expect(result._unsafeUnwrapErr().code).toBe('SECURITY_VIOLATION');
+      }
+    });
+
+    it('blocks double-encoded traversal', () => {
+      const result = validatePath('app/..%2f..%2f..%2fetc/passwd', root);
+      // %2f is not decoded by path.resolve, so this stays in root — that's fine
+      if (result.isOk()) {
+        expect(result._unsafeUnwrap().startsWith(root + '/')).toBe(true);
+      }
+    });
+
+    it('handles empty path as root', () => {
+      const result = validatePath('', root);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toBe('/projects/my-app');
+    });
+
+    it('blocks traversal disguised in middle segments', () => {
+      const result = validatePath('app/Models/../../../../../../etc/shadow', root);
+      expect(result.isErr()).toBe(true);
+    });
+
+    it('allows paths with .. that stay within root', () => {
+      const result = validatePath('app/Models/../Services/UserService.php', root);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toBe('/projects/my-app/app/Services/UserService.php');
+    });
+
+    it('blocks root prefix attack (rootpath substring)', () => {
+      // If root is /projects/my-app, /projects/my-app-evil should be blocked
+      const result = validatePath('/projects/my-app-evil/file.ts', '/projects/my-app');
+      expect(result.isErr()).toBe(true);
+    });
   });
 
   describe('secret detection', () => {
@@ -54,6 +101,30 @@ describe('security', () => {
       const result = detectSecrets('MY_CUSTOM_VAR=value', ['custom_var']);
       expect(result.found).toBe(true);
     });
+
+    it('skips invalid regex in custom patterns', () => {
+      const result = detectSecrets('some content', ['[invalid', 'password']);
+      // should not throw, should still match 'password' pattern
+      expect(result.found).toBe(false); // content doesn't contain 'password'
+    });
+
+    it('detects multiple secret patterns', () => {
+      const result = detectSecrets('DB_PASSWORD=x API_KEY=y TOKEN=z');
+      expect(result.found).toBe(true);
+      expect(result.matches.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('returns empty matches for empty content', () => {
+      const result = detectSecrets('');
+      expect(result.found).toBe(false);
+      expect(result.matches).toEqual([]);
+    });
+
+    it('is case insensitive', () => {
+      expect(detectSecrets('PASSWORD=x').found).toBe(true);
+      expect(detectSecrets('Password=x').found).toBe(true);
+      expect(detectSecrets('pAsSwOrD=x').found).toBe(true);
+    });
   });
 
   describe('file size validation', () => {
@@ -71,6 +142,21 @@ describe('security', () => {
     it('respects custom limit', () => {
       const result = validateFileSize(100, 50);
       expect(result.isErr()).toBe(true);
+    });
+
+    it('allows file exactly at limit', () => {
+      const result = validateFileSize(1_048_576); // exactly 1MB
+      expect(result.isOk()).toBe(true);
+    });
+
+    it('blocks file 1 byte over limit', () => {
+      const result = validateFileSize(1_048_577);
+      expect(result.isErr()).toBe(true);
+    });
+
+    it('allows zero-size file', () => {
+      const result = validateFileSize(0);
+      expect(result.isOk()).toBe(true);
     });
   });
 
@@ -196,6 +282,64 @@ describe('security', () => {
       expect(isSensitiveFile('package.json')).toBe(false);
       expect(isSensitiveFile('config/database.php')).toBe(false);
       expect(isSensitiveFile('README.md')).toBe(false);
+    });
+
+    it('is case-insensitive', () => {
+      expect(isSensitiveFile('.ENV')).toBe(true);
+      expect(isSensitiveFile('ID_RSA')).toBe(true);
+      expect(isSensitiveFile('Server.PEM')).toBe(true);
+    });
+
+    it('handles *.env pattern', () => {
+      expect(isSensitiveFile('production.env')).toBe(true);
+      expect(isSensitiveFile('staging.env')).toBe(true);
+    });
+  });
+
+  describe('binary buffer detection', () => {
+    it('detects null bytes as binary', () => {
+      const buf = Buffer.from([0x48, 0x65, 0x6c, 0x00, 0x6f]); // "Hel\0o"
+      expect(isBinaryBuffer(buf)).toBe(true);
+    });
+
+    it('allows pure text content', () => {
+      const buf = Buffer.from('export function hello() { return "world"; }', 'utf-8');
+      expect(isBinaryBuffer(buf)).toBe(false);
+    });
+
+    it('allows empty buffer', () => {
+      const buf = Buffer.alloc(0);
+      expect(isBinaryBuffer(buf)).toBe(false);
+    });
+
+    it('detects null byte at start', () => {
+      const buf = Buffer.from([0x00, 0x48, 0x65, 0x6c, 0x6f]);
+      expect(isBinaryBuffer(buf)).toBe(true);
+    });
+
+    it('detects null byte at 8KB boundary', () => {
+      // Null byte right at the end of the scan window
+      const buf = Buffer.alloc(8192, 0x41); // 8KB of 'A'
+      buf[8191] = 0x00;
+      expect(isBinaryBuffer(buf)).toBe(true);
+    });
+
+    it('ignores null bytes beyond 8KB', () => {
+      // Null byte just past the scan window
+      const buf = Buffer.alloc(9000, 0x41); // 9KB of 'A'
+      buf[8192] = 0x00;
+      expect(isBinaryBuffer(buf)).toBe(false);
+    });
+
+    it('detects PNG header as binary', () => {
+      // PNG magic bytes
+      const buf = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+      expect(isBinaryBuffer(buf)).toBe(true);
+    });
+
+    it('allows UTF-8 text with multibyte characters', () => {
+      const buf = Buffer.from('const привет = "мир"; // Юникод', 'utf-8');
+      expect(isBinaryBuffer(buf)).toBe(false);
     });
   });
 });

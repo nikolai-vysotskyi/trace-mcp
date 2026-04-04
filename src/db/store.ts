@@ -4,7 +4,41 @@ import { ok, err, type TraceMcpResult } from '../errors.js';
 import { dbError } from '../errors.js';
 
 export class Store {
-  constructor(public readonly db: Database.Database) {}
+  constructor(public readonly db: Database.Database) {
+    // Pre-compile hot-path prepared statements to avoid per-call allocation overhead.
+    // better-sqlite3 caches the native side, but the JS wrapper creation is measurable at 10K+ calls.
+    this._stmts = {
+      getFile: db.prepare('SELECT * FROM files WHERE path = ?'),
+      getFileById: db.prepare('SELECT * FROM files WHERE id = ?'),
+      getNodeId: db.prepare('SELECT id FROM nodes WHERE node_type = ? AND ref_id = ?'),
+      createNodeInsert: db.prepare('INSERT OR IGNORE INTO nodes (node_type, ref_id) VALUES (?, ?)'),
+      createNodeSelect: db.prepare('SELECT id FROM nodes WHERE node_type = ? AND ref_id = ?'),
+      getNodeRef: db.prepare('SELECT node_type AS nodeType, ref_id AS refId FROM nodes WHERE id = ?'),
+      getEdgeType: db.prepare('SELECT id FROM edge_types WHERE name = ?'),
+      insertEdge: db.prepare(
+        `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ),
+      insertSymbol: db.prepare(
+        `INSERT OR REPLACE INTO symbols (file_id, symbol_id, name, kind, fqn, parent_id, signature, byte_start, byte_end, line_start, line_end, metadata, cyclomatic, max_nesting, param_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ),
+      getSymbolById: db.prepare('SELECT * FROM symbols WHERE id = ?'),
+    };
+  }
+
+  private readonly _stmts: {
+    getFile: Database.Statement;
+    getFileById: Database.Statement;
+    getNodeId: Database.Statement;
+    createNodeInsert: Database.Statement;
+    createNodeSelect: Database.Statement;
+    getNodeRef: Database.Statement;
+    getEdgeType: Database.Statement;
+    insertEdge: Database.Statement;
+    insertSymbol: Database.Statement;
+    getSymbolById: Database.Statement;
+  };
 
   // --- Files ---
 
@@ -27,11 +61,11 @@ export class Store {
   }
 
   getFile(path: string): FileRow | undefined {
-    return this.db.prepare('SELECT * FROM files WHERE path = ?').get(path) as FileRow | undefined;
+    return this._stmts.getFile.get(path) as FileRow | undefined;
   }
 
   getFileById(id: number): FileRow | undefined {
-    return this.db.prepare('SELECT * FROM files WHERE id = ?').get(id) as FileRow | undefined;
+    return this._stmts.getFileById.get(id) as FileRow | undefined;
   }
 
   getAllFiles(): FileRow[] {
@@ -58,6 +92,10 @@ export class Store {
     ).run(status, frameworkRole ?? null, fileId);
   }
 
+  updateFileGitignored(fileId: number, gitignored: boolean): void {
+    this.db.prepare('UPDATE files SET gitignored = ? WHERE id = ?').run(gitignored ? 1 : 0, fileId);
+  }
+
   deleteFile(fileId: number): void {
     // Cascade deletes symbols, edges via nodes
     this.deleteEdgesForFileNodes(fileId);
@@ -68,6 +106,7 @@ export class Store {
 
   /** Delete routes, components, migrations, ORM models, and RN screens for a file (and their nodes). */
   deleteEntitiesByFile(fileId: number): void {
+    // Use subquery DELETEs — avoids SELECT + placeholder building per table.
     for (const [table, nodeType] of [
       ['routes', 'route'],
       ['components', 'component'],
@@ -75,27 +114,28 @@ export class Store {
       ['orm_models', 'orm_model'],
       ['rn_screens', 'rn_screen'],
     ] as const) {
-      const ids = this.db.prepare(`SELECT id FROM ${table} WHERE file_id = ?`).all(fileId) as { id: number }[];
-      if (ids.length > 0) {
-        const placeholders = ids.map(() => '?').join(',');
-        const idValues = ids.map((r) => r.id);
-        this.db.prepare(`DELETE FROM nodes WHERE node_type = ? AND ref_id IN (${placeholders})`).run(nodeType, ...idValues);
-        this.db.prepare(`DELETE FROM ${table} WHERE file_id = ?`).run(fileId);
-      }
+      this.db.prepare(
+        `DELETE FROM nodes WHERE node_type = ? AND ref_id IN (SELECT id FROM ${table} WHERE file_id = ?)`,
+      ).run(nodeType, fileId);
+      this.db.prepare(`DELETE FROM ${table} WHERE file_id = ?`).run(fileId);
     }
   }
 
   // --- Symbols ---
 
-  insertSymbol(fileId: number, sym: RawSymbol): number {
-    const parentId = sym.parentSymbolId
-      ? (this.db.prepare('SELECT id FROM symbols WHERE symbol_id = ?').get(sym.parentSymbolId) as { id: number } | undefined)?.id ?? null
-      : null;
+  insertSymbol(fileId: number, sym: RawSymbol, parentIdOverride?: number | null): number {
+    const parentId = parentIdOverride !== undefined
+      ? parentIdOverride
+      : sym.parentSymbolId
+        ? (this.db.prepare('SELECT id FROM symbols WHERE symbol_id = ?').get(sym.parentSymbolId) as { id: number } | undefined)?.id ?? null
+        : null;
 
-    const result = this.db.prepare(
-      `INSERT OR REPLACE INTO symbols (file_id, symbol_id, name, kind, fqn, parent_id, signature, byte_start, byte_end, line_start, line_end, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
+    // Extract complexity metrics from metadata (computed in pipeline)
+    const cyclomatic = (sym.metadata as Record<string, unknown> | undefined)?.['cyclomatic'] as number | undefined ?? null;
+    const maxNesting = (sym.metadata as Record<string, unknown> | undefined)?.['max_nesting'] as number | undefined ?? null;
+    const paramCount = (sym.metadata as Record<string, unknown> | undefined)?.['param_count'] as number | undefined ?? null;
+
+    const result = this._stmts.insertSymbol.run(
       fileId,
       sym.symbolId,
       sym.name,
@@ -108,6 +148,9 @@ export class Store {
       sym.lineStart ?? null,
       sym.lineEnd ?? null,
       sym.metadata ? JSON.stringify(sym.metadata) : null,
+      cyclomatic,
+      maxNesting,
+      paramCount,
     );
 
     const symbolId = Number(result.lastInsertRowid);
@@ -117,7 +160,44 @@ export class Store {
 
   insertSymbols(fileId: number, symbols: RawSymbol[]): number[] {
     return this.db.transaction(() => {
-      return symbols.map((s) => this.insertSymbol(fileId, s));
+      // Batch-resolve parent symbol IDs to avoid N+1 SELECTs.
+      // Parents can be: (a) already in DB from a previous file, or
+      // (b) in the current batch (same file, inserted earlier in loop).
+      const parentSymbolIds = symbols
+        .map((s) => s.parentSymbolId)
+        .filter((id): id is string => id != null);
+
+      const parentIdMap = new Map<string, number>();
+      if (parentSymbolIds.length > 0) {
+        const unique = [...new Set(parentSymbolIds)];
+        const placeholders = unique.map(() => '?').join(',');
+        const rows = this.db.prepare(
+          `SELECT symbol_id, id FROM symbols WHERE symbol_id IN (${placeholders})`,
+        ).all(...unique) as { symbol_id: string; id: number }[];
+        for (const row of rows) parentIdMap.set(row.symbol_id, row.id);
+      }
+
+      const ids: number[] = [];
+      for (const sym of symbols) {
+        // Resolve parent: check batch-loaded map, then check already-inserted
+        // symbols in this batch (parent defined earlier in same file).
+        let parentId: number | null = null;
+        if (sym.parentSymbolId) {
+          parentId = parentIdMap.get(sym.parentSymbolId) ?? null;
+          // Parent might have been inserted earlier in this loop
+          if (parentId == null) {
+            const idx = symbols.findIndex((s) => s.symbolId === sym.parentSymbolId);
+            if (idx >= 0 && idx < ids.length) {
+              parentId = ids[idx];
+            }
+          }
+        }
+        const id = this.insertSymbol(fileId, sym, parentId);
+        ids.push(id);
+        // Track newly inserted symbol so later siblings can find it
+        parentIdMap.set(sym.symbolId, id);
+      }
+      return ids;
     })();
   }
 
@@ -145,23 +225,12 @@ export class Store {
   // --- Nodes ---
 
   createNode(nodeType: string, refId: number): number {
-    const existing = this.db.prepare(
-      'SELECT id FROM nodes WHERE node_type = ? AND ref_id = ?',
-    ).get(nodeType, refId) as { id: number } | undefined;
-
-    if (existing) return existing.id;
-
-    const result = this.db.prepare(
-      'INSERT INTO nodes (node_type, ref_id) VALUES (?, ?)',
-    ).run(nodeType, refId);
-    return Number(result.lastInsertRowid);
+    this._stmts.createNodeInsert.run(nodeType, refId);
+    return (this._stmts.createNodeSelect.get(nodeType, refId) as { id: number }).id;
   }
 
   getNodeId(nodeType: string, refId: number): number | undefined {
-    const row = this.db.prepare(
-      'SELECT id FROM nodes WHERE node_type = ? AND ref_id = ?',
-    ).get(nodeType, refId) as { id: number } | undefined;
-    return row?.id;
+    return (this._stmts.getNodeId.get(nodeType, refId) as { id: number } | undefined)?.id;
   }
 
   // --- Edges ---
@@ -174,16 +243,16 @@ export class Store {
     metadata?: Record<string, unknown>,
     isCrossWs = false,
   ): TraceMcpResult<number> {
-    const edgeType = this.db.prepare('SELECT id FROM edge_types WHERE name = ?').get(edgeTypeName) as { id: number } | undefined;
+    const edgeType = this._stmts.getEdgeType.get(edgeTypeName) as { id: number } | undefined;
     if (!edgeType) {
       return err(dbError(`Unknown edge type: ${edgeTypeName}`));
     }
 
     try {
-      const result = this.db.prepare(
-        `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(sourceNodeId, targetNodeId, edgeType.id, resolved ? 1 : 0, metadata ? JSON.stringify(metadata) : null, isCrossWs ? 1 : 0);
+      const result = this._stmts.insertEdge.run(
+        sourceNodeId, targetNodeId, edgeType.id,
+        resolved ? 1 : 0, metadata ? JSON.stringify(metadata) : null, isCrossWs ? 1 : 0,
+      );
       return ok(Number(result.lastInsertRowid));
     } catch (e) {
       return err(dbError(e instanceof Error ? e.message : String(e)));
@@ -322,7 +391,7 @@ export class Store {
 
   /** Reverse-lookup: find which symbol/file a node refers to */
   getNodeRef(nodeId: number): { nodeType: string; refId: number } | undefined {
-    return this.db.prepare('SELECT node_type AS nodeType, ref_id AS refId FROM nodes WHERE id = ?').get(nodeId) as { nodeType: string; refId: number } | undefined;
+    return this._stmts.getNodeRef.get(nodeId) as { nodeType: string; refId: number } | undefined;
   }
 
   // --- Migrations ---
@@ -504,7 +573,7 @@ export class Store {
   }
 
   getSymbolById(id: number): SymbolRow | undefined {
-    return this.db.prepare('SELECT * FROM symbols WHERE id = ?').get(id) as SymbolRow | undefined;
+    return this._stmts.getSymbolById.get(id) as SymbolRow | undefined;
   }
 
   getNodeByNodeId(nodeId: number): { node_type: string; ref_id: number } | undefined {
@@ -743,7 +812,7 @@ export class Store {
       SELECT s.id, s.name, s.fqn, s.kind, s.signature, f.path as file_path, s.byte_start, s.byte_end
       FROM symbols s
       JOIN files f ON s.file_id = f.id
-      WHERE s.summary IS NULL AND s.kind IN (${placeholders})
+      WHERE s.summary IS NULL AND s.kind IN (${placeholders}) AND f.gitignored = 0
       LIMIT ?
     `).all(...kinds, limit) as {
       id: number;
@@ -755,6 +824,89 @@ export class Store {
       byte_start: number;
       byte_end: number;
     }[];
+  }
+
+  // --- Workspace / Monorepo ---
+
+  /** Get all distinct workspaces with file/symbol counts. */
+  getWorkspaceStats(): WorkspaceStats[] {
+    return this.db.prepare(`
+      SELECT
+        f.workspace,
+        COUNT(DISTINCT f.id) as file_count,
+        COUNT(DISTINCT s.id) as symbol_count,
+        GROUP_CONCAT(DISTINCT f.language) as languages
+      FROM files f
+      LEFT JOIN symbols s ON s.file_id = f.id
+      WHERE f.workspace IS NOT NULL
+      GROUP BY f.workspace
+      ORDER BY file_count DESC
+    `).all() as WorkspaceStats[];
+  }
+
+  /** Get all cross-workspace edges with resolved source/target workspace info. */
+  getCrossWorkspaceEdges(): CrossWorkspaceEdge[] {
+    return this.db.prepare(`
+      SELECT
+        e.id,
+        et.name as edge_type,
+        sf.workspace as source_workspace,
+        sf.path as source_path,
+        ss.name as source_symbol,
+        ss.kind as source_kind,
+        tf.workspace as target_workspace,
+        tf.path as target_path,
+        ts.name as target_symbol,
+        ts.kind as target_kind
+      FROM edges e
+      JOIN edge_types et ON e.edge_type_id = et.id
+      JOIN nodes sn ON e.source_node_id = sn.id
+      JOIN nodes tn ON e.target_node_id = tn.id
+      LEFT JOIN symbols ss ON sn.node_type = 'symbol' AND sn.ref_id = ss.id
+      LEFT JOIN files sf ON (sn.node_type = 'file' AND sn.ref_id = sf.id) OR ss.file_id = sf.id
+      LEFT JOIN symbols ts ON tn.node_type = 'symbol' AND tn.ref_id = ts.id
+      LEFT JOIN files tf ON (tn.node_type = 'file' AND tn.ref_id = tf.id) OR ts.file_id = tf.id
+      WHERE e.is_cross_ws = 1
+      ORDER BY sf.workspace, tf.workspace
+    `).all() as CrossWorkspaceEdge[];
+  }
+
+  /** Get workspace dependency summary: which workspaces depend on which. */
+  getWorkspaceDependencyGraph(): WorkspaceDependency[] {
+    return this.db.prepare(`
+      SELECT
+        sf.workspace as from_workspace,
+        tf.workspace as to_workspace,
+        COUNT(*) as edge_count,
+        GROUP_CONCAT(DISTINCT et.name) as edge_types
+      FROM edges e
+      JOIN edge_types et ON e.edge_type_id = et.id
+      JOIN nodes sn ON e.source_node_id = sn.id
+      JOIN nodes tn ON e.target_node_id = tn.id
+      LEFT JOIN symbols ss ON sn.node_type = 'symbol' AND sn.ref_id = ss.id
+      LEFT JOIN files sf ON (sn.node_type = 'file' AND sn.ref_id = sf.id) OR ss.file_id = sf.id
+      LEFT JOIN symbols ts ON tn.node_type = 'symbol' AND tn.ref_id = ts.id
+      LEFT JOIN files tf ON (tn.node_type = 'file' AND tn.ref_id = tf.id) OR ts.file_id = tf.id
+      WHERE e.is_cross_ws = 1
+        AND sf.workspace IS NOT NULL
+        AND tf.workspace IS NOT NULL
+        AND sf.workspace != tf.workspace
+      GROUP BY sf.workspace, tf.workspace
+      ORDER BY edge_count DESC
+    `).all() as WorkspaceDependency[];
+  }
+
+  /** Get symbols in a workspace that are used by other workspaces (public API surface). */
+  getWorkspaceExports(workspace: string): SymbolWithFilePath[] {
+    return this.db.prepare(`
+      SELECT DISTINCT s.*, f.path as file_path
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      JOIN nodes n ON n.node_type = 'symbol' AND n.ref_id = s.id
+      JOIN edges e ON e.target_node_id = n.id AND e.is_cross_ws = 1
+      WHERE f.workspace = ?
+      ORDER BY s.kind, s.name
+    `).all(workspace) as SymbolWithFilePath[];
   }
 
   // --- Stats ---
@@ -798,6 +950,7 @@ export interface FileRow {
   indexed_at: string;
   metadata: string | null;
   workspace: string | null;
+  gitignored: number;
 }
 
 export interface SymbolRow {
@@ -914,6 +1067,33 @@ export interface EdgeTypeRow {
   name: string;
   category: string;
   description: string;
+}
+
+export interface WorkspaceStats {
+  workspace: string;
+  file_count: number;
+  symbol_count: number;
+  languages: string | null;
+}
+
+export interface CrossWorkspaceEdge {
+  id: number;
+  edge_type: string;
+  source_workspace: string | null;
+  source_path: string | null;
+  source_symbol: string | null;
+  source_kind: string | null;
+  target_workspace: string | null;
+  target_path: string | null;
+  target_symbol: string | null;
+  target_kind: string | null;
+}
+
+export interface WorkspaceDependency {
+  from_workspace: string;
+  to_workspace: string;
+  edge_count: number;
+  edge_types: string;
 }
 
 export interface IndexStats {
