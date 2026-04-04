@@ -8,3 +8,4 @@ dist/
 .env.local
 coverage/
 .idea/
+plans/
