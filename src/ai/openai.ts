@@ -4,6 +4,7 @@
  */
 import type { AIProvider, EmbeddingService, InferenceService } from './interfaces.js';
 import { logger } from '../logger.js';
+import { withRetry } from '../utils/retry.js';
 
 export interface OpenAIConfig {
   apiKey: string;
@@ -28,30 +29,30 @@ class OpenAIEmbeddingService implements EmbeddingService {
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
-    const resp = await fetch(`${this.baseUrl}/embeddings`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({ model: this.model, input: texts }),
-      signal: AbortSignal.timeout(30_000),
-    });
+    return withRetry(async () => {
+      const resp = await fetch(`${this.baseUrl}/embeddings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({ model: this.model, input: texts }),
+        signal: AbortSignal.timeout(30_000),
+      });
 
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => '');
-      // Truncate body to avoid leaking sensitive data in error messages
-      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
-      throw new Error(`OpenAI embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
-    }
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+        throw new Error(`OpenAI embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
+      }
 
-    const data = (await resp.json()) as { data: { index: number; embedding: number[] }[] };
-    // OpenAI returns data sorted by index, but let's be safe
-    const result: number[][] = new Array(texts.length).fill(null);
-    for (const item of data.data) {
-      result[item.index] = item.embedding;
-    }
-    return result;
+      const data = (await resp.json()) as { data: { index: number; embedding: number[] }[] };
+      const result: number[][] = new Array(texts.length).fill(null);
+      for (const item of data.data) {
+        result[item.index] = item.embedding;
+      }
+      return result;
+    }, { label: 'OpenAI embeddings' });
   }
 
   dimensions(): number {
@@ -70,29 +71,31 @@ class OpenAIInferenceService implements InferenceService {
     prompt: string,
     options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
-    const resp = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [{ role: 'user', content: prompt }],
-        ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
-        ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
+    return withRetry(async () => {
+      const resp = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [{ role: 'user', content: prompt }],
+          ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
+          ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
 
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => '');
-      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
-      throw new Error(`OpenAI chat failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
-    }
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+        throw new Error(`OpenAI chat failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
+      }
 
-    const data = (await resp.json()) as { choices: { message: { content: string } }[] };
-    return data.choices[0]?.message?.content ?? '';
+      const data = (await resp.json()) as { choices: { message: { content: string } }[] };
+      return data.choices[0]?.message?.content ?? '';
+    }, { label: 'OpenAI chat' });
   }
 }
 
