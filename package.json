@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Framework-aware code intelligence MCP server — 48+ frameworks, 44 languages",
   "type": "module",
   "main": "dist/index.js",
