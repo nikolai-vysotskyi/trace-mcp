@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     permissions:
-      contents: write
+      contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -20,16 +20,10 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - name: Sync package.json version from tag
-        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version
-
       - run: npm ci
       - run: npm run build
       - run: npm test
 
       - run: npm publish --provenance --access public
-
-      - name: Create GitHub Release
-        run: gh release create "${{ github.ref_name }}" --generate-notes
         env:
-          GH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
