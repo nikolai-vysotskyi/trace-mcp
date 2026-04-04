@@ -447,6 +447,10 @@ const SEED_EDGE_TYPES = [
   { name: 'fetches_endpoint', category: 'data-fetching', description: 'useQuery/useSWR call referencing an API endpoint' },
   // Zod edges
   { name: 'zod_schema', category: 'zod', description: 'Zod schema definition' },
+  // Testing framework edges
+  { name: 'test_covers_route', category: 'testing', description: 'Test file visits/requests an API route' },
+  { name: 'test_covers_component', category: 'testing', description: 'Test file mounts/renders a component' },
+  { name: 'test_imports_module', category: 'testing', description: 'Test file imports the module under test' },
   // Workspace edges
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },

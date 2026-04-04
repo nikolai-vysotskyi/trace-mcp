@@ -52,6 +52,7 @@ import { ZustandReduxPlugin } from './indexer/plugins/framework/zustand/index.js
 import { N8nPlugin } from './indexer/plugins/framework/n8n/index.js';
 import { DataFetchingPlugin } from './indexer/plugins/framework/data-fetching/index.js';
 import { ZodPlugin } from './indexer/plugins/framework/zod/index.js';
+import { TestingPlugin } from './indexer/plugins/framework/testing/index.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import { FileWatcher } from './indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from './ai/index.js';
@@ -102,6 +103,7 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
   registry.registerFrameworkPlugin(new RailsPlugin());
   registry.registerFrameworkPlugin(new DataFetchingPlugin());
   registry.registerFrameworkPlugin(new ZodPlugin());
+  registry.registerFrameworkPlugin(new TestingPlugin());
 }
 
 const program = new Command();
