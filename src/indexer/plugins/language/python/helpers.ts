@@ -25,6 +25,22 @@ type TSNode = {
 
 export type { TSNode };
 
+/**
+ * Collect all unique AST node types within a subtree (shallow — immediate children + one level deeper).
+ * Used for detecting version-specific language features.
+ */
+export function collectNodeTypes(node: TSNode): string[] {
+  const types = new Set<string>();
+  types.add(node.type);
+  for (const child of node.namedChildren) {
+    types.add(child.type);
+    for (const grandchild of child.namedChildren) {
+      types.add(grandchild.type);
+    }
+  }
+  return Array.from(types);
+}
+
 /** Build a symbol ID following the convention: `path::Name#kind` */
 export function makeSymbolId(
   relativePath: string,

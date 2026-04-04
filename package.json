@@ -1,7 +1,7 @@
 {
   "name": "trace-mcp",
   "version": "0.1.0",
-  "description": "Framework-aware code intelligence MCP server — 35+ frameworks, 8 languages",
+  "description": "Framework-aware code intelligence MCP server — 48+ frameworks, 44 languages",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -38,10 +38,12 @@
   ],
   "files": [
     "dist",
+    "hooks",
     "LICENSE",
     "README.md"
   ],
   "dependencies": {
+    "@clack/prompts": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@parcel/watcher": "^2.5.6",
     "@vue/compiler-sfc": "^3.5.32",
@@ -53,12 +55,17 @@
     "oxc-resolver": "^11.19.1",
     "pino": "^9.6.0",
     "tree-sitter": "^0.22.4",
+    "tree-sitter-c": "^0.23.4",
+    "tree-sitter-c-sharp": "^0.23.1",
+    "tree-sitter-cpp": "^0.23.4",
     "tree-sitter-go": "^0.23.4",
     "tree-sitter-java": "^0.23.5",
     "tree-sitter-kotlin": "^0.3.8",
     "tree-sitter-php": "^0.22.8",
     "tree-sitter-python": "^0.21.0",
     "tree-sitter-ruby": "^0.23.1",
+    "tree-sitter-rust": "^0.23.2",
+    "tree-sitter-scala": "^0.23.2",
     "tree-sitter-typescript": "^0.23.2",
     "yaml": "^2.8.3",
     "zod": "^3.24.0"

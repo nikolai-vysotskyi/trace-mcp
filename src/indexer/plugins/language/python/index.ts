@@ -25,7 +25,9 @@ import {
   extractTypeAlias,
   extractTypeParams,
   hasSpecialDecorator,
+  collectNodeTypes,
 } from './helpers.js';
+import { detectMinPythonVersion } from './version-features.js';
 
 const require = createRequire(import.meta.url);
 const Parser = require('tree-sitter');
@@ -160,10 +162,12 @@ export class PythonLanguagePlugin implements LanguagePlugin {
     if (decorators.length > 0) meta.decorators = decorators;
     if (hasSpecialDecorator(decorators, 'override')) meta.override = true;
     if (hasSpecialDecorator(decorators, 'overload')) meta.overload = true;
-    if (typeParams) {
-      meta.typeParams = typeParams;
-      meta.minPythonVersion = '3.12';
-    }
+    if (typeParams) meta.typeParams = typeParams;
+
+    // Detect minimum Python version from AST features
+    const nodeTypes = collectNodeTypes(effectiveNode);
+    const minVer = detectMinPythonVersion(nodeTypes);
+    if (minVer) meta.minPythonVersion = minVer;
 
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'function'),
@@ -199,10 +203,12 @@ export class PythonLanguagePlugin implements LanguagePlugin {
     const meta: Record<string, unknown> = {};
     if (decorators.length > 0) meta.decorators = decorators;
     if (bases.length > 0) meta.bases = bases;
-    if (typeParams) {
-      meta.typeParams = typeParams;
-      meta.minPythonVersion = '3.12';
-    }
+    if (typeParams) meta.typeParams = typeParams;
+
+    // Detect minimum Python version from AST features
+    const nodeTypes = collectNodeTypes(effectiveNode);
+    const minVer = detectMinPythonVersion(nodeTypes);
+    if (minVer) meta.minPythonVersion = minVer;
 
     // Detect special class patterns
     if (decorators.includes('dataclass') || decorators.includes('dataclasses.dataclass')) {
