@@ -44,7 +44,7 @@ export function getSymbol(
   let source: string;
   let truncated: boolean | undefined;
   try {
-    source = readByteRange(absPath, symbol.byte_start, symbol.byte_end);
+    source = readByteRange(absPath, symbol.byte_start, symbol.byte_end, !!file.gitignored);
     if (opts.maxLines != null) {
       const lines = source.split('\n');
       if (lines.length > opts.maxLines) {
@@ -218,7 +218,7 @@ export async function search(
   return { items, total, search_mode: searchMode };
 }
 
-// ─── get_file_outline ───────────────────────────────────────
+// ─── get_outline ───────────────────────────────────────
 
 export interface FileOutlineSymbol {
   symbolId: string;

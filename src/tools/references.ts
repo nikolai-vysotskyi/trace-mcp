@@ -66,20 +66,37 @@ export function findReferences(
   }
 
   const incomingEdges = store.getIncomingEdges(nodeId);
+
+  // Batch resolve all source nodes, symbols, and files (replaces per-edge N+1)
+  const sourceNodeIds = incomingEdges.map((e) => e.source_node_id);
+  const nodeRefs = store.getNodeRefsBatch(sourceNodeIds);
+
+  const symbolRefIds: number[] = [];
+  const fileRefIds: number[] = [];
+  for (const [, ref] of nodeRefs) {
+    if (ref.nodeType === 'symbol') symbolRefIds.push(ref.refId);
+    else if (ref.nodeType === 'file') fileRefIds.push(ref.refId);
+  }
+
+  const symbolMap = symbolRefIds.length > 0 ? store.getSymbolsByIds(symbolRefIds) : new Map();
+  const symFileIds = new Set<number>();
+  for (const sym of symbolMap.values()) symFileIds.add(sym.file_id);
+  const allFileIds = [...new Set([...fileRefIds, ...symFileIds])];
+  const fileMap = allFileIds.length > 0 ? store.getFilesByIds(allFileIds) : new Map();
+
   const references: ReferenceItem[] = [];
 
   for (const edge of incomingEdges) {
-    const sourceRef = store.getNodeRef(edge.source_node_id);
+    const sourceRef = nodeRefs.get(edge.source_node_id);
     if (!sourceRef) continue;
 
     let symbol: ReferenceItem['symbol'] = null;
     let filePath = '';
 
     if (sourceRef.nodeType === 'symbol') {
-      const sym = store.getSymbolById(sourceRef.refId);
+      const sym = symbolMap.get(sourceRef.refId);
       if (!sym) continue;
-      const f = store.getFileById(sym.file_id);
-      filePath = f?.path ?? '';
+      filePath = fileMap.get(sym.file_id)?.path ?? '';
       symbol = {
         symbol_id: sym.symbol_id,
         name: sym.name,
@@ -89,11 +106,8 @@ export function findReferences(
         line_start: sym.line_start,
       };
     } else if (sourceRef.nodeType === 'file') {
-      const f = store.getFileById(sourceRef.refId);
-      filePath = f?.path ?? '';
+      filePath = fileMap.get(sourceRef.refId)?.path ?? '';
     } else {
-      // route / component / orm_model / rn_screen — just note the file via the ref table
-      // We don't have a direct getById for all types, so skip detailed resolution
       filePath = `[${sourceRef.nodeType}:${sourceRef.refId}]`;
     }
 

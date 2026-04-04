@@ -10,6 +10,7 @@
  */
 import type { Store, SymbolWithFilePath, SymbolRow } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
+import { getCouplingMetrics, getDependencyCycles } from './graph-analysis.js';
 
 /** Safely parse JSON metadata — returns empty object on malformed input. */
 function safeParseMeta(raw: string | null | undefined): Record<string, unknown> {
@@ -414,7 +415,7 @@ export function getDeadExports(
 }
 
 // ---------------------------------------------------------------------------
-// get_dependency_graph
+// get_import_graph
 // ---------------------------------------------------------------------------
 
 export interface DependencyEdge {
@@ -588,6 +589,9 @@ export interface SelfAuditResult {
     import_edges: number;
     heritage_edges: number;
     test_covers_edges: number;
+    dependency_cycles: number;
+    unstable_modules: number;
+    avg_cyclomatic: number | null;
   };
   dead_exports_top10: DeadExportItem[];
   untested_top10: UntestedExportItem[];
@@ -597,6 +601,10 @@ export interface SelfAuditResult {
   most_dependent_files: { file: string; imports_count: number }[];
   /** Interfaces/classes with the most implementors */
   widest_interfaces: { name: string; implementor_count: number }[];
+  /** Most complex symbols */
+  most_complex_symbols: { symbol_id: string; name: string; file: string; cyclomatic: number }[];
+  /** Most unstable modules (highest instability index) */
+  most_unstable: { file: string; instability: number; ca: number; ce: number }[];
 }
 
 /**
@@ -658,20 +666,47 @@ export function selfAudit(store: Store): SelfAuditResult {
       return { file: file?.path ?? `[node:${nodeId}]`, imports_count: count };
     });
 
-  // Widest interfaces (most implementors via heritage metadata)
-  const allClassesAndInterfaces = store.db.prepare(
-    "SELECT name, kind FROM symbols WHERE kind IN ('class', 'interface') AND json_extract(metadata, '$.exported') = 1",
-  ).all() as { name: string; kind: string }[];
-
-  const interfaceCounts: { name: string; implementor_count: number }[] = [];
-  for (const sym of allClassesAndInterfaces) {
-    if (sym.kind !== 'interface') continue;
-    const impls = store.findImplementors(sym.name);
-    if (impls.length > 0) {
-      interfaceCounts.push({ name: sym.name, implementor_count: impls.length });
+  // Widest interfaces — single pass instead of N full-table scans
+  // Collect all implements/extends references from heritage metadata, count in-memory
+  const heritageSymbols = store.getSymbolsWithHeritage();
+  const implCountMap = new Map<string, number>(); // interface name → implementor count
+  for (const sym of heritageSymbols) {
+    const meta = sym.metadata ? (typeof sym.metadata === 'string' ? JSON.parse(sym.metadata) : sym.metadata) as Record<string, unknown> : {};
+    for (const key of ['implements', 'extends']) {
+      const parents = meta[key] as string[] | undefined;
+      if (Array.isArray(parents)) {
+        for (const parentName of parents) {
+          implCountMap.set(parentName, (implCountMap.get(parentName) ?? 0) + 1);
+        }
+      }
     }
   }
-  interfaceCounts.sort((a, b) => b.implementor_count - a.implementor_count);
+  const interfaceCounts = [...implCountMap.entries()]
+    .map(([name, count]) => ({ name, implementor_count: count }))
+    .filter((x) => x.implementor_count > 0)
+    .sort((a, b) => b.implementor_count - a.implementor_count);
+
+  // Coupling & cycles
+  const coupling = getCouplingMetrics(store);
+  const cycles = getDependencyCycles(store);
+  const unstable = coupling.filter((c) => c.assessment === 'unstable');
+
+  // Average cyclomatic complexity
+  const complexityRow = store.db.prepare(
+    'SELECT AVG(cyclomatic) as avg FROM symbols WHERE cyclomatic IS NOT NULL',
+  ).get() as { avg: number | null } | undefined;
+  const avgCyclomatic = complexityRow?.avg != null
+    ? Math.round(complexityRow.avg * 100) / 100
+    : null;
+
+  // Most complex symbols
+  const complexSymbols = store.db.prepare(`
+    SELECT s.symbol_id, s.name, f.path as file, s.cyclomatic
+    FROM symbols s JOIN files f ON s.file_id = f.id
+    WHERE s.cyclomatic IS NOT NULL
+    ORDER BY s.cyclomatic DESC
+    LIMIT 10
+  `).all() as { symbol_id: string; name: string; file: string; cyclomatic: number }[];
 
   return {
     summary: {
@@ -685,11 +720,18 @@ export function selfAudit(store: Store): SelfAuditResult {
       import_edges: importEdges.length,
       heritage_edges: heritageExtends.length + heritageImplements.length,
       test_covers_edges: testCovers.length,
+      dependency_cycles: cycles.length,
+      unstable_modules: unstable.length,
+      avg_cyclomatic: avgCyclomatic,
     },
     dead_exports_top10: deadResult.dead_exports.slice(0, 10),
     untested_top10: untestedResult.untested.slice(0, 10),
     most_imported_files: mostImported,
     most_dependent_files: mostDependent,
     widest_interfaces: interfaceCounts.slice(0, 10),
+    most_complex_symbols: complexSymbols,
+    most_unstable: unstable.slice(0, 10).map((c) => ({
+      file: c.file, instability: c.instability, ca: c.ca, ce: c.ce,
+    })),
   };
 }

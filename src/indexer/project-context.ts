@@ -31,12 +31,55 @@ export function buildProjectContext(rootPath: string): ProjectContext {
         if (engines.npm) detectedVersions.push({ runtime: 'npm', version: engines.npm, source: 'package.json#engines.npm' });
       }
       // Extract deps
+      const allPkgDeps: Record<string, string> = {};
       for (const [section, dev] of [['dependencies', false], ['devDependencies', true], ['peerDependencies', false]] as const) {
         const deps = packageJson[section] as Record<string, string> | undefined;
         if (deps) {
           for (const [name, version] of Object.entries(deps)) {
             allDependencies.push({ name, version, dev: dev || undefined });
+            allPkgDeps[name] = version;
           }
+        }
+      }
+      // Extract notable tool/runtime versions as detectedVersions
+      const NPM_TOOL_RUNTIMES: Record<string, string> = {
+        'typescript': 'typescript',
+        'sass': 'sass', 'node-sass': 'sass',
+        'less': 'less',
+        'stylus': 'stylus',
+        'tailwindcss': 'tailwindcss',
+        'postcss': 'postcss',
+        'autoprefixer': 'autoprefixer',
+        'webpack': 'webpack',
+        'vite': 'vite',
+        'esbuild': 'esbuild',
+        'tsup': 'tsup',
+        'rollup': 'rollup',
+        'babel-core': 'babel', '@babel/core': 'babel',
+        'eslint': 'eslint',
+        'prettier': 'prettier',
+        'jest': 'jest',
+        'vitest': 'vitest',
+        'mocha': 'mocha',
+        'react': 'react',
+        'react-dom': 'react',
+        'vue': 'vue',
+        'svelte': 'svelte',
+        'next': 'nextjs',
+        'nuxt': 'nuxt',
+        '@angular/core': 'angular',
+        'express': 'express',
+        'fastify': 'fastify',
+        'hono': 'hono',
+        'prisma': 'prisma', '@prisma/client': 'prisma',
+        'drizzle-orm': 'drizzle',
+        'electron': 'electron',
+        'react-native': 'react-native',
+      };
+      for (const [pkg, runtime] of Object.entries(NPM_TOOL_RUNTIMES)) {
+        const ver = allPkgDeps[pkg];
+        if (ver) {
+          detectedVersions.push({ runtime, version: ver, source: `package.json#${pkg}` });
         }
       }
     } catch { /* malformed JSON */ }
@@ -61,12 +104,36 @@ export function buildProjectContext(rootPath: string): ProjectContext {
       const require_ = composerJson.require as Record<string, string> | undefined;
       const requireDev = composerJson['require-dev'] as Record<string, string> | undefined;
       if (require_?.['php']) detectedVersions.push({ runtime: 'php', version: require_['php'], source: 'composer.json#require.php' });
+      const allComposerDeps: Record<string, string> = {};
       for (const [section, dev] of [[require_, false], [requireDev, true]] as const) {
         if (section) {
           for (const [name, version] of Object.entries(section)) {
             if (name === 'php') continue;
             allDependencies.push({ name, version, dev: dev || undefined });
+            allComposerDeps[name] = version;
           }
+        }
+      }
+      // Notable PHP ecosystem tool versions
+      const COMPOSER_TOOL_RUNTIMES: Record<string, string> = {
+        'laravel/framework': 'laravel',
+        'symfony/symfony': 'symfony', 'symfony/framework-bundle': 'symfony',
+        'filp/whoops': 'whoops',
+        'phpunit/phpunit': 'phpunit',
+        'pestphp/pest': 'pest',
+        'nunomaduro/larastan': 'larastan',
+        'phpstan/phpstan': 'phpstan',
+        'laravel/sanctum': 'sanctum',
+        'laravel/passport': 'passport',
+        'inertiajs/inertia-laravel': 'inertia',
+        'livewire/livewire': 'livewire',
+        'filament/filament': 'filament',
+        'spatie/laravel-permission': 'spatie-permission',
+      };
+      for (const [pkg, runtime] of Object.entries(COMPOSER_TOOL_RUNTIMES)) {
+        const ver = allComposerDeps[pkg];
+        if (ver) {
+          detectedVersions.push({ runtime, version: ver, source: `composer.json#${pkg}` });
         }
       }
     } catch { /* malformed JSON */ }

@@ -90,6 +90,7 @@ export function getFeatureContext(
     fileId: number;
     filePath: string;
     indexedAt: string;
+    gitignored: number;
   }
 
   const ftsResults = store.db.prepare(`
@@ -105,7 +106,8 @@ export function getFeatureContext(
       s.signature,
       f.id        AS fileId,
       f.path      AS filePath,
-      f.indexed_at  AS indexedAt
+      f.indexed_at  AS indexedAt,
+      f.gitignored
     FROM symbols_fts fts
     JOIN symbols s ON s.id = fts.rowid
     JOIN files   f ON f.id = s.file_id
@@ -167,6 +169,7 @@ export function getFeatureContext(
       id: fts.fileId,
       path: fts.filePath,
       indexed_at: fts.indexedAt,
+      gitignored: fts.gitignored,
     } as FileRow;
 
     const entry: ScoredSymbol = { symbol, file, score };
@@ -233,7 +236,7 @@ export function getFeatureContext(
     let source: string | undefined;
     try {
       const absPath = path.resolve(rootPath, item.file.path);
-      source = readByteRange(absPath, item.symbol.byte_start, item.symbol.byte_end);
+      source = readByteRange(absPath, item.symbol.byte_start, item.symbol.byte_end, !!item.file.gitignored);
     } catch { /* source unavailable */ }
 
     return {

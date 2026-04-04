@@ -100,7 +100,7 @@ describe('MCP Protocol E2E', () => {
     });
   });
 
-  describe('get_file_outline', () => {
+  describe('get_outline', () => {
     it('returns symbols for a known file', () => {
       const fileId = store.insertFile('app/User.php', 'php', 'h1', 100);
       store.insertSymbol(fileId, {
