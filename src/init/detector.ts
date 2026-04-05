@@ -136,6 +136,13 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
   checkConfig('claude-code', path.join(HOME, '.claude.json'));
   checkConfig('claude-code', path.join(HOME, '.claude', 'settings.json'));
 
+  // Claw Code: project-level .claw.json
+  if (projectRoot) {
+    checkConfig('claw-code', path.join(projectRoot, '.claw.json'));
+  }
+  // Claw Code: global settings
+  checkConfig('claw-code', path.join(HOME, '.claw', 'settings.json'));
+
   // Claude Desktop
   const platform = os.platform();
   if (platform === 'darwin') {
@@ -209,9 +216,11 @@ export function detectExistingDb(root: string, globalDbPath?: string): { path: s
 
 export function detectGuardHook(): { hasGuardHook: boolean; guardHookVersion: string | null } {
   const hookPath = path.join(HOME, '.claude', 'hooks', 'trace-mcp-guard.sh');
-  if (!fs.existsSync(hookPath)) return { hasGuardHook: false, guardHookVersion: null };
+  const clawHookPath = path.join(HOME, '.claw', 'hooks', 'trace-mcp-guard.sh');
+  const existingPath = fs.existsSync(hookPath) ? hookPath : fs.existsSync(clawHookPath) ? clawHookPath : null;
+  if (!existingPath) return { hasGuardHook: false, guardHookVersion: null };
 
-  const content = fs.readFileSync(hookPath, 'utf-8');
+  const content = fs.readFileSync(existingPath, 'utf-8');
   const match = content.match(/^# trace-mcp-guard v(.+)$/m);
   return {
     hasGuardHook: true,
