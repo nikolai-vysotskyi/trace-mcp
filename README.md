@@ -1,6 +1,6 @@
 # trace-mcp
 
-**Framework-aware code intelligence MCP server — 48+ framework integrations across 44 languages.**
+**Framework-aware code intelligence MCP server — 48+ framework integrations across 68 languages.**
 
 > Your AI agent reads `UserController.php` and sees a class.
 > trace-mcp reads it and sees a route → controller → FormRequest → Eloquent model → Inertia render → Vue page → child components — **in one graph.**
@@ -21,7 +21,7 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 
 | Without trace-mcp | With trace-mcp |
 |---|---|
-| Agent reads 15 files to understand a feature | `get_feature_context` — relevant code in one shot |
+| Agent reads 15 files to understand a feature | `get_task_context` — optimal code subgraph in one shot |
 | Agent doesn't know which Vue page a controller renders | `routes_to → renders_component → uses_prop` edges |
 | "What breaks if I change this model?" — agent guesses | `get_change_impact` traverses reverse dependencies across languages |
 | Schema? Agent needs a running database | Migrations parsed — schema reconstructed from code |
@@ -36,15 +36,17 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 - **Schema from migrations** — no DB connection needed
 - **Event chains** — Event → Listener → Job fan-out (Laravel, Django, NestJS, Celery, Socket.io)
 - **Change impact analysis** — reverse dependency traversal across languages
-- **Feature context assembly** — describe a feature in English → get relevant code within a token budget
+- **Graph-aware task context** — describe a dev task → get the optimal code subgraph (execution paths, tests, types), adapted to bugfix/feature/refactor intent
+- **CI/PR change impact reports** — automated blast radius, risk scoring, test gap detection, architecture violation checks on every PR
 - **Call graph & DI tree** — bidirectional call graphs, NestJS dependency injection
 - **ORM model context** — relationships, schema, metadata for 7 ORMs
 - **Dead code & test gap detection** — find untested exports, dead code, coverage gaps
+- **Multi-repo federation** — link graphs across separate repos via API contracts; cross-repo impact analysis
 - **AI-powered analysis** — symbol explanation, test suggestions, change review, semantic search (optional)
 
 ### Supported stack
 
-**Languages (44):** PHP, TypeScript/JavaScript, Python, Go, Java, Kotlin, Ruby, Rust, C, C++, C#, Swift, Objective-C, Dart, Scala, Groovy, Elixir, Erlang, Haskell, Gleam, Bash, Lua, Perl, GDScript, R, Julia, Nix, SQL, HCL/Terraform, Protocol Buffers, Vue SFC, HTML, CSS/SCSS/SASS/LESS, XML/XUL/XSD, YAML, JSON, TOML, Assembly, Fortran, AutoHotkey, Verse, AL, Blade, EJS
+**Languages (68):** PHP, TypeScript/JavaScript, Python, Go, Java, Kotlin, Ruby, Rust, C, C++, C#, Swift, Objective-C, Dart, Scala, Groovy, Elixir, Erlang, Haskell, Gleam, Bash, Lua, Perl, GDScript, R, Julia, Nix, SQL, HCL/Terraform, Protocol Buffers, Vue SFC, HTML, CSS/SCSS/SASS/LESS, XML/XUL/XSD, YAML, JSON, TOML, Assembly, Fortran, AutoHotkey, Verse, AL, Blade, EJS, Zig, OCaml, Clojure, F#, Elm, CUDA, COBOL, Verilog/SystemVerilog, GLSL, Meson, Vim Script, Common Lisp, Emacs Lisp, Dockerfile, Makefile, CMake, INI, Svelte, Markdown, MATLAB, Lean 4, FORM, Magma, Wolfram/Mathematica
 
 **Frameworks:** Laravel (+ Livewire, Nova, Filament, Pennant), Django (+ DRF), FastAPI, Flask, Express, NestJS, Fastify, Hono, Next.js, Nuxt, Rails, Spring, tRPC
 
@@ -54,7 +56,7 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 
 **Other:** GraphQL, Socket.io, Celery, Zustand, Pydantic, Zod, n8n, React Query/SWR, Playwright/Cypress/Jest/Vitest/Mocha
 
-> Full details: [Supported frameworks](docs/supported-frameworks.md) · [All 38 tools](docs/tools-reference.md)
+> Full details: [Supported frameworks](docs/supported-frameworks.md) · [All tools](docs/tools-reference.md)
 
 ---
 
@@ -75,7 +77,7 @@ All state lives in `~/.trace-mcp/` — nothing is stored in your project directo
 Start your MCP client and use:
 ```
 > get_project_map to see what frameworks are detected
-> get_feature_context to find code related to "user registration"
+> get_task_context("fix the login bug") to get full execution context for a task
 > get_change_impact on app/Models/User.php to see what depends on it
 ```
 
@@ -138,6 +140,7 @@ All trace-mcp state is centralized:
 ~/.trace-mcp/
   .config.json              # global config + per-project settings
   registry.json             # registered projects
+  topology.db               # cross-service topology + federation graph
   index/
     my-app-a1b2c3d4e5f6.db  # per-project databases (named by project + hash)
 ```
@@ -168,7 +171,8 @@ Use trace-mcp tools for code intelligence — they understand framework relation
 | Read one symbol's source | `get_symbol` | Read (full file) |
 | What breaks if I change X | `get_change_impact` | guessing |
 | All usages of a symbol | `find_usages` | Grep |
-| Context for a task | `get_feature_context` | reading 15 files |
+| Starting work on a task | `get_task_context` | reading 15 files |
+| Quick keyword context | `get_feature_context` | reading 15 files |
 | Tests for a symbol | `get_tests_for` | Glob + Grep |
 | HTTP request flow | `get_request_flow` | reading route files |
 | DB model relationships | `get_model_context` | reading model + migrations |
@@ -229,7 +233,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         38 tools · 2 resources
+         44+ tools · 2 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -252,12 +256,130 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 
 ---
 
+## Multi-repo federation
+
+Real projects are not a single repository. trace-mcp can **link dependency graphs across separate repos** — if microservice A calls an API endpoint in microservice B, trace-mcp knows that changing that endpoint in B breaks clients in A.
+
+### How it works
+
+Federation is **automatic by default**. Every time a project is indexed (`serve`, `serve-http`, or `index`), trace-mcp:
+
+1. **Registers** the project in the global federation (`~/.trace-mcp/topology.db`)
+2. **Discovers** services (Docker Compose, workspace detection)
+3. **Parses** API contracts — OpenAPI/Swagger, GraphQL SDL, Protobuf/gRPC
+4. **Scans** code for HTTP client calls (fetch, axios, Http::, requests, http.Get, gRPC stubs, GraphQL operations)
+5. **Links** discovered calls to known endpoints from previously indexed repos
+6. **Creates** cross-repo dependency edges
+
+### Example
+
+```bash
+# Index two separate repos
+cd ~/projects/user-service && trace-mcp add
+cd ~/projects/order-service && trace-mcp add
+
+# order-service has: axios.get('/api/users/{id}')
+# user-service has: openapi.yaml with GET /api/users/{id}
+# → trace-mcp automatically links them
+
+# Check cross-repo impact
+trace-mcp federation impact --endpoint=/api/users
+# → "GET /api/users/{id} is called by 2 client(s) in 1 repo(s)"
+#   [order-service] src/services/user-client.ts:42 (axios, confidence: 85%)
+```
+
+### Federation CLI
+
+```bash
+trace-mcp federation add --repo=../service-b [--contract=openapi.yaml]
+trace-mcp federation remove <name-or-path>
+trace-mcp federation list [--json]
+trace-mcp federation sync           # re-scan all repos
+trace-mcp federation impact --endpoint=/api/users [--method=GET] [--service=user-svc]
+```
+
+### MCP tools
+
+| Tool | What it does |
+|---|---|
+| `get_federation_graph` | All federated repos, their connections, and stats |
+| `get_federation_impact` | Cross-repo impact: what breaks if endpoint X changes (resolves to symbol level) |
+| `get_federation_clients` | Find all client calls across repos that call a specific endpoint |
+| `federation_add_repo` | Add a repo to the federation via MCP |
+| `federation_sync` | Re-scan all federated repos |
+
+> Federation builds on top of the topology system. See [Configuration](docs/configuration.md#topology--federation) for options.
+
+---
+
+## CI/PR change impact reports
+
+trace-mcp can generate automated change impact reports for pull requests — blast radius, risk scoring, test coverage gaps, architecture violations, and dead code detection.
+
+### CLI usage
+
+```bash
+# Generate a markdown report for changes between main and HEAD
+trace-mcp ci-report --base main --head HEAD
+
+# Output to file
+trace-mcp ci-report --base main --head HEAD --format markdown --output report.md
+
+# JSON output
+trace-mcp ci-report --base main --head HEAD --format json
+
+# Fail CI if risk level >= high
+trace-mcp ci-report --base main --head HEAD --fail-on high
+
+# Index before generating (for CI environments without pre-built index)
+trace-mcp ci-report --base main --head HEAD --index
+```
+
+### GitHub Action
+
+Add this workflow to get automatic impact reports on every PR:
+
+```yaml
+# .github/workflows/ci.yml (impact-report job runs after build-and-test)
+- name: Index project
+  run: node dist/cli.js index . --force
+
+- name: Generate impact report
+  run: |
+    node dist/cli.js ci-report \
+      --base ${{ github.event.pull_request.base.sha }} \
+      --head ${{ github.event.pull_request.head.sha }} \
+      --format markdown \
+      --output report.md
+
+- name: Post PR comment
+  uses: marocchino/sticky-pull-request-comment@v2
+  with:
+    path: report.md
+```
+
+The full workflow is in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — it runs `build → test → impact-report` on every PR.
+
+### Report sections
+
+| Section | What it shows |
+|---|---|
+| **Summary** | Changed files, affected files count, risk level, gap counts |
+| **Blast Radius** | Files transitively affected by changes (depth-2 reverse dependency traversal) |
+| **Test Coverage Gaps** | Affected symbols with no matching test file |
+| **Risk Analysis** | Per-file composite score: 30% complexity + 25% churn + 25% coupling + 20% blast radius |
+| **Architecture Violations** | Layer rule violations involving changed files (auto-detects clean architecture / hexagonal presets) |
+| **Dead Code** | New exports in changed files that nothing imports |
+
+---
+
 ## Best for
 
 - **Full-stack projects** in any supported framework combination
 - Teams using AI agents (Claude, Cursor, Windsurf) for day-to-day development
 - **Multi-language codebases** where PHP ↔ JavaScript ↔ Python boundaries create blind spots
 - **Monorepos** with multiple services and shared libraries
+- **Microservice architectures** where API changes ripple across repos
 - Large codebases where agents waste tokens re-reading files
 
 ---

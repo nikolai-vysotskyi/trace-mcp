@@ -133,6 +133,92 @@ When `ai.enabled` is `true`, trace-mcp runs background summarization and embeddi
 
 ---
 
+## Topology & federation
+
+trace-mcp includes a **topology layer** for cross-service analysis and a **federation layer** for linking dependency graphs across separate repositories.
+
+Both are **enabled by default** — every indexed project is automatically registered in the federation, its contracts parsed, and client calls scanned.
+
+```jsonc
+{
+  "topology": {
+    "enabled": true,           // default: true — enable topology + federation tools
+    "auto_federation": true,   // default: true — auto-register projects on indexing
+    "auto_detect": true,       // default: true — auto-detect services from Docker Compose
+    "repos": [],               // additional repo paths to include in topology
+    "contract_globs": []       // explicit contract file patterns (e.g. ["api/openapi.yaml"])
+  }
+}
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `topology.enabled` | `true` | Enable topology and federation tools |
+| `topology.auto_federation` | `true` | Auto-register project in federation on every index |
+| `topology.auto_detect` | `true` | Auto-detect services from Docker Compose / workspace manifests |
+| `topology.repos` | `[]` | Additional repo paths to include in the topology graph |
+| `topology.contract_globs` | — | Explicit paths to API contract files (relative to project root) |
+
+### Auto-federation flow
+
+When a project is indexed (via `serve`, `serve-http`, or `index`):
+
+1. Project is registered in `~/.trace-mcp/topology.db`
+2. Services are detected (Docker Compose, workspace fallback)
+3. API contracts are parsed (OpenAPI, GraphQL SDL, Protobuf)
+4. Code is scanned for HTTP/gRPC client calls (fetch, axios, Http::, requests, etc.)
+5. Client calls are matched to known endpoints from other federated repos
+6. Cross-service edges are created
+
+This is non-blocking — the server starts immediately, and federation syncs in the background.
+
+### Disabling
+
+To disable auto-federation while keeping topology tools:
+```jsonc
+{ "topology": { "enabled": true, "auto_federation": false } }
+```
+
+To disable everything:
+```jsonc
+{ "topology": { "enabled": false } }
+```
+
+### Federation CLI
+
+```bash
+trace-mcp federation add --repo=../service-b [--contract=openapi.yaml] [--name=my-service]
+trace-mcp federation remove <name-or-path>
+trace-mcp federation list [--json]
+trace-mcp federation sync
+trace-mcp federation impact --endpoint=/api/users [--method=GET] [--service=user-svc]
+```
+
+### Supported contract formats
+
+| Format | Auto-detected files |
+|---|---|
+| **OpenAPI / Swagger** | `openapi.yml`, `openapi.yaml`, `openapi.json`, `swagger.yml`, `swagger.yaml`, `swagger.json`, `api-spec.yml`, `api-spec.yaml`, `api-spec.json` |
+| **GraphQL SDL** | `schema.graphql`, `schema.gql` |
+| **Protobuf / gRPC** | `*.proto` |
+
+### Supported client call patterns
+
+The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported languages:
+
+| Pattern | Languages | Example |
+|---|---|---|
+| `fetch()` | JS/TS | `fetch('/api/users')` |
+| `axios.*()` | JS/TS | `axios.get('/api/users')` |
+| `Http::*()` | PHP/Laravel | `Http::post('/api/orders')` |
+| `requests.*()` | Python | `requests.get('https://api.example.com/users')` |
+| `http.Get/Post()` | Go | `http.Get("http://svc/api/users")` |
+| `RestTemplate.*()` | Java/Kotlin | `.getForObject("/api/users")` |
+| gRPC stubs | All | `client.GetUser()` |
+| GraphQL operations | All | `query GetUser { ... }` |
+
+---
+
 ## Environment variables
 
 | Variable | Description |
@@ -159,6 +245,20 @@ trace-mcp serve-http           # Start HTTP/SSE server (default: 127.0.0.1:3741)
 # Manual indexing
 trace-mcp index <dir>          # Index a project directory
   -f, --force                  # Force reindex all files
+
+# Federation
+trace-mcp federation add       # Add a repo to the federation
+  --repo <path>                # Repository path (required)
+  --contract <paths...>        # Explicit contract file paths
+  --name <name>                # Display name
+trace-mcp federation remove <name-or-path>   # Remove from federation
+trace-mcp federation list [--json]           # List all federated repos
+trace-mcp federation sync                    # Re-scan all repos
+trace-mcp federation impact                  # Cross-repo impact analysis
+  --endpoint <path>            # Endpoint path pattern
+  --method <method>            # HTTP method filter
+  --service <name>             # Service name filter
+  --json                       # Output as JSON
 
 # Hooks
 trace-mcp setup-hooks          # Install guard hook

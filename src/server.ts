@@ -35,23 +35,54 @@ import { getCouplingMetrics, getDependencyCycles, getPageRank, getExtractionCand
 import { getChurnRate, getHotspots } from './tools/git-analysis.js';
 import { getDeadCodeV2 } from './tools/dead-code.js';
 import { checkRenameSafe } from './tools/rename-check.js';
+import { applyRename, removeDeadCode, extractFunction } from './tools/refactor.js';
 import { getLayerViolations, detectLayerPreset, type LayerDefinition } from './tools/layer-violations.js';
 import { getFileOwnership, getSymbolOwnership } from './tools/git-ownership.js';
 import { getComplexityTrend } from './tools/complexity-trend.js';
+import { getCouplingTrend, getSymbolComplexityTrend } from './tools/history.js';
 import { suggestQueries } from './tools/suggest.js';
 import { getRelatedSymbols } from './tools/related.js';
 import { getContextBundle } from './tools/context-bundle.js';
+import { getTaskContext } from './tools/task-context.js';
 import { predictBugs, detectDrift, getTechDebt, assessChangeRisk, getHealthTrends } from './tools/predictive-intelligence.js';
 import { queryByIntent, getDomainMap, getDomainContext, getCrossDomainDependencies } from './tools/intent.js';
+import { graphQuery } from './tools/graph-query.js';
 import { getRuntimeProfile, getRuntimeCallGraph, getEndpointAnalytics, getRuntimeDependencies } from './tools/runtime.js';
 import { RuntimeIntelligence } from './runtime/lifecycle.js';
+import { searchText } from './tools/search-text.js';
+import { visualizeGraph, getDependencyDiagram } from './tools/visualize.js';
+import { getDataflow } from './tools/dataflow.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { TOPOLOGY_DB_PATH, ensureGlobalDirs } from './global.js';
 import { getServiceMap, getCrossServiceImpact, getApiContract, getServiceDependencies, getContractDrift } from './tools/topology.js';
+import { getFederationGraph, getFederationImpact, federationAddRepo, federationSync, getFederationClients } from './tools/federation.js';
+import { resolvePreset, listPresets } from './tools/presets.js';
+import { withHints } from './tools/hints.js';
+import { scanSecurity, type RuleName, type Severity } from './tools/security-scan.js';
+import { detectAntipatterns, type AntipatternCategory, type Severity as AntipatternSeverity } from './tools/antipatterns.js';
+import { generateSbom, type SbomFormat } from './tools/sbom.js';
+import { getArtifacts, type ArtifactCategory } from './tools/artifacts.js';
+import { fallbackSearch, fallbackOutline } from './tools/zero-index.js';
+import { planBatchChange } from './tools/batch-changes.js';
+import { getCoChanges, collectCoChanges, persistCoChanges } from './tools/co-changes.js';
+import { getChangedSymbols, compareBranches } from './tools/changed-symbols.js';
+import { SessionTracker } from './session-tracker.js';
+import { auditConfig } from './tools/audit-config.js';
+import { detectCommunities, getCommunities, getCommunityDetail } from './tools/communities.js';
+import { registerPrompts } from './prompts/index.js';
+import { packContext } from './tools/pack-context.js';
+import { generateDocs } from './tools/generate-docs.js';
+import { getPackageDeps } from './tools/package-deps.js';
+import { getControlFlow } from './tools/control-flow.js';
 
 /** Compact JSON — no pretty-printing; saves 25–35% tokens on every response */
 function j(value: unknown): string {
   return JSON.stringify(value);
+}
+
+/** JSON-serialize with contextual next-step hints */
+function jh(toolName: string, value: unknown): string {
+  return j(withHints(toolName, value));
 }
 
 export function createServer(
@@ -82,7 +113,8 @@ export function createServer(
         '- What breaks if I change X → `get_change_impact` (reverse dependency graph)',
         '- Who calls this / what does it call → `get_call_graph` (bidirectional)',
         '- All usages of a symbol → `trace_usages` (semantic: imports, calls, renders, dispatches)',
-        '- Context for a task → `get_feature_context` (NL query → relevant symbols + source)',
+        '- Starting work on a task → `get_task_context` (NL task → full execution context with tests, adapts to bugfix/feature/refactor)',
+        '- Quick keyword context → `get_feature_context` (NL query → relevant symbols + source)',
         '- Tests for a symbol/file → `get_tests_for` (understands test-to-source mapping)',
         '- HTTP request flow → `get_request_flow` (route → middleware → controller → service)',
         '- DB model details → `get_model_context` (relationships, schema, metadata)',
@@ -97,6 +129,58 @@ export function createServer(
       ].join('\n'),
     },
   );
+
+  // --- Tool preset gate ---
+  const presetName = process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? 'full';
+  const presetResult = resolvePreset(presetName);
+  const activePreset = presetResult ?? 'all'; // unknown preset → full
+  const includeSet = config.tools?.include ? new Set(config.tools.include) : null;
+  const excludeSet = config.tools?.exclude ? new Set(config.tools.exclude) : null;
+
+  function toolAllowed(name: string): boolean {
+    if (excludeSet?.has(name)) return false;
+    if (includeSet?.has(name)) return true;
+    if (activePreset === 'all') return true;
+    return activePreset.has(name);
+  }
+
+  /** Gated tool registration — skips tools not in the active preset.
+   *  Also wraps the callback to record tool calls for savings tracking. */
+  const _originalTool = server.tool.bind(server);
+  const registeredToolNames: string[] = [];
+  const descriptionOverrides = config.tools?.descriptions ?? {};
+  server.tool = ((...args: unknown[]) => {
+    const name = args[0] as string;
+    if (!toolAllowed(name)) return undefined as never;
+    registeredToolNames.push(name);
+    // Apply user description override if configured
+    if (descriptionOverrides[name] && typeof args[1] === 'string') {
+      args[1] = descriptionOverrides[name];
+    }
+    // Wrap the last argument (callback) to record calls
+    const cbIdx = args.length - 1;
+    const originalCb = args[cbIdx] as Function;
+    if (typeof originalCb === 'function') {
+      args[cbIdx] = async (...cbArgs: unknown[]) => {
+        savings.recordCall(name);
+        return originalCb(...cbArgs);
+      };
+    }
+    return (_originalTool as Function)(...args);
+  }) as typeof server.tool;
+
+  if (presetName !== 'full') {
+    logger.info({ preset: presetName, tools: activePreset === 'all' ? 'all' : activePreset.size }, 'Tool preset active');
+  }
+
+  // --- Session savings tracker ---
+  const savings = new SessionTracker(projectRoot);
+
+  // Flush savings on process exit
+  const flushSavings = () => savings.flush();
+  process.on('SIGINT', flushSavings);
+  process.on('SIGTERM', flushSavings);
+  process.on('exit', flushSavings);
 
   // AI layer (optional)
   const aiProvider: AIProvider = createAIProvider(config);
@@ -114,6 +198,45 @@ export function createServer(
     }
     return null;
   }
+
+  // --- Zero-index Fallback Tools ---
+
+  server.tool(
+    'fallback_search',
+    'On-the-fly text search using ripgrep — works without an index. Use when the index is empty or stale. Returns file matches with line numbers. Suggest `reindex` after using this.',
+    {
+      query: z.string().min(1).max(500).describe('Search query (text or regex)'),
+      file_pattern: z.string().max(256).optional().describe('Glob filter (e.g. "*.ts", "src/**/*.py")'),
+      case_sensitive: z.boolean().optional().describe('Case-sensitive search (default: false)'),
+      max_results: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
+    },
+    async ({ query, file_pattern, case_sensitive, max_results }) => {
+      const result = fallbackSearch(projectRoot, query, {
+        filePattern: file_pattern,
+        caseSensitive: case_sensitive,
+        maxResults: max_results,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'fallback_outline',
+    'Regex-based symbol extraction for a single file — works without an index. Extracts classes, functions, interfaces, types, variables. Use when the index is unavailable. Suggest `reindex` after using this.',
+    {
+      path: z.string().min(1).max(512).describe('Relative file path'),
+    },
+    async ({ path: filePath }) => {
+      const blocked = guardPath(filePath);
+      if (blocked) return blocked;
+      try {
+        const result = fallbackOutline(projectRoot, filePath);
+        return { content: [{ type: 'text', text: j(result) }] };
+      } catch (e: unknown) {
+        return { content: [{ type: 'text', text: j({ error: 'File not found or unreadable', path: filePath }) }], isError: true };
+      }
+    },
+  );
 
   // --- Core Tools (always registered) ---
 
@@ -159,7 +282,7 @@ export function createServer(
     async ({ summary_only }) => {
       const ctx = buildProjectContext(projectRoot);
       const result = getProjectMap(store, registry, summary_only ?? false, ctx);
-      return { content: [{ type: 'text', text: j(result) }] };
+      return { content: [{ type: 'text', text: jh('get_project_map', result) }] };
     },
   );
 
@@ -218,7 +341,7 @@ export function createServer(
       return {
         content: [{
           type: 'text',
-          text: j({
+          text: jh('get_symbol', {
             symbol_id: symbol.symbol_id,
             name: symbol.name,
             kind: symbol.kind,
@@ -238,7 +361,7 @@ export function createServer(
 
   server.tool(
     'search',
-    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. Supports kind/language/file_pattern filters.',
+    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). Auto-falls back to fuzzy if exact search returns 0 results.',
     {
       query: z.string().min(1).max(500).describe('Search query'),
       kind: z.string().max(64).optional().describe('Filter by symbol kind (class, method, function, etc.)'),
@@ -246,10 +369,13 @@ export function createServer(
       file_pattern: z.string().max(512).optional().describe('Filter by file path pattern'),
       implements: z.string().max(256).optional().describe('Filter to classes implementing this interface'),
       extends: z.string().max(256).optional().describe('Filter to classes/interfaces extending this name'),
+      fuzzy: z.boolean().optional().describe('Enable fuzzy search (trigram + Levenshtein). Auto-enabled when exact search returns 0 results.'),
+      fuzzy_threshold: z.number().min(0).max(1).optional().describe('Minimum Jaccard trigram similarity (default 0.3)'),
+      max_edit_distance: z.number().int().min(1).max(10).optional().describe('Maximum Levenshtein edit distance (default 3)'),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
       offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
     },
-    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext }) => {
+    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext, fuzzy, fuzzy_threshold, max_edit_distance }) => {
       const result = await search(
         store,
         query,
@@ -257,6 +383,7 @@ export function createServer(
         limit ?? 20,
         offset ?? 0,
         { vectorStore, embeddingService, reranker },
+        { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
       );
       // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
       const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => ({
@@ -270,7 +397,7 @@ export function createServer(
         line: symbol.line_start,
         score,
       }));
-      return { content: [{ type: 'text', text: j({ items, total: result.total, search_mode: result.search_mode }) }] };
+      return { content: [{ type: 'text', text: jh('search', { items, total: result.total, search_mode: result.search_mode }) }] };
     },
   );
 
@@ -287,7 +414,7 @@ export function createServer(
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: j(result.value) }] };
+      return { content: [{ type: 'text', text: jh('get_outline', result.value) }] };
     },
   );
 
@@ -314,7 +441,7 @@ export function createServer(
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: j(result.value) }] };
+      return { content: [{ type: 'text', text: jh('get_change_impact', result.value) }] };
     },
   );
 
@@ -327,7 +454,7 @@ export function createServer(
     },
     async ({ description, token_budget }) => {
       const result = getFeatureContext(store, projectRoot, description, token_budget ?? 4000);
-      return { content: [{ type: 'text', text: j(result) }] };
+      return { content: [{ type: 'text', text: jh('get_feature_context', result) }] };
     },
   );
 
@@ -353,7 +480,7 @@ export function createServer(
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: j(result.value) }] };
+      return { content: [{ type: 'text', text: jh('get_related_symbols', result.value) }] };
     },
   );
 
@@ -380,7 +507,27 @@ export function createServer(
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: j(result.value) }] };
+      return { content: [{ type: 'text', text: jh('get_context_bundle', result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_task_context',
+    'Get the optimal code context for a development task. Traces execution paths through the dependency graph, includes relevant tests, and adapts strategy based on task type (bug fix, new feature, refactor). Use this as your PRIMARY context-gathering tool when starting work on a task — it replaces manual chaining of search → get_symbol → get_context_bundle.',
+    {
+      task: z.string().min(1).max(2000).describe('Natural language description of the task'),
+      token_budget: z.number().int().min(100).max(100000).optional().describe('Max tokens (default 8000)'),
+      focus: z.enum(['minimal', 'broad', 'deep']).optional().describe('Context strategy: minimal (fast, essential only), broad (default, wide net), deep (follow full execution chains)'),
+      include_tests: z.boolean().optional().describe('Include relevant test files (default true)'),
+    },
+    async ({ task, token_budget, focus, include_tests }) => {
+      const result = await getTaskContext(store, projectRoot, {
+        task,
+        tokenBudget: token_budget ?? 8000,
+        focus: focus ?? 'broad',
+        includeTests: include_tests ?? true,
+      }, { vectorStore, embeddingService });
+      return { content: [{ type: 'text', text: jh('get_task_context', result) }] };
     },
   );
 
@@ -402,7 +549,7 @@ export function createServer(
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         }
-        return { content: [{ type: 'text', text: j(result.value) }] };
+        return { content: [{ type: 'text', text: jh('get_component_tree', result.value) }] };
       },
     );
   }
@@ -422,7 +569,7 @@ export function createServer(
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         }
-        return { content: [{ type: 'text', text: j(result.value) }] };
+        return { content: [{ type: 'text', text: jh('get_request_flow', result.value) }] };
       },
     );
   }
@@ -456,7 +603,7 @@ export function createServer(
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         }
-        return { content: [{ type: 'text', text: j(result.value) }] };
+        return { content: [{ type: 'text', text: jh('get_module_graph', result.value) }] };
       },
     );
 
@@ -471,7 +618,7 @@ export function createServer(
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         }
-        return { content: [{ type: 'text', text: j(result.value) }] };
+        return { content: [{ type: 'text', text: jh('get_di_tree', result.value) }] };
       },
     );
   }
@@ -518,7 +665,7 @@ export function createServer(
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         }
-        return { content: [{ type: 'text', text: j(result.value) }] };
+        return { content: [{ type: 'text', text: jh('get_model_context', result.value) }] };
       },
     );
 
@@ -533,7 +680,7 @@ export function createServer(
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         }
-        return { content: [{ type: 'text', text: j(result.value) }] };
+        return { content: [{ type: 'text', text: jh('get_schema', result.value) }] };
       },
     );
   }
@@ -550,7 +697,7 @@ export function createServer(
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         }
-        return { content: [{ type: 'text', text: j(result.value) }] };
+        return { content: [{ type: 'text', text: jh('get_event_graph', result.value) }] };
       },
     );
   }
@@ -572,7 +719,7 @@ export function createServer(
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: j(result.value) }] };
+      return { content: [{ type: 'text', text: jh('find_usages', result.value) }] };
     },
   );
 
@@ -589,7 +736,7 @@ export function createServer(
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: j(result.value) }] };
+      return { content: [{ type: 'text', text: jh('get_call_graph', result.value) }] };
     },
   );
 
@@ -610,7 +757,7 @@ export function createServer(
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: j(result.value) }] };
+      return { content: [{ type: 'text', text: jh('get_tests_for', result.value) }] };
     },
   );
 
@@ -626,7 +773,7 @@ export function createServer(
         if (result.isErr()) {
           return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         }
-        return { content: [{ type: 'text', text: j(result.value) }] };
+        return { content: [{ type: 'text', text: jh('get_livewire_context', result.value) }] };
       },
     );
 
@@ -783,7 +930,7 @@ export function createServer(
       let results = getCouplingMetrics(store);
       if (assessment) results = results.filter((r) => r.assessment === assessment);
       if (limit) results = results.slice(0, limit);
-      return { content: [{ type: 'text', text: j(results) }] };
+      return { content: [{ type: 'text', text: jh('get_coupling_metrics', results) }] };
     },
   );
 
@@ -796,7 +943,7 @@ export function createServer(
       return {
         content: [{
           type: 'text',
-          text: j({
+          text: jh('get_dependency_cycles', {
             total_cycles: cycles.length,
             cycles,
             ...(cycles.length === 0 ? { message: 'No circular dependencies found' } : {}),
@@ -814,7 +961,7 @@ export function createServer(
     },
     async ({ limit }) => {
       const results = getPageRank(store);
-      return { content: [{ type: 'text', text: j(results.slice(0, limit ?? 50)) }] };
+      return { content: [{ type: 'text', text: jh('get_page_rank', results.slice(0, limit ?? 50)) }] };
     },
   );
 
@@ -843,7 +990,7 @@ export function createServer(
     async () => {
       const result = getRepoHealth(store);
       const hotspots = getHotspots(store, projectRoot);
-      return { content: [{ type: 'text', text: j({ ...result, hotspots: hotspots.slice(0, 10) }) }] };
+      return { content: [{ type: 'text', text: jh('get_repo_health', { ...result, hotspots: hotspots.slice(0, 10) }) }] };
     },
   );
 
@@ -887,7 +1034,7 @@ export function createServer(
       if (results.length === 0) {
         return { content: [{ type: 'text', text: j({ message: 'No hotspots found (no complex files with git churn)' }) }] };
       }
-      return { content: [{ type: 'text', text: j(results) }] };
+      return { content: [{ type: 'text', text: jh('get_hotspots', results) }] };
     },
   );
 
@@ -905,7 +1052,126 @@ export function createServer(
         threshold,
         limit,
       });
+      return { content: [{ type: 'text', text: jh('get_dead_code', result) }] };
+    },
+  );
+
+  server.tool(
+    'scan_security',
+    'Scan project files for OWASP Top-10 security vulnerabilities using pattern matching. Detects SQL injection (CWE-89), XSS (CWE-79), command injection (CWE-78), path traversal (CWE-22), hardcoded secrets (CWE-798), insecure crypto (CWE-327), open redirects (CWE-601), and SSRF (CWE-918). Skips test files.',
+    {
+      scope: z.string().max(512).optional().describe('Directory to scan (default: whole project)'),
+      rules: z.array(z.enum([
+        'sql_injection', 'xss', 'command_injection', 'path_traversal',
+        'hardcoded_secrets', 'insecure_crypto', 'open_redirect', 'ssrf', 'all',
+      ])).min(1).describe('Rules to apply (use ["all"] for full scan)'),
+      severity_threshold: z.enum(['critical', 'high', 'medium', 'low']).optional()
+        .describe('Minimum severity to report (default: low)'),
+    },
+    async ({ scope, rules, severity_threshold }) => {
+      if (scope) {
+        const blocked = guardPath(scope);
+        if (blocked) return blocked;
+      }
+      const result = scanSecurity(store, projectRoot, {
+        scope,
+        rules: rules as RuleName[],
+        severityThreshold: severity_threshold as Severity | undefined,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  server.tool(
+    'detect_antipatterns',
+    'Detect performance antipatterns: N+1 query risks, missing eager loading, unbounded queries, event listener leaks, circular model dependencies, missing indexes. Static analysis across all indexed ORMs (Eloquent, Sequelize, Mongoose, Django, Prisma, TypeORM, Drizzle).',
+    {
+      category: z.array(z.enum([
+        'n_plus_one_risk', 'missing_eager_load', 'unbounded_query',
+        'event_listener_leak', 'circular_dependency', 'missing_index',
+      ])).optional().describe('Antipattern categories to check (default: all)'),
+      file_pattern: z.string().max(512).optional().describe('Filter to files matching this pattern'),
+      severity_threshold: z.enum(['critical', 'high', 'medium', 'low']).optional()
+        .describe('Minimum severity to report (default: low)'),
+      limit: z.number().int().min(1).max(500).optional().describe('Max findings to return (default: 100)'),
+    },
+    async ({ category, file_pattern, severity_threshold, limit }) => {
+      const result = detectAntipatterns(store, projectRoot, {
+        category: category as AntipatternCategory[] | undefined,
+        file_pattern,
+        severity_threshold: severity_threshold as AntipatternSeverity | undefined,
+        limit,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: jh('detect_antipatterns', result.value) }] };
+    },
+  );
+
+  server.tool(
+    'generate_sbom',
+    'Generate a Software Bill of Materials (SBOM) from package manifests and lockfiles. Supports npm, Composer, pip, Go, Cargo, Bundler, Maven. Outputs CycloneDX, SPDX, or plain JSON. Includes license compliance warnings for copyleft licenses.',
+    {
+      format: z.enum(['cyclonedx', 'spdx', 'json']).optional().describe('Output format (default: json)'),
+      include_dev: z.boolean().optional().describe('Include devDependencies (default: false)'),
+      include_transitive: z.boolean().optional().describe('Include transitive dependencies (default: true)'),
+    },
+    async ({ format, include_dev, include_transitive }) => {
+      const result = generateSbom(projectRoot, {
+        format: format as SbomFormat | undefined,
+        includeDev: include_dev,
+        includeTransitive: include_transitive,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_artifacts',
+    'Surface non-code knowledge from the index: DB schemas (migrations, ORM models), API specs (routes, OpenAPI endpoints), infrastructure (docker-compose services, K8s resources), CI pipelines (jobs, stages), and config (env vars). All data from the existing index — no extra I/O.',
+    {
+      category: z.enum(['database', 'api', 'infra', 'ci', 'config', 'all']).optional()
+        .describe('Filter by artifact category (default: all)'),
+      query: z.string().max(256).optional().describe('Text filter on name/kind/file'),
+      limit: z.number().int().min(1).max(1000).optional().describe('Max results (default: 200)'),
+    },
+    async ({ category, query, limit }) => {
+      const result = getArtifacts(store, {
+        category: category as ArtifactCategory | undefined,
+        query,
+        limit,
+      });
       return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'plan_batch_change',
+    'Analyze the impact of updating a package/dependency. Shows all affected files, import references, and generates a PR template with checklist. Use before upgrading a dependency to understand blast radius.',
+    {
+      package: z.string().min(1).max(256).describe('Package name (e.g. "express", "laravel/framework", "react")'),
+      from_version: z.string().max(64).optional().describe('Current version'),
+      to_version: z.string().max(64).optional().describe('Target version'),
+      breaking_changes: z.array(z.string().max(500)).max(20).optional().describe('Known breaking changes to include in the report'),
+    },
+    async ({ package: pkg, from_version, to_version, breaking_changes }) => {
+      const result = planBatchChange(store, {
+        package: pkg,
+        fromVersion: from_version,
+        toVersion: to_version,
+        breakingChanges: breaking_changes,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
 
@@ -957,6 +1223,59 @@ export function createServer(
     },
     async ({ symbol_id, target_name }) => {
       const result = checkRenameSafe(store, symbol_id, target_name);
+      return { content: [{ type: 'text', text: jh('check_rename_safe', result) }] };
+    },
+  );
+
+  // --- Refactoring Execution Tools ---
+
+  server.tool(
+    'apply_rename',
+    'Rename a symbol across all usages (definition + all importing files). Runs collision detection first and aborts on conflicts. Returns the list of edits applied.',
+    {
+      symbol_id: z.string().max(512).describe('Symbol ID to rename (from search or outline)'),
+      new_name: z.string().min(1).max(256).describe('New name for the symbol'),
+    },
+    async ({ symbol_id, new_name }) => {
+      const result = applyRename(store, projectRoot, symbol_id, new_name);
+      if (!result.success) {
+        return { content: [{ type: 'text', text: j(result) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'remove_dead_code',
+    'Safely remove a dead symbol from its file. Verifies the symbol is actually dead (multi-signal detection or zero incoming edges) before removal. Warns about orphaned imports in other files.',
+    {
+      symbol_id: z.string().max(512).describe('Symbol ID to remove (from get_dead_code results)'),
+    },
+    async ({ symbol_id }) => {
+      const result = removeDeadCode(store, projectRoot, symbol_id);
+      if (!result.success) {
+        return { content: [{ type: 'text', text: j(result) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'extract_function',
+    'Extract a range of lines into a new named function. Detects parameters (variables from outer scope) and return values (variables used after the range). Supports TypeScript/JavaScript, Python, and Go.',
+    {
+      file_path: z.string().max(512).describe('File path (relative to project root)'),
+      start_line: z.number().int().min(1).describe('First line to extract (1-indexed, inclusive)'),
+      end_line: z.number().int().min(1).describe('Last line to extract (1-indexed, inclusive)'),
+      function_name: z.string().min(1).max(256).describe('Name for the extracted function'),
+    },
+    async ({ file_path, start_line, end_line, function_name }) => {
+      const blocked = guardPath(file_path);
+      if (blocked) return blocked;
+      const result = extractFunction(store, projectRoot, file_path, start_line, end_line, function_name);
+      if (!result.success) {
+        return { content: [{ type: 'text', text: j(result) }], isError: true };
+      }
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );
@@ -1048,6 +1367,50 @@ export function createServer(
     },
   );
 
+  // --- Historical Graph Analysis (Time Machine) ---
+
+  server.tool(
+    'get_coupling_trend',
+    'Coupling trend for a file over time: tracks Ca (afferent), Ce (efferent), and instability across git history. Shows whether a module is stabilizing or destabilizing. Complements get_git_churn with structural graph data.',
+    {
+      file_path: z.string().max(512).describe('File path to analyze'),
+      since_days: z.number().int().min(1).optional().describe('Analyze last N days (default: 90)'),
+      snapshots: z.number().int().min(2).max(20).optional().describe('Number of historical snapshots (default: 6)'),
+    },
+    async ({ file_path, since_days, snapshots }) => {
+      const blocked = guardPath(file_path);
+      if (blocked) return blocked;
+      const result = getCouplingTrend(store, projectRoot, file_path, {
+        sinceDays: since_days,
+        snapshots,
+      });
+      if (!result) {
+        return { content: [{ type: 'text', text: j({ message: 'No coupling data or git history for this file' }) }] };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'get_symbol_complexity_trend',
+    'Per-symbol complexity trend: tracks cyclomatic complexity, nesting depth, param count, and line count for a specific function/method/class across git history. Shows whether a symbol is getting more or less complex over time.',
+    {
+      symbol_id: z.string().min(1).max(512).describe('Symbol ID to analyze (from search or outline)'),
+      since_days: z.number().int().min(1).optional().describe('Analyze last N days (default: all history)'),
+      snapshots: z.number().int().min(2).max(20).optional().describe('Number of historical snapshots (default: 6)'),
+    },
+    async ({ symbol_id, since_days, snapshots }) => {
+      const result = getSymbolComplexityTrend(store, projectRoot, symbol_id, {
+        sinceDays: since_days,
+        snapshots,
+      });
+      if (!result) {
+        return { content: [{ type: 'text', text: j({ message: 'Symbol not found or no git history available' }) }] };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
   // --- Multi-Repo Topology Tools (optional) ---
   if (config.topology?.enabled) {
     ensureGlobalDirs();
@@ -1118,6 +1481,74 @@ export function createServer(
       },
       async ({ service }) => {
         const result = getContractDrift(topoStore, store, projectRoot, additionalRepos, { service });
+        if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    // --- Federation Tools (within topology block) ---
+
+    server.tool(
+      'get_federation_graph',
+      'Show all federated repositories and their cross-repo connections. Displays repos, endpoints, client calls, and inter-repo dependency edges.',
+      {},
+      async () => {
+        const result = getFederationGraph(topoStore);
+        if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'get_federation_impact',
+      'Cross-repo impact analysis: find all client code across federated repos that would break if an endpoint changes. Resolves down to symbol level when per-repo indexes exist.',
+      {
+        endpoint: z.string().max(512).optional().describe('Endpoint path pattern (e.g. /api/users)'),
+        method: z.string().max(10).optional().describe('HTTP method filter (e.g. GET, POST)'),
+        service: z.string().max(256).optional().describe('Service name filter'),
+      },
+      async ({ endpoint, method, service }) => {
+        const result = getFederationImpact(topoStore, { endpoint, method, service });
+        if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'federation_add_repo',
+      'Add a repository to the federation. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints.',
+      {
+        repo_path: z.string().min(1).max(1024).describe('Absolute or relative path to the repository'),
+        name: z.string().max(256).optional().describe('Display name for the repo (default: directory basename)'),
+        contract_paths: z.array(z.string().max(512)).optional().describe('Explicit contract file paths relative to repo root'),
+      },
+      async ({ repo_path, name, contract_paths }) => {
+        const result = federationAddRepo(topoStore, { repoPath: repo_path, name, contractPaths: contract_paths });
+        if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'federation_sync',
+      'Re-scan all federated repos: re-discover services, re-parse contracts, re-scan client calls, and re-link everything.',
+      {},
+      async () => {
+        const result = federationSync(topoStore);
+        if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'get_federation_clients',
+      'Find all client calls across federated repos that call a specific endpoint. Shows file, line, call type, and confidence.',
+      {
+        endpoint: z.string().min(1).max(512).describe('Endpoint path to search for (e.g. /api/users)'),
+        method: z.string().max(10).optional().describe('HTTP method filter'),
+      },
+      async ({ endpoint, method }) => {
+        const result = getFederationClients(topoStore, { endpoint, method });
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
@@ -1255,6 +1686,113 @@ export function createServer(
     },
     async ({ domain }) => {
       const result = await getCrossDomainDependencies(store, { domain });
+      if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Graph Query (NL → Graph) ---
+
+  server.tool(
+    'graph_query',
+    'Natural language graph query — ask questions about code relationships and get a subgraph + Mermaid diagram. Examples: "How does authentication flow from login to database?", "What services depend on UserModel?", "Trace the flow through PaymentService".',
+    {
+      query: z.string().min(1).max(500).describe('Natural language question about code relationships'),
+      depth: z.number().int().min(1).max(6).optional().describe('Max traversal depth (default 3)'),
+      max_nodes: z.number().int().min(1).max(200).optional().describe('Max nodes in result graph (default 100)'),
+    },
+    async ({ query, depth, max_nodes }) => {
+      const result = graphQuery(store, query, { depth, max_nodes });
+      if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      return { content: [{ type: 'text', text: jh('graph_query', result.value) }] };
+    },
+  );
+
+  // --- Dataflow Analysis ---
+
+  server.tool(
+    'get_dataflow',
+    'Intra-function dataflow analysis: track how each parameter flows through the function body — into which calls, where it gets mutated, and what is returned. Phase 1: single function scope.',
+    {
+      symbol_id: z.string().max(512).optional().describe('Symbol ID of the function/method to analyze'),
+      fqn: z.string().max(512).optional().describe('Fully qualified name of the function/method'),
+      direction: z.enum(['forward', 'backward', 'both']).optional().describe('Analysis direction (default both)'),
+      depth: z.number().int().min(1).max(5).optional().describe('Max analysis depth for chained calls (default 3)'),
+    },
+    async ({ symbol_id, fqn, direction, depth }) => {
+      const result = getDataflow(store, projectRoot, { symbolId: symbol_id, fqn, direction, depth });
+      if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Graph Visualization ---
+
+  server.tool(
+    'visualize_graph',
+    'Generate interactive HTML graph visualization of file/symbol dependencies. Opens in browser. Supports force/hierarchical/radial layouts, community detection, color by language/role.',
+    {
+      scope: z.string().min(1).max(512).describe('Scope: file path, directory (e.g. "src/"), or "project"'),
+      depth: z.number().int().min(1).max(5).optional().describe('Max hops from scope (default 2)'),
+      layout: z.enum(['force', 'hierarchical', 'radial']).optional().describe('Graph layout algorithm (default force)'),
+      color_by: z.enum(['community', 'language', 'framework_role']).optional().describe('Node coloring strategy (default community)'),
+      include_edges: z.array(z.string()).optional().describe('Filter edge types (default: all)'),
+      output: z.string().max(512).optional().describe('Output file path (default: /tmp/trace-mcp-graph.html)'),
+    },
+    async ({ scope, depth, layout, color_by, include_edges, output }) => {
+      const result = visualizeGraph(store, {
+        scope,
+        depth,
+        layout,
+        colorBy: color_by,
+        includeEdges: include_edges,
+        output,
+      });
+      if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_dependency_diagram',
+    'Generate a text-based dependency diagram (Mermaid or DOT format) for inline display in chat. Trims to max_nodes most important nodes for readability.',
+    {
+      scope: z.string().min(1).max(512).describe('Scope: file path, directory, or "project"'),
+      depth: z.number().int().min(1).max(5).optional().describe('Max hops from scope (default 2)'),
+      max_nodes: z.number().int().min(1).max(100).optional().describe('Max nodes in diagram (default 30)'),
+      format: z.enum(['mermaid', 'dot']).optional().describe('Output format (default mermaid)'),
+    },
+    async ({ scope, depth, max_nodes, format }) => {
+      const result = getDependencyDiagram(store, { scope, depth, maxNodes: max_nodes, format });
+      if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Text Search ---
+
+  server.tool(
+    'search_text',
+    'Full-text search across all indexed files. Supports regex, glob file patterns, language filter. Use for finding strings, comments, TODOs, config values, error messages — anything not captured as a symbol.',
+    {
+      query: z.string().min(1).max(1000).describe('Search string or regex pattern'),
+      is_regex: z.boolean().optional().describe('Treat query as regex (default false)'),
+      file_pattern: z.string().max(512).optional().describe('Glob filter, e.g. "src/**/*.ts"'),
+      language: z.string().max(64).optional().describe('Filter by language (e.g. "typescript", "python")'),
+      max_results: z.number().int().min(1).max(200).optional().describe('Max matches to return (default 50)'),
+      context_lines: z.number().int().min(0).max(10).optional().describe('Lines of context before/after each match (default 2)'),
+      case_sensitive: z.boolean().optional().describe('Case-sensitive search (default false)'),
+    },
+    async ({ query, is_regex, file_pattern, language, max_results, context_lines, case_sensitive }) => {
+      const result = searchText(store, projectRoot, {
+        query,
+        isRegex: is_regex,
+        filePattern: file_pattern,
+        language,
+        maxResults: max_results,
+        contextLines: context_lines,
+        caseSensitive: case_sensitive,
+      });
       if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       return { content: [{ type: 'text', text: j(result.value) }] };
     },
@@ -1458,6 +1996,32 @@ export function createServer(
     },
   );
 
+  // --- Batch Changes ---
+
+  server.tool(
+    'plan_batch_change',
+    'Analyze the impact of updating a dependency across the codebase. Shows affected files, import sites, and line references. Generates a PR description template with risk level, breaking changes checklist, and affected file list.',
+    {
+      package: z.string().min(1).max(256).describe('Package name being updated (e.g. "@myorg/auth-lib", "lodash")'),
+      from_version: z.string().max(64).optional().describe('Current version'),
+      to_version: z.string().max(64).optional().describe('Target version'),
+      breaking_changes: z.array(z.string().max(500)).max(20).optional()
+        .describe('Known breaking changes (e.g. "login() now returns Promise<AuthResult>")'),
+    },
+    async ({ package: pkg, from_version, to_version, breaking_changes }) => {
+      const result = planBatchChange(store, {
+        package: pkg,
+        fromVersion: from_version,
+        toVersion: to_version,
+        breakingChanges: breaking_changes,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
   // --- Resources ---
 
   server.resource(
@@ -1485,6 +2049,139 @@ export function createServer(
     },
   );
 
+
+  // --- Co-Change Analysis ---
+  server.tool('get_co_changes', 'Find files that frequently change together in git history (temporal coupling).', { file: z.string().min(1).max(512).describe('File path to analyze'), min_confidence: z.number().min(0).max(1).optional().describe('Minimum confidence threshold (default 0.3)'), min_count: z.number().int().min(1).optional().describe('Minimum co-change count (default 3)'), window_days: z.number().int().min(1).max(730).optional().describe('Git history window in days (default 180)'), limit: z.number().int().min(1).max(100).optional().describe('Max results (default 20)') }, async ({ file, min_confidence, min_count, window_days, limit: lim }) => { const result = getCoChanges(store, { file, minConfidence: min_confidence, minCount: min_count, windowDays: window_days, limit: lim }); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+  server.tool('refresh_co_changes', 'Rebuild co-change index from git history.', { window_days: z.number().int().min(1).max(730).optional().describe('Git history window in days (default 180)') }, async ({ window_days }) => { const days = window_days ?? 180; const pairs = collectCoChanges(projectRoot, days); const count = persistCoChanges(store, pairs, projectRoot, days); return { content: [{ type: 'text', text: j({ status: 'completed', pairs_stored: count, window_days: days }) }] }; });
+  // --- Changed Symbols ---
+  server.tool('get_changed_symbols', 'Map a git diff to affected symbols (functions, classes, methods). For PR review.', { since: z.string().min(1).max(256).describe('Git ref to compare from (SHA, branch, tag)'), until: z.string().max(256).optional().describe('Git ref to compare to (default: HEAD)'), include_blast_radius: z.boolean().optional().describe('Include blast radius for each changed symbol (default false)'), max_blast_depth: z.number().int().min(1).max(10).optional().describe('Max blast radius traversal depth (default 3)') }, async ({ since, until, include_blast_radius, max_blast_depth }) => { const result = getChangedSymbols(store, projectRoot, { since, until, includeBlastRadius: include_blast_radius, maxBlastDepth: max_blast_depth }); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+
+  server.tool(
+    'compare_branches',
+    'Compare two branches at symbol level: what was added, modified, removed. Resolves merge-base automatically, groups by category/file/risk, includes blast radius and risk assessment.',
+    {
+      branch: z.string().min(1).max(256).describe('Branch to compare (e.g. "feature/payments")'),
+      base: z.string().max(256).optional().describe('Base branch (default: "main")'),
+      include_blast_radius: z.boolean().optional().describe('Include blast radius per symbol (default true)'),
+      max_blast_depth: z.number().int().min(1).max(10).optional().describe('Max blast radius depth (default 3)'),
+      group_by: z.enum(['file', 'category', 'risk']).optional().describe('Group results by: file, category (added/modified/removed), or risk level (default: category)'),
+    },
+    async ({ branch, base, include_blast_radius, max_blast_depth, group_by }) => {
+      const result = compareBranches(store, projectRoot, {
+        branch,
+        base,
+        includeBlastRadius: include_blast_radius,
+        maxBlastDepth: max_blast_depth,
+        groupBy: group_by,
+      });
+      if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Community Detection ---
+  server.tool('detect_communities', 'Run Leiden community detection on the file dependency graph. Identifies tightly-coupled file clusters (modules).', { resolution: z.number().min(0.1).max(5).optional().describe('Resolution parameter — higher values produce more communities (default 1.0)') }, async ({ resolution }) => { const result = detectCommunities(store, resolution ?? 1.0); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+  server.tool('get_communities', 'Get previously detected communities (file clusters). Run detect_communities first.', {}, async () => { const result = getCommunities(store); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+  server.tool('get_community', 'Get details for a specific community: files, inter-community dependencies.', { id: z.number().int().min(0).describe('Community ID') }, async ({ id }) => { const result = getCommunityDetail(store, id); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+
+  // --- Audit Config ---
+  server.tool('audit_config', 'Scan AI agent config files for stale references, dead paths, and token bloat.', { config_files: z.array(z.string().max(512)).optional().describe('Specific config files to audit (default: auto-detect)'), fix_suggestions: z.boolean().optional().describe('Include fix suggestions (default true)') }, async ({ config_files, fix_suggestions }) => { const result = auditConfig(store, projectRoot, { configFiles: config_files, fixSuggestions: fix_suggestions ?? true }); return { content: [{ type: 'text', text: j(result) }] }; });
+
+  // --- Control Flow Graph ---
+  server.tool(
+    'get_control_flow',
+    'Build a Control Flow Graph (CFG) for a function/method: if/else branches, loops, try/catch, returns, throws. Shows logical paths through the code. Outputs Mermaid diagram, ASCII, or JSON.',
+    {
+      symbol_id: z.string().max(512).optional().describe('Symbol ID of the function/method'),
+      fqn: z.string().max(512).optional().describe('Fully qualified name of the function/method'),
+      format: z.enum(['json', 'mermaid', 'ascii']).optional().describe('Output format (default: mermaid)'),
+      simplify: z.boolean().optional().describe('Collapse sequential statements (default: true)'),
+    },
+    async ({ symbol_id, fqn, format: fmt, simplify }) => {
+      const result = getControlFlow(store, projectRoot, {
+        symbolId: symbol_id,
+        fqn,
+        format: fmt ?? 'mermaid',
+        simplify: simplify ?? true,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Cross-Repo Package Dependencies ---
+  server.tool(
+    'get_package_deps',
+    'Cross-repo package dependency analysis: find which registered projects depend on a package, or what packages a project publishes. Scans package.json/composer.json/pyproject.toml across all repos in the registry.',
+    {
+      package: z.string().max(256).optional().describe('Package name to analyze (e.g. "@myorg/shared-utils")'),
+      project: z.string().max(256).optional().describe('Project name — analyze all packages it publishes'),
+      direction: z.enum(['dependents', 'dependencies', 'both']).optional().describe('Direction (default: both)'),
+    },
+    async ({ package: pkg, project, direction }) => {
+      const result = getPackageDeps({
+        package: pkg,
+        project,
+        direction: direction ?? 'both',
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- Documentation Generation ---
+  server.tool(
+    'generate_docs',
+    'Auto-generate project documentation from the code graph. Produces structured docs with architecture, API surface, data models, components, and dependency analysis.',
+    {
+      scope: z.enum(['project', 'module', 'directory']).optional().describe('Scope (default: project)'),
+      path: z.string().max(512).optional().describe('Path for module/directory scope'),
+      format: z.enum(['markdown', 'html']).optional().describe('Output format (default: markdown)'),
+      sections: z.array(z.enum(['overview', 'architecture', 'api_surface', 'data_model', 'components', 'events', 'dependencies'])).optional()
+        .describe('Sections to include (default: all)'),
+    },
+    async ({ scope, path: scopePath, format: fmt, sections: secs }) => {
+      const result = generateDocs(store, registry, {
+        scope: scope ?? 'project',
+        path: scopePath,
+        format: fmt ?? 'markdown',
+        sections: secs ?? ['overview', 'architecture', 'api_surface', 'data_model', 'components', 'events', 'dependencies'],
+        projectRoot,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- Repo Packing ---
+  server.tool(
+    'pack_context',
+    'Pack project context into a single document for external LLMs. Intelligent selection by graph importance, fits within token budget. Better than Repomix for focused context.',
+    {
+      scope: z.enum(['project', 'module', 'feature']).describe('Scope: project (whole repo), module (subdirectory), feature (NL query)'),
+      path: z.string().max(512).optional().describe('Subdirectory path (for module scope)'),
+      query: z.string().max(500).optional().describe('Natural language query (for feature scope)'),
+      format: z.enum(['xml', 'markdown', 'json']).optional().describe('Output format (default: markdown)'),
+      max_tokens: z.number().int().min(1000).max(200000).optional().describe('Token budget (default: 50000)'),
+      include: z.array(z.enum(['file_tree', 'outlines', 'source', 'dependencies', 'routes', 'models', 'tests'])).optional()
+        .describe('Sections to include (default: outlines + source + routes)'),
+      compress: z.boolean().optional().describe('Strip function bodies, keep signatures (default: true)'),
+    },
+    async ({ scope, path: scopePath, query, format: fmt, max_tokens, include: inc, compress }) => {
+      const result = packContext(store, registry, {
+        scope,
+        path: scopePath,
+        query,
+        format: fmt ?? 'markdown',
+        maxTokens: max_tokens ?? 50000,
+        include: inc ?? ['outlines', 'source', 'routes'],
+        compress: compress ?? true,
+        projectRoot,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
   // --- AI-powered tools (registered only when AI is enabled) ---
   if (config.ai?.enabled) {
     registerAITools(server, {
@@ -1497,6 +2194,46 @@ export function createServer(
       projectRoot,
     });
   }
+
+  // --- Always-registered meta tools (bypass preset gate) ---
+
+  _originalTool(
+    'get_preset_info',
+    'Show active tool preset, available presets, and which tools are registered in this session',
+    {},
+    async () => {
+      const presets = listPresets();
+      return {
+        content: [{
+          type: 'text',
+          text: j({
+            active_preset: presetName,
+            registered_tools: registeredToolNames.length,
+            tool_names: registeredToolNames,
+            available_presets: presets,
+          }),
+        }],
+      };
+    },
+  );
+
+  _originalTool(
+    'get_session_stats',
+    'Token savings stats for this session and cumulative across all sessions. Shows per-tool call counts, estimated token savings, and reduction percentage.',
+    {},
+    async () => {
+      const stats = savings.getFullStats();
+      return {
+        content: [{
+          type: 'text',
+          text: j(stats),
+        }],
+      };
+    },
+  );
+
+  // --- MCP Prompts (workflow templates) ---
+  registerPrompts(server, { store, registry, config, projectRoot });
 
   return server;
 }

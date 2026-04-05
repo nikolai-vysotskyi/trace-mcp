@@ -1,6 +1,6 @@
 # Supported frameworks & languages
 
-## Languages (44)
+## Languages (68)
 
 ### Tree-sitter (full AST parsing)
 
@@ -56,6 +56,30 @@
 | **AL (Business Central)** | Tables, pages, codeunits, enums, procedures, triggers |
 | **Blade (Laravel)** | Sections, components, slots, includes, extends |
 | **EJS** | Functions, constants (from scriptlet blocks) |
+| **Zig** | Functions, structs, enums, unions, constants, variables, test declarations |
+| **OCaml** | Let/val bindings, type definitions, modules, classes, exceptions |
+| **Clojure** | defn, def, defmacro, defprotocol, defrecord, deftype, ns declarations |
+| **F#** | Let bindings, members, type definitions, modules, exceptions |
+| **Elm** | Functions, type aliases, custom types, ports, modules |
+| **CUDA** | Kernels (__global__), device/host functions, structs, __constant__/__shared__ vars |
+| **COBOL** | PROGRAM-ID, divisions, sections, paragraphs, data items (01–77 levels), conditions (88) |
+| **Verilog / SystemVerilog** | Modules, interfaces, packages, classes, functions, tasks, parameters |
+| **GLSL** | Functions, structs, uniforms, varyings, layout qualifiers, constants |
+| **Meson** | Projects, executables, libraries, dependencies, custom targets, subdirs |
+| **Vim Script** | Functions, commands, variables (g:/s:/b:), augroups |
+| **Common Lisp** | defun, defmacro, defclass, defstruct, defpackage, defvar, defconstant |
+| **Emacs Lisp** | defun, defmacro, defvar, defcustom, defconst, define-*-mode, defgroup |
+| **Dockerfile** | FROM stages, ARG/ENV declarations, EXPOSE ports, ENTRYPOINT/CMD |
+| **Makefile** | Targets, variable definitions, define blocks, .PHONY |
+| **CMake** | Functions, macros, projects, add_executable/add_library, options |
+| **INI / Config** | Sections, key-value pairs (.ini, .cfg, .conf, .properties, .editorconfig) |
+| **Svelte** | Props (export let / $props), reactive declarations, runes ($state/$derived), snippets |
+| **Markdown** | Headings (h1–h4), link definitions, code block languages |
+| **MATLAB / Octave** | Functions, classdef, properties blocks, global/persistent variables |
+| **Lean 4** | def, theorem, lemma, structure, class, inductive, abbrev, namespace |
+| **FORM** | Symbols, indices, vectors, functions, tables, procedures, modules |
+| **Magma** | Functions, procedures, intrinsics, types, records |
+| **Wolfram / Mathematica** | Function definitions (SetDelayed), packages, usage strings, options |
 
 ---
 
