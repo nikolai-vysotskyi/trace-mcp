@@ -94,6 +94,23 @@ Enabled by default (`topology.enabled: true`). See [Configuration](configuration
 | `federation_add_repo` | Add a repository to the federation (discovers services, parses contracts, scans for client calls) |
 | `federation_sync` | Re-scan all federated repos: contracts, client calls, and re-link |
 
+## Session Analytics
+
+See [Analytics](analytics.md) for full documentation.
+
+| Tool | What it does |
+|---|---|
+| `get_session_analytics` | Token usage, cost breakdown by tool/server, top files, models used |
+| `get_optimization_report` | Detect token waste patterns (8 rules) with savings estimates |
+| `get_real_savings` | Analyze actual sessions: how much trace-mcp saves vs raw file reads |
+| `benchmark_project` | Synthetic benchmark: raw reads vs trace-mcp compact responses (5 scenarios) |
+| `get_coverage_report` | Technology profile: deps from manifests, coverage by trace-mcp plugins, gaps |
+| `get_usage_trends` | Daily token usage trends over time |
+| `get_session_stats` | Real-time token savings for the current session |
+| `audit_config` | Audit AI agent config files for stale refs, dead paths, bloat, scope leaks |
+
+Supports **Claude Code** and **Claw Code** session logs (auto-detected).
+
 ## CI/PR reports (CLI)
 
 Not an MCP tool — a CLI command for CI pipelines:
@@ -147,3 +164,8 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "Show me all service connections" | `get_federation_graph` — repos, edges, stats |
 | "Starting work on a task" | `get_task_context("fix the login bug")` — full execution context adapted to bugfix/feature/refactor |
 | "PR impact report" | `trace-mcp ci-report --base main --head HEAD` — blast radius, risk score, test gaps |
+| "How much am I spending on tokens?" | `get_session_analytics` — full breakdown by tool, file, model |
+| "Where am I wasting tokens?" | `get_optimization_report` — detects repeated reads, bash-grep, large files |
+| "How much would trace-mcp save?" | `get_real_savings` — compares actual reads vs compact alternatives |
+| "Quick efficiency benchmark" | `benchmark_project` — 92%+ reduction on typical projects |
+| "What tech isn't covered?" | `get_coverage_report` — gaps in plugin coverage for your deps |

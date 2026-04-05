@@ -3,6 +3,7 @@ dist/
 *.db
 *.db-wal
 *.db-shm
+.claude/
 .trace-mcp/
 .env
 .env.local
