@@ -22,7 +22,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger CI on release PR branch
-        if: steps.release.outputs.prs_created == 'true'
+        if: steps.release.outputs.prs != '' && steps.release.outputs.prs != '[]'
         env:
           GH_TOKEN: ${{ github.token }}
           PRS_OUTPUT: ${{ steps.release.outputs.prs }}
@@ -48,11 +48,18 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: https://registry.npmjs.org
 
-      # Required: npm >=10.9.2 for Trusted Publishing (OIDC token exchange)
-      - run: npm install -g npm@latest
+      # Trusted Publishing requires npm >=10.9.2
+      - name: Ensure npm >=10.9.2
+        run: |
+          NPM_VERSION=$(npm --version)
+          echo "Current npm: $NPM_VERSION"
+          if [ "$(printf '%s\n' "10.9.2" "$NPM_VERSION" | sort -V | head -n1)" != "10.9.2" ]; then
+            echo "npm $NPM_VERSION < 10.9.2, upgrading..."
+            npm install -g npm@latest
+          fi
       - run: npm ci
       - run: npm run build
       - run: npm test
