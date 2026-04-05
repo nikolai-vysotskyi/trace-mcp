@@ -51,6 +51,8 @@ jobs:
           node-version: '22'
           registry-url: https://registry.npmjs.org
 
+      # Required: npm >=10.9.2 for Trusted Publishing (OIDC token exchange)
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
       - run: npm test
