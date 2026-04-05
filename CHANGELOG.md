@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.1.0...v1.2.0) (2026-04-05)
+
+
+### Features
+
+* add analytics system with benchmarks and session tracking ([8a6650c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8a6650ccd54bbdffb66176bce93c244fe50508c2))
+* add bundle management, file watcher, and health check CLI ([220bc9c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/220bc9cea4b5f3b80773fa6d8ac77b9925e4ae31))
+* add claw-code MCP client support ([0559ba8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0559ba85c7db7347419e09bd113debe266718d1d))
+* add quality gates, taint analysis, and evidence tools ([23bf3a2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/23bf3a2bc850efb4aedc3b8c029be71515c9f4ee))
+* integrate new features into server, CLI, and config ([fbaf1d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fbaf1d7a268ed9e4297efb502edb28d913242570))
+
+
+### Bug Fixes
+
+* **ci:** support impact reports for release-please auto-PRs ([1bd53ac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1bd53ac31fa703f6e2f5439693630acd381263ca))
+
+
+### Performance Improvements
+
+* optimize indexer with concurrent extraction and FTS5 batch mode ([c19273f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c19273f1646805f86db4186a18cb84769de13560))
+
 ## [1.1.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.11...v1.1.0) (2026-04-05)
 
 
