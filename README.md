@@ -29,6 +29,43 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 
 ---
 
+## Token efficiency — real-world benchmark
+
+AI agents burn tokens reading files they don't need. trace-mcp returns **precision context** — only the symbols, edges, and signatures relevant to the query.
+
+**Benchmark: trace-mcp's own codebase** (563 files, 2,955 symbols):
+
+```
+Task                  Without trace-mcp    With trace-mcp    Reduction
+─────────────────────────────────────────────────────────────────────
+Symbol lookup              49,719 tokens     5,103 tokens      89.7%
+File exploration           11,284 tokens       463 tokens      95.9%
+Search                     22,860 tokens     8,000 tokens      65.0%
+Impact analysis            69,223 tokens     3,464 tokens      95.0%
+Call graph                107,497 tokens     6,452 tokens      94.0%
+─────────────────────────────────────────────────────────────────────
+Total                     260,583 tokens    23,482 tokens      91.0%
+```
+
+**91% fewer tokens** to accomplish the same code understanding tasks. That's ~237K tokens saved per exploration session — more headroom for actual coding, fewer context window evictions, lower API costs.
+
+<details>
+<summary>Methodology</summary>
+
+Measured using `benchmark_project` — runs five real task categories (symbol lookup, file exploration, text search, impact analysis, call graph traversal) against the indexed project. "Without trace-mcp" = estimated tokens from equivalent Read/Grep/Glob operations (full file reads, grep output). "With trace-mcp" = actual tokens returned by trace-mcp tools (targeted symbols, outlines, graph results). Token counts estimated using trace-mcp's built-in savings tracker.
+
+Reproduce it yourself:
+```
+# Via MCP tool
+benchmark_project  # runs against the current project
+
+# Or via CLI
+trace-mcp benchmark /path/to/project
+```
+</details>
+
+---
+
 ## Key capabilities
 
 - **Request flow tracing** — URL → Route → Middleware → Controller → Service, across 18 backend frameworks
