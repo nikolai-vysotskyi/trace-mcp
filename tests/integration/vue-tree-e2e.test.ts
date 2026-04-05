@@ -95,6 +95,6 @@ describe('Vue component tree e2e', () => {
     const impact = result.value;
     expect(impact.target.path).toContain('UserCard.vue');
     console.log(`Change impact: ${impact.totalAffected} affected, dependents:`,
-      impact.dependents.map((d) => `${d.path} (${d.edgeType})`));
+      impact.dependents.map((d) => `${d.path} (${d.edgeTypes.join(', ')})`));
   });
 });

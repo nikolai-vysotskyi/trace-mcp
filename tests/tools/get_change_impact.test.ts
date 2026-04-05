@@ -46,24 +46,29 @@ describe('get_change_impact', () => {
     await pipeline.indexAll();
   });
 
-  it('finds dependents of UserCard.vue', () => {
+  it('finds dependents of UserCard.vue (deduped by file)', () => {
     const result = getChangeImpact(store, { filePath: 'src/components/UserCard.vue' });
     expect(result.isOk()).toBe(true);
 
     const impact = result._unsafeUnwrap();
     expect(impact.target.path).toBe('src/components/UserCard.vue');
-    // UserList renders UserCard, so it should appear as dependent
     const deps = impact.dependents.map((d) => d.path);
     expect(deps).toContain('src/components/UserList.vue');
+    // File should only appear once (deduped)
+    const uniquePaths = new Set(deps);
+    expect(deps.length).toBe(uniquePaths.size);
   });
 
-  it('returns correct edge types', () => {
+  it('returns edge types as array per file', () => {
     const result = getChangeImpact(store, { filePath: 'src/components/UserCard.vue' });
     expect(result.isOk()).toBe(true);
 
     const impact = result._unsafeUnwrap();
-    const renderDeps = impact.dependents.filter((d) => d.edgeType === 'renders_component');
-    expect(renderDeps.length).toBeGreaterThan(0);
+    const userList = impact.dependents.find((d) => d.path === 'src/components/UserList.vue');
+    if (userList) {
+      expect(Array.isArray(userList.edgeTypes)).toBe(true);
+      expect(userList.edgeTypes).toContain('renders_component');
+    }
   });
 
   it('respects depth limit', () => {
@@ -71,7 +76,6 @@ describe('get_change_impact', () => {
     expect(result.isOk()).toBe(true);
 
     const impact = result._unsafeUnwrap();
-    // With depth 1, only direct dependents
     for (const dep of impact.dependents) {
       expect(dep.depth).toBe(1);
     }
@@ -95,12 +99,102 @@ describe('get_change_impact', () => {
   });
 
   it('returns empty dependents for a leaf with no incoming edges', () => {
-    // App.vue is the root -- nothing renders App
     const result = getChangeImpact(store, { filePath: 'src/App.vue' });
     expect(result.isOk()).toBe(true);
+    expect(impact(result).target.path).toBe('src/App.vue');
+  });
 
-    const impact = result._unsafeUnwrap();
-    // App may or may not have dependents, but the call should succeed
-    expect(impact.target.path).toBe('src/App.vue');
+  // ── Enriched output ──
+
+  it('returns summary with sentence', () => {
+    const result = getChangeImpact(store, { filePath: 'src/components/UserCard.vue' });
+    const i = impact(result);
+    expect(typeof i.summary.totalFiles).toBe('number');
+    expect(i.summary.sentence).toMatch(/^Impact:/);
+  });
+
+  it('returns risk signals with level and mitigations', () => {
+    const i = impact(getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }));
+    expect(typeof i.risk.score).toBe('number');
+    expect(['low', 'medium', 'high', 'critical']).toContain(i.risk.level);
+    expect(Array.isArray(i.risk.mitigations)).toBe(true);
+  });
+
+  it('groups by module when dependents exist', () => {
+    const i = impact(getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }));
+    if (i.dependents.length > 0) {
+      expect(i.byModule).toBeDefined();
+      expect(i.byModule![0]).toHaveProperty('module');
+      expect(i.byModule![0]).toHaveProperty('count');
+    }
+  });
+
+  it('enriches dependents with symbols array', () => {
+    const i = impact(getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }));
+    const withSymbols = i.dependents.filter((d) => d.symbols && d.symbols.length > 0);
+    if (i.dependents.length > 0) {
+      expect(withSymbols.length).toBeGreaterThan(0);
+      expect(withSymbols[0].symbols![0]).toHaveProperty('symbolName');
+      expect(withSymbols[0].symbols![0]).toHaveProperty('symbolKind');
+    }
+  });
+
+  it('returns target with symbolName and kind', () => {
+    const i = impact(getChangeImpact(store, {
+      symbolId: 'src/components/UserCard.vue::UserCard#class',
+    }));
+    expect(i.target.symbolName).toBeDefined();
+    expect(i.target.kind).toBeDefined();
+  });
+
+  it('returns compact affectedTests format', () => {
+    const i = impact(getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }));
+    expect(typeof i.affectedTests.total).toBe('number');
+    expect(Array.isArray(i.affectedTests.files)).toBe(true);
+  });
+
+  it('omits empty optional sections', () => {
+    const i = impact(getChangeImpact(store, { filePath: 'src/App.vue' }));
+    if (i.dependents.length === 0) {
+      expect(i.byModule).toBeUndefined();
+      expect(i.byEdgeType).toBeUndefined();
+      expect(i.byDepth).toBeUndefined();
+      expect(i.coChangeHidden).toBeUndefined();
+    }
+  });
+
+  it('totalAffected equals deduped file count', () => {
+    const i = impact(getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }));
+    expect(i.totalAffected).toBe(i.dependents.length);
+    expect(i.summary.totalFiles).toBe(i.dependents.length);
+  });
+
+  // ── Diff-aware mode ──
+
+  it('symbol_ids scopes impact to specific symbols', () => {
+    const i = impact(getChangeImpact(store, {
+      symbolIds: ['src/components/UserCard.vue::UserCard#class'],
+    }));
+    expect(i.target.path).toBe('src/components/UserCard.vue');
+    expect(i.scopedToSymbols).toEqual(['src/components/UserCard.vue::UserCard#class']);
+    expect(i.dependents.length).toBeGreaterThan(0);
+  });
+
+  it('symbol_ids with unknown symbol returns error', () => {
+    const result = getChangeImpact(store, { symbolIds: ['nonexistent::Foo#class'] });
+    expect(result.isErr()).toBe(true);
+  });
+
+  // ── Breaking changes ──
+
+  it('breakingChanges is omitted when no exported symbols have consumers', () => {
+    const i = impact(getChangeImpact(store, { filePath: 'src/App.vue' }));
+    expect(i.breakingChanges).toBeUndefined();
   });
 });
+
+// Helper to unwrap results
+function impact(result: ReturnType<typeof getChangeImpact>) {
+  expect(result.isOk()).toBe(true);
+  return result._unsafeUnwrap();
+}
