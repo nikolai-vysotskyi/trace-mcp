@@ -35,6 +35,28 @@ Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp
 | Find where something is defined | `search` | ~~Grep~~ |
 | Understand project structure | `get_project_map` | ~~Bash find~~ |
 
+### Token optimization — MANDATORY
+
+**Use `batch` for multiple independent queries.** When you need 2+ independent tool calls, combine them into a single `batch` call. This saves round-trips and reduces context overhead.
+
+```
+batch({ calls: [
+  { tool: "get_outline", args: { path: "src/server.ts" } },
+  { tool: "get_outline", args: { path: "src/config.ts" } },
+  { tool: "search", args: { query: "registerTool", kind: "method" } }
+] })
+```
+
+**Use `get_context_bundle` instead of get_symbol chains.** When you need a symbol + its imports, or multiple symbols at once:
+- Single: `get_context_bundle({ symbol_id: "..." })` — returns symbol + imports
+- Batch: `get_context_bundle({ symbol_ids: ["...", "..."] })` — deduplicates shared imports
+
+**NEVER read the same file twice.** Use `get_outline` once → then `get_symbol` for specific symbols.
+
+**Use `get_task_context` instead of Agent subagents** for code exploration. It returns focused context within a token budget.
+
+**Monitor waste:** Run `get_optimization_report` to detect repeated reads, Bash grep usage, and missed trace-mcp opportunities.
+
 ### The ONLY cases where native tools are allowed
 
 - **Read**: ONLY for non-code files (.md, .json, .yaml, .env, config), OR immediately before using Edit on a file you need to modify
@@ -46,7 +68,7 @@ Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp
 
 - Language plugins: `src/indexer/plugins/lang/` — one per language (ts, python, go, etc.)
 - Integration plugins: `src/indexer/plugins/integration/` — framework-specific (api/, framework/, orm/, etc.)
-- Each plugin implements `LanguagePlugin` or `IntegrationPlugin` interface from `src/plugin-api/types.ts`
+- Each plugin implements `LanguagePlugin` or `FrameworkPlugin` interface from `src/plugin-api/types.ts`
 - Plugin registry: `src/plugin-api/registry.ts`
 
 ## Workflow Checklists — MANDATORY
