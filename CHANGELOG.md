@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.3.0...v1.3.1) (2026-04-05)
+
+
+### Bug Fixes
+
+* **ci:** restore npm upgrade for Trusted Publishing OIDC support ([d4e1d92](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d4e1d9252d23da731111d670947bf93d726a285d))
+
 ## [1.3.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.2.2...v1.3.0) (2026-04-05)
 
 
