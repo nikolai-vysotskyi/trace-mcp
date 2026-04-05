@@ -3,6 +3,7 @@
  * extracts useQuery/useMutation/useSWR hooks that reference API endpoints.
  */
 import fs from 'node:fs';
+import { globalRe } from '../../../../../utils/regex.js';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
@@ -71,38 +72,38 @@ export function extractDataFetchingHooks(source: string): DataFetchingHook[] {
 
   // useQuery with object syntax
   let match: RegExpExecArray | null;
-  const queryObjRe = new RegExp(USE_QUERY_OBJECT_RE.source, 'g');
+  const queryObjRe = globalRe(USE_QUERY_OBJECT_RE);
   while ((match = queryObjRe.exec(source)) !== null) {
     add(match[1], match[2], 'FETCH');
   }
 
   // useQuery with array key syntax
-  const queryArrRe = new RegExp(USE_QUERY_ARRAY_RE.source, 'g');
+  const queryArrRe = globalRe(USE_QUERY_ARRAY_RE);
   while ((match = queryArrRe.exec(source)) !== null) {
     add(match[1], match[2], 'FETCH');
   }
 
   // useMutation
-  const mutationRe = new RegExp(USE_MUTATION_RE.source, 'g');
+  const mutationRe = globalRe(USE_MUTATION_RE);
   while ((match = mutationRe.exec(source)) !== null) {
     const method = match[3]?.toUpperCase() || 'POST';
     add(match[1], match[2], method);
   }
 
   // useSWR with string key
-  const swrStringRe = new RegExp(USE_SWR_STRING_RE.source, 'g');
+  const swrStringRe = globalRe(USE_SWR_STRING_RE);
   while ((match = swrStringRe.exec(source)) !== null) {
     add('useSWR', match[1], 'FETCH');
   }
 
   // useSWR with arrow function key
-  const swrFuncRe = new RegExp(USE_SWR_FUNCTION_RE.source, 'g');
+  const swrFuncRe = globalRe(USE_SWR_FUNCTION_RE);
   while ((match = swrFuncRe.exec(source)) !== null) {
     add('useSWR', match[1], 'FETCH');
   }
 
   // Template literal fetch with interpolation (any useQuery/useSWR context)
-  const templateRe = new RegExp(FETCH_TEMPLATE_RE.source, 'g');
+  const templateRe = globalRe(FETCH_TEMPLATE_RE);
   while ((match = templateRe.exec(source)) !== null) {
     const endpoint = normalizeEndpoint(match[1] + '${x}' + match[2]);
     // Determine context: is this inside useQuery, useMutation, or useSWR?

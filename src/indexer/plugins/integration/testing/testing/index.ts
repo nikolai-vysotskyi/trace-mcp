@@ -3,6 +3,7 @@
  * and extracts test-to-code relationships: tested routes, tested components, and test names.
  */
 import fs from 'node:fs';
+import { globalRe } from '../../../../../utils/regex.js';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
@@ -82,27 +83,27 @@ export function extractTestedRoutes(source: string): { path: string; method?: st
 
   // page.goto
   let m: RegExpExecArray | null;
-  const gotoRe = new RegExp(PAGE_GOTO_RE.source, 'g');
+  const gotoRe = globalRe(PAGE_GOTO_RE);
   while ((m = gotoRe.exec(source)) !== null) add(m[1], 'GET');
 
   // cy.visit
-  const visitRe = new RegExp(CY_VISIT_RE.source, 'g');
+  const visitRe = globalRe(CY_VISIT_RE);
   while ((m = visitRe.exec(source)) !== null) add(m[1], 'GET');
 
   // request.get/post/...
-  const reqRe = new RegExp(REQUEST_METHOD_RE.source, 'g');
+  const reqRe = globalRe(REQUEST_METHOD_RE);
   while ((m = reqRe.exec(source)) !== null) add(m[2], m[1].toUpperCase());
 
   // cy.request('METHOD', '/path')
-  const cyReqMethodRe = new RegExp(CY_REQUEST_METHOD_RE.source, 'g');
+  const cyReqMethodRe = globalRe(CY_REQUEST_METHOD_RE);
   while ((m = cyReqMethodRe.exec(source)) !== null) add(m[2], m[1].toUpperCase());
 
   // cy.request('/path')
-  const cyReqSimpleRe = new RegExp(CY_REQUEST_SIMPLE_RE.source, 'g');
+  const cyReqSimpleRe = globalRe(CY_REQUEST_SIMPLE_RE);
   while ((m = cyReqSimpleRe.exec(source)) !== null) add(m[1]);
 
   // fetch('/api/...')
-  const fetchRe = new RegExp(FETCH_RE.source, 'g');
+  const fetchRe = globalRe(FETCH_RE);
   while ((m = fetchRe.exec(source)) !== null) add(m[1]);
 
   return routes;
@@ -122,13 +123,13 @@ export function extractTestedComponents(source: string): string[] {
 
   let m: RegExpExecArray | null;
 
-  const renderRe = new RegExp(RENDER_JSX_RE.source, 'g');
+  const renderRe = globalRe(RENDER_JSX_RE);
   while ((m = renderRe.exec(source)) !== null) add(m[1]);
 
-  const mountRe = new RegExp(MOUNT_RE.source, 'g');
+  const mountRe = globalRe(MOUNT_RE);
   while ((m = mountRe.exec(source)) !== null) add(m[1]);
 
-  const cyMountRe = new RegExp(CY_MOUNT_RE.source, 'g');
+  const cyMountRe = globalRe(CY_MOUNT_RE);
   while ((m = cyMountRe.exec(source)) !== null) add(m[1]);
 
   return components;
@@ -140,16 +141,16 @@ export function extractTestNames(source: string): { name: string; type: 'test' |
 
   let m: RegExpExecArray | null;
 
-  const testRe = new RegExp(TEST_NAME_RE.source, 'g');
+  const testRe = globalRe(TEST_NAME_RE);
   while ((m = testRe.exec(source)) !== null) names.push({ name: m[1], type: 'test' });
 
-  const itRe = new RegExp(IT_NAME_RE.source, 'g');
+  const itRe = globalRe(IT_NAME_RE);
   while ((m = itRe.exec(source)) !== null) names.push({ name: m[1], type: 'test' });
 
-  const describeRe = new RegExp(DESCRIBE_NAME_RE.source, 'g');
+  const describeRe = globalRe(DESCRIBE_NAME_RE);
   while ((m = describeRe.exec(source)) !== null) names.push({ name: m[1], type: 'describe' });
 
-  const testDescRe = new RegExp(TEST_DESCRIBE_RE.source, 'g');
+  const testDescRe = globalRe(TEST_DESCRIBE_RE);
   while ((m = testDescRe.exec(source)) !== null) names.push({ name: m[1], type: 'describe' });
 
   return names;

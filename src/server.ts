@@ -65,6 +65,7 @@ import { withHints } from './tools/hints.js';
 import { scanSecurity, type RuleName, type Severity } from './tools/security-scan.js';
 import { detectAntipatterns, type AntipatternCategory, type Severity as AntipatternSeverity } from './tools/antipatterns.js';
 import { scanCodeSmells, type SmellCategory, type SmellPriority } from './tools/code-smells.js';
+import { taintAnalysis, type TaintSourceKind, type TaintSinkKind } from './tools/taint-analysis.js';
 import { generateSbom, type SbomFormat } from './tools/sbom.js';
 import { getArtifacts, type ArtifactCategory } from './tools/artifacts.js';
 import { fallbackSearch, fallbackOutline } from './tools/zero-index.js';
@@ -72,22 +73,68 @@ import { planBatchChange } from './tools/batch-changes.js';
 import { getCoChanges, collectCoChanges, persistCoChanges } from './tools/co-changes.js';
 import { getChangedSymbols, compareBranches } from './tools/changed-symbols.js';
 import { SessionTracker } from './session-tracker.js';
+import { SessionJournal } from './session-journal.js';
 import { auditConfig } from './tools/audit-config.js';
+import { AnalyticsStore } from './analytics/analytics-store.js';
+import { getSessionAnalytics, getOptimizationReport } from './analytics/session-analytics.js';
+import { runBenchmark, formatBenchmarkMarkdown } from './analytics/benchmark.js';
+import { detectCoverage } from './analytics/tech-detector.js';
+import { analyzeRealSavings } from './analytics/real-savings.js';
+import { syncAnalytics } from './analytics/sync.js';
+import { evaluateQualityGates, QualityGatesConfigSchema, type QualityGatesConfig } from './tools/quality-gates.js';
+import { listBundles, loadAllBundles, searchBundles } from './bundles.js';
 import { detectCommunities, getCommunities, getCommunityDetail } from './tools/communities.js';
 import { registerPrompts } from './prompts/index.js';
 import { packContext } from './tools/pack-context.js';
 import { generateDocs } from './tools/generate-docs.js';
 import { getPackageDeps } from './tools/package-deps.js';
 import { getControlFlow } from './tools/control-flow.js';
+import { buildNegativeEvidence } from './tools/evidence.js';
+import { FileWatcher } from './file-watcher.js';
 
 /** Compact JSON — no pretty-printing; saves 25–35% tokens on every response */
 function j(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** JSON-serialize with contextual next-step hints */
-function jh(toolName: string, value: unknown): string {
-  return j(withHints(toolName, value));
+// jh() is defined inside createServer() as a closure over the savings tracker
+
+/** Extract result count from an MCP tool response for journal tracking */
+function extractResultCount(response: { content: Array<{ type: string; text: string }>; isError?: boolean }): number {
+  if (response?.isError) return 0;
+  try {
+    const text = response?.content?.[0]?.text;
+    if (!text) return 0;
+    const parsed = JSON.parse(text);
+    if (typeof parsed !== 'object' || parsed === null) return 1;
+    // Try common count fields
+    if (typeof parsed.total === 'number') return parsed.total;
+    if (Array.isArray(parsed.items)) return parsed.items.length;
+    if (Array.isArray(parsed.symbols)) return parsed.symbols.length;
+    if (Array.isArray(parsed.references)) return parsed.references.length;
+    if (Array.isArray(parsed.data)) return parsed.data.length;
+    return 1; // non-empty response = at least 1 result
+  } catch {
+    return 1;
+  }
+}
+
+/** Apply per-parameter description overrides to a Zod-like schema object.
+ *  `toolOverrides` are from the tool-specific nested config, `sharedOverrides` from `_shared`. */
+function applyParamOverrides(
+  schema: Record<string, unknown>,
+  toolOverrides: Record<string, string>,
+  sharedOverrides: Record<string, string>,
+): void {
+  for (const paramName of Object.keys(schema)) {
+    const desc = toolOverrides[paramName] ?? sharedOverrides[paramName];
+    if (desc) {
+      const zodType = schema[paramName];
+      if (zodType && typeof zodType === 'object' && 'describe' in zodType && typeof (zodType as { describe: unknown }).describe === 'function') {
+        schema[paramName] = (zodType as { describe: (d: string) => unknown }).describe(desc);
+      }
+    }
+  }
 }
 
 export function createServer(
@@ -170,25 +217,80 @@ export function createServer(
   }
 
   /** Gated tool registration — skips tools not in the active preset.
-   *  Also wraps the callback to record tool calls for savings tracking. */
+   *  Also wraps the callback to record tool calls for savings tracking.
+   *  Supports description overrides: flat string or nested { _description, param: desc, ... }.
+   *  The special `_shared` key in descriptions applies to all tools' parameters. */
   const _originalTool = server.tool.bind(server);
   const registeredToolNames: string[] = [];
   const descriptionOverrides = config.tools?.descriptions ?? {};
+  const sharedParamOverrides = (typeof descriptionOverrides._shared === 'object' && descriptionOverrides._shared !== null)
+    ? descriptionOverrides._shared as Record<string, string>
+    : {};
   server.tool = ((...args: unknown[]) => {
     const name = args[0] as string;
     if (!toolAllowed(name)) return undefined as never;
     registeredToolNames.push(name);
-    // Apply user description override if configured
-    if (descriptionOverrides[name] && typeof args[1] === 'string') {
-      args[1] = descriptionOverrides[name];
+
+    const override = descriptionOverrides[name];
+    if (override) {
+      if (typeof override === 'string') {
+        // Flat override: replace entire tool description
+        if (typeof args[1] === 'string') args[1] = override;
+      } else if (typeof override === 'object') {
+        // Nested override: _description for tool, other keys for params
+        const obj = override as Record<string, string>;
+        if (obj._description && typeof args[1] === 'string') {
+          args[1] = obj._description;
+        }
+        // Apply per-parameter description overrides to Zod schema
+        const schemaIdx = typeof args[1] === 'string' ? 2 : 1;
+        const schema = args[schemaIdx];
+        if (schema && typeof schema === 'object') {
+          applyParamOverrides(schema as Record<string, unknown>, obj, sharedParamOverrides);
+        }
+      }
+    } else if (Object.keys(sharedParamOverrides).length > 0) {
+      // Apply _shared overrides even when no tool-specific override exists
+      const schemaIdx = typeof args[1] === 'string' ? 2 : 1;
+      const schema = args[schemaIdx];
+      if (schema && typeof schema === 'object') {
+        applyParamOverrides(schema as Record<string, unknown>, {}, sharedParamOverrides);
+      }
     }
-    // Wrap the last argument (callback) to record calls
+
+    // Wrap the last argument (callback) to record calls + journal
     const cbIdx = args.length - 1;
     const originalCb = args[cbIdx] as Function;
     if (typeof originalCb === 'function') {
       args[cbIdx] = async (...cbArgs: unknown[]) => {
         savings.recordCall(name);
-        return originalCb(...cbArgs);
+        // Extract params from MCP callback args (first arg is the params object)
+        const params = (cbArgs[0] && typeof cbArgs[0] === 'object') ? cbArgs[0] as Record<string, unknown> : {};
+
+        // Check for duplicate query before executing
+        const duplicateCheck = journal.checkDuplicate(name, params);
+        if (duplicateCheck) {
+          // Still execute but prepend warning to response
+          const result = await originalCb(...cbArgs) as { content: Array<{ type: string; text: string }>; isError?: boolean };
+          if (result?.content?.[0]?.text && !result.isError) {
+            try {
+              const parsed = JSON.parse(result.content[0].text);
+              const obj = (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed))
+                ? parsed : { data: parsed };
+              obj._duplicate_warning = duplicateCheck;
+              result.content[0].text = JSON.stringify(obj);
+            } catch { /* keep original response */ }
+          }
+          // Record in journal after execution
+          const count = extractResultCount(result);
+          journal.record(name, params, count);
+          return result;
+        }
+
+        const result = await originalCb(...cbArgs);
+        const count = extractResultCount(result as { content: Array<{ type: string; text: string }> });
+        journal.record(name, params, count);
+        return result;
       };
     }
     return (_originalTool as Function)(...args);
@@ -198,14 +300,29 @@ export function createServer(
     logger.info({ preset: presetName, tools: activePreset === 'all' ? 'all' : activePreset.size }, 'Tool preset active');
   }
 
-  // --- Session savings tracker ---
+  // --- Session savings tracker + journal ---
   const savings = new SessionTracker(projectRoot);
+  const journal = new SessionJournal();
 
   // Flush savings on process exit
   const flushSavings = () => savings.flush();
   process.on('SIGINT', flushSavings);
   process.on('SIGTERM', flushSavings);
   process.on('exit', flushSavings);
+
+  /** JSON-serialize with contextual next-step hints + budget warnings */
+  function jh(toolName: string, value: unknown): string {
+    const hinted = withHints(toolName, value);
+    const stats = savings.getSessionStats();
+    if (stats.total_calls >= 15) {
+      const obj = (hinted !== null && typeof hinted === 'object' && !Array.isArray(hinted))
+        ? hinted as Record<string, unknown>
+        : { data: hinted };
+      obj._budget_warning = `${stats.total_calls} tool calls this session (~${stats.total_raw_tokens} raw tokens). Consider using get_task_context or get_feature_context for consolidated context instead of many small queries.`;
+      return j(obj);
+    }
+    return j(hinted);
+  }
 
   // AI layer (optional)
   const aiProvider: AIProvider = createAIProvider(config);
@@ -214,6 +331,28 @@ export function createServer(
   const reranker: RerankerService | null = config.ai?.enabled
     ? new LLMReranker(aiProvider.fastInference())
     : null;
+
+  // --- Auto-reindex file watcher ---
+  if (config.watch?.enabled !== false) {
+    const knownExtensions = new Set(registry.getLanguagePlugins().flatMap(p => p.supportedExtensions));
+    const fileWatcher = new FileWatcher(
+      projectRoot,
+      async (files) => {
+        const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+        await pipeline.indexFiles(files);
+      },
+      {
+        debounceMs: config.watch?.debounceMs ?? 2000,
+        extensions: knownExtensions,
+      },
+    );
+    fileWatcher.start();
+
+    const stopWatcher = () => fileWatcher.stop();
+    process.on('SIGINT', stopWatcher);
+    process.on('SIGTERM', stopWatcher);
+    process.on('exit', stopWatcher);
+  }
 
   /** Validate a user-supplied path stays within projectRoot; returns error response on failure */
   function guardPath(filePath: string): { content: [{ type: 'text'; text: string }]; isError: true } | null {
@@ -422,7 +561,16 @@ export function createServer(
         line: symbol.line_start,
         score,
       }));
-      return { content: [{ type: 'text', text: jh('search', { items, total: result.total, search_mode: result.search_mode }) }] };
+      const response: Record<string, unknown> = { items, total: result.total, search_mode: result.search_mode };
+      if (items.length === 0) {
+        const stats = store.getStats();
+        response.evidence = buildNegativeEvidence(
+          stats.totalFiles, stats.totalSymbols,
+          result.search_mode === 'fuzzy' || !!fuzzy,
+          'search',
+        );
+      }
+      return { content: [{ type: 'text', text: jh('search', response) }] };
     },
   );
 
@@ -479,6 +627,11 @@ export function createServer(
     },
     async ({ description, token_budget }) => {
       const result = getFeatureContext(store, projectRoot, description, token_budget ?? 4000);
+      if (result.items.length === 0) {
+        const stats = store.getStats();
+        const enriched = { ...result, evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'get_feature_context') };
+        return { content: [{ type: 'text', text: jh('get_feature_context', enriched) }] };
+      }
       return { content: [{ type: 'text', text: jh('get_feature_context', result) }] };
     },
   );
@@ -743,6 +896,11 @@ export function createServer(
       const result = findReferences(store, { symbolId: symbol_id, fqn, filePath: file_path });
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      if (result.value.total === 0) {
+        const stats = store.getStats();
+        const enriched = { ...result.value, evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'find_usages') };
+        return { content: [{ type: 'text', text: jh('find_usages', enriched) }] };
       }
       return { content: [{ type: 'text', text: jh('find_usages', result.value) }] };
     },
@@ -1170,6 +1328,41 @@ export function createServer(
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
       return { content: [{ type: 'text', text: jh('scan_code_smells', result.value) }] };
+    },
+  );
+
+  server.tool(
+    'taint_analysis',
+    'Track flow of untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL queries, exec, innerHTML, redirects). Framework-aware: knows Express req.params, Laravel $request->input, Django request.GET, FastAPI Query(), etc. Reports unsanitized flows with CWE IDs and fix suggestions. More accurate than pattern-based scanning — traces actual data flow paths.',
+    {
+      scope: z.string().max(512).optional().describe('Directory to scan (default: whole project)'),
+      sources: z.array(z.enum([
+        'http_param', 'http_body', 'http_header', 'cookie',
+        'env', 'file_read', 'db_result', 'user_input',
+      ])).optional().describe('Filter by source kinds (default: all)'),
+      sinks: z.array(z.enum([
+        'sql_query', 'exec', 'eval', 'innerHTML', 'redirect',
+        'file_write', 'response_body', 'template_raw',
+      ])).optional().describe('Filter by sink kinds (default: all)'),
+      include_sanitized: z.boolean().optional().describe('Include flows with sanitizers (default: false)'),
+      limit: z.number().int().min(1).max(200).optional().describe('Max flows to return (default: 100)'),
+    },
+    async ({ scope, sources, sinks, include_sanitized, limit }) => {
+      if (scope) {
+        const blocked = guardPath(scope);
+        if (blocked) return blocked;
+      }
+      const result = taintAnalysis(store, projectRoot, {
+        scope,
+        sources: sources as TaintSourceKind[] | undefined,
+        sinks: sinks as TaintSinkKind[] | undefined,
+        includeSanitized: include_sanitized,
+        limit,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
 
@@ -1705,6 +1898,11 @@ export function createServer(
     async ({ query, limit }) => {
       const result = queryByIntent(store, query, { limit });
       if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      if (result.value.symbols.length === 0) {
+        const stats = store.getStats();
+        const enriched = { ...result.value, evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'query_by_intent') };
+        return { content: [{ type: 'text', text: j(enriched) }] };
+      }
       return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
@@ -2122,6 +2320,7 @@ export function createServer(
   // --- Audit Config ---
   server.tool('audit_config', 'Scan AI agent config files for stale references, dead paths, and token bloat.', { config_files: z.array(z.string().max(512)).optional().describe('Specific config files to audit (default: auto-detect)'), fix_suggestions: z.boolean().optional().describe('Include fix suggestions (default true)') }, async ({ config_files, fix_suggestions }) => { const result = auditConfig(store, projectRoot, { configFiles: config_files, fixSuggestions: fix_suggestions ?? true }); return { content: [{ type: 'text', text: j(result) }] }; });
 
+
   // --- Control Flow Graph ---
   server.tool(
     'get_control_flow',
@@ -2230,6 +2429,92 @@ export function createServer(
     });
   }
 
+  // --- Quality Gates ---
+
+  server.tool(
+    'check_quality_gates',
+    'Run configurable quality gate checks against the project. Returns pass/fail for each gate (complexity, coupling, circular imports, dead exports, tech debt, security, antipatterns, code smells). Designed for CI integration — AI can verify gates pass before committing.',
+    {
+      scope: z.enum(['project', 'changed']).optional().describe('Scope: "project" (all) or "changed" (git diff). Default: project'),
+      since: z.string().max(128).optional().describe('Git ref for "changed" scope (e.g. "main")'),
+      config: z.object({
+        fail_on: z.enum(['error', 'warning', 'none']).optional(),
+        rules: z.record(z.string(), z.object({
+          threshold: z.union([z.number(), z.string()]),
+          severity: z.enum(['error', 'warning']).optional(),
+        })).optional(),
+      }).optional().describe('Inline config overrides (merged with project config)'),
+    },
+    async ({ scope: _scope, since: _since, config: inlineConfig }) => {
+      // Load quality gates config from project config
+      let gatesConfig: QualityGatesConfig;
+      const rawQG = (config as Record<string, unknown>).quality_gates;
+      if (rawQG) {
+        const parsed = QualityGatesConfigSchema.safeParse(rawQG);
+        gatesConfig = parsed.success ? parsed.data : { enabled: true, fail_on: 'error', rules: {
+          max_cyclomatic_complexity: { threshold: 30, severity: 'warning' },
+          max_circular_import_chains: { threshold: 0, severity: 'error' },
+          max_security_critical_findings: { threshold: 0, severity: 'error' },
+        }};
+      } else {
+        gatesConfig = { enabled: true, fail_on: 'error', rules: {
+          max_cyclomatic_complexity: { threshold: 30, severity: 'warning' },
+          max_circular_import_chains: { threshold: 0, severity: 'error' },
+          max_security_critical_findings: { threshold: 0, severity: 'error' },
+        }};
+      }
+
+      // Apply inline overrides
+      if (inlineConfig?.fail_on) gatesConfig.fail_on = inlineConfig.fail_on;
+      if (inlineConfig?.rules) {
+        for (const [key, val] of Object.entries(inlineConfig.rules)) {
+          (gatesConfig.rules as Record<string, unknown>)[key] = {
+            ...(gatesConfig.rules as Record<string, unknown>)[key] as Record<string, unknown> | undefined,
+            ...val,
+          };
+        }
+      }
+
+      const report = evaluateQualityGates(store, projectRoot, gatesConfig, {
+        sinceDays: config.predictive?.git_since_days,
+        moduleDepth: config.predictive?.module_depth,
+      });
+
+      return { content: [{ type: 'text', text: j(report) }] };
+    },
+  );
+
+  // --- Pre-Indexed Bundles ---
+
+  server.tool(
+    'search_bundles',
+    'Search pre-indexed bundles for symbols from popular libraries (React, Express, etc.). Returns symbol definitions from dependency bundles — useful for go-to-definition into node_modules/vendor. Install bundles via CLI: `trace-mcp bundles export`.',
+    {
+      query: z.string().min(1).max(256).describe('Symbol name or FQN to search'),
+      kind: z.string().max(64).optional().describe('Filter by symbol kind (function, class, interface, etc.)'),
+      limit: z.number().int().min(1).max(50).optional().describe('Max results (default: 20)'),
+    },
+    async ({ query, kind, limit }) => {
+      const bundles = loadAllBundles();
+      if (bundles.length === 0) {
+        return { content: [{ type: 'text', text: j({ message: 'No bundles installed. Use `trace-mcp bundles export` to create bundles from indexed dependencies.' }) }] };
+      }
+      const results = searchBundles(bundles, query, { kind, limit });
+      for (const b of bundles) b.db.close();
+      return { content: [{ type: 'text', text: j({ results, bundles_searched: bundles.length }) }] };
+    },
+  );
+
+  server.tool(
+    'list_bundles',
+    'List installed pre-indexed bundles for dependency libraries. Shows package name, version, symbol/edge counts, and size.',
+    {},
+    async () => {
+      const bundles = listBundles();
+      return { content: [{ type: 'text', text: j({ bundles, total: bundles.length }) }] };
+    },
+  );
+
   // --- Always-registered meta tools (bypass preset gate) ---
 
   _originalTool(
@@ -2252,6 +2537,137 @@ export function createServer(
     },
   );
 
+  // --- Analytics: Session Analytics ---
+  _originalTool(
+    'get_session_analytics',
+    'Analyze AI agent session logs: token usage, cost breakdown by tool/server, top files, models used. Parses Claude Code JSONL logs automatically.',
+    {
+      period: z.enum(['today', 'week', 'month', 'all']).optional().describe('Time period (default: week)'),
+      session_id: z.string().max(128).optional().describe('Specific session ID to analyze'),
+    },
+    async ({ period, session_id }) => {
+      try {
+        const analyticsStore = new AnalyticsStore();
+        try {
+          const result = getSessionAnalytics(analyticsStore, { period, sessionId: session_id, projectPath: projectRoot });
+          return { content: [{ type: 'text', text: j(result) }] };
+        } finally {
+          analyticsStore.close();
+        }
+      } catch (e) {
+        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+      }
+    },
+  );
+
+  // --- Analytics: Optimization Report ---
+  _originalTool(
+    'get_optimization_report',
+    'Detect token waste patterns in AI agent sessions: repeated file reads, Bash grep instead of search, large file reads, unused trace-mcp tools. Provides savings estimates.',
+    {
+      period: z.enum(['today', 'week', 'month', 'all']).optional().describe('Time period (default: week)'),
+    },
+    async ({ period }) => {
+      try {
+        const analyticsStore = new AnalyticsStore();
+        try {
+          const result = getOptimizationReport(analyticsStore, { period, projectPath: projectRoot });
+          return { content: [{ type: 'text', text: j(result) }] };
+        } finally {
+          analyticsStore.close();
+        }
+      } catch (e) {
+        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+      }
+    },
+  );
+
+  // --- Analytics: Benchmark ---
+  _originalTool(
+    'benchmark_project',
+    'Synthetic token efficiency benchmark: compare raw file reads vs trace-mcp compact responses across symbol lookup, file exploration, search, and impact analysis scenarios.',
+    {
+      queries: z.number().int().min(1).max(50).optional().describe('Queries per scenario (default 10)'),
+      seed: z.number().int().optional().describe('Random seed for reproducibility (default 42)'),
+      format: z.enum(['json', 'markdown']).optional().describe('Output format (default: json)'),
+    },
+    async ({ queries, seed, format: fmt }) => {
+      const result = runBenchmark(store, { queries, seed, projectName: projectRoot });
+      if (fmt === 'markdown') {
+        return { content: [{ type: 'text', text: formatBenchmarkMarkdown(result) }] };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- Analytics: Coverage Report ---
+  _originalTool(
+    'get_coverage_report',
+    'Technology profile of the project: detected frameworks/ORMs/UI libs from manifests (package.json, composer.json, etc.), which are covered by trace-mcp plugins, and coverage gaps.',
+    {},
+    async () => {
+      try {
+        const result = detectCoverage(projectRoot);
+        return { content: [{ type: 'text', text: j(result) }] };
+      } catch (e) {
+        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+      }
+    },
+  );
+
+  // --- Analytics: Real Savings ---
+  _originalTool(
+    'get_real_savings',
+    'Analyze actual session logs to show how much could be saved by using trace-mcp instead of raw Read/Bash file reads. Includes per-file breakdown and A/B comparison of sessions with/without trace-mcp.',
+    {
+      period: z.enum(['today', 'week', 'month', 'all']).optional().describe('Time period (default: week)'),
+    },
+    async ({ period }) => {
+      try {
+        const analyticsStore = new AnalyticsStore();
+        try {
+          syncAnalytics(analyticsStore);
+          const toolCalls = analyticsStore.getToolCallsForOptimization({ projectPath: projectRoot, period: period ?? 'week' });
+          const result = analyzeRealSavings(store, toolCalls, period ?? 'week');
+          return { content: [{ type: 'text', text: j(result) }] };
+        } finally {
+          analyticsStore.close();
+        }
+      } catch (e) {
+        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+      }
+    },
+  );
+
+  // --- Analytics: Usage Trends ---
+  _originalTool(
+    'get_usage_trends',
+    'Daily token usage trends over time: sessions, tokens, estimated cost, tool calls per day. Good for spotting cost spikes and tracking optimization progress.',
+    {
+      days: z.number().int().min(1).max(365).optional().describe('Number of days to show (default: 30)'),
+    },
+    async ({ days }) => {
+      try {
+        const analyticsStore = new AnalyticsStore();
+        try {
+          syncAnalytics(analyticsStore);
+          const trends = analyticsStore.getUsageTrends(days ?? 30);
+          const total = trends.reduce((s, d) => ({
+            sessions: s.sessions + d.sessions,
+            tokens: s.tokens + d.tokens,
+            cost_usd: s.cost_usd + d.cost_usd,
+            tool_calls: s.tool_calls + d.tool_calls,
+          }), { sessions: 0, tokens: 0, cost_usd: 0, tool_calls: 0 });
+          return { content: [{ type: 'text', text: j({ days: days ?? 30, daily: trends, totals: total }) }] };
+        } finally {
+          analyticsStore.close();
+        }
+      } catch (e) {
+        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+      }
+    },
+  );
+
   _originalTool(
     'get_session_stats',
     'Token savings stats for this session and cumulative across all sessions. Shows per-tool call counts, estimated token savings, and reduction percentage.',
@@ -2264,6 +2680,16 @@ export function createServer(
           text: j(stats),
         }],
       };
+    },
+  );
+
+  server.tool(
+    'get_session_journal',
+    'Session history: all tool calls made, files read, zero-result searches, and duplicate queries. Use to avoid repeating work or to understand what has already been explored.',
+    {},
+    async () => {
+      const summary = journal.getSummary();
+      return { content: [{ type: 'text', text: j(summary) }] };
     },
   );
 
