@@ -7,10 +7,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import type { InitStepResult } from './types.js';
-import { GUARD_HOOK_VERSION } from './types.js';
+import { GUARD_HOOK_VERSION, REINDEX_HOOK_VERSION } from './types.js';
 
 const HOME = os.homedir();
 const HOOK_DEST = path.join(HOME, '.claude', 'hooks', 'trace-mcp-guard.sh');
+const REINDEX_HOOK_DEST = path.join(HOME, '.claude', 'hooks', 'trace-mcp-reindex.sh');
 
 /**
  * Get the path to the shipped hook script.
@@ -115,4 +116,95 @@ export function uninstallGuardHook(opts: { global?: boolean }): InitStepResult {
 export function isHookOutdated(installedVersion: string | null): boolean {
   if (!installedVersion) return true;
   return installedVersion !== GUARD_HOOK_VERSION;
+}
+
+// --- PostToolUse auto-reindex hook ---
+
+function getReindexHookSourcePath(): string {
+  const candidates = [
+    path.resolve(import.meta.dirname ?? '.', '..', '..', 'hooks', 'trace-mcp-reindex.sh'),
+    path.resolve(process.cwd(), 'hooks', 'trace-mcp-reindex.sh'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  throw new Error('Could not find hooks/trace-mcp-reindex.sh — trace-mcp installation may be corrupted.');
+}
+
+export function installReindexHook(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+}): InitStepResult {
+  const settingsPath = opts.global
+    ? path.join(HOME, '.claude', 'settings.json')
+    : path.resolve(process.cwd(), '.claude', 'settings.local.json');
+
+  if (opts.dryRun) {
+    return { target: REINDEX_HOOK_DEST, action: 'skipped', detail: 'Would install reindex hook' };
+  }
+
+  const hookSrc = getReindexHookSourcePath();
+
+  const hookDir = path.dirname(REINDEX_HOOK_DEST);
+  if (!fs.existsSync(hookDir)) fs.mkdirSync(hookDir, { recursive: true });
+
+  const isUpdate = fs.existsSync(REINDEX_HOOK_DEST);
+  fs.copyFileSync(hookSrc, REINDEX_HOOK_DEST);
+  fs.chmodSync(REINDEX_HOOK_DEST, 0o755);
+
+  const settingsDir = path.dirname(settingsPath);
+  if (!fs.existsSync(settingsDir)) fs.mkdirSync(settingsDir, { recursive: true });
+
+  const settings = fs.existsSync(settingsPath)
+    ? JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
+    : {};
+  if (!settings.hooks) settings.hooks = {};
+  if (!settings.hooks.PostToolUse) settings.hooks.PostToolUse = [];
+
+  const hookEntry = {
+    matcher: 'Edit|Write|MultiEdit',
+    hooks: [{
+      type: 'command' as const,
+      command: `CLAUDE_TOOL_NAME={{tool_name}} ${REINDEX_HOOK_DEST}`,
+    }],
+  };
+
+  // Don't duplicate
+  const existing = settings.hooks.PostToolUse.find(
+    (h: { hooks?: { command?: string }[] }) =>
+      h.hooks?.some((hh) => hh.command?.includes('trace-mcp-reindex')),
+  );
+  if (!existing) {
+    settings.hooks.PostToolUse.push(hookEntry);
+  }
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+
+  return {
+    target: REINDEX_HOOK_DEST,
+    action: isUpdate ? 'updated' : 'created',
+    detail: `v${REINDEX_HOOK_VERSION} → ${settingsPath}`,
+  };
+}
+
+export function uninstallReindexHook(opts: { global?: boolean }): InitStepResult {
+  const settingsPath = opts.global
+    ? path.join(HOME, '.claude', 'settings.json')
+    : path.resolve(process.cwd(), '.claude', 'settings.local.json');
+
+  if (fs.existsSync(settingsPath)) {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    const post = settings.hooks?.PostToolUse;
+    if (Array.isArray(post)) {
+      settings.hooks.PostToolUse = post.filter(
+        (h: { hooks?: { command?: string }[] }) =>
+          !h.hooks?.some((hh) => hh.command?.includes('trace-mcp-reindex')),
+      );
+      if (settings.hooks.PostToolUse.length === 0) delete settings.hooks.PostToolUse;
+      if (settings.hooks && Object.keys(settings.hooks).length === 0) delete settings.hooks;
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+    }
+  }
+  if (fs.existsSync(REINDEX_HOOK_DEST)) fs.unlinkSync(REINDEX_HOOK_DEST);
+
+  return { target: REINDEX_HOOK_DEST, action: 'updated', detail: 'Removed' };
 }

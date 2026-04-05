@@ -10,7 +10,7 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import { configureMcpClients } from './init/mcp-client.js';
 import { updateClaudeMd } from './init/claude-md.js';
-import { installGuardHook } from './init/hooks.js';
+import { installGuardHook, installReindexHook } from './init/hooks.js';
 import { installCursorRules, installWindsurfRules } from './init/ide-rules.js';
 import { formatReport } from './init/reporter.js';
 import { ensureGlobalDirs, getDbPath } from './global.js';
@@ -89,10 +89,10 @@ export const initCommand = new Command('init')
         selectedClients = clientResult as DetectedMcpClient['name'][];
       }
 
-      // Q2: Guard hook
+      // Q2: Hooks (PreToolUse guard + PostToolUse auto-reindex)
       if (!opts.skipHooks) {
         const hookResult = await p.confirm({
-          message: 'Install guard hook? (blocks Read/Grep/Glob on code files, redirects to trace-mcp)',
+          message: 'Install hooks? (PreToolUse guard redirects code reads → PostToolUse auto-reindexes edits)',
           initialValue: true,
         });
         if (p.isCancel(hookResult)) { p.cancel('Cancelled.'); process.exit(0); }
@@ -247,13 +247,10 @@ function executeSteps(
     steps.push(installWindsurfRules(process.cwd(), { dryRun: opts.dryRun, global: true }));
   }
 
-  // 3. Guard hook
+  // 3. PreToolUse guard hook + PostToolUse auto-reindex hook
   if (opts.installHooks) {
-    const hookResult = installGuardHook({
-      global: true,
-      dryRun: opts.dryRun,
-    });
-    steps.push(hookResult);
+    steps.push(installGuardHook({ global: true, dryRun: opts.dryRun }));
+    steps.push(installReindexHook({ global: true, dryRun: opts.dryRun }));
   }
 
   // 4. CLAUDE.md (global)

@@ -425,6 +425,40 @@ program
   });
 
 program
+  .command('index-file')
+  .description('Incrementally reindex a single file (called by the PostToolUse auto-reindex hook)')
+  .argument('<file>', 'Absolute or relative path to the file to reindex')
+  .action(async (file: string) => {
+    const resolvedFile = path.resolve(file);
+    if (!fs.existsSync(resolvedFile)) {
+      process.exit(0); // file may have been deleted — exit silently
+    }
+
+    let projectRoot: string;
+    try {
+      projectRoot = findProjectRoot(path.dirname(resolvedFile));
+    } catch {
+      process.exit(0); // not inside a known project — skip silently
+    }
+
+    const configResult = await loadConfig(projectRoot);
+    if (configResult.isErr()) process.exit(0);
+    const config = configResult.value;
+
+    const dbPath = resolveDbPath(projectRoot);
+    ensureGlobalDirs();
+
+    const db = initializeDatabase(dbPath);
+    const store = new Store(db);
+    const registry = new PluginRegistry();
+    registerDefaultPlugins(registry);
+
+    const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+    await pipeline.indexFiles([resolvedFile]);
+    db.close();
+  });
+
+program
   .command('setup-hooks')
   .description('Install Claude Code PreToolUse guard hook (alias: use `trace-mcp init` instead)')
   .option('--global', 'Install to ~/.claude/settings.json (default: project-level .claude/settings.local.json)')
