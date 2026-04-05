@@ -58,28 +58,29 @@ export function getNovaResource(
 
   if (nodeId !== undefined) {
     const outgoing = store.getOutgoingEdges(nodeId);
+
+    // Batch resolve all target nodes + symbols
+    const targetNodeIds = outgoing.map((e) => e.target_node_id);
+    const refs = store.getNodeRefsBatch(targetNodeIds);
+    const symRefIds = [...refs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+    const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
+
     for (const edge of outgoing) {
       const meta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
+      const ref = refs.get(edge.target_node_id);
+      const targetSym = ref?.nodeType === 'symbol' ? symMap.get(ref.refId) : undefined;
 
       switch (edge.edge_type_name) {
         case 'nova_resource_for': {
-          const targetNode = store.getNodeByNodeId(edge.target_node_id);
-          if (targetNode?.node_type === 'symbol') {
-            const targetSym = store.getSymbolById(targetNode.ref_id);
-            if (targetSym) {
-              modelInfo = {
-                name: targetSym.name,
-                fqn: targetSym.fqn ?? targetSym.name,
-                symbolId: targetSym.symbol_id,
-              };
-            }
+          if (targetSym) {
+            modelInfo = { name: targetSym.name, fqn: targetSym.fqn ?? targetSym.name, symbolId: targetSym.symbol_id };
           }
           if (!modelInfo && meta.targetFqn) {
             modelInfo = { name: String(meta.targetFqn).split('\\').pop()!, fqn: String(meta.targetFqn) };
           }
           break;
         }
-        case 'nova_field_relationship': {
+        case 'nova_field_relationship':
           fields.push({
             fieldType: String(meta.fieldType ?? ''),
             label: String(meta.label ?? ''),
@@ -87,27 +88,22 @@ export function getNovaResource(
             targetResource: meta.targetFqn as string | undefined,
           });
           break;
-        }
-        case 'nova_action_on': {
-          const name = resolveTargetName(store, edge.target_node_id, meta);
-          if (name) actions.push(name);
+        case 'nova_action_on':
+          if (targetSym) actions.push(targetSym.fqn ?? targetSym.name);
+          else if (meta.targetFqn) actions.push(String(meta.targetFqn));
           break;
-        }
-        case 'nova_filter_on': {
-          const name = resolveTargetName(store, edge.target_node_id, meta);
-          if (name) filters.push(name);
+        case 'nova_filter_on':
+          if (targetSym) filters.push(targetSym.fqn ?? targetSym.name);
+          else if (meta.targetFqn) filters.push(String(meta.targetFqn));
           break;
-        }
-        case 'nova_lens_on': {
-          const name = resolveTargetName(store, edge.target_node_id, meta);
-          if (name) lenses.push(name);
+        case 'nova_lens_on':
+          if (targetSym) lenses.push(targetSym.fqn ?? targetSym.name);
+          else if (meta.targetFqn) lenses.push(String(meta.targetFqn));
           break;
-        }
-        case 'nova_metric_queries': {
-          const name = resolveTargetName(store, edge.target_node_id, meta);
-          if (name) metrics.push(name);
+        case 'nova_metric_queries':
+          if (targetSym) metrics.push(targetSym.fqn ?? targetSym.name);
+          else if (meta.targetFqn) metrics.push(String(meta.targetFqn));
           break;
-        }
       }
     }
   }

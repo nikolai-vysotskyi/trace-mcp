@@ -158,18 +158,18 @@ export function getContextBundle(
       }
     }
 
-    // For file-type deps, grab their top-level exported symbols
+    // For file-type deps, grab their top-level exported symbols (batched)
     if (fileRefIds.length > 0) {
-      for (const fileId of fileRefIds) {
-        const fileSymbols = store.getSymbolsByFile(fileId);
-        const file = store.getFileById(fileId);
-        if (!file) continue;
-        for (const sym of fileSymbols) {
-          if (seenDepIds.has(sym.id)) continue;
-          if (sym.parent_id !== null) continue; // only top-level
-          seenDepIds.add(sym.id);
-          depSymbols.push({ sym, file });
-        }
+      const depFileMap = store.getFilesByIds(fileRefIds);
+      const placeholders = fileRefIds.map(() => '?').join(',');
+      const allFileSyms = store.db.prepare(
+        `SELECT * FROM symbols WHERE file_id IN (${placeholders}) AND parent_id IS NULL`,
+      ).all(...fileRefIds) as import('../db/store.js').SymbolRow[];
+      for (const sym of allFileSyms) {
+        if (seenDepIds.has(sym.id)) continue;
+        seenDepIds.add(sym.id);
+        const file = depFileMap.get(sym.file_id);
+        if (file) depSymbols.push({ sym, file });
       }
     }
   }

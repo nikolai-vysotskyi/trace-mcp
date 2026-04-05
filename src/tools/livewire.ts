@@ -86,19 +86,27 @@ export function getLivewireContext(
 
   if (nodeId !== undefined) {
     const outgoing = store.getOutgoingEdges(nodeId);
+
+    // Batch resolve all target nodes
+    const targetNodeIds = outgoing.map((e) => e.target_node_id);
+    const refs = store.getNodeRefsBatch(targetNodeIds);
+    const symRefIds = [...refs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+    const fileRefIds = [...refs.values()].filter((r) => r.nodeType === 'file').map((r) => r.refId);
+    const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
+    const symFileIds = [...new Set([...symMap.values()].map((s) => s.file_id))];
+    const fileMap = store.getFilesByIds([...new Set([...fileRefIds, ...symFileIds])]);
+
     for (const edge of outgoing) {
+      const ref = refs.get(edge.target_node_id);
       switch (edge.edge_type_name) {
         case 'livewire_renders': {
-          const ref = store.getNodeRef(edge.target_node_id);
-          if (ref) {
-            const target = ref.nodeType === 'file'
-              ? store.getFileById(ref.refId)
-              : store.getSymbolById(ref.refId);
-            if (target && 'path' in target) viewPath = target.path;
-            else if (target && 'symbol_id' in target) {
-              viewSymbolId = target.symbol_id;
-              const f = store.getFileById(target.file_id);
-              if (f) viewPath = f.path;
+          if (ref?.nodeType === 'file') {
+            viewPath = fileMap.get(ref.refId)?.path;
+          } else if (ref?.nodeType === 'symbol') {
+            const s = symMap.get(ref.refId);
+            if (s) {
+              viewSymbolId = s.symbol_id;
+              viewPath = fileMap.get(s.file_id)?.path;
             }
           }
           break;
@@ -109,18 +117,16 @@ export function getLivewireContext(
           break;
         }
         case 'livewire_uses_model': {
-          const ref = store.getNodeRef(edge.target_node_id);
           if (ref?.nodeType === 'symbol') {
-            const s = store.getSymbolById(ref.refId);
+            const s = symMap.get(ref.refId);
             if (s) usesModel = s.name;
           }
           break;
         }
         case 'livewire_child_of':
         case 'livewire_form': {
-          const ref = store.getNodeRef(edge.target_node_id);
           if (ref?.nodeType === 'symbol') {
-            const s = store.getSymbolById(ref.refId);
+            const s = symMap.get(ref.refId);
             if (s) childComponents.push(s.name);
           }
           break;
