@@ -83,11 +83,12 @@ describe('benchmark', () => {
       expect(result.index_stats.files).toBeGreaterThan(0);
       expect(result.index_stats.symbols).toBeGreaterThan(0);
 
-      expect(result.scenarios.length).toBeGreaterThanOrEqual(3);
+      expect(result.scenarios.length).toBeGreaterThanOrEqual(4);
       const scenarioNames = result.scenarios.map(s => s.name);
       expect(scenarioNames).toContain('symbol_lookup');
       expect(scenarioNames).toContain('file_exploration');
       expect(scenarioNames).toContain('search');
+      expect(scenarioNames).toContain('composite_task');
 
       for (const scenario of result.scenarios) {
         expect(scenario).toHaveProperty('name');

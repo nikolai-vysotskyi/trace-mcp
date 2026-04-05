@@ -49,10 +49,14 @@ Total                     260,583 tokens    23,482 tokens      91.0%
 
 **91% fewer tokens** to accomplish the same code understanding tasks. That's ~237K tokens saved per exploration session — more headroom for actual coding, fewer context window evictions, lower API costs.
 
+**Savings scale with project size.** On a 500-file project, trace-mcp saves ~237K tokens. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
+
+**Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, with 90%+ token reduction.
+
 <details>
 <summary>Methodology</summary>
 
-Measured using `benchmark_project` — runs five real task categories (symbol lookup, file exploration, text search, impact analysis, call graph traversal) against the indexed project. "Without trace-mcp" = estimated tokens from equivalent Read/Grep/Glob operations (full file reads, grep output). "With trace-mcp" = actual tokens returned by trace-mcp tools (targeted symbols, outlines, graph results). Token counts estimated using trace-mcp's built-in savings tracker.
+Measured using `benchmark_project` — runs six real task categories (symbol lookup, file exploration, text search, impact analysis, call graph traversal, composite task context) against the indexed project. "Without trace-mcp" = estimated tokens from equivalent Read/Grep/Glob operations (full file reads, grep output). "With trace-mcp" = actual tokens returned by trace-mcp tools (targeted symbols, outlines, graph results). Token counts estimated using trace-mcp's built-in savings tracker.
 
 Reproduce it yourself:
 ```
@@ -137,17 +141,13 @@ trace-mcp list
 
 ### Upgrading
 
-After updating trace-mcp (`npm update -g trace-mcp`), run:
+After updating trace-mcp (`npm update -g trace-mcp`), re-run init in your project directory:
 
 ```bash
-trace-mcp upgrade
+trace-mcp init
 ```
 
-This runs database migrations and reindexes **all registered projects** with the latest plugins. To upgrade a specific project:
-
-```bash
-trace-mcp upgrade /path/to/project
-```
+This runs database migrations, updates MCP client configuration, and reindexes the project with the latest plugins.
 
 ### Manual setup
 

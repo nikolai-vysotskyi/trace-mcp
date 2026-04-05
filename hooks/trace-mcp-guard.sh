@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.1.0
+# trace-mcp-guard v0.2.0
 # trace-mcp PreToolUse guard
 # Blocks Read/Grep/Glob/Bash on source code files → redirects to trace-mcp tools.
 # Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
@@ -16,7 +16,10 @@ TOOL_NAME="${CLAUDE_TOOL_NAME:-$(echo "$INPUT" | jq -r '.tool_name // empty')}"
 CODE_EXT_RE='\.(ts|tsx|js|jsx|mjs|cjs|py|pyi|go|rs|java|kt|kts|rb|php|cs|cpp|c|h|hpp|swift|scala|vue|svelte|astro|blade\.php)$'
 
 # Non-code extensions — always allow
-NONCODE_EXT_RE='\.(md|json|jsonc|yaml|yml|toml|ini|cfg|env|txt|html|xml|csv|svg|lock|log|sh|bash|zsh|fish|ps1|bat|cmd|dockerfile|dockerignore|gitignore|gitattributes|editorconfig|prettierrc|eslintrc|stylelintrc)$'
+NONCODE_EXT_RE='\.(md|json|jsonc|yaml|yml|toml|ini|cfg|txt|html|xml|csv|svg|lock|log|sh|bash|zsh|fish|ps1|bat|cmd|dockerfile|dockerignore|gitignore|gitattributes|editorconfig|prettierrc|eslintrc|stylelintrc)$'
+
+# .env files — always route through trace-mcp to prevent secret leakage
+ENV_FILE_RE='\.env(\.[a-zA-Z0-9._-]+)?$'
 
 # Safe bash command prefixes — never block
 SAFE_BASH_RE='^(git |npm |npx |pnpm |yarn |bun |node |deno |cargo |go |make |mvn |gradle |docker |kubectl |helm |terraform |pip |poetry |uv |pytest |vitest |jest |phpunit |composer |artisan |rails |bundle |mix |dotnet |cmake |ninja |meson )'
@@ -45,6 +48,14 @@ mkdir -p "$DENY_DIR" 2>/dev/null
 # --- Read ---
 if [[ "$TOOL_NAME" == "Read" ]]; then
   FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+
+  # Block .env files — prevent secret leakage to AI model context
+  if echo "$FILE_PATH" | grep -qiE "$ENV_FILE_RE"; then
+    REL_PATH=$(echo "$FILE_PATH" | sed "s|^$(pwd)/||")
+    deny \
+      "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
+      "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context."
+  fi
 
   # Allow non-code files
   if echo "$FILE_PATH" | grep -qiE "$NONCODE_EXT_RE"; then
@@ -82,8 +93,15 @@ if [[ "$TOOL_NAME" == "Grep" ]]; then
   GREP_GLOB=$(echo "$INPUT" | jq -r '.tool_input.glob // empty')
   GREP_TYPE=$(echo "$INPUT" | jq -r '.tool_input.type // empty')
 
+  # Block grep on .env files — prevent secret leakage
+  if echo "$GREP_GLOB" | grep -qiE '\.env' || echo "$GREP_PATH" | grep -qiE "$ENV_FILE_RE"; then
+    deny \
+      "Use get_env_vars for .env files — it masks sensitive values." \
+      "trace-mcp alternatives:\\n- get_env_vars { \\\"pattern\\\": \\\"search_term\\\" } — find env vars by key pattern without exposing values"
+  fi
+
   # Allow grep on non-code file types
-  if echo "$GREP_GLOB" | grep -qiE '\.(md|json|ya?ml|toml|env|txt|html|xml|csv|cfg|ini|lock|log)'; then
+  if echo "$GREP_GLOB" | grep -qiE '\.(md|json|ya?ml|toml|txt|html|xml|csv|cfg|ini|lock|log)'; then
     exit 0
   fi
 
@@ -108,8 +126,15 @@ fi
 if [[ "$TOOL_NAME" == "Glob" ]]; then
   GLOB_PATTERN=$(echo "$INPUT" | jq -r '.tool_input.pattern // empty')
 
+  # Block glob on .env patterns
+  if echo "$GLOB_PATTERN" | grep -qiE '\.env'; then
+    deny \
+      "Use get_env_vars for .env files — it masks sensitive values." \
+      "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files"
+  fi
+
   # Allow glob for non-code patterns
-  if echo "$GLOB_PATTERN" | grep -qiE '\.(md|json|ya?ml|toml|env|txt|html|xml|csv|cfg|ini|lock|log)'; then
+  if echo "$GLOB_PATTERN" | grep -qiE '\.(md|json|ya?ml|toml|txt|html|xml|csv|cfg|ini|lock|log)'; then
     exit 0
   fi
 

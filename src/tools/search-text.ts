@@ -51,7 +51,7 @@ export function searchText(
     filePattern,
     language,
     maxResults = 50,
-    contextLines = 2,
+    contextLines = 0,
     caseSensitive = false,
   } = opts;
 

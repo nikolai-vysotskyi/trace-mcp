@@ -593,7 +593,7 @@ export function createServer(
 
   server.tool(
     'get_change_impact',
-    'Determine what depends on a file or symbol (reverse dependency analysis). Use before making changes to understand blast radius.',
+    'Full change impact report: reverse dependencies, risk scoring, affected tests, co-change hidden couplings, module grouping, and actionable mitigations. Use before making any change to understand blast radius and plan safely.',
     {
       file_path: z.string().max(512).optional().describe('Relative file path to analyze'),
       symbol_id: z.string().max(512).optional().describe('Symbol ID to analyze'),
@@ -610,6 +610,7 @@ export function createServer(
         { filePath: file_path, symbolId: symbol_id },
         depth ?? 3,
         max_dependents ?? 200,
+        projectRoot,
       );
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
@@ -2039,7 +2040,7 @@ export function createServer(
       file_pattern: z.string().max(512).optional().describe('Glob filter, e.g. "src/**/*.ts"'),
       language: z.string().max(64).optional().describe('Filter by language (e.g. "typescript", "python")'),
       max_results: z.number().int().min(1).max(200).optional().describe('Max matches to return (default 50)'),
-      context_lines: z.number().int().min(0).max(10).optional().describe('Lines of context before/after each match (default 2)'),
+      context_lines: z.number().int().min(0).max(10).optional().describe('Lines of context before/after each match (default 0 — set higher if you need surrounding code)'),
       case_sensitive: z.boolean().optional().describe('Case-sensitive search (default false)'),
     },
     async ({ query, is_regex, file_pattern, language, max_results, context_lines, case_sensitive }) => {
