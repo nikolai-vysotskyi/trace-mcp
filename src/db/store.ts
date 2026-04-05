@@ -16,8 +16,10 @@ export class Store {
       getNodeRef: db.prepare('SELECT node_type AS nodeType, ref_id AS refId FROM nodes WHERE id = ?'),
       getEdgeType: db.prepare('SELECT id FROM edge_types WHERE name = ?'),
       insertEdge: db.prepare(
-        `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(source_node_id, target_node_id, edge_type_id)
+         DO UPDATE SET metadata = excluded.metadata, resolved = excluded.resolved`,
       ),
       insertSymbol: db.prepare(
         `INSERT OR REPLACE INTO symbols (file_id, symbol_id, name, kind, fqn, parent_id, signature, byte_start, byte_end, line_start, line_end, metadata, cyclomatic, max_nesting, param_count)
@@ -296,6 +298,16 @@ export class Store {
            OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
       )
     `).run(fileId, fileId, fileId, fileId);
+  }
+
+  /** Delete outgoing import edges from a file node — used by fast-path re-indexing
+   *  to clear stale specifiers before re-inserting consolidated imports. */
+  deleteOutgoingImportEdges(fileId: number): void {
+    this.db.prepare(`
+      DELETE FROM edges WHERE source_node_id IN (
+        SELECT n.id FROM nodes n WHERE n.node_type = 'file' AND n.ref_id = ?
+      ) AND edge_type_id = (SELECT id FROM edge_types WHERE name = 'imports')
+    `).run(fileId);
   }
 
   /** Delete only outgoing edges from a file's nodes — used by incremental indexing
