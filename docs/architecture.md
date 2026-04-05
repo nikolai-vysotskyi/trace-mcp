@@ -61,6 +61,8 @@ All state is centralized in `~/.trace-mcp/`:
   .config.json              # global config + per-project settings
   registry.json             # project registry (all added projects)
   topology.db               # cross-service topology + federation graph
+  analytics.db              # session analytics (cross-project)
+  savings.json              # cumulative token savings tracker
   index/
     my-app-a1b2c3d4e5f6.db  # per-project SQLite databases
     api-server-b2c3d4e5.db
@@ -197,14 +199,26 @@ src/
 │   ├── pipeline.ts         # Two-pass indexing engine
 │   ├── watcher.ts          # File change watcher
 │   └── monorepo.ts         # Monorepo workspace detection
-├── tools/                  # 43+ MCP tool implementations
+├── analytics/              # Session analytics engine
+│   ├── log-parser.ts       #   JSONL parser (Claude Code + Claw Code)
+│   ├── analytics-store.ts  #   SQLite storage for parsed sessions
+│   ├── sync.ts             #   Incremental session log sync
+│   ├── session-analytics.ts #  Analytics query facade
+│   ├── rules.ts            #   8 optimization rules (repeated reads, bash-grep, etc.)
+│   ├── real-savings.ts     #   Real savings analysis (Read vs get_symbol)
+│   ├── benchmark.ts        #   Synthetic benchmark (5 scenarios)
+│   ├── tech-detector.ts    #   Manifest parser + coverage assessment
+│   └── known-packages.ts   #   Catalog of ~200 known packages
+├── tools/                  # 50+ MCP tool implementations
 ├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
 ├── plugin-api/             # Plugin registry, loader, executor, test harness
+├── init/                   # Setup & detection (Claude Code, Claw Code, Cursor, Windsurf, Continue)
 ├── utils/                  # Env parser, hasher, security, source reader, token counter
 ├── server.ts               # MCP server factory
 ├── config.ts               # Cosmiconfig + Zod validation
 ├── errors.ts               # Error types (neverthrow)
 ├── logger.ts               # Pino logger setup
-├── cli.ts                  # Commander CLI (serve, serve-http, index, federation)
+├── cli.ts                  # Commander CLI (serve, serve-http, index, federation, analytics)
+├── cli-analytics.ts        # Analytics CLI subcommands (sync, report, optimize, benchmark, coverage, savings, trends)
 └── cli-federation.ts       # Federation CLI subcommands
 ```

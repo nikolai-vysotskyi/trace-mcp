@@ -12,29 +12,35 @@ npm test               # Vitest (all tests)
 npm test -- --run <pattern>  # Run specific test
 ```
 
-## trace-mcp Tool Routing (for AI agents working ON this codebase)
+## trace-mcp Tool Routing — MANDATORY (for AI agents working ON this codebase)
 
-Since trace-mcp is its own MCP server, when developing it you should use trace-mcp tools to navigate the codebase:
+**HARD RULE: NEVER use Read, Grep, Glob, or Bash (ls, find, cat, head, tail) to explore or navigate source code (.ts, .js, .py, etc.). ALWAYS use trace-mcp tools instead. This is not a suggestion — it is a requirement. Violations waste tokens and produce worse results.**
 
-### Decision Matrix
+Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp tools to navigate the codebase:
 
-| Task | Tool | Why not native |
-|------|------|----------------|
-| Find a function/class/method | `search` | Understands symbol kinds, FQNs, language filters |
-| Understand a file before editing | `get_outline` | Signatures only, no bodies — cheaper than Read |
-| Read one symbol's source | `get_symbol` | Returns only the symbol, not 800 lines |
-| What breaks if I change X | `get_change_impact` | Traverses dependency graph, not just text |
-| Who calls this / what does it call | `get_call_graph` | Bidirectional, semantic |
-| Find all usages of a symbol | `find_usages` | Semantic edges, not grep matches |
-| Get context for a task | `get_feature_context` | NL query → relevant symbols + source within token budget |
-| Find tests for a symbol | `get_tests_for` | Understands test-to-source mapping |
-| Project overview | `get_project_map` (summary_only=true) | Structured: frameworks, languages, counts |
+### Decision Matrix — USE THESE, NOT native tools
 
-### When to use native tools
+| Task | trace-mcp tool | NEVER use |
+|------|---------------|-----------|
+| Find a function/class/method | `search` | ~~Grep~~ ~~Glob~~ |
+| Understand a file before editing | `get_outline` | ~~Read (full file)~~ |
+| Read one symbol's source | `get_symbol` | ~~Read (full file)~~ |
+| What breaks if I change X | `get_change_impact` | ~~guessing~~ |
+| Who calls this / what does it call | `get_call_graph` | ~~Grep~~ |
+| Find all usages of a symbol | `find_usages` | ~~Grep~~ |
+| Get context for a task | `get_feature_context` | ~~reading 15 files with Read~~ |
+| Find tests for a symbol | `get_tests_for` | ~~Glob + Grep~~ |
+| Project overview | `get_project_map` (summary_only=true) | ~~Bash ls~~ |
+| List files in a directory | `get_outline` or `search` | ~~Bash ls/find~~ ~~Glob~~ |
+| Find where something is defined | `search` | ~~Grep~~ |
+| Understand project structure | `get_project_map` | ~~Bash find~~ |
 
-- **Read**: non-code files (.md, .json, .yaml, config), or reading a file before Edit
-- **Grep**: searching non-code file content, or regex patterns in config files
-- **Glob**: finding files by name pattern (e.g., `*.test.ts`)
+### The ONLY cases where native tools are allowed
+
+- **Read**: ONLY for non-code files (.md, .json, .yaml, .env, config), OR immediately before using Edit on a file you need to modify
+- **Grep**: ONLY for searching non-code file content (config, markdown, yaml)
+- **Glob**: ONLY for finding non-code files by name pattern
+- **Bash**: ONLY for running builds (`npm run build`), tests (`npm test`), git commands, or other CLI operations — NEVER for code exploration
 
 ### Plugin architecture
 
@@ -42,3 +48,52 @@ Since trace-mcp is its own MCP server, when developing it you should use trace-m
 - Integration plugins: `src/indexer/plugins/integration/` — framework-specific (api/, framework/, orm/, etc.)
 - Each plugin implements `LanguagePlugin` or `IntegrationPlugin` interface from `src/plugin-api/types.ts`
 - Plugin registry: `src/plugin-api/registry.ts`
+
+## Workflow Checklists — MANDATORY
+
+These workflows define which trace-mcp tools MUST be used at each stage. Follow them — they are not optional.
+
+### Starting any task
+1. `get_project_map` (summary_only=true) — orient yourself
+2. `get_task_context` { task: "description of what you're doing" } — get all relevant code in one call
+3. Do NOT read files one by one. `get_task_context` replaces manual chaining of search → get_symbol → Read.
+
+### Before refactoring
+1. `assess_change_risk` { file_path / symbol_id } — understand risk level before touching anything
+2. `get_refactor_candidates` — find what actually needs refactoring (don't guess)
+3. `get_change_impact` — know what breaks before you break it
+4. `get_complexity_report` { file_path } — quantify current complexity
+
+### Renaming a symbol
+1. `check_rename` { symbol_id, target_name } — collision detection FIRST
+2. `apply_rename` { symbol_id, new_name } — renames across ALL files (definition + imports)
+3. NEVER rename manually via Edit with replace_all — it misses import sites and cross-file references
+
+### Deleting code
+1. `get_dead_code` { file_pattern } — verify code is actually dead (multi-signal detection)
+2. `get_dead_exports` { file_pattern } — find unused exports
+3. `remove_dead_code` { symbol_id } — safe removal with orphan import detection
+4. NEVER delete code without verifying it's dead first
+
+### Before PR / commit
+1. `scan_security` { rules: ["all"] } — OWASP Top-10 vulnerability scan
+2. `check_quality_gates` { scope: "changed" } — quality gate validation
+3. `detect_antipatterns` {} — performance antipattern scan
+4. `compare_branches` { branch: "current" } — symbol-level diff for PR description
+5. Fix any critical/high findings before committing
+
+### Bug fixing
+1. `predict_bugs` {} — prioritize which files to investigate
+2. `get_risk_hotspots` {} — high complexity + high churn = likely bug location
+3. `get_task_context` { task: "fix the bug description" } — get relevant code
+4. `taint_analysis` {} — if security-related, trace untrusted data flows
+
+### Upgrading dependencies
+1. `plan_batch_change` { package: "name", from_version, to_version } — impact analysis
+2. Review all affected files and import references
+3. `check_quality_gates` { scope: "changed" } — verify no degradation after upgrade
+
+### Periodic health checks (once per session)
+1. `audit_config` {} — check for stale references in CLAUDE.md/settings
+2. `self_audit` {} — dead exports, untested code, hotspots
+3. `get_tech_debt` {} — per-module tech debt grades

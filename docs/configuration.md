@@ -264,6 +264,20 @@ trace-mcp federation impact                  # Cross-repo impact analysis
 trace-mcp setup-hooks          # Install guard hook
   --global                     # Install globally
   --uninstall                  # Remove hook
+
+# Analytics (see docs/analytics.md)
+trace-mcp analytics sync       # Parse session logs into analytics DB
+  --full                       # Force full rescan
+trace-mcp analytics report     # Token usage report
+  --period <p>                 # today, week, month, all (default: week)
+trace-mcp analytics optimize   # Optimization recommendations
+trace-mcp analytics savings    # Real savings analysis
+trace-mcp analytics benchmark  # Synthetic token efficiency benchmark
+  --queries <n>                # Queries per scenario (default: 10)
+  --format <fmt>               # text, json, markdown
+trace-mcp analytics coverage   # Technology coverage report
+trace-mcp analytics trends     # Daily usage trends
+  --days <n>                   # Number of days (default: 30)
 ```
 
 ---
