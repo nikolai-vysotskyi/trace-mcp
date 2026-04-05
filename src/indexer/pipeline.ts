@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { cpus } from 'node:os';
 import fg from 'fast-glob';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
@@ -18,6 +19,7 @@ import { GitignoreMatcher } from '../utils/gitignore.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { indexTrigramsBatch, deleteTrigramsByFile } from '../db/fuzzy.js';
 import { captureGraphSnapshots } from '../tools/history.js';
+import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
 
 export interface IndexingResult {
   totalFiles: number;
@@ -39,6 +41,7 @@ interface FileExtraction {
   gitignored: boolean;
   status: string;
   frameworkRole?: string;
+  mtimeMs: number | null;
   symbols: import('../plugin-api/types.js').RawSymbol[];
   otherEdges: RawEdge[];
   importEdges: { from: string; specifiers: string[]; relPath: string }[];
@@ -153,19 +156,30 @@ export class IndexingPipeline {
 
     try {
       // Pass 1: extract + persist in batched transactions for throughput.
-      // Splitting extract (CPU/IO) from persist (DB) lets us wrap each batch
-      // in a single SQLite transaction instead of one per file.
+      // Extractions within each batch run concurrently (parallel I/O + parsing),
+      // then persist in a single SQLite transaction per batch.
       {
-        const BATCH_SIZE = 100;
+        // Disable FTS5 triggers during batch inserts — rebuild once after all inserts.
+        // This avoids per-row FTS5 index updates (20-30% speedup on symbol insertion).
+        disableFts5Triggers(this.store.db);
+
+        const BATCH_SIZE = Math.min(500, Math.max(100, Math.ceil(relPaths.length / 20)));
+        const CONCURRENCY = Math.min(8, cpus().length);
         for (let i = 0; i < relPaths.length; i += BATCH_SIZE) {
           const batch = relPaths.slice(i, i + BATCH_SIZE);
           const extractions: FileExtraction[] = [];
 
-          for (const relPath of batch) {
-            const ext = await this.extractFile(relPath, force);
-            if (ext === 'skipped') { result.skipped++; continue; }
-            if (ext === 'error') { result.errors++; continue; }
-            extractions.push(ext);
+          // Run extractions concurrently within the batch, limited by CONCURRENCY
+          for (let c = 0; c < batch.length; c += CONCURRENCY) {
+            const chunk = batch.slice(c, c + CONCURRENCY);
+            const results = await Promise.all(
+              chunk.map(relPath => this.extractFile(relPath, force)),
+            );
+            for (const ext of results) {
+              if (ext === 'skipped') { result.skipped++; continue; }
+              if (ext === 'error') { result.errors++; continue; }
+              extractions.push(ext);
+            }
           }
 
           if (extractions.length > 0) {
@@ -173,6 +187,9 @@ export class IndexingPipeline {
             result.indexed += extractions.length;
           }
         }
+
+        // Rebuild FTS5 index once after all batch inserts and re-enable triggers
+        enableFts5Triggers(this.store.db);
       }
 
       // Pass 2: resolve edges (framework plugins)
@@ -236,11 +253,14 @@ export class IndexingPipeline {
     }
 
     // Reject symlinks to prevent escaping the project root
+    let fileMtimeMs: number | null = null;
     try {
-      if (fs.lstatSync(absPath).isSymbolicLink()) {
+      const stat = fs.lstatSync(absPath);
+      if (stat.isSymbolicLink()) {
         logger.warn({ file: relPath }, 'Symlink skipped');
         return 'error';
       }
+      fileMtimeMs = stat.mtimeMs;
     } catch {
       // lstat failed — file may not exist; readFileSync below will catch it
     }
@@ -248,6 +268,16 @@ export class IndexingPipeline {
     // Block sensitive files (credentials, keys, secrets) from indexing
     if (isSensitiveFile(relPath)) {
       logger.warn({ file: relPath }, 'Sensitive file blocked from indexing');
+      return 'skipped';
+    }
+
+    // Single DB lookup — reused for both mtime fast-path and hash-change check
+    const existing = this.store.getFile(relPath);
+
+    // mtime fast-path: if mtime hasn't changed, the file content is identical —
+    // skip the expensive read + hash computation entirely.
+    if (!force && fileMtimeMs != null && existing
+        && existing.mtime_ms != null && existing.mtime_ms === Math.floor(fileMtimeMs)) {
       return 'skipped';
     }
 
@@ -277,7 +307,6 @@ export class IndexingPipeline {
     this._fileContentCache.set(relPath, contentStr);
 
     const hash = hashContent(content);
-    const existing = this.store.getFile(relPath);
 
     // Skip if unchanged
     if (!force && existing && existing.content_hash === hash) {
@@ -356,6 +385,7 @@ export class IndexingPipeline {
       gitignored: this._gitignore?.isIgnored(relPath) ?? false,
       status: parsed.status,
       frameworkRole: parsed.frameworkRole,
+      mtimeMs: fileMtimeMs != null ? Math.floor(fileMtimeMs) : null,
       symbols: parsed.symbols,
       otherEdges,
       importEdges,
@@ -415,7 +445,7 @@ export class IndexingPipeline {
       // This avoids the expensive delete+reinsert cycle and FTS5 trigger churn.
       if (this.tryFastSymbolUpdate(fileId, ext)) {
         this._changedFileIds.add(fileId);
-        this.store.updateFileHash(fileId, ext.hash, ext.contentSize);
+        this.store.updateFileHash(fileId, ext.hash, ext.contentSize, ext.mtimeMs);
         if (ext.gitignored) this.store.updateFileGitignored(fileId, true);
         if (ext.importEdges.length > 0) {
           this._pendingImports.set(fileId, ext.importEdges);
@@ -435,11 +465,11 @@ export class IndexingPipeline {
         this.store.deleteEdgesForFileNodes(fileId);
       }
       this.store.deleteEntitiesByFile(fileId);
-      this.store.updateFileHash(fileId, ext.hash, ext.contentSize);
+      this.store.updateFileHash(fileId, ext.hash, ext.contentSize, ext.mtimeMs);
       this.store.updateFileStatus(fileId, ext.status, ext.frameworkRole);
       if (ext.workspace) this.store.updateFileWorkspace(fileId, ext.workspace);
     } else {
-      fileId = this.store.insertFile(ext.relPath, ext.language, ext.hash, ext.contentSize, ext.workspace);
+      fileId = this.store.insertFile(ext.relPath, ext.language, ext.hash, ext.contentSize, ext.workspace, ext.mtimeMs);
       this._changedFileIds.add(fileId);
       if (ext.status !== 'ok' || ext.frameworkRole) {
         this.store.updateFileStatus(fileId, ext.status, ext.frameworkRole);
@@ -623,14 +653,12 @@ export class IndexingPipeline {
 
   /** Convert ORM associations (orm_associations table) into graph edges. */
   private resolveOrmAssociationEdges(): void {
-    let associations = this.store.getAllOrmAssociations();
+    // Incremental: filter at SQL level to avoid loading all associations into memory
+    const changedFileIds = this._isIncremental && this._changedFileIds.size > 0
+      ? Array.from(this._changedFileIds)
+      : undefined;
+    const associations = this.store.getAllOrmAssociations(changedFileIds);
     if (associations.length === 0) return;
-
-    // Incremental: only resolve associations from changed files
-    if (this._isIncremental && this._changedFileIds.size > 0) {
-      associations = associations.filter((a) => a.file_id != null && this._changedFileIds.has(a.file_id));
-      if (associations.length === 0) return;
-    }
 
     // Build model ID → ORM type map
     const allModels = this.store.getAllOrmModels();
@@ -719,31 +747,51 @@ export class IndexingPipeline {
    * ts_extends and ts_implements edges for all symbols that have heritage metadata.
    */
   private resolveTypeScriptHeritageEdges(): void {
-    let symbolsWithHeritage = this.store.getSymbolsWithHeritage();
+    // Incremental: filter at SQL level to avoid full table scan + JS filtering
+    const changedFileIds = this._isIncremental && this._changedFileIds.size > 0
+      ? Array.from(this._changedFileIds)
+      : undefined;
+    const symbolsWithHeritage = this.store.getSymbolsWithHeritage(changedFileIds);
     if (symbolsWithHeritage.length === 0) return;
 
-    // Incremental: only resolve heritage for symbols in changed files
-    if (this._isIncremental && this._changedFileIds.size > 0) {
-      symbolsWithHeritage = symbolsWithHeritage.filter((s) => this._changedFileIds.has(s.file_id));
-      if (symbolsWithHeritage.length === 0) return;
+    // Collect all target names referenced by heritage metadata to avoid loading ALL symbols.
+    // On large projects this reduces 50K+ symbol loads to a few hundred.
+    const neededNames = new Set<string>();
+    for (const sym of symbolsWithHeritage) {
+      try {
+        if (!sym.metadata) continue;
+        const meta = JSON.parse(sym.metadata) as Record<string, unknown>;
+        const ext = meta['extends'];
+        if (Array.isArray(ext)) for (const n of ext) { if (typeof n === 'string') neededNames.add(n); }
+        else if (typeof ext === 'string') neededNames.add(ext);
+        const impl = meta['implements'];
+        if (Array.isArray(impl)) for (const n of impl) { if (typeof n === 'string') neededNames.add(n); }
+      } catch { /* skip malformed metadata */ }
     }
 
-    // Build name → {id, kind} index across ALL TypeScript symbols (classes + interfaces)
+    // Build name → {id, kind} index — only for names that are actually referenced
     const nameIndex = new Map<string, { id: number; kind: string }[]>();
-    const allSymbols = this.store.db.prepare(
-      "SELECT id, name, kind FROM symbols WHERE kind IN ('class', 'interface')",
-    ).all() as { id: number; name: string; kind: string }[];
-
-    for (const s of allSymbols) {
-      const list = nameIndex.get(s.name) ?? [];
-      list.push({ id: s.id, kind: s.kind });
-      nameIndex.set(s.name, list);
+    if (neededNames.size > 0) {
+      const CHUNK = 500;
+      const nameArr = Array.from(neededNames);
+      for (let i = 0; i < nameArr.length; i += CHUNK) {
+        const chunk = nameArr.slice(i, i + CHUNK);
+        const ph = chunk.map(() => '?').join(',');
+        const rows = this.store.db.prepare(
+          `SELECT id, name, kind FROM symbols WHERE kind IN ('class', 'interface') AND name IN (${ph})`,
+        ).all(...chunk) as { id: number; name: string; kind: string }[];
+        for (const s of rows) {
+          const list = nameIndex.get(s.name) ?? [];
+          list.push({ id: s.id, kind: s.kind });
+          nameIndex.set(s.name, list);
+        }
+      }
     }
 
-    // Pre-load symbol node IDs — chunked to avoid SQLite variable limit
+    // Pre-load symbol node IDs — only for heritage sources + matched targets
     const allNeededIds = [...new Set([
-      ...allSymbols.map((s) => s.id),
       ...symbolsWithHeritage.map((s) => s.id),
+      ...[...nameIndex.values()].flat().map((s) => s.id),
     ])];
     const symbolNodeMap = new Map<number, number>();
     const CHUNK = 500;
@@ -911,15 +959,16 @@ export class IndexingPipeline {
    *   test_file →[test_covers]→ source_file
    */
   private resolveTestCoversEdges(): void {
-    const allFiles = this.store.getAllFiles();
+    // Incremental: load only changed files from DB instead of ALL files,
+    // then filter test files from them. Full reindex loads everything.
+    let allFiles: import('./db/store.js').FileRow[];
+    if (this._isIncremental && this._changedFileIds.size > 0) {
+      allFiles = [...this.store.getFilesByIds(Array.from(this._changedFileIds)).values()];
+    } else {
+      allFiles = this.store.getAllFiles();
+    }
     let testFiles = allFiles.filter((f) => IndexingPipeline.TEST_PATH_RE.test(f.path));
     if (testFiles.length === 0) return;
-
-    // Incremental: only process test files that were re-indexed
-    if (this._isIncremental && this._changedFileIds.size > 0) {
-      testFiles = testFiles.filter((f) => this._changedFileIds.has(f.id));
-      if (testFiles.length === 0) return;
-    }
 
     // Pre-load file node IDs — in incremental mode, only load for test files + targets
     // instead of all files (avoids O(allFiles) query when only 1 test changed).
@@ -943,10 +992,8 @@ export class IndexingPipeline {
     // Batch-fetch all edges for test file nodes
     const allEdges = this.store.getEdgesForNodesBatch(testNodeIds);
 
-    // Build file path set for fast test-file check — use full test set, not just changed
-    const testPathSet = new Set(allFiles
-      .filter((f) => IndexingPipeline.TEST_PATH_RE.test(f.path))
-      .map((f) => f.path));
+    // Check if target is a test file via regex — avoids loading ALL files just for path set
+    const isTestFile = (filePath: string) => IndexingPipeline.TEST_PATH_RE.test(filePath);
 
     // Pre-load all target node refs in one batch
     const targetNodeIds = [...new Set(allEdges.map((e) => e.target_node_id))];
@@ -979,7 +1026,7 @@ export class IndexingPipeline {
 
         const targetFile = targetFileMap.get(targetRef.refId);
         if (!targetFile) continue;
-        if (testPathSet.has(targetFile.path)) continue;
+        if (isTestFile(targetFile.path)) continue;
 
         const testFile = testNodeToFile.get(edge.source_node_id)!;
         insertStmt.run(

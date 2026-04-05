@@ -26,11 +26,11 @@ export class Store {
       getSymbolById: db.prepare('SELECT * FROM symbols WHERE id = ?'),
       // Hot-path statements called per-file during indexing:
       insertFile: db.prepare(
-        `INSERT INTO files (path, language, content_hash, byte_length, indexed_at, workspace)
-         VALUES (?, ?, ?, ?, datetime('now'), ?)`,
+        `INSERT INTO files (path, language, content_hash, byte_length, indexed_at, workspace, mtime_ms)
+         VALUES (?, ?, ?, ?, datetime('now'), ?, ?)`,
       ),
       updateFileHash: db.prepare(
-        "UPDATE files SET content_hash = ?, byte_length = ?, indexed_at = datetime('now') WHERE id = ?",
+        "UPDATE files SET content_hash = ?, byte_length = ?, mtime_ms = ?, indexed_at = datetime('now') WHERE id = ?",
       ),
       updateFileStatus: db.prepare(
         'UPDATE files SET status = ?, framework_role = COALESCE(?, framework_role) WHERE id = ?',
@@ -81,8 +81,9 @@ export class Store {
     contentHash: string | null,
     byteLength: number | null,
     workspace?: string | null,
+    mtimeMs?: number | null,
   ): number {
-    const result = this._stmts.insertFile.run(path, language, contentHash, byteLength, workspace ?? null);
+    const result = this._stmts.insertFile.run(path, language, contentHash, byteLength, workspace ?? null, mtimeMs ?? null);
     const fileId = Number(result.lastInsertRowid);
 
     // Create node in unified address space
@@ -110,8 +111,8 @@ export class Store {
     return this.db.prepare('SELECT * FROM files WHERE workspace = ?').all(workspace) as FileRow[];
   }
 
-  updateFileHash(fileId: number, hash: string, byteLength: number): void {
-    this._stmts.updateFileHash.run(hash, byteLength, fileId);
+  updateFileHash(fileId: number, hash: string, byteLength: number, mtimeMs?: number | null): void {
+    this._stmts.updateFileHash.run(hash, byteLength, mtimeMs ?? null, fileId);
   }
 
   updateFileStatus(fileId: number, status: string, frameworkRole?: string): void {
@@ -569,7 +570,11 @@ export class Store {
     return Number(result.lastInsertRowid);
   }
 
-  getAllOrmAssociations(): OrmAssociationRow[] {
+  getAllOrmAssociations(fileIds?: number[]): OrmAssociationRow[] {
+    if (fileIds && fileIds.length > 0) {
+      const ph = fileIds.map(() => '?').join(',');
+      return this.db.prepare(`SELECT * FROM orm_associations WHERE file_id IN (${ph})`).all(...fileIds) as OrmAssociationRow[];
+    }
     return this.db.prepare('SELECT * FROM orm_associations').all() as OrmAssociationRow[];
   }
 
@@ -661,15 +666,18 @@ export class Store {
    * Get all symbols that have heritage metadata (extends/implements).
    * Used by the TypeScript heritage resolver in the pipeline.
    */
-  getSymbolsWithHeritage(): (SymbolRow & { file_path: string })[] {
-    return this.db.prepare(`
-      SELECT s.*, f.path AS file_path
+  getSymbolsWithHeritage(fileIds?: number[]): (SymbolRow & { file_path: string })[] {
+    const base = `SELECT s.*, f.path AS file_path
       FROM symbols s
       JOIN files f ON s.file_id = f.id
       WHERE s.metadata IS NOT NULL
         AND (json_extract(s.metadata, '$.extends') IS NOT NULL
-          OR json_extract(s.metadata, '$.implements') IS NOT NULL)
-    `).all() as (SymbolRow & { file_path: string })[];
+          OR json_extract(s.metadata, '$.implements') IS NOT NULL)`;
+    if (fileIds && fileIds.length > 0) {
+      const ph = fileIds.map(() => '?').join(',');
+      return this.db.prepare(`${base} AND s.file_id IN (${ph})`).all(...fileIds) as (SymbolRow & { file_path: string })[];
+    }
+    return this.db.prepare(base).all() as (SymbolRow & { file_path: string })[];
   }
 
   /**
@@ -1031,6 +1039,7 @@ export interface FileRow {
   metadata: string | null;
   workspace: string | null;
   gitignored: number;
+  mtime_ms: number | null;
 }
 
 export interface SymbolRow {
