@@ -10,26 +10,34 @@ import type { InitStepResult } from './types.js';
 import { GUARD_HOOK_VERSION, REINDEX_HOOK_VERSION } from './types.js';
 
 const HOME = os.homedir();
-const HOOK_DEST = path.join(HOME, '.claude', 'hooks', 'trace-mcp-guard.sh');
-const REINDEX_HOOK_DEST = path.join(HOME, '.claude', 'hooks', 'trace-mcp-reindex.sh');
-const CLAW_HOOK_DEST = path.join(HOME, '.claw', 'hooks', 'trace-mcp-guard.sh');
-const CLAW_REINDEX_HOOK_DEST = path.join(HOME, '.claw', 'hooks', 'trace-mcp-reindex.sh');
+const IS_WINDOWS = process.platform === 'win32';
+const HOOK_EXT = IS_WINDOWS ? '.cmd' : '.sh';
+
+/** Build the hook command string with inline env var — platform-aware. */
+function hookCommand(hookPath: string): string {
+  return IS_WINDOWS
+    ? `cmd /c "set CLAUDE_TOOL_NAME={{tool_name}}&& "${hookPath}""`
+    : `CLAUDE_TOOL_NAME={{tool_name}} ${hookPath}`;
+}
+const HOOK_DEST = path.join(HOME, '.claude', 'hooks', `trace-mcp-guard${HOOK_EXT}`);
+const REINDEX_HOOK_DEST = path.join(HOME, '.claude', 'hooks', `trace-mcp-reindex${HOOK_EXT}`);
+const CLAW_HOOK_DEST = path.join(HOME, '.claw', 'hooks', `trace-mcp-guard${HOOK_EXT}`);
+const CLAW_REINDEX_HOOK_DEST = path.join(HOME, '.claw', 'hooks', `trace-mcp-reindex${HOOK_EXT}`);
 
 /**
  * Get the path to the shipped hook script.
  * Works both in development (src/) and after build (dist/).
  */
 function getHookSourcePath(): string {
-  // In built version: dist/init/hooks.js → ../../hooks/trace-mcp-guard.sh
-  // In source: src/init/hooks.ts → ../../hooks/trace-mcp-guard.sh
+  const filename = `trace-mcp-guard${HOOK_EXT}`;
   const candidates = [
-    path.resolve(import.meta.dirname ?? '.', '..', '..', 'hooks', 'trace-mcp-guard.sh'),
-    path.resolve(process.cwd(), 'hooks', 'trace-mcp-guard.sh'),
+    path.resolve(import.meta.dirname ?? '.', '..', '..', 'hooks', filename),
+    path.resolve(process.cwd(), 'hooks', filename),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
-  throw new Error('Could not find hooks/trace-mcp-guard.sh — trace-mcp installation may be corrupted.');
+  throw new Error(`Could not find hooks/${filename} — trace-mcp installation may be corrupted.`);
 }
 
 export function installGuardHook(opts: {
@@ -52,7 +60,7 @@ export function installGuardHook(opts: {
 
   const isUpdate = fs.existsSync(HOOK_DEST);
   fs.copyFileSync(hookSrc, HOOK_DEST);
-  fs.chmodSync(HOOK_DEST, 0o755);
+  if (!IS_WINDOWS) fs.chmodSync(HOOK_DEST, 0o755);
 
   // Update settings
   const settingsDir = path.dirname(settingsPath);
@@ -68,7 +76,7 @@ export function installGuardHook(opts: {
     matcher: 'Read|Grep|Glob|Bash',
     hooks: [{
       type: 'command' as const,
-      command: `CLAUDE_TOOL_NAME={{tool_name}} ${HOOK_DEST}`,
+      command: hookCommand(HOOK_DEST),
     }],
   };
 
@@ -88,7 +96,7 @@ export function installGuardHook(opts: {
     const clawHookDir = path.dirname(CLAW_HOOK_DEST);
     if (!fs.existsSync(clawHookDir)) fs.mkdirSync(clawHookDir, { recursive: true });
     fs.copyFileSync(hookSrc, CLAW_HOOK_DEST);
-    fs.chmodSync(CLAW_HOOK_DEST, 0o755);
+    if (!IS_WINDOWS) fs.chmodSync(CLAW_HOOK_DEST, 0o755);
 
     const clawSettingsPath = opts.global
       ? path.join(clawHome, 'settings.json')
@@ -107,7 +115,7 @@ export function installGuardHook(opts: {
     if (!clawExisting) {
       clawSettings.hooks.PreToolUse.push({
         matcher: 'Read|Grep|Glob|Bash',
-        hooks: [{ type: 'command' as const, command: `CLAUDE_TOOL_NAME={{tool_name}} ${CLAW_HOOK_DEST}` }],
+        hooks: [{ type: 'command' as const, command: hookCommand(CLAW_HOOK_DEST) }],
       });
     }
     fs.writeFileSync(clawSettingsPath, JSON.stringify(clawSettings, null, 2) + '\n');
@@ -173,14 +181,15 @@ export function isHookOutdated(installedVersion: string | null): boolean {
 // --- PostToolUse auto-reindex hook ---
 
 function getReindexHookSourcePath(): string {
+  const filename = `trace-mcp-reindex${HOOK_EXT}`;
   const candidates = [
-    path.resolve(import.meta.dirname ?? '.', '..', '..', 'hooks', 'trace-mcp-reindex.sh'),
-    path.resolve(process.cwd(), 'hooks', 'trace-mcp-reindex.sh'),
+    path.resolve(import.meta.dirname ?? '.', '..', '..', 'hooks', filename),
+    path.resolve(process.cwd(), 'hooks', filename),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
-  throw new Error('Could not find hooks/trace-mcp-reindex.sh — trace-mcp installation may be corrupted.');
+  throw new Error(`Could not find hooks/${filename} — trace-mcp installation may be corrupted.`);
 }
 
 export function installReindexHook(opts: {
@@ -202,7 +211,7 @@ export function installReindexHook(opts: {
 
   const isUpdate = fs.existsSync(REINDEX_HOOK_DEST);
   fs.copyFileSync(hookSrc, REINDEX_HOOK_DEST);
-  fs.chmodSync(REINDEX_HOOK_DEST, 0o755);
+  if (!IS_WINDOWS) fs.chmodSync(REINDEX_HOOK_DEST, 0o755);
 
   const settingsDir = path.dirname(settingsPath);
   if (!fs.existsSync(settingsDir)) fs.mkdirSync(settingsDir, { recursive: true });
@@ -217,7 +226,7 @@ export function installReindexHook(opts: {
     matcher: 'Edit|Write|MultiEdit',
     hooks: [{
       type: 'command' as const,
-      command: `CLAUDE_TOOL_NAME={{tool_name}} ${REINDEX_HOOK_DEST}`,
+      command: hookCommand(REINDEX_HOOK_DEST),
     }],
   };
 
@@ -237,7 +246,7 @@ export function installReindexHook(opts: {
     const clawHookDir = path.dirname(CLAW_REINDEX_HOOK_DEST);
     if (!fs.existsSync(clawHookDir)) fs.mkdirSync(clawHookDir, { recursive: true });
     fs.copyFileSync(hookSrc, CLAW_REINDEX_HOOK_DEST);
-    fs.chmodSync(CLAW_REINDEX_HOOK_DEST, 0o755);
+    if (!IS_WINDOWS) fs.chmodSync(CLAW_REINDEX_HOOK_DEST, 0o755);
 
     const clawSettingsPath = opts.global
       ? path.join(clawHome, 'settings.json')
@@ -256,7 +265,7 @@ export function installReindexHook(opts: {
     if (!clawExisting) {
       clawSettings.hooks.PostToolUse.push({
         matcher: 'Edit|Write|MultiEdit',
-        hooks: [{ type: 'command' as const, command: `CLAUDE_TOOL_NAME={{tool_name}} ${CLAW_REINDEX_HOOK_DEST}` }],
+        hooks: [{ type: 'command' as const, command: hookCommand(CLAW_REINDEX_HOOK_DEST) }],
       });
     }
     fs.writeFileSync(clawSettingsPath, JSON.stringify(clawSettings, null, 2) + '\n');
