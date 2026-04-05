@@ -13,10 +13,6 @@ export type TraceMcpError =
 
 export type TraceMcpResult<T> = Result<T, TraceMcpError>;
 
-export function parseError(file: string, message: string, partial = false): TraceMcpError {
-  return { code: 'PARSE_ERROR', file, partial, message };
-}
-
 export function notFound(id: string, candidates?: string[]): TraceMcpError {
   return { code: 'NOT_FOUND', id, candidates };
 }
