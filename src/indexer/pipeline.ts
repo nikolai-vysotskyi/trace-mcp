@@ -448,6 +448,7 @@ export class IndexingPipeline {
         this.store.updateFileHash(fileId, ext.hash, ext.contentSize, ext.mtimeMs);
         if (ext.gitignored) this.store.updateFileGitignored(fileId, true);
         if (ext.importEdges.length > 0) {
+          this.store.deleteOutgoingImportEdges(fileId);
           this._pendingImports.set(fileId, ext.importEdges);
         }
         return;
@@ -898,8 +899,10 @@ export class IndexingPipeline {
     if (!importsEdgeType) return;
 
     const insertStmt = this.store.db.prepare(
-      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
-       VALUES (?, ?, ?, 1, ?, 0)`,
+      `INSERT INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+       VALUES (?, ?, ?, 1, ?, 0)
+       ON CONFLICT(source_node_id, target_node_id, edge_type_id)
+       DO UPDATE SET metadata = excluded.metadata`,
     );
 
     this.store.db.transaction(() => {
@@ -1011,8 +1014,10 @@ export class IndexingPipeline {
 
     let created = 0;
     const insertStmt = this.store.db.prepare(
-      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
-       VALUES (?, ?, ?, 1, ?, 0)`,
+      `INSERT INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
+       VALUES (?, ?, ?, 1, ?, 0)
+       ON CONFLICT(source_node_id, target_node_id, edge_type_id)
+       DO UPDATE SET metadata = excluded.metadata`,
     );
 
     this.store.db.transaction(() => {
