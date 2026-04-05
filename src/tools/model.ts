@@ -158,18 +158,22 @@ function getRelationships(store: Store, modelSymbol: SymbolRow): ModelRelationsh
   const nodeId = store.getNodeId('symbol', modelSymbol.id);
   if (!nodeId) return relationships;
 
-  const relEdgeTypes = ['has_many', 'belongs_to', 'belongs_to_many', 'has_one', 'morphs_to'];
+  const relEdgeTypes = new Set(['has_many', 'belongs_to', 'belongs_to_many', 'has_one', 'morphs_to']);
 
-  const outEdges = store.getOutgoingEdges(nodeId);
+  const outEdges = store.getOutgoingEdges(nodeId).filter((e) => relEdgeTypes.has(e.edge_type_name));
+  const inEdges = store.getIncomingEdges(nodeId).filter((e) => relEdgeTypes.has(e.edge_type_name));
+
+  // Batch resolve all referenced nodes
+  const allNodeIds = [...outEdges.map((e) => e.target_node_id), ...inEdges.map((e) => e.source_node_id)];
+  const nodeRefs = store.getNodeRefsBatch(allNodeIds);
+  const symRefIds = [...nodeRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
+
   for (const edge of outEdges) {
-    if (!relEdgeTypes.includes(edge.edge_type_name)) continue;
-
-    const targetNode = store.getNodeByNodeId(edge.target_node_id);
-    if (!targetNode || targetNode.node_type !== 'symbol') continue;
-
-    const targetSym = store.getSymbolById(targetNode.ref_id);
+    const ref = nodeRefs.get(edge.target_node_id);
+    if (!ref || ref.nodeType !== 'symbol') continue;
+    const targetSym = symMap.get(ref.refId);
     if (!targetSym) continue;
-
     const metadata = edge.metadata ? JSON.parse(edge.metadata) : {};
     relationships.push({
       type: edge.edge_type_name,
@@ -179,17 +183,11 @@ function getRelationships(store: Store, modelSymbol: SymbolRow): ModelRelationsh
     });
   }
 
-  // Also check incoming edges (e.g. belongs_to from other models)
-  const inEdges = store.getIncomingEdges(nodeId);
   for (const edge of inEdges) {
-    if (!relEdgeTypes.includes(edge.edge_type_name)) continue;
-
-    const sourceNode = store.getNodeByNodeId(edge.source_node_id);
-    if (!sourceNode || sourceNode.node_type !== 'symbol') continue;
-
-    const sourceSym = store.getSymbolById(sourceNode.ref_id);
+    const ref = nodeRefs.get(edge.source_node_id);
+    if (!ref || ref.nodeType !== 'symbol') continue;
+    const sourceSym = symMap.get(ref.refId);
     if (!sourceSym) continue;
-
     const metadata = edge.metadata ? JSON.parse(edge.metadata) : {};
     relationships.push({
       type: `inverse:${edge.edge_type_name}`,
@@ -236,23 +234,44 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
   const incoming = store.getIncomingEdges(nodeId);
   const result: Partial<ModelContextResult> = {};
 
+  // Batch resolve all incoming source nodes
+  const sourceNodeIds = incoming.map((e) => e.source_node_id);
+  const sourceRefs = store.getNodeRefsBatch(sourceNodeIds);
+  const srcSymRefIds = [...sourceRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const srcSymMap = srcSymRefIds.length > 0 ? store.getSymbolsByIds(srcSymRefIds) : new Map();
+
+  // Helper: resolve source symbol from pre-fetched maps
+  const getSrcSym = (srcNodeId: number) => {
+    const ref = sourceRefs.get(srcNodeId);
+    return ref?.nodeType === 'symbol' ? srcSymMap.get(ref.refId) : undefined;
+  };
+
   // Nova
   for (const edge of incoming) {
     if (edge.edge_type_name !== 'nova_resource_for') continue;
-    const src = resolveSourceSymbol(store, edge.source_node_id);
+    const src = getSrcSym(edge.source_node_id);
     if (!src) continue;
-    const srcNodeId = store.getNodeId('symbol', src.id);
+    const srcNid = store.getNodeId('symbol', src.id);
     const actions: string[] = [];
     const filters: string[] = [];
     const lenses: string[] = [];
     const metrics: string[] = [];
-    if (srcNodeId) {
-      for (const out of store.getOutgoingEdges(srcNodeId)) {
-        const name = resolveTargetName(store, out.target_node_id, out.metadata);
-        if (out.edge_type_name === 'nova_action_on' && name) actions.push(name);
-        if (out.edge_type_name === 'nova_filter_on' && name) filters.push(name);
-        if (out.edge_type_name === 'nova_lens_on' && name) lenses.push(name);
-        if (out.edge_type_name === 'nova_metric_queries' && name) metrics.push(name);
+    if (srcNid) {
+      const subEdges = store.getOutgoingEdges(srcNid);
+      // Batch resolve sub-edge targets
+      const subTargetIds = subEdges.map((e) => e.target_node_id);
+      const subRefs = store.getNodeRefsBatch(subTargetIds);
+      const subSymIds = [...subRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+      const subSymMap = subSymIds.length > 0 ? store.getSymbolsByIds(subSymIds) : new Map();
+      for (const out of subEdges) {
+        const ref = subRefs.get(out.target_node_id);
+        const sym = ref?.nodeType === 'symbol' ? subSymMap.get(ref.refId) : undefined;
+        const name = sym ? (sym.fqn ?? sym.name) : (out.metadata ? (JSON.parse(out.metadata) as Record<string, unknown>).targetFqn as string : undefined);
+        if (!name) continue;
+        if (out.edge_type_name === 'nova_action_on') actions.push(name);
+        if (out.edge_type_name === 'nova_filter_on') filters.push(name);
+        if (out.edge_type_name === 'nova_lens_on') lenses.push(name);
+        if (out.edge_type_name === 'nova_metric_queries') metrics.push(name);
       }
     }
     result.nova = {
@@ -265,18 +284,26 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
   // Filament
   for (const edge of incoming) {
     if (edge.edge_type_name !== 'filament_resource_for') continue;
-    const src = resolveSourceSymbol(store, edge.source_node_id);
+    const src = getSrcSym(edge.source_node_id);
     if (!src) continue;
-    const srcNodeId = store.getNodeId('symbol', src.id);
+    const srcNid = store.getNodeId('symbol', src.id);
     const relationManagers: string[] = [];
     const pages: string[] = [];
     const widgets: string[] = [];
-    if (srcNodeId) {
-      for (const out of store.getOutgoingEdges(srcNodeId)) {
-        const name = resolveTargetName(store, out.target_node_id, out.metadata);
-        if (out.edge_type_name === 'filament_relation_manager' && name) relationManagers.push(name);
-        if (out.edge_type_name === 'filament_page_for' && name) pages.push(name);
-        if (out.edge_type_name === 'filament_widget_queries' && name) widgets.push(name);
+    if (srcNid) {
+      const subEdges = store.getOutgoingEdges(srcNid);
+      const subTargetIds = subEdges.map((e) => e.target_node_id);
+      const subRefs = store.getNodeRefsBatch(subTargetIds);
+      const subSymIds = [...subRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+      const subSymMap = subSymIds.length > 0 ? store.getSymbolsByIds(subSymIds) : new Map();
+      for (const out of subEdges) {
+        const ref = subRefs.get(out.target_node_id);
+        const sym = ref?.nodeType === 'symbol' ? subSymMap.get(ref.refId) : undefined;
+        const name = sym ? (sym.fqn ?? sym.name) : (out.metadata ? (JSON.parse(out.metadata) as Record<string, unknown>).targetFqn as string : undefined);
+        if (!name) continue;
+        if (out.edge_type_name === 'filament_relation_manager') relationManagers.push(name);
+        if (out.edge_type_name === 'filament_page_for') pages.push(name);
+        if (out.edge_type_name === 'filament_widget_queries') widgets.push(name);
       }
     }
     result.filament = {
@@ -290,7 +317,7 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
   const lwComponents: EcosystemRef[] = [];
   for (const edge of incoming) {
     if (edge.edge_type_name !== 'livewire_uses_model') continue;
-    const src = resolveSourceSymbol(store, edge.source_node_id);
+    const src = getSrcSym(edge.source_node_id);
     if (src) lwComponents.push({ name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id });
   }
   if (lwComponents.length > 0) result.livewireComponents = lwComponents;
@@ -299,33 +326,12 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
   const dataClasses: EcosystemRef[] = [];
   for (const edge of incoming) {
     if (edge.edge_type_name !== 'data_wraps') continue;
-    const src = resolveSourceSymbol(store, edge.source_node_id);
+    const src = getSrcSym(edge.source_node_id);
     if (src) dataClasses.push({ name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id });
   }
   if (dataClasses.length > 0) result.dataClasses = dataClasses;
 
   return result;
-}
-
-function resolveSourceSymbol(store: Store, sourceNodeId: number): SymbolRow | undefined {
-  const sourceNode = store.getNodeByNodeId(sourceNodeId);
-  if (!sourceNode || sourceNode.node_type !== 'symbol') return undefined;
-  return store.getSymbolById(sourceNode.ref_id);
-}
-
-function resolveTargetName(store: Store, targetNodeId: number, metadataStr: string | null): string | undefined {
-  const targetNode = store.getNodeByNodeId(targetNodeId);
-  if (targetNode?.node_type === 'symbol') {
-    const sym = store.getSymbolById(targetNode.ref_id);
-    if (sym) return sym.fqn ?? sym.name;
-  }
-  if (metadataStr) {
-    try {
-      const meta = JSON.parse(metadataStr) as Record<string, unknown>;
-      if (meta.targetFqn) return String(meta.targetFqn);
-    } catch { /* ignore */ }
-  }
-  return undefined;
 }
 
 /** Convert a model class name to a table name (simple pluralization). */

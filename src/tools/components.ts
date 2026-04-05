@@ -101,19 +101,27 @@ function buildNode(
   const outEdges = store.getOutgoingEdges(symbolNodeId);
   const renderEdges = outEdges.filter((e) => e.edge_type_name === 'renders_component');
 
+  // Batch resolve all render edge targets instead of per-edge N+1
+  const targetNodeIds = renderEdges.map((e) => e.target_node_id);
+  const refs = store.getNodeRefsBatch(targetNodeIds);
+  const symRefIds = [...refs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
+  const fileIds = [...new Set([...symMap.values()].map((s) => s.file_id))];
+  const fileMap = fileIds.length > 0 ? store.getFilesByIds(fileIds) : new Map();
+
   for (const edge of renderEdges) {
     if (budget.remaining <= 0) {
       budget.truncated = true;
       break;
     }
 
-    const targetRef = store.getNodeByNodeId(edge.target_node_id);
-    if (!targetRef || targetRef.node_type !== 'symbol') continue;
+    const ref = refs.get(edge.target_node_id);
+    if (!ref || ref.nodeType !== 'symbol') continue;
 
-    const targetSymbol = store.getSymbolById(targetRef.ref_id);
+    const targetSymbol = symMap.get(ref.refId);
     if (!targetSymbol) continue;
 
-    const targetFile = store.getFileById(targetSymbol.file_id);
+    const targetFile = fileMap.get(targetSymbol.file_id);
     if (!targetFile || visited.has(targetFile.path)) continue;
 
     const targetComp = store.getComponentByFileId(targetFile.id);

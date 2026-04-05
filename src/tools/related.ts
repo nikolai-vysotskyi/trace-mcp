@@ -122,12 +122,18 @@ export function getRelatedSymbols(
         }
       }
 
-      // Get symbols from co-imported files
-      for (const [fileId, { shared, total }] of fileNodeMap) {
-        const fileSymbols = store.getSymbolsByFile(fileId);
-        const sharedScore = total > 0 ? shared / total : 0;
-        for (const sym of fileSymbols) {
+      // Get symbols from co-imported files (batched instead of per-file N+1)
+      const coFileIds = [...fileNodeMap.keys()];
+      if (coFileIds.length > 0) {
+        const placeholders = coFileIds.map(() => '?').join(',');
+        const allCoSymbols = store.db.prepare(
+          `SELECT * FROM symbols WHERE file_id IN (${placeholders})`,
+        ).all(...coFileIds) as Array<{ id: number; file_id: number; name: string; kind: string; symbol_id: string; fqn: string | null; signature: string | null; line_start: number | null }>;
+        for (const sym of allCoSymbols) {
           if (sym.id === target.id) continue;
+          const info = fileNodeMap.get(sym.file_id);
+          if (!info) continue;
+          const sharedScore = info.total > 0 ? info.shared / info.total : 0;
           ensureEntry(sym.id).shared_importers = Math.max(
             ensureEntry(sym.id).shared_importers,
             sharedScore,

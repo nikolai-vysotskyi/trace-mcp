@@ -77,54 +77,56 @@ export function getRequestFlow(
     const symbolsToCheck = [methodSymbol, controllerSymbol].filter(Boolean) as typeof controllerSymbol[];
     const seenEdgeTypes = new Set<string>();
 
+    // Collect all outgoing edges from both symbols, then batch resolve targets
+    const allOutEdges: Array<{ edge: typeof store extends { getOutgoingEdges(n: number): infer R } ? (R extends Array<infer E> ? E : never) : never; }> = [];
     for (const sym of symbolsToCheck) {
       if (!sym) continue;
-      const nodeId = store.getNodeId('symbol', sym.id);
-      if (!nodeId) continue;
+      const nid = store.getNodeId('symbol', sym.id);
+      if (!nid) continue;
+      const edges = store.getOutgoingEdges(nid);
+      for (const e of edges) (allOutEdges as any[]).push(e);
+    }
 
-      const outEdges = store.getOutgoingEdges(nodeId);
-      for (const edge of outEdges) {
-        if (edge.edge_type_name === 'validates_with' && !seenEdgeTypes.has('validates_with')) {
-          const targetNode = store.getNodeByNodeId(edge.target_node_id);
-          if (targetNode && targetNode.node_type === 'symbol') {
-            const targetSym = store.getSymbolById(targetNode.ref_id);
-            if (targetSym) {
-              seenEdgeTypes.add('validates_with');
-              steps.push({
-                type: 'form_request',
-                name: targetSym.fqn ?? targetSym.name,
-                symbolId: targetSym.symbol_id,
-                fqn: targetSym.fqn ?? undefined,
-              });
-            }
-          }
-        }
+    const targetIds = allOutEdges.map((e: any) => e.target_node_id);
+    const targetRefs = store.getNodeRefsBatch(targetIds);
+    const symIds = [...targetRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+    const targetSymMap = symIds.length > 0 ? store.getSymbolsByIds(symIds) : new Map();
+    const targetFileIds = [...new Set([...targetSymMap.values()].map((s) => s.file_id))];
+    const targetFileMap = targetFileIds.length > 0 ? store.getFilesByIds(targetFileIds) : new Map();
 
-        if (edge.edge_type_name === 'inertia_renders') {
-          const targetNode = store.getNodeByNodeId(edge.target_node_id);
-          if (targetNode && targetNode.node_type === 'symbol') {
-            const targetSym = store.getSymbolById(targetNode.ref_id);
-            if (targetSym) {
-              const meta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
-              const file = store.getFileById(targetSym.file_id);
-              // Only include Inertia pages that are NOT already in steps
-              const alreadyAdded = steps.some(
-                (s) => s.type === 'inertia_page' && s.details?.pageName === meta.pageName,
-              );
-              if (!alreadyAdded) {
-                steps.push({
-                  type: 'inertia_page',
-                  name: targetSym.name,
-                  symbolId: targetSym.symbol_id,
-                  details: {
-                    pageName: meta.pageName,
-                    propNames: meta.propNames,
-                    filePath: file?.path,
-                  },
-                });
-              }
-            }
-          }
+    for (const edge of allOutEdges as any[]) {
+      const ref = targetRefs.get(edge.target_node_id);
+      if (!ref || ref.nodeType !== 'symbol') continue;
+      const targetSym = targetSymMap.get(ref.refId);
+      if (!targetSym) continue;
+
+      if (edge.edge_type_name === 'validates_with' && !seenEdgeTypes.has('validates_with')) {
+        seenEdgeTypes.add('validates_with');
+        steps.push({
+          type: 'form_request',
+          name: targetSym.fqn ?? targetSym.name,
+          symbolId: targetSym.symbol_id,
+          fqn: targetSym.fqn ?? undefined,
+        });
+      }
+
+      if (edge.edge_type_name === 'inertia_renders') {
+        const meta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
+        const file = targetFileMap.get(targetSym.file_id);
+        const alreadyAdded = steps.some(
+          (s: any) => s.type === 'inertia_page' && s.details?.pageName === meta.pageName,
+        );
+        if (!alreadyAdded) {
+          steps.push({
+            type: 'inertia_page',
+            name: targetSym.name,
+            symbolId: targetSym.symbol_id,
+            details: {
+              pageName: meta.pageName,
+              propNames: meta.propNames,
+              filePath: file?.path,
+            },
+          });
         }
       }
     }

@@ -448,42 +448,45 @@ export function getDependencyGraph(
     return { file: filePath, imports: [], imported_by: [] };
   }
 
-  // Outgoing imports (what this file imports)
-  const outgoing = store.getOutgoingEdges(nodeId)
-    .filter((e) => e.edge_type_name === 'imports');
+  // Fetch all edges for this node, then batch-resolve targets/sources
+  const outgoing = store.getOutgoingEdges(nodeId).filter((e) => e.edge_type_name === 'imports');
+  const incoming = store.getIncomingEdges(nodeId).filter((e) => e.edge_type_name === 'imports');
+
+  // Batch resolve all referenced node IDs
+  const allRefNodeIds = [
+    ...outgoing.map((e) => e.target_node_id),
+    ...incoming.map((e) => e.source_node_id),
+  ];
+  const nodeRefs = store.getNodeRefsBatch(allRefNodeIds);
+
+  // Batch fetch all referenced files
+  const fileRefIds = [...nodeRefs.values()]
+    .filter((r) => r.nodeType === 'file')
+    .map((r) => r.refId);
+  const fileMap = fileRefIds.length > 0 ? store.getFilesByIds(fileRefIds) : new Map();
+
   const imports: DependencyEdge[] = [];
   for (const edge of outgoing) {
-    const targetRef = store.getNodeRef(edge.target_node_id);
-    if (!targetRef || targetRef.nodeType !== 'file') continue;
-    const targetFile = store.getFileById(targetRef.refId);
+    const ref = nodeRefs.get(edge.target_node_id);
+    if (!ref || ref.nodeType !== 'file') continue;
+    const targetFile = fileMap.get(ref.refId);
     if (!targetFile) continue;
     const meta = edge.metadata
       ? (typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata) as Record<string, unknown>
       : {};
-    imports.push({
-      source: filePath,
-      target: targetFile.path,
-      specifiers: (meta['specifiers'] as string[]) ?? [],
-    });
+    imports.push({ source: filePath, target: targetFile.path, specifiers: (meta['specifiers'] as string[]) ?? [] });
   }
 
-  // Incoming imports (what imports this file)
-  const incoming = store.getIncomingEdges(nodeId)
-    .filter((e) => e.edge_type_name === 'imports');
   const importedBy: DependencyEdge[] = [];
   for (const edge of incoming) {
-    const sourceRef = store.getNodeRef(edge.source_node_id);
-    if (!sourceRef || sourceRef.nodeType !== 'file') continue;
-    const sourceFile = store.getFileById(sourceRef.refId);
+    const ref = nodeRefs.get(edge.source_node_id);
+    if (!ref || ref.nodeType !== 'file') continue;
+    const sourceFile = fileMap.get(ref.refId);
     if (!sourceFile) continue;
     const meta = edge.metadata
       ? (typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata) as Record<string, unknown>
       : {};
-    importedBy.push({
-      source: sourceFile.path,
-      target: filePath,
-      specifiers: (meta['specifiers'] as string[]) ?? [],
-    });
+    importedBy.push({ source: sourceFile.path, target: filePath, specifiers: (meta['specifiers'] as string[]) ?? [] });
   }
 
   return { file: filePath, imports, imported_by: importedBy };

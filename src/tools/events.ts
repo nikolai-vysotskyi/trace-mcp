@@ -45,22 +45,31 @@ export function getEventGraph(
     events.push(node);
   } else {
     const seen = new Set<number>();
+    const targetNodeIds: number[] = [];
 
-    // Find all events that have listener/dispatch edges targeting them
+    // Collect all unique target node IDs from event edges
     for (const edgeType of [...LISTENER_EDGE_TYPES, ...DISPATCH_EDGE_TYPES]) {
       const edges = store.getEdgesByType(edgeType);
       for (const edge of edges) {
         if (seen.has(edge.target_node_id)) continue;
         seen.add(edge.target_node_id);
-
-        const targetNode = store.getNodeByNodeId(edge.target_node_id);
-        if (!targetNode || targetNode.node_type !== 'symbol') continue;
-
-        const sym = store.getSymbolById(targetNode.ref_id);
-        if (!sym) continue;
-
-        events.push(buildEventNode(store, sym, LISTENER_EDGE_TYPES, DISPATCH_EDGE_TYPES));
+        targetNodeIds.push(edge.target_node_id);
       }
+    }
+
+    // Batch resolve: node refs → symbols
+    const refs = store.getNodeRefsBatch(targetNodeIds);
+    const symbolRefIds = [...refs.entries()]
+      .filter(([, r]) => r.nodeType === 'symbol')
+      .map(([, r]) => r.refId);
+    const symbolMap = symbolRefIds.length > 0 ? store.getSymbolsByIds(symbolRefIds) : new Map();
+
+    for (const nid of targetNodeIds) {
+      const ref = refs.get(nid);
+      if (!ref || ref.nodeType !== 'symbol') continue;
+      const sym = symbolMap.get(ref.refId);
+      if (!sym) continue;
+      events.push(buildEventNode(store, sym, LISTENER_EDGE_TYPES, DISPATCH_EDGE_TYPES));
     }
   }
 
@@ -95,21 +104,24 @@ function buildEventNode(
 
   if (nodeId) {
     const inEdges = store.getIncomingEdges(nodeId);
+
+    // Batch resolve all source nodes and symbols
+    const sourceIds = inEdges.map((e) => e.source_node_id);
+    const sourceRefs = store.getNodeRefsBatch(sourceIds);
+    const symRefIds = [...sourceRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+    const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
+
     for (const edge of inEdges) {
+      const ref = sourceRefs.get(edge.source_node_id);
+      if (!ref || ref.nodeType !== 'symbol') continue;
+      const sym = symMap.get(ref.refId);
+      if (!sym) continue;
+
+      const entry = { name: sym.name, fqn: sym.fqn ?? sym.name, symbolId: sym.symbol_id };
       if (listenerEdgeTypes.includes(edge.edge_type_name)) {
-        const sourceNode = store.getNodeByNodeId(edge.source_node_id);
-        if (!sourceNode || sourceNode.node_type !== 'symbol') continue;
-        const sym = store.getSymbolById(sourceNode.ref_id);
-        if (sym) {
-          listeners.push({ name: sym.name, fqn: sym.fqn ?? sym.name, symbolId: sym.symbol_id });
-        }
+        listeners.push(entry);
       } else if (dispatchEdgeTypes.includes(edge.edge_type_name)) {
-        const sourceNode = store.getNodeByNodeId(edge.source_node_id);
-        if (!sourceNode || sourceNode.node_type !== 'symbol') continue;
-        const sym = store.getSymbolById(sourceNode.ref_id);
-        if (sym) {
-          dispatchers.push({ name: sym.name, fqn: sym.fqn ?? sym.name, symbolId: sym.symbol_id });
-        }
+        dispatchers.push(entry);
       }
     }
   }

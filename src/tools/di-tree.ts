@@ -47,44 +47,37 @@ export function getDITree(
     return ok({ service, injects: [], injectedBy: [] });
   }
 
-  // What this service injects (outgoing nest_injects edges)
-  const outEdges = store.getOutgoingEdges(nodeId);
+  // What this service injects + who injects it — batch resolved
+  const outEdges = store.getOutgoingEdges(nodeId).filter((e) => e.edge_type_name === 'nest_injects');
+  const inEdges = store.getIncomingEdges(nodeId).filter((e) => e.edge_type_name === 'nest_injects');
+
+  // Batch resolve all referenced nodes
+  const allNodeIds = [
+    ...outEdges.map((e) => e.target_node_id),
+    ...inEdges.map((e) => e.source_node_id),
+  ];
+  const nodeRefs = store.getNodeRefsBatch(allNodeIds);
+  const symRefIds = [...nodeRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
+  const fileIds = [...new Set([...symMap.values()].map((s) => s.file_id))];
+  const fileMap = fileIds.length > 0 ? store.getFilesByIds(fileIds) : new Map();
+
   const injects: DINode[] = [];
-
   for (const edge of outEdges) {
-    if (edge.edge_type_name !== 'nest_injects') continue;
-    const targetRef = store.getNodeByNodeId(edge.target_node_id);
-    if (!targetRef || targetRef.node_type !== 'symbol') continue;
-
-    const targetSym = store.getSymbolById(targetRef.ref_id);
-    if (!targetSym) continue;
-
-    const targetFile = store.getFileById(targetSym.file_id);
-    injects.push({
-      name: targetSym.name,
-      symbolId: targetSym.symbol_id,
-      file: targetFile?.path,
-    });
+    const ref = nodeRefs.get(edge.target_node_id);
+    if (!ref || ref.nodeType !== 'symbol') continue;
+    const sym = symMap.get(ref.refId);
+    if (!sym) continue;
+    injects.push({ name: sym.name, symbolId: sym.symbol_id, file: fileMap.get(sym.file_id)?.path });
   }
 
-  // Who injects this service (incoming nest_injects edges)
-  const inEdges = store.getIncomingEdges(nodeId);
   const injectedBy: DINode[] = [];
-
   for (const edge of inEdges) {
-    if (edge.edge_type_name !== 'nest_injects') continue;
-    const sourceRef = store.getNodeByNodeId(edge.source_node_id);
-    if (!sourceRef || sourceRef.node_type !== 'symbol') continue;
-
-    const sourceSym = store.getSymbolById(sourceRef.ref_id);
-    if (!sourceSym) continue;
-
-    const sourceFile = store.getFileById(sourceSym.file_id);
-    injectedBy.push({
-      name: sourceSym.name,
-      symbolId: sourceSym.symbol_id,
-      file: sourceFile?.path,
-    });
+    const ref = nodeRefs.get(edge.source_node_id);
+    if (!ref || ref.nodeType !== 'symbol') continue;
+    const sym = symMap.get(ref.refId);
+    if (!sym) continue;
+    injectedBy.push({ name: sym.name, symbolId: sym.symbol_id, file: fileMap.get(sym.file_id)?.path });
   }
 
   return ok({ service, injects, injectedBy });

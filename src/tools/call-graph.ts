@@ -65,63 +65,120 @@ export function getCallGraph(
   });
 }
 
+/**
+ * BFS-based call graph builder. Pre-fetches edges, symbols, and files in batched waves
+ * instead of per-node queries (replaces ~2000 N+1 queries with ~6 per depth level).
+ */
 function buildCallNode(
   store: Store,
-  symbolId: number,
-  nodeId: number,
-  depth: number,
-  visited: Set<number>,
+  rootSymbolId: number,
+  rootNodeId: number,
+  maxDepth: number,
+  _visited: Set<number>,
   edgeTypesUsed: Set<string>,
 ): CallGraphNode {
-  const symbol = store.getSymbolById(symbolId);
-  const file = symbol ? store.getFileById(symbol.file_id) : undefined;
-
-  if (!symbol) {
-    return { symbol_id: '', name: '?', kind: 'unknown', file: '', line: null };
+  // Phase 1: BFS to collect all reachable node IDs + edges
+  interface NodeInfo {
+    nodeId: number;
+    symbolRefId: number;
+    outgoing: Array<{ targetNodeId: number; edgeType: string }>;
+    incoming: Array<{ sourceNodeId: number; edgeType: string }>;
   }
 
-  const node = makeNode(symbol, file?.path ?? '', symbol.line_start, [], []);
-  visited.add(nodeId);
+  const nodeInfoMap = new Map<number, NodeInfo>();
+  const visited = new Set<number>();
+  let frontier = [rootNodeId];
+  visited.add(rootNodeId);
+  nodeInfoMap.set(rootNodeId, { nodeId: rootNodeId, symbolRefId: rootSymbolId, outgoing: [], incoming: [] });
 
-  if (depth <= 0) {
-    delete node.calls;
-    delete node.called_by;
+  for (let d = 0; d < maxDepth; d++) {
+    if (frontier.length === 0) break;
+
+    // Batch fetch all edges for this frontier
+    const batchEdges = store.getEdgesForNodesBatch(frontier);
+
+    // Collect new neighbor node IDs
+    const newNeighbors = new Set<number>();
+    for (const edge of batchEdges) {
+      if (!CALL_EDGE_TYPES.has(edge.edge_type_name)) continue;
+      edgeTypesUsed.add(edge.edge_type_name);
+
+      const pivotInfo = nodeInfoMap.get(edge.pivot_node_id);
+      if (!pivotInfo) continue;
+
+      // Outgoing: pivot is source, target is the callee
+      if (edge.source_node_id === edge.pivot_node_id && !visited.has(edge.target_node_id)) {
+        pivotInfo.outgoing.push({ targetNodeId: edge.target_node_id, edgeType: edge.edge_type_name });
+        newNeighbors.add(edge.target_node_id);
+      }
+
+      // Incoming: pivot is target, source is the caller
+      if (edge.target_node_id === edge.pivot_node_id && !visited.has(edge.source_node_id)) {
+        pivotInfo.incoming.push({ sourceNodeId: edge.source_node_id, edgeType: edge.edge_type_name });
+        newNeighbors.add(edge.source_node_id);
+      }
+    }
+
+    if (newNeighbors.size === 0) break;
+
+    // Batch resolve node refs to get symbolRefIds
+    const newIds = [...newNeighbors];
+    const refs = store.getNodeRefsBatch(newIds);
+    frontier = [];
+
+    for (const nid of newIds) {
+      const ref = refs.get(nid);
+      if (!ref || ref.nodeType !== 'symbol') continue;
+      visited.add(nid);
+      nodeInfoMap.set(nid, { nodeId: nid, symbolRefId: ref.refId, outgoing: [], incoming: [] });
+      frontier.push(nid);
+    }
+  }
+
+  // Phase 2: Batch fetch all symbols and files
+  const allSymbolIds = [...new Set([...nodeInfoMap.values()].map((n) => n.symbolRefId))];
+  const symbolMap = allSymbolIds.length > 0 ? store.getSymbolsByIds(allSymbolIds) : new Map();
+  const allFileIds = [...new Set([...symbolMap.values()].map((s) => s.file_id))];
+  const fileMap = allFileIds.length > 0 ? store.getFilesByIds(allFileIds) : new Map();
+
+  // Phase 3: Build tree from pre-fetched data
+  const builtNodes = new Map<number, CallGraphNode>();
+
+  function buildFromInfo(nodeId: number, depth: number, buildVisited: Set<number>): CallGraphNode {
+    const info = nodeInfoMap.get(nodeId);
+    if (!info) return { symbol_id: '', name: '?', kind: 'unknown', file: '', line: null };
+
+    const sym = symbolMap.get(info.symbolRefId);
+    if (!sym) return { symbol_id: '', name: '?', kind: 'unknown', file: '', line: null };
+
+    const filePath = fileMap.get(sym.file_id)?.path ?? '';
+    const node = makeNode(sym, filePath, sym.line_start, [], []);
+    buildVisited.add(nodeId);
+
+    if (depth <= 0) {
+      delete node.calls;
+      delete node.called_by;
+      return node;
+    }
+
+    for (const { targetNodeId } of info.outgoing) {
+      if (buildVisited.has(targetNodeId)) continue;
+      if (!nodeInfoMap.has(targetNodeId)) continue;
+      node.calls!.push(buildFromInfo(targetNodeId, depth - 1, new Set(buildVisited)));
+    }
+
+    for (const { sourceNodeId } of info.incoming) {
+      if (buildVisited.has(sourceNodeId)) continue;
+      if (!nodeInfoMap.has(sourceNodeId)) continue;
+      node.called_by!.push(buildFromInfo(sourceNodeId, depth - 1, new Set(buildVisited)));
+    }
+
+    if (node.calls!.length === 0) delete node.calls;
+    if (node.called_by!.length === 0) delete node.called_by;
     return node;
   }
 
-  // Outgoing: what this symbol calls
-  const outgoing = store.getOutgoingEdges(nodeId);
-  for (const edge of outgoing) {
-    if (!CALL_EDGE_TYPES.has(edge.edge_type_name)) continue;
-    edgeTypesUsed.add(edge.edge_type_name);
-    if (visited.has(edge.target_node_id)) continue;
-
-    const ref = store.getNodeRef(edge.target_node_id);
-    if (!ref || ref.nodeType !== 'symbol') continue;
-
-    const child = buildCallNode(store, ref.refId, edge.target_node_id, depth - 1, new Set(visited), edgeTypesUsed);
-    node.calls!.push(child);
-  }
-
-  // Incoming: who calls this symbol
-  const incoming = store.getIncomingEdges(nodeId);
-  for (const edge of incoming) {
-    if (!CALL_EDGE_TYPES.has(edge.edge_type_name)) continue;
-    edgeTypesUsed.add(edge.edge_type_name);
-    if (visited.has(edge.source_node_id)) continue;
-
-    const ref = store.getNodeRef(edge.source_node_id);
-    if (!ref || ref.nodeType !== 'symbol') continue;
-
-    const caller = buildCallNode(store, ref.refId, edge.source_node_id, depth - 1, new Set(visited), edgeTypesUsed);
-    node.called_by!.push(caller);
-  }
-
-  // Prune empty arrays
-  if (node.calls!.length === 0) delete node.calls;
-  if (node.called_by!.length === 0) delete node.called_by;
-
-  return node;
+  return buildFromInfo(rootNodeId, maxDepth, new Set());
 }
 
 function makeNode(
