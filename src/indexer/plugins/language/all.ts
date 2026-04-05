@@ -45,6 +45,30 @@ import { ProtobufLanguagePlugin } from './protobuf/index.js';
 import { YamlLanguagePlugin } from './yaml-lang/index.js';
 import { JsonLanguagePlugin } from './json-lang/index.js';
 import { TomlLanguagePlugin } from './toml/index.js';
+import { ZigLanguagePlugin } from './zig/index.js';
+import { OcamlLanguagePlugin } from './ocaml/index.js';
+import { ClojureLanguagePlugin } from './clojure/index.js';
+import { FSharpLanguagePlugin } from './fsharp/index.js';
+import { ElmLanguagePlugin } from './elm/index.js';
+import { CudaLanguagePlugin } from './cuda/index.js';
+import { CobolLanguagePlugin } from './cobol/index.js';
+import { VerilogLanguagePlugin } from './verilog/index.js';
+import { GlslLanguagePlugin } from './glsl/index.js';
+import { MesonLanguagePlugin } from './meson/index.js';
+import { VimScriptLanguagePlugin } from './vimscript/index.js';
+import { CommonLispLanguagePlugin } from './common-lisp/index.js';
+import { ElispLanguagePlugin } from './elisp/index.js';
+import { DockerfileLanguagePlugin } from './dockerfile/index.js';
+import { MakefileLanguagePlugin } from './makefile/index.js';
+import { CMakeLanguagePlugin } from './cmake/index.js';
+import { IniLanguagePlugin } from './ini/index.js';
+import { SvelteLanguagePlugin } from './svelte/index.js';
+import { MarkdownLanguagePlugin } from './markdown/index.js';
+import { MatlabLanguagePlugin } from './matlab/index.js';
+import { LeanLanguagePlugin } from './lean/index.js';
+import { FormLanguagePlugin } from './form/index.js';
+import { MagmaLanguagePlugin } from './magma/index.js';
+import { WolframLanguagePlugin } from './wolfram/index.js';
 
 export function createAllLanguagePlugins(): LanguagePlugin[] {
   return [
@@ -94,5 +118,29 @@ export function createAllLanguagePlugins(): LanguagePlugin[] {
     new YamlLanguagePlugin(),
     new JsonLanguagePlugin(),
     new TomlLanguagePlugin(),
+    new ZigLanguagePlugin(),
+    new OcamlLanguagePlugin(),
+    new ClojureLanguagePlugin(),
+    new FSharpLanguagePlugin(),
+    new ElmLanguagePlugin(),
+    new CudaLanguagePlugin(),
+    new CobolLanguagePlugin(),
+    new VerilogLanguagePlugin(),
+    new GlslLanguagePlugin(),
+    new MesonLanguagePlugin(),
+    new VimScriptLanguagePlugin(),
+    new CommonLispLanguagePlugin(),
+    new ElispLanguagePlugin(),
+    new DockerfileLanguagePlugin(),
+    new MakefileLanguagePlugin(),
+    new CMakeLanguagePlugin(),
+    new IniLanguagePlugin(),
+    new SvelteLanguagePlugin(),
+    new MarkdownLanguagePlugin(),
+    new MatlabLanguagePlugin(),
+    new LeanLanguagePlugin(),
+    new FormLanguagePlugin(),
+    new MagmaLanguagePlugin(),
+    new WolframLanguagePlugin(),
   ];
 }
