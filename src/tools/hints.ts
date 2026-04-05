@@ -317,6 +317,38 @@ const hintGenerators: Record<string, HintGenerator> = {
     }
     return hints;
   },
+
+  batch(r) {
+    const hints: Hint[] = [];
+    const results = arr(dig(r, 'batch_results'));
+    if (results.length > 0) {
+      hints.push({ tool: 'get_session_stats', args: {}, why: 'Check token savings from this batch vs individual calls' });
+    }
+    return hints;
+  },
+
+  get_optimization_report(r) {
+    const hints: Hint[] = [];
+    const opts = arr(dig(r, 'optimizations'));
+    const hasRepeated = opts.some((o) => str((o as Record<string, unknown>)?.rule) === 'repeated-file-read');
+    if (hasRepeated) {
+      hints.push({ tool: 'get_outline', args: { path: '<frequently_read_file>' }, why: 'Use get_outline + get_symbol instead of repeated full-file reads' });
+    }
+    hints.push({ tool: 'get_real_savings', args: { period: 'today' }, why: 'See actual per-file token savings breakdown' });
+    return hints;
+  },
+
+  get_real_savings(r) {
+    const hints: Hint[] = [];
+    hints.push({ tool: 'get_session_stats', args: {}, why: 'See per-tool call counts and savings for this session' });
+    return hints;
+  },
+
+  get_session_stats(r) {
+    const hints: Hint[] = [];
+    hints.push({ tool: 'get_optimization_report', args: { period: 'today' }, why: 'Find specific waste patterns to fix' });
+    return hints;
+  },
 };
 
 // ---------------------------------------------------------------------------
