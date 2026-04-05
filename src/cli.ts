@@ -3,6 +3,10 @@
 import { Command } from 'commander';
 import path from 'node:path';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require('../package.json');
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { initializeDatabase } from './db/schema.js';
@@ -94,7 +98,7 @@ const program = new Command();
 program
   .name('trace-mcp')
   .description('Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt')
-  .version('0.1.0');
+  .version(PKG_VERSION);
 
 program
   .command('serve')

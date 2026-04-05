@@ -185,8 +185,7 @@ CREATE INDEX IF NOT EXISTS idx_symbols_fqn  ON symbols(fqn);
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_nodes_type   ON nodes(node_type);
 CREATE INDEX IF NOT EXISTS idx_orm_models_name ON orm_models(name);
-CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace);
-CREATE INDEX IF NOT EXISTS idx_edges_cross_ws ON edges(is_cross_ws) WHERE is_cross_ws = 1;
+-- idx_files_workspace and idx_edges_cross_ws created in migration v9
 
 -- ============================================================
 -- FTS5 FULL-TEXT SEARCH
@@ -688,7 +687,16 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     `);
   },
   9: (db) => {
-    // v9: Workspace indices for cross-workspace queries
+    // v9: Workspace columns + indices for cross-workspace queries
+    // Add columns first (they're in the DDL for new databases, but existing ones need ALTER)
+    const filesCols = db.pragma('table_info(files)') as { name: string }[];
+    if (!filesCols.some(c => c.name === 'workspace')) {
+      db.exec(`ALTER TABLE files ADD COLUMN workspace TEXT`);
+    }
+    const edgesCols = db.pragma('table_info(edges)') as { name: string }[];
+    if (!edgesCols.some(c => c.name === 'is_cross_ws')) {
+      db.exec(`ALTER TABLE edges ADD COLUMN is_cross_ws INTEGER NOT NULL DEFAULT 0`);
+    }
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace);
       CREATE INDEX IF NOT EXISTS idx_edges_cross_ws ON edges(is_cross_ws) WHERE is_cross_ws = 1;
@@ -969,6 +977,14 @@ function seedDatabase(db: Database.Database): void {
   for (const et of SEED_EDGE_TYPES) {
     insertEdgeType.run(et.name, et.category, et.description);
   }
+
+  // Indexes that depend on columns added in migrations (v9) —
+  // for fresh databases the columns are in the DDL, but the indexes
+  // were removed from DDL to avoid errors on existing databases.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace);
+    CREATE INDEX IF NOT EXISTS idx_edges_cross_ws ON edges(is_cross_ws) WHERE is_cross_ws = 1;
+  `);
 }
 
 export function getTableNames(db: Database.Database): string[] {

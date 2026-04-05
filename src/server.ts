@@ -1,4 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require('../package.json');
 import { z } from 'zod';
 import type { Store } from './db/store.js';
 import type { PluginRegistry } from './plugin-api/registry.js';
@@ -101,7 +105,7 @@ export function createServer(
   const detectedFrameworks = [...frameworkNames].join(', ') || 'none';
 
   const server = new McpServer(
-    { name: 'trace-mcp', version: '0.1.0' },
+    { name: 'trace-mcp', version: PKG_VERSION },
     {
       instructions: [
         `trace-mcp is a framework-aware code intelligence server for this project. Detected frameworks: ${detectedFrameworks}.`,
