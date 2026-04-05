@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.10](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.9...v1.0.10) (2026-04-05)
+
+
+### Bug Fixes
+
+* **db:** add missing workspace/is_cross_ws columns in migration v9 ([8b263bd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b263bd131940566f739187a0187df10ddcb8288))
+
 ## [1.0.9](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.8...v1.0.9) (2026-04-05)
 
 
