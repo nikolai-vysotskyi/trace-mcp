@@ -215,13 +215,15 @@ export function detectExistingDb(root: string, globalDbPath?: string): { path: s
 }
 
 export function detectGuardHook(): { hasGuardHook: boolean; guardHookVersion: string | null } {
-  const hookPath = path.join(HOME, '.claude', 'hooks', 'trace-mcp-guard.sh');
-  const clawHookPath = path.join(HOME, '.claw', 'hooks', 'trace-mcp-guard.sh');
+  const ext = process.platform === 'win32' ? '.cmd' : '.sh';
+  const hookPath = path.join(HOME, '.claude', 'hooks', `trace-mcp-guard${ext}`);
+  const clawHookPath = path.join(HOME, '.claw', 'hooks', `trace-mcp-guard${ext}`);
   const existingPath = fs.existsSync(hookPath) ? hookPath : fs.existsSync(clawHookPath) ? clawHookPath : null;
   if (!existingPath) return { hasGuardHook: false, guardHookVersion: null };
 
   const content = fs.readFileSync(existingPath, 'utf-8');
-  const match = content.match(/^# trace-mcp-guard v(.+)$/m);
+  // Match both bash (# comment) and cmd (REM comment) version markers
+  const match = content.match(/^(?:#|REM) trace-mcp-guard v(.+)$/m);
   return {
     hasGuardHook: true,
     guardHookVersion: match ? match[1] : null,
