@@ -1,6 +1,6 @@
 # Tools reference
 
-trace-mcp exposes 38 MCP tools (33 standard + 5 AI-powered) and 2 resources.
+trace-mcp exposes 44+ MCP tools and 2 resources.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
@@ -31,6 +31,7 @@ Tools are registered dynamically based on detected frameworks — you only see t
 |---|---|---|
 | `get_component_tree` | Build component render tree from a root file | Vue, Nuxt, Inertia |
 | `get_change_impact` | Reverse dependency graph — what depends on this file or symbol | Always |
+| `get_task_context` | **Graph-aware context engine** — describe a dev task, get the optimal code subgraph (execution paths, tests, types) adapted to task type (bugfix/feature/refactor) | Always |
 | `get_feature_context` | NLP-driven context assembly — describe a feature, get relevant code within a token budget | Always |
 | `get_request_flow` | Trace request flow for a URL+method: route → middleware → controller → service | Express, NestJS, Laravel, FastAPI, Flask, DRF, Spring, Rails, Fastify, Hono, tRPC |
 | `get_middleware_chain` | Trace middleware chain for a route URL | Express, NestJS, FastAPI, Flask |
@@ -69,6 +70,41 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_untested_exports` | Find exported public symbols with no matching test file (test coverage gaps) |
 | `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
 
+## Topology & federation
+
+Enabled by default (`topology.enabled: true`). See [Configuration](configuration.md#topology--federation).
+
+### Service topology
+
+| Tool | What it does |
+|---|---|
+| `get_service_map` | Map of all services, their APIs, and inter-service dependencies (auto-detects from Docker Compose) |
+| `get_cross_service_impact` | Impact of changing an endpoint or event — which services are affected |
+| `get_api_contract` | API contract (OpenAPI/gRPC/GraphQL) for a service |
+| `get_service_deps` | External service dependencies: outgoing and incoming |
+| `get_contract_drift` | Mismatches between API spec and implementation |
+
+### Multi-repo federation
+
+| Tool | What it does |
+|---|---|
+| `get_federation_graph` | All federated repos, cross-repo connections, and stats |
+| `get_federation_impact` | Cross-repo impact: find all client code across repos that would break if an endpoint changes. Resolves to symbol level when per-repo indexes exist |
+| `get_federation_clients` | Find all client calls across federated repos that call a specific endpoint |
+| `federation_add_repo` | Add a repository to the federation (discovers services, parses contracts, scans for client calls) |
+| `federation_sync` | Re-scan all federated repos: contracts, client calls, and re-link |
+
+## CI/PR reports (CLI)
+
+Not an MCP tool — a CLI command for CI pipelines:
+
+```bash
+trace-mcp ci-report --base main --head HEAD --format markdown --output report.md
+trace-mcp ci-report --base main --head HEAD --fail-on high
+```
+
+Generates a change impact report with blast radius, risk scores, test coverage gaps, architecture violations, and dead code. See [README](../README.md#cipr-change-impact-reports) for GitHub Action setup.
+
 ## AI-powered (optional)
 
 Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-configuration).
@@ -98,10 +134,16 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 |---|---|
 | "Add a new field to the User model" | `get_change_impact` — shows all dependents: model, migration, request validation, Vue props |
 | "What components does this page use?" | `get_component_tree` — full render tree with props/slots |
-| "Refactor the auth flow" | `get_feature_context("authentication")` — assembles relevant code in one call |
+| "Refactor the auth flow" | `get_task_context("refactor the auth flow")` — intent-aware context with full execution paths |
+| "Quick keyword context" | `get_feature_context("authentication")` — assembles relevant code in one call |
 | "Does the Vue page match the controller response?" | Prop mismatch detection flags drift automatically at index time |
 | "What's the DB schema?" | `get_schema` — reconstructed from migrations, no DB needed |
 | "Trace a request end-to-end" | `get_request_flow("/api/users", "GET")` — full chain |
 | "What NestJS modules does this depend on?" | `get_module_graph` — full dependency tree |
 | "Find untested code" | `get_untested_exports` + `self_audit` — flag coverage gaps |
 | "Explain this complex service" | `explain_symbol` — AI-generated explanation with context |
+| "What repos call this endpoint?" | `get_federation_clients("/api/users")` — all client calls across repos |
+| "Will this API change break anything?" | `get_federation_impact` — cross-repo impact with symbol resolution |
+| "Show me all service connections" | `get_federation_graph` — repos, edges, stats |
+| "Starting work on a task" | `get_task_context("fix the login bug")` — full execution context adapted to bugfix/feature/refactor |
+| "PR impact report" | `trace-mcp ci-report --base main --head HEAD` — blast radius, risk score, test gaps |

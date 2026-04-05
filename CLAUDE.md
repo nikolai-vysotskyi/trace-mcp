@@ -2,7 +2,7 @@
 
 ## What this project is
 
-trace-mcp is a framework-aware code intelligence MCP server. It indexes source code into a dependency graph with full-text search, understanding 48+ frameworks across 44 languages. It exposes MCP tools for navigation, impact analysis, and framework-specific queries.
+trace-mcp is a framework-aware code intelligence MCP server. It indexes source code into a dependency graph with full-text search, understanding 48+ frameworks across 68 languages. It exposes MCP tools for navigation, impact analysis, and framework-specific queries.
 
 ## Build & Test
 

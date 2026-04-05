@@ -33,6 +33,7 @@ Test files live alongside source or in `tests/`:
 ```
 tests/
 ├── ai/              # AI pipeline tests
+├── ci/              # CI report generator and formatter tests
 ├── frameworks/      # Framework plugin tests (per-framework)
 ├── tools/           # MCP tool integration tests
 ├── integration/     # End-to-end indexing tests

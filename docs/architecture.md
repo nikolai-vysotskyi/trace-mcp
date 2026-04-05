@@ -33,9 +33,18 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
 ┌──────────────────────────────────────────┐
-│  SQLite (WAL mode) + FTS5               │
+│  Per-project SQLite (WAL mode) + FTS5   │
 │  nodes · edges · symbols · routes       │
 │  + optional: embeddings · summaries     │
+└────────────────────┬─────────────────────┘
+                     │
+                     ▼
+┌──────────────────────────────────────────┐
+│  Federation (auto, post-index)          │
+│  Topology DB (~/.trace-mcp/topology.db) │
+│  Services · Contracts · Endpoints       │
+│  Client calls → endpoint matching       │
+│  Cross-repo impact edges                │
 └──────────────────────────────────────────┘
 ```
 
@@ -51,12 +60,21 @@ All state is centralized in `~/.trace-mcp/`:
 ~/.trace-mcp/
   .config.json              # global config + per-project settings
   registry.json             # project registry (all added projects)
+  topology.db               # cross-service topology + federation graph
   index/
     my-app-a1b2c3d4e5f6.db  # per-project SQLite databases
     api-server-b2c3d4e5.db
 ```
 
 Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself.
+
+The **topology database** (`topology.db`) is shared across all projects. It stores:
+- **Services** — detected from Docker Compose or registered manually
+- **API contracts** — parsed OpenAPI, GraphQL SDL, Protobuf specs
+- **Endpoints** — normalized API endpoints extracted from contracts
+- **Client calls** — HTTP/gRPC/GraphQL calls discovered in code
+- **Cross-service edges** — links between client calls and endpoints
+- **Federated repos** — repos registered for cross-repo analysis
 
 ---
 
@@ -151,9 +169,18 @@ Three module resolvers handle cross-file imports:
 src/
 ├── ai/                     # Embeddings, reranker, summarization, vector store, inference caching
 ├── db/                     # SQLite schema, store, FTS5
+├── federation/             # Multi-repo graph federation
+│   ├── manager.ts          #   Add/remove/sync repos, cross-repo impact analysis
+│   └── scanner.ts          #   HTTP/gRPC/GraphQL client call scanner
+├── topology/               # Cross-service topology layer
+│   ├── topology-db.ts      #   Topology + federation SQLite store
+│   ├── contract-parser.ts  #   OpenAPI, GraphQL SDL, Protobuf parsers
+│   └── service-detector.ts #   Service discovery (Docker Compose, workspace)
 ├── indexer/
 │   ├── plugins/
-│   │   ├── language/       # PHP, TypeScript, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS
+│   │   ├── language/       # 68 languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
+│   │   │                   #   C/C++/C#, Swift, Dart, Scala, Zig, OCaml, Clojure, F#, Elm,
+│   │   │                   #   CUDA, COBOL, Verilog, GLSL, Svelte, MATLAB, Lean, Wolfram, …
 │   │   └── integration/    # 48 plugins organized by category:
 │   │       ├── framework/  #   Laravel, Django, Rails, Spring, NestJS, Express, FastAPI,
 │   │       │               #   Flask, Hono, Fastify, Nuxt, Next.js
@@ -170,7 +197,7 @@ src/
 │   ├── pipeline.ts         # Two-pass indexing engine
 │   ├── watcher.ts          # File change watcher
 │   └── monorepo.ts         # Monorepo workspace detection
-├── tools/                  # 38 MCP tool implementations
+├── tools/                  # 43+ MCP tool implementations
 ├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
 ├── plugin-api/             # Plugin registry, loader, executor, test harness
 ├── utils/                  # Env parser, hasher, security, source reader, token counter
@@ -178,5 +205,6 @@ src/
 ├── config.ts               # Cosmiconfig + Zod validation
 ├── errors.ts               # Error types (neverthrow)
 ├── logger.ts               # Pino logger setup
-└── cli.ts                  # Commander CLI (serve, serve-http, index)
+├── cli.ts                  # Commander CLI (serve, serve-http, index, federation)
+└── cli-federation.ts       # Federation CLI subcommands
 ```
