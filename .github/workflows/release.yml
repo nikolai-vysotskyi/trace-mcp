@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -19,6 +20,18 @@ jobs:
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger CI on release PR branch
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRS_OUTPUT: ${{ steps.release.outputs.prs }}
+        run: |
+          PR_BRANCH=$(echo "$PRS_OUTPUT" | jq -r '.[0].headBranchName // empty')
+          if [ -n "$PR_BRANCH" ]; then
+            echo "Triggering CI on branch: $PR_BRANCH"
+            gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH"
+          fi
 
   publish:
     needs: release-please
