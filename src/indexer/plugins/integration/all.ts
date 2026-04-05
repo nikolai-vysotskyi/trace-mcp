@@ -23,6 +23,7 @@ import { SequelizePlugin } from './orm/sequelize/index.js';
 import { MongoosePlugin } from './orm/mongoose/index.js';
 import { SQLAlchemyPlugin } from './orm/sqlalchemy/index.js';
 import { DrizzlePlugin } from './orm/drizzle/index.js';
+import { RawSqlPlugin } from './orm/raw-sql/index.js';
 
 // --- view ---
 import { ReactPlugin } from './view/react/index.js';
@@ -42,6 +43,7 @@ import { SveltePlugin } from './view/svelte/index.js';
 import { GraphQLPlugin } from './api/graphql/index.js';
 import { TrpcPlugin } from './api/trpc/index.js';
 import { DRFPlugin } from './api/drf/index.js';
+import { McpSdkPlugin } from './api/mcp-sdk/index.js';
 
 // --- validation ---
 import { ZodPlugin } from './validation/zod/index.js';
@@ -60,6 +62,14 @@ import { TestingPlugin } from './testing/testing/index.js';
 import { CeleryPlugin } from './tooling/celery/index.js';
 import { N8nPlugin } from './tooling/n8n/index.js';
 import { DataFetchingPlugin } from './tooling/data-fetching/index.js';
+import { CommanderPlugin } from './tooling/commander/index.js';
+import { TreeSitterPlugin } from './tooling/tree-sitter/index.js';
+import { BuildToolsPlugin } from './tooling/build-tools/index.js';
+import { GithubActionsPlugin } from './tooling/github-actions/index.js';
+import { PinoPlugin } from './tooling/pino/index.js';
+import { CosmiconfigPlugin } from './tooling/cosmiconfig/index.js';
+import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
+import { ClackPlugin } from './tooling/clack/index.js';
 
 export function createAllIntegrationPlugins(): FrameworkPlugin[] {
   return [
@@ -85,6 +95,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new MongoosePlugin(),
     new SQLAlchemyPlugin(),
     new DrizzlePlugin(),
+    new RawSqlPlugin(),
     // view
     new ReactPlugin(),
     new VueFrameworkPlugin(),
@@ -102,6 +113,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new GraphQLPlugin(),
     new TrpcPlugin(),
     new DRFPlugin(),
+    new McpSdkPlugin(),
     // validation
     new ZodPlugin(),
     new PydanticPlugin(),
@@ -115,5 +127,13 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new CeleryPlugin(),
     new N8nPlugin(),
     new DataFetchingPlugin(),
+    new CommanderPlugin(),
+    new TreeSitterPlugin(),
+    new BuildToolsPlugin(),
+    new GithubActionsPlugin(),
+    new PinoPlugin(),
+    new CosmiconfigPlugin(),
+    new NeverthrowPlugin(),
+    new ClackPlugin(),
   ];
 }

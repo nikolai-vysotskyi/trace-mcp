@@ -1,0 +1,6 @@
+{
+  "name": "neverthrow-fixture",
+  "dependencies": {
+    "neverthrow": "^8.0.0"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "commander-fixture",
+  "dependencies": {
+    "commander": "^12.0.0"
+  }
+}

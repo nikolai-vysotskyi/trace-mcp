@@ -1,0 +1,6 @@
+{
+  "name": "mcp-server-fixture",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
