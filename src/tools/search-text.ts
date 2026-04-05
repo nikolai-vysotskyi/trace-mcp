@@ -81,7 +81,7 @@ export function searchText(
 
   // Apply glob filter in-memory (cheaper than SQL LIKE for globs)
   if (filePattern) {
-    const isMatch = picomatch(filePattern, { matchBase: true });
+    const isMatch = picomatch(filePattern, { dot: true });
     files = files.filter((f) => isMatch(f.path));
   }
 
