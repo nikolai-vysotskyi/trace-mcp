@@ -45,3 +45,4 @@ export interface InitReport {
 }
 
 export const GUARD_HOOK_VERSION = '0.1.0';
+export const REINDEX_HOOK_VERSION = '0.1.0';
