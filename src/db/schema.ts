@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 14;
 
 const DDL = `
 -- ============================================================
@@ -240,6 +240,73 @@ CREATE TABLE IF NOT EXISTS inference_cache (
     ttl_days    INTEGER DEFAULT 90
 );
 CREATE INDEX IF NOT EXISTS idx_inference_cache_model ON inference_cache(model);
+
+-- ============================================================
+-- GRAPH SNAPSHOTS (Time Machine)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS graph_snapshots (
+    id              INTEGER PRIMARY KEY,
+    commit_hash     TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    snapshot_type   TEXT NOT NULL,
+    file_path       TEXT,
+    data            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gs_type ON graph_snapshots(snapshot_type);
+CREATE INDEX IF NOT EXISTS idx_gs_commit ON graph_snapshots(commit_hash);
+CREATE INDEX IF NOT EXISTS idx_gs_file ON graph_snapshots(file_path);
+CREATE INDEX IF NOT EXISTS idx_gs_created ON graph_snapshots(created_at);
+
+-- ============================================================
+-- TRIGRAM INDEX (fuzzy search)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS symbol_trigrams (
+    symbol_id INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+    trigram   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trigrams_tri ON symbol_trigrams(trigram);
+CREATE INDEX IF NOT EXISTS idx_trigrams_sym ON symbol_trigrams(symbol_id);
+
+-- ============================================================
+-- CO-CHANGE ANALYSIS (git temporal coupling)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS co_changes (
+    file_a TEXT NOT NULL,
+    file_b TEXT NOT NULL,
+    co_change_count INTEGER NOT NULL,
+    total_changes_a INTEGER NOT NULL,
+    total_changes_b INTEGER NOT NULL,
+    confidence REAL NOT NULL,
+    last_co_change TEXT,
+    window_days INTEGER NOT NULL DEFAULT 180,
+    PRIMARY KEY (file_a, file_b)
+);
+CREATE INDEX IF NOT EXISTS idx_co_changes_a ON co_changes(file_a);
+CREATE INDEX IF NOT EXISTS idx_co_changes_b ON co_changes(file_b);
+
+-- ============================================================
+-- COMMUNITY DETECTION (Leiden algorithm)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS communities (
+    id INTEGER PRIMARY KEY,
+    label TEXT,
+    file_count INTEGER,
+    cohesion REAL,
+    internal_edges INTEGER,
+    external_edges INTEGER,
+    computed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS community_members (
+    community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    file_path TEXT NOT NULL,
+    PRIMARY KEY (community_id, file_path)
+);
+CREATE INDEX IF NOT EXISTS idx_cm_community ON community_members(community_id);
 
 -- ============================================================
 -- SCHEMA VERSION
@@ -758,6 +825,64 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       CREATE INDEX IF NOT EXISTS idx_ra_node ON runtime_aggregates(node_id);
       CREATE INDEX IF NOT EXISTS idx_ra_bucket ON runtime_aggregates(bucket);
       CREATE INDEX IF NOT EXISTS idx_rs_trace_parent ON runtime_spans(trace_id, parent_span_id);
+    `);
+  },
+  13: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS graph_snapshots (
+          id              INTEGER PRIMARY KEY,
+          commit_hash     TEXT,
+          created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+          snapshot_type   TEXT NOT NULL,
+          file_path       TEXT,
+          data            TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_gs_type ON graph_snapshots(snapshot_type);
+      CREATE INDEX IF NOT EXISTS idx_gs_commit ON graph_snapshots(commit_hash);
+      CREATE INDEX IF NOT EXISTS idx_gs_file ON graph_snapshots(file_path);
+      CREATE INDEX IF NOT EXISTS idx_gs_created ON graph_snapshots(created_at);
+    `);
+  },
+  14: (db) => {
+    // v14: Trigram index for fuzzy search
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS symbol_trigrams (
+          symbol_id INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+          trigram   TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_trigrams_tri ON symbol_trigrams(trigram);
+      CREATE INDEX IF NOT EXISTS idx_trigrams_sym ON symbol_trigrams(symbol_id);
+
+      CREATE TABLE IF NOT EXISTS co_changes (
+          file_a TEXT NOT NULL,
+          file_b TEXT NOT NULL,
+          co_change_count INTEGER NOT NULL,
+          total_changes_a INTEGER NOT NULL,
+          total_changes_b INTEGER NOT NULL,
+          confidence REAL NOT NULL,
+          last_co_change TEXT,
+          window_days INTEGER NOT NULL DEFAULT 180,
+          PRIMARY KEY (file_a, file_b)
+      );
+      CREATE INDEX IF NOT EXISTS idx_co_changes_a ON co_changes(file_a);
+      CREATE INDEX IF NOT EXISTS idx_co_changes_b ON co_changes(file_b);
+
+      CREATE TABLE IF NOT EXISTS communities (
+          id INTEGER PRIMARY KEY,
+          label TEXT,
+          file_count INTEGER,
+          cohesion REAL,
+          internal_edges INTEGER,
+          external_edges INTEGER,
+          computed_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS community_members (
+          community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+          file_path TEXT NOT NULL,
+          PRIMARY KEY (community_id, file_path)
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_community ON community_members(community_id);
     `);
   },
 };

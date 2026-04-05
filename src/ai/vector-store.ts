@@ -29,30 +29,39 @@ export class BlobVectorStore implements VectorStore {
   }
 
   search(query: number[], limit: number): { id: number; score: number }[] {
-    const rows = this.db.prepare(
-      'SELECT symbol_id, embedding FROM symbol_embeddings',
-    ).all() as { symbol_id: number; embedding: Buffer }[];
-
-    if (rows.length === 0) return [];
-
     const queryArr = new Float32Array(query);
     const queryNorm = vecNorm(queryArr);
     if (queryNorm === 0) return [];
 
-    const scored: { id: number; score: number }[] = [];
+    // Use iterate() instead of all() to avoid loading every embedding into memory at once.
+    // Maintain a min-heap of top-K results so we only keep `limit` items in memory.
+    const topK: { id: number; score: number }[] = [];
+    let minScore = -Infinity;
 
-    for (const row of rows) {
+    const stmt = this.db.prepare('SELECT symbol_id, embedding FROM symbol_embeddings');
+    for (const row of stmt.iterate() as Iterable<{ symbol_id: number; embedding: Buffer }>) {
       const embedding = new Float32Array(
         row.embedding.buffer,
         row.embedding.byteOffset,
         row.embedding.byteLength / 4,
       );
       const sim = cosineSimilarity(queryArr, embedding, queryNorm);
-      scored.push({ id: row.symbol_id, score: sim });
+
+      if (topK.length < limit) {
+        topK.push({ id: row.symbol_id, score: sim });
+        if (topK.length === limit) {
+          topK.sort((a, b) => a.score - b.score);
+          minScore = topK[0].score;
+        }
+      } else if (sim > minScore) {
+        topK[0] = { id: row.symbol_id, score: sim };
+        topK.sort((a, b) => a.score - b.score);
+        minScore = topK[0].score;
+      }
     }
 
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit);
+    topK.sort((a, b) => b.score - a.score);
+    return topK;
   }
 
   delete(id: number): void {

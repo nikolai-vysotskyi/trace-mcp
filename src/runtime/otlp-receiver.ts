@@ -68,12 +68,16 @@ export class OtlpReceiver {
 
     const chunks: Buffer[] = [];
     let size = 0;
+    let destroyed = false;
 
     req.on('data', (chunk: Buffer) => {
+      if (destroyed) return;
       size += chunk.length;
       if (size > this.options.maxBodyBytes) {
+        destroyed = true;
         res.writeHead(413, { 'Content-Type': 'application/json' });
         res.end('{"error":"Request body too large"}');
+        req.removeAllListeners('data');
         req.destroy();
         return;
       }

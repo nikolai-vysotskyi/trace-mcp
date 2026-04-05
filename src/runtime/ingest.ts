@@ -22,6 +22,10 @@ export class SpanIngester {
   private insertSpan: Database.Statement;
   private upsertService: Database.Statement;
 
+  private pruneSpans: Database.Statement;
+  private pruneAggs: Database.Statement;
+  private pruneOrphanTraces: Database.Statement;
+
   constructor(
     private db: Database.Database,
     private pruneInterval: number = 100,
@@ -44,6 +48,12 @@ export class SpanIngester {
       VALUES (?, ?, datetime('now'), datetime('now'), ?)
       ON CONFLICT(name) DO UPDATE SET last_seen_at = datetime('now')
     `);
+
+    this.pruneSpans = db.prepare('DELETE FROM runtime_spans WHERE started_at < ?');
+    this.pruneAggs = db.prepare('DELETE FROM runtime_aggregates WHERE bucket < ?');
+    this.pruneOrphanTraces = db.prepare(
+      'DELETE FROM runtime_traces WHERE id NOT IN (SELECT DISTINCT trace_id FROM runtime_spans)',
+    );
   }
 
   ingest(request: OtlpExportRequest): IngestResult {
@@ -122,18 +132,11 @@ export class SpanIngester {
     const spanCutoff = new Date(Date.now() - maxSpanAgeDays * 86_400_000).toISOString();
     const aggCutoff = new Date(Date.now() - maxAggregateAgeDays * 86_400_000).toISOString();
 
-    const spansDeleted = this.db.prepare(
-      'DELETE FROM runtime_spans WHERE started_at < ?',
-    ).run(spanCutoff).changes;
-
-    const aggsDeleted = this.db.prepare(
-      'DELETE FROM runtime_aggregates WHERE bucket < ?',
-    ).run(aggCutoff).changes;
+    const spansDeleted = this.pruneSpans.run(spanCutoff).changes;
+    const aggsDeleted = this.pruneAggs.run(aggCutoff).changes;
 
     // Clean orphaned traces (no spans left)
-    const tracesDeleted = this.db.prepare(`
-      DELETE FROM runtime_traces WHERE id NOT IN (SELECT DISTINCT trace_id FROM runtime_spans)
-    `).run().changes;
+    const tracesDeleted = this.pruneOrphanTraces.run().changes;
 
     if (spansDeleted > 0 || tracesDeleted > 0) {
       logger.info({ spansDeleted, aggsDeleted, tracesDeleted }, 'Runtime data pruned');

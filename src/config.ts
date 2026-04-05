@@ -102,10 +102,18 @@ const RuntimeConfigSchema = z.object({
   }).default({}),
 }).optional();
 
+const ToolsConfigSchema = z.object({
+  preset: z.string().default('full'),
+  include: z.array(z.string()).optional(),
+  exclude: z.array(z.string()).optional(),
+  descriptions: z.record(z.string(), z.string()).optional(),
+}).optional();
+
 const TopologyConfigSchema = z.object({
-  enabled: z.boolean().default(false),
+  enabled: z.boolean().default(true),
   repos: z.array(z.string()).default([]),
   auto_detect: z.boolean().default(true),
+  auto_federation: z.boolean().default(true),
   contract_globs: z.array(z.string()).optional(),
 }).optional();
 
@@ -134,6 +142,7 @@ export const TraceMcpConfigSchema = z.object({
   intent: IntentConfigSchema,
   runtime: RuntimeConfigSchema,
   topology: TopologyConfigSchema,
+  tools: ToolsConfigSchema,
 });
 
 export type TraceMcpConfig = z.infer<typeof TraceMcpConfigSchema>;

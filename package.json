@@ -1,7 +1,7 @@
 {
   "name": "trace-mcp",
   "version": "0.1.1",
-  "description": "Framework-aware code intelligence MCP server — 48+ frameworks, 44 languages",
+  "description": "Framework-aware code intelligence MCP server — 48+ frameworks, 68 languages",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -51,6 +51,7 @@
     "commander": "^13.1.0",
     "cosmiconfig": "^9.0.0",
     "fast-glob": "^3.3.3",
+    "fastest-levenshtein": "^1.0.16",
     "neverthrow": "^8.2.0",
     "oxc-resolver": "^11.19.1",
     "pino": "^9.6.0",

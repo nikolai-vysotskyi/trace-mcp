@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { Store, SymbolRow, FileRow } from '../db/store.js';
 import { searchFts, type FtsResult, type FtsFilters } from '../db/fts.js';
+import { fuzzySearch, type FuzzyMatch } from '../db/fuzzy.js';
 import { readByteRange } from '../utils/source-reader.js';
 import { hybridScore, getTypeBonus, computeRecency } from '../scoring/hybrid.js';
 import { computePageRank } from '../scoring/pagerank.js';
@@ -96,10 +97,16 @@ export interface SearchAIOptions {
   reranker?: RerankerService | null;
 }
 
+export interface FuzzyOptions {
+  fuzzy?: boolean;
+  fuzzyThreshold?: number;
+  maxEditDistance?: number;
+}
+
 export interface SearchResult {
   items: SearchResultItem[];
   total: number;
-  search_mode?: 'hybrid_ai' | 'fts';
+  search_mode?: 'hybrid_ai' | 'fts' | 'fuzzy';
 }
 
 export async function search(
@@ -109,9 +116,15 @@ export async function search(
   limit = 20,
   offset = 0,
   aiOptions?: SearchAIOptions,
+  fuzzyOptions?: FuzzyOptions,
 ): Promise<SearchResult> {
   const fetchLimit = limit + offset + 50;
   const useAI = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
+
+  // Explicit fuzzy mode — skip FTS/AI entirely
+  if (fuzzyOptions?.fuzzy) {
+    return runFuzzySearch(store, query, filters, limit, offset, fuzzyOptions);
+  }
 
   // Build initial candidates: (symbolIdStr, relevance [0,1])
   let candidates: Array<{ symbolIdStr: string; relevance: number }>;
@@ -215,7 +228,64 @@ export async function search(
   const total = scored.length;
   const items = scored.slice(offset, offset + limit);
 
+  // Auto-fallback: if BM25/AI returns 0 results, try fuzzy search transparently
+  if (items.length === 0 && !fuzzyOptions?.fuzzy) {
+    const fuzzyResult = runFuzzySearch(store, query, filters, limit, offset, {
+      fuzzyThreshold: 0.2,
+      maxEditDistance: 3,
+    });
+    if (fuzzyResult.items.length > 0) return fuzzyResult;
+  }
+
   return { items, total, search_mode: searchMode };
+}
+
+/**
+ * Execute fuzzy search and map results to SearchResultItem format.
+ * Single SQL query for candidates + batch symbol/file fetch — no N+1.
+ */
+function runFuzzySearch(
+  store: Store,
+  query: string,
+  filters: SearchFilters | undefined,
+  limit: number,
+  offset: number,
+  fuzzyOpts: FuzzyOptions,
+): SearchResult {
+  const matches = fuzzySearch(store.db, query, {
+    threshold: fuzzyOpts.fuzzyThreshold ?? 0.3,
+    maxEditDistance: fuzzyOpts.maxEditDistance ?? 3,
+    limit: limit + offset + 20,
+    kind: filters?.kind,
+    language: filters?.language,
+    filePattern: filters?.filePattern,
+  });
+
+  if (matches.length === 0) return { items: [], total: 0, search_mode: 'fuzzy' };
+
+  // Batch-fetch symbols and files for all matches (avoid N+1)
+  const symbolIds = matches.map((m) => m.symbolId);
+  const symbolMap = store.getSymbolsByIds(symbolIds);
+  const fileIds = [...new Set(matches.map((m) => m.fileId))];
+  const fileMap = store.getFilesByIds(fileIds);
+
+  const items: SearchResultItem[] = [];
+  for (const m of matches) {
+    const symbol = symbolMap.get(m.symbolId);
+    const file = fileMap.get(m.fileId);
+    if (!symbol || !file) continue;
+
+    // Convert similarity to a 0-1 score: combine Jaccard + inverse edit distance
+    const maxName = Math.max(query.length, m.name.length);
+    const editScore = maxName > 0 ? 1 - m.editDistance / maxName : 0;
+    const score = 0.6 * m.similarity + 0.4 * editScore;
+
+    items.push({ symbol, file, score });
+  }
+
+  const total = items.length;
+  const sliced = items.slice(offset, offset + limit);
+  return { items: sliced, total, search_mode: 'fuzzy' };
 }
 
 // ─── get_outline ───────────────────────────────────────
