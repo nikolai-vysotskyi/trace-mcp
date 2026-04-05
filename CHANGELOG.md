@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.7...v1.0.8) (2026-04-05)
+
+
+### Bug Fixes
+
+* **ci:** restore registry-url for npm OIDC auth ([c2c66aa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c2c66aae7d6ca052d4d3a1bac55d3274c20db83b))
+
 ## [1.0.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.6...v1.0.7) (2026-04-05)
 
 
