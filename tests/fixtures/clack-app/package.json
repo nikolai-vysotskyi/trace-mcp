@@ -1,0 +1,6 @@
+{
+  "name": "clack-fixture",
+  "dependencies": {
+    "@clack/prompts": "^0.8.0"
+  }
+}

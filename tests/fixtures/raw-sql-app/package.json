@@ -1,0 +1,6 @@
+{
+  "name": "raw-sql-fixture",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  }
+}

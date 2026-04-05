@@ -1,0 +1,7 @@
+{
+  "name": "cosmiconfig-fixture",
+  "dependencies": {
+    "cosmiconfig": "^9.0.0",
+    "dotenv": "^16.0.0"
+  }
+}
