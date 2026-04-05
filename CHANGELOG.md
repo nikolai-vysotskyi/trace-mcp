@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.4.0...v1.4.1) (2026-04-05)
+
+
+### Bug Fixes
+
+* **ci:** upgrade to Node 24 and conditionally upgrade npm ([d0484df](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d0484df53617330f90c5e6eb08b2a4723fecf5bc))
+
 ## [1.4.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.3.1...v1.4.0) (2026-04-05)
 
 
