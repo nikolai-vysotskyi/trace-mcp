@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.2.1...v1.2.2) (2026-04-05)
+
+
+### Bug Fixes
+
+* **ci:** auto-trigger CI on release-please PR branches ([caa4edf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/caa4edfdc5a081811f1b4ffea2a4e577ae1f3dba))
+
 ## [1.2.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.2.0...v1.2.1) (2026-04-05)
 
 
