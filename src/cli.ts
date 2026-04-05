@@ -21,10 +21,16 @@ import http from 'node:http';
 import { initCommand } from './cli-init.js';
 import { upgradeCommand } from './cli-upgrade.js';
 import { addCommand } from './cli-add.js';
+import { doctorCommand } from './cli-doctor.js';
+import { ciReportCommand } from './cli-ci.js';
+import { federationCommand } from './cli-federation.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
-import { getDbPath, ensureGlobalDirs } from './global.js';
+import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH } from './global.js';
 import { getProject, listProjects, registerProject } from './registry.js';
 import { findProjectRoot } from './project-root.js';
+import { TopologyStore } from './topology/topology-db.js';
+import { FederationManager } from './federation/manager.js';
+import type { TraceMcpConfig } from './config.js';
 
 function registerDefaultPlugins(registry: PluginRegistry): void {
   for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
@@ -40,6 +46,47 @@ function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);
   if (entry) return entry.dbPath;
   return getDbPath(projectRoot);
+}
+
+/**
+ * Auto-federation: after indexing, register the project in federation,
+ * scan for contracts and client calls, and link to known endpoints.
+ * Runs when topology is enabled (default: true) and auto_federation is true (default: true).
+ */
+function runFederationAutoSync(projectRoot: string, config: TraceMcpConfig): void {
+  if (config.topology?.enabled === false) return;
+  if (config.topology?.auto_federation === false) return;
+
+  try {
+    ensureGlobalDirs();
+    const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    const manager = new FederationManager(topoStore);
+
+    const result = manager.add(projectRoot, {
+      contractPaths: config.topology?.contract_globs,
+    });
+
+    // Also sync any other previously federated repos to re-link
+    const fedRepos = topoStore.getAllFederatedRepos();
+    if (fedRepos.length > 1) {
+      const linked = topoStore.linkClientCallsToEndpoints();
+      if (linked > 0) {
+        logger.info({ linked }, 'Federation: linked additional client calls');
+      }
+    }
+
+    logger.info({
+      repo: result.name,
+      services: result.services,
+      endpoints: result.endpoints,
+      clientCalls: result.clientCalls,
+      linkedCalls: result.linkedCalls,
+    }, 'Federation auto-sync completed');
+
+    topoStore.close();
+  } catch (e) {
+    logger.warn({ error: e }, 'Federation auto-sync failed (non-fatal)');
+  }
 }
 
 const program = new Command();
@@ -123,7 +170,11 @@ program
     };
 
     // Initial index runs in background so the server starts immediately
-    pipeline.indexAll().then(() => { runSummarization(); runEmbeddings(); }).catch((err) => {
+    pipeline.indexAll().then(() => {
+      runSummarization();
+      runEmbeddings();
+      runFederationAutoSync(projectRoot, config);
+    }).catch((err) => {
       logger.error({ error: err }, 'Initial indexing failed');
     });
 
@@ -210,7 +261,11 @@ program
       });
     };
 
-    pipeline.indexAll().then(() => { runSummarization2(); runEmbeddings(); }).catch((err) => {
+    pipeline.indexAll().then(() => {
+      runSummarization2();
+      runEmbeddings();
+      runFederationAutoSync(projectRoot, config);
+    }).catch((err) => {
       logger.error({ error: err }, 'Initial indexing failed');
     });
 
@@ -289,12 +344,22 @@ program
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: undefined,
         });
-        res.on('close', () => {
+        const cleanup = () => {
           transport.close().catch(() => {});
           server.close().catch(() => {});
-        });
-        await server.connect(transport);
-        await transport.handleRequest(req, res);
+        };
+        res.on('close', cleanup);
+        try {
+          await server.connect(transport);
+          await transport.handleRequest(req, res);
+        } catch (e) {
+          logger.error({ error: e }, 'MCP request handling failed');
+          cleanup();
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal server error' }));
+          }
+        }
         return;
       }
 
@@ -353,6 +418,9 @@ program
     const result = await pipeline.indexAll(opts.force ?? false);
     logger.info(result, 'Indexing completed');
 
+    // Auto-federation: register this project, scan contracts & client calls
+    runFederationAutoSync(resolvedDir, config);
+
     db.close();
   });
 
@@ -399,5 +467,8 @@ program
 program.addCommand(initCommand);
 program.addCommand(upgradeCommand);
 program.addCommand(addCommand);
+program.addCommand(doctorCommand);
+program.addCommand(ciReportCommand);
+program.addCommand(federationCommand);
 
 program.parse();
