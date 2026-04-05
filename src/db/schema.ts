@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 14;
+const SCHEMA_VERSION = 16;
 
 const DDL = `
 -- ============================================================
@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS files (
     indexed_at      TEXT NOT NULL,
     metadata        TEXT,
     workspace       TEXT,
-    gitignored      INTEGER NOT NULL DEFAULT 0
+    gitignored      INTEGER NOT NULL DEFAULT 0,
+    mtime_ms        INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS symbols (
@@ -185,6 +186,10 @@ CREATE INDEX IF NOT EXISTS idx_symbols_fqn  ON symbols(fqn);
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_nodes_type   ON nodes(node_type);
 CREATE INDEX IF NOT EXISTS idx_orm_models_name ON orm_models(name);
+CREATE INDEX IF NOT EXISTS idx_symbols_has_heritage ON symbols(file_id)
+  WHERE metadata IS NOT NULL
+    AND (json_extract(metadata, '$.extends') IS NOT NULL
+      OR json_extract(metadata, '$.implements') IS NOT NULL);
 -- idx_files_workspace and idx_edges_cross_ws created in migration v9
 
 -- ============================================================
@@ -893,6 +898,21 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       CREATE INDEX IF NOT EXISTS idx_cm_community ON community_members(community_id);
     `);
   },
+  15: (db) => {
+    // Add mtime_ms column for fast-path skip (avoids reading + hashing unchanged files)
+    db.exec(`ALTER TABLE files ADD COLUMN mtime_ms INTEGER`);
+  },
+  16: (db) => {
+    // Partial index for symbols with heritage metadata (extends/implements).
+    // Speeds up getSymbolsWithHeritage() — avoids full table scan + json_extract on all rows.
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_symbols_has_heritage
+      ON symbols(file_id)
+      WHERE metadata IS NOT NULL
+        AND (json_extract(metadata, '$.extends') IS NOT NULL
+          OR json_extract(metadata, '$.implements') IS NOT NULL)
+    `);
+  },
 };
 
 function runMigrations(db: Database.Database, fromVersion: number): void {
@@ -985,6 +1005,41 @@ function seedDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace);
     CREATE INDEX IF NOT EXISTS idx_edges_cross_ws ON edges(is_cross_ws) WHERE is_cross_ws = 1;
   `);
+}
+
+/**
+ * Disable FTS5 triggers on symbols table during batch inserts.
+ * Call rebuildFts5 after all inserts are done.
+ */
+export function disableFts5Triggers(db: Database.Database): void {
+  db.exec('DROP TRIGGER IF EXISTS symbols_ai');
+  db.exec('DROP TRIGGER IF EXISTS symbols_ad');
+  db.exec('DROP TRIGGER IF EXISTS symbols_au');
+}
+
+/**
+ * Re-enable FTS5 triggers and rebuild the FTS5 index from scratch.
+ * This is faster than per-row trigger fires during batch inserts.
+ */
+export function enableFts5Triggers(db: Database.Database): void {
+  // Rebuild FTS5 index from current symbols table content
+  db.exec("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')");
+
+  // Restore triggers for subsequent single-row operations
+  db.exec(`CREATE TRIGGER IF NOT EXISTS symbols_ai AFTER INSERT ON symbols BEGIN
+    INSERT INTO symbols_fts(rowid, name, fqn, signature, summary)
+    VALUES (new.id, new.name, new.fqn, new.signature, new.summary);
+  END`);
+  db.exec(`CREATE TRIGGER IF NOT EXISTS symbols_ad AFTER DELETE ON symbols BEGIN
+    INSERT INTO symbols_fts(symbols_fts, rowid, name, fqn, signature, summary)
+    VALUES ('delete', old.id, old.name, old.fqn, old.signature, old.summary);
+  END`);
+  db.exec(`CREATE TRIGGER IF NOT EXISTS symbols_au AFTER UPDATE ON symbols BEGIN
+    INSERT INTO symbols_fts(symbols_fts, rowid, name, fqn, signature, summary)
+    VALUES ('delete', old.id, old.name, old.fqn, old.signature, old.summary);
+    INSERT INTO symbols_fts(rowid, name, fqn, signature, summary)
+    VALUES (new.id, new.name, new.fqn, new.signature, new.summary);
+  END`);
 }
 
 export function getTableNames(db: Database.Database): string[] {
