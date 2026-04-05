@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.2.2...v1.3.0) (2026-04-05)
+
+
+### Features
+
+* add 10 integration plugins (mcp-sdk, raw-sql, commander, tree-sitter, etc.) ([a89feef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a89feefad8905c6ad0f00c046c3ec264b847438b))
+* enriched change impact with risk scoring, breaking changes, and diff-aware mode ([511b474](https://github.com/nikolai-vysotskyi/trace-mcp/commit/511b474a001bad8a2a8f3ce08017f3aadc233228))
+* reduce tool calls and token waste across 7 optimizations ([24ff690](https://github.com/nikolai-vysotskyi/trace-mcp/commit/24ff690e379884116cb3ecb5a41425a5482f7b96))
+* safer conflict resolution — comment-out instead of delete, scope to selected clients ([8308564](https://github.com/nikolai-vysotskyi/trace-mcp/commit/830856407a10bab28efb7aa5ffdf10c1bf2950cf))
+* scan .github/workflows in project context discovery ([3411e8a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3411e8acc644aad1d8a2a06bd9cc4b73b0ccce08))
+* token efficiency improvements + .env security guard ([1b22425](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b224251a4464208d1b7fed67ef90b6b04d19934))
+* Windows support for guard and reindex hooks ([edaaaf5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/edaaaf5c7ef4ab6fb977a6fc47f3d6e1930b6346))
+
+
+### Bug Fixes
+
+* **ci:** bump Node from 20 to 22 to fix tsup DTS build ([1ceb6d5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ceb6d5e6c20d9a0d05e9762dedc787aec62d320))
+
 ## [1.2.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.2.1...v1.2.2) (2026-04-05)
 
 
