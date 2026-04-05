@@ -102,11 +102,38 @@ const RuntimeConfigSchema = z.object({
   }).default({}),
 }).optional();
 
+const ToolDescriptionOverrideSchema = z.union([
+  z.string(),                                // flat: replace entire tool description
+  z.record(z.string(), z.string()),          // nested: _description + per-parameter overrides
+]);
+
 const ToolsConfigSchema = z.object({
   preset: z.string().default('full'),
   include: z.array(z.string()).optional(),
   exclude: z.array(z.string()).optional(),
-  descriptions: z.record(z.string(), z.string()).optional(),
+  descriptions: z.record(z.string(), ToolDescriptionOverrideSchema).optional(),
+}).optional();
+
+const QualityGatesRuleSchema = z.object({
+  threshold: z.union([z.number(), z.string()]),
+  severity: z.enum(['error', 'warning']).default('error'),
+  scope: z.enum(['all', 'new_symbols', 'changed_symbols']).optional(),
+  message: z.string().optional(),
+});
+
+const QualityGatesConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  fail_on: z.enum(['error', 'warning', 'none']).default('error'),
+  rules: z.object({
+    max_cyclomatic_complexity: QualityGatesRuleSchema.optional(),
+    max_coupling_instability: QualityGatesRuleSchema.optional(),
+    max_circular_import_chains: QualityGatesRuleSchema.optional(),
+    max_dead_exports_percent: QualityGatesRuleSchema.optional(),
+    max_tech_debt_grade: QualityGatesRuleSchema.optional(),
+    max_security_critical_findings: QualityGatesRuleSchema.optional(),
+    max_antipattern_count: QualityGatesRuleSchema.optional(),
+    max_code_smell_count: QualityGatesRuleSchema.optional(),
+  }).default({}),
 }).optional();
 
 const TopologyConfigSchema = z.object({
@@ -142,7 +169,12 @@ export const TraceMcpConfigSchema = z.object({
   intent: IntentConfigSchema,
   runtime: RuntimeConfigSchema,
   topology: TopologyConfigSchema,
+  quality_gates: QualityGatesConfigSchema,
   tools: ToolsConfigSchema,
+  watch: z.object({
+    enabled: z.boolean().default(true),
+    debounceMs: z.number().int().min(500).max(30000).default(2000),
+  }).default({}),
 });
 
 export type TraceMcpConfig = z.infer<typeof TraceMcpConfigSchema>;

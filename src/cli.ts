@@ -3,6 +3,7 @@
 import { Command } from 'commander';
 import path from 'node:path';
 import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -27,7 +28,10 @@ import { upgradeCommand } from './cli-upgrade.js';
 import { addCommand } from './cli-add.js';
 import { doctorCommand } from './cli-doctor.js';
 import { ciReportCommand } from './cli-ci.js';
+import { checkCommand } from './cli-check.js';
+import { bundlesCommand } from './cli-bundles.js';
 import { federationCommand } from './cli-federation.js';
+import { analyticsCommand } from './cli-analytics.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH } from './global.js';
 import { getProject, listProjects, registerProject } from './registry.js';
@@ -284,6 +288,13 @@ program
     const port = parseInt(opts.port, 10);
     const host = opts.host;
 
+    // Create a single MCP server + stateful transport (persists across requests)
+    const server = createServer(store, registry, config, projectRoot);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+    });
+    await server.connect(transport);
+
     // Simple per-IP rate limiter (token bucket: 60 requests/minute per IP)
     const RATE_WINDOW_MS = 60_000;
     const RATE_LIMIT = 60;
@@ -320,6 +331,24 @@ program
 
     const MAX_BODY_SIZE = 5 * 1024 * 1024;
 
+    function collectBody(req: http.IncomingMessage): Promise<Buffer> {
+      return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        req.on('data', (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > MAX_BODY_SIZE) {
+            req.destroy();
+            reject(new Error('BODY_TOO_LARGE'));
+          } else {
+            chunks.push(chunk);
+          }
+        });
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', reject);
+      });
+    }
+
     const httpServer = http.createServer(async (req, res) => {
       const clientIp = req.socket.remoteAddress ?? 'unknown';
 
@@ -329,36 +358,23 @@ program
         return;
       }
 
-      let bodySize = 0;
-      let bodySizeExceeded = false;
-      req.on('data', (chunk: Buffer) => {
-        if (bodySizeExceeded) return;
-        bodySize += chunk.length;
-        if (bodySize > MAX_BODY_SIZE) {
-          bodySizeExceeded = true;
-          res.writeHead(413, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Request body too large' }));
-          req.removeAllListeners('data');
-          req.destroy();
-        }
-      });
-
-      if (req.method === 'POST' && req.url === '/mcp') {
-        const server = createServer(store, registry, config, projectRoot);
-        const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined,
-        });
-        const cleanup = () => {
-          transport.close().catch(() => {});
-          server.close().catch(() => {});
-        };
-        res.on('close', cleanup);
+      if (req.url === '/mcp') {
         try {
-          await server.connect(transport);
-          await transport.handleRequest(req, res);
-        } catch (e) {
+          let parsedBody: unknown;
+          if (req.method === 'POST') {
+            const body = await collectBody(req);
+            parsedBody = JSON.parse(body.toString());
+          }
+          await transport.handleRequest(req, res, parsedBody);
+        } catch (e: any) {
+          if (e?.message === 'BODY_TOO_LARGE') {
+            if (!res.headersSent) {
+              res.writeHead(413, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Request body too large' }));
+            }
+            return;
+          }
           logger.error({ error: e }, 'MCP request handling failed');
-          cleanup();
           if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Internal server error' }));
@@ -379,6 +395,8 @@ program
 
     const shutdown = async () => {
       await watcher.stop();
+      await transport.close();
+      await server.close();
       httpServer.close(() => process.exit(0));
     };
     process.on('SIGINT', shutdown);
@@ -507,6 +525,9 @@ program.addCommand(upgradeCommand);
 program.addCommand(addCommand);
 program.addCommand(doctorCommand);
 program.addCommand(ciReportCommand);
+program.addCommand(checkCommand);
+program.addCommand(bundlesCommand);
 program.addCommand(federationCommand);
+program.addCommand(analyticsCommand);
 
 program.parse();

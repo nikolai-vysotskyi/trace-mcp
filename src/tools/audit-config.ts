@@ -37,11 +37,14 @@ const CONFIG_PATTERNS = [
   'CLAUDE.md', '.claude/CLAUDE.md', '.cursorrules', '.cursor/rules',
   '.github/copilot-instructions.md', '.aider.conf.yml', '.continue/config.json',
   'cline_docs', '.windsurfrules',
+  // Claw Code
+  '.claw.json', '.claw/settings.json', '.claw/settings.local.json',
 ];
 
 /** Global config locations */
 const GLOBAL_CONFIG_PATTERNS = [
   '~/.claude/CLAUDE.md',
+  '~/.claw/settings.json',
 ];
 
 export function auditConfig(
@@ -230,5 +233,5 @@ function resolveConfigPath(file: string, projectRoot: string): string {
 }
 
 function isGlobalConfig(file: string): boolean {
-  return file.startsWith('~') || file.includes('.claude/CLAUDE.md');
+  return file.startsWith('~') || file.includes('.claude/CLAUDE.md') || file.includes('.claw/settings.json');
 }

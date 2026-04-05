@@ -20,9 +20,14 @@ import { detectConflicts } from './init/conflict-detector.js';
 import { fixAllConflicts } from './init/conflict-resolver.js';
 import { findProjectRoot } from './project-root.js';
 import { generateConfig } from './init/config-generator.js';
-import { registerProject, getProject } from './registry.js';
-import { saveProjectConfig } from './config.js';
+import { registerProject, getProject, listProjects, updateLastIndexed } from './registry.js';
+import { saveProjectConfig, loadConfig } from './config.js';
 import { initializeDatabase } from './db/schema.js';
+import { Store } from './db/store.js';
+import { PluginRegistry } from './plugin-api/registry.js';
+import { createAllLanguagePlugins } from './indexer/plugins/language/all.js';
+import { createAllIntegrationPlugins } from './indexer/plugins/integration/all.js';
+import { IndexingPipeline } from './indexer/pipeline.js';
 
 export const initCommand = new Command('init')
   .description('One-time global setup: configure MCP clients, install hooks, set up CLAUDE.md')
@@ -70,7 +75,7 @@ export const initCommand = new Command('init')
 
       // Q1: Which MCP clients
       if (!opts.skipMcpClient && !opts.mcpClient) {
-        const allClients: DetectedMcpClient['name'][] = ['claude-code', 'claude-desktop', 'cursor', 'windsurf', 'continue'];
+        const allClients: DetectedMcpClient['name'][] = ['claude-code', 'claw-code', 'claude-desktop', 'cursor', 'windsurf', 'continue'];
         const detectedNames = new Set(mcpClients.map((c) => c.name));
 
         const clientResult = await p.multiselect({
@@ -184,6 +189,66 @@ export const initCommand = new Command('init')
     if (indexProject) {
       const indexStep = registerAndIndexProject(process.cwd(), { dryRun: opts.dryRun, force: opts.force });
       steps.push(indexStep);
+    }
+
+    // --- Upgrade existing projects if previous installation detected ---
+    const existingProjects = listProjects();
+    if (existingProjects.length > 0) {
+      let runUpgrade = false;
+
+      if (!nonInteractive) {
+        const upgradeResult = await p.confirm({
+          message: `Found ${existingProjects.length} registered project${existingProjects.length > 1 ? 's' : ''} from a previous installation. Run upgrade (migrations + reindex)?`,
+          initialValue: true,
+        });
+        if (p.isCancel(upgradeResult)) { p.cancel('Cancelled.'); process.exit(0); }
+        runUpgrade = upgradeResult;
+      } else {
+        // Non-interactive: auto-upgrade
+        runUpgrade = true;
+      }
+
+      if (runUpgrade) {
+        const spin = !nonInteractive ? p.spinner() : null;
+        spin?.start('Upgrading registered projects');
+
+        for (const proj of existingProjects) {
+          if (!fs.existsSync(proj.root)) {
+            steps.push({ target: proj.root, action: 'skipped', detail: 'Directory not found (stale)' });
+            continue;
+          }
+
+          if (opts.dryRun) {
+            steps.push({ target: proj.root, action: 'skipped', detail: 'Would run migrations + reindex' });
+            continue;
+          }
+
+          const configResult = await loadConfig(proj.root);
+          if (configResult.isErr()) {
+            steps.push({ target: proj.root, action: 'skipped', detail: 'Config load failed' });
+            continue;
+          }
+
+          const dbPath = getDbPath(proj.root);
+          const db = initializeDatabase(dbPath);
+          const store = new Store(db);
+
+          const registry = new PluginRegistry();
+          for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
+          for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
+
+          const pipeline = new IndexingPipeline(store, registry, configResult.value, proj.root);
+          const result = await pipeline.indexAll(true);
+          steps.push({
+            target: proj.root, action: 'updated',
+            detail: `Upgraded: ${result.indexed} files, ${result.skipped} skipped, ${result.errors} errors`,
+          });
+          updateLastIndexed(proj.root);
+          db.close();
+        }
+
+        spin?.stop('Upgrade complete');
+      }
     }
 
     // --- Report ---
@@ -309,6 +374,7 @@ function registerAndIndexProject(
 function formatClientName(name: string): string {
   const names: Record<string, string> = {
     'claude-code': 'Claude Code',
+    'claw-code': 'Claw Code',
     'claude-desktop': 'Claude Desktop',
     'cursor': 'Cursor',
     'windsurf': 'Windsurf',

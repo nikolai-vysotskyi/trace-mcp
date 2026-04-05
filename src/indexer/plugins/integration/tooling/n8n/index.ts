@@ -16,6 +16,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { globalRe } from '../../../../../utils/regex.js';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
   FrameworkPlugin,
@@ -418,13 +419,13 @@ export function createExpressionInfo(): ExpressionInfo {
 export function parseExpressions(value: unknown, info: ExpressionInfo): void {
   if (typeof value === 'string') {
     let m: RegExpExecArray | null;
-    const re1 = new RegExp(EXPR_NODE_REF.source, 'g');
+    const re1 = globalRe(EXPR_NODE_REF);
     while ((m = re1.exec(value)) !== null) info.nodeDeps.add(m[1]);
-    const re2 = new RegExp(EXPR_ITEMS_REF.source, 'g');
+    const re2 = globalRe(EXPR_ITEMS_REF);
     while ((m = re2.exec(value)) !== null) info.nodeDeps.add(m[1]);
-    const re3 = new RegExp(EXPR_SHORTHAND_REF.source, 'g');
+    const re3 = globalRe(EXPR_SHORTHAND_REF);
     while ((m = re3.exec(value)) !== null) info.nodeDeps.add(m[1]);
-    const re4 = new RegExp(EXPR_ENV_REF.source, 'g');
+    const re4 = globalRe(EXPR_ENV_REF);
     while ((m = re4.exec(value)) !== null) info.envVars.add(m[1]);
     if (EXPR_EXECUTION.test(value)) info.usesExecution = true;
     if (EXPR_WORKFLOW.test(value)) info.usesWorkflow = true;
@@ -679,7 +680,7 @@ function parseCustomNodeSource(filePath: string, source: string): CustomNodeDefi
   const credentialTypes: string[] = [];
   const credBlock = NODE_CRED_BLOCK_RE.exec(source);
   if (credBlock) {
-    const re = new RegExp(NODE_CRED_TYPE_RE.source, 'g');
+    const re = globalRe(NODE_CRED_TYPE_RE);
     let m: RegExpExecArray | null;
     while ((m = re.exec(credBlock[1])) !== null) {
       credentialTypes.push(m[1]);
@@ -719,7 +720,7 @@ function parseCustomNodeSource(filePath: string, source: string): CustomNodeDefi
   const operationNames: string[] = [];
   const opBlock = NODE_OPERATION_RE.exec(source);
   if (opBlock) {
-    const re = new RegExp(NODE_PROP_NAME_RE.source, 'g');
+    const re = globalRe(NODE_PROP_NAME_RE);
     let m: RegExpExecArray | null;
     while ((m = re.exec(opBlock[1])) !== null) {
       operationNames.push(m[1]);

@@ -12,6 +12,8 @@ import { GUARD_HOOK_VERSION, REINDEX_HOOK_VERSION } from './types.js';
 const HOME = os.homedir();
 const HOOK_DEST = path.join(HOME, '.claude', 'hooks', 'trace-mcp-guard.sh');
 const REINDEX_HOOK_DEST = path.join(HOME, '.claude', 'hooks', 'trace-mcp-reindex.sh');
+const CLAW_HOOK_DEST = path.join(HOME, '.claw', 'hooks', 'trace-mcp-guard.sh');
+const CLAW_REINDEX_HOOK_DEST = path.join(HOME, '.claw', 'hooks', 'trace-mcp-reindex.sh');
 
 /**
  * Get the path to the shipped hook script.
@@ -80,6 +82,37 @@ export function installGuardHook(opts: {
   }
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
 
+  // Also install for Claw Code if .claw/ directory exists
+  const clawHome = path.join(HOME, '.claw');
+  if (fs.existsSync(clawHome)) {
+    const clawHookDir = path.dirname(CLAW_HOOK_DEST);
+    if (!fs.existsSync(clawHookDir)) fs.mkdirSync(clawHookDir, { recursive: true });
+    fs.copyFileSync(hookSrc, CLAW_HOOK_DEST);
+    fs.chmodSync(CLAW_HOOK_DEST, 0o755);
+
+    const clawSettingsPath = opts.global
+      ? path.join(clawHome, 'settings.json')
+      : path.resolve(process.cwd(), '.claw', 'settings.local.json');
+    const clawSettingsDir = path.dirname(clawSettingsPath);
+    if (!fs.existsSync(clawSettingsDir)) fs.mkdirSync(clawSettingsDir, { recursive: true });
+    const clawSettings = fs.existsSync(clawSettingsPath)
+      ? JSON.parse(fs.readFileSync(clawSettingsPath, 'utf-8'))
+      : {};
+    if (!clawSettings.hooks) clawSettings.hooks = {};
+    if (!clawSettings.hooks.PreToolUse) clawSettings.hooks.PreToolUse = [];
+    const clawExisting = clawSettings.hooks.PreToolUse.find(
+      (h: { hooks?: { command?: string }[] }) =>
+        h.hooks?.some((hh) => hh.command?.includes('trace-mcp-guard')),
+    );
+    if (!clawExisting) {
+      clawSettings.hooks.PreToolUse.push({
+        matcher: 'Read|Grep|Glob|Bash',
+        hooks: [{ type: 'command' as const, command: `CLAUDE_TOOL_NAME={{tool_name}} ${CLAW_HOOK_DEST}` }],
+      });
+    }
+    fs.writeFileSync(clawSettingsPath, JSON.stringify(clawSettings, null, 2) + '\n');
+  }
+
   return {
     target: HOOK_DEST,
     action: isUpdate ? 'updated' : 'created',
@@ -106,6 +139,25 @@ export function uninstallGuardHook(opts: { global?: boolean }): InitStepResult {
     }
   }
   if (fs.existsSync(HOOK_DEST)) fs.unlinkSync(HOOK_DEST);
+
+  // Also clean up Claw Code guard hook
+  const clawSettingsPath = opts.global
+    ? path.join(HOME, '.claw', 'settings.json')
+    : path.resolve(process.cwd(), '.claw', 'settings.local.json');
+  if (fs.existsSync(clawSettingsPath)) {
+    const clawSettings = JSON.parse(fs.readFileSync(clawSettingsPath, 'utf-8'));
+    const clawPre = clawSettings.hooks?.PreToolUse;
+    if (Array.isArray(clawPre)) {
+      clawSettings.hooks.PreToolUse = clawPre.filter(
+        (h: { hooks?: { command?: string }[] }) =>
+          !h.hooks?.some((hh) => hh.command?.includes('trace-mcp-guard')),
+      );
+      if (clawSettings.hooks.PreToolUse.length === 0) delete clawSettings.hooks.PreToolUse;
+      if (clawSettings.hooks && Object.keys(clawSettings.hooks).length === 0) delete clawSettings.hooks;
+      fs.writeFileSync(clawSettingsPath, JSON.stringify(clawSettings, null, 2) + '\n');
+    }
+  }
+  if (fs.existsSync(CLAW_HOOK_DEST)) fs.unlinkSync(CLAW_HOOK_DEST);
 
   return { target: HOOK_DEST, action: 'updated', detail: 'Removed' };
 }
@@ -179,6 +231,37 @@ export function installReindexHook(opts: {
   }
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
 
+  // Also install for Claw Code if .claw/ directory exists
+  const clawHome = path.join(HOME, '.claw');
+  if (fs.existsSync(clawHome)) {
+    const clawHookDir = path.dirname(CLAW_REINDEX_HOOK_DEST);
+    if (!fs.existsSync(clawHookDir)) fs.mkdirSync(clawHookDir, { recursive: true });
+    fs.copyFileSync(hookSrc, CLAW_REINDEX_HOOK_DEST);
+    fs.chmodSync(CLAW_REINDEX_HOOK_DEST, 0o755);
+
+    const clawSettingsPath = opts.global
+      ? path.join(clawHome, 'settings.json')
+      : path.resolve(process.cwd(), '.claw', 'settings.local.json');
+    const clawSettingsDir = path.dirname(clawSettingsPath);
+    if (!fs.existsSync(clawSettingsDir)) fs.mkdirSync(clawSettingsDir, { recursive: true });
+    const clawSettings = fs.existsSync(clawSettingsPath)
+      ? JSON.parse(fs.readFileSync(clawSettingsPath, 'utf-8'))
+      : {};
+    if (!clawSettings.hooks) clawSettings.hooks = {};
+    if (!clawSettings.hooks.PostToolUse) clawSettings.hooks.PostToolUse = [];
+    const clawExisting = clawSettings.hooks.PostToolUse.find(
+      (h: { hooks?: { command?: string }[] }) =>
+        h.hooks?.some((hh) => hh.command?.includes('trace-mcp-reindex')),
+    );
+    if (!clawExisting) {
+      clawSettings.hooks.PostToolUse.push({
+        matcher: 'Edit|Write|MultiEdit',
+        hooks: [{ type: 'command' as const, command: `CLAUDE_TOOL_NAME={{tool_name}} ${CLAW_REINDEX_HOOK_DEST}` }],
+      });
+    }
+    fs.writeFileSync(clawSettingsPath, JSON.stringify(clawSettings, null, 2) + '\n');
+  }
+
   return {
     target: REINDEX_HOOK_DEST,
     action: isUpdate ? 'updated' : 'created',
@@ -205,6 +288,25 @@ export function uninstallReindexHook(opts: { global?: boolean }): InitStepResult
     }
   }
   if (fs.existsSync(REINDEX_HOOK_DEST)) fs.unlinkSync(REINDEX_HOOK_DEST);
+
+  // Also clean up Claw Code reindex hook
+  const clawSettingsPath = opts.global
+    ? path.join(HOME, '.claw', 'settings.json')
+    : path.resolve(process.cwd(), '.claw', 'settings.local.json');
+  if (fs.existsSync(clawSettingsPath)) {
+    const clawSettings = JSON.parse(fs.readFileSync(clawSettingsPath, 'utf-8'));
+    const clawPost = clawSettings.hooks?.PostToolUse;
+    if (Array.isArray(clawPost)) {
+      clawSettings.hooks.PostToolUse = clawPost.filter(
+        (h: { hooks?: { command?: string }[] }) =>
+          !h.hooks?.some((hh) => hh.command?.includes('trace-mcp-reindex')),
+      );
+      if (clawSettings.hooks.PostToolUse.length === 0) delete clawSettings.hooks.PostToolUse;
+      if (clawSettings.hooks && Object.keys(clawSettings.hooks).length === 0) delete clawSettings.hooks;
+      fs.writeFileSync(clawSettingsPath, JSON.stringify(clawSettings, null, 2) + '\n');
+    }
+  }
+  if (fs.existsSync(CLAW_REINDEX_HOOK_DEST)) fs.unlinkSync(CLAW_REINDEX_HOOK_DEST);
 
   return { target: REINDEX_HOOK_DEST, action: 'updated', detail: 'Removed' };
 }
