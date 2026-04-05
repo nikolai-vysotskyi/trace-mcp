@@ -16,6 +16,8 @@ import { formatReport } from './init/reporter.js';
 import { ensureGlobalDirs, getDbPath } from './global.js';
 import type { DetectedMcpClient, InitStepResult, InitReport } from './init/types.js';
 import { detectMcpClients, detectGuardHook, detectProject } from './init/detector.js';
+import { detectConflicts } from './init/conflict-detector.js';
+import { fixAllConflicts } from './init/conflict-resolver.js';
 import { findProjectRoot } from './project-root.js';
 import { generateConfig } from './init/config-generator.js';
 import { registerProject, getProject } from './registry.js';
@@ -60,6 +62,7 @@ export const initCommand = new Command('init')
     let installHooks = !opts.skipHooks;
     let claudeMdScope: 'global' | 'skip' = opts.skipClaudeMd ? 'skip' : 'global';
     let indexProject = opts.index ?? false;
+    let fixConflicts = false;
 
     if (!nonInteractive) {
       p.intro('trace-mcp init');
@@ -115,6 +118,29 @@ export const initCommand = new Command('init')
         if (p.isCancel(indexResult)) { p.cancel('Cancelled.'); process.exit(0); }
         indexProject = indexResult;
       }
+
+      // Q5: Check for competing tools
+      {
+        let projectRoot: string | undefined;
+        try { projectRoot = findProjectRoot(process.cwd()); } catch { /* no project */ }
+        const conflictReport = detectConflicts(projectRoot);
+        const fixable = conflictReport.conflicts.filter((c) => c.fixable);
+        if (fixable.length > 0) {
+          const critical = fixable.filter((c) => c.severity === 'critical');
+          const label = critical.length > 0
+            ? `Found ${fixable.length} conflicting tool${fixable.length > 1 ? 's' : ''} (${critical.length} critical). Fix them? (recommended)`
+            : `Found ${fixable.length} competing tool artifact${fixable.length > 1 ? 's' : ''}. Clean up?`;
+          for (const c of fixable) {
+            p.log.warn(`  ${c.summary}`);
+          }
+          const fixResult = await p.confirm({
+            message: label,
+            initialValue: true,
+          });
+          if (p.isCancel(fixResult)) { p.cancel('Cancelled.'); process.exit(0); }
+          fixConflicts = fixResult;
+        }
+      }
     } else {
       // Non-interactive defaults
       if (opts.mcpClient) {
@@ -122,6 +148,8 @@ export const initCommand = new Command('init')
       } else if (!opts.skipMcpClient) {
         selectedClients = ['claude-code'];
       }
+      // Auto-fix conflicts in non-interactive mode
+      fixConflicts = true;
     }
 
     // --- Execute ---
@@ -134,6 +162,22 @@ export const initCommand = new Command('init')
       spin.stop('Done');
     } else {
       executeSteps(steps, { selectedClients, installHooks, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
+    }
+
+    // --- Fix competing tools ---
+    if (fixConflicts) {
+      let projectRoot: string | undefined;
+      try { projectRoot = findProjectRoot(process.cwd()); } catch { /* no project */ }
+      const conflictReport = detectConflicts(projectRoot);
+      const fixable = conflictReport.conflicts.filter((c) => c.fixable);
+      if (fixable.length > 0) {
+        const results = fixAllConflicts(fixable, { dryRun: opts.dryRun });
+        for (const r of results) {
+          if (r.action !== 'skipped') {
+            steps.push({ target: r.target, action: 'updated', detail: `${r.action}: ${r.detail}` });
+          }
+        }
+      }
     }
 
     // --- Optional project indexing ---
