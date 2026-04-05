@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.11...v1.1.0) (2026-04-05)
+
+
+### Features
+
+* add code smells scanner, consolidate imports, improve tool routing docs ([9a2b66e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9a2b66ef3fb7251a24ac7e852f6bfe3444fb5feb))
+
 ## [1.0.11](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.10...v1.0.11) (2026-04-05)
 
 
