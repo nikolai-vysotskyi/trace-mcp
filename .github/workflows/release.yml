@@ -4,13 +4,13 @@ on:
   push:
     branches:
       - master
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 
 jobs:
   # On push to master: create/update release PR with changelog
   release-please:
-    if: github.ref == 'refs/heads/master'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -20,9 +20,9 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  # On tag push: build, test, publish to npm
+  # On GitHub Release published: build, test, publish to npm
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: npm
     permissions:
