@@ -340,6 +340,17 @@ export function buildProjectContext(rootPath: string): ProjectContext {
     } catch { /* not found */ }
   }
 
+  // Scan .github/workflows for CI/CD files
+  try {
+    const ghWorkflowDir = path.resolve(rootPath, '.github/workflows');
+    const entries = fs.readdirSync(ghWorkflowDir);
+    for (const entry of entries) {
+      if (entry.endsWith('.yml') || entry.endsWith('.yaml')) {
+        configFiles.push(`.github/workflows/${entry}`);
+      }
+    }
+  } catch { /* no .github/workflows */ }
+
   return {
     rootPath,
     packageJson,
