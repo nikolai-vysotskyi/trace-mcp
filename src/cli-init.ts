@@ -124,12 +124,20 @@ export const initCommand = new Command('init')
         indexProject = indexResult;
       }
 
-      // Q5: Check for competing tools
+      // Q5: Check for competing tools (only for selected clients)
       {
         let projectRoot: string | undefined;
         try { projectRoot = findProjectRoot(process.cwd()); } catch { /* no project */ }
         const conflictReport = detectConflicts(projectRoot);
-        const fixable = conflictReport.conflicts.filter((c) => c.fixable);
+        const clientSet = new Set(selectedClients);
+        const fixable = conflictReport.conflicts.filter((c) => {
+          if (!c.fixable) return false;
+          if (c.category === 'mcp_server') {
+            const clientName = c.id.split(':')[2];
+            return clientSet.has(clientName);
+          }
+          return true;
+        });
         if (fixable.length > 0) {
           const critical = fixable.filter((c) => c.severity === 'critical');
           const label = critical.length > 0
@@ -174,7 +182,16 @@ export const initCommand = new Command('init')
       let projectRoot: string | undefined;
       try { projectRoot = findProjectRoot(process.cwd()); } catch { /* no project */ }
       const conflictReport = detectConflicts(projectRoot);
-      const fixable = conflictReport.conflicts.filter((c) => c.fixable);
+      const clientSet = new Set(selectedClients);
+      const fixable = conflictReport.conflicts.filter((c) => {
+        if (!c.fixable) return false;
+        // Only fix MCP server conflicts for clients the user selected
+        if (c.category === 'mcp_server') {
+          const clientName = c.id.split(':')[2]; // id format: "mcp:<server>:<client>:<path>"
+          return clientSet.has(clientName);
+        }
+        return true;
+      });
       if (fixable.length > 0) {
         const results = fixAllConflicts(fixable, { dryRun: opts.dryRun });
         for (const r of results) {
