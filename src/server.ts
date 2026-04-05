@@ -2000,32 +2000,6 @@ export function createServer(
     },
   );
 
-  // --- Batch Changes ---
-
-  server.tool(
-    'plan_batch_change',
-    'Analyze the impact of updating a dependency across the codebase. Shows affected files, import sites, and line references. Generates a PR description template with risk level, breaking changes checklist, and affected file list.',
-    {
-      package: z.string().min(1).max(256).describe('Package name being updated (e.g. "@myorg/auth-lib", "lodash")'),
-      from_version: z.string().max(64).optional().describe('Current version'),
-      to_version: z.string().max(64).optional().describe('Target version'),
-      breaking_changes: z.array(z.string().max(500)).max(20).optional()
-        .describe('Known breaking changes (e.g. "login() now returns Promise<AuthResult>")'),
-    },
-    async ({ package: pkg, from_version, to_version, breaking_changes }) => {
-      const result = planBatchChange(store, {
-        package: pkg,
-        fromVersion: from_version,
-        toVersion: to_version,
-        breakingChanges: breaking_changes,
-      });
-      if (result.isErr()) {
-        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
-      }
-      return { content: [{ type: 'text', text: j(result.value) }] };
-    },
-  );
-
   // --- Resources ---
 
   server.resource(

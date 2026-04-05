@@ -132,7 +132,8 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
   if (projectRoot) {
     checkConfig('claude-code', path.join(projectRoot, '.mcp.json'));
   }
-  // Claude Code: global settings
+  // Claude Code: global — mcpServers can live in either file
+  checkConfig('claude-code', path.join(HOME, '.claude.json'));
   checkConfig('claude-code', path.join(HOME, '.claude', 'settings.json'));
 
   // Claude Desktop

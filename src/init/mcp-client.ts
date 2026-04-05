@@ -98,7 +98,7 @@ function getConfigPath(name: DetectedMcpClient['name'], projectRoot: string, sco
   switch (name) {
     case 'claude-code':
       return scope === 'global'
-        ? path.join(HOME, '.claude', 'settings.json')  // user-level MCP in Claude Code
+        ? path.join(HOME, '.claude.json')  // user-level MCP in Claude Code
         : path.join(projectRoot, '.mcp.json');
     case 'claude-desktop':
       // Claude Desktop is always global
