@@ -12,6 +12,9 @@ import type { Store, SymbolWithFilePath, SymbolRow } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import { getCouplingMetrics, getDependencyCycles } from './graph-analysis.js';
 
+/** Matches paths inside test fixture directories (sample projects, not real code). */
+const TEST_FIXTURE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/fixtures?\//;
+
 /** Safely parse JSON metadata — returns empty object on malformed input. */
 function safeParseMeta(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
@@ -369,7 +372,8 @@ export function getDeadExports(
   store: Store,
   filePattern?: string,
 ): GetDeadExportsResult {
-  const exported = store.getExportedSymbols(filePattern);
+  const exported = store.getExportedSymbols(filePattern)
+    .filter((s) => !TEST_FIXTURE_RE.test(s.file_path));
 
   // Build a set of all imported specifier names across the entire project
   const importedNames = new Set<string>();
@@ -522,7 +526,8 @@ export function getUntestedExports(
   filePattern?: string,
 ): GetUntestedExportsResult {
   const exported = store.getExportedSymbols(filePattern)
-    .filter((s) => s.kind !== 'method'); // methods inherit from class
+    .filter((s) => s.kind !== 'method') // methods inherit from class
+    .filter((s) => !TEST_FIXTURE_RE.test(s.file_path));
 
   // Collect all test file paths
   const allFiles = store.getAllFiles();

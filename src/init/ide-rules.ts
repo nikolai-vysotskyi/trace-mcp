@@ -11,7 +11,7 @@ import type { InitStepResult } from './types.js';
 const START_MARKER = '<!-- trace-mcp:start -->';
 const END_MARKER = '<!-- trace-mcp:end -->';
 
-const TOOL_ROUTING_POLICY = `Use trace-mcp MCP tools for all code intelligence tasks — they understand framework relationships, not just text.
+const TOOL_ROUTING_POLICY = `IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVER use built-in search/grep/file listing for navigating source code.
 
 ## Tool Routing
 
@@ -22,13 +22,19 @@ const TOOL_ROUTING_POLICY = `Use trace-mcp MCP tools for all code intelligence t
 | Read one symbol's source | \`get_symbol\` | reading full file |
 | What breaks if I change X | \`get_change_impact\` | guessing |
 | All usages of a symbol | \`find_usages\` | grep / find references |
+| All implementations of an interface | \`get_type_hierarchy\` | listing directories |
+| All classes implementing X | \`search\` with \`implements\` filter | grep |
+| Project health / coverage gaps | \`self_audit\` | manual inspection |
+| Dead code / dead exports | \`get_dead_code\` / \`get_dead_exports\` | grep for unused |
 | Context for a task | \`get_feature_context\` | reading many files |
 | Tests for a symbol | \`get_tests_for\` | searching test files |
 | HTTP request flow | \`get_request_flow\` | reading route files |
 | DB model relationships | \`get_model_context\` | reading model + migration files |
+| Component tree | \`get_component_tree\` | reading component files |
+| Circular dependencies | \`get_circular_imports\` | manual tracing |
 
 Start sessions with \`get_project_map\` (summary_only=true) to get project overview.
-Use built-in file reading only for non-code files (.md, .json, .yaml, config).`;
+Use built-in file reading ONLY for non-code files (.md, .json, .yaml, config) or before editing.`;
 
 // --- Cursor ---
 

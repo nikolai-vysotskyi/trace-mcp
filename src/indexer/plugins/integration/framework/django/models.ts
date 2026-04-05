@@ -243,10 +243,10 @@ function extractAssociations(
 /** Extract Meta class options. */
 function extractMeta(classBody: string): {
   dbTable?: string;
-  abstract?: boolean;
+  'abstract'?: boolean;
   ordering?: string[];
 } {
-  const meta: { dbTable?: string; abstract?: boolean; ordering?: string[] } = {};
+  const meta: { dbTable?: string; 'abstract'?: boolean; ordering?: string[] } = {};
 
   // Match class Meta: block
   const metaMatch = classBody.match(/class\s+Meta\s*:\s*\n([\s\S]*?)(?=\n\s*(?:class\s|def\s|\w+\s*=)|$)/);

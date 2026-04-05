@@ -27,17 +27,6 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 
 // ─── Schema ────────────────────────────────────────────────
 
-export function createTrigramTable(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS symbol_trigrams (
-      symbol_id INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
-      trigram   TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_trigrams_tri ON symbol_trigrams(trigram);
-    CREATE INDEX IF NOT EXISTS idx_trigrams_sym ON symbol_trigrams(symbol_id);
-  `);
-}
-
 // ─── Indexing ──────────────────────────────────────────────
 
 /** Insert trigrams for a batch of symbols. Wraps in transaction for performance. */

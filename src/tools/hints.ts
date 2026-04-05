@@ -290,6 +290,21 @@ const hintGenerators: Record<string, HintGenerator> = {
     return hints;
   },
 
+  scan_code_smells(r) {
+    const hints: Hint[] = [];
+    const summary = dig(r, 'summary') as Record<string, number> | undefined;
+    if (summary?.empty_function) {
+      hints.push({ tool: 'get_dead_code', why: 'Empty functions may also be dead code — cross-check with dead code analysis' });
+    }
+    if (summary?.todo_comment) {
+      hints.push({ tool: 'get_tech_debt', why: 'See overall tech debt score for modules with many TODOs' });
+    }
+    if (summary?.hardcoded_value) {
+      hints.push({ tool: 'scan_security', args: { rules: '["hardcoded_secrets"]' }, why: 'Some hardcoded values may be security-sensitive' });
+    }
+    return hints;
+  },
+
   get_page_rank(r) {
     const hints: Hint[] = [];
     const ranked = arr(r);
