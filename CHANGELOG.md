@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.11](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.10...v1.0.11) (2026-04-05)
+
+
+### Bug Fixes
+
+* **deps:** suppress tree-sitter peer dependency warnings ([0c5b030](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0c5b030884f33aab41d0895ae0321cdf3c092c9f))
+* **server:** remove duplicate plan_batch_change tool registration ([0e1143d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0e1143d9db58e28fca92dcf391826448de800086))
+
 ## [1.0.10](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.9...v1.0.10) (2026-04-05)
 
 
