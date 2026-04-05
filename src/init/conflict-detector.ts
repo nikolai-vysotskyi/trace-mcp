@@ -257,6 +257,7 @@ function getMcpConfigPaths(projectRoot?: string): { clientName: string; configPa
   if (projectRoot) {
     paths.push({ clientName: 'claude-code', configPath: path.join(projectRoot, '.mcp.json') });
   }
+  paths.push({ clientName: 'claude-code', configPath: path.join(HOME, '.claude.json') });
   paths.push({ clientName: 'claude-code', configPath: path.join(HOME, '.claude', 'settings.json') });
 
   // Claw Code

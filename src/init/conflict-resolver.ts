@@ -62,7 +62,8 @@ export function fixAllConflicts(conflicts: Conflict[], opts: { dryRun?: boolean 
 // ---------------------------------------------------------------------------
 
 /**
- * Remove a competing MCP server entry from a client config file.
+ * Comment out a competing MCP server entry in a client config file (JSONC).
+ * Uses line-level `//` comments so the user can easily re-enable if needed.
  */
 function fixMcpServer(conflict: Conflict, opts: { dryRun?: boolean }): FixResult {
   const configPath = conflict.target;
@@ -70,7 +71,7 @@ function fixMcpServer(conflict: Conflict, opts: { dryRun?: boolean }): FixResult
   const serverName = conflict.id.split(':')[1];
 
   if (opts.dryRun) {
-    return { conflictId: conflict.id, action: 'removed', detail: `Would remove "${serverName}" from ${shortPath(configPath)}`, target: configPath };
+    return { conflictId: conflict.id, action: 'disabled', detail: `Would comment out "${serverName}" in ${shortPath(configPath)}`, target: configPath };
   }
 
   if (!fs.existsSync(configPath)) {
@@ -79,26 +80,72 @@ function fixMcpServer(conflict: Conflict, opts: { dryRun?: boolean }): FixResult
 
   try {
     const raw = fs.readFileSync(configPath, 'utf-8');
-    const parsed = JSON.parse(raw);
+    const result = commentOutJsonKey(raw, serverName);
 
-    // Handle both `mcpServers` and `servers` keys
-    let removed = false;
-    for (const key of ['mcpServers', 'servers']) {
-      if (parsed[key] && parsed[key][serverName]) {
-        delete parsed[key][serverName];
-        removed = true;
-      }
+    if (!result) {
+      return { conflictId: conflict.id, action: 'skipped', detail: `Server "${serverName}" not found (already disabled?)`, target: configPath };
     }
 
-    if (!removed) {
-      return { conflictId: conflict.id, action: 'skipped', detail: `Server "${serverName}" not found (already removed?)`, target: configPath };
-    }
-
-    fs.writeFileSync(configPath, JSON.stringify(parsed, null, 2) + '\n');
-    return { conflictId: conflict.id, action: 'removed', detail: `Removed "${serverName}" from ${shortPath(configPath)}`, target: configPath };
+    fs.writeFileSync(configPath, result);
+    return { conflictId: conflict.id, action: 'disabled', detail: `Commented out "${serverName}" in ${shortPath(configPath)}`, target: configPath };
   } catch (err) {
     return { conflictId: conflict.id, action: 'skipped', detail: `Failed to update config: ${(err as Error).message}`, target: configPath };
   }
+}
+
+/**
+ * Comment out a top-level key inside a JSON object using `//` line comments.
+ * Finds `"key": <value>` (value may span multiple lines) and prefixes each line with `// `.
+ * Returns the modified text, or null if the key was not found or already commented out.
+ */
+export function commentOutJsonKey(raw: string, key: string): string | null {
+  const lines = raw.split('\n');
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const keyPattern = new RegExp(`^(\\s*)"${escaped}"\\s*:`);
+
+  let startLine = -1;
+  for (let i = 0; i < lines.length; i++) {
+    // Skip already-commented lines
+    if (/^\s*\/\//.test(lines[i])) continue;
+    if (keyPattern.test(lines[i])) {
+      startLine = i;
+      break;
+    }
+  }
+
+  if (startLine === -1) return null;
+
+  // Find the end of the value by tracking brace/bracket depth
+  let endLine = startLine;
+  let braceDepth = 0;
+  let foundOpen = false;
+
+  for (let i = startLine; i < lines.length; i++) {
+    // Strip string literals to avoid counting braces inside strings
+    const stripped = lines[i].replace(/"(?:[^"\\]|\\.)*"/g, '""');
+    for (const ch of stripped) {
+      if (ch === '{' || ch === '[') { braceDepth++; foundOpen = true; }
+      else if (ch === '}' || ch === ']') { braceDepth--; }
+    }
+
+    if (foundOpen && braceDepth <= 0) {
+      endLine = i;
+      break;
+    }
+
+    // Simple value on one line (string/number/bool) — no braces opened
+    if (!foundOpen && i === startLine) {
+      endLine = i;
+      break;
+    }
+  }
+
+  // Comment out lines [startLine..endLine]
+  for (let i = startLine; i <= endLine; i++) {
+    lines[i] = '// ' + lines[i];
+  }
+
+  return lines.join('\n');
 }
 
 /**
