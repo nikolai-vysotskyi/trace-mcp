@@ -65,6 +65,7 @@ export interface CIReport {
     entries: BlastRadiusEntry[];
     totalAffected: number;
     truncated: boolean;
+    riskSummary?: { file: string; riskLevel: string; sentence: string }[];
   };
   testCoverage: {
     gaps: TestCoverageGap[];
@@ -183,6 +184,7 @@ function computeBlastRadius(
   const allEntries: BlastRadiusEntry[] = [];
   const seenPaths = new Set(changedFiles);
   let truncated = false;
+  const riskSummary: { file: string; riskLevel: string; sentence: string }[] = [];
 
   for (const filePath of changedFiles) {
     const result = getChangeImpact(store, { filePath }, 2, 100);
@@ -196,9 +198,17 @@ function computeBlastRadius(
       seenPaths.add(dep.path);
       allEntries.push({
         path: dep.path,
-        symbolId: dep.symbolId,
-        edgeType: dep.edgeType,
+        symbolId: dep.symbols?.[0]?.symbolId,
+        edgeType: dep.edgeTypes.join(', '),
         depth: dep.depth,
+      });
+    }
+
+    if (impact.totalAffected > 3) {
+      riskSummary.push({
+        file: filePath,
+        riskLevel: impact.risk.level,
+        sentence: impact.summary.sentence,
       });
     }
   }
@@ -210,6 +220,7 @@ function computeBlastRadius(
     entries: allEntries,
     totalAffected: allEntries.length,
     truncated,
+    ...(riskSummary.length > 0 ? { riskSummary } : {}),
   };
 }
 

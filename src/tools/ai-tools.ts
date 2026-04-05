@@ -243,7 +243,7 @@ export function registerAITools(
     async ({ file_path, diff }) => {
       const impactResult = getChangeImpact(store, { filePath: file_path });
       const blastRadius = impactResult.isOk()
-        ? impactResult.value.dependents.map((d) => `${d.edgeType}: ${d.path}`).join('\n')
+        ? impactResult.value.dependents.map((d) => `${d.edgeTypes.join(', ')}: ${d.path}`).join('\n')
         : '';
 
       const prompt = PROMPTS.review_change.build({

@@ -616,21 +616,22 @@ export function createServer(
 
   server.tool(
     'get_change_impact',
-    'Full change impact report: reverse dependencies, risk scoring, affected tests, co-change hidden couplings, module grouping, and actionable mitigations. Use before making any change to understand blast radius and plan safely.',
+    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Supports diff-aware mode via symbol_ids to scope analysis to only changed symbols.',
     {
       file_path: z.string().max(512).optional().describe('Relative file path to analyze'),
       symbol_id: z.string().max(512).optional().describe('Symbol ID to analyze'),
+      symbol_ids: z.array(z.string().max(512)).max(50).optional().describe('Diff-aware: only analyze impact of these specific symbols (e.g. from get_changed_symbols)'),
       depth: z.number().int().min(1).max(20).optional().describe('Max traversal depth (default 3)'),
       max_dependents: z.number().int().min(1).max(5000).optional().describe('Cap on returned dependents (default 200)'),
     },
-    async ({ file_path, symbol_id, depth, max_dependents }) => {
+    async ({ file_path, symbol_id, symbol_ids, depth, max_dependents }) => {
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
       }
       const result = getChangeImpact(
         store,
-        { filePath: file_path, symbolId: symbol_id },
+        { filePath: file_path, symbolId: symbol_id, symbolIds: symbol_ids },
         depth ?? 3,
         max_dependents ?? 200,
         projectRoot,
