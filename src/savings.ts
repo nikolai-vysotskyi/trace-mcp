@@ -19,6 +19,7 @@ export const SAVINGS_PATH = path.join(TRACE_MCP_HOME, 'savings.json');
 const RAW_COST_ESTIMATES: Record<string, number> = {
   get_symbol: 800,
   search: 600,
+  search_text: 3000,
   get_outline: 1200,
   get_change_impact: 2000,
   get_feature_context: 4000,

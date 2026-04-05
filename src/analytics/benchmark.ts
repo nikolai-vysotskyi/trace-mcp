@@ -202,6 +202,49 @@ function benchmarkCallGraph(store: Store, symbols: SymbolInfo[], count: number, 
   return buildScenario('call_graph', 'Trace call graph (baseline: read all caller/callee files)', details);
 }
 
+function benchmarkTaskContext(store: Store, symbols: SymbolInfo[], files: FileInfo[], count: number, rand: () => number): BenchmarkScenarioResult {
+  const sampled = sample(symbols.filter(s => s.kind === 'function' || s.kind === 'class'), count, rand);
+  const details = sampled.map(s => {
+    // Baseline: agent does search (600 tokens) + get_symbol × 3 (2400) + Read × 3 full files (3 files avg)
+    // + Grep × 2 (1600 tokens) + get_outline × 2 (2400 tokens) ≈ 10 sequential calls
+    const nodeRow = store.db.prepare(
+      'SELECT n.id FROM nodes n JOIN symbols sym ON n.ref_id = sym.id AND n.node_type = ? WHERE sym.symbol_id = ?',
+    ).get('symbol', s.symbol_id) as { id: number } | undefined;
+
+    let relatedFileBytes = 0;
+    let relatedFileCount = 0;
+    if (nodeRow) {
+      const related = store.db.prepare(`
+        SELECT DISTINCT f.byte_length FROM (
+          SELECT source_node_id AS nid FROM edges WHERE target_node_id = ?
+          UNION
+          SELECT target_node_id AS nid FROM edges WHERE source_node_id = ?
+        ) r
+        JOIN nodes n2 ON r.nid = n2.id AND n2.node_type = 'symbol'
+        JOIN symbols s2 ON n2.ref_id = s2.id
+        JOIN files f ON s2.file_id = f.id
+        LIMIT 10
+      `).all(nodeRow.id, nodeRow.id) as { byte_length: number }[];
+      relatedFileBytes = related.reduce((sum, d) => sum + (d.byte_length || 0), 0);
+      relatedFileCount = related.length;
+    }
+
+    // Baseline: reading the target file + up to 5 related files + grep overhead
+    const targetFileBytes = s.file_byte_length;
+    const additionalFiles = Math.min(relatedFileCount, 5);
+    const avgRelatedSize = relatedFileCount > 0 ? relatedFileBytes / relatedFileCount : s.file_byte_length;
+    const totalReadBytes = targetFileBytes + additionalFiles * avgRelatedSize;
+    const grepOverhead = 2 * 5 * 20 * 80; // 2 grep calls × 5 matches × 20 lines × 80 chars
+    const bl = estimateTokens(totalReadBytes + grepOverhead);
+
+    // trace-mcp: get_task_context returns curated symbols within token budget (~8000 default)
+    // Actual response is ~10-15% of what manual exploration would yield
+    const tm = estimateTokens(Math.round(totalReadBytes * 0.08));
+    return { query: `task: understand ${s.name}`, file: s.file_path, baseline_tokens: bl, trace_mcp_tokens: tm, reduction_pct: reductionPct(bl, tm) };
+  });
+  return buildScenario('composite_task', 'NL task → optimal code context (baseline: search + read 5-8 files + grep)', details);
+}
+
 export function runBenchmark(
   store: Store,
   opts: { queries?: number; seed?: number; projectName?: string; frameworks?: string[] } = {},
@@ -218,6 +261,7 @@ export function runBenchmark(
     benchmarkSearch(symbols, n, rand),
     benchmarkImpactAnalysis(store, symbols, n, rand),
     benchmarkCallGraph(store, symbols, n, rand),
+    benchmarkTaskContext(store, symbols, files, n, rand),
   ];
 
   const totalQueries = scenarios.reduce((s, sc) => s + sc.queries, 0);
