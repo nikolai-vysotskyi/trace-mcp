@@ -65,6 +65,31 @@ export interface CrossServiceEdgeRow {
   metadata: string | null;
 }
 
+export interface FederatedRepoRow {
+  id: number;
+  name: string;
+  repo_root: string;
+  db_path: string | null;
+  contract_paths: string | null;
+  added_at: string;
+  last_synced: string | null;
+  metadata: string | null;
+}
+
+export interface ClientCallRow {
+  id: number;
+  source_repo_id: number;
+  target_repo_id: number | null;
+  file_path: string;
+  line: number | null;
+  call_type: string;
+  method: string | null;
+  url_pattern: string;
+  matched_endpoint_id: number | null;
+  confidence: number;
+  metadata: string | null;
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // SCHEMA DDL
 // ════════════════════════════════════════════════════════════════════════
@@ -137,11 +162,87 @@ CREATE TABLE IF NOT EXISTS topology_meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- ════════════════════════════════════════════════════════════════
+-- FEDERATION — explicit multi-repo graph linking
+-- ════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS federated_repos (
+    id              INTEGER PRIMARY KEY,
+    name            TEXT NOT NULL UNIQUE,
+    repo_root       TEXT NOT NULL UNIQUE,
+    db_path         TEXT,
+    contract_paths  TEXT,
+    added_at        TEXT NOT NULL,
+    last_synced     TEXT,
+    metadata        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS client_calls (
+    id              INTEGER PRIMARY KEY,
+    source_repo_id  INTEGER NOT NULL REFERENCES federated_repos(id) ON DELETE CASCADE,
+    target_repo_id  INTEGER REFERENCES federated_repos(id),
+    file_path       TEXT NOT NULL,
+    line            INTEGER,
+    call_type       TEXT NOT NULL,
+    method          TEXT,
+    url_pattern     TEXT NOT NULL,
+    matched_endpoint_id INTEGER REFERENCES api_endpoints(id),
+    confidence      REAL NOT NULL DEFAULT 0.5,
+    metadata        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_client_calls_source ON client_calls(source_repo_id);
+CREATE INDEX IF NOT EXISTS idx_client_calls_target ON client_calls(target_repo_id);
+CREATE INDEX IF NOT EXISTS idx_client_calls_endpoint ON client_calls(matched_endpoint_id);
 `;
 
 // ════════════════════════════════════════════════════════════════════════
 // TOPOLOGY STORE
 // ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Match a client call URL pattern to the best-fitting endpoint.
+ * Normalizes path params ({id}, :id) and compares.
+ */
+function findBestEndpointMatch(
+  urlPattern: string,
+  method: string | null,
+  endpoints: Array<EndpointRow & { service_name: string }>,
+): (EndpointRow & { service_name: string; confidence: number }) | null {
+  // Normalize: /api/users/{id} and /api/users/:id → /api/users/{*}
+  const normalize = (p: string) =>
+    p.replace(/\{[^}]+\}/g, '{*}').replace(/:[\w]+/g, '{*}').replace(/\/+$/, '');
+
+  const normalizedUrl = normalize(urlPattern);
+  let bestMatch: (EndpointRow & { service_name: string; confidence: number }) | null = null;
+  let bestScore = 0;
+
+  for (const ep of endpoints) {
+    const normalizedEp = normalize(ep.path);
+
+    // Exact match
+    if (normalizedUrl === normalizedEp) {
+      const methodBonus = (method && ep.method && method.toUpperCase() === ep.method.toUpperCase()) ? 0.2 : 0;
+      const score = 1.0 + methodBonus;
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = { ...ep, confidence: Math.min(score, 1.0) };
+      }
+      continue;
+    }
+
+    // Partial: url ends with the endpoint path
+    if (normalizedUrl.endsWith(normalizedEp) || normalizedEp.endsWith(normalizedUrl)) {
+      const score = 0.7;
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = { ...ep, confidence: score };
+      }
+    }
+  }
+
+  return bestMatch;
+}
 
 export class TopologyStore {
   public readonly db: Database.Database;
@@ -380,6 +481,163 @@ export class TopologyStore {
       endpoints: cnt('SELECT COUNT(*) as cnt FROM api_endpoints'),
       events: cnt('SELECT COUNT(*) as cnt FROM event_channels'),
       crossEdges: cnt('SELECT COUNT(*) as cnt FROM cross_service_edges'),
+    };
+  }
+
+  // ── Federated Repos ───────────────────────────────────────────────
+
+  upsertFederatedRepo(input: {
+    name: string;
+    repoRoot: string;
+    dbPath?: string;
+    contractPaths?: string[];
+    metadata?: Record<string, unknown>;
+  }): number {
+    const existing = this.db.prepare('SELECT id FROM federated_repos WHERE repo_root = ?').get(input.repoRoot) as { id: number } | undefined;
+    if (existing) {
+      this.db.prepare(`
+        UPDATE federated_repos SET name = ?, db_path = COALESCE(?, db_path),
+          contract_paths = COALESCE(?, contract_paths),
+          metadata = COALESCE(?, metadata), last_synced = datetime('now')
+        WHERE id = ?
+      `).run(input.name, input.dbPath ?? null,
+        input.contractPaths ? JSON.stringify(input.contractPaths) : null,
+        input.metadata ? JSON.stringify(input.metadata) : null, existing.id);
+      return existing.id;
+    }
+
+    return this.db.prepare(`
+      INSERT INTO federated_repos (name, repo_root, db_path, contract_paths, metadata, added_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+    `).run(input.name, input.repoRoot, input.dbPath ?? null,
+      input.contractPaths ? JSON.stringify(input.contractPaths) : null,
+      input.metadata ? JSON.stringify(input.metadata) : null,
+    ).lastInsertRowid as number;
+  }
+
+  getFederatedRepo(nameOrRoot: string): FederatedRepoRow | undefined {
+    return (this.db.prepare('SELECT * FROM federated_repos WHERE name = ? OR repo_root = ?')
+      .get(nameOrRoot, nameOrRoot) as FederatedRepoRow | undefined);
+  }
+
+  getAllFederatedRepos(): FederatedRepoRow[] {
+    return this.db.prepare('SELECT * FROM federated_repos ORDER BY name').all() as FederatedRepoRow[];
+  }
+
+  deleteFederatedRepo(id: number): void {
+    this.db.prepare('DELETE FROM federated_repos WHERE id = ?').run(id);
+  }
+
+  updateFederatedRepoSyncTime(id: number): void {
+    this.db.prepare("UPDATE federated_repos SET last_synced = datetime('now') WHERE id = ?").run(id);
+  }
+
+  // ── Client Calls ──────────────────────────────────────────────────
+
+  insertClientCalls(calls: Array<{
+    sourceRepoId: number;
+    targetRepoId?: number;
+    filePath: string;
+    line?: number;
+    callType: string;
+    method?: string;
+    urlPattern: string;
+    matchedEndpointId?: number;
+    confidence?: number;
+    metadata?: Record<string, unknown>;
+  }>): void {
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO client_calls
+        (source_repo_id, target_repo_id, file_path, line, call_type, method, url_pattern,
+         matched_endpoint_id, confidence, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    this.db.transaction(() => {
+      for (const c of calls) {
+        stmt.run(c.sourceRepoId, c.targetRepoId ?? null, c.filePath, c.line ?? null,
+          c.callType, c.method ?? null, c.urlPattern,
+          c.matchedEndpointId ?? null, c.confidence ?? 0.5,
+          c.metadata ? JSON.stringify(c.metadata) : null);
+      }
+    })();
+  }
+
+  deleteClientCallsByRepo(repoId: number): void {
+    this.db.prepare('DELETE FROM client_calls WHERE source_repo_id = ?').run(repoId);
+  }
+
+  getClientCallsByEndpoint(endpointId: number): Array<ClientCallRow & { source_repo_name: string }> {
+    return this.db.prepare(`
+      SELECT cc.*, fr.name as source_repo_name FROM client_calls cc
+      JOIN federated_repos fr ON cc.source_repo_id = fr.id
+      WHERE cc.matched_endpoint_id = ?
+      ORDER BY cc.confidence DESC
+    `).all(endpointId) as Array<ClientCallRow & { source_repo_name: string }>;
+  }
+
+  getClientCallsByRepo(repoId: number): ClientCallRow[] {
+    return this.db.prepare('SELECT * FROM client_calls WHERE source_repo_id = ? ORDER BY file_path, line')
+      .all(repoId) as ClientCallRow[];
+  }
+
+  getClientCallsForTarget(targetRepoId: number): Array<ClientCallRow & { source_repo_name: string }> {
+    return this.db.prepare(`
+      SELECT cc.*, fr.name as source_repo_name FROM client_calls cc
+      JOIN federated_repos fr ON cc.source_repo_id = fr.id
+      WHERE cc.target_repo_id = ?
+      ORDER BY cc.confidence DESC
+    `).all(targetRepoId) as Array<ClientCallRow & { source_repo_name: string }>;
+  }
+
+  /** Match unlinked client calls to known endpoints. Returns number of newly linked calls. */
+  linkClientCallsToEndpoints(): number {
+    // Match by URL pattern similarity
+    const unlinked = this.db.prepare(
+      'SELECT * FROM client_calls WHERE matched_endpoint_id IS NULL',
+    ).all() as ClientCallRow[];
+
+    const endpoints = this.getAllEndpoints();
+    let linked = 0;
+
+    const updateStmt = this.db.prepare(
+      'UPDATE client_calls SET matched_endpoint_id = ?, target_repo_id = ?, confidence = ? WHERE id = ?',
+    );
+
+    this.db.transaction(() => {
+      for (const call of unlinked) {
+        const match = findBestEndpointMatch(call.url_pattern, call.method, endpoints);
+        if (match) {
+          // Find the repo for this service
+          const svc = this.db.prepare('SELECT repo_root FROM services WHERE id = ?')
+            .get(match.service_id) as { repo_root: string } | undefined;
+          const targetRepo = svc
+            ? this.db.prepare('SELECT id FROM federated_repos WHERE repo_root = ?')
+                .get(svc.repo_root) as { id: number } | undefined
+            : undefined;
+
+          updateStmt.run(match.id, targetRepo?.id ?? null, match.confidence, call.id);
+          linked++;
+        }
+      }
+    })();
+
+    return linked;
+  }
+
+  // ── Federation Stats ─────────────────────────────────────────────
+
+  getFederationStats(): {
+    repos: number;
+    clientCalls: number;
+    linkedCalls: number;
+    crossRepoEdges: number;
+  } {
+    const cnt = (sql: string) => (this.db.prepare(sql).get() as { cnt: number }).cnt;
+    return {
+      repos: cnt('SELECT COUNT(*) as cnt FROM federated_repos'),
+      clientCalls: cnt('SELECT COUNT(*) as cnt FROM client_calls'),
+      linkedCalls: cnt('SELECT COUNT(*) as cnt FROM client_calls WHERE matched_endpoint_id IS NOT NULL'),
+      crossRepoEdges: cnt('SELECT COUNT(*) as cnt FROM cross_service_edges'),
     };
   }
 }
