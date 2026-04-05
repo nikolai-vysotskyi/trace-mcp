@@ -259,6 +259,12 @@ function getMcpConfigPaths(projectRoot?: string): { clientName: string; configPa
   }
   paths.push({ clientName: 'claude-code', configPath: path.join(HOME, '.claude', 'settings.json') });
 
+  // Claw Code
+  if (projectRoot) {
+    paths.push({ clientName: 'claw-code', configPath: path.join(projectRoot, '.claw.json') });
+  }
+  paths.push({ clientName: 'claw-code', configPath: path.join(HOME, '.claw', 'settings.json') });
+
   // Claude Desktop
   if (platform === 'darwin') {
     paths.push({ clientName: 'claude-desktop', configPath: path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json') });
@@ -294,6 +300,8 @@ function scanHooksInSettings(): Conflict[] {
   const settingsFiles = [
     path.join(HOME, '.claude', 'settings.json'),
     path.join(HOME, '.claude', 'settings.local.json'),
+    path.join(HOME, '.claw', 'settings.json'),
+    path.join(HOME, '.claw', 'settings.local.json'),
   ];
 
   for (const settingsPath of settingsFiles) {
@@ -349,35 +357,40 @@ function scanHooksInSettings(): Conflict[] {
 
 function scanHookScriptFiles(): Conflict[] {
   const conflicts: Conflict[] = [];
-  const hooksDir = path.join(HOME, '.claude', 'hooks');
+  const hooksDirs = [
+    path.join(HOME, '.claude', 'hooks'),
+    path.join(HOME, '.claw', 'hooks'),
+  ];
 
-  if (!fs.existsSync(hooksDir)) return conflicts;
+  for (const hooksDir of hooksDirs) {
+    if (!fs.existsSync(hooksDir)) continue;
 
-  let files: string[];
-  try {
-    files = fs.readdirSync(hooksDir);
-  } catch {
-    return conflicts;
-  }
+    let files: string[];
+    try {
+      files = fs.readdirSync(hooksDir);
+    } catch {
+      continue;
+    }
 
-  for (const file of files) {
-    // Skip our own hook
-    if (file.startsWith('trace-mcp')) continue;
+    for (const file of files) {
+      // Skip our own hook
+      if (file.startsWith('trace-mcp')) continue;
 
-    for (const { pattern, competitor } of COMPETING_HOOK_PATTERNS) {
-      if (pattern.test(file)) {
-        const filePath = path.join(hooksDir, file);
-        conflicts.push({
-          id: `hook_script:${file}:${competitor}`,
-          category: 'hook_script',
-          severity: 'warning',
-          summary: `Competing hook script: ${file}`,
-          detail: `Hook script from ${competitor} at ${shortPath(filePath)}. ` +
-            `Even if not registered in settings.json, it may be re-enabled later.`,
-          target: filePath,
-          competitor,
-          fixable: true,
-        });
+      for (const { pattern, competitor } of COMPETING_HOOK_PATTERNS) {
+        if (pattern.test(file)) {
+          const filePath = path.join(hooksDir, file);
+          conflicts.push({
+            id: `hook_script:${file}:${competitor}`,
+            category: 'hook_script',
+            severity: 'warning',
+            summary: `Competing hook script: ${file}`,
+            detail: `Hook script from ${competitor} at ${shortPath(filePath)}. ` +
+              `Even if not registered in settings.json, it may be re-enabled later.`,
+            target: filePath,
+            competitor,
+            fixable: true,
+          });
+        }
       }
     }
   }

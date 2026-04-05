@@ -56,7 +56,7 @@ export function configureMcpClients(
     // Global scope always needs cwd since server starts from anywhere.
     // Project scope for claude-code doesn't need cwd (.mcp.json is in project root).
     const entry: McpServerEntry = { command: 'trace-mcp', args: ['serve'] };
-    if (opts.scope === 'global' || name !== 'claude-code') {
+    if (opts.scope === 'global' || (name !== 'claude-code' && name !== 'claw-code')) {
       entry.cwd = projectRoot;
     }
 
@@ -100,6 +100,10 @@ function getConfigPath(name: DetectedMcpClient['name'], projectRoot: string, sco
       return scope === 'global'
         ? path.join(HOME, '.claude.json')  // user-level MCP in Claude Code
         : path.join(projectRoot, '.mcp.json');
+    case 'claw-code':
+      return scope === 'global'
+        ? path.join(HOME, '.claw', 'settings.json')
+        : path.join(projectRoot, '.claw.json');
     case 'claude-desktop':
       // Claude Desktop is always global
       return process.platform === 'darwin'
