@@ -24,6 +24,10 @@ const CALL_EDGE_TYPES = new Set([
   // Framework-specific "call" semantics
   'dispatches', 'routes_to', 'validates_with',
   'nest_injects', 'graphql_resolves',
+  // Import-based edges (fallback when no call edges exist)
+  'esm_imports', 'imports', 'uses',
+  // Component/rendering edges
+  'renders_component', 'uses_composable',
 ]);
 
 /**

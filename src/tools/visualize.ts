@@ -133,7 +133,7 @@ function buildGraphData(
     const allFiles = store.getAllFiles();
     // Check if scope is a file or directory pattern
     if (scope.includes('*')) {
-      const isMatch = picomatch(scope, { matchBase: true });
+      const isMatch = picomatch(scope, { dot: true });
       seedFiles = allFiles.filter((f) => isMatch(f.path));
     } else if (scope.endsWith('/') || !scope.includes('.')) {
       // Directory

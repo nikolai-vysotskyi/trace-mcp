@@ -92,9 +92,9 @@ import { getControlFlow } from './tools/control-flow.js';
 import { buildNegativeEvidence } from './tools/evidence.js';
 import { FileWatcher } from './file-watcher.js';
 
-/** Compact JSON — no pretty-printing; saves 25–35% tokens on every response */
+/** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response */
 function j(value: unknown): string {
-  return JSON.stringify(value);
+  return JSON.stringify(value, (_key, val) => (val === null || val === undefined) ? undefined : val);
 }
 
 // jh() is defined inside createServer() as a closure over the savings tracker
@@ -222,6 +222,7 @@ export function createServer(
    *  The special `_shared` key in descriptions applies to all tools' parameters. */
   const _originalTool = server.tool.bind(server);
   const registeredToolNames: string[] = [];
+  const toolHandlers = new Map<string, (params: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>>();
   const descriptionOverrides = config.tools?.descriptions ?? {};
   const sharedParamOverrides = (typeof descriptionOverrides._shared === 'object' && descriptionOverrides._shared !== null)
     ? descriptionOverrides._shared as Record<string, string>
@@ -262,6 +263,11 @@ export function createServer(
     const cbIdx = args.length - 1;
     const originalCb = args[cbIdx] as Function;
     if (typeof originalCb === 'function') {
+      // Capture handler for batch API (calls original directly, no savings/journal double-counting)
+      toolHandlers.set(name, async (params: Record<string, unknown>) => {
+        return await originalCb(params) as { content: Array<{ type: string; text: string }>; isError?: boolean };
+      });
+
       args[cbIdx] = async (...cbArgs: unknown[]) => {
         savings.recordCall(name);
         // Extract params from MCP callback args (first arg is the params object)
@@ -311,10 +317,12 @@ export function createServer(
   process.on('exit', flushSavings);
 
   /** JSON-serialize with contextual next-step hints + budget warnings */
+  let budgetWarningShown = false;
   function jh(toolName: string, value: unknown): string {
     const hinted = withHints(toolName, value);
     const stats = savings.getSessionStats();
-    if (stats.total_calls >= 15) {
+    if (stats.total_calls >= 15 && !budgetWarningShown) {
+      budgetWarningShown = true;
       const obj = (hinted !== null && typeof hinted === 'object' && !Array.isArray(hinted))
         ? hinted as Record<string, unknown>
         : { data: hinted };
@@ -563,12 +571,27 @@ export function createServer(
       }));
       const response: Record<string, unknown> = { items, total: result.total, search_mode: result.search_mode };
       if (items.length === 0) {
-        const stats = store.getStats();
-        response.evidence = buildNegativeEvidence(
-          stats.totalFiles, stats.totalSymbols,
-          result.search_mode === 'fuzzy' || !!fuzzy,
-          'search',
-        );
+        // Auto-fallback: try text search when symbol search finds nothing
+        const textResult = searchText(store, projectRoot, {
+          query,
+          filePattern: file_pattern,
+          language,
+          maxResults: Math.min(limit ?? 20, 10),
+          contextLines: 1,
+        });
+        if (textResult.isOk() && textResult.value.matches.length > 0) {
+          const tv = textResult.value;
+          response.fallback_text_matches = tv.matches;
+          response.fallback_total = tv.total_matches;
+          response.search_mode = 'symbol_miss_text_fallback';
+        } else {
+          const stats = store.getStats();
+          response.evidence = buildNegativeEvidence(
+            stats.totalFiles, stats.totalSymbols,
+            result.search_mode === 'fuzzy' || !!fuzzy,
+            'search',
+          );
+        }
       }
       return { content: [{ type: 'text', text: jh('search', response) }] };
     },
@@ -2691,6 +2714,46 @@ export function createServer(
     async () => {
       const summary = journal.getSummary();
       return { content: [{ type: 'text', text: j(summary) }] };
+    },
+  );
+
+  // --- Batch API: multiple tool calls in one MCP request ---
+  _originalTool(
+    'batch',
+    'Execute multiple trace-mcp tools in a single MCP request. Returns results for all calls. Use to reduce round-trips when you need several independent queries (e.g., get_outline for 3 files, or search + get_symbol together).',
+    {
+      calls: z.array(z.object({
+        tool: z.string().describe('Tool name (e.g., "get_outline", "get_symbol", "search")'),
+        args: z.record(z.unknown()).describe('Tool arguments'),
+      })).min(1).max(10).describe('Array of tool calls to execute (max 10)'),
+    },
+    async ({ calls }) => {
+      const results: { tool: string; result?: unknown; error?: string }[] = [];
+      for (const call of calls) {
+        const handler = toolHandlers.get(call.tool);
+        if (!handler) {
+          results.push({ tool: call.tool, error: `Unknown tool: ${call.tool}` });
+          continue;
+        }
+        try {
+          savings.recordCall(call.tool);
+          const response = await handler(call.args);
+          // Parse the JSON text from the response to embed inline
+          const text = response.content?.[0]?.text;
+          if (text) {
+            try {
+              results.push({ tool: call.tool, result: JSON.parse(text) });
+            } catch {
+              results.push({ tool: call.tool, result: text });
+            }
+          } else {
+            results.push({ tool: call.tool, result: response });
+          }
+        } catch (e) {
+          results.push({ tool: call.tool, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+      return { content: [{ type: 'text', text: j({ batch_results: results, total: results.length }) }] };
     },
   );
 

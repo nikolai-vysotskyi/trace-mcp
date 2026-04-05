@@ -359,6 +359,12 @@ export async function getTaskContext(
 
     let score = hybridScore({ relevance, pagerank: pr, recency, typeBonus });
 
+    // Penalize non-code files (docs, config, yaml, markdown) — they waste tokens
+    const NON_CODE_LANGUAGES = new Set(['markdown', 'yaml', 'json', 'toml', 'xml', 'html', 'csv', 'text', 'ini']);
+    if (file.language && NON_CODE_LANGUAGES.has(file.language.toLowerCase())) {
+      score *= 0.2;
+    }
+
     // Depth decay for graph-expanded items
     if (walkInfo.depth > 0) {
       score *= 1 / (1 + 0.3 * walkInfo.depth);
