@@ -164,7 +164,7 @@ export function getContextBundle(
       const placeholders = fileRefIds.map(() => '?').join(',');
       const allFileSyms = store.db.prepare(
         `SELECT * FROM symbols WHERE file_id IN (${placeholders}) AND parent_id IS NULL`,
-      ).all(...fileRefIds) as import('../db/store.js').SymbolRow[];
+      ).all(...fileRefIds) as SymbolRow[];
       for (const sym of allFileSyms) {
         if (seenDepIds.has(sym.id)) continue;
         seenDepIds.add(sym.id);

@@ -84,8 +84,8 @@ export function isReadonly(node: TSNode): boolean {
  * Extract modifier keywords from a declaration node.
  * Returns flags for static, abstract, final modifiers.
  */
-export function extractModifiers(node: TSNode): { static?: true; abstract?: true; final?: true } {
-  const mods: { static?: true; abstract?: true; final?: true } = {};
+export function extractModifiers(node: TSNode): { static?: true; 'abstract'?: true; final?: true } {
+  const mods: { static?: true; 'abstract'?: true; final?: true } = {};
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;

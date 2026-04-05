@@ -235,14 +235,6 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
   }
 }
 
-/** Save global config to ~/.trace-mcp/.config.json (preserving existing content). */
-export function saveGlobalConfig(updates: Record<string, unknown>): void {
-  ensureGlobalDirs();
-  const existing = loadGlobalConfigRaw();
-  const merged = { ...existing, ...updates };
-  fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(merged, null, 2) + '\n');
-}
-
 /** Save per-project config section in the global config file. */
 export function saveProjectConfig(projectRoot: string, config: Record<string, unknown>): void {
   ensureGlobalDirs();

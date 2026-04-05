@@ -201,25 +201,13 @@ function fixClaudeMdBlock(conflict: Conflict, opts: { dryRun?: boolean }): FixRe
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
 
-    // Try to find and remove marker-delimited blocks
-    // Common patterns: <!-- tool:start --> ... <!-- tool:end -->
-    const markerPatterns = [
-      /<!-- ?jcodemunch:start ?-->[\s\S]*?<!-- ?jcodemunch:end ?-->\n?/gi,
-      /<!-- ?code-index:start ?-->[\s\S]*?<!-- ?code-index:end ?-->\n?/gi,
-      /<!-- ?repomix:start ?-->[\s\S]*?<!-- ?repomix:end ?-->\n?/gi,
-      /<!-- ?aider:start ?-->[\s\S]*?<!-- ?aider:end ?-->\n?/gi,
-      /<!-- ?cline:start ?-->[\s\S]*?<!-- ?cline:end ?-->\n?/gi,
-      /<!-- ?cody:start ?-->[\s\S]*?<!-- ?cody:end ?-->\n?/gi,
-      /<!-- ?greptile:start ?-->[\s\S]*?<!-- ?greptile:end ?-->\n?/gi,
-      /<!-- ?sourcegraph:start ?-->[\s\S]*?<!-- ?sourcegraph:end ?-->\n?/gi,
-      /<!-- ?code-compass:start ?-->[\s\S]*?<!-- ?code-compass:end ?-->\n?/gi,
-      /<!-- ?repo-map:start ?-->[\s\S]*?<!-- ?repo-map:end ?-->\n?/gi,
-    ];
+    // Remove marker-delimited blocks: <!-- tool:start --> ... <!-- tool:end -->
+    const tools = ['jcodemunch', 'code-index', 'repomix', 'aider', 'cline', 'cody', 'greptile', 'sourcegraph', 'code-compass', 'repo-map'];
+    const markerPattern = new RegExp(
+      `<!-- ?(${tools.join('|')}):start ?-->[\\s\\S]*?<!-- ?\\1:end ?-->\\n?`, 'gi',
+    );
 
-    let updated = content;
-    for (const pattern of markerPatterns) {
-      updated = updated.replace(pattern, '');
-    }
+    let updated = content.replace(markerPattern, '');
 
     // Clean up excessive blank lines left behind
     updated = updated.replace(/\n{3,}/g, '\n\n').trim() + '\n';

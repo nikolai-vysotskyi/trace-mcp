@@ -9,7 +9,7 @@ const IGNORE_DIRS = [
 ];
 
 /** Debounce window in ms — coalesces rapid saves from editors. */
-export const DEFAULT_DEBOUNCE_MS = 300;
+const DEFAULT_DEBOUNCE_MS = 300;
 
 export class FileWatcher {
   private subscription: parcelWatcher.AsyncSubscription | null = null;

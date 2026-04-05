@@ -64,6 +64,7 @@ import { resolvePreset, listPresets } from './tools/presets.js';
 import { withHints } from './tools/hints.js';
 import { scanSecurity, type RuleName, type Severity } from './tools/security-scan.js';
 import { detectAntipatterns, type AntipatternCategory, type Severity as AntipatternSeverity } from './tools/antipatterns.js';
+import { scanCodeSmells, type SmellCategory, type SmellPriority } from './tools/code-smells.js';
 import { generateSbom, type SbomFormat } from './tools/sbom.js';
 import { getArtifacts, type ArtifactCategory } from './tools/artifacts.js';
 import { fallbackSearch, fallbackOutline } from './tools/zero-index.js';
@@ -110,19 +111,39 @@ export function createServer(
       instructions: [
         `trace-mcp is a framework-aware code intelligence server for this project. Detected frameworks: ${detectedFrameworks}.`,
         '',
-        'WHEN TO USE trace-mcp tools (instead of Read/Grep/Glob):',
-        '- Finding a function/class/method → `search` (understands symbol kinds, FQNs, language filters)',
-        '- Understanding a file before editing → `outline_file` (signatures only — cheaper than Read)',
+        'IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVER fall back to Read/Grep/Glob/Bash(ls,find) for navigating source code — trace-mcp gives semantic, structured results that are cheaper in tokens and more accurate.',
+        '',
+        'WHEN TO USE trace-mcp tools:',
+        '',
+        'Navigation & search:',
+        '- Finding a function/class/method → `search` (understands symbol kinds, FQNs, language filters; use `implements`/`extends` to filter by interface)',
+        '- Understanding a file before editing → `get_outline` (signatures only — cheaper than Read)',
         '- Reading one symbol\'s source → `get_symbol` (returns only the symbol, not the whole file)',
+        '- Quick keyword context → `get_feature_context` (NL query → relevant symbols + source)',
+        '- Starting work on a task → `get_task_context` (NL task → full execution context with tests)',
+        '',
+        'Relationships & impact:',
         '- What breaks if I change X → `get_change_impact` (reverse dependency graph)',
         '- Who calls this / what does it call → `get_call_graph` (bidirectional)',
-        '- All usages of a symbol → `trace_usages` (semantic: imports, calls, renders, dispatches)',
-        '- Starting work on a task → `get_task_context` (NL task → full execution context with tests, adapts to bugfix/feature/refactor)',
-        '- Quick keyword context → `get_feature_context` (NL query → relevant symbols + source)',
+        '- All usages of a symbol → `find_usages` (semantic: imports, calls, renders, dispatches)',
         '- Tests for a symbol/file → `get_tests_for` (understands test-to-source mapping)',
+        '',
+        'Architecture & meta-analysis:',
+        '- All implementations of an interface → `get_type_hierarchy` (walks extends/implements tree)',
+        '- All classes implementing X → `search` with `implements` or `extends` filter',
+        '- Project health / coverage gaps → `self_audit` (dead exports, untested code, hotspots)',
+        '- Module dependency graph → `get_module_graph` (NestJS) or `get_import_graph`',
+        '- Dead code / dead exports → `get_dead_code` / `get_dead_exports`',
+        '- Circular dependencies → `get_circular_imports`',
+        '- Coupling analysis → `get_coupling`',
+        '',
+        'Framework-specific:',
         '- HTTP request flow → `get_request_flow` (route → middleware → controller → service)',
         '- DB model details → `get_model_context` (relationships, schema, metadata)',
         '- Database schema → `get_schema` (from migrations/ORM definitions)',
+        '- Component tree → `get_component_tree` (React/Vue/Angular)',
+        '- State stores → `get_state_stores` (Zustand/Redux/Pinia)',
+        '- Event graph → `get_event_graph` (event emitters/listeners)',
         '',
         'WHEN TO USE native tools (Read/Grep/Glob):',
         '- Non-code files (.md, .json, .yaml, .toml, config) → Read/Grep',
@@ -1113,6 +1134,42 @@ export function createServer(
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
       return { content: [{ type: 'text', text: jh('detect_antipatterns', result.value) }] };
+    },
+  );
+
+  server.tool(
+    'scan_code_smells',
+    'Find deferred work and shortcuts: TODO/FIXME/HACK/XXX comments, empty functions & stubs, hardcoded values (IPs, URLs, credentials, magic numbers, feature flags). Surfaces technical debt that grep alone misses by combining comment scanning, symbol body analysis, and context-aware false-positive filtering.',
+    {
+      category: z.array(z.enum([
+        'todo_comment', 'empty_function', 'hardcoded_value',
+      ])).optional().describe('Categories to scan (default: all)'),
+      scope: z.string().max(512).optional().describe('Directory to scan (default: whole project)'),
+      priority_threshold: z.enum(['high', 'medium', 'low']).optional()
+        .describe('Minimum priority to report (default: low)'),
+      include_tests: z.boolean().optional()
+        .describe('Include test files in scan (default: false)'),
+      tags: z.array(z.string().max(64)).optional()
+        .describe('Filter TODO comments by tag (e.g. ["FIXME","HACK"]). Only applies to todo_comment category'),
+      limit: z.number().int().min(1).max(1000).optional().describe('Max findings to return (default: 200)'),
+    },
+    async ({ category, scope, priority_threshold, include_tests, tags, limit }) => {
+      if (scope) {
+        const blocked = guardPath(scope);
+        if (blocked) return blocked;
+      }
+      const result = scanCodeSmells(store, projectRoot, {
+        category: category as SmellCategory[] | undefined,
+        scope,
+        priority_threshold: priority_threshold as SmellPriority | undefined,
+        include_tests,
+        tags,
+        limit,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: jh('scan_code_smells', result.value) }] };
     },
   );
 

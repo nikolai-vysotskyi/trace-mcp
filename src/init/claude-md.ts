@@ -13,7 +13,7 @@ const END_MARKER = '<!-- trace-mcp:end -->';
 const BLOCK = `${START_MARKER}
 ## trace-mcp Tool Routing
 
-Use trace-mcp tools for code intelligence — they understand framework relationships, not just text.
+IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
 
 | Task | trace-mcp tool | Instead of |
 |------|---------------|------------|
@@ -22,12 +22,18 @@ Use trace-mcp tools for code intelligence — they understand framework relation
 | Read one symbol's source | \`get_symbol\` | Read (full file) |
 | What breaks if I change X | \`get_change_impact\` | guessing |
 | All usages of a symbol | \`find_usages\` | Grep |
+| All implementations of an interface | \`get_type_hierarchy\` | ls/find on directories |
+| All classes implementing X | \`search\` with \`implements\` filter | Grep |
+| Project health / coverage gaps | \`self_audit\` | manual inspection |
+| Dead code / dead exports | \`get_dead_code\` / \`get_dead_exports\` | Grep for unused |
 | Context for a task | \`get_feature_context\` | reading 15 files |
 | Tests for a symbol | \`get_tests_for\` | Glob + Grep |
 | HTTP request flow | \`get_request_flow\` | reading route files |
 | DB model relationships | \`get_model_context\` | reading model + migrations |
+| Component tree | \`get_component_tree\` | reading component files |
+| Circular dependencies | \`get_circular_imports\` | manual tracing |
 
-Use Read/Grep/Glob for non-code files (.md, .json, .yaml, config).
+Use Read/Grep/Glob ONLY for non-code files (.md, .json, .yaml, config) or before Edit.
 Start sessions with \`get_project_map\` (summary_only=true).
 ${END_MARKER}`;
 

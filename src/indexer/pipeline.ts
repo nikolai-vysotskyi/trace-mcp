@@ -17,6 +17,7 @@ import { computeComplexity } from '../tools/complexity.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { indexTrigramsBatch, deleteTrigramsByFile } from '../db/fuzzy.js';
+import { captureGraphSnapshots } from '../tools/history.js';
 
 export interface IndexingResult {
   totalFiles: number;
@@ -862,7 +863,19 @@ export class IndexingPipeline {
         const sourceNodeId = fileNodeMap.get(fileId);
         if (sourceNodeId == null) continue;
 
+        // Consolidate imports from the same module so specifiers don't get lost
+        // by INSERT OR IGNORE when multiple import statements target the same file
+        const consolidated = new Map<string, string[]>();
         for (const { from, specifiers } of imports) {
+          const existing = consolidated.get(from);
+          if (existing) {
+            existing.push(...specifiers);
+          } else {
+            consolidated.set(from, [...specifiers]);
+          }
+        }
+
+        for (const [from, specifiers] of consolidated) {
           // Skip bare specifiers (node_modules) — only resolve project-local imports
           if (!from.startsWith('.') && !from.startsWith('/') && !from.startsWith('@/') && !from.startsWith('~')) continue;
 

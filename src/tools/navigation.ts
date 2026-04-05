@@ -177,7 +177,7 @@ export async function search(
   const allSymbols = symbolIdStrs.length > 0
     ? store.db.prepare(
         `SELECT * FROM symbols WHERE symbol_id IN (${symbolIdStrs.map(() => '?').join(',')})`,
-      ).all(...symbolIdStrs) as import('../db/store.js').SymbolRow[]
+      ).all(...symbolIdStrs) as SymbolRow[]
     : [];
   const symbolByIdStr = new Map(allSymbols.map((s) => [s.symbol_id, s]));
 
