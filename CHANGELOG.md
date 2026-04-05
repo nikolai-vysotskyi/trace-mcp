@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.6...v1.0.7) (2026-04-05)
+
+
+### Bug Fixes
+
+* **ci:** remove registry-url to let npm use OIDC for Trusted Publishing ([a361917](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a361917aac5f029339f23914cf045c4612b18eb6))
+
 ## [1.0.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.0.5...v1.0.6) (2026-04-05)
 
 
