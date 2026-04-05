@@ -24,6 +24,28 @@ export class Store {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ),
       getSymbolById: db.prepare('SELECT * FROM symbols WHERE id = ?'),
+      // Hot-path statements called per-file during indexing:
+      insertFile: db.prepare(
+        `INSERT INTO files (path, language, content_hash, byte_length, indexed_at, workspace)
+         VALUES (?, ?, ?, ?, datetime('now'), ?)`,
+      ),
+      updateFileHash: db.prepare(
+        "UPDATE files SET content_hash = ?, byte_length = ?, indexed_at = datetime('now') WHERE id = ?",
+      ),
+      updateFileStatus: db.prepare(
+        'UPDATE files SET status = ?, framework_role = COALESCE(?, framework_role) WHERE id = ?',
+      ),
+      updateFileGitignored: db.prepare('UPDATE files SET gitignored = ? WHERE id = ?'),
+      deleteFileById: db.prepare('DELETE FROM files WHERE id = ?'),
+      deleteNodeByTypeAndRef: db.prepare('DELETE FROM nodes WHERE node_type = ? AND ref_id = ?'),
+      deleteSymbolsByFileId: db.prepare('DELETE FROM symbols WHERE file_id = ?'),
+      deleteSymbolNodesByFileId: db.prepare(
+        `DELETE FROM nodes WHERE node_type = 'symbol'
+         AND ref_id IN (SELECT id FROM symbols WHERE file_id = ?)`,
+      ),
+      getSymbolsByFileId: db.prepare('SELECT * FROM symbols WHERE file_id = ? ORDER BY byte_start'),
+      getSymbolBySymbolId: db.prepare('SELECT * FROM symbols WHERE symbol_id = ?'),
+      getSymbolByFqn: db.prepare('SELECT * FROM symbols WHERE fqn = ?'),
     };
   }
 
@@ -38,6 +60,17 @@ export class Store {
     insertEdge: Database.Statement;
     insertSymbol: Database.Statement;
     getSymbolById: Database.Statement;
+    insertFile: Database.Statement;
+    updateFileHash: Database.Statement;
+    updateFileStatus: Database.Statement;
+    updateFileGitignored: Database.Statement;
+    deleteFileById: Database.Statement;
+    deleteNodeByTypeAndRef: Database.Statement;
+    deleteSymbolsByFileId: Database.Statement;
+    deleteSymbolNodesByFileId: Database.Statement;
+    getSymbolsByFileId: Database.Statement;
+    getSymbolBySymbolId: Database.Statement;
+    getSymbolByFqn: Database.Statement;
   };
 
   // --- Files ---
@@ -49,10 +82,7 @@ export class Store {
     byteLength: number | null,
     workspace?: string | null,
   ): number {
-    const result = this.db.prepare(
-      `INSERT INTO files (path, language, content_hash, byte_length, indexed_at, workspace)
-       VALUES (?, ?, ?, ?, datetime('now'), ?)`,
-    ).run(path, language, contentHash, byteLength, workspace ?? null);
+    const result = this._stmts.insertFile.run(path, language, contentHash, byteLength, workspace ?? null);
     const fileId = Number(result.lastInsertRowid);
 
     // Create node in unified address space
@@ -81,27 +111,23 @@ export class Store {
   }
 
   updateFileHash(fileId: number, hash: string, byteLength: number): void {
-    this.db.prepare(
-      "UPDATE files SET content_hash = ?, byte_length = ?, indexed_at = datetime('now') WHERE id = ?",
-    ).run(hash, byteLength, fileId);
+    this._stmts.updateFileHash.run(hash, byteLength, fileId);
   }
 
   updateFileStatus(fileId: number, status: string, frameworkRole?: string): void {
-    this.db.prepare(
-      'UPDATE files SET status = ?, framework_role = COALESCE(?, framework_role) WHERE id = ?',
-    ).run(status, frameworkRole ?? null, fileId);
+    this._stmts.updateFileStatus.run(status, frameworkRole ?? null, fileId);
   }
 
   updateFileGitignored(fileId: number, gitignored: boolean): void {
-    this.db.prepare('UPDATE files SET gitignored = ? WHERE id = ?').run(gitignored ? 1 : 0, fileId);
+    this._stmts.updateFileGitignored.run(gitignored ? 1 : 0, fileId);
   }
 
   deleteFile(fileId: number): void {
     // Cascade deletes symbols, edges via nodes
     this.deleteEdgesForFileNodes(fileId);
     this.deleteEntitiesByFile(fileId);
-    this.db.prepare('DELETE FROM nodes WHERE node_type = ? AND ref_id = ?').run('file', fileId);
-    this.db.prepare('DELETE FROM files WHERE id = ?').run(fileId);
+    this._stmts.deleteNodeByTypeAndRef.run('file', fileId);
+    this._stmts.deleteFileById.run(fileId);
   }
 
   /** Delete routes, components, migrations, ORM models, and RN screens for a file (and their nodes). */
@@ -203,23 +229,20 @@ export class Store {
 
   deleteSymbolsByFile(fileId: number): void {
     // Single subquery instead of N individual per-symbol DELETEs
-    this.db.prepare(
-      `DELETE FROM nodes WHERE node_type = 'symbol'
-         AND ref_id IN (SELECT id FROM symbols WHERE file_id = ?)`,
-    ).run(fileId);
-    this.db.prepare('DELETE FROM symbols WHERE file_id = ?').run(fileId);
+    this._stmts.deleteSymbolNodesByFileId.run(fileId);
+    this._stmts.deleteSymbolsByFileId.run(fileId);
   }
 
   getSymbolsByFile(fileId: number): SymbolRow[] {
-    return this.db.prepare('SELECT * FROM symbols WHERE file_id = ? ORDER BY byte_start').all(fileId) as SymbolRow[];
+    return this._stmts.getSymbolsByFileId.all(fileId) as SymbolRow[];
   }
 
   getSymbolBySymbolId(symbolId: string): SymbolRow | undefined {
-    return this.db.prepare('SELECT * FROM symbols WHERE symbol_id = ?').get(symbolId) as SymbolRow | undefined;
+    return this._stmts.getSymbolBySymbolId.get(symbolId) as SymbolRow | undefined;
   }
 
   getSymbolByFqn(fqn: string): SymbolRow | undefined {
-    return this.db.prepare('SELECT * FROM symbols WHERE fqn = ?').get(fqn) as SymbolRow | undefined;
+    return this._stmts.getSymbolByFqn.get(fqn) as SymbolRow | undefined;
   }
 
   // --- Nodes ---
@@ -272,6 +295,18 @@ export class Store {
            OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
       )
     `).run(fileId, fileId, fileId, fileId);
+  }
+
+  /** Delete only outgoing edges from a file's nodes — used by incremental indexing
+   *  to preserve incoming edges (e.g. imports from other files into this file). */
+  deleteOutgoingEdgesForFileNodes(fileId: number): void {
+    this.db.prepare(`
+      DELETE FROM edges WHERE source_node_id IN (
+        SELECT n.id FROM nodes n
+        WHERE (n.node_type = 'file' AND n.ref_id = ?)
+           OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
+      )
+    `).run(fileId, fileId);
   }
 
   // --- Graph Traversal ---
@@ -935,6 +970,51 @@ export class Store {
       errorFiles,
     };
   }
+
+  // --- Graph Snapshots (Time Machine) ---
+
+  insertGraphSnapshot(
+    snapshotType: string,
+    data: Record<string, unknown>,
+    commitHash?: string,
+    filePath?: string,
+  ): number {
+    const result = this.db.prepare(
+      `INSERT INTO graph_snapshots (commit_hash, snapshot_type, file_path, data)
+       VALUES (?, ?, ?, ?)`,
+    ).run(commitHash ?? null, snapshotType, filePath ?? null, JSON.stringify(data));
+    return Number(result.lastInsertRowid);
+  }
+
+  getGraphSnapshots(
+    snapshotType: string,
+    options: { filePath?: string; since?: string; limit?: number } = {},
+  ): GraphSnapshotRow[] {
+    const conditions = ['snapshot_type = ?'];
+    const params: unknown[] = [snapshotType];
+    if (options.filePath) {
+      conditions.push('file_path = ?');
+      params.push(options.filePath);
+    }
+    if (options.since) {
+      conditions.push('created_at >= ?');
+      params.push(options.since);
+    }
+    params.push(options.limit ?? 50);
+    return this.db.prepare(`
+      SELECT * FROM graph_snapshots
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(...params) as GraphSnapshotRow[];
+  }
+
+  pruneGraphSnapshots(maxAge: number = 90): number {
+    const result = this.db.prepare(
+      `DELETE FROM graph_snapshots WHERE created_at < datetime('now', '-' || ? || ' days')`,
+    ).run(maxAge);
+    return result.changes;
+  }
 }
 
 // --- Row types ---
@@ -1106,4 +1186,13 @@ export interface IndexStats {
   totalMigrations: number;
   partialFiles: number;
   errorFiles: number;
+}
+
+export interface GraphSnapshotRow {
+  id: number;
+  commit_hash: string | null;
+  created_at: string;
+  snapshot_type: string;
+  file_path: string | null;
+  data: string;
 }

@@ -12,14 +12,12 @@ export interface AggregateResult {
 }
 
 export class RuntimeAggregator {
-  constructor(private db: Database.Database) {}
+  private readonly aggregateStmt: Database.Statement;
+  private readonly upsertStmt: Database.Statement;
+  private readonly getDurations: Database.Statement;
 
-  /** Recompute aggregates for spans since a given time. */
-  aggregate(since?: string): AggregateResult {
-    const sinceStr = since ?? new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // default: last 2h
-
-    // Step 1: Basic aggregates via SQL
-    const rows = this.db.prepare(`
+  constructor(private db: Database.Database) {
+    this.aggregateStmt = db.prepare(`
       SELECT
         mapped_node_id as node_id,
         strftime('%Y-%m-%dT%H', started_at) as bucket,
@@ -32,7 +30,28 @@ export class RuntimeAggregator {
       WHERE mapped_node_id IS NOT NULL
         AND started_at >= ?
       GROUP BY mapped_node_id, bucket
-    `).all(sinceStr) as Array<{
+      LIMIT 50000
+    `);
+
+    this.upsertStmt = db.prepare(`
+      INSERT OR REPLACE INTO runtime_aggregates
+        (node_id, bucket, call_count, error_count, total_duration_us, min_duration_us, max_duration_us, percentiles)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    this.getDurations = db.prepare(`
+      SELECT duration_us FROM runtime_spans
+      WHERE mapped_node_id = ? AND strftime('%Y-%m-%dT%H', started_at) = ?
+      ORDER BY duration_us
+    `);
+  }
+
+  /** Recompute aggregates for spans since a given time. */
+  aggregate(since?: string): AggregateResult {
+    const sinceStr = since ?? new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // default: last 2h
+
+    // Step 1: Basic aggregates via SQL
+    const rows = this.aggregateStmt.all(sinceStr) as Array<{
       node_id: number;
       bucket: string;
       call_count: number;
@@ -44,25 +63,12 @@ export class RuntimeAggregator {
 
     if (rows.length === 0) return { bucketsUpdated: 0, nodesAffected: 0 };
 
-    // Step 2: Compute percentiles per node+bucket
-    const upsertStmt = this.db.prepare(`
-      INSERT OR REPLACE INTO runtime_aggregates
-        (node_id, bucket, call_count, error_count, total_duration_us, min_duration_us, max_duration_us, percentiles)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const getDurations = this.db.prepare(`
-      SELECT duration_us FROM runtime_spans
-      WHERE mapped_node_id = ? AND strftime('%Y-%m-%dT%H', started_at) = ?
-      ORDER BY duration_us
-    `);
-
     const nodesAffected = new Set<number>();
 
     this.db.transaction(() => {
       for (const row of rows) {
         // Compute percentiles
-        const durations = getDurations.all(row.node_id, row.bucket) as Array<{ duration_us: number }>;
+        const durations = this.getDurations.all(row.node_id, row.bucket) as Array<{ duration_us: number }>;
         const sorted = durations.map((d) => d.duration_us);
         const percentiles = [
           { p: 50, v: percentile(sorted, 0.50) },
@@ -70,7 +76,7 @@ export class RuntimeAggregator {
           { p: 99, v: percentile(sorted, 0.99) },
         ];
 
-        upsertStmt.run(
+        this.upsertStmt.run(
           row.node_id,
           row.bucket,
           row.call_count,
