@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { graphQuery } from '../../src/tools/graph-query.js';
+import { graphQuery } from '../../src/tools/analysis/graph-query.js';
 
 function createStore(): Store {
   const db = initializeDatabase(':memory:');

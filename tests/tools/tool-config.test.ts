@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { TraceMcpConfigSchema } from '../../src/config.js';
-import { resolvePreset, TOOL_PRESETS } from '../../src/tools/presets.js';
+import { resolvePreset, TOOL_PRESETS } from '../../src/tools/project/presets.js';
 
 describe('Tool config schema', () => {
   it('accepts descriptions override in tools config', () => {

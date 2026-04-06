@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { Store } from '../../src/db/store.js';
 import { initializeDatabase } from '../../src/db/schema.js';
-import { getComplexityTrend } from '../../src/tools/complexity-trend.js';
+import { getComplexityTrend } from '../../src/tools/analysis/complexity-trend.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),

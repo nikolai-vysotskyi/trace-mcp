@@ -1,0 +1,327 @@
+/**
+ * `trace-mcp analytics` command group.
+ * Subcommands: sync, report, optimize, benchmark, coverage
+ */
+
+import { Command } from 'commander';
+import { AnalyticsStore } from '../analytics/analytics-store.js';
+import { syncAnalytics } from '../analytics/sync.js';
+import { getSessionAnalytics, getOptimizationReport } from '../analytics/session-analytics.js';
+import { runBenchmark, formatBenchmarkMarkdown } from '../analytics/benchmark.js';
+import { detectCoverage } from '../analytics/tech-detector.js';
+import { analyzeRealSavings } from '../analytics/real-savings.js';
+import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
+import { getDbPath, ensureGlobalDirs } from '../global.js';
+import { getProject } from '../registry.js';
+import { findProjectRoot } from '../project-root.js';
+
+function resolveDbPath(projectRoot: string): string {
+  const entry = getProject(projectRoot);
+  if (entry) return entry.dbPath;
+  return getDbPath(projectRoot);
+}
+
+export const analyticsCommand = new Command('analytics')
+  .description('AI agent session analytics: sync logs, view reports, find optimizations');
+
+// --- sync ---
+analyticsCommand
+  .command('sync')
+  .description('Parse Claude Code session logs into analytics database')
+  .option('--full', 'Force full rescan of all sessions', false)
+  .option('--project <path>', 'Filter by project path')
+  .action(async (opts: { full: boolean; project?: string }) => {
+    ensureGlobalDirs();
+    const analyticsStore = new AnalyticsStore();
+    try {
+      const result = syncAnalytics(analyticsStore, { full: opts.full });
+      console.log(`Scanned: ${result.files_scanned}, Parsed: ${result.files_parsed}, Skipped: ${result.files_skipped}, Errors: ${result.errors}`);
+    } finally {
+      analyticsStore.close();
+    }
+  });
+
+// --- report ---
+analyticsCommand
+  .command('report')
+  .description('Show session analytics: token usage, costs, tool breakdown')
+  .option('--period <p>', 'Period: today, week, month, all', 'week')
+  .option('--project <path>', 'Filter by project path')
+  .option('--format <fmt>', 'Output: text | json', 'text')
+  .action(async (opts: { period: string; project?: string; format: string }) => {
+    ensureGlobalDirs();
+    const analyticsStore = new AnalyticsStore();
+    try {
+      const result = getSessionAnalytics(analyticsStore, {
+        period: opts.period as 'today' | 'week' | 'month' | 'all',
+        projectPath: opts.project,
+      });
+
+      if (opts.format === 'json') {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log(`\n📊 Session Analytics (${result.period})\n`);
+      console.log(`Sessions: ${result.sessionsCount}`);
+      console.log(`Tool calls: ${result.totals.toolCalls}`);
+      console.log(`Input tokens: ${result.totals.inputTokens.toLocaleString()}`);
+      console.log(`Output tokens: ${result.totals.outputTokens.toLocaleString()}`);
+      console.log(`Cache read: ${result.totals.cacheReadTokens.toLocaleString()}`);
+      console.log(`Estimated cost: $${result.totals.estimatedCostUsd.toFixed(2)}`);
+
+      if (result.topTools.length > 0) {
+        console.log(`\nTop tools:`);
+        for (const t of result.topTools.slice(0, 10)) {
+          console.log(`  ${t.name}: ${t.calls} calls (~${t.outputTokensEst.toLocaleString()} tokens)`);
+        }
+      }
+
+      if (result.topFiles.length > 0) {
+        console.log(`\nTop files:`);
+        for (const f of result.topFiles.slice(0, 10)) {
+          console.log(`  ${f.path}: ${f.reads} reads (~${f.tokensEst.toLocaleString()} tokens)`);
+        }
+      }
+    } finally {
+      analyticsStore.close();
+    }
+  });
+
+// --- optimize ---
+analyticsCommand
+  .command('optimize')
+  .description('Detect token waste patterns and suggest optimizations')
+  .option('--period <p>', 'Period: today, week, month, all', 'week')
+  .option('--project <path>', 'Filter by project path')
+  .option('--format <fmt>', 'Output: text | json', 'text')
+  .action(async (opts: { period: string; project?: string; format: string }) => {
+    ensureGlobalDirs();
+    const analyticsStore = new AnalyticsStore();
+    try {
+      const result = getOptimizationReport(analyticsStore, {
+        period: opts.period as 'today' | 'week' | 'month' | 'all',
+        projectPath: opts.project,
+      });
+
+      if (opts.format === 'json') {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log(`\n🔍 Optimization Report (${result.period})\n`);
+      console.log(`Current usage: ${result.currentUsage.totalTokens.toLocaleString()} tokens (~$${result.currentUsage.estimatedCostUsd.toFixed(2)})`);
+
+      if (result.optimizations.length === 0) {
+        console.log('\nNo optimization opportunities found.');
+      } else {
+        for (const opt of result.optimizations) {
+          const saved = opt.currentTokens - opt.potentialTokens;
+          const pct = opt.currentTokens > 0 ? Math.round((saved / opt.currentTokens) * 100) : 0;
+          console.log(`\n[${opt.severity}] ${opt.rule}: ${opt.occurrences} occurrences`);
+          console.log(`  Current: ${opt.currentTokens.toLocaleString()} tokens → Potential: ${opt.potentialTokens.toLocaleString()} tokens`);
+          console.log(`  Savings: ${saved.toLocaleString()} tokens (${pct}%)`);
+          console.log(`  ${opt.recommendation}`);
+        }
+        console.log(`\nTotal potential savings: ${result.totalPotentialSavings.tokens.toLocaleString()} tokens (~$${result.totalPotentialSavings.costUsd.toFixed(2)}, ${result.totalPotentialSavings.pct}%)`);
+      }
+    } finally {
+      analyticsStore.close();
+    }
+  });
+
+// --- benchmark ---
+analyticsCommand
+  .command('benchmark')
+  .description('Run synthetic token efficiency benchmark')
+  .option('--queries <n>', 'Queries per scenario', '10')
+  .option('--seed <n>', 'Random seed', '42')
+  .option('--format <fmt>', 'Output: json | markdown | text', 'text')
+  .action(async (opts: { queries: string; seed: string; format: string }) => {
+    let projectRoot: string;
+    try {
+      projectRoot = findProjectRoot(process.cwd());
+    } catch {
+      projectRoot = process.cwd();
+    }
+
+    const dbPath = resolveDbPath(projectRoot);
+    const db = initializeDatabase(dbPath);
+    const store = new Store(db);
+    try {
+      const result = runBenchmark(store, {
+        queries: parseInt(opts.queries, 10),
+        seed: parseInt(opts.seed, 10),
+        projectName: projectRoot,
+      });
+
+      if (opts.format === 'json') {
+        console.log(JSON.stringify(result, null, 2));
+      } else if (opts.format === 'markdown') {
+        console.log(formatBenchmarkMarkdown(result));
+      } else {
+        console.log(`\n⚡ Token Efficiency Benchmark\n`);
+        console.log(`Project: ${result.project}`);
+        console.log(`Index: ${result.index_stats.files} files, ${result.index_stats.symbols} symbols\n`);
+
+        for (const s of result.scenarios) {
+          const reduction = s.reduction_pct.toFixed(1);
+          console.log(`${s.name}: ${s.baseline_tokens.toLocaleString()} → ${s.trace_mcp_tokens.toLocaleString()} tokens (${reduction}% reduction)`);
+        }
+
+        console.log(`\nTotal: ${result.totals.baseline_tokens.toLocaleString()} → ${result.totals.trace_mcp_tokens.toLocaleString()} (${result.totals.reduction_pct}% reduction)`);
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+// --- coverage ---
+analyticsCommand
+  .command('coverage')
+  .description('Show technology coverage: detected deps vs trace-mcp plugin support')
+  .option('--format <fmt>', 'Output: text | json', 'text')
+  .action(async (opts: { format: string }) => {
+    let projectRoot: string;
+    try {
+      projectRoot = findProjectRoot(process.cwd());
+    } catch {
+      projectRoot = process.cwd();
+    }
+
+    const result = detectCoverage(projectRoot);
+
+    if (opts.format === 'json') {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    console.log(`\n📦 Technology Coverage Report\n`);
+    console.log(`Manifests: ${result.manifests_analyzed.join(', ')}`);
+    console.log(`Coverage: ${result.coverage.covered}/${result.coverage.total_significant} significant deps (${result.coverage.coverage_pct}%)\n`);
+
+    if (result.covered.length > 0) {
+      console.log('✅ Covered:');
+      for (const d of result.covered) {
+        console.log(`  ${d.name} ${d.version} → plugin: ${d.plugin}`);
+      }
+    }
+
+    if (result.gaps.length > 0) {
+      console.log('\n⚠️  Gaps:');
+      for (const g of result.gaps) {
+        console.log(`  [${g.priority}] ${g.name} ${g.version} (${g.category})`);
+      }
+    }
+
+    if (result.unknown.length > 0) {
+      console.log(`\n❓ Unknown (${result.unknown.length} packages not in catalog)`);
+    }
+  });
+
+// --- savings ---
+analyticsCommand
+  .command('savings')
+  .description('Analyze real savings: how much trace-mcp could save vs raw file reads')
+  .option('--period <p>', 'Period: today, week, month, all', 'week')
+  .option('--format <fmt>', 'Output: text | json', 'text')
+  .action(async (opts: { period: string; format: string }) => {
+    let projectRoot: string;
+    try {
+      projectRoot = findProjectRoot(process.cwd());
+    } catch {
+      projectRoot = process.cwd();
+    }
+
+    ensureGlobalDirs();
+    const analyticsStore = new AnalyticsStore();
+    const dbPath = resolveDbPath(projectRoot);
+    const db = initializeDatabase(dbPath);
+    const store = new Store(db);
+    try {
+      syncAnalytics(analyticsStore);
+      const toolCalls = analyticsStore.getToolCallsForOptimization({ projectPath: projectRoot, period: opts.period as any });
+      const result = analyzeRealSavings(store, toolCalls, opts.period);
+
+      if (opts.format === 'json') {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log(`\n💰 Real Savings Analysis (${result.period})\n`);
+      console.log(`Sessions analyzed: ${result.sessionsAnalyzed}`);
+      console.log(`File reads: ${result.fileReadsAnalyzed} (${result.filesInIndex} in index, ${result.filesNotIndexed} not indexed)`);
+      console.log(`\nTotal read tokens: ${result.summary.totalReadTokens.toLocaleString()}`);
+      console.log(`Achievable with trace-mcp: ${result.summary.achievableWithTraceMcp.toLocaleString()}`);
+      console.log(`Potential savings: ${result.summary.potentialSavingsTokens.toLocaleString()} tokens (${result.summary.potentialSavingsPct}%)`);
+
+      const costs = Object.entries(result.summary.potentialCostSavings);
+      if (costs.length > 0) {
+        console.log(`Cost savings: ${costs.map(([m, v]) => `${v} (${m})`).join(', ')}`);
+      }
+
+      if (result.byFile.length > 0) {
+        console.log(`\nTop files by savings:`);
+        for (const f of result.byFile.slice(0, 10)) {
+          const saved = f.totalReadTokens - f.alternativeTokens;
+          console.log(`  ${f.file}: ${f.reads} reads, ${saved.toLocaleString()} tokens saveable (${f.savingsPct}%)`);
+        }
+      }
+
+      if (result.abComparison) {
+        const ab = result.abComparison;
+        console.log(`\nA/B Comparison:`);
+        console.log(`  With trace-mcp (${ab.sessionsWithTraceMcp.count} sessions): ${ab.sessionsWithTraceMcp.avgTokensPerSession.toLocaleString()} avg tokens, ${ab.sessionsWithTraceMcp.avgToolCalls} avg calls`);
+        console.log(`  Without (${ab.sessionsWithoutTraceMcp.count} sessions): ${ab.sessionsWithoutTraceMcp.avgTokensPerSession.toLocaleString()} avg tokens, ${ab.sessionsWithoutTraceMcp.avgToolCalls} avg calls`);
+        console.log(`  Difference: ${ab.difference.tokensSavedPct}% fewer tokens, ${ab.difference.fewerToolCallsPct}% fewer calls`);
+      }
+    } finally {
+      db.close();
+      analyticsStore.close();
+    }
+  });
+
+// --- trends ---
+analyticsCommand
+  .command('trends')
+  .description('Show daily usage trends: tokens, cost, sessions over time')
+  .option('--days <n>', 'Number of days', '30')
+  .option('--format <fmt>', 'Output: text | json', 'text')
+  .action(async (opts: { days: string; format: string }) => {
+    ensureGlobalDirs();
+    const analyticsStore = new AnalyticsStore();
+    try {
+      syncAnalytics(analyticsStore);
+      const days = parseInt(opts.days, 10);
+      const trends = analyticsStore.getUsageTrends(days);
+
+      if (opts.format === 'json') {
+        console.log(JSON.stringify(trends, null, 2));
+        return;
+      }
+
+      console.log(`\n📈 Usage Trends (last ${days} days)\n`);
+      console.log('Date         Sessions  Tokens       Cost     Tool Calls');
+      console.log('─'.repeat(60));
+      for (const d of trends) {
+        const date = d.date.padEnd(12);
+        const sessions = String(d.sessions).padStart(4);
+        const tokens = (d.tokens ?? 0).toLocaleString().padStart(12);
+        const cost = `$${(d.cost_usd ?? 0).toFixed(2)}`.padStart(8);
+        const calls = String(d.tool_calls ?? 0).padStart(10);
+        console.log(`${date} ${sessions}  ${tokens}  ${cost}  ${calls}`);
+      }
+
+      const total = trends.reduce((s, d) => ({
+        sessions: s.sessions + d.sessions,
+        tokens: s.tokens + (d.tokens ?? 0),
+        cost: s.cost + (d.cost_usd ?? 0),
+        calls: s.calls + (d.tool_calls ?? 0),
+      }), { sessions: 0, tokens: 0, cost: 0, calls: 0 });
+      console.log('─'.repeat(60));
+      console.log(`Total        ${String(total.sessions).padStart(4)}  ${total.tokens.toLocaleString().padStart(12)}  $${total.cost.toFixed(2).padStart(7)}  ${String(total.calls).padStart(10)}`);
+    } finally {
+      analyticsStore.close();
+    }
+  });

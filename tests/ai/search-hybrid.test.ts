@@ -11,7 +11,7 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { BlobVectorStore } from '../../src/ai/vector-store.js';
 import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
-import { search } from '../../src/tools/navigation.js';
+import { search } from '../../src/tools/navigation/navigation.js';
 import type { EmbeddingService } from '../../src/ai/interfaces.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 

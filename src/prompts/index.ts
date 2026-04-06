@@ -8,15 +8,15 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { Store } from '../db/store.js';
-import { getChangeImpact } from '../tools/impact.js';
-import { getFeatureContext } from '../tools/context.js';
-import { getProjectMap } from '../tools/project.js';
+import { getChangeImpact } from '../tools/analysis/impact.js';
+import { getFeatureContext } from '../tools/navigation/context.js';
+import { getProjectMap } from '../tools/project/project.js';
 import { buildProjectContext } from '../indexer/project-context.js';
-import { getCallGraph } from '../tools/call-graph.js';
-import { getCouplingMetrics, getDependencyCycles, getRepoHealth } from '../tools/graph-analysis.js';
-import { getDeadCodeV2 } from '../tools/dead-code.js';
-import { getHotspots } from '../tools/git-analysis.js';
-import { predictBugs, getTechDebt } from '../tools/predictive-intelligence.js';
+import { getCallGraph } from '../tools/framework/call-graph.js';
+import { getCouplingMetrics, getDependencyCycles, getRepoHealth } from '../tools/analysis/graph-analysis.js';
+import { getDeadCodeV2 } from '../tools/refactoring/dead-code.js';
+import { getHotspots } from '../tools/git/git-analysis.js';
+import { predictBugs, getTechDebt } from '../tools/analysis/predictive-intelligence.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
 

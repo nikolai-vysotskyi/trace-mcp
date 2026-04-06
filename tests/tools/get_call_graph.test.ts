@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { getCallGraph } from '../../src/tools/call-graph.js';
+import { getCallGraph } from '../../src/tools/framework/call-graph.js';
 
 function makeStore(): Store {
   const db = initializeDatabase(':memory:');

@@ -7,7 +7,7 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { search, getSymbol, getFileOutline } from '../../src/tools/navigation.js';
+import { search, getSymbol, getFileOutline } from '../../src/tools/navigation/navigation.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');

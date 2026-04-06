@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { getPackageDeps } from '../../src/tools/package-deps.js';
+import { getPackageDeps } from '../../src/tools/project/package-deps.js';
 import { REGISTRY_PATH } from '../../src/global.js';
 
 let tmpDir: string;

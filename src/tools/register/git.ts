@@ -1,17 +1,17 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server-types.js';
+import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
-import { getChurnRate, getHotspots } from '../git-analysis.js';
-import { getDeadCodeV2 } from '../dead-code.js';
-import { scanSecurity, type RuleName, type Severity } from '../security-scan.js';
-import { detectAntipatterns, type AntipatternCategory, type Severity as AntipatternSeverity } from '../antipatterns.js';
-import { scanCodeSmells, type SmellCategory, type SmellPriority } from '../code-smells.js';
-import { taintAnalysis, type TaintSourceKind, type TaintSinkKind } from '../taint-analysis.js';
-import { generateSbom, type SbomFormat } from '../sbom.js';
-import { getArtifacts, type ArtifactCategory } from '../artifacts.js';
-import { planBatchChange } from '../batch-changes.js';
-import { checkRenameSafe } from '../rename-check.js';
+import { getChurnRate, getHotspots } from '../git/git-analysis.js';
+import { getDeadCodeV2 } from '../refactoring/dead-code.js';
+import { scanSecurity, type RuleName, type Severity } from '../quality/security-scan.js';
+import { detectAntipatterns, type AntipatternCategory, type Severity as AntipatternSeverity } from '../quality/antipatterns.js';
+import { scanCodeSmells, type SmellCategory, type SmellPriority } from '../quality/code-smells.js';
+import { taintAnalysis, type TaintSourceKind, type TaintSinkKind } from '../quality/taint-analysis.js';
+import { generateSbom, type SbomFormat } from '../project/sbom.js';
+import { getArtifacts, type ArtifactCategory } from '../project/artifacts.js';
+import { planBatchChange } from '../project/batch-changes.js';
+import { checkRenameSafe } from '../refactoring/rename-check.js';
 
 export function registerGitTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j, jh } = ctx;

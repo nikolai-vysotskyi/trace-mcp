@@ -8,7 +8,7 @@ import {
   getPageRank,
   getExtractionCandidates,
   getRepoHealth,
-} from '../../src/tools/graph-analysis.js';
+} from '../../src/tools/analysis/graph-analysis.js';
 
 function createStore(): Store {
   const db = initializeDatabase(':memory:');

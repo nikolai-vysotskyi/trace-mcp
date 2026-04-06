@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server-types.js';
-import { applyRename, removeDeadCode, extractFunction } from '../refactor.js';
+import type { ServerContext } from '../../server/types.js';
+import { applyRename, removeDeadCode, extractFunction } from '../refactoring/refactor.js';
 
 export function registerRefactoringTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j } = ctx;

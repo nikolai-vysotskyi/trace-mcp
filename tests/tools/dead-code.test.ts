@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../../src/db/store.js';
 import { initializeDatabase } from '../../src/db/schema.js';
-import { getDeadCodeV2 } from '../../src/tools/dead-code.js';
+import { getDeadCodeV2 } from '../../src/tools/refactoring/dead-code.js';
 
 function createStore(): Store {
   const db = initializeDatabase(':memory:');

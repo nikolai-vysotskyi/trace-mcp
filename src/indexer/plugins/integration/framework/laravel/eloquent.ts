@@ -193,7 +193,7 @@ function resolveClassRef(
  * Build edges from an extracted model's relationships.
  * Maps model FQN -> related model FQN via edge type.
  */
-export function buildRelationshipEdges(
+function buildRelationshipEdges(
   modelInfo: EloquentModelInfo,
 ): RawEdge[] {
   return modelInfo.relationships.map((rel) => ({

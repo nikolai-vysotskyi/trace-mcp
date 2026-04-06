@@ -86,7 +86,7 @@ export function detectEventDispatches(
 /**
  * Build listens_to edges from event-listener mappings.
  */
-export function buildEventEdges(
+function buildEventEdges(
   mappings: EventListenerMapping[],
 ): RawEdge[] {
   const edges: RawEdge[] = [];
@@ -109,7 +109,7 @@ export function buildEventEdges(
 /**
  * Build dispatches edges from detected event dispatches.
  */
-export function buildDispatchEdges(
+function buildDispatchEdges(
   sourceFqn: string,
   dispatches: string[],
 ): RawEdge[] {

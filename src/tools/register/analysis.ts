@@ -1,13 +1,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server-types.js';
-import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, selfAudit } from '../introspect.js';
-import { getCouplingMetrics, getDependencyCycles, getPageRank, getExtractionCandidates, getRepoHealth } from '../graph-analysis.js';
-import { getHotspots } from '../git-analysis.js';
-import { getLayerViolations, detectLayerPreset, type LayerDefinition } from '../layer-violations.js';
-import { getFileOwnership, getSymbolOwnership } from '../git-ownership.js';
-import { getComplexityTrend } from '../complexity-trend.js';
-import { getCouplingTrend, getSymbolComplexityTrend } from '../history.js';
+import type { ServerContext } from '../../server/types.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, selfAudit } from '../analysis/introspect.js';
+import { getCouplingMetrics, getDependencyCycles, getPageRank, getExtractionCandidates, getRepoHealth } from '../analysis/graph-analysis.js';
+import { getHotspots } from '../git/git-analysis.js';
+import { getLayerViolations, detectLayerPreset, type LayerDefinition } from '../analysis/layer-violations.js';
+import { getFileOwnership, getSymbolOwnership } from '../git/git-ownership.js';
+import { getComplexityTrend } from '../analysis/complexity-trend.js';
+import { getCouplingTrend, getSymbolComplexityTrend } from '../analysis/history.js';
+import { checkSymbolForDuplicates } from '../analysis/duplication.js';
 
 export function registerAnalysisTools(server: McpServer, ctx: ServerContext): void {
   const { store, registry, projectRoot, guardPath, j, jh } = ctx;
@@ -205,7 +206,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
       if (customLayers && customLayers.length > 0) {
         layerDefs = customLayers;
       } else if (preset) {
-        const { LAYER_PRESETS } = await import('../layer-violations.js');
+        const { LAYER_PRESETS } = await import('../analysis/layer-violations.js');
         layerDefs = LAYER_PRESETS[preset] ?? [];
       } else {
         // Auto-detect
@@ -312,6 +313,33 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         return { content: [{ type: 'text', text: j({ message: 'Symbol not found or no git history available' }) }] };
       }
       return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // ─── Duplication Detection ────────────────────────────────
+
+  server.tool(
+    'check_duplication',
+    'Check if a symbol or function name has potential duplicates elsewhere in the codebase. Use BEFORE creating new functions/classes to avoid reinventing existing logic. Returns scored matches with similarity signals.',
+    {
+      symbol_id: z.string().max(512).optional().describe('Existing symbol ID to check for duplicates'),
+      name: z.string().max(256).optional().describe('Function/class name to check (when symbol_id not available)'),
+      kind: z.enum(['function', 'class', 'method', 'interface', 'type_alias', 'enum']).optional()
+        .describe('Symbol kind to narrow search (default: function)'),
+      threshold: z.number().min(0.3).max(1.0).optional()
+        .describe('Minimum similarity score to report (default: 0.60)'),
+    },
+    async ({ symbol_id, name, kind, threshold }) => {
+      if (!symbol_id && !name) {
+        return { content: [{ type: 'text', text: j({ error: 'Provide symbol_id or name' }) }], isError: true };
+      }
+      const result = checkSymbolForDuplicates(store, store.db, {
+        symbol_id, name, kind,
+      }, {
+        threshold: threshold ?? 0.60,
+        maxResults: 15,
+      });
+      return { content: [{ type: 'text', text: jh('check_duplication', result) }] };
     },
   );
 }

@@ -124,7 +124,7 @@ const ToolsConfigSchema = z.object({
   /** Control which meta fields appear in responses. true = all (default), false = none, or list specific fields to include */
   meta_fields: z.union([
     z.boolean(),
-    z.array(z.enum(['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta'])),
+    z.array(z.enum(['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta', '_duplication_warnings'])),
   ]).default(true),
 }).optional();
 

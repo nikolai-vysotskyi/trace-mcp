@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { getCoChanges, persistCoChanges } from '../../src/tools/co-changes.js';
+import { getCoChanges, persistCoChanges } from '../../src/tools/quality/co-changes.js';
 import type Database from 'better-sqlite3';
 
 describe('Co-Change Analysis', () => {

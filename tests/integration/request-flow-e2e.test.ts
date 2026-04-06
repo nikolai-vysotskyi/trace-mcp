@@ -16,7 +16,7 @@ import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { InertiaPlugin } from '../../src/indexer/plugins/integration/view/inertia/index.js';
-import { getRequestFlow } from '../../src/tools/flow.js';
+import { getRequestFlow } from '../../src/tools/framework/flow.js';
 
 describe('get_request_flow end-to-end (laravel-10)', () => {
   let store: Store;

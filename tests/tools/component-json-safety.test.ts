@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { getComponentTree } from '../../src/tools/components.js';
+import { getComponentTree } from '../../src/tools/framework/components.js';
 
 function setupWithCorruptedComponent() {
   const db = initializeDatabase(':memory:');

@@ -12,8 +12,8 @@ import { TraceMcpConfigSchema } from '../../src/config.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { getComponentTree } from '../../src/tools/components.js';
-import { getChangeImpact } from '../../src/tools/impact.js';
+import { getComponentTree } from '../../src/tools/framework/components.js';
+import { getChangeImpact } from '../../src/tools/analysis/impact.js';
 
 describe('Vue component tree e2e', () => {
   let store: Store;

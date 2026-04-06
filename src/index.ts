@@ -1,4 +1,4 @@
-export { createServer } from './server.js';
+export { createServer } from './server/server.js';
 export { initializeDatabase } from './db/schema.js';
 export { Store } from './db/store.js';
 export { PluginRegistry } from './plugin-api/registry.js';

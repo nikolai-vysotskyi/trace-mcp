@@ -1,10 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server-types.js';
+import type { ServerContext } from '../../server/types.js';
 import { logger } from '../../logger.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
-import { getIndexHealth, getProjectMap } from '../project.js';
+import { getIndexHealth, getProjectMap } from '../project/project.js';
+import { checkFileForDuplicates } from '../analysis/duplication.js';
 
 export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
   const { store, registry, config, projectRoot, guardPath, j, jh, journal } = ctx;
@@ -60,6 +61,18 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       // Record in journal so session knows this file was edited
       journal.record('register_edit', { file_path: filePath }, 1);
 
+      // Best-effort duplication check — never fails register_edit
+      let dupWarnings: { message: string; score: number; duplicate_symbol_id: string; duplicate_file: string }[] = [];
+      try {
+        const dup = checkFileForDuplicates(store, store.db, filePath, { threshold: 0.70, maxResults: 5 });
+        dupWarnings = dup.warnings.map((w) => ({
+          message: `"${w.source_name}" is similar to "${w.duplicate_name}" in ${w.duplicate_file}:${w.duplicate_line ?? '?'}`,
+          score: w.score,
+          duplicate_symbol_id: w.duplicate_symbol_id,
+          duplicate_file: w.duplicate_file,
+        }));
+      } catch { /* non-fatal */ }
+
       return {
         content: [{
           type: 'text',
@@ -67,6 +80,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
             status: 'reindexed',
             file: filePath,
             ...result,
+            ...(dupWarnings.length > 0 ? { _duplication_warnings: dupWarnings } : {}),
           }),
         }],
       };

@@ -15,8 +15,8 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { ReactNativePlugin } from '../../src/indexer/plugins/integration/view/react-native/index.js';
-import { getNavigationGraph } from '../../src/tools/rn-navigation.js';
-import { getScreenContext } from '../../src/tools/screen-context.js';
+import { getNavigationGraph } from '../../src/tools/framework/rn-navigation.js';
+import { getScreenContext } from '../../src/tools/framework/screen-context.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/expo-router-3');

@@ -31,7 +31,7 @@ export interface ToolResultEvent {
   isError: boolean;
 }
 
-export interface SessionSummary {
+interface SessionSummary {
   sessionId: string;
   projectPath: string;
   startedAt: string;
@@ -256,13 +256,13 @@ export function parseSessionFile(filePath: string, projectPath: string): ParsedS
 /** List all project directories in ~/.claude/projects/ */
 /**
  * Decode a Claude Code project directory name back to a filesystem path.
- * Claude encodes `/` as `-`, so `-Users-nikolai-Projects-trace-mcp` could be
- * `/Users/nikolai/Projects/trace-mcp` or `/Users/nikolai/Projects/trace/mcp`.
+ * Claude encodes `/` as `-`, so `-Users-username-Projects-trace-mcp` could be
+ * `/Users/username/Projects/trace-mcp` or `/Users/username/Projects/trace/mcp`.
  * We resolve ambiguity by checking which path exists on disk.
  */
 function decodeDirName(dirName: string): string {
   // Claude Code encodes "/" as "-" in directory names.
-  // `/Users/nikolai/Projects/trace-mcp` → `-Users-nikolai-Projects-trace-mcp`
+  // `/Users/username/Projects/trace-mcp` → `-Users-username-Projects-trace-mcp`
   // We decode by checking which intermediate paths are real directories.
   const raw = dirName.replace(/^-/, '/');
   const parts = raw.split('-');
@@ -305,7 +305,7 @@ function decodeDirName(dirName: string): string {
   return tail ? base + '/' + tail : base;
 }
 
-export function listProjectDirs(): { dirName: string; projectPath: string }[] {
+function listProjectDirs(): { dirName: string; projectPath: string }[] {
   if (!fs.existsSync(CLAUDE_PROJECTS_DIR)) return [];
   const entries = fs.readdirSync(CLAUDE_PROJECTS_DIR, { withFileTypes: true });
   return entries
@@ -317,7 +317,7 @@ export function listProjectDirs(): { dirName: string; projectPath: string }[] {
 }
 
 /** List all JSONL session files in a project directory */
-export function listSessionFiles(projectDirName: string): { filePath: string; mtime: number }[] {
+function listSessionFiles(projectDirName: string): { filePath: string; mtime: number }[] {
   const dir = path.join(CLAUDE_PROJECTS_DIR, projectDirName);
   if (!fs.existsSync(dir)) return [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });

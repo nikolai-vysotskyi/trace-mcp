@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { MetaContext } from '../../server-types.js';
-import { getIndexHealth, getProjectMap } from '../project.js';
+import type { MetaContext } from '../../server/types.js';
+import { getIndexHealth, getProjectMap } from '../project/project.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
-import { registerAITools } from '../ai-tools.js';
+import { registerAITools } from '../ai/ai-tools.js';
 import { listBundles, loadAllBundles, searchBundles } from '../../bundles.js';
-import { resolvePreset, listPresets } from '../presets.js';
-import { flushSessionSummary, getSessionResume } from '../../session-resume.js';
+import { resolvePreset, listPresets } from '../project/presets.js';
+import { flushSessionSummary, getSessionResume } from '../../session/resume.js';
 import { AnalyticsStore } from '../../analytics/analytics-store.js';
 import { getSessionAnalytics, getOptimizationReport } from '../../analytics/session-analytics.js';
 import { runBenchmark, formatBenchmarkMarkdown } from '../../analytics/benchmark.js';

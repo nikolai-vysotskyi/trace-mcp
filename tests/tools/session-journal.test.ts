@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SessionJournal } from '../../src/session-journal.js';
+import { SessionJournal } from '../../src/session/journal.js';
 
 describe('SessionJournal — dedup', () => {
   it('returns null for first-time calls', () => {

@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import type { InferenceService, EmbeddingService, VectorStore, RerankerService } from '../../src/ai/interfaces.js';
-import { registerAITools } from '../../src/tools/ai-tools.js';
+import { registerAITools } from '../../src/tools/ai/ai-tools.js';
 
 function createMockInference(response = '{"explanation": "This class handles auth."}') {
   return {

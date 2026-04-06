@@ -17,13 +17,13 @@ import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/v
 import { BladePlugin } from '../../src/indexer/plugins/integration/view/blade/index.js';
 
 // Tools under test
-import { search, getFileOutline, getSymbol } from '../../src/tools/navigation.js';
-import { getChangeImpact } from '../../src/tools/impact.js';
-import { findReferences } from '../../src/tools/references.js';
-import { getRequestFlow } from '../../src/tools/flow.js';
-import { getSchema } from '../../src/tools/schema.js';
-import { getModelContext } from '../../src/tools/model.js';
-import { getComponentTree } from '../../src/tools/components.js';
+import { search, getFileOutline, getSymbol } from '../../src/tools/navigation/navigation.js';
+import { getChangeImpact } from '../../src/tools/analysis/impact.js';
+import { findReferences } from '../../src/tools/framework/references.js';
+import { getRequestFlow } from '../../src/tools/framework/flow.js';
+import { getSchema } from '../../src/tools/framework/schema.js';
+import { getModelContext } from '../../src/tools/framework/model.js';
+import { getComponentTree } from '../../src/tools/framework/components.js';
 
 // ─── Laravel Fixture (full-stack: routes, models, controllers, migrations) ───
 

@@ -70,7 +70,7 @@ export function extractExpressMiddleware(source: string): ExpressMiddleware[] {
 }
 
 /** Detect 4-arg error handler middleware: (err, req, res, next) => {} */
-export function extractErrorHandlers(source: string): { path: string }[] {
+function extractErrorHandlers(source: string): { path: string }[] {
   const handlers: { path: string }[] = [];
   // function form
   const funcRe = /(?:app|router)\s*\.\s*use\s*\([^;]*?function\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)/g;
@@ -87,7 +87,7 @@ export function extractErrorHandlers(source: string): { path: string }[] {
 }
 
 /** Extract app.param() handlers */
-export function extractParamHandlers(source: string): string[] {
+function extractParamHandlers(source: string): string[] {
   const params: string[] = [];
   const re = /(?:app|router)\s*\.\s*param\s*\(\s*['"`]([^'"`]+)['"`]/g;
   let m: RegExpExecArray | null;

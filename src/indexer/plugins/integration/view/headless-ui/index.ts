@@ -133,7 +133,7 @@ function extractCompoundComponents(
 }
 
 /** Detect controlled state patterns (open, onOpenChange, etc.) */
-export function extractControlledState(source: string): string[] {
+function extractControlledState(source: string): string[] {
   const patterns: string[] = [];
   const stateProps = [
     'open', 'onOpenChange', 'onClose', 'value', 'onChange', 'onValueChange',

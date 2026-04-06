@@ -24,7 +24,7 @@ function markerDir(projectRoot: string): string {
 }
 
 /** Write a consultation marker for a file. Non-blocking, best-effort. */
-export function markConsulted(projectRoot: string, relPath: string): void {
+function markConsulted(projectRoot: string, relPath: string): void {
   try {
     const dir = markerDir(projectRoot);
     fs.mkdirSync(dir, { recursive: true });
@@ -33,7 +33,7 @@ export function markConsulted(projectRoot: string, relPath: string): void {
 }
 
 /** Extract file paths from tool params that indicate file consultation. */
-export function extractConsultedFiles(toolName: string, params: Record<string, unknown>): string[] {
+function extractConsultedFiles(toolName: string, params: Record<string, unknown>): string[] {
   const files: string[] = [];
 
   switch (toolName) {
@@ -95,6 +95,6 @@ export function markToolConsultation(
 }
 
 /** Return the marker directory path (for documentation / guard hook alignment). */
-export function getMarkerDir(projectRoot: string): string {
+function getMarkerDir(projectRoot: string): string {
   return markerDir(projectRoot);
 }

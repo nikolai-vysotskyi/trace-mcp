@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { packContext } from '../../src/tools/pack-context.js';
+import { packContext } from '../../src/tools/refactoring/pack-context.js';
 import type { Store } from '../../src/db/store.js';
 import type { PluginRegistry } from '../../src/plugin-api/registry.js';
 

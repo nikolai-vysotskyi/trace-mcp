@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeAdaptiveBudget } from '../../src/adaptive-budget.js';
+import { computeAdaptiveBudget } from '../../src/scoring/adaptive-budget.js';
 
 describe('Adaptive Token Budget', () => {
   it('returns full budget for early session', () => {

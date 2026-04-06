@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { findReferences } from '../../src/tools/references.js';
+import { findReferences } from '../../src/tools/framework/references.js';
 
 function createStore(): Store {
   return new Store(initializeDatabase(':memory:'));

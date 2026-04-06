@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateDocs } from '../../src/tools/generate-docs.js';
+import { generateDocs } from '../../src/tools/project/generate-docs.js';
 import type { Store } from '../../src/db/store.js';
 import type { PluginRegistry } from '../../src/plugin-api/registry.js';
 

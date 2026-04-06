@@ -11,7 +11,7 @@ import { indexTrigramsBatch, deleteTrigramsByFile } from '../db/fuzzy.js';
  * Callback for storing raw edges — injected from the pipeline so that
  * FilePersister doesn't depend on EdgeResolver directly.
  */
-export type StoreRawEdgesFn = (edges: RawEdge[]) => void;
+type StoreRawEdgesFn = (edges: RawEdge[]) => void;
 
 export class FilePersister {
   constructor(
