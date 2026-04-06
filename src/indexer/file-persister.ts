@@ -85,13 +85,18 @@ export class FilePersister {
     // Insert symbols + trigrams
     if (ext.symbols.length > 0) {
       const insertedIds = store.insertSymbols(fileId, ext.symbols);
-      // Populate trigram index for fuzzy search (batch, no N+1)
-      const trigramBatch = ext.symbols.map((sym, i) => ({
-        id: insertedIds[i],
-        name: sym.name,
-        fqn: sym.fqn ?? null,
-      }));
-      indexTrigramsBatch(store.db, trigramBatch);
+      // Populate trigram index for fuzzy search (batch, no N+1).
+      // Deduplicate by symbolId: INSERT OR REPLACE invalidates earlier IDs when
+      // duplicate symbol_ids appear in the same batch — only the last ID survives.
+      const trigramBySymbolId = new Map<string, { id: number; name: string; fqn: string | null }>();
+      for (let i = 0; i < ext.symbols.length; i++) {
+        trigramBySymbolId.set(ext.symbols[i].symbolId, {
+          id: insertedIds[i],
+          name: ext.symbols[i].name,
+          fqn: ext.symbols[i].fqn ?? null,
+        });
+      }
+      indexTrigramsBatch(store.db, [...trigramBySymbolId.values()]);
     }
 
     // Insert edges from language plugin
@@ -113,11 +118,15 @@ export class FilePersister {
     for (const fwResult of ext.frameworkExtracts) {
       if (fwResult.symbols.length > 0) {
         const fwIds = store.insertSymbols(fileId, fwResult.symbols);
-        indexTrigramsBatch(store.db, fwResult.symbols.map((sym, i) => ({
-          id: fwIds[i],
-          name: sym.name,
-          fqn: sym.fqn ?? null,
-        })));
+        const fwTrigramBySymbolId = new Map<string, { id: number; name: string; fqn: string | null }>();
+        for (let i = 0; i < fwResult.symbols.length; i++) {
+          fwTrigramBySymbolId.set(fwResult.symbols[i].symbolId, {
+            id: fwIds[i],
+            name: fwResult.symbols[i].name,
+            fqn: fwResult.symbols[i].fqn ?? null,
+          });
+        }
+        indexTrigramsBatch(store.db, [...fwTrigramBySymbolId.values()]);
       }
       if (fwResult.edges?.length) {
         this.storeRawEdges(fwResult.edges);
