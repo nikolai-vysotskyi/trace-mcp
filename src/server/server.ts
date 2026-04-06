@@ -1,8 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { version: PKG_VERSION } = require('../../package.json');
+declare const PKG_VERSION_INJECTED: string;
+const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
