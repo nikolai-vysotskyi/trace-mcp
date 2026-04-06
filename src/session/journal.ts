@@ -50,7 +50,7 @@ interface PrefetchBoost {
 }
 
 /** Structured snapshot for programmatic consumption */
-export interface SessionSnapshotStructured {
+interface SessionSnapshotStructured {
   duration_seconds: number;
   total_calls: number;
   files_explored: number;
@@ -500,6 +500,6 @@ export class SessionJournal {
       if (v !== undefined && v !== null) normalized[k] = v;
     }
     const input = `${tool}:${JSON.stringify(normalized)}`;
-    return createHash('md5').update(input).digest('hex').slice(0, 12);
+    return createHash('sha256').update(input).digest('hex').slice(0, 12);
   }
 }

@@ -55,7 +55,7 @@ for /f "usebackq delims=" %%h in (`powershell -NoProfile -Command "[System.BitCo
 set "REL_FOR_HASH=%FILE_PATH%"
 set "REL_FOR_HASH=!REL_FOR_HASH:%CD%\=!"
 set "REL_FOR_HASH=!REL_FOR_HASH:\=/!"
-for /f "usebackq delims=" %%h in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.MD5]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('!REL_FOR_HASH!'))).Replace('-','').ToLower()"`) do set "FILE_HASH=%%h"
+for /f "usebackq delims=" %%h in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('!REL_FOR_HASH!'))).Replace('-','').ToLower()"`) do set "FILE_HASH=%%h"
 if exist "%TEMP%\trace-mcp-consulted-!PROJ_HASH!\!FILE_HASH!" goto :allow
 
 REM Allow on second attempt (agent needs full content for Edit)
@@ -65,7 +65,7 @@ set "DENY_DIR=%TEMP%\trace-mcp-guard-%SESSION_ID%"
 if not exist "%DENY_DIR%" mkdir "%DENY_DIR%" 2>nul
 
 REM Create a hash of the file path for the marker
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.MD5]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('%FILE_PATH%'))).Replace('-','')"`) do set "MARKER_HASH=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('%FILE_PATH%'))).Replace('-','').ToLower()"`) do set "MARKER_HASH=%%i"
 set "DENY_MARKER=%DENY_DIR%\%MARKER_HASH%"
 
 if exist "%DENY_MARKER%" (

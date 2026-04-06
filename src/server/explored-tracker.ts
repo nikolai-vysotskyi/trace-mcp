@@ -5,7 +5,7 @@
  *
  * The guard hook and this tracker share a convention:
  * - Directory: /tmp/trace-mcp-explored-<sha256(projectRoot)[0:12]>/
- * - Marker file: <md5(absoluteFilePath)> containing the absolute path
+ * - Marker file: <sha256(absoluteFilePath)> containing the absolute path
  */
 
 import fs from 'node:fs';
@@ -33,7 +33,7 @@ export function createExploredTracker(projectRoot: string): ExploredTracker {
       const absPath = path.isAbsolute(filePath)
         ? filePath
         : path.resolve(projectRoot, filePath);
-      const fileHash = crypto.createHash('md5').update(absPath).digest('hex');
+      const fileHash = crypto.createHash('sha256').update(absPath).digest('hex');
       try {
         fs.writeFileSync(path.join(markerDir, fileHash), absPath);
       } catch {

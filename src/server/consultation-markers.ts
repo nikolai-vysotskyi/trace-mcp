@@ -16,7 +16,7 @@ import crypto from 'node:crypto';
 import { projectHash } from '../global.js';
 
 function fileHash(filePath: string): string {
-  return crypto.createHash('md5').update(filePath).digest('hex');
+  return crypto.createHash('sha256').update(filePath).digest('hex');
 }
 
 function markerDir(projectRoot: string): string {
@@ -92,9 +92,4 @@ export function markToolConsultation(
   for (const f of files) {
     markConsulted(projectRoot, f);
   }
-}
-
-/** Return the marker directory path (for documentation / guard hook alignment). */
-function getMarkerDir(projectRoot: string): string {
-  return markerDir(projectRoot);
 }

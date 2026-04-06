@@ -28,9 +28,9 @@ ENV_FILE_RE='\.env(\.[a-zA-Z0-9._-]+)?$'
 # Safe bash command prefixes — never block
 SAFE_BASH_RE='^(git |npm |npx |pnpm |yarn |bun |node |deno |cargo |go |make |mvn |gradle |docker |kubectl |helm |terraform |pip |poetry |uv |pytest |vitest |jest |phpunit |composer |artisan |rails |bundle |mix |dotnet |cmake |ninja |meson )'
 
-# Cross-platform md5 hash (Linux: md5sum, macOS: md5)
-file_md5() {
-  echo -n "$1" | md5sum 2>/dev/null | cut -d' ' -f1 || echo -n "$1" | md5 -q 2>/dev/null
+# Cross-platform sha256 hash (Linux: sha256sum, macOS: shasum)
+file_sha256() {
+  echo -n "$1" | sha256sum 2>/dev/null | cut -d' ' -f1 || echo -n "$1" | shasum -a 256 2>/dev/null | cut -d' ' -f1
 }
 
 deny() {
@@ -56,7 +56,7 @@ mkdir -p "$DENY_DIR" 2>/dev/null
 
 # Consultation markers: trace-mcp server writes these when get_outline/get_symbol/etc. are called.
 # If a file was already consulted via trace-mcp, allow Read immediately (agent needs full content for Edit).
-# Dir format: $TMPDIR/trace-mcp-consulted-{sha256(projectRoot)[:12]}/{md5(relPath)}
+# Dir format: $TMPDIR/trace-mcp-consulted-{sha256(projectRoot)[:12]}/{sha256(relPath)}
 PROJECT_ROOT="$(pwd)"
 if command -v sha256sum >/dev/null 2>&1; then
   PROJECT_HASH=$(echo -n "$PROJECT_ROOT" | sha256sum | cut -c1-12)
@@ -94,7 +94,7 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
   if echo "$FILE_PATH" | grep -qiE "$CODE_EXT_RE"; then
     # Compute relative path for consultation marker check (server writes markers keyed by relative path)
     REL_PATH_FOR_HASH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
-    CONSULTED_HASH=$(file_md5 "$REL_PATH_FOR_HASH")
+    CONSULTED_HASH=$(file_sha256 "$REL_PATH_FOR_HASH")
 
     # Check if file was already consulted via trace-mcp (get_outline, get_symbol, etc.)
     if [[ -n "$PROJECT_HASH" && -f "$CONSULTED_DIR/$CONSULTED_HASH" ]]; then
@@ -103,7 +103,7 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
     fi
 
     # Allow on second attempt — agent needs full content for Edit
-    DENY_MARKER="$DENY_DIR/$(file_md5 "$FILE_PATH")"
+    DENY_MARKER="$DENY_DIR/$(file_sha256 "$FILE_PATH")"
     if [[ -f "$DENY_MARKER" ]]; then
       rm -f "$DENY_MARKER"
       exit 0
