@@ -99,8 +99,7 @@ jobs:
           node-version: '22'
           registry-url: https://registry.npmjs.org
 
-      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: npm publish --provenance --access public
+      - run: npx -y npm@11 publish --provenance --access public
