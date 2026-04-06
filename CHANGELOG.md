@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.4.1...v1.5.0) (2026-04-06)
+
+
+### Features
+
+* add .traceignore support and shared ignore-pattern parser ([0eae92d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0eae92dfad64096590e4a36a49c9c007309c5334))
+* add AI concurrency config, expand known packages, simplify CI ([0025c57](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0025c5711b3161a0dbdfbb8cb2f50b25bce322b7))
+* add consultation markers, explored tracker, and guard hook v0.4.0 ([eb87a86](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eb87a864a152fe53cc49e8a54ee9267a42f0532b))
+* add duplication checking guidance to tools and instructions ([53779fd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/53779fd2daa5ebde372f4769ce2b07fa8c23fd1d))
+* add memory leak detector and inter-procedural taint analysis ([aa752fd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aa752fd5f5c97a4a5bfa330af2bfe39edd168bb7))
+* add session dedup, resume, and adaptive token budget ([628a6bc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/628a6bca5ebeee6184947396d5cede1fcd4fb389))
+* add session snapshot, precompact hook, and worktree hooks ([fd0a0f2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fd0a0f25a0b3c3228c0d7419e9c5972c42d3e154))
+* enhance init with competing tool cleanup and error handling ([4f6aa4a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4f6aa4a4cd4b02719ab49c6ad25314d11b4980ec))
+
+
+### Bug Fixes
+
+* **ci:** improve risk scoring and split code/non-code file sections ([2325f82](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2325f82626d2012aa94750572771020a53718ec6))
+* **ci:** use last release tag as base for impact report ([e9d12bf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e9d12bf0f9c4cb4172820c8b1276ceb8cce8cee9))
+* improve dead export detection accuracy ([e4d8728](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e4d87286f41cbddb98eb18d6fedcee013c838ae6))
+* store original export names in import specifiers across all languages ([4d92110](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4d92110c071e0f397b05a3cd1b10b7176d533f20))
+
+
+### Refactoring
+
+* extract pipeline file persistence and edge resolution ([cf91a9f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cf91a9f0919189fb550e308781d7f01080bf7bf2))
+* extract server tool registration into modular register files ([80baf81](https://github.com/nikolai-vysotskyi/trace-mcp/commit/80baf81835fff26cd6681f5bd7aa55094e3b811e))
+* extract shared test utilities into tests/test-utils.ts ([13938c4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/13938c4fda8fb8592e02d115fa3a9df48df9b0be))
+* extract Store into repository pattern ([0f43ee2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0f43ee27b1d3537d6af88a8256cfef4b69952638))
+* narrow export visibility and minor cleanups across codebase ([fc79331](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fc79331da7069c5a40e94162c80d9c50d1e97ec5))
+* remove dead code and narrow export visibility ([ff2c930](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ff2c9309460b4085d9a27cfe1133004419a1fd67))
+* reorganize source tree into domain subdirectories ([279f583](https://github.com/nikolai-vysotskyi/trace-mcp/commit/279f583a0ff1b449d85dc617f49a0c2d9c2a53ff))
+
+
+### Documentation
+
+* add token reduction stat to README tagline ([00dc91f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/00dc91f860458975cd16f536b900d949ede4dbee))
+* update README with comparison tables, benchmarks, and .traceignore ([4b8d84a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4b8d84a988c4fdafe9e6089a01d39d1a9e7e2307))
+
+
+### Tests
+
+* add tests for init, runtime, tools, and AI pipeline ([9219e2d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9219e2d0e8a07091f60f94d01002a87848e3eb34))
+* expand conflict-detector coverage with fixture-based tests ([8db3009](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8db3009f795eed581a680a0b6e72cf27cb8df30f))
+
 ## [1.4.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.4.0...v1.4.1) (2026-04-05)
 
 
