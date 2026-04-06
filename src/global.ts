@@ -42,6 +42,12 @@ export function projectName(absolutePath: string): string {
   return path.basename(absolutePath).replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+/** Path to the live session snapshot file (read by PreCompact hook). */
+export function getSnapshotPath(projectRoot: string): string {
+  const absRoot = path.resolve(projectRoot);
+  return path.join(TRACE_MCP_HOME, 'sessions', `${projectHash(absRoot)}-snapshot.json`);
+}
+
 /** Compute global DB path for a project root. */
 export function getDbPath(projectRoot: string): string {
   const absRoot = path.resolve(projectRoot);

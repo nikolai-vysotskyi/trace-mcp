@@ -17,7 +17,9 @@ import { withHints } from './tools/hints.js';
 import { SessionTracker } from './session-tracker.js';
 import { SessionJournal } from './session-journal.js';
 import { flushSessionSummary } from './session-resume.js';
+import { getSnapshotPath } from './global.js';
 import { FileWatcher } from './file-watcher.js';
+import { createExploredTracker } from './explored-tracker.js';
 import type { ServerContext, MetaContext } from './server-types.js';
 import { buildInstructions } from './server/instructions.js';
 import { installToolGate } from './server/tool-gate.js';
@@ -149,10 +151,14 @@ export function createServer(
   const savings = new SessionTracker(projectRoot);
   const journal = new SessionJournal();
   const sessionStartedAt = new Date().toISOString();
+  const snapshotPath = getSnapshotPath(projectRoot);
+  journal.enablePeriodicSnapshot(snapshotPath);
 
   let sessionFlushed = false;
   const flushAll = () => {
     savings.flush();
+    // Write final snapshot for PreCompact hook
+    try { journal.flushSnapshotFile(snapshotPath); } catch { /* best-effort */ }
     if (!sessionFlushed) {
       sessionFlushed = true;
       const stats = savings.getSessionStats();
@@ -199,6 +205,7 @@ export function createServer(
   const { _originalTool, registeredToolNames, toolHandlers } = installToolGate(
     server, config, activePreset, savings, journal,
     j, extractResultCount, extractCompactResult, stripMetaFields,
+    projectRoot,
   );
 
   if (presetName !== 'full') {
@@ -257,7 +264,7 @@ export function createServer(
         const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
         await pipeline.indexFiles(files);
       },
-      { debounceMs: config.watch?.debounceMs ?? 2000, extensions: knownExtensions },
+      { debounceMs: config.watch?.debounceMs ?? 2000, extensions: knownExtensions, ignoreConfig: config.ignore },
     );
     fileWatcher.start();
     const stopWatcher = () => fileWatcher.stop();
@@ -274,12 +281,16 @@ export function createServer(
     return null;
   }
 
+  // Explored-file tracker (guard hook reads markers to allow Read on explored files)
+  const explored = createExploredTracker(projectRoot);
+
   // Build shared context and register all tools
   const ctx: ServerContext = {
     store, registry, config, projectRoot,
     savings, journal,
     aiProvider, vectorStore, embeddingService, reranker,
     has, guardPath, j, jh,
+    markExplored: explored.markExplored,
   };
 
   const metaCtx: MetaContext = {
