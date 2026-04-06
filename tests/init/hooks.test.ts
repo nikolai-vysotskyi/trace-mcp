@@ -14,7 +14,6 @@ const mockOs = vi.mocked(os);
 let installGuardHook: typeof import('../../src/init/hooks.js').installGuardHook;
 let uninstallGuardHook: typeof import('../../src/init/hooks.js').uninstallGuardHook;
 let installReindexHook: typeof import('../../src/init/hooks.js').installReindexHook;
-let uninstallReindexHook: typeof import('../../src/init/hooks.js').uninstallReindexHook;
 let isHookOutdated: typeof import('../../src/init/hooks.js').isHookOutdated;
 
 beforeEach(async () => {
@@ -35,7 +34,6 @@ beforeEach(async () => {
   installGuardHook = mod.installGuardHook;
   uninstallGuardHook = mod.uninstallGuardHook;
   installReindexHook = mod.installReindexHook;
-  uninstallReindexHook = mod.uninstallReindexHook;
   isHookOutdated = mod.isHookOutdated;
 });
 
@@ -218,29 +216,6 @@ describe('installReindexHook', () => {
     const settings = JSON.parse(String(writeCall![1]).trim());
     expect(settings.hooks.PostToolUse).toHaveLength(1);
     expect(settings.hooks.PostToolUse[0].matcher).toBe('Edit|Write|MultiEdit');
-  });
-});
-
-describe('uninstallReindexHook', () => {
-  it('removes PostToolUse hook entry', () => {
-    const existingSettings = JSON.stringify({
-      hooks: {
-        PostToolUse: [
-          { hooks: [{ command: 'trace-mcp-reindex /path' }] },
-        ],
-      },
-    });
-
-    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
-      if (s.includes('settings')) return true;
-      if (s.includes('.claw')) return false;
-      return false;
-    });
-    mockFs.readFileSync.mockReturnValue(existingSettings);
-
-    const result = uninstallReindexHook({ global: true });
-    expect(result.action).toBe('updated');
   });
 });
 

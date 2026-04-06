@@ -17,7 +17,7 @@ import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
 import type { FileExtraction } from './pipeline-state.js';
 
-export interface ExtractorContext {
+interface ExtractorContext {
   store: Store;
   registry: PluginRegistry;
   rootPath: string;

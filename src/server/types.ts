@@ -7,8 +7,6 @@ import type { SessionJournal } from '../session/journal.js';
 import type { AIProvider, RerankerService, EmbeddingService, BlobVectorStore } from '../ai/index.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
-export type ErrorResponse = { content: [{ type: 'text'; text: string }]; isError: true };
-
 export interface ServerContext {
   store: Store;
   registry: PluginRegistry;

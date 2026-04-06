@@ -252,10 +252,6 @@ export function installReindexHook(opts: {
   return installHook(REINDEX_HOOK, opts);
 }
 
-export function uninstallReindexHook(opts: { global?: boolean }): InitStepResult {
-  return uninstallHook(REINDEX_HOOK, opts);
-}
-
 export function installPrecompactHook(opts: {
   global?: boolean;
   dryRun?: boolean;
