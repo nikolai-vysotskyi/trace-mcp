@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.nikolai-vysotskyi/trace-mcp",
+  "description": "Framework-aware code intelligence server that builds a cross-language dependency graph from source code — 53 framework integrations across 68 languages, 100+ tools for navigation, impact analysis, refactoring, and session memory with up to 97% token reduction.",
+  "repository": {
+    "url": "https://github.com/nikolai-vysotskyi/trace-mcp",
+    "source": "github"
+  },
+  "version": "1.5.4",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "trace-mcp",
+      "version": "1.5.4",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
