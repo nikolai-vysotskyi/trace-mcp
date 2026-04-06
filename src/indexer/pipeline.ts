@@ -8,7 +8,7 @@ import type { TraceMcpConfig } from '../config.js';
 import type { ResolveContext, ProjectContext } from '../plugin-api/types.js';
 import { buildProjectContext } from './project-context.js';
 import { logger } from '../logger.js';
-import { detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
+import { detectWorkspaces, buildMultiRootWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import { validatePath } from '../utils/security.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
@@ -69,9 +69,14 @@ export class IndexingPipeline {
     const result = this._lock.then(async () => {
       this._isIncremental = false;
       const start = Date.now();
-      this.workspaces = detectWorkspaces(this.rootPath);
-      if (this.workspaces.length > 0) {
-        logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Detected workspaces');
+      if (this.config.children?.length) {
+        this.workspaces = buildMultiRootWorkspaces(this.rootPath, this.config.children);
+        logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Multi-root workspaces');
+      } else {
+        this.workspaces = detectWorkspaces(this.rootPath);
+        if (this.workspaces.length > 0) {
+          logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Detected workspaces');
+        }
       }
       const filePaths = await this.collectFiles();
       return this.runPipeline(filePaths, force ?? false, start);

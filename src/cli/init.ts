@@ -18,10 +18,10 @@ import type { DetectedMcpClient, InitStepResult, InitReport } from '../init/type
 import { detectMcpClients, detectGuardHook, detectProject } from '../init/detector.js';
 import { detectConflicts } from '../init/conflict-detector.js';
 import { fixAllConflicts } from '../init/conflict-resolver.js';
-import { findProjectRoot } from '../project-root.js';
+import { findProjectRoot, discoverChildProjects } from '../project-root.js';
 import { generateConfig } from '../init/config-generator.js';
-import { registerProject, getProject, listProjects, updateLastIndexed } from '../registry.js';
-import { saveProjectConfig, loadConfig } from '../config.js';
+import { registerProject, getProject, listProjects, updateLastIndexed, unregisterProject } from '../registry.js';
+import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
@@ -365,11 +365,20 @@ function registerAndIndexProject(
   dir: string,
   opts: { dryRun?: boolean; force?: boolean },
 ): InitStepResult {
-  let projectRoot: string;
+  let projectRoot: string | null = null;
   try {
     projectRoot = findProjectRoot(dir);
   } catch {
-    return { target: dir, action: 'skipped', detail: 'Could not detect project root' };
+    // No root markers — try multi-root discovery
+  }
+
+  // Multi-root fallback: discover child projects
+  if (!projectRoot) {
+    const childRoots = discoverChildProjects(dir);
+    if (childRoots.length === 0) {
+      return { target: dir, action: 'skipped', detail: 'Could not detect project root or child projects' };
+    }
+    return registerMultiRootProject(dir, childRoots, opts);
   }
 
   if (opts.dryRun) {
@@ -401,6 +410,66 @@ function registerAndIndexProject(
     target: projectRoot,
     action: existing ? 'updated' : 'created',
     detail: `Registered project: ${entry.name}`,
+  };
+}
+
+function registerMultiRootProject(
+  parentDir: string,
+  childRoots: string[],
+  opts: { dryRun?: boolean; force?: boolean },
+): InitStepResult {
+  if (opts.dryRun) {
+    return {
+      target: parentDir,
+      action: 'skipped',
+      detail: `Would register multi-root with ${childRoots.length} children: ${childRoots.map((r) => path.basename(r)).join(', ')}`,
+    };
+  }
+
+  const existing = getProject(parentDir);
+  if (existing && !opts.force) {
+    return { target: parentDir, action: 'already_configured', detail: `Multi-root already registered: ${existing.name}` };
+  }
+
+  // Detect and merge configs from all children
+  const allInclude: string[] = [];
+  const allExclude: string[] = [];
+  for (const childRoot of childRoots) {
+    const relPath = path.relative(parentDir, childRoot).replace(/\\/g, '/');
+    const detection = detectProject(childRoot);
+    const config = generateConfig(detection);
+    for (const pattern of config.include) allInclude.push(`${relPath}/${pattern}`);
+    for (const pattern of config.exclude) allExclude.push(`${relPath}/${pattern}`);
+  }
+
+  // Cleanup existing child indexes
+  const allProjects = listProjects();
+  const parentPrefix = parentDir + path.sep;
+  for (const proj of allProjects) {
+    if (proj.root !== parentDir && proj.root.startsWith(parentPrefix)) {
+      if (fs.existsSync(proj.dbPath)) fs.unlinkSync(proj.dbPath);
+      unregisterProject(proj.root);
+      removeProjectConfig(proj.root);
+    }
+  }
+
+  // Save unified config
+  saveProjectConfig(parentDir, {
+    root: '.',
+    include: allInclude,
+    exclude: allExclude,
+    children: childRoots,
+  });
+
+  const dbPath = getDbPath(parentDir);
+  const db = initializeDatabase(dbPath);
+  db.close();
+
+  const entry = registerProject(parentDir, { type: 'multi-root', children: childRoots });
+  return {
+    target: parentDir,
+    action: existing ? 'updated' : 'created',
+    detail: `Registered multi-root (${childRoots.length} children): ${childRoots.map((r) => path.basename(r)).join(', ')}`,
   };
 }
 

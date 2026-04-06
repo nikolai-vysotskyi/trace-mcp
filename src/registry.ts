@@ -8,12 +8,14 @@ import path from 'node:path';
 import os from 'node:os';
 import { REGISTRY_PATH, ensureGlobalDirs, getDbPath, projectName } from './global.js';
 
-interface RegistryEntry {
+export interface RegistryEntry {
   name: string;
   root: string;
   dbPath: string;
   lastIndexed: string | null;
   addedAt: string;
+  type?: 'single' | 'multi-root';
+  children?: string[];
 }
 
 interface Registry {
@@ -44,11 +46,14 @@ function saveRegistry(reg: Registry): void {
   fs.renameSync(tmp, REGISTRY_PATH);
 }
 
-export function registerProject(root: string): RegistryEntry {
+export function registerProject(
+  root: string,
+  opts?: { type?: 'single' | 'multi-root'; children?: string[] },
+): RegistryEntry {
   const absRoot = path.resolve(root);
   const reg = loadRegistry();
 
-  if (reg.projects[absRoot]) {
+  if (reg.projects[absRoot] && !opts) {
     return reg.projects[absRoot];
   }
 
@@ -58,6 +63,8 @@ export function registerProject(root: string): RegistryEntry {
     dbPath: getDbPath(absRoot),
     lastIndexed: null,
     addedAt: new Date().toISOString(),
+    ...(opts?.type && { type: opts.type }),
+    ...(opts?.children && { children: opts.children }),
   };
 
   reg.projects[absRoot] = entry;
@@ -65,7 +72,19 @@ export function registerProject(root: string): RegistryEntry {
   return entry;
 }
 
-function unregisterProject(root: string): void {
+/** Find a multi-root project that contains this child root. */
+export function findParentProject(childRoot: string): RegistryEntry | null {
+  const absChild = path.resolve(childRoot);
+  const reg = loadRegistry();
+  for (const entry of Object.values(reg.projects)) {
+    if (entry.type === 'multi-root' && entry.children?.includes(absChild)) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+export function unregisterProject(root: string): void {
   const absRoot = path.resolve(root);
   const reg = loadRegistry();
   delete reg.projects[absRoot];

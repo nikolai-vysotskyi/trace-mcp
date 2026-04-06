@@ -29,6 +29,34 @@ export function detectWorkspaces(rootPath: string): WorkspaceInfo[] {
   return [];
 }
 
+/**
+ * Build workspace list for a multi-root project.
+ * Each child root becomes a top-level workspace. Sub-workspaces within
+ * each child (pnpm, npm, composer) get compound names: "child/sub-ws".
+ */
+export function buildMultiRootWorkspaces(parentDir: string, childRoots: string[]): WorkspaceInfo[] {
+  const workspaces: WorkspaceInfo[] = [];
+
+  for (const childRoot of childRoots) {
+    const relPath = path.relative(parentDir, childRoot).replace(/\\/g, '/');
+    const childName = path.basename(childRoot);
+
+    // The child itself is a workspace
+    workspaces.push({ name: childName, path: relPath });
+
+    // Detect sub-workspaces within the child (monorepo support)
+    const subWorkspaces = detectWorkspaces(childRoot);
+    for (const sub of subWorkspaces) {
+      workspaces.push({
+        name: `${childName}/${sub.name}`,
+        path: `${relPath}/${sub.path}`,
+      });
+    }
+  }
+
+  return workspaces;
+}
+
 function detectPnpmWorkspaces(rootPath: string): WorkspaceInfo[] {
   const yamlPath = path.join(rootPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(yamlPath)) return [];
