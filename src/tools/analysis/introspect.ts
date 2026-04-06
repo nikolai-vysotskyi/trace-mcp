@@ -15,6 +15,9 @@ import { getCouplingMetrics, getDependencyCycles } from './graph-analysis.js';
 /** Matches paths inside test fixture directories (sample projects, not real code). */
 const TEST_FIXTURE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/fixtures?\//;
 
+/** Matches test files and test utility files — entry points run by test runners, not imported by production code. */
+const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.[jt]sx?$/;
+
 /** Safely parse JSON metadata — returns empty object on malformed input. */
 function safeParseMeta(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
@@ -373,23 +376,28 @@ export function getDeadExports(
   filePattern?: string,
 ): GetDeadExportsResult {
   const exported = store.getExportedSymbols(filePattern)
-    .filter((s) => !TEST_FIXTURE_RE.test(s.file_path));
+    .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
+    .filter((s) => !TEST_FILE_RE.test(s.file_path));
 
-  // Build a set of all imported specifier names across the entire project
+  // Build a set of all imported specifier names across the entire project.
+  // Check all import edge types (TS/JS use 'imports', Python uses 'py_imports',
+  // and some resolved edges may use 'esm_imports').
   const importedNames = new Set<string>();
-  const importEdges = store.getEdgesByType('imports');
-  for (const edge of importEdges) {
-    if (!edge.metadata) continue;
-    const meta = typeof edge.metadata === 'string'
-      ? JSON.parse(edge.metadata) as Record<string, unknown>
-      : edge.metadata as Record<string, unknown>;
-    const specifiers = meta['specifiers'];
-    if (Array.isArray(specifiers)) {
-      for (const s of specifiers) {
-        if (typeof s === 'string') {
-          // Handle "* as name" → add "name"
-          const clean = s.startsWith('* as ') ? s.slice(5) : s;
-          importedNames.add(clean);
+  for (const edgeType of ['imports', 'esm_imports', 'py_imports']) {
+    const importEdges = store.getEdgesByType(edgeType);
+    for (const edge of importEdges) {
+      if (!edge.metadata) continue;
+      const meta = typeof edge.metadata === 'string'
+        ? JSON.parse(edge.metadata) as Record<string, unknown>
+        : edge.metadata as Record<string, unknown>;
+      const specifiers = meta['specifiers'];
+      if (Array.isArray(specifiers)) {
+        for (const s of specifiers) {
+          if (typeof s === 'string') {
+            // Handle "* as name" → add "name"
+            const clean = s.startsWith('* as ') ? s.slice(5) : s;
+            importedNames.add(clean);
+          }
         }
       }
     }

@@ -175,12 +175,14 @@ export function getDeadCodeV2(
 ): DeadCodeResult {
   const { filePattern, threshold = 0.5, limit = 50 } = options;
 
-  // Get all exported symbols, excluding test fixtures (they're sample projects
-  // whose exports are never imported — always false positives)
+  // Exclude test fixtures (sample projects — always false positives) and test
+  // files (entry points run by test runners, never imported by production code).
   const TEST_FIXTURE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/fixtures?\//;
+  const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.[jt]sx?$/;
   const exported = store.getExportedSymbols(filePattern)
     .filter((s) => s.kind !== 'method') // methods inherit export from class
-    .filter((s) => !TEST_FIXTURE_RE.test(s.file_path));
+    .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
+    .filter((s) => !TEST_FILE_RE.test(s.file_path));
 
   // Build all three signal datasets
   const importedNames = buildImportedNamesSet(store);
