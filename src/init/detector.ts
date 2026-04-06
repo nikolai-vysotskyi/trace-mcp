@@ -193,7 +193,7 @@ function detectExistingConfig(root: string): { path: string } | null {
   return null;
 }
 
-export function detectExistingDb(root: string, globalDbPath?: string): { path: string; schemaVersion: number; fileCount: number } | null {
+function detectExistingDb(root: string, globalDbPath?: string): { path: string; schemaVersion: number; fileCount: number } | null {
   // Check global location first, then legacy local location
   const candidates = globalDbPath
     ? [globalDbPath, path.join(root, '.trace-mcp', 'index.db')]

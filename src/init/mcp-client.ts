@@ -16,7 +16,7 @@ interface McpServerEntry {
   cwd?: string;
 }
 
-export type McpScope = 'global' | 'project';
+type McpScope = 'global' | 'project';
 
 /**
  * Configure selected MCP clients to use trace-mcp.

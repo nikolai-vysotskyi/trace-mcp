@@ -31,7 +31,7 @@ export interface DetectionResult {
   guardHookVersion: string | null;
 }
 
-export type InitAction = 'created' | 'updated' | 'skipped' | 'already_configured';
+type InitAction = 'created' | 'updated' | 'skipped' | 'already_configured';
 
 export interface InitStepResult {
   target: string;

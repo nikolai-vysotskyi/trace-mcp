@@ -18,7 +18,7 @@ const HOME = os.homedir();
 
 export type ConflictSeverity = 'critical' | 'warning' | 'info';
 
-export type ConflictCategory =
+type ConflictCategory =
   | 'mcp_server'     // Competing MCP server registered in client config
   | 'hook'           // Competing PreToolUse / PostToolUse hooks
   | 'hook_script'    // Physical hook script files on disk
@@ -40,11 +40,13 @@ export interface Conflict {
   target: string;
   /** The competing tool name */
   competitor: string;
+  /** Regex pattern used to detect this conflict (for use by the resolver) */
+  detectionPattern?: RegExp;
   /** Whether automatic fix is available */
   fixable: boolean;
 }
 
-export interface ConflictReport {
+interface ConflictReport {
   conflicts: Conflict[];
   scannedAt: string;
   projectRoot: string | null;
@@ -305,6 +307,21 @@ function scanHooksInSettings(): Conflict[] {
     path.join(HOME, '.claw', 'settings.local.json'),
   ];
 
+  // Project-scoped settings in ~/.claude/projects/*/
+  const projectsDir = path.join(HOME, '.claude', 'projects');
+  if (fs.existsSync(projectsDir)) {
+    try {
+      for (const entry of fs.readdirSync(projectsDir)) {
+        const projDir = path.join(projectsDir, entry);
+        try {
+          if (!fs.statSync(projDir).isDirectory()) continue;
+        } catch { continue; }
+        settingsFiles.push(path.join(projDir, 'settings.json'));
+        settingsFiles.push(path.join(projDir, 'settings.local.json'));
+      }
+    } catch { /* ignore */ }
+  }
+
   for (const settingsPath of settingsFiles) {
     if (!fs.existsSync(settingsPath)) continue;
 
@@ -340,6 +357,7 @@ function scanHooksInSettings(): Conflict[] {
                   `intercepts tool calls and may block or redirect trace-mcp operations.`,
                 target: settingsPath,
                 competitor,
+                detectionPattern: pattern,
                 fixable: true,
               });
             }
@@ -389,6 +407,7 @@ function scanHookScriptFiles(): Conflict[] {
               `Even if not registered in settings.json, it may be re-enabled later.`,
             target: filePath,
             competitor,
+            detectionPattern: pattern,
             fixable: true,
           });
         }
@@ -409,6 +428,31 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
     path.join(HOME, '.claude', 'CLAUDE.md'),
     path.join(HOME, '.claude', 'AGENTS.md'),
   ];
+
+  // Project-scoped CLAUDE.md files in ~/.claude/projects/*/
+  const projectsDir = path.join(HOME, '.claude', 'projects');
+  if (fs.existsSync(projectsDir)) {
+    try {
+      for (const entry of fs.readdirSync(projectsDir)) {
+        const projDir = path.join(projectsDir, entry);
+        if (!fs.statSync(projDir).isDirectory()) continue;
+        files.push(path.join(projDir, 'CLAUDE.md'));
+        files.push(path.join(projDir, 'AGENTS.md'));
+        // Memory files
+        const memDir = path.join(projDir, 'memory');
+        if (fs.existsSync(memDir)) {
+          try {
+            for (const memFile of fs.readdirSync(memDir)) {
+              if (memFile.endsWith('.md') && memFile !== 'MEMORY.md') {
+                files.push(path.join(memDir, memFile));
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
   if (projectRoot) {
     files.push(
       path.join(projectRoot, 'CLAUDE.md'),
@@ -432,6 +476,9 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
         // Avoid duplicate entries for same file+competitor
         if (conflicts.some((c) => c.id === id)) continue;
 
+        // Fixable if we have markers OR if competitor name appears in a markdown heading
+        const hasSection = hasCompetitorSection(content, competitor);
+
         conflicts.push({
           id,
           category: 'claude_md',
@@ -439,10 +486,12 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
           summary: `${shortPath(filePath)} contains ${competitor} directives`,
           detail: marker
             ? `Found "${marker}" block marker. This injects competing tool routing instructions that override trace-mcp tools.`
-            : `Found references to ${competitor} tools/APIs. These instructions may cause the AI to prefer competing tools over trace-mcp.`,
+            : hasSection
+              ? `Found "${competitor}" section heading with tool routing instructions that override trace-mcp tools.`
+              : `Found references to ${competitor} tools/APIs. These instructions may cause the AI to prefer competing tools over trace-mcp.`,
           target: filePath,
           competitor,
-          fixable: !!marker, // Only auto-fixable if we have markers to identify the block
+          fixable: !!marker || hasSection,
         });
       }
     }
@@ -450,6 +499,32 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
 
   return conflicts;
 }
+
+/** Check if content has a markdown heading containing the competitor name. */
+function hasCompetitorSection(content: string, competitor: string): boolean {
+  // Build patterns for the competitor and its common aliases
+  const names = COMPETITOR_ALIASES[competitor] ?? [competitor.replace(/-mcp$/, '')];
+  for (const name of names) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const headingPattern = new RegExp(`^#{1,6}\\s+.*${escaped}`, 'im');
+    if (headingPattern.test(content)) return true;
+  }
+  return false;
+}
+
+/** Map competitor id → possible names that appear in headings. */
+const COMPETITOR_ALIASES: Record<string, string[]> = {
+  'jcodemunch-mcp': ['jcodemunch', 'jCodeMunch', 'code-index'],
+  'code-index': ['code-index', 'codeindex'],
+  'repomix': ['repomix', 'repopack'],
+  'aider': ['aider'],
+  'cline': ['cline'],
+  'sourcegraph-cody': ['cody', 'sourcegraph'],
+  'sourcegraph': ['sourcegraph'],
+  'greptile': ['greptile'],
+  'code-compass': ['code-compass', 'codecompass'],
+  'repo-map': ['repo-map', 'repomap'],
+};
 
 // ---------------------------------------------------------------------------
 // 5. IDE rule files
