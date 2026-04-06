@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.5.4...v1.6.0) (2026-04-06)
+
+
+### Features
+
+* add apply_codemod tool for bulk regex find-and-replace ([eeed93b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eeed93b5651d5d089cd34dae123e34389db1d159))
+* add multi-root project support ([858fc7f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/858fc7f1c5313b69bc7b1eb74a8f462a1902142c))
+
+
+### Refactoring
+
+* migrate from native tree-sitter to web-tree-sitter WASM ([3544f0b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3544f0b4e94098ad6274450794dd3ef80d7ab36a))
+
 ## [1.5.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.5.3...v1.5.4) (2026-04-06)
 
 
