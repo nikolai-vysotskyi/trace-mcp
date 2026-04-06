@@ -1,5 +1,5 @@
 /**
- * Refactoring execution tools — apply_rename, remove_dead_code, extract_function.
+ * Refactoring execution tools — apply_rename, remove_dead_code, extract_function, apply_codemod.
  *
  * These tools perform actual file modifications guided by the dependency graph.
  * Each tool produces a structured diff plan with the exact edits to apply,
@@ -8,6 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import fg from 'fast-glob';
 import type { Store } from '../../db/store.js';
 import { checkRenameSafe } from './rename-check.js';
 
@@ -505,6 +506,239 @@ export function extractFunction(
     result.warnings.push(`Detected ${returns.length} return value(s): ${returns.join(', ')} — verify correctness`);
   }
 
+  return result;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// TOOL 4: APPLY CODEMOD
+// ════════════════════════════════════════════════════════════════════════
+
+interface CodemodMatch {
+  file: string;
+  line: number;
+  original: string;
+  replaced: string;
+  context_before: string[];
+  context_after: string[];
+}
+
+interface CodemodResult {
+  success: boolean;
+  tool: 'apply_codemod';
+  dry_run: boolean;
+  matches: CodemodMatch[];
+  files_modified: string[];
+  total_replacements: number;
+  total_files: number;
+  warnings: string[];
+  error?: string;
+}
+
+const CODEMOD_MAX_PREVIEW = 20;
+const CODEMOD_LARGE_THRESHOLD = 20;
+const CODEMOD_CONTEXT_LINES = 2;
+
+const BINARY_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.webp',
+  '.woff', '.woff2', '.ttf', '.eot', '.otf',
+  '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx',
+  '.mp3', '.mp4', '.avi', '.mov', '.wav',
+  '.exe', '.dll', '.so', '.dylib', '.o', '.a',
+  '.wasm', '.pyc', '.class',
+]);
+
+const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', 'vendor', '__pycache__', '.next', '.nuxt'];
+
+export function applyCodemod(
+  projectRoot: string,
+  pattern: string,
+  replacement: string,
+  filePattern: string,
+  options: {
+    dryRun: boolean;
+    confirmLarge?: boolean;
+    filterContent?: string;
+    multiline?: boolean;
+  },
+): CodemodResult {
+  const result: CodemodResult = {
+    success: false,
+    tool: 'apply_codemod',
+    dry_run: options.dryRun,
+    matches: [],
+    files_modified: [],
+    total_replacements: 0,
+    total_files: 0,
+    warnings: [],
+  };
+
+  // 1. Compile regex
+  let regex: RegExp;
+  try {
+    const flags = options.multiline ? 'gms' : 'gm';
+    regex = new RegExp(pattern, flags);
+  } catch (e) {
+    result.error = `Invalid regex pattern: ${(e as Error).message}`;
+    return result;
+  }
+
+  // 2. Glob files
+  let files: string[];
+  try {
+    files = fg.sync(filePattern, {
+      cwd: projectRoot,
+      ignore: SKIP_DIRS.map((d) => `**/${d}/**`),
+      onlyFiles: true,
+      absolute: false,
+    });
+  } catch (e) {
+    result.error = `Invalid file pattern: ${(e as Error).message}`;
+    return result;
+  }
+
+  // Filter out binary files
+  files = files.filter((f) => !BINARY_EXTENSIONS.has(path.extname(f).toLowerCase()));
+
+  if (files.length === 0) {
+    result.error = `No files matched pattern: ${filePattern}`;
+    return result;
+  }
+
+  // 3. Scan files for matches
+  const allMatches: CodemodMatch[] = [];
+  const filesWithMatches = new Set<string>();
+
+  for (const relPath of files) {
+    const absPath = path.resolve(projectRoot, relPath);
+    if (!fs.existsSync(absPath)) continue;
+
+    let content: string;
+    try {
+      content = fs.readFileSync(absPath, 'utf-8');
+    } catch {
+      result.warnings.push(`Could not read: ${relPath}`);
+      continue;
+    }
+
+    // Optional content filter — skip files that don't contain the filter string
+    if (options.filterContent && !content.includes(options.filterContent)) {
+      continue;
+    }
+
+    const lines = content.split('\n');
+
+    // Find all matches line-by-line (non-multiline) or in full content (multiline)
+    if (options.multiline) {
+      // Multiline: work on full content
+      regex.lastIndex = 0;
+      if (!regex.test(content)) continue;
+
+      filesWithMatches.add(relPath);
+
+      // Count matches
+      regex.lastIndex = 0;
+      let matchCount = 0;
+      const matchPositions: { index: number; match: string }[] = [];
+      let m: RegExpExecArray | null;
+      while ((m = regex.exec(content)) !== null) {
+        matchPositions.push({ index: m.index, match: m[0] });
+        matchCount++;
+        if (m[0].length === 0) { regex.lastIndex++; }
+      }
+
+      // For preview, find line numbers of first few matches
+      for (const pos of matchPositions.slice(0, CODEMOD_MAX_PREVIEW - allMatches.length)) {
+        const lineNum = content.slice(0, pos.index).split('\n').length;
+        const original = pos.match;
+        regex.lastIndex = 0;
+        const replaced = original.replace(regex, replacement);
+        allMatches.push({
+          file: relPath,
+          line: lineNum,
+          original: original.length > 200 ? original.slice(0, 200) + '…' : original,
+          replaced: replaced.length > 200 ? replaced.slice(0, 200) + '…' : replaced,
+          context_before: lines.slice(Math.max(0, lineNum - 1 - CODEMOD_CONTEXT_LINES), lineNum - 1),
+          context_after: lines.slice(lineNum, lineNum + CODEMOD_CONTEXT_LINES),
+        });
+      }
+
+      result.total_replacements += matchCount;
+    } else {
+      // Line-by-line matching
+      let fileMatchCount = 0;
+      for (let i = 0; i < lines.length; i++) {
+        regex.lastIndex = 0;
+        if (!regex.test(lines[i])) continue;
+
+        filesWithMatches.add(relPath);
+        fileMatchCount++;
+
+        regex.lastIndex = 0;
+        const newLine = lines[i].replace(regex, replacement);
+
+        if (allMatches.length < CODEMOD_MAX_PREVIEW) {
+          allMatches.push({
+            file: relPath,
+            line: i + 1,
+            original: lines[i],
+            replaced: newLine,
+            context_before: lines.slice(Math.max(0, i - CODEMOD_CONTEXT_LINES), i),
+            context_after: lines.slice(i + 1, i + 1 + CODEMOD_CONTEXT_LINES),
+          });
+        }
+      }
+      result.total_replacements += fileMatchCount;
+    }
+  }
+
+  result.total_files = filesWithMatches.size;
+
+  if (allMatches.length === 0) {
+    result.error = `No matches found for pattern in ${files.length} files`;
+    return result;
+  }
+
+  // 4. Large change guard
+  if (filesWithMatches.size > CODEMOD_LARGE_THRESHOLD && !options.confirmLarge) {
+    result.matches = allMatches;
+    result.warnings.push(
+      `Affects ${filesWithMatches.size} files (>${CODEMOD_LARGE_THRESHOLD}). ` +
+      `Re-run with confirm_large: true to proceed, or narrow file_pattern.`,
+    );
+    // Return as dry_run preview regardless
+    result.dry_run = true;
+    result.success = true;
+    return result;
+  }
+
+  // 5. Dry run — just return preview
+  if (options.dryRun) {
+    result.matches = allMatches;
+    result.success = true;
+    return result;
+  }
+
+  // 6. Apply changes
+  for (const relPath of filesWithMatches) {
+    const absPath = path.resolve(projectRoot, relPath);
+    try {
+      const content = fs.readFileSync(absPath, 'utf-8');
+      const flags = options.multiline ? 'gms' : 'gm';
+      const freshRegex = new RegExp(pattern, flags);
+      const newContent = content.replace(freshRegex, replacement);
+
+      if (newContent !== content) {
+        fs.writeFileSync(absPath, newContent, 'utf-8');
+        result.files_modified.push(relPath);
+      }
+    } catch (e) {
+      result.warnings.push(`Failed to write ${relPath}: ${(e as Error).message}`);
+    }
+  }
+
+  result.matches = allMatches;
+  result.success = true;
   return result;
 }
 

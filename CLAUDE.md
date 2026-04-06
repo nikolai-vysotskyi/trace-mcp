@@ -95,6 +95,15 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 2. `apply_rename` { symbol_id, new_name } — renames across ALL files (definition + imports)
 3. NEVER rename manually via Edit with replace_all — it misses import sites and cross-file references
 
+### Bulk mechanical changes (add async/await, update patterns, fix imports across many files)
+1. `apply_codemod` { pattern, replacement, file_pattern, dry_run: true } — preview changes first (dry_run is default)
+2. Review the preview — check matched files, context lines, replacement correctness
+3. `apply_codemod` { pattern, replacement, file_pattern, dry_run: false } — apply changes
+4. If >20 files affected, must add `confirm_large: true`
+5. Use `filter_content` to narrow scope (e.g. only files containing "extractNodes")
+6. Use `multiline: true` for patterns spanning multiple lines
+7. NEVER use 50× Edit calls for the same mechanical regex replacement — use apply_codemod instead
+
 ### Deleting code
 1. `get_dead_code` { file_pattern } — verify code is actually dead (multi-signal detection)
 2. `get_dead_exports` { file_pattern } — find unused exports

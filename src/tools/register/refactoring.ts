@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServerContext } from '../../server/types.js';
-import { applyRename, removeDeadCode, extractFunction } from '../refactoring/refactor.js';
+import { applyRename, removeDeadCode, extractFunction, applyCodemod } from '../refactoring/refactor.js';
 
 export function registerRefactoringTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j } = ctx;
@@ -52,6 +52,32 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
       const blocked = guardPath(file_path);
       if (blocked) return blocked;
       const result = extractFunction(store, projectRoot, file_path, start_line, end_line, function_name);
+      if (!result.success) {
+        return { content: [{ type: 'text', text: j(result) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'apply_codemod',
+    'Bulk regex find-and-replace across files. Dry-run by default — first call shows preview, second call with dry_run=false applies. Use for mechanical changes like adding async/await, renaming patterns, updating imports across many files.',
+    {
+      pattern: z.string().min(1).max(1000).describe('Regex pattern to match (JavaScript regex syntax)'),
+      replacement: z.string().max(1000).describe('Replacement string ($1, $2 for capture groups)'),
+      file_pattern: z.string().min(1).max(512).describe('Glob pattern for files to scan (e.g. "tests/**/*.test.ts", "src/**/*.py")'),
+      dry_run: z.boolean().default(true).describe('Preview changes without writing (default: true). Set to false to apply.'),
+      confirm_large: z.boolean().optional().describe('Required when >20 files affected. Acknowledges large-scale change.'),
+      filter_content: z.string().max(500).optional().describe('Only process files containing this substring (narrows scope)'),
+      multiline: z.boolean().optional().describe('Enable multiline mode (dot matches newlines, patterns span lines)'),
+    },
+    async ({ pattern, replacement, file_pattern, dry_run, confirm_large, filter_content, multiline }) => {
+      const result = applyCodemod(projectRoot, pattern, replacement, file_pattern, {
+        dryRun: dry_run,
+        confirmLarge: confirm_large,
+        filterContent: filter_content,
+        multiline: multiline,
+      });
       if (!result.success) {
         return { content: [{ type: 'text', text: j(result) }], isError: true };
       }
