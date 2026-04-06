@@ -53,6 +53,7 @@ describe('SummarizationPipeline', () => {
     const pipeline = new SummarizationPipeline(store, inference, '/tmp/fake', {
       batchSize: 10,
       kinds: ['class', 'method'],
+      concurrency: 1,
     });
 
     const count = await pipeline.summarizeUnsummarized();
@@ -77,6 +78,7 @@ describe('SummarizationPipeline', () => {
     const pipeline = new SummarizationPipeline(store, inference, '/tmp/fake', {
       batchSize: 10,
       kinds: ['class', 'method'],
+      concurrency: 1,
     });
 
     const count = await pipeline.summarizeUnsummarized();
@@ -97,6 +99,7 @@ describe('SummarizationPipeline', () => {
     const pipeline = new SummarizationPipeline(store, inference, '/tmp/fake', {
       batchSize: 10,
       kinds: ['class', 'method'],
+      concurrency: 1,
     });
 
     const count = await pipeline.summarizeUnsummarized();
@@ -109,6 +112,7 @@ describe('SummarizationPipeline', () => {
     const pipeline = new SummarizationPipeline(store, inference, '/tmp/fake', {
       batchSize: 10,
       kinds: ['class'],
+      concurrency: 1,
     });
 
     const count = await pipeline.summarizeUnsummarized();
@@ -122,6 +126,7 @@ describe('SummarizationPipeline', () => {
     const pipeline = new SummarizationPipeline(store, inference, '/tmp/fake', {
       batchSize: 10,
       kinds: ['class', 'method'],
+      concurrency: 1,
     });
 
     await pipeline.summarizeUnsummarized();
@@ -131,5 +136,19 @@ describe('SummarizationPipeline', () => {
     const count2 = await pipeline.summarizeUnsummarized();
     expect(count2).toBe(0);
     expect(inference.generate).toHaveBeenCalledTimes(2); // no new calls
+  });
+
+  it('summarizes in parallel when concurrency > 1', async () => {
+    seedSymbols(store);
+    const inference = createMockInference();
+    const pipeline = new SummarizationPipeline(store, inference, '/tmp/fake', {
+      batchSize: 10,
+      kinds: ['class', 'method'],
+      concurrency: 4,
+    });
+
+    const count = await pipeline.summarizeUnsummarized();
+    expect(count).toBe(2);
+    expect(inference.generate).toHaveBeenCalledTimes(2);
   });
 });
