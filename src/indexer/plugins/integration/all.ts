@@ -56,7 +56,7 @@ import { ZustandReduxPlugin } from './state/zustand/index.js';
 import { SocketIoPlugin } from './realtime/socketio/index.js';
 
 // --- testing ---
-import { TestingPlugin } from './testing/testing/index.js';
+import { TestingPlugin } from './testing/index.js';
 
 // --- tooling ---
 import { CeleryPlugin } from './tooling/celery/index.js';

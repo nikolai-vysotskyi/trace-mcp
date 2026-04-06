@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { generateSbom } from '../../src/tools/sbom.js';
+import { generateSbom } from '../../src/tools/project/sbom.js';
 
 const TEST_DIR = path.join(tmpdir(), 'trace-mcp-sbom-test-' + process.pid);
 

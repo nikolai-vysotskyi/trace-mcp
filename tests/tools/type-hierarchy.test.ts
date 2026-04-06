@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { getTypeHierarchy } from '../../src/tools/introspect.js';
+import { getTypeHierarchy } from '../../src/tools/analysis/introspect.js';
 
 function createStore(): Store {
   return new Store(initializeDatabase(':memory:'));

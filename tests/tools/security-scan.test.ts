@@ -4,7 +4,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { scanSecurity } from '../../src/tools/security-scan.js';
+import { scanSecurity } from '../../src/tools/quality/security-scan.js';
 
 // Temp dir for test files
 const TEST_DIR = path.join(tmpdir(), 'trace-mcp-security-test-' + process.pid);

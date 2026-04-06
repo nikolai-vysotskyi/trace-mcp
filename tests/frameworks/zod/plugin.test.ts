@@ -3,7 +3,7 @@ import {
   ZodPlugin,
   extractZodSchemas,
   extractZodInferences,
-} from '../../../src/indexer/plugins/integration/validation/zod/index.js';
+} from '../../../src/indexer/plugins/integration/validation/zod/index';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 describe('ZodPlugin', () => {
@@ -19,6 +19,8 @@ describe('ZodPlugin', () => {
         rootPath: '/tmp/fake',
         packageJson: { dependencies: { zod: '^3.22.0' } },
         configFiles: [],
+        detectedVersions: [],
+        allDependencies: [],
       };
       expect(plugin.detect(ctx)).toBe(true);
     });
@@ -28,6 +30,8 @@ describe('ZodPlugin', () => {
         rootPath: '/tmp/fake',
         packageJson: { devDependencies: { zod: '^3.22.0' } },
         configFiles: [],
+        detectedVersions: [],
+        allDependencies: [],
       };
       expect(plugin.detect(ctx)).toBe(true);
     });
@@ -37,6 +41,8 @@ describe('ZodPlugin', () => {
         rootPath: '/tmp/nonexistent-12345',
         packageJson: { dependencies: { yup: '^1.0' } },
         configFiles: [],
+        detectedVersions: [],
+        allDependencies: [],
       };
       expect(plugin.detect(ctx)).toBe(false);
     });

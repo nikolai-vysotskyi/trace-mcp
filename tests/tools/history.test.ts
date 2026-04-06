@@ -7,7 +7,7 @@ import {
   getSymbolComplexityTrend,
   countImports,
   extractSymbolSource,
-} from '../../src/tools/history.js';
+} from '../../src/tools/analysis/history.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),

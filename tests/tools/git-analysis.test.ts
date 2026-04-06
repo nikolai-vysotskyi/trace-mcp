@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import Database from 'better-sqlite3';
 import { Store } from '../../src/db/store.js';
 import { initializeDatabase } from '../../src/db/schema.js';
-import { getChurnRate, getHotspots, isGitRepo } from '../../src/tools/git-analysis.js';
+import { getChurnRate, getHotspots, isGitRepo } from '../../src/tools/git/git-analysis.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),

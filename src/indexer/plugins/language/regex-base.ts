@@ -16,7 +16,7 @@ export function lineAt(source: string, offset: number): number {
 }
 
 /** Get byte offset of end of line containing `offset`. */
-export function lineEndOffset(source: string, offset: number): number {
+function lineEndOffset(source: string, offset: number): number {
   const nl = source.indexOf('\n', offset);
   return nl === -1 ? source.length : nl;
 }

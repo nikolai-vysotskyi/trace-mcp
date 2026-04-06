@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { getTestsFor } from '../../src/tools/tests.js';
+import { getTestsFor } from '../../src/tools/framework/tests.js';
 
 function makeStore(): Store {
   const db = initializeDatabase(':memory:');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolvePreset, listPresets, TOOL_PRESETS } from '../../src/tools/presets.js';
+import { resolvePreset, listPresets, TOOL_PRESETS } from '../../src/tools/project/presets.js';
 
 describe('Tool Presets', () => {
   describe('resolvePreset', () => {

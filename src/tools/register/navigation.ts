@@ -1,18 +1,18 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server-types.js';
-import { getSymbol, search, getFileOutline, type SearchResultItemProjected } from '../navigation.js';
-import { getChangeImpact } from '../impact.js';
-import { getFeatureContext } from '../context.js';
-import { getContextBundle } from '../context-bundle.js';
-import { getTaskContext } from '../task-context.js';
-import { suggestQueries } from '../suggest.js';
-import { getRelatedSymbols } from '../related.js';
+import type { ServerContext } from '../../server/types.js';
+import { getSymbol, search, getFileOutline, type SearchResultItemProjected } from '../navigation/navigation.js';
+import { getChangeImpact } from '../analysis/impact.js';
+import { getFeatureContext } from '../navigation/context.js';
+import { getContextBundle } from '../navigation/context-bundle.js';
+import { getTaskContext } from '../navigation/task-context.js';
+import { suggestQueries } from '../navigation/suggest.js';
+import { getRelatedSymbols } from '../navigation/related.js';
 import { formatToolError } from '../../errors.js';
-import { buildNegativeEvidence } from '../evidence.js';
-import { searchText } from '../search-text.js';
-import { fallbackSearch, fallbackOutline } from '../zero-index.js';
-import { computeAdaptiveBudget } from '../../adaptive-budget.js';
+import { buildNegativeEvidence } from '../shared/evidence.js';
+import { searchText } from '../navigation/search-text.js';
+import { fallbackSearch, fallbackOutline } from '../navigation/zero-index.js';
+import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j, jh, savings, vectorStore, embeddingService, reranker, markExplored } = ctx;

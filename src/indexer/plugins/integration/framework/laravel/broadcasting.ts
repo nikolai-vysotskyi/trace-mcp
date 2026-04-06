@@ -100,7 +100,7 @@ export function extractChannelAuthorizations(
 
 // ─── Edge builders ────────────────────────────────────────────
 
-export function buildBroadcastingEdges(event: BroadcastingEventInfo): RawEdge[] {
+function buildBroadcastingEdges(event: BroadcastingEventInfo): RawEdge[] {
   const edges: RawEdge[] = [];
 
   for (const channel of event.channels) {
@@ -119,7 +119,7 @@ export function buildBroadcastingEdges(event: BroadcastingEventInfo): RawEdge[] 
   return edges;
 }
 
-export function buildChannelAuthEdges(mappings: ChannelAuthMapping[]): RawEdge[] {
+function buildChannelAuthEdges(mappings: ChannelAuthMapping[]): RawEdge[] {
   return mappings.map((m) => ({
     edgeType: 'broadcast_authorized_by',
     metadata: { channelPattern: m.pattern, authClass: m.authClass },

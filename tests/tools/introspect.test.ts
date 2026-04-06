@@ -5,8 +5,8 @@ import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, selfAudit } from '../../src/tools/introspect.js';
-import { search } from '../../src/tools/navigation.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, selfAudit } from '../../src/tools/analysis/introspect.js';
+import { search } from '../../src/tools/navigation/navigation.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/ts-heritage');

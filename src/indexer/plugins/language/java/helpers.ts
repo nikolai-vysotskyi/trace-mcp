@@ -106,7 +106,7 @@ export function extractAnnotations(node: TSNode): string[] {
 }
 
 /** Extract modifier keywords (public, static, final, abstract, etc.) from a modifiers node. */
-export function extractModifierKeywords(node: TSNode): string[] {
+function extractModifierKeywords(node: TSNode): string[] {
   const keywords: string[] = [];
   const modifiers = node.childForFieldName('modifiers') ?? findChildByType(node, 'modifiers');
   if (!modifiers) return keywords;

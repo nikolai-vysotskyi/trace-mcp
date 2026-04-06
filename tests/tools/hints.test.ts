@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { getHints, withHints, type Hint } from '../../src/tools/hints.js';
+import { getHints, withHints, type Hint } from '../../src/tools/shared/hints.js';
 
 describe('Next-step hints', () => {
   describe('getHints', () => {

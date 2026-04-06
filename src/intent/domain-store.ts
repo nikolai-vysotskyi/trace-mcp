@@ -50,7 +50,7 @@ interface DomainTreeNode {
   symbol_count?: number;
 }
 
-export interface DomainInput {
+interface DomainInput {
   name: string;
   parentId?: number | null;
   description?: string;

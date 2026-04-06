@@ -9,7 +9,7 @@ import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typ
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { getFeatureContext, tokenizeDescription } from '../../src/tools/context.js';
+import { getFeatureContext, tokenizeDescription } from '../../src/tools/navigation/context.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');

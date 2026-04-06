@@ -5,7 +5,7 @@ import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { compareBranches } from '../../src/tools/changed-symbols.js';
+import { compareBranches } from '../../src/tools/quality/changed-symbols.js';
 
 describe('compareBranches', () => {
   let store: Store;

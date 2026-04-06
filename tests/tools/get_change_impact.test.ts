@@ -7,7 +7,7 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { getChangeImpact } from '../../src/tools/impact.js';
+import { getChangeImpact } from '../../src/tools/analysis/impact.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/vue3-composition');

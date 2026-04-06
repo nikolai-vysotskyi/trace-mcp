@@ -4,7 +4,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { taintAnalysis } from '../../src/tools/taint-analysis.js';
+import { taintAnalysis } from '../../src/tools/quality/taint-analysis.js';
 
 const TEST_DIR = path.join(tmpdir(), 'trace-mcp-taint-test-' + process.pid);
 

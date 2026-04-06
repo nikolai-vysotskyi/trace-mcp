@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { getDataflow } from '../../src/tools/dataflow.js';
+import { getDataflow } from '../../src/tools/analysis/dataflow.js';
 
 describe('getDataflow', () => {
   let store: Store;

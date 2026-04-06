@@ -11,12 +11,12 @@
  * No CLI concerns, no git — pure data in, report out.
  */
 import type { Store } from '../db/store.js';
-import { getChangeImpact, type ChangeImpactResult } from '../tools/impact.js';
-import { getDeadExports } from '../tools/introspect.js';
-import { getUntestedExports } from '../tools/introspect.js';
-import { getCouplingMetrics, type CouplingResult } from '../tools/graph-analysis.js';
-import { getLayerViolations, detectLayerPreset, type LayerDefinition, type LayerViolation } from '../tools/layer-violations.js';
-import { getChurnRate } from '../tools/git-analysis.js';
+import { getChangeImpact, type ChangeImpactResult } from '../tools/analysis/impact.js';
+import { getDeadExports } from '../tools/analysis/introspect.js';
+import { getUntestedExports } from '../tools/analysis/introspect.js';
+import { getCouplingMetrics, type CouplingResult } from '../tools/analysis/graph-analysis.js';
+import { getLayerViolations, detectLayerPreset, type LayerDefinition, type LayerViolation } from '../tools/analysis/layer-violations.js';
+import { getChurnRate } from '../tools/git/git-analysis.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES

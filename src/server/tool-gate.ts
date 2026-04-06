@@ -4,12 +4,12 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { SessionTracker } from '../session-tracker.js';
-import type { SessionJournal } from '../session-journal.js';
-import type { ToolResponse } from '../server-types.js';
+import type { SessionTracker } from '../session/tracker.js';
+import type { SessionJournal } from '../session/journal.js';
+import type { ToolResponse } from './types.js';
 import { markToolConsultation } from './consultation-markers.js';
 
-export interface ToolGateResult {
+interface ToolGateResult {
   _originalTool: McpServer['tool'];
   registeredToolNames: string[];
   toolHandlers: Map<string, (params: Record<string, unknown>) => Promise<ToolResponse>>;

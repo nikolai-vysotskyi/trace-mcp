@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { visualizeGraph, getDependencyDiagram } from '../../src/tools/visualize.js';
+import { visualizeGraph, getDependencyDiagram } from '../../src/tools/analysis/visualize.js';
 
 describe('visualizeGraph', () => {
   let store: Store;

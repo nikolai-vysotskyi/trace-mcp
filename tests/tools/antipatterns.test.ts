@@ -4,7 +4,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { detectAntipatterns } from '../../src/tools/antipatterns.js';
+import { detectAntipatterns } from '../../src/tools/quality/antipatterns.js';
 
 const TEST_DIR = path.join(tmpdir(), 'trace-mcp-antipatterns-test-' + process.pid);
 

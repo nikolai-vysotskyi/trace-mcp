@@ -8,11 +8,11 @@ import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typ
 import { NestJSPlugin } from '../../src/indexer/plugins/integration/framework/nestjs/index.js';
 import { ExpressPlugin } from '../../src/indexer/plugins/integration/framework/express/index.js';
 import { ReactNativePlugin } from '../../src/indexer/plugins/integration/view/react-native/index.js';
-import { getMiddlewareChain } from '../../src/tools/middleware-chain.js';
-import { getModuleGraph } from '../../src/tools/module-graph.js';
-import { getDITree } from '../../src/tools/di-tree.js';
-import { getNavigationGraph } from '../../src/tools/rn-navigation.js';
-import { getScreenContext } from '../../src/tools/screen-context.js';
+import { getMiddlewareChain } from '../../src/tools/framework/middleware-chain.js';
+import { getModuleGraph } from '../../src/tools/analysis/module-graph.js';
+import { getDITree } from '../../src/tools/framework/di-tree.js';
+import { getNavigationGraph } from '../../src/tools/framework/rn-navigation.js';
+import { getScreenContext } from '../../src/tools/framework/screen-context.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const NESTJS_FIXTURE = path.resolve(__dirname, '../fixtures/nestjs-basic');

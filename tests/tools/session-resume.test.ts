@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { flushSessionSummary, getSessionResume } from '../../src/session-resume.js';
+import { flushSessionSummary, getSessionResume } from '../../src/session/resume.js';
 
 // Use a temp dir to avoid polluting real ~/.trace-mcp
 // We need to mock the SESSIONS_DIR — since session-resume uses TRACE_MCP_HOME,

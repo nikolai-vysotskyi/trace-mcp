@@ -4,7 +4,7 @@ import {
   computeMaxNesting,
   computeParamCount,
   computeComplexity,
-} from '../../src/tools/complexity.js';
+} from '../../src/tools/analysis/complexity.js';
 
 describe('computeCyclomatic', () => {
   it('returns 1 for empty/simple function', () => {

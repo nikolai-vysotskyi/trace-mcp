@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { planBatchChange } from '../../src/tools/batch-changes.js';
+import { planBatchChange } from '../../src/tools/project/batch-changes.js';
 
 function createStore(): Store {
   const db = initializeDatabase(':memory:');

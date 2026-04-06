@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { detectCommunities, getCommunities, getCommunityDetail } from '../../src/tools/communities.js';
+import { detectCommunities, getCommunities, getCommunityDetail } from '../../src/tools/analysis/communities.js';
 import type Database from 'better-sqlite3';
 
 describe('Community Detection', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../../src/db/store.js';
 import { initializeDatabase } from '../../src/db/schema.js';
-import { getLayerViolations, detectLayerPreset, type LayerDefinition } from '../../src/tools/layer-violations.js';
+import { getLayerViolations, detectLayerPreset, type LayerDefinition } from '../../src/tools/analysis/layer-violations.js';
 
 function createStore(): Store {
   const db = initializeDatabase(':memory:');

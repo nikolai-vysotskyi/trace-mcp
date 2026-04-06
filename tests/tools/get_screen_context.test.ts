@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { getScreenContext } from '../../src/tools/screen-context.js';
+import { getScreenContext } from '../../src/tools/framework/screen-context.js';
 
 function makeStore(): Store {
   const db = initializeDatabase(':memory:');

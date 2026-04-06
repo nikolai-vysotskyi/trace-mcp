@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { auditConfig } from '../../src/tools/audit-config.js';
+import { auditConfig } from '../../src/tools/quality/audit-config.js';
 import { indexTrigramsBatch } from '../../src/db/fuzzy.js';
 import fs from 'node:fs';
 import path from 'node:path';

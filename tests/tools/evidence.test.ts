@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildNegativeEvidence } from '../../src/tools/evidence.js';
+import { buildNegativeEvidence } from '../../src/tools/shared/evidence.js';
 
 describe('buildNegativeEvidence', () => {
   it('returns tool-specific suggestion for find_usages', () => {

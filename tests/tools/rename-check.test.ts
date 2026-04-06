@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../../src/db/store.js';
 import { initializeDatabase } from '../../src/db/schema.js';
-import { checkRenameSafe } from '../../src/tools/rename-check.js';
+import { checkRenameSafe } from '../../src/tools/refactoring/rename-check.js';
 
 function createStore(): Store {
   const db = initializeDatabase(':memory:');

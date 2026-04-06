@@ -1,21 +1,21 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server-types.js';
+import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { TopologyStore } from '../../topology/topology-db.js';
 import { TOPOLOGY_DB_PATH, ensureGlobalDirs } from '../../global.js';
-import { getServiceMap, getCrossServiceImpact, getApiContract, getServiceDependencies, getContractDrift } from '../topology.js';
-import { getFederationGraph, getFederationImpact, federationAddRepo, federationSync, getFederationClients } from '../federation.js';
+import { getServiceMap, getCrossServiceImpact, getApiContract, getServiceDependencies, getContractDrift } from '../project/topology.js';
+import { getFederationGraph, getFederationImpact, federationAddRepo, federationSync, getFederationClients } from '../advanced/federation.js';
 import { RuntimeIntelligence } from '../../runtime/lifecycle.js';
-import { getRuntimeProfile, getRuntimeCallGraph, getEndpointAnalytics, getRuntimeDependencies } from '../runtime.js';
-import { queryByIntent, getDomainMap, getDomainContext, getCrossDomainDependencies } from '../intent.js';
-import { graphQuery } from '../graph-query.js';
-import { getDataflow } from '../dataflow.js';
-import { visualizeGraph, getDependencyDiagram } from '../visualize.js';
-import { searchText } from '../search-text.js';
-import { predictBugs, detectDrift, getTechDebt, assessChangeRisk, getHealthTrends } from '../predictive-intelligence.js';
-import { buildNegativeEvidence } from '../evidence.js';
+import { getRuntimeProfile, getRuntimeCallGraph, getEndpointAnalytics, getRuntimeDependencies } from '../advanced/runtime.js';
+import { queryByIntent, getDomainMap, getDomainContext, getCrossDomainDependencies } from '../advanced/intent.js';
+import { graphQuery } from '../analysis/graph-query.js';
+import { getDataflow } from '../analysis/dataflow.js';
+import { visualizeGraph, getDependencyDiagram } from '../analysis/visualize.js';
+import { searchText } from '../navigation/search-text.js';
+import { predictBugs, detectDrift, getTechDebt, assessChangeRisk, getHealthTrends } from '../analysis/predictive-intelligence.js';
+import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerAdvancedTools(server: McpServer, ctx: ServerContext): void {
   const { store, config, projectRoot, guardPath, j, jh } = ctx;

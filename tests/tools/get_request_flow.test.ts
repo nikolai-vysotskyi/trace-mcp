@@ -6,7 +6,7 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
-import { getRequestFlow } from '../../src/tools/flow.js';
+import { getRequestFlow } from '../../src/tools/framework/flow.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');

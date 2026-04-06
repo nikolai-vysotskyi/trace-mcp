@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { searchText } from '../../src/tools/search-text.js';
+import { searchText } from '../../src/tools/navigation/search-text.js';
 
 describe('searchText', () => {
   let store: Store;
