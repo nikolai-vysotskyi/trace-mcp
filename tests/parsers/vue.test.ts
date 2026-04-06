@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
-function parse(code: string, filePath = 'src/components/MyComponent.vue') {
+async function parse(code: string, filePath = 'src/components/MyComponent.vue') {
   const plugin = new VueLanguagePlugin();
-  const result = plugin.extractSymbols(filePath, Buffer.from(code, 'utf-8'));
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code, 'utf-8'));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -36,16 +36,16 @@ const count = ref(0)
   </div>
 </template>`;
 
-  it('extracts component-level symbol', () => {
-    const result = parse(code, 'src/components/UserList.vue');
+  it('extracts component-level symbol', async () => {
+    const result = await parse(code, 'src/components/UserList.vue');
     const comp = findSymbol(result.symbols, 'UserList', 'class');
     expect(comp.symbolId).toBe('src/components/UserList.vue::UserList#class');
     expect(comp.metadata?.framework).toBe('vue');
     expect(comp.metadata?.sfc).toBe(true);
   });
 
-  it('extracts props from defineProps type syntax', () => {
-    const result = parse(code, 'src/components/UserList.vue');
+  it('extracts props from defineProps type syntax', async () => {
+    const result = await parse(code, 'src/components/UserList.vue');
     expect(result.components).toBeDefined();
     expect(result.components!.length).toBe(1);
     const comp = result.components![0];
@@ -54,20 +54,20 @@ const count = ref(0)
     expect(Object.keys(comp.props!)).toContain('title');
   });
 
-  it('extracts emits from defineEmits type syntax', () => {
-    const result = parse(code, 'src/components/UserList.vue');
+  it('extracts emits from defineEmits type syntax', async () => {
+    const result = await parse(code, 'src/components/UserList.vue');
     const comp = result.components![0];
     expect(comp.emits).toContain('select');
   });
 
-  it('extracts exposed keys', () => {
-    const result = parse(code, 'src/components/UserList.vue');
+  it('extracts exposed keys', async () => {
+    const result = await parse(code, 'src/components/UserList.vue');
     const sym = findSymbol(result.symbols, 'UserList', 'class');
     expect(sym.metadata?.exposed).toContain('refresh');
   });
 
-  it('extracts import edges from script setup', () => {
-    const result = parse(code, 'src/components/UserList.vue');
+  it('extracts import edges from script setup', async () => {
+    const result = await parse(code, 'src/components/UserList.vue');
     expect(result.edges).toBeDefined();
     const vueImport = result.edges!.find(
       (e) => (e.metadata as Record<string, unknown>).from === 'vue',
@@ -76,8 +76,8 @@ const count = ref(0)
     expect(vueImport!.edgeType).toBe('imports');
   });
 
-  it('sets language to vue', () => {
-    const result = parse(code);
+  it('sets language to vue', async () => {
+    const result = await parse(code);
     expect(result.language).toBe('vue');
   });
 });
@@ -97,8 +97,8 @@ import UserCard from './UserCard.vue'
   </div>
 </template>`;
 
-  it('extracts custom component tags from template', () => {
-    const result = parse(code);
+  it('extracts custom component tags from template', async () => {
+    const result = await parse(code);
     const comp = findSymbol(result.symbols, 'MyComponent', 'class');
     const templateComponents = comp.metadata?.templateComponents as string[];
     expect(templateComponents).toBeDefined();
@@ -106,8 +106,8 @@ import UserCard from './UserCard.vue'
     expect(templateComponents).toContain('el-button');
   });
 
-  it('excludes HTML built-in elements', () => {
-    const result = parse(code);
+  it('excludes HTML built-in elements', async () => {
+    const result = await parse(code);
     const comp = findSymbol(result.symbols, 'MyComponent', 'class');
     const templateComponents = comp.metadata?.templateComponents as string[];
     expect(templateComponents).not.toContain('div');
@@ -130,20 +130,20 @@ export default {
 }
 </script>`;
 
-  it('creates component-level symbol', () => {
-    const result = parse(code);
+  it('creates component-level symbol', async () => {
+    const result = await parse(code);
     const comp = findSymbol(result.symbols, 'MyComponent', 'class');
     expect(comp).toBeDefined();
     expect(comp.kind).toBe('class');
   });
 
-  it('returns status ok for valid SFC', () => {
-    const result = parse(code);
+  it('returns status ok for valid SFC', async () => {
+    const result = await parse(code);
     expect(result.status).toBe('ok');
   });
 
-  it('returns a RawComponent with framework=vue', () => {
-    const result = parse(code);
+  it('returns a RawComponent with framework=vue', async () => {
+    const result = await parse(code);
     expect(result.components).toBeDefined();
     expect(result.components![0].framework).toBe('vue');
     expect(result.components![0].kind).toBe('component');
@@ -165,15 +165,15 @@ const { user } = useAuth()
   <div>{{ user?.name }}</div>
 </template>`;
 
-  it('detects composable usage in script setup', () => {
-    const result = parse(code);
+  it('detects composable usage in script setup', async () => {
+    const result = await parse(code);
     const comp = result.components![0];
     expect(comp.composables).toContain('useRouter');
     expect(comp.composables).toContain('useAuth');
   });
 
-  it('stores composables in component symbol metadata', () => {
-    const result = parse(code);
+  it('stores composables in component symbol metadata', async () => {
+    const result = await parse(code);
     const sym = findSymbol(result.symbols, 'MyComponent', 'class');
     expect(sym.metadata?.composables).toContain('useRouter');
     expect(sym.metadata?.composables).toContain('useAuth');
@@ -183,9 +183,9 @@ const { user } = useAuth()
 // ---------- broken/invalid SFC ----------
 
 describe('Vue plugin — broken SFC', () => {
-  it('handles completely broken content without crashing', () => {
+  it('handles completely broken content without crashing', async () => {
     const plugin = new VueLanguagePlugin();
-    const result = plugin.extractSymbols(
+    const result = await plugin.extractSymbols(
       'broken.vue',
       Buffer.from('<<<not valid at all>>>', 'utf-8'),
     );
@@ -193,9 +193,9 @@ describe('Vue plugin — broken SFC', () => {
     expect(result.isOk()).toBe(true);
   });
 
-  it('handles empty content', () => {
+  it('handles empty content', async () => {
     const plugin = new VueLanguagePlugin();
-    const result = plugin.extractSymbols(
+    const result = await plugin.extractSymbols(
       'empty.vue',
       Buffer.from('', 'utf-8'),
     );
@@ -217,16 +217,16 @@ describe('Vue plugin — template-only SFC', () => {
   </div>
 </template>`;
 
-  it('extracts component symbol and template components', () => {
-    const result = parse(code, 'src/components/Simple.vue');
+  it('extracts component symbol and template components', async () => {
+    const result = await parse(code, 'src/components/Simple.vue');
     const comp = findSymbol(result.symbols, 'Simple', 'class');
     expect(comp).toBeDefined();
     const templateComponents = comp.metadata?.templateComponents as string[];
     expect(templateComponents).toContain('MyWidget');
   });
 
-  it('has no edges when there is no script', () => {
-    const result = parse(code);
+  it('has no edges when there is no script', async () => {
+    const result = await parse(code);
     expect(result.edges).toBeUndefined();
   });
 });
@@ -241,16 +241,16 @@ defineEmits(['click', 'submit'])
 
 <template><div /></template>`;
 
-  it('extracts props from array syntax', () => {
-    const result = parse(code);
+  it('extracts props from array syntax', async () => {
+    const result = await parse(code);
     const comp = result.components![0];
     expect(Object.keys(comp.props!)).toEqual(
       expect.arrayContaining(['name', 'age', 'active']),
     );
   });
 
-  it('extracts emits from array syntax', () => {
-    const result = parse(code);
+  it('extracts emits from array syntax', async () => {
+    const result = await parse(code);
     const comp = result.components![0];
     expect(comp.emits).toEqual(expect.arrayContaining(['click', 'submit']));
   });

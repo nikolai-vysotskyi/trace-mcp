@@ -118,6 +118,8 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   '@clack/prompts':                 { category: 'infra',     priority: 'medium', plugin: 'clack' },
   '@clack/core':                    { category: 'infra',     priority: 'medium', plugin: 'clack' },
   'tree-sitter':                    { category: 'infra',     priority: 'medium', plugin: 'tree-sitter' },
+  'web-tree-sitter':                { category: 'infra',     priority: 'medium', plugin: 'tree-sitter' },
+  'tree-sitter-wasms':              { category: 'infra',     priority: 'low',    plugin: 'tree-sitter' },
   'n8n-workflow':                   { category: 'infra',     priority: 'high',   plugin: 'n8n' },
 
   // --- JavaScript / npm: Build tools (with plugin) ---

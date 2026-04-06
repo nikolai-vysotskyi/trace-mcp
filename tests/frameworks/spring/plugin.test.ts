@@ -29,7 +29,7 @@ describe('SpringPlugin — schema', () => {
 });
 
 describe('SpringPlugin — route extraction', () => {
-  it('extracts @GetMapping routes', () => {
+  it('extracts @GetMapping routes', async () => {
     const source = `
 @RestController
 @RequestMapping("/api/users")
@@ -42,7 +42,7 @@ public class UserController {
 }
     `;
     const plugin = new SpringPlugin();
-    const result = plugin.extractNodes!('UserController.java', Buffer.from(source), 'java');
+    const result = await plugin.extractNodes!('UserController.java', Buffer.from(source), 'java');
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.frameworkRole).toBe('controller');
@@ -53,7 +53,7 @@ public class UserController {
 });
 
 describe('SpringPlugin — DI extraction', () => {
-  it('extracts @Autowired injections', () => {
+  it('extracts @Autowired injections', async () => {
     const source = `
 @Service
 public class OrderService {
@@ -62,7 +62,7 @@ public class OrderService {
 }
     `;
     const plugin = new SpringPlugin();
-    const result = plugin.extractNodes!('OrderService.java', Buffer.from(source), 'java');
+    const result = await plugin.extractNodes!('OrderService.java', Buffer.from(source), 'java');
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.frameworkRole).toBe('service');
@@ -72,7 +72,7 @@ public class OrderService {
 });
 
 describe('SpringPlugin — entity extraction', () => {
-  it('extracts JPA entity relations', () => {
+  it('extracts JPA entity relations', async () => {
     const source = `
 @Entity
 public class Order {
@@ -84,7 +84,7 @@ public class Order {
 }
     `;
     const plugin = new SpringPlugin();
-    const result = plugin.extractNodes!('Order.java', Buffer.from(source), 'java');
+    const result = await plugin.extractNodes!('Order.java', Buffer.from(source), 'java');
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.frameworkRole).toBe('entity');

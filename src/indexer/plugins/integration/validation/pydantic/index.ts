@@ -10,7 +10,6 @@
  *
  * Uses tree-sitter-python for AST-based extraction.
  */
-import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, err } from 'neverthrow';
@@ -27,39 +26,7 @@ import type {
 import type { TraceMcpResult } from '../../../../../errors.js';
 import { parseError } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const PythonGrammar = require('tree-sitter-python');
-
-// tree-sitter types (CJS interop)
-type TSNode = {
-  type: string;
-  text: string;
-  startIndex: number;
-  endIndex: number;
-  startPosition: { row: number; column: number };
-  endPosition: { row: number; column: number };
-  namedChildCount: number;
-  childCount: number;
-  namedChildren: TSNode[];
-  namedChild(index: number): TSNode | null;
-  child(index: number): TSNode | null;
-  childForFieldName(name: string): TSNode | null;
-  parent: TSNode | null;
-  isNamed: boolean;
-  hasError: boolean;
-};
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(PythonGrammar);
-  }
-  return parserInstance!;
-}
+import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 
 // ============================================================
 // Python dependency detection
@@ -461,11 +428,11 @@ export class PydanticPlugin implements FrameworkPlugin {
     };
   }
 
-  extractNodes(
+  async extractNodes(
     filePath: string,
     content: Buffer,
     language: string,
-  ): TraceMcpResult<FileParseResult> {
+  ): Promise<TraceMcpResult<FileParseResult>> {
     if (language !== 'python') {
       return ok({ status: 'ok', symbols: [] });
     }
@@ -479,7 +446,7 @@ export class PydanticPlugin implements FrameworkPlugin {
 
     let tree: { rootNode: TSNode };
     try {
-      const parser = getParser();
+      const parser = await getParser('python');
       tree = parser.parse(source);
     } catch (e) {
       return err(parseError(filePath, `tree-sitter parse failed: ${e}`));

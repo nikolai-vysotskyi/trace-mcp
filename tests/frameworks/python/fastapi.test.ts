@@ -51,9 +51,9 @@ async def get_user(user_id: int):
     pass
 `;
 
-  it('extracts routes', () => {
+  it('extracts routes', async () => {
     const plugin = new FastAPIPlugin();
-    const result = plugin.extractNodes!('main.py', Buffer.from(code), 'python');
+    const result = await plugin.extractNodes!('main.py', Buffer.from(code), 'python');
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 
@@ -70,9 +70,9 @@ async def get_user(user_id: int):
     expect(getUserById).toBeDefined();
   });
 
-  it('extracts Depends() edges', () => {
+  it('extracts Depends() edges', async () => {
     const plugin = new FastAPIPlugin();
-    const result = plugin.extractNodes!('main.py', Buffer.from(code), 'python');
+    const result = await plugin.extractNodes!('main.py', Buffer.from(code), 'python');
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 
@@ -95,9 +95,9 @@ async def list_orders():
 app.include_router(router, prefix='/api/v1')
 `;
 
-  it('extracts router mount edge', () => {
+  it('extracts router mount edge', async () => {
     const plugin = new FastAPIPlugin();
-    const result = plugin.extractNodes!('main.py', Buffer.from(code), 'python');
+    const result = await plugin.extractNodes!('main.py', Buffer.from(code), 'python');
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 

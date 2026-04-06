@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
-function parse(code: string, filePath = 'src/utils.ts') {
+async function parse(code: string, filePath = 'src/utils.ts') {
   const plugin = new TypeScriptLanguagePlugin();
-  const result = plugin.extractSymbols(filePath, Buffer.from(code, 'utf-8'));
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code, 'utf-8'));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -20,8 +20,8 @@ function findSymbol(symbols: RawSymbol[], name: string, kind?: string): RawSymbo
 describe('TypeScript plugin — exported function', () => {
   const code = `export function foo(x: number): string { return String(x); }`;
 
-  it('extracts function symbol with exported=true', () => {
-    const result = parse(code);
+  it('extracts function symbol with exported=true', async () => {
+    const result = await parse(code);
     const fn = findSymbol(result.symbols, 'foo', 'function');
     expect(fn.kind).toBe('function');
     expect(fn.metadata?.exported).toBe(true);
@@ -37,8 +37,8 @@ describe('TypeScript plugin — exported class', () => {
   doStuff(): void {}
 }`;
 
-  it('extracts class symbol with signature', () => {
-    const result = parse(code);
+  it('extracts class symbol with signature', async () => {
+    const result = await parse(code);
     const cls = findSymbol(result.symbols, 'MyClass', 'class');
     expect(cls.kind).toBe('class');
     expect(cls.metadata?.exported).toBe(true);
@@ -52,8 +52,8 @@ describe('TypeScript plugin — exported class', () => {
 describe('TypeScript plugin — exported const', () => {
   const code = `export const value = 42;`;
 
-  it('extracts variable symbol', () => {
-    const result = parse(code);
+  it('extracts variable symbol', async () => {
+    const result = await parse(code);
     const v = findSymbol(result.symbols, 'value', 'variable');
     expect(v.kind).toBe('variable');
     expect(v.metadata?.exported).toBe(true);
@@ -65,8 +65,8 @@ describe('TypeScript plugin — exported const', () => {
 describe('TypeScript plugin — exported type', () => {
   const code = `export type MyType = { name: string; age: number };`;
 
-  it('extracts type symbol', () => {
-    const result = parse(code);
+  it('extracts type symbol', async () => {
+    const result = await parse(code);
     const t = findSymbol(result.symbols, 'MyType', 'type');
     expect(t.kind).toBe('type');
     expect(t.metadata?.exported).toBe(true);
@@ -82,8 +82,8 @@ describe('TypeScript plugin — exported interface', () => {
   greet(): void;
 }`;
 
-  it('extracts interface symbol', () => {
-    const result = parse(code);
+  it('extracts interface symbol', async () => {
+    const result = await parse(code);
     const iface = findSymbol(result.symbols, 'MyInterface', 'interface');
     expect(iface.kind).toBe('interface');
     expect(iface.metadata?.exported).toBe(true);
@@ -96,8 +96,8 @@ describe('TypeScript plugin — exported interface', () => {
 describe('TypeScript plugin — exported enum', () => {
   const code = `export enum Status { Active, Inactive }`;
 
-  it('extracts enum symbol', () => {
-    const result = parse(code);
+  it('extracts enum symbol', async () => {
+    const result = await parse(code);
     const e = findSymbol(result.symbols, 'Status', 'enum');
     expect(e.kind).toBe('enum');
     expect(e.metadata?.exported).toBe(true);
@@ -112,8 +112,8 @@ describe('TypeScript plugin — class methods', () => {
   process(): void {}
 }`;
 
-  it('extracts methods from class', () => {
-    const result = parse(code);
+  it('extracts methods from class', async () => {
+    const result = await parse(code);
     const fetch = findSymbol(result.symbols, 'fetchData', 'method');
     expect(fetch.kind).toBe('method');
     expect(fetch.parentSymbolId).toContain('Service');
@@ -133,8 +133,8 @@ export function App() {
   return <div>Hello</div>;
 }`;
 
-  it('parses TSX without error', () => {
-    const result = parse(code, 'src/App.tsx');
+  it('parses TSX without error', async () => {
+    const result = await parse(code, 'src/App.tsx');
     expect(result.status).toBe('ok');
     const fn = findSymbol(result.symbols, 'App', 'function');
     expect(fn.kind).toBe('function');
@@ -150,8 +150,8 @@ import DefaultExport from './default';
 
 export const x = 1;`;
 
-  it('extracts import edges with specifiers', () => {
-    const result = parse(code);
+  it('extracts import edges with specifiers', async () => {
+    const result = await parse(code);
     expect(result.edges).toBeDefined();
     expect(result.edges!.length).toBe(3);
 
@@ -172,8 +172,8 @@ export const x = 1;`;
 describe('TypeScript plugin — default export', () => {
   const code = `export default function main() { return 42; }`;
 
-  it('marks function as default', () => {
-    const result = parse(code);
+  it('marks function as default', async () => {
+    const result = await parse(code);
     const fn = findSymbol(result.symbols, 'main', 'function');
     expect(fn.metadata?.default).toBe(true);
     expect(fn.metadata?.exported).toBe(true);
@@ -188,8 +188,8 @@ describe('TypeScript plugin — broken syntax', () => {
 export function broken(
 `;
 
-  it('returns status=partial and extracts valid symbols', () => {
-    const result = parse(code);
+  it('returns status=partial and extracts valid symbols', async () => {
+    const result = await parse(code);
     expect(result.status).toBe('partial');
     expect(result.warnings).toBeDefined();
 
@@ -204,8 +204,8 @@ describe('TypeScript plugin — non-exported declarations', () => {
   const code = `function helper() {}
 export function exported() {}`;
 
-  it('extracts non-exported functions with exported=false', () => {
-    const result = parse(code);
+  it('extracts non-exported functions with exported=false', async () => {
+    const result = await parse(code);
     const helper = findSymbol(result.symbols, 'helper', 'function');
     expect(helper.metadata?.exported).toBe(false);
 
@@ -219,8 +219,8 @@ export function exported() {}`;
 describe('TypeScript plugin — async function', () => {
   const code = `export async function fetchAll(): Promise<void> {}`;
 
-  it('extracts async metadata', () => {
-    const result = parse(code);
+  it('extracts async metadata', async () => {
+    const result = await parse(code);
     const fn = findSymbol(result.symbols, 'fetchAll', 'function');
     expect(fn.metadata?.async).toBe(true);
   });
@@ -231,8 +231,8 @@ describe('TypeScript plugin — async function', () => {
 describe('TypeScript plugin — symbol ID format', () => {
   const code = `export class Foo { bar(): void {} }`;
 
-  it('uses path::name#kind format', () => {
-    const result = parse(code, 'src/foo.ts');
+  it('uses path::name#kind format', async () => {
+    const result = await parse(code, 'src/foo.ts');
     const cls = findSymbol(result.symbols, 'Foo', 'class');
     expect(cls.symbolId).toBe('src/foo.ts::Foo#class');
 

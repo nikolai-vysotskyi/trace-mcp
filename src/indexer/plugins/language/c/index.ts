@@ -4,11 +4,11 @@
  * Extracts: functions, structs, enums, unions, typedefs, macros, global variables.
  * Imports: #include directives.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -23,20 +23,6 @@ import {
   extractEnumConstants,
 } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const CGrammar = require('tree-sitter-c');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(CGrammar);
-  }
-  return parserInstance!;
-}
-
 export class CLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'c-language',
@@ -46,9 +32,9 @@ export class CLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.c', '.h'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('c');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

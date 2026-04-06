@@ -1,11 +1,11 @@
 /**
  * Java Language Plugin — tree-sitter based symbol extraction.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import { detectMinJavaVersionFromSource } from './version-features.js';
 import {
   type TSNode,
@@ -23,20 +23,6 @@ import {
   getNodeName,
 } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const JavaGrammar = require('tree-sitter-java');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(JavaGrammar);
-  }
-  return parserInstance!;
-}
-
 export class JavaLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'java-language',
@@ -47,9 +33,9 @@ export class JavaLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.java'];
   supportedVersions = ['8', '9', '10', '11', '14', '15', '16', '17', '21', '22', '23'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('java');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

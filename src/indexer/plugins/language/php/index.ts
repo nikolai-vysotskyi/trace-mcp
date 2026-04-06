@@ -4,11 +4,11 @@
  * Extracts classes, methods, functions, interfaces, traits, enums,
  * constants, properties, and enum_cases from PHP source files.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   extractNamespace,
@@ -27,20 +27,6 @@ import {
 } from './helpers.js';
 import { detectMinPhpVersion } from './version-features.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const PhpGrammar = require('tree-sitter-php');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(PhpGrammar.php);
-  }
-  return parserInstance!;
-}
-
 export class PhpLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'php-language',
@@ -55,9 +41,9 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     '8.0', '8.1', '8.2', '8.3', '8.4',
   ];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('php');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

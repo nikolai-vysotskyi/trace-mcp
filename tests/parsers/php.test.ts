@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
-function parse(code: string, filePath = 'app/Models/User.php') {
+async function parse(code: string, filePath = 'app/Models/User.php') {
   const plugin = new PhpLanguagePlugin();
-  const result = plugin.extractSymbols(filePath, Buffer.from(code, 'utf-8'));
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code, 'utf-8'));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -31,8 +31,8 @@ class User extends Model implements Authenticatable
 }`;
 
 describe('PHP language plugin', () => {
-  it('extracts class with namespace and FQN', () => {
-    const result = parse(basicClassPhp);
+  it('extracts class with namespace and FQN', async () => {
+    const result = await parse(basicClassPhp);
     expect(result.status).toBe('ok');
     expect(result.language).toBe('php');
 
@@ -42,16 +42,16 @@ describe('PHP language plugin', () => {
     expect(cls.signature).toContain('class User extends Model');
   });
 
-  it('extracts method with parent reference', () => {
-    const result = parse(basicClassPhp);
+  it('extracts method with parent reference', async () => {
+    const result = await parse(basicClassPhp);
     const method = findSymbol(result.symbols, 'getEmail', 'method');
     expect(method.fqn).toBe('App\\Models\\User::getEmail');
     expect(method.parentSymbolId).toBe('app/Models/User.php::User#class');
     expect(method.signature).toContain('public function getEmail(): string');
   });
 
-  it('extracts property', () => {
-    const result = parse(basicClassPhp);
+  it('extracts property', async () => {
+    const result = await parse(basicClassPhp);
     const prop = findSymbol(result.symbols, 'name', 'property');
     expect(prop.fqn).toBe('App\\Models\\User::name');
     expect(prop.parentSymbolId).toBe('app/Models/User.php::User#class');
@@ -60,7 +60,7 @@ describe('PHP language plugin', () => {
 
   // ---------- all symbol kinds ----------
 
-  it('extracts interface', () => {
+  it('extracts interface', async () => {
     const code = `<?php
 namespace App\\Contracts;
 
@@ -68,7 +68,7 @@ interface Authenticatable
 {
     public function getAuthId(): string;
 }`;
-    const result = parse(code, 'app/Contracts/Authenticatable.php');
+    const result = await parse(code, 'app/Contracts/Authenticatable.php');
     const iface = findSymbol(result.symbols, 'Authenticatable', 'interface');
     expect(iface.fqn).toBe('App\\Contracts\\Authenticatable');
 
@@ -76,7 +76,7 @@ interface Authenticatable
     expect(method.parentSymbolId).toBe('app/Contracts/Authenticatable.php::Authenticatable#interface');
   });
 
-  it('extracts trait with methods', () => {
+  it('extracts trait with methods', async () => {
     const code = `<?php
 namespace App\\Traits;
 
@@ -87,7 +87,7 @@ trait HasRoles
         return [];
     }
 }`;
-    const result = parse(code, 'app/Traits/HasRoles.php');
+    const result = await parse(code, 'app/Traits/HasRoles.php');
     const trait = findSymbol(result.symbols, 'HasRoles', 'trait');
     expect(trait.fqn).toBe('App\\Traits\\HasRoles');
 
@@ -95,7 +95,7 @@ trait HasRoles
     expect(method.parentSymbolId).toBe('app/Traits/HasRoles.php::HasRoles#trait');
   });
 
-  it('extracts enum with cases', () => {
+  it('extracts enum with cases', async () => {
     const code = `<?php
 namespace App\\Enums;
 
@@ -104,7 +104,7 @@ enum Status: string
     case Active = 'active';
     case Inactive = 'inactive';
 }`;
-    const result = parse(code, 'app/Enums/Status.php');
+    const result = await parse(code, 'app/Enums/Status.php');
     const enumSym = findSymbol(result.symbols, 'Status', 'enum');
     expect(enumSym.fqn).toBe('App\\Enums\\Status');
 
@@ -113,7 +113,7 @@ enum Status: string
     expect(active.fqn).toBe('App\\Enums\\Status::Active');
   });
 
-  it('extracts top-level function', () => {
+  it('extracts top-level function', async () => {
     const code = `<?php
 namespace App\\Helpers;
 
@@ -121,13 +121,13 @@ function formatDate(string $date): string
 {
     return $date;
 }`;
-    const result = parse(code, 'app/Helpers/functions.php');
+    const result = await parse(code, 'app/Helpers/functions.php');
     const fn = findSymbol(result.symbols, 'formatDate', 'function');
     expect(fn.fqn).toBe('App\\Helpers\\formatDate');
     expect(fn.signature).toContain('function formatDate(string $date): string');
   });
 
-  it('extracts class constant', () => {
+  it('extracts class constant', async () => {
     const code = `<?php
 namespace App\\Models;
 
@@ -135,7 +135,7 @@ class User
 {
     const STATUS_ACTIVE = 'active';
 }`;
-    const result = parse(code, 'app/Models/User.php');
+    const result = await parse(code, 'app/Models/User.php');
     const constant = findSymbol(result.symbols, 'STATUS_ACTIVE', 'constant');
     expect(constant.fqn).toBe('App\\Models\\User::STATUS_ACTIVE');
     expect(constant.parentSymbolId).toBe('app/Models/User.php::User#class');
@@ -143,7 +143,7 @@ class User
 
   // ---------- PHP 8.x features ----------
 
-  it('extracts attributes in metadata', () => {
+  it('extracts attributes in metadata', async () => {
     const code = `<?php
 namespace App\\Http\\Controllers;
 
@@ -154,7 +154,7 @@ class UserController
     #[Middleware('auth')]
     public function index(): void {}
 }`;
-    const result = parse(code, 'app/Http/Controllers/UserController.php');
+    const result = await parse(code, 'app/Http/Controllers/UserController.php');
     const cls = findSymbol(result.symbols, 'UserController', 'class');
     expect(cls.metadata?.attributes).toEqual(['Controller']);
 
@@ -163,19 +163,19 @@ class UserController
     expect(method.metadata?.attributes).toContain('Middleware');
   });
 
-  it('extracts readonly property', () => {
+  it('extracts readonly property', async () => {
     const code = `<?php
 class Config
 {
     public readonly string $name;
 }`;
-    const result = parse(code, 'src/Config.php');
+    const result = await parse(code, 'src/Config.php');
     const prop = findSymbol(result.symbols, 'name', 'property');
     expect(prop.metadata?.readonly).toBe(true);
     expect(prop.metadata?.visibility).toBe('public');
   });
 
-  it('extracts constructor-promoted properties', () => {
+  it('extracts constructor-promoted properties', async () => {
     const code = `<?php
 namespace App\\Models;
 
@@ -186,7 +186,7 @@ class User
         public readonly string $role = 'user'
     ) {}
 }`;
-    const result = parse(code, 'app/Models/User.php');
+    const result = await parse(code, 'app/Models/User.php');
 
     const idProp = findSymbol(result.symbols, 'id', 'property');
     expect(idProp.metadata?.promoted).toBe(true);
@@ -201,7 +201,7 @@ class User
 
   // ---------- partial parse recovery ----------
 
-  it('recovers partial results from broken PHP', () => {
+  it('recovers partial results from broken PHP', async () => {
     const code = `<?php
 namespace App\\Models;
 
@@ -212,7 +212,7 @@ class User
     public function broken(
 }`;
     const plugin = new PhpLanguagePlugin();
-    const result = plugin.extractSymbols('app/Models/User.php', Buffer.from(code, 'utf-8'));
+    const result = await plugin.extractSymbols('app/Models/User.php', Buffer.from(code, 'utf-8'));
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.status).toBe('partial');
@@ -225,24 +225,24 @@ class User
 
   // ---------- edge cases ----------
 
-  it('handles file without namespace', () => {
+  it('handles file without namespace', async () => {
     const code = `<?php
 function helper(): void {}
 class Util {}`;
-    const result = parse(code, 'helpers.php');
+    const result = await parse(code, 'helpers.php');
     const fn = findSymbol(result.symbols, 'helper', 'function');
     expect(fn.fqn).toBe('helper');
     const cls = findSymbol(result.symbols, 'Util', 'class');
     expect(cls.fqn).toBe('Util');
   });
 
-  it('handles empty file', () => {
-    const result = parse('<?php', 'empty.php');
+  it('handles empty file', async () => {
+    const result = await parse('<?php', 'empty.php');
     expect(result.status).toBe('ok');
     expect(result.symbols).toHaveLength(0);
   });
 
-  it('line numbers are 1-based', () => {
+  it('line numbers are 1-based', async () => {
     const code = `<?php
 namespace App;
 
@@ -250,7 +250,7 @@ class Foo
 {
     public function bar(): void {}
 }`;
-    const result = parse(code, 'app/Foo.php');
+    const result = await parse(code, 'app/Foo.php');
     const cls = findSymbol(result.symbols, 'Foo', 'class');
     expect(cls.lineStart).toBe(4);
     const method = findSymbol(result.symbols, 'bar', 'method');

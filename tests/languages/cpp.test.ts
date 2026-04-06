@@ -3,8 +3,8 @@ import { CppLanguagePlugin } from '../../src/indexer/plugins/language/cpp/index.
 
 const plugin = new CppLanguagePlugin();
 
-function extract(code: string, filePath = 'src/main.cpp') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'src/main.cpp') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   if (!result.isOk()) {
     throw new Error(`C++ extractSymbols failed: ${JSON.stringify(result._unsafeUnwrapErr())}`);
   }
@@ -12,8 +12,8 @@ function extract(code: string, filePath = 'src/main.cpp') {
 }
 
 describe('CppLanguagePlugin', () => {
-  beforeAll(() => {
-    const probe = plugin.extractSymbols('probe.cpp', Buffer.from('int probe() { return 0; }\n'));
+  beforeAll(async () => {
+    const probe = await plugin.extractSymbols('probe.cpp', Buffer.from('int probe() { return 0; }\n'));
     expect(probe.isOk(), `C++ parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
   });
 
@@ -23,8 +23,8 @@ describe('CppLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.hpp');
   });
 
-  it('extracts classes', () => {
-    const result = extract(`
+  it('extracts classes', async () => {
+    const result = await extract(`
 class Animal {
 public:
     virtual void speak() = 0;
@@ -35,8 +35,8 @@ public:
     expect(cls).toBeDefined();
   });
 
-  it('extracts namespaces', () => {
-    const result = extract(`
+  it('extracts namespaces', async () => {
+    const result = await extract(`
 namespace mylib {
     class Foo {};
 }
@@ -47,8 +47,8 @@ namespace mylib {
     expect(cls).toBeDefined();
   });
 
-  it('extracts enums', () => {
-    const result = extract(`
+  it('extracts enums', async () => {
+    const result = await extract(`
 enum class Color {
     Red,
     Green,
@@ -59,8 +59,8 @@ enum class Color {
     expect(e).toBeDefined();
   });
 
-  it('extracts functions', () => {
-    const result = extract(`
+  it('extracts functions', async () => {
+    const result = await extract(`
 int main(int argc, char** argv) {
     return 0;
 }
@@ -71,8 +71,8 @@ inline void helper() {}
     expect(fns.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('extracts #include edges', () => {
-    const result = extract(`
+  it('extracts #include edges', async () => {
+    const result = await extract(`
 #include <iostream>
 #include "config.h"
 
@@ -83,8 +83,8 @@ int main() { return 0; }
     expect(imports.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('extracts structs', () => {
-    const result = extract(`
+  it('extracts structs', async () => {
+    const result = await extract(`
 struct Point {
     double x;
     double y;
@@ -94,8 +94,8 @@ struct Point {
     expect(st).toBeDefined();
   });
 
-  it('handles syntax errors gracefully', () => {
-    const result = extract(`
+  it('handles syntax errors gracefully', async () => {
+    const result = await extract(`
 class Broken {
     void foo( {
     }

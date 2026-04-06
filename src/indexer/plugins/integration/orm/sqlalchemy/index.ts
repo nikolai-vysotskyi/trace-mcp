@@ -9,7 +9,6 @@
  *
  * Uses tree-sitter-python for AST parsing.
  */
-import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, err } from 'neverthrow';
@@ -26,10 +25,7 @@ import type {
 import type { TraceMcpResult } from '../../../../../errors.js';
 import { parseError } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const PythonGrammar = require('tree-sitter-python');
+import { getParser } from '../../../../../parser/tree-sitter.js';
 
 /** Known base classes for SQLAlchemy declarative models. */
 const MODEL_BASES = new Set([
@@ -90,11 +86,11 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
     };
   }
 
-  extractNodes(
+  async extractNodes(
     filePath: string,
     content: Buffer,
     language: string,
-  ): TraceMcpResult<FileParseResult> {
+  ): Promise<TraceMcpResult<FileParseResult>> {
     if (language !== 'python') {
       return ok({ status: 'ok', symbols: [] });
     }
@@ -120,8 +116,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
       // Quick check for migration operations
       if (source.includes('op.create_table') || source.includes('op.add_column') || source.includes('op.drop_table')) {
         try {
-          const parser = new Parser();
-          parser.setLanguage(PythonGrammar);
+          const parser = await getParser('python');
           const tree = parser.parse(source);
           this.extractAlembicMigrations(tree.rootNode, source, filePath, result);
         } catch (e: unknown) {
@@ -147,8 +142,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
     }
 
     try {
-      const parser = new Parser();
-      parser.setLanguage(PythonGrammar);
+      const parser = await getParser('python');
       const tree = parser.parse(source);
       const root = tree.rootNode;
 

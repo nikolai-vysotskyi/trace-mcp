@@ -3,8 +3,8 @@ import { ScalaLanguagePlugin } from '../../src/indexer/plugins/language/scala/in
 
 const plugin = new ScalaLanguagePlugin();
 
-function extract(code: string, filePath = 'src/main/scala/App.scala') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'src/main/scala/App.scala') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   if (!result.isOk()) {
     throw new Error(`Scala extractSymbols failed: ${JSON.stringify(result._unsafeUnwrapErr())}`);
   }
@@ -12,8 +12,8 @@ function extract(code: string, filePath = 'src/main/scala/App.scala') {
 }
 
 describe('ScalaLanguagePlugin', () => {
-  beforeAll(() => {
-    const probe = plugin.extractSymbols('probe.scala', Buffer.from('class Probe\n'));
+  beforeAll(async () => {
+    const probe = await plugin.extractSymbols('probe.scala', Buffer.from('class Probe\n'));
     expect(probe.isOk(), `Scala parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
   });
 
@@ -23,8 +23,8 @@ describe('ScalaLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.sc');
   });
 
-  it('extracts classes', () => {
-    const result = extract(`
+  it('extracts classes', async () => {
+    const result = await extract(`
 package models
 
 class User(val name: String, val age: Int)
@@ -33,8 +33,8 @@ class User(val name: String, val age: Int)
     expect(cls).toBeDefined();
   });
 
-  it('extracts objects', () => {
-    const result = extract(`
+  it('extracts objects', async () => {
+    const result = await extract(`
 object App {
   def main(args: Array[String]): Unit = {
     println("Hello")
@@ -45,8 +45,8 @@ object App {
     expect(obj).toBeDefined();
   });
 
-  it('extracts traits', () => {
-    const result = extract(`
+  it('extracts traits', async () => {
+    const result = await extract(`
 trait Service {
   def start(): Unit
   def stop(): Unit
@@ -56,8 +56,8 @@ trait Service {
     expect(t).toBeDefined();
   });
 
-  it('extracts methods inside objects', () => {
-    const result = extract(`
+  it('extracts methods inside objects', async () => {
+    const result = await extract(`
 object Utils {
   def add(a: Int, b: Int): Int = a + b
   private def helper(): Unit = {}
@@ -67,16 +67,16 @@ object Utils {
     expect(methods.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('extracts top-level functions', () => {
-    const result = extract(`
+  it('extracts top-level functions', async () => {
+    const result = await extract(`
 def topLevel(x: Int): Int = x * 2
     `);
     const fns = result.symbols.filter((s) => s.kind === 'function');
     expect(fns.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('extracts import edges', () => {
-    const result = extract(`
+  it('extracts import edges', async () => {
+    const result = await extract(`
 import scala.collection.mutable.Map
 import java.util.{List, ArrayList}
 
@@ -87,16 +87,16 @@ class Foo
     expect(imports.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('extracts case classes', () => {
-    const result = extract(`
+  it('extracts case classes', async () => {
+    const result = await extract(`
 case class Config(name: String, port: Int)
     `);
     const cls = result.symbols.find((s) => s.name === 'Config' && s.kind === 'class');
     expect(cls).toBeDefined();
   });
 
-  it('extracts vals and vars', () => {
-    const result = extract(`
+  it('extracts vals and vars', async () => {
+    const result = await extract(`
 object Constants {
   val MaxRetries = 3
   var counter = 0
@@ -107,8 +107,8 @@ object Constants {
     expect(symbols.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('handles syntax errors gracefully', () => {
-    const result = extract(`
+  it('handles syntax errors gracefully', async () => {
+    const result = await extract(`
 class Broken {
   def foo( = {
   }

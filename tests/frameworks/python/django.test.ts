@@ -54,9 +54,9 @@ class Profile(models.Model):
     bio = models.TextField(blank=True)
 `;
 
-  it('extracts models with fields and associations', () => {
+  it('extracts models with fields and associations', async () => {
     const plugin = new DjangoPlugin();
-    const result = plugin.extractNodes!('myapp/models.py', Buffer.from(modelCode), 'python');
+    const result = await plugin.extractNodes!('myapp/models.py', Buffer.from(modelCode), 'python');
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 
@@ -96,9 +96,9 @@ urlpatterns = [
 ]
 `;
 
-  it('extracts URL routes', () => {
+  it('extracts URL routes', async () => {
     const plugin = new DjangoPlugin();
-    const result = plugin.extractNodes!('myapp/urls.py', Buffer.from(urlCode), 'python');
+    const result = await plugin.extractNodes!('myapp/urls.py', Buffer.from(urlCode), 'python');
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 
@@ -110,9 +110,9 @@ urlpatterns = [
     expect(userList!.uri).toContain('users');
   });
 
-  it('extracts include() as edges', () => {
+  it('extracts include() as edges', async () => {
     const plugin = new DjangoPlugin();
-    const result = plugin.extractNodes!('myapp/urls.py', Buffer.from(urlCode), 'python');
+    const result = await plugin.extractNodes!('myapp/urls.py', Buffer.from(urlCode), 'python');
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 
@@ -132,9 +132,9 @@ def send_welcome_email(sender, instance, created, **kwargs):
         send_email(instance.email)
 `;
 
-  it('extracts signal receiver edges', () => {
+  it('extracts signal receiver edges', async () => {
     const plugin = new DjangoPlugin();
-    const result = plugin.extractNodes!('myapp/signals.py', Buffer.from(signalCode), 'python');
+    const result = await plugin.extractNodes!('myapp/signals.py', Buffer.from(signalCode), 'python');
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 
@@ -155,9 +155,9 @@ class UserAdmin(admin.ModelAdmin):
 admin.site.register(Post)
 `;
 
-  it('extracts admin registrations', () => {
+  it('extracts admin registrations', async () => {
     const plugin = new DjangoPlugin();
-    const result = plugin.extractNodes!('myapp/admin.py', Buffer.from(adminCode), 'python');
+    const result = await plugin.extractNodes!('myapp/admin.py', Buffer.from(adminCode), 'python');
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 
