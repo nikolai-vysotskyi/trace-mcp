@@ -33,61 +33,125 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'symfony/console':                { category: 'framework', priority: 'medium', plugin: null },
   'symfony/http-foundation':        { category: 'framework', priority: 'medium', plugin: null },
 
-  // --- JavaScript / npm ---
+  // --- JavaScript / npm: Frameworks ---
   'express':                        { category: 'framework', priority: 'high',   plugin: 'express' },
   'fastify':                        { category: 'framework', priority: 'high',   plugin: 'fastify' },
   'hono':                           { category: 'framework', priority: 'high',   plugin: 'hono' },
   'next':                           { category: 'framework', priority: 'high',   plugin: 'nextjs' },
   'nuxt':                           { category: 'framework', priority: 'high',   plugin: 'nuxt' },
+  '@nestjs/core':                   { category: 'framework', priority: 'high',   plugin: 'nestjs' },
+  '@nestjs/common':                 { category: 'framework', priority: 'high',   plugin: 'nestjs' },
+
+  // --- JavaScript / npm: UI ---
   'react':                          { category: 'ui',        priority: 'high',   plugin: 'react' },
   'vue':                            { category: 'ui',        priority: 'high',   plugin: 'vue-framework' },
+  '@vue/compiler-sfc':              { category: 'ui',        priority: 'low',    plugin: 'vue-framework' },
   'svelte':                         { category: 'ui',        priority: 'high',   plugin: 'svelte' },
   'angular':                        { category: 'ui',        priority: 'high',   plugin: 'angular' },
   '@angular/core':                  { category: 'ui',        priority: 'high',   plugin: 'angular' },
-  '@nestjs/core':                   { category: 'framework', priority: 'high',   plugin: 'nestjs' },
-  '@nestjs/common':                 { category: 'framework', priority: 'high',   plugin: 'nestjs' },
   'react-native':                   { category: 'ui',        priority: 'high',   plugin: 'react-native' },
   'expo':                           { category: 'ui',        priority: 'high',   plugin: 'react-native' },
+  '@nuxt/ui':                       { category: 'ui',        priority: 'high',   plugin: 'nuxt-ui' },
+  '@nuxt/ui-pro':                   { category: 'ui',        priority: 'high',   plugin: 'nuxt-ui' },
+  '@inertiajs/react':               { category: 'ui',        priority: 'high',   plugin: 'inertia' },
+  '@inertiajs/vue3':                { category: 'ui',        priority: 'high',   plugin: 'inertia' },
+  '@inertiajs/svelte':              { category: 'ui',        priority: 'high',   plugin: 'inertia' },
+  'tailwindcss':                    { category: 'ui',        priority: 'low',    plugin: null },
+  '@mui/material':                  { category: 'ui',        priority: 'medium', plugin: 'mui' },
+  'antd':                           { category: 'ui',        priority: 'medium', plugin: 'antd' },
+  '@headlessui/react':              { category: 'ui',        priority: 'medium', plugin: 'headless-ui' },
+  '@headlessui/vue':                { category: 'ui',        priority: 'medium', plugin: 'headless-ui' },
+  '@radix-ui/react-dialog':         { category: 'ui',        priority: 'low',    plugin: null },
+  'shadcn':                         { category: 'ui',        priority: 'medium', plugin: 'shadcn' },
+
+  // --- JavaScript / npm: State management ---
+  'zustand':                        { category: 'ui',        priority: 'medium', plugin: 'zustand-redux' },
+  'redux':                          { category: 'ui',        priority: 'medium', plugin: 'zustand-redux' },
+  '@reduxjs/toolkit':               { category: 'ui',        priority: 'medium', plugin: 'zustand-redux' },
+
+  // --- JavaScript / npm: ORMs ---
   'prisma':                         { category: 'orm',       priority: 'high',   plugin: 'prisma' },
   '@prisma/client':                 { category: 'orm',       priority: 'high',   plugin: 'prisma' },
   'drizzle-orm':                    { category: 'orm',       priority: 'high',   plugin: 'drizzle' },
   'typeorm':                        { category: 'orm',       priority: 'high',   plugin: 'typeorm' },
   'sequelize':                      { category: 'orm',       priority: 'high',   plugin: 'sequelize' },
   'mongoose':                       { category: 'orm',       priority: 'high',   plugin: 'mongoose' },
-  'zod':                            { category: 'framework', priority: 'medium', plugin: 'zod' },
-  'pydantic':                       { category: 'framework', priority: 'medium', plugin: 'pydantic' },
-  '@tanstack/react-query':          { category: 'ui',        priority: 'medium', plugin: 'data-fetching' },
-  'swr':                            { category: 'ui',        priority: 'medium', plugin: 'data-fetching' },
+  'knex':                           { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'kysely':                         { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+
+  // --- JavaScript / npm: DB drivers (raw-sql plugin) ---
+  'better-sqlite3':                 { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'sqlite3':                        { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'sql.js':                         { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'pg':                             { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'mysql2':                         { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'mysql':                          { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'tedious':                        { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'oracledb':                       { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+
+  // --- JavaScript / npm: API ---
   '@trpc/server':                   { category: 'framework', priority: 'high',   plugin: 'trpc' },
   '@trpc/client':                   { category: 'framework', priority: 'high',   plugin: 'trpc' },
   'graphql':                        { category: 'framework', priority: 'high',   plugin: 'graphql' },
   '@apollo/server':                 { category: 'framework', priority: 'high',   plugin: 'graphql' },
+  '@apollo/client':                 { category: 'framework', priority: 'high',   plugin: 'graphql' },
+  '@modelcontextprotocol/sdk':      { category: 'framework', priority: 'high',   plugin: 'mcp-sdk' },
+
+  // --- JavaScript / npm: Validation ---
+  'zod':                            { category: 'framework', priority: 'medium', plugin: 'zod' },
+  'yup':                            { category: 'framework', priority: 'medium', plugin: null },
+  'joi':                            { category: 'framework', priority: 'medium', plugin: null },
+
+  // --- JavaScript / npm: Data fetching ---
+  '@tanstack/react-query':          { category: 'ui',        priority: 'medium', plugin: 'data-fetching' },
+  'swr':                            { category: 'ui',        priority: 'medium', plugin: 'data-fetching' },
+
+  // --- JavaScript / npm: Realtime ---
   'socket.io':                      { category: 'infra',     priority: 'high',   plugin: 'socketio' },
-  'tailwindcss':                    { category: 'ui',        priority: 'low',    plugin: null },
-  '@mui/material':                  { category: 'ui',        priority: 'medium', plugin: 'mui' },
-  'antd':                           { category: 'ui',        priority: 'medium', plugin: 'antd' },
-  '@headlessui/react':              { category: 'ui',        priority: 'medium', plugin: 'headless-ui' },
-  '@radix-ui/react-dialog':         { category: 'ui',        priority: 'low',    plugin: null },
-  'shadcn':                         { category: 'ui',        priority: 'medium', plugin: 'shadcn' },
-  'zustand':                        { category: 'ui',        priority: 'medium', plugin: 'zustand-redux' },
-  'redux':                          { category: 'ui',        priority: 'medium', plugin: 'zustand-redux' },
-  '@reduxjs/toolkit':               { category: 'ui',        priority: 'medium', plugin: 'zustand-redux' },
+  'socket.io-client':               { category: 'infra',     priority: 'medium', plugin: 'socketio' },
+
+  // --- JavaScript / npm: Tooling (with plugins) ---
+  'commander':                      { category: 'infra',     priority: 'medium', plugin: 'commander' },
+  'pino':                           { category: 'infra',     priority: 'medium', plugin: 'pino' },
+  'cosmiconfig':                    { category: 'infra',     priority: 'medium', plugin: 'cosmiconfig' },
+  'neverthrow':                     { category: 'infra',     priority: 'medium', plugin: 'neverthrow' },
+  '@clack/prompts':                 { category: 'infra',     priority: 'medium', plugin: 'clack' },
+  '@clack/core':                    { category: 'infra',     priority: 'medium', plugin: 'clack' },
+  'tree-sitter':                    { category: 'infra',     priority: 'medium', plugin: 'tree-sitter' },
+  'n8n-workflow':                   { category: 'infra',     priority: 'high',   plugin: 'n8n' },
+
+  // --- JavaScript / npm: Build tools (with plugin) ---
+  'tsup':                           { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
+  'esbuild':                        { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
+  'rollup':                         { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
+  'webpack':                        { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
+  '@rspack/core':                   { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
+  'vite':                           { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
+  'turbo':                          { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
+  'parcel':                         { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
+
+  // --- JavaScript / npm: Testing ---
   'vitest':                         { category: 'testing',   priority: 'medium', plugin: 'testing' },
   'jest':                           { category: 'testing',   priority: 'medium', plugin: 'testing' },
   'mocha':                          { category: 'testing',   priority: 'medium', plugin: 'testing' },
   'cypress':                        { category: 'testing',   priority: 'medium', plugin: 'testing' },
   'playwright':                     { category: 'testing',   priority: 'medium', plugin: 'testing' },
+  '@playwright/test':               { category: 'testing',   priority: 'medium', plugin: 'testing' },
+  '@testing-library/react':         { category: 'testing',   priority: 'medium', plugin: 'testing' },
+
+  // --- JavaScript / npm: Infra (no plugin) ---
   'stripe':                         { category: 'infra',     priority: 'low',    plugin: null },
+  'winston':                        { category: 'infra',     priority: 'low',    plugin: null },
+  'bull':                           { category: 'infra',     priority: 'medium', plugin: null },
+  'bullmq':                         { category: 'infra',     priority: 'medium', plugin: null },
+
+  // --- JavaScript / npm: Utilities (no plugin, low signal) ---
   'axios':                          { category: 'utility',   priority: 'none',   plugin: null },
   'lodash':                         { category: 'utility',   priority: 'none',   plugin: null },
   'date-fns':                       { category: 'utility',   priority: 'none',   plugin: null },
   'uuid':                           { category: 'utility',   priority: 'none',   plugin: null },
   'dotenv':                         { category: 'utility',   priority: 'none',   plugin: null },
-  'winston':                        { category: 'infra',     priority: 'low',    plugin: null },
-  'pino':                           { category: 'infra',     priority: 'low',    plugin: null },
-  'bull':                           { category: 'infra',     priority: 'medium', plugin: null },
-  'bullmq':                         { category: 'infra',     priority: 'medium', plugin: null },
-  'n8n-workflow':                    { category: 'infra',     priority: 'high',   plugin: 'n8n' },
+  'typescript':                     { category: 'utility',   priority: 'none',   plugin: null },
 
   // --- Python / pip ---
   'django':                         { category: 'framework', priority: 'high',   plugin: 'django' },
@@ -97,9 +161,15 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'flask':                          { category: 'framework', priority: 'high',   plugin: 'flask' },
   'celery':                         { category: 'infra',     priority: 'high',   plugin: 'celery' },
   'sqlalchemy':                     { category: 'orm',       priority: 'high',   plugin: 'sqlalchemy' },
+  'pydantic':                       { category: 'framework', priority: 'medium', plugin: 'pydantic' },
   'pytest':                         { category: 'testing',   priority: 'medium', plugin: 'testing' },
   'alembic':                        { category: 'orm',       priority: 'medium', plugin: 'sqlalchemy' },
   'tortoise-orm':                   { category: 'orm',       priority: 'medium', plugin: null },
+  'psycopg2':                       { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'psycopg2-binary':                { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'pymysql':                        { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'asyncpg':                        { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
+  'aiosqlite':                      { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
 
   // --- Ruby / Gemfile ---
   'rails':                          { category: 'framework', priority: 'high',   plugin: 'rails' },
@@ -108,6 +178,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'pundit':                         { category: 'framework', priority: 'medium', plugin: null },
   'rspec':                          { category: 'testing',   priority: 'medium', plugin: 'testing' },
   'rspec-rails':                    { category: 'testing',   priority: 'medium', plugin: 'testing' },
+  'pg':                             { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
 
   // --- Go ---
   'github.com/gin-gonic/gin':       { category: 'framework', priority: 'high',   plugin: 'gin' },

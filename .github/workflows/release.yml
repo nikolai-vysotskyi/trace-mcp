@@ -2,8 +2,7 @@ name: Release
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
 
 jobs:
   release-please:
@@ -11,7 +10,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -20,18 +18,6 @@ jobs:
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Trigger CI on release PR branch
-        if: steps.release.outputs.prs != '' && steps.release.outputs.prs != '[]'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PRS_OUTPUT: ${{ steps.release.outputs.prs }}
-        run: |
-          PR_BRANCH=$(echo "$PRS_OUTPUT" | jq -r '.[0].headBranchName // empty')
-          if [ -n "$PR_BRANCH" ]; then
-            echo "Triggering CI on branch: $PR_BRANCH"
-            gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$PR_BRANCH"
-          fi
 
   publish:
     needs: release-please
@@ -48,20 +34,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
           registry-url: https://registry.npmjs.org
 
-      # Trusted Publishing requires npm >=10.9.2
-      - name: Ensure npm >=10.9.2
-        run: |
-          NPM_VERSION=$(npm --version)
-          echo "Current npm: $NPM_VERSION"
-          if [ "$(printf '%s\n' "10.9.2" "$NPM_VERSION" | sort -V | head -n1)" != "10.9.2" ]; then
-            echo "npm $NPM_VERSION < 10.9.2, upgrading..."
-            npm install -g npm@latest
-          fi
       - run: npm ci
       - run: npm run build
       - run: npm test
-
       - run: npm publish --provenance --access public
