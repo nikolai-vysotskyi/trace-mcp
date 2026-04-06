@@ -15,6 +15,7 @@ import { detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { computeComplexity } from '../tools/complexity.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
+import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { captureGraphSnapshots } from '../tools/history.js';
 import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
@@ -54,6 +55,8 @@ export class IndexingPipeline {
   private _pendingImports = new Map<number, { from: string; specifiers: string[]; relPath: string }[]>();
   // Gitignore matcher — flags files whose content should not be served to AI.
   private _gitignore: GitignoreMatcher | undefined;
+  // Traceignore matcher — files matching these rules are fully skipped from indexing.
+  private _traceignore: TraceignoreMatcher | undefined;
   // Incremental indexing state: tracks which files were actually re-indexed in this run.
   // When set, edge resolution passes scope to these files only (O(changed) not O(all)).
   private _changedFileIds = new Set<number>();
@@ -145,6 +148,9 @@ export class IndexingPipeline {
 
     // Load .gitignore rules (lazy — reloaded per pipeline run to pick up changes)
     this._gitignore = new GitignoreMatcher(this.rootPath);
+
+    // Load .traceignore + config ignore rules
+    this._traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
 
     // Register edge types from framework plugins
     this.registerFrameworkEdgeTypes();
@@ -497,13 +503,23 @@ export class IndexingPipeline {
   private static readonly DEFAULT_MAX_FILES = 10_000;
 
   private async collectFiles(): Promise<string[]> {
-    const entries = await fg(this.config.include, {
+    // Merge config exclude with traceignore skip-dir patterns for fast-glob
+    const traceignoreIgnore = this._traceignore?.toFastGlobIgnore() ?? [];
+    const ignore = [...this.config.exclude, ...traceignoreIgnore];
+
+    let entries = await fg(this.config.include, {
       cwd: this.rootPath,
-      ignore: this.config.exclude,
+      ignore,
       dot: false,
       absolute: false,
       onlyFiles: true,
     });
+
+    // Post-filter with .traceignore pattern rules (gitignore syntax not 1:1 with fast-glob)
+    if (this._traceignore) {
+      const ti = this._traceignore;
+      entries = entries.filter((e) => !ti.isIgnored(e));
+    }
 
     const maxFiles = this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES;
     if (entries.length > maxFiles) {

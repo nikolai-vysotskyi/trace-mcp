@@ -150,6 +150,13 @@ const QualityGatesConfigSchema = z.object({
   }).default({}),
 }).optional();
 
+const IgnoreConfigSchema = z.object({
+  /** Extra directory names to skip during indexing (added to built-in list). */
+  directories: z.array(z.string()).default([]),
+  /** Extra gitignore-style patterns to exclude from indexing. */
+  patterns: z.array(z.string()).default([]),
+}).default({});
+
 const TopologyConfigSchema = z.object({
   enabled: z.boolean().default(true),
   repos: z.array(z.string()).default([]),
@@ -175,6 +182,7 @@ export const TraceMcpConfigSchema = z.object({
     'storage/**', 'bootstrap/cache/**', '.nuxt/**',
     '**/.env', '**/.env.*',
   ]),
+  ignore: IgnoreConfigSchema,
   frameworks: FrameworkConfigSchema,
   ai: AiConfigSchema,
   plugins: z.array(z.string()).default([]),
@@ -207,6 +215,7 @@ function loadGlobalConfigRaw(): Record<string, unknown> {
 async function loadProjectConfigRaw(searchFrom: string): Promise<Record<string, unknown>> {
   const explorer = cosmiconfig('trace-mcp', {
     searchPlaces: [
+      '.trace-mcp/.config.json',
       '.trace-mcp.json',
       '.trace-mcp',
       '.config/trace-mcp.json',

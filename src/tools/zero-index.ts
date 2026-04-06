@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../db/store.js';
+import { TraceignoreMatcher } from '../utils/traceignore.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,7 +147,7 @@ function manualSearch(
   const matches: FallbackMatch[] = [];
   const limit = opts.maxResults ?? 50;
   const regex = new RegExp(escapeRegex(query), 'gi');
-  const skipDirs = new Set(['node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__']);
+  const traceignore = new TraceignoreMatcher(projectRoot);
 
   function walk(dir: string): void {
     if (matches.length >= limit) return;
@@ -159,7 +160,7 @@ function manualSearch(
 
     for (const entry of entries) {
       if (matches.length >= limit) return;
-      if (skipDirs.has(entry)) continue;
+      if (traceignore.isSkippedDir(entry)) continue;
 
       const full = path.join(dir, entry);
       let stat;
@@ -172,6 +173,8 @@ function manualSearch(
       if (stat.isDirectory()) {
         walk(full);
       } else if (stat.isFile() && stat.size < 512 * 1024) {
+        const rel = path.relative(projectRoot, full);
+        if (traceignore.isIgnored(rel)) continue;
         try {
           const content = readFileSync(full, 'utf-8');
           const lines = content.split('\n');
