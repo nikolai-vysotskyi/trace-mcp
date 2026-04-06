@@ -50,13 +50,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PR_JSON=$(gh pr list --search "head:release-please--branches--master" --json number,baseRefName --limit 1 --jq '.[0] // empty')
+          PR_JSON=$(gh pr list --search "head:release-please--branches--master" --json number --limit 1 --jq '.[0] // empty')
           if [ -n "$PR_JSON" ]; then
             PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
-            BASE_BRANCH=$(echo "$PR_JSON" | jq -r '.baseRefName')
-            echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-            echo "base=$(git merge-base origin/$BASE_BRANCH HEAD)" >> "$GITHUB_OUTPUT"
-            echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            # Compare against the latest release tag, not merge-base
+            # (we're on master, so merge-base with master is HEAD itself)
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -n "$LAST_TAG" ]; then
+              echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+              echo "base=$LAST_TAG" >> "$GITHUB_OUTPUT"
+              echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Generate impact report
