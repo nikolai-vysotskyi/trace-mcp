@@ -275,22 +275,34 @@ function computeRiskScores(
     churnByFile.set(c.file, c.churn_per_week);
   }
 
+  // Build per-file blast radius: count how many blast entries were caused by each source file
+  const blastByFile = new Map<string, number>();
+  for (const filePath of changedFileInfos.map((i) => i.path)) {
+    const result = getChangeImpact(store, { filePath }, 2, 100);
+    if (result.isOk()) {
+      blastByFile.set(filePath, result.value.totalAffected);
+    }
+  }
+
   // Total files in index for normalization
   const totalFiles = store.getAllFiles().length || 1;
 
   const files: RiskFileEntry[] = [];
 
-  for (const info of changedFileInfos) {
+  // Only score files that are in the index (skip .md, .json, .sh, etc.)
+  const codeFiles = changedFileInfos.filter((info) => store.getFile(info.path));
+
+  for (const info of codeFiles) {
     const coupling = couplingByFile.get(info.path);
     const churn = churnByFile.get(info.path) ?? 0;
 
-    // Per-file blast radius (how many entries reference this file's changes)
-    const fileBlast = blastRadius.entries.filter((e) => e.depth === 1).length;
+    // Per-file blast radius
+    const fileBlast = blastByFile.get(info.path) ?? 0;
 
     // Normalize each signal to 0-1
     const complexityNorm = Math.min(info.avgCyclomatic / 20, 1);
     const churnNorm = Math.min(churn / 5, 1);
-    const couplingNorm = coupling ? coupling.instability : 0.5;
+    const couplingNorm = coupling ? coupling.instability : 0;
     const blastNorm = Math.min(fileBlast / totalFiles, 1);
 
     const score = 0.30 * complexityNorm + 0.25 * churnNorm + 0.25 * couplingNorm + 0.20 * blastNorm;
