@@ -108,8 +108,10 @@ function clientExists(client: ClientDir): boolean {
 
 function findHookSource(scriptName: string): string {
   const filename = `${scriptName}${HOOK_EXT}`;
+  const base = import.meta.dirname ?? '.';
   const candidates = [
-    path.resolve(import.meta.dirname ?? '.', '..', '..', 'hooks', filename),
+    path.resolve(base, '..', '..', 'hooks', filename),  // dev: src/init/ → ../../hooks
+    path.resolve(base, '..', 'hooks', filename),         // bundled: dist/ → ../hooks
     path.resolve(process.cwd(), 'hooks', filename),
   ];
   for (const c of candidates) {
