@@ -17,7 +17,8 @@ export type AntipatternCategory =
   | 'unbounded_query'
   | 'event_listener_leak'
   | 'circular_dependency'
-  | 'missing_index';
+  | 'missing_index'
+  | 'memory_leak';
 
 const ALL_CATEGORIES: AntipatternCategory[] = [
   'n_plus_one_risk',
@@ -26,13 +27,14 @@ const ALL_CATEGORIES: AntipatternCategory[] = [
   'event_listener_leak',
   'circular_dependency',
   'missing_index',
+  'memory_leak',
 ];
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
 const SEVERITY_ORDER: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-export interface AntipatternFinding {
+interface AntipatternFinding {
   id: string;
   category: AntipatternCategory;
   severity: Severity;
@@ -47,7 +49,7 @@ export interface AntipatternFinding {
   confidence: number;
 }
 
-export interface AntipatternResult {
+interface AntipatternResult {
   findings: AntipatternFinding[];
   summary: Record<Severity, number>;
   models_analyzed: number;
@@ -121,13 +123,14 @@ function hasEagerLoadHint(assoc: OrmAssociationRow, model: OrmModelRow): boolean
 /** High-cardinality table name heuristic. */
 const HIGH_CARDINALITY_PATTERNS = /^(logs?|events?|messages?|notifications?|activities|audit|metrics|jobs|queue|sessions?|clicks?|views?|requests?)$/i;
 
-/** Add/remove listener pairs for leak detection. */
+/** Add/remove listener pairs for leak detection.
+ *  sigText and allNames are lowercased, so patterns must be case-insensitive. */
 const LISTENER_PAIRS: [RegExp, RegExp, string][] = [
-  [/addEventListener\s*\(/, /removeEventListener\s*\(/, 'addEventListener without removeEventListener'],
-  [/\.on\s*\(/, /\.off\s*\(|\.removeListener\s*\(|\.removeAllListeners\s*\(/, '.on() without .off()/.removeListener()'],
-  [/\.subscribe\s*\(/, /\.unsubscribe\s*\(|\.complete\s*\(/, '.subscribe() without .unsubscribe()'],
-  [/setInterval\s*\(/, /clearInterval\s*\(/, 'setInterval without clearInterval'],
-  [/setTimeout\s*\(/, /clearTimeout\s*\(/, 'setTimeout without clearTimeout (in class/component)'],
+  [/addeventlistener\s*\(/i, /removeeventlistener\s*\(/i, 'addEventListener without removeEventListener'],
+  [/\.on\s*\(/i, /\.off\s*\(|\.removelistener\s*\(|\.removealllisteners\s*\(/i, '.on() without .off()/.removeListener()'],
+  [/\.subscribe\s*\(/i, /\.unsubscribe\s*\(|\.complete\s*\(/i, '.subscribe() without .unsubscribe()'],
+  [/setinterval\s*\(/i, /clearinterval\s*\(/i, 'setInterval without clearInterval'],
+  [/settimeout\s*\(/i, /cleartimeout\s*\(/i, 'setTimeout without clearTimeout (in class/component)'],
 ];
 
 // ---------------------------------------------------------------------------
@@ -485,12 +488,34 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
     const allFileSyms = store.getSymbolsByFile(fileId);
     const allNames = allFileSyms.map(s => s.name + ' ' + (s.signature ?? '')).join(' ');
 
+    // Also check related files (files that import this one) for cleanup patterns
+    const fileNodeId = store.getNodeId('file', fileId);
+    let crossFileNames = '';
+    if (fileNodeId) {
+      const incomingEdges = store.getIncomingEdges(fileNodeId);
+      const importerNodeIds = incomingEdges
+        .filter(e => e.edge_type_name === 'esm_imports' || e.edge_type_name === 'imports')
+        .map(e => e.source_node_id);
+      if (importerNodeIds.length > 0) {
+        const importerRefs = store.getNodeRefsBatch(importerNodeIds);
+        const importerFileIds = [...importerRefs.values()]
+          .filter(r => r.nodeType === 'file')
+          .map(r => r.refId);
+        for (const impFileId of importerFileIds) {
+          const impSyms = store.getSymbolsByFile(impFileId);
+          crossFileNames += ' ' + impSyms.map(s => s.name + ' ' + (s.signature ?? '')).join(' ');
+        }
+      }
+    }
+    const combinedNames = allNames + ' ' + crossFileNames;
+
     for (const sym of syms) {
       const sigText = (sym.name + ' ' + (sym.signature ?? '')).toLowerCase();
 
       for (const [addPattern, removePattern, label] of LISTENER_PAIRS) {
         if (!addPattern.test(sigText)) continue;
-        if (removePattern.test(allNames)) continue; // Cleanup exists in file
+        // Check cleanup in same file AND in importing files
+        if (removePattern.test(combinedNames)) continue;
 
         counter++;
         findings.push({
@@ -498,7 +523,7 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
           category: 'event_listener_leak',
           severity: 'high',
           title: `${label} in ${sym.name}`,
-          description: `"${sym.name}" in ${filePath} registers a listener but no corresponding cleanup was found in the same file.`,
+          description: `"${sym.name}" in ${filePath} registers a listener but no corresponding cleanup was found in the same file or importing files.`,
           file: filePath,
           line: sym.line_start,
           related_symbols: [sym.symbol_id],
@@ -679,6 +704,134 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
 }
 
 // ---------------------------------------------------------------------------
+// Detector 7: Memory Leak Patterns
+// ---------------------------------------------------------------------------
+
+/** Patterns that suggest potential memory leaks via unbounded growth. */
+const MEMORY_LEAK_PATTERNS: { regex: RegExp; label: string; severity: Severity; description: string; fix: string }[] = [
+  // Growing caches without eviction
+  {
+    regex: /\.(set|push|add)\s*\(/i,
+    label: 'Unbounded cache/collection growth',
+    severity: 'medium',
+    description: 'adds to a Map/Set/Array without size limits or eviction — can grow indefinitely in long-running processes.',
+    fix: 'Add a max size check and eviction policy (LRU, TTL) or use WeakMap/WeakRef.',
+  },
+  // Module-level mutable Map/Set/Array (likely cache)
+  {
+    regex: /^(?:const|let|var)\s+\w+\s*=\s*new\s+(?:Map|Set)\s*\(/i,
+    label: 'Module-level Map/Set (potential unbounded cache)',
+    severity: 'low',
+    description: 'declares a module-level Map/Set. If items are added during request handling without cleanup, this grows unboundedly.',
+    fix: 'Consider WeakMap/WeakRef for caches, or add TTL-based eviction.',
+  },
+];
+
+/** SQL patterns for symbol body search to find memory-leaky patterns. */
+function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFinding[] {
+  const findings: AntipatternFinding[] = [];
+  let counter = 0;
+
+  // Strategy 1: Find module-level Map/Set/Array that have .set/.push/.add calls
+  // without any .delete/.clear/.splice calls in the same file.
+  const cacheSymbols = store.db.prepare(`
+    SELECT s.id, s.name, s.kind, s.symbol_id, s.line_start, s.signature,
+           f.path as file_path, f.id as file_id
+    FROM symbols s
+    JOIN files f ON s.file_id = f.id
+    WHERE (s.signature LIKE '%new Map%'
+      OR s.signature LIKE '%new Set%'
+      OR s.signature LIKE '%: Map<%'
+      OR s.signature LIKE '%: Set<%'
+      OR s.name LIKE '%cache%'
+      OR s.name LIKE '%Cache%'
+      OR s.name LIKE '%registry%'
+      OR s.name LIKE '%Registry%'
+      OR s.name LIKE '%store%'
+      OR s.name LIKE '%pool%')
+    AND s.kind IN ('variable', 'property')
+    AND f.gitignored = 0
+  `).all() as Array<{
+    id: number; name: string; kind: string; symbol_id: string;
+    line_start: number | null; signature: string | null;
+    file_path: string; file_id: number;
+  }>;
+
+  // Group by file
+  const byFile = groupBy(cacheSymbols, s => s.file_id);
+
+  for (const [fileId, syms] of byFile) {
+    const filePath = syms[0]?.file_path;
+    if (!filePath || !matchesFilePattern(filePath, data.filePattern)) continue;
+
+    // Check all symbols in this file for cleanup patterns
+    const allFileSyms = store.getSymbolsByFile(fileId);
+    const allText = allFileSyms.map(s => s.name + ' ' + (s.signature ?? '')).join(' ');
+
+    const hasCleanup = /\.delete\s*\(|\.clear\s*\(|\.splice\s*\(|\.shift\s*\(|\.pop\s*\(|weakmap|weakset|weakref|lru|ttl|maxsize|max_size|evict/i.test(allText);
+    if (hasCleanup) continue;
+
+    // Check if there are .set/.push/.add calls — signs of growth
+    const hasGrowth = /\.set\s*\(|\.push\s*\(|\.add\s*\(/i.test(allText);
+    if (!hasGrowth) continue;
+
+    for (const sym of syms) {
+      counter++;
+      findings.push({
+        id: `MEM-${String(counter).padStart(3, '0')}`,
+        category: 'memory_leak',
+        severity: 'medium',
+        title: `Potential unbounded cache: ${sym.name}`,
+        description: `"${sym.name}" in ${filePath} is a Map/Set/cache-like variable that grows (has .set/.push/.add calls) but no eviction (no .delete/.clear or size limit found in the same file).`,
+        file: filePath,
+        line: sym.line_start,
+        related_symbols: [sym.symbol_id],
+        fix: 'Add a max size check and eviction policy (LRU, TTL), or use WeakMap/WeakRef for object keys.',
+        confidence: 0.5,
+      });
+    }
+  }
+
+  // Strategy 2: Detect closure-over-mutable patterns in event handlers
+  // Look for symbols that are event handlers and reference outer-scope mutable state
+  const closureLeakSymbols = store.db.prepare(`
+    SELECT s.id, s.name, s.symbol_id, s.line_start, s.signature,
+           f.path as file_path, f.id as file_id
+    FROM symbols s
+    JOIN files f ON s.file_id = f.id
+    WHERE (s.signature LIKE '%=>\s*{%' OR s.signature LIKE '%function%')
+    AND (s.signature LIKE '%.on(%' OR s.signature LIKE '%addEventListener%'
+      OR s.signature LIKE '%subscribe%' OR s.signature LIKE '%setInterval%')
+    AND s.signature LIKE '%push%'
+    AND f.gitignored = 0
+  `).all() as Array<{
+    id: number; name: string; symbol_id: string;
+    line_start: number | null; signature: string | null;
+    file_path: string; file_id: number;
+  }>;
+
+  for (const sym of closureLeakSymbols) {
+    if (!matchesFilePattern(sym.file_path, data.filePattern)) continue;
+
+    counter++;
+    findings.push({
+      id: `MEM-${String(counter).padStart(3, '0')}`,
+      category: 'memory_leak',
+      severity: 'high',
+      title: `Closure retains growing array: ${sym.name}`,
+      description: `"${sym.name}" in ${sym.file_path} is an event handler that pushes to a collection in its closure. Each event invocation grows the collection without cleanup.`,
+      file: sym.file_path,
+      line: sym.line_start,
+      related_symbols: [sym.symbol_id],
+      fix: 'Move the collection inside the handler, add a size limit, or clean up on handler removal.',
+      confidence: 0.6,
+    });
+  }
+
+  return findings;
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -710,6 +863,7 @@ export function detectAntipatterns(
   if (categories.has('event_listener_leak')) findings.push(...detectEventListenerLeak(store, data));
   if (categories.has('circular_dependency')) findings.push(...detectCircularDeps(data));
   if (categories.has('missing_index')) findings.push(...detectMissingIndex(store, data));
+  if (categories.has('memory_leak')) findings.push(...detectMemoryLeak(store, data));
 
   // Filter by severity threshold
   findings = findings.filter(f => SEVERITY_ORDER[f.severity] <= severityThreshold);
