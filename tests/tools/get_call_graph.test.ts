@@ -3,14 +3,9 @@
  * Uses in-memory store with manually inserted symbols + edges.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { getCallGraph } from '../../src/tools/framework/call-graph.js';
-
-function makeStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
+import { createTestStore } from '../test-utils.js';
 
 function insertSymbol(store: Store, fileId: number, name: string, fqn: string, kind = 'function'): number {
   return store.insertSymbol(fileId, {
@@ -28,7 +23,7 @@ describe('get_call_graph', () => {
   let fileId: number;
 
   beforeEach(() => {
-    store = makeStore();
+    store = createTestStore();
     fileId = store.insertFile('src/app.ts', 'typescript', 'h1', 500);
   });
 

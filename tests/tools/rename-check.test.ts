@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
+import { createTestStore } from '../test-utils.js';
 import { checkRenameSafe } from '../../src/tools/refactoring/rename-check.js';
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function insertFile(store: Store, filePath: string): number {
   return store.insertFile(filePath, 'typescript', 'hash_' + filePath, 100);
@@ -26,7 +21,7 @@ describe('checkRenameSafe', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('returns safe=true when no conflicts', () => {

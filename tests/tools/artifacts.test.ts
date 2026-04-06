@@ -1,18 +1,13 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { getArtifacts } from '../../src/tools/project/artifacts.js';
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 describe('Context Artifacts', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   test('returns empty when no data', () => {

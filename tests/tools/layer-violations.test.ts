@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
+import { createTestStore } from '../test-utils.js';
 import { getLayerViolations, detectLayerPreset, type LayerDefinition } from '../../src/tools/analysis/layer-violations.js';
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function insertFile(store: Store, filePath: string): number {
   return store.insertFile(filePath, 'typescript', 'hash_' + filePath, 100);
@@ -27,7 +22,7 @@ describe('getLayerViolations', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('returns no violations when layers respect rules', () => {
@@ -100,7 +95,7 @@ describe('getLayerViolations', () => {
 
 describe('detectLayerPreset', () => {
   it('detects clean-architecture when matching paths exist', () => {
-    const store = createStore();
+    const store = createTestStore();
     insertFile(store, 'src/domain/user.ts');
     insertFile(store, 'src/application/user-service.ts');
     insertFile(store, 'src/infrastructure/user-repo.ts');
@@ -111,7 +106,7 @@ describe('detectLayerPreset', () => {
   });
 
   it('returns null when no preset matches', () => {
-    const store = createStore();
+    const store = createTestStore();
     insertFile(store, 'src/components/button.ts');
     insertFile(store, 'src/utils/format.ts');
 

@@ -5,8 +5,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
@@ -43,8 +42,8 @@ function makeMockEmbeddingService(): EmbeddingService {
 
 describe('EmbeddingPipeline CLI integration', () => {
   it('indexes embeddings for all symbols after structural indexing', async () => {
-    const db = initializeDatabase(':memory:');
-    const store = new Store(db);
+    const store = createTestStore();
+    const db = store.db;
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
 
@@ -69,8 +68,8 @@ describe('EmbeddingPipeline CLI integration', () => {
   });
 
   it('indexUnembedded is idempotent — second call embeds nothing', async () => {
-    const db = initializeDatabase(':memory:');
-    const store = new Store(db);
+    const store = createTestStore();
+    const db = store.db;
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
 
@@ -88,8 +87,8 @@ describe('EmbeddingPipeline CLI integration', () => {
   });
 
   it('embedding service errors do not crash the flow', async () => {
-    const db = initializeDatabase(':memory:');
-    const store = new Store(db);
+    const store = createTestStore();
+    const db = store.db;
     store.insertFile('test.ts', 'typescript', 'abc', 100);
     store.insertSymbol(1, { symbolId: 's1', name: 'Foo', kind: 'class', byteStart: 0, byteEnd: 50 });
 
@@ -109,8 +108,8 @@ describe('EmbeddingPipeline CLI integration', () => {
   });
 
   it('runEmbeddings pattern: pipeline fires and forgets after indexFiles', async () => {
-    const db = initializeDatabase(':memory:');
-    const store = new Store(db);
+    const store = createTestStore();
+    const db = store.db;
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
 

@@ -2,16 +2,10 @@ import { describe, test, expect, beforeEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { isIndexStale, fallbackSearch, fallbackOutline } from '../../src/tools/navigation/zero-index.js';
 
 const TEST_DIR = path.join(tmpdir(), 'trace-mcp-zeroindex-test-' + process.pid);
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function writeFile(relPath: string, content: string): void {
   const absPath = path.join(TEST_DIR, relPath);
@@ -31,21 +25,21 @@ describe('Zero-index fallback', () => {
 
   describe('isIndexStale', () => {
     test('returns stale for empty index', () => {
-      const store = createStore();
+      const store = createTestStore();
       const result = isIndexStale(store);
       expect(result.stale).toBe(true);
       expect(result.reason).toContain('empty');
     });
 
     test('returns not stale for fresh index', () => {
-      const store = createStore();
+      const store = createTestStore();
       store.insertFile('src/a.ts', 'typescript', 'h1', 100);
       const result = isIndexStale(store);
       expect(result.stale).toBe(false);
     });
 
     test('returns stale for old index', () => {
-      const store = createStore();
+      const store = createTestStore();
       // Manually insert with old timestamp
       store.db.prepare(
         "INSERT INTO files (path, language, content_hash, byte_length, indexed_at) VALUES (?, ?, ?, ?, datetime('now', '-120 minutes'))"

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
+import type { Store } from '../../src/db/store.js';
 import { searchFts } from '../../src/db/fts.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 import type { RawOrmModel, RawRnScreen } from '../../src/plugin-api/types.js';
@@ -9,8 +9,7 @@ describe('Store', () => {
   let store: Store;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
   });
 
   describe('files', () => {

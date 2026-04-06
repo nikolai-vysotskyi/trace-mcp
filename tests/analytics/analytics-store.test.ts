@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { AnalyticsStore } from '../../src/analytics/analytics-store.js';
 import type { ParsedSession } from '../../src/analytics/log-parser.js';
-import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 function makeParsedSession(overrides: Partial<ParsedSession['summary']> = {}): ParsedSession {
   return {
@@ -67,17 +66,14 @@ describe('AnalyticsStore', () => {
   let dbPath: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'analytics-store-test-'));
+    tmpDir = createTmpDir('analytics-store-test-');
     dbPath = path.join(tmpDir, 'test-analytics.db');
     store = new AnalyticsStore(dbPath);
   });
 
   afterEach(() => {
     store.close();
-    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-    if (fs.existsSync(dbPath + '-wal')) fs.unlinkSync(dbPath + '-wal');
-    if (fs.existsSync(dbPath + '-shm')) fs.unlinkSync(dbPath + '-shm');
-    fs.rmdirSync(tmpDir);
+    removeTmpDir(tmpDir);
   });
 
   it('stores and retrieves a session', () => {

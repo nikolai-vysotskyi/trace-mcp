@@ -2,13 +2,12 @@
  * Tests that BM25 field weighting ranks name matches above summary matches.
  */
 import { describe, it, expect } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { searchFts } from '../../src/db/fts.js';
 
 function createStoreWithSymbols() {
-  const db = initializeDatabase(':memory:');
-  const store = new Store(db);
+  const store = createTestStore();
+  const db = store.db;
 
   const fA = store.insertFile('src/a.ts', 'typescript', 'h1', 100);
   const fB = store.insertFile('src/b.ts', 'typescript', 'h2', 100);

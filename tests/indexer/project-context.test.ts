@@ -2,26 +2,18 @@
  * Tests for buildProjectContext — manifest file parsing and version detection.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { buildProjectContext } from '../../src/indexer/project-context.js';
+import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
 
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-ctx-'));
+  tmpDir = createTmpDir('trace-ctx-');
 });
 
 afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  removeTmpDir(tmpDir);
 });
-
-function writeFile(rel: string, content: string) {
-  const full = path.join(tmpDir, rel);
-  fs.mkdirSync(path.dirname(full), { recursive: true });
-  fs.writeFileSync(full, content);
-}
 
 describe('buildProjectContext', () => {
   it('returns empty context for an empty directory', () => {
@@ -36,7 +28,7 @@ describe('buildProjectContext', () => {
 
   describe('package.json', () => {
     it('parses dependencies and engines', () => {
-      writeFile('package.json', JSON.stringify({
+      writeFixtureFile(tmpDir,'package.json', JSON.stringify({
         engines: { node: '>=18.0.0', npm: '>=9' },
         dependencies: { express: '^4.18.0', lodash: '4.17.21' },
         devDependencies: { vitest: '^1.0.0' },
@@ -52,7 +44,7 @@ describe('buildProjectContext', () => {
     });
 
     it('handles peerDependencies', () => {
-      writeFile('package.json', JSON.stringify({
+      writeFixtureFile(tmpDir,'package.json', JSON.stringify({
         peerDependencies: { react: '>=17' },
       }));
       const ctx = buildProjectContext(tmpDir);
@@ -60,7 +52,7 @@ describe('buildProjectContext', () => {
     });
 
     it('tolerates malformed JSON', () => {
-      writeFile('package.json', '{ invalid json }');
+      writeFixtureFile(tmpDir,'package.json', '{ invalid json }');
       const ctx = buildProjectContext(tmpDir);
       expect(ctx.packageJson).toBeUndefined();
     });
@@ -70,20 +62,20 @@ describe('buildProjectContext', () => {
 
   describe('.nvmrc and .node-version', () => {
     it('detects node version from .nvmrc', () => {
-      writeFile('.nvmrc', 'v20.11.0\n');
+      writeFixtureFile(tmpDir,'.nvmrc', 'v20.11.0\n');
       const ctx = buildProjectContext(tmpDir);
       expect(ctx.detectedVersions).toContainEqual({ runtime: 'node', version: '20.11.0', source: '.nvmrc' });
     });
 
     it('detects node version from .node-version', () => {
-      writeFile('.node-version', '18.19.0');
+      writeFixtureFile(tmpDir,'.node-version', '18.19.0');
       const ctx = buildProjectContext(tmpDir);
       expect(ctx.detectedVersions).toContainEqual({ runtime: 'node', version: '18.19.0', source: '.node-version' });
     });
 
     it('prefers .nvmrc over .node-version', () => {
-      writeFile('.nvmrc', '20');
-      writeFile('.node-version', '18');
+      writeFixtureFile(tmpDir,'.nvmrc', '20');
+      writeFixtureFile(tmpDir,'.node-version', '18');
       const ctx = buildProjectContext(tmpDir);
       const nodeVersions = ctx.detectedVersions.filter((v) => v.runtime === 'node' && (v.source === '.nvmrc' || v.source === '.node-version'));
       expect(nodeVersions).toHaveLength(1);
@@ -95,7 +87,7 @@ describe('buildProjectContext', () => {
 
   describe('composer.json', () => {
     it('parses PHP version and dependencies', () => {
-      writeFile('composer.json', JSON.stringify({
+      writeFixtureFile(tmpDir,'composer.json', JSON.stringify({
         require: { php: '>=8.2', 'laravel/framework': '^11.0' },
         'require-dev': { 'phpunit/phpunit': '^10.0' },
       }));
@@ -114,7 +106,7 @@ describe('buildProjectContext', () => {
 
   describe('pyproject.toml', () => {
     it('parses inline dependencies and requires-python', () => {
-      writeFile('pyproject.toml', `
+      writeFixtureFile(tmpDir,'pyproject.toml', `
 [project]
 name = "my-app"
 requires-python = ">=3.11"
@@ -133,7 +125,7 @@ dependencies = ["fastapi>=0.100", "pydantic>=2.0"]
 
   describe('.python-version', () => {
     it('detects python version', () => {
-      writeFile('.python-version', '3.12.1');
+      writeFixtureFile(tmpDir,'.python-version', '3.12.1');
       const ctx = buildProjectContext(tmpDir);
       expect(ctx.detectedVersions).toContainEqual({ runtime: 'python', version: '3.12.1', source: '.python-version' });
     });
@@ -143,7 +135,7 @@ dependencies = ["fastapi>=0.100", "pydantic>=2.0"]
 
   describe('requirements.txt', () => {
     it('parses package names and versions', () => {
-      writeFile('requirements.txt', `
+      writeFixtureFile(tmpDir,'requirements.txt', `
 django>=4.2
 celery[redis]>=5.3.0
 # this is a comment
@@ -162,7 +154,7 @@ gunicorn==21.2.0
 
   describe('go.mod', () => {
     it('parses module, go version, and dependencies', () => {
-      writeFile('go.mod', `module github.com/example/app
+      writeFixtureFile(tmpDir,'go.mod', `module github.com/example/app
 
 go 1.22
 
@@ -186,7 +178,7 @@ require (
 
   describe('Cargo.toml', () => {
     it('parses rust version, edition, and dependencies', () => {
-      writeFile('Cargo.toml', `
+      writeFixtureFile(tmpDir,'Cargo.toml', `
 [package]
 name = "my-app"
 version = "0.1.0"
@@ -216,7 +208,7 @@ criterion = "0.5"
 
   describe('Gemfile', () => {
     it('parses gem dependencies', () => {
-      writeFile('Gemfile', `
+      writeFixtureFile(tmpDir,'Gemfile', `
 source "https://rubygems.org"
 gem 'rails', '~> 7.1'
 gem 'pg'
@@ -235,13 +227,13 @@ gem 'puma', '>= 5.0'
 
   describe('.ruby-version', () => {
     it('detects ruby version', () => {
-      writeFile('.ruby-version', 'ruby-3.3.0');
+      writeFixtureFile(tmpDir,'.ruby-version', 'ruby-3.3.0');
       const ctx = buildProjectContext(tmpDir);
       expect(ctx.detectedVersions).toContainEqual({ runtime: 'ruby', version: '3.3.0', source: '.ruby-version' });
     });
 
     it('strips ruby- prefix', () => {
-      writeFile('.ruby-version', 'ruby-3.2.2');
+      writeFixtureFile(tmpDir,'.ruby-version', 'ruby-3.2.2');
       const ctx = buildProjectContext(tmpDir);
       const rv = ctx.detectedVersions.find((v) => v.runtime === 'ruby');
       expect(rv!.version).toBe('3.2.2');
@@ -252,7 +244,7 @@ gem 'puma', '>= 5.0'
 
   describe('pom.xml', () => {
     it('parses Java version and Maven dependencies', () => {
-      writeFile('pom.xml', `<?xml version="1.0"?>
+      writeFixtureFile(tmpDir,'pom.xml', `<?xml version="1.0"?>
 <project>
   <groupId>com.example</groupId>
   <artifactId>my-app</artifactId>
@@ -285,7 +277,7 @@ gem 'puma', '>= 5.0'
 
   describe('build.gradle', () => {
     it('parses Gradle dependencies and Java version', () => {
-      writeFile('build.gradle', `
+      writeFixtureFile(tmpDir,'build.gradle', `
 plugins {
     id 'java'
 }
@@ -307,7 +299,7 @@ dependencies {
 
   describe('.tool-versions (asdf)', () => {
     it('detects multiple runtimes', () => {
-      writeFile('.tool-versions', `nodejs 20.11.0
+      writeFixtureFile(tmpDir,'.tool-versions', `nodejs 20.11.0
 python 3.12.1
 ruby 3.3.0
 golang 1.22.0
@@ -325,9 +317,9 @@ golang 1.22.0
 
   describe('configFiles', () => {
     it('detects known config files', () => {
-      writeFile('tsconfig.json', '{}');
-      writeFile('vite.config.ts', 'export default {}');
-      writeFile('.env', 'FOO=bar');
+      writeFixtureFile(tmpDir,'tsconfig.json', '{}');
+      writeFixtureFile(tmpDir,'vite.config.ts', 'export default {}');
+      writeFixtureFile(tmpDir,'.env', 'FOO=bar');
       const ctx = buildProjectContext(tmpDir);
 
       expect(ctx.configFiles).toContain('tsconfig.json');
@@ -340,13 +332,13 @@ golang 1.22.0
 
   describe('multi-ecosystem', () => {
     it('aggregates versions and deps from multiple manifests', () => {
-      writeFile('package.json', JSON.stringify({
+      writeFixtureFile(tmpDir,'package.json', JSON.stringify({
         engines: { node: '>=20' },
         dependencies: { next: '14.0.0' },
       }));
-      writeFile('.nvmrc', '20');
-      writeFile('.python-version', '3.12');
-      writeFile('requirements.txt', 'django>=4.2');
+      writeFixtureFile(tmpDir,'.nvmrc', '20');
+      writeFixtureFile(tmpDir,'.python-version', '3.12');
+      writeFixtureFile(tmpDir,'requirements.txt', 'django>=4.2');
 
       const ctx = buildProjectContext(tmpDir);
 

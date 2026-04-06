@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { getDeadExports } from '../../src/tools/analysis/introspect.js';
-
-function createStore(): Store {
-  return new Store(initializeDatabase(':memory:'));
-}
+import { createTestStore } from '../test-utils.js';
 
 function addExportedSymbol(store: Store, filePath: string, name: string, kind: string): number {
   let file = store.getFile(filePath);
@@ -36,7 +32,7 @@ describe('getDeadExports', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     store.ensureEdgeType('imports', 'code', 'Import statements');
   });
 

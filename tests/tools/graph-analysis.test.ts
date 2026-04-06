@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import Database from 'better-sqlite3';
 import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
 import {
   getCouplingMetrics,
   getDependencyCycles,
@@ -9,11 +7,7 @@ import {
   getExtractionCandidates,
   getRepoHealth,
 } from '../../src/tools/analysis/graph-analysis.js';
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
+import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, path: string, lang = 'typescript'): number {
   return store.insertFile(path, lang, 'hash_' + path, 100);
@@ -44,7 +38,7 @@ describe('getCouplingMetrics', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('returns empty for no files', () => {
@@ -86,7 +80,7 @@ describe('getDependencyCycles', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('returns empty when no cycles', () => {
@@ -138,7 +132,7 @@ describe('getPageRank', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('returns empty for no files', () => {
@@ -187,7 +181,7 @@ describe('getExtractionCandidates', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('returns empty when no complex functions', () => {
@@ -221,7 +215,7 @@ describe('getExtractionCandidates', () => {
 
 describe('getRepoHealth', () => {
   it('returns aggregated health report', () => {
-    const store = createStore();
+    const store = createTestStore();
     const fA = insertFile(store, 'src/a.ts');
     const fB = insertFile(store, 'src/b.ts');
     const nodeA = store.getNodeId('file', fA)!;

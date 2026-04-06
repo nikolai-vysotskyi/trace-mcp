@@ -4,8 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
@@ -18,8 +17,7 @@ describe('Livewire v3 e2e', () => {
 
   beforeAll(async () => {
     const fixturePath = path.resolve(__dirname, '../fixtures/livewire-v3');
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
 
     registry.registerLanguagePlugin(new PhpLanguagePlugin());

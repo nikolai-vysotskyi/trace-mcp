@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { compareBranches } from '../../src/tools/quality/changed-symbols.js';
 
 describe('compareBranches', () => {
@@ -12,11 +11,10 @@ describe('compareBranches', () => {
   let repoDir: string;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
 
     // Create a temporary git repo with two branches
-    repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'branch-compare-'));
+    repoDir = createTmpDir('branch-compare-');
     const run = (cmd: string) =>
       execSync(cmd, { cwd: repoDir, encoding: 'utf-8', env: { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@test.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@test.com' } });
 
@@ -100,7 +98,7 @@ describe('compareBranches', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(repoDir, { recursive: true, force: true });
+    removeTmpDir(repoDir);
   });
 
   it('resolves merge-base and returns branch comparison', () => {

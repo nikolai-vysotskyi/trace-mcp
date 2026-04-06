@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
+import { createTestStore } from '../test-utils.js';
 import { getComplexityTrend } from '../../src/tools/analysis/complexity-trend.js';
 
 vi.mock('node:child_process', () => ({
@@ -10,11 +9,6 @@ vi.mock('node:child_process', () => ({
 
 const mockExecFileSync = vi.mocked(execFileSync);
 
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
-
 describe('getComplexityTrend', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -22,7 +16,7 @@ describe('getComplexityTrend', () => {
     mockExecFileSync.mockImplementation(() => {
       throw new Error('not a git repo');
     });
-    const store = createStore();
+    const store = createTestStore();
     const fId = store.insertFile('src/a.ts', 'typescript', 'h1', 100);
     store.insertSymbol(fId, {
       symbolId: 'sym:foo',
@@ -57,7 +51,7 @@ describe('getComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fId = store.insertFile('src/a.ts', 'typescript', 'h1', 100);
     // Current: high complexity
     store.insertSymbol(fId, {
@@ -85,7 +79,7 @@ describe('getComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     store.insertFile('src/empty.ts', 'typescript', 'h1', 100);
     // No symbols with complexity
     expect(getComplexityTrend(store, '/project', 'src/empty.ts')).toBeNull();

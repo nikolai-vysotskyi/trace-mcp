@@ -3,8 +3,7 @@
  * exploding in memory or time. These use in-memory SQLite.
  */
 import { describe, it, expect } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { searchFts } from '../../src/db/fts.js';
 
 const KINDS = ['class', 'function', 'method', 'interface', 'variable', 'type', 'constant', 'property'] as const;
@@ -12,8 +11,8 @@ const PREFIXES = ['User', 'Auth', 'Payment', 'Order', 'Product', 'Cart', 'Invoic
 const LANGS = ['typescript', 'python', 'go', 'rust', 'java', 'csharp', 'ruby', 'kotlin'];
 
 function seedDatabase(fileCount: number, symbolsPerFile: number, opts?: { workspaces?: string[]; crossWsEdges?: number }) {
-  const db = initializeDatabase(':memory:');
-  const store = new Store(db);
+  const store = createTestStore();
+  const db = store.db;
 
   const insertFile = db.prepare(
     `INSERT INTO files (path, language, content_hash, byte_length, indexed_at, workspace)

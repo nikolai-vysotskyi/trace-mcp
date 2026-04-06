@@ -1,20 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import Database from 'better-sqlite3';
 import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { getChurnRate, getHotspots, isGitRepo } from '../../src/tools/git/git-analysis.js';
+import { createTestStore } from '../test-utils.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
 }));
 
 const mockExecFileSync = vi.mocked(execFileSync);
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function insertFileWithComplexity(
   store: Store,
@@ -130,7 +124,7 @@ describe('getHotspots', () => {
       throw new Error('not a git repo');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     insertFileWithComplexity(store, 'src/complex.ts', 15);
     insertFileWithComplexity(store, 'src/simple.ts', 2);
 
@@ -167,7 +161,7 @@ describe('getHotspots', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     insertFileWithComplexity(store, 'src/hot.ts', 12);
     insertFileWithComplexity(store, 'src/cold.ts', 12);
 
@@ -189,7 +183,7 @@ describe('getHotspots', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     insertFileWithComplexity(store, 'src/simple.ts', 2);
 
     const result = getHotspots(store, '/project', { minCyclomatic: 5 });

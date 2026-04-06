@@ -1,32 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { detectWorkspaces } from '../../src/indexer/monorepo.js';
+import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
 
 let tmpDir: string;
-
-function createTmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-mono-'));
-}
 
 function writeJson(filePath: string, data: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
-function writeFile(filePath: string, content: string): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, content);
-}
-
 describe('detectWorkspaces', () => {
   beforeEach(() => {
-    tmpDir = createTmpDir();
+    tmpDir = createTmpDir('trace-mcp-mono-');
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
   });
 
   it('returns empty array when no workspace config exists', () => {
@@ -35,7 +26,7 @@ describe('detectWorkspaces', () => {
   });
 
   it('detects pnpm workspaces from pnpm-workspace.yaml', () => {
-    writeFile(path.join(tmpDir, 'pnpm-workspace.yaml'), `packages:\n  - "packages/*"\n`);
+    writeFixtureFile(tmpDir, 'pnpm-workspace.yaml', `packages:\n  - "packages/*"\n`);
     writeJson(path.join(tmpDir, 'packages/ui/package.json'), { name: '@mono/ui' });
     writeJson(path.join(tmpDir, 'packages/core/package.json'), { name: '@mono/core' });
 
@@ -116,7 +107,7 @@ describe('detectWorkspaces', () => {
 
   it('pnpm takes priority over npm workspaces', () => {
     // Both exist, but pnpm should win
-    writeFile(path.join(tmpDir, 'pnpm-workspace.yaml'), `packages:\n  - "apps/*"\n`);
+    writeFixtureFile(tmpDir, 'pnpm-workspace.yaml', `packages:\n  - "apps/*"\n`);
     writeJson(path.join(tmpDir, 'package.json'), {
       workspaces: ['packages/*'],
     });

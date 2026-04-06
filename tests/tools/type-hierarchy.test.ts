@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { getTypeHierarchy } from '../../src/tools/analysis/introspect.js';
-
-function createStore(): Store {
-  return new Store(initializeDatabase(':memory:'));
-}
 
 function addSymbol(store: Store, opts: {
   filePath: string; name: string; kind: string; metadata?: Record<string, unknown>;
@@ -25,7 +21,7 @@ describe('getTypeHierarchy', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('returns empty ancestors/descendants for unknown type', () => {

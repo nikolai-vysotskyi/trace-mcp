@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { findReferences } from '../../src/tools/framework/references.js';
-
-function createStore(): Store {
-  return new Store(initializeDatabase(':memory:'));
-}
 
 function addSymbol(store: Store, opts: {
   filePath: string; name: string; kind: string; fqn?: string;
@@ -26,7 +22,7 @@ describe('findReferences', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     store.ensureEdgeType('calls', 'code', 'Function calls');
     store.ensureEdgeType('imports', 'code', 'Import statements');
     store.ensureEdgeType('references', 'code', 'Symbol references');

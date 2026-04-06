@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { visualizeGraph, getDependencyDiagram } from '../../src/tools/analysis/visualize.js';
 
 describe('visualizeGraph', () => {
@@ -11,9 +10,8 @@ describe('visualizeGraph', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'viz-'));
+    store = createTestStore();
+    tmpDir = createTmpDir('viz-');
 
     // Create a small graph: files with symbols and edges
     const f1 = store.insertFile('src/auth.ts', 'typescript', 'h1', 200);
@@ -47,7 +45,7 @@ describe('visualizeGraph', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
   });
 
   it('generates HTML file for project scope', () => {
@@ -165,8 +163,7 @@ describe('getDependencyDiagram', () => {
   let store: Store;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
 
     const f1 = store.insertFile('src/auth.ts', 'typescript', 'h1', 200);
     const f2 = store.insertFile('src/user.ts', 'typescript', 'h2', 300);

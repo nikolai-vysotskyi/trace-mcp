@@ -3,8 +3,8 @@
  * correctly removes all symbol nodes (not leaving orphaned entries in `nodes`).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
+import type { Store } from '../../src/db/store.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
 function makeSymbol(id: string, name: string): RawSymbol {
@@ -23,8 +23,7 @@ describe('Store.deleteSymbolsByFile', () => {
   let store: Store;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
   });
 
   it('removes all symbols and their nodes in one operation', () => {

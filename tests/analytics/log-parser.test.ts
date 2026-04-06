@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseToolName, extractTargetFile, parseSessionFile } from '../../src/analytics/log-parser.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('parseToolName', () => {
   it('parses builtin tool', () => {
@@ -38,7 +38,7 @@ describe('extractTargetFile', () => {
 
 describe('parseSessionFile', () => {
   it('parses a JSONL session file', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'log-parser-test-'));
+    const tmpDir = createTmpDir('log-parser-test-');
     const filePath = path.join(tmpDir, 'test-session.jsonl');
 
     const lines = [
@@ -106,12 +106,11 @@ describe('parseSessionFile', () => {
     expect(result!.toolResults.get('tool_1')!.outputSizeChars).toBe(25);
     expect(result!.toolResults.get('tool_1')!.isError).toBe(false);
 
-    fs.unlinkSync(filePath);
-    fs.rmdirSync(tmpDir);
+    removeTmpDir(tmpDir);
   });
 
   it('parses Claw Code JSONL format', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'log-parser-claw-'));
+    const tmpDir = createTmpDir('log-parser-claw-');
     const filePath = path.join(tmpDir, 'claw-session.jsonl');
 
     // Claw Code uses {type: "message", message: {role, content, usage}}
@@ -171,17 +170,15 @@ describe('parseSessionFile', () => {
     expect(result!.toolResults.get('tu_1')!.outputSizeChars).toBe(20); // "export const x = 42;"
     expect(result!.toolResults.get('tu_1')!.isError).toBe(false);
 
-    fs.unlinkSync(filePath);
-    fs.rmdirSync(tmpDir);
+    removeTmpDir(tmpDir);
   });
 
   it('returns null for empty session', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'log-parser-test-'));
+    const tmpDir = createTmpDir('log-parser-test-');
     const filePath = path.join(tmpDir, 'empty.jsonl');
     fs.writeFileSync(filePath, JSON.stringify({ type: 'queue-operation', timestamp: '2026-04-01T10:00:00Z', sessionId: 'empty' }));
     const result = parseSessionFile(filePath, '/test/project');
     expect(result).toBeNull();
-    fs.unlinkSync(filePath);
-    fs.rmdirSync(tmpDir);
+    removeTmpDir(tmpDir);
   });
 });

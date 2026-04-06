@@ -3,14 +3,9 @@
  * BFS path finding, subgraph extraction, and Mermaid generation.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { graphQuery } from '../../src/tools/analysis/graph-query.js';
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
+import { createTestStore } from '../test-utils.js';
 
 function addSymbol(
   store: Store,
@@ -58,7 +53,7 @@ describe('graphQuery: intent classification', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
     addSymbol(store, { filePath: 'src/auth.ts', name: 'AuthService', kind: 'class' });
     addSymbol(store, { filePath: 'src/db.ts', name: 'Database', kind: 'class' });
@@ -114,7 +109,7 @@ describe('graphQuery: error handling', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -145,7 +140,7 @@ describe('graphQuery: dependents', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -209,7 +204,7 @@ describe('graphQuery: dependencies', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -238,7 +233,7 @@ describe('graphQuery: path finding', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -307,7 +302,7 @@ describe('graphQuery: flow', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -338,7 +333,7 @@ describe('graphQuery: cycle safety', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -376,7 +371,7 @@ describe('graphQuery: depth and node limits', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -420,7 +415,7 @@ describe('graphQuery: mermaid output', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -459,7 +454,7 @@ describe('graphQuery: symbol resolution', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -498,7 +493,7 @@ describe('graphQuery: edge type variety', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 
@@ -530,7 +525,7 @@ describe('graphQuery: no N+1 queries', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     seedEdgeTypes(store);
   });
 

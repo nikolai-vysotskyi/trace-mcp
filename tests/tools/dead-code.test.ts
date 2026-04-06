@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
+import { createTestStore } from '../test-utils.js';
 import { getDeadCodeV2 } from '../../src/tools/refactoring/dead-code.js';
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
   return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
@@ -36,7 +31,7 @@ describe('getDeadCodeV2', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('returns empty when no exported symbols', () => {

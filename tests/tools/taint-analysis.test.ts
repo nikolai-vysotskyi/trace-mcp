@@ -2,16 +2,11 @@ import { describe, test, expect, beforeEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { taintAnalysis } from '../../src/tools/quality/taint-analysis.js';
 
 const TEST_DIR = path.join(tmpdir(), 'trace-mcp-taint-test-' + process.pid);
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function writeFile(store: Store, relPath: string, content: string, language: string): void {
   const absPath = path.join(TEST_DIR, relPath);
@@ -24,7 +19,7 @@ describe('Taint Analysis', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     rmSync(TEST_DIR, { recursive: true, force: true });
     mkdirSync(TEST_DIR, { recursive: true });
   });

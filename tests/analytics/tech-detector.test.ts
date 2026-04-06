@@ -1,19 +1,19 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { KNOWN_PACKAGES } from '../../src/analytics/known-packages.js';
 import { detectCoverage } from '../../src/analytics/tech-detector.js';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('tech-detector', () => {
   let tmpDir: string;
 
   beforeAll(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tech-detector-test-'));
+    tmpDir = createTmpDir('tech-detector-test-');
   });
 
   afterAll(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
   });
 
   describe('KNOWN_PACKAGES lookup', () => {

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { BlobVectorStore } from '../../src/ai/vector-store.js';
 import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
+import type { Store } from '../../src/db/store.js';
 import type { EmbeddingService } from '../../src/ai/interfaces.js';
 import type Database from 'better-sqlite3';
 
@@ -26,8 +26,8 @@ describe('EmbeddingPipeline', () => {
   let vectorStore: BlobVectorStore;
 
   beforeEach(() => {
-    db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
+    db = store.db;
     vectorStore = new BlobVectorStore(db);
 
     // Insert test symbols

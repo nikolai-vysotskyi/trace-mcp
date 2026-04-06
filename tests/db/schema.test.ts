@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import path from 'node:path';
 import Database from 'better-sqlite3';
 import { initializeDatabase, getTableNames } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('schema', () => {
   let db: Database.Database;
@@ -77,17 +79,14 @@ describe('schema', () => {
 
   it('has WAL journal mode (file-backed DB)', () => {
     // In-memory DBs ignore WAL, so test with a temp file
-    const fs = require('node:fs');
-    const os = require('node:os');
-    const path = require('node:path');
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-wal-'));
+    const tmpDir = createTmpDir('trace-mcp-wal-');
     const tmpDb = initializeDatabase(path.join(tmpDir, 'test.db'));
     try {
       const mode = tmpDb.pragma('journal_mode', { simple: true }) as string;
       expect(mode).toBe('wal');
     } finally {
       tmpDb.close();
-      fs.rmSync(tmpDir, { recursive: true });
+      removeTmpDir(tmpDir);
     }
   });
 
