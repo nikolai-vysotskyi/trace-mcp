@@ -178,7 +178,6 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'pundit':                         { category: 'framework', priority: 'medium', plugin: null },
   'rspec':                          { category: 'testing',   priority: 'medium', plugin: 'testing' },
   'rspec-rails':                    { category: 'testing',   priority: 'medium', plugin: 'testing' },
-  'pg':                             { category: 'orm',       priority: 'medium', plugin: 'raw-sql' },
 
   // --- Go ---
   'github.com/gin-gonic/gin':       { category: 'framework', priority: 'high',   plugin: 'gin' },
