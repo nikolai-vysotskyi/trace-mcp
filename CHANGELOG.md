@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.5.3...v1.5.4) (2026-04-06)
+
+
+### Refactoring
+
+* Update hook finding logic ([7f5f4e5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7f5f4e55971aa7fbf21e4d031be6544f753b127b))
+
 ## [1.5.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.5.2...v1.5.3) (2026-04-06)
 
 
