@@ -87,6 +87,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      TSUP_TARGET: node22
     steps:
       - uses: actions/checkout@v4
         with:
@@ -97,9 +99,8 @@ jobs:
           node-version: '22'
           registry-url: https://registry.npmjs.org
 
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
-        env:
-          TSUP_TARGET: node22
       - run: npm test
       - run: npm publish --provenance --access public
