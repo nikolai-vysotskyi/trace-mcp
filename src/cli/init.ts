@@ -260,22 +260,26 @@ export const initCommand = new Command('init')
             continue;
           }
 
-          const dbPath = getDbPath(proj.root);
-          const db = initializeDatabase(dbPath);
-          const store = new Store(db);
+          try {
+            const dbPath = getDbPath(proj.root);
+            const db = initializeDatabase(dbPath);
+            const store = new Store(db);
 
-          const registry = new PluginRegistry();
-          for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
-          for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
+            const registry = new PluginRegistry();
+            for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
+            for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
 
-          const pipeline = new IndexingPipeline(store, registry, configResult.value, proj.root);
-          const result = await pipeline.indexAll(true);
-          steps.push({
-            target: proj.root, action: 'updated',
-            detail: `Upgraded: ${result.indexed} files, ${result.skipped} skipped, ${result.errors} errors`,
-          });
-          updateLastIndexed(proj.root);
-          db.close();
+            const pipeline = new IndexingPipeline(store, registry, configResult.value, proj.root);
+            const result = await pipeline.indexAll(true);
+            steps.push({
+              target: proj.root, action: 'updated',
+              detail: `Upgraded: ${result.indexed} files, ${result.skipped} skipped, ${result.errors} errors`,
+            });
+            updateLastIndexed(proj.root);
+            db.close();
+          } catch (err) {
+            steps.push({ target: proj.root, action: 'skipped', detail: `Upgrade failed: ${(err as Error).message}` });
+          }
         }
 
         spin?.stop('Upgrade complete');

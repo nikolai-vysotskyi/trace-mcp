@@ -77,33 +77,38 @@ export const upgradeCommand = new Command('upgrade')
       ensureGlobalDirs();
 
       if (!opts.dryRun) {
-        // Run migrations
-        const db = initializeDatabase(dbPath);
-        const store = new Store(db);
+        try {
+          // Run migrations
+          const db = initializeDatabase(dbPath);
+          const store = new Store(db);
 
-        const versionRow = db.prepare('SELECT value FROM schema_meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
-        const currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
-        steps.push({
-          target: dbPath, action: 'updated',
-          detail: `Schema v${currentVersion}`,
-        });
-
-        // Force reindex
-        if (!opts.skipReindex) {
-          const registry = new PluginRegistry();
-          for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-          for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
-
-          const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
-          const result = await pipeline.indexAll(true);
+          const versionRow = db.prepare('SELECT value FROM schema_meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
+          const currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
           steps.push({
-            target: projectRoot, action: 'updated',
-            detail: `Reindexed: ${result.indexed} files, ${result.skipped} skipped, ${result.errors} errors`,
+            target: dbPath, action: 'updated',
+            detail: `Schema v${currentVersion}`,
           });
-          updateLastIndexed(projectRoot);
-        }
 
-        db.close();
+          // Force reindex
+          if (!opts.skipReindex) {
+            const registry = new PluginRegistry();
+            for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
+            for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
+
+            const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+            const result = await pipeline.indexAll(true);
+            steps.push({
+              target: projectRoot, action: 'updated',
+              detail: `Reindexed: ${result.indexed} files, ${result.skipped} skipped, ${result.errors} errors`,
+            });
+            updateLastIndexed(projectRoot);
+          }
+
+          db.close();
+        } catch (err) {
+          logger.error({ error: (err as Error).message, project: projectRoot }, 'Upgrade failed');
+          steps.push({ target: projectRoot, action: 'skipped', detail: `Upgrade failed: ${(err as Error).message}` });
+        }
       } else {
         steps.push({ target: dbPath, action: 'skipped', detail: 'Would run migrations' });
         if (!opts.skipReindex) {
