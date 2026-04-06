@@ -107,11 +107,12 @@ When `ai.enabled` is `true`, trace-mcp runs background summarization and embeddi
     "enabled": true,
     "provider": "ollama",
     "base_url": "http://localhost:11434",
-    "inference_model": "llama3",
-    "embedding_model": "nomic-embed-text",
+    "inference_model": "gemma4-e4b",
+    "embedding_model": "qwen3-embedding:0.6b",
     "summarize_on_index": true,
     "summarize_batch_size": 20,
-    "summarize_kinds": ["class", "function", "method", "interface", "trait", "enum", "type"]
+    "summarize_kinds": ["class", "function", "method", "interface", "trait", "enum", "type"],
+    "concurrency": 4
   }
 }
 ```
@@ -122,14 +123,36 @@ When `ai.enabled` is `true`, trace-mcp runs background summarization and embeddi
 | `ai.provider` | `"ollama"` | `"ollama"` or `"openai"` |
 | `ai.base_url` | — | Custom API endpoint |
 | `ai.api_key` | — | API key (required for OpenAI) |
-| `ai.inference_model` | — | Model for explanations and reviews |
-| `ai.fast_model` | — | Faster model for lightweight tasks |
-| `ai.embedding_model` | — | Model for vector embeddings |
+| `ai.inference_model` | `"gemma4-e4b"` (ollama) | Model for explanations and reviews |
+| `ai.fast_model` | `"gemma4-e4b"` (ollama) | Faster model for lightweight tasks |
+| `ai.embedding_model` | `"qwen3-embedding:0.6b"` (ollama) | Model for vector embeddings |
 | `ai.embedding_dimensions` | — | Embedding vector dimensions |
 | `ai.summarize_on_index` | `true` | Auto-summarize symbols after indexing |
 | `ai.summarize_batch_size` | `20` | Symbols per summarization batch |
 | `ai.summarize_kinds` | `["class", "function", ...]` | Symbol kinds to summarize |
+| `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking |
+
+> **Ollama parallelism:** When setting `concurrency` > 1, you must also configure Ollama to handle parallel requests. The desktop app UI does not expose this setting — use one of these methods:
+>
+> **Option 1 — Environment variable for the desktop app (macOS):**
+> ```bash
+> launchctl setenv OLLAMA_NUM_PARALLEL 4
+> ```
+> Then quit and reopen the Ollama app. The variable persists until logout.
+>
+> **Option 2 — Run from terminal instead of the desktop app:**
+> ```bash
+> OLLAMA_NUM_PARALLEL=4 ollama serve
+> ```
+>
+> **Option 3 — Persist via shell profile** (add to `~/.zshrc`):
+> ```bash
+> export OLLAMA_NUM_PARALLEL=4
+> ```
+> Then `source ~/.zshrc` and restart Ollama.
+>
+> Set `OLLAMA_NUM_PARALLEL` to match your `ai.concurrency` value. Higher parallelism uses more VRAM/RAM — start with 2–4 and increase if your hardware allows.
 
 ---
 

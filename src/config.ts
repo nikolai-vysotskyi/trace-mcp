@@ -38,6 +38,11 @@ const AiConfigSchema = z.object({
   summarize_kinds: z.array(z.string()).default([
     'class', 'function', 'method', 'interface', 'trait', 'enum', 'type',
   ]),
+  /** Max parallel requests to the AI provider (embedding + inference).
+   *  Ollama-side: set OLLAMA_NUM_PARALLEL env var to match this value.
+   *  On macOS desktop app: `launchctl setenv OLLAMA_NUM_PARALLEL <N>` + restart app.
+   *  Or run from terminal: `OLLAMA_NUM_PARALLEL=<N> ollama serve`. */
+  concurrency: z.number().int().min(1).max(32).default(1),
   reranker_model: z.string().optional(),
 }).optional();
 
@@ -112,6 +117,15 @@ const ToolsConfigSchema = z.object({
   include: z.array(z.string()).optional(),
   exclude: z.array(z.string()).optional(),
   descriptions: z.record(z.string(), ToolDescriptionOverrideSchema).optional(),
+  /** Global description verbosity: full (default), minimal (first sentence only), none (empty) */
+  description_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
+  /** Server instructions verbosity: full (default ~2K tokens), minimal (~200 tokens), none (empty) */
+  instructions_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
+  /** Control which meta fields appear in responses. true = all (default), false = none, or list specific fields to include */
+  meta_fields: z.union([
+    z.boolean(),
+    z.array(z.enum(['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta'])),
+  ]).default(true),
 }).optional();
 
 const QualityGatesRuleSchema = z.object({

@@ -57,6 +57,8 @@ batch({ calls: [
 
 **Monitor waste:** Run `get_optimization_report` to detect repeated reads, Bash grep usage, and missed trace-mcp opportunities.
 
+**After editing a file:** Call `register_edit` { file_path: "path/to/file" } to reindex that single file and invalidate caches. Much lighter than full `reindex`. Do this after every Edit/Write to keep the index fresh.
+
 ### The ONLY cases where native tools are allowed
 
 - **Read**: ONLY for non-code files (.md, .json, .yaml, .env, config), OR immediately before using Edit on a file you need to modify

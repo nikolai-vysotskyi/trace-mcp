@@ -159,6 +159,7 @@ program
           {
             batchSize: config.ai.summarize_batch_size ?? 20,
             kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
+            concurrency: config.ai.concurrency ?? 1,
           },
         )
       : null;
@@ -251,6 +252,7 @@ program
           {
             batchSize: config.ai.summarize_batch_size ?? 20,
             kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
+            concurrency: config.ai.concurrency ?? 1,
           },
         )
       : null;

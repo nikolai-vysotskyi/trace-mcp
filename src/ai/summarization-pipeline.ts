@@ -10,9 +10,11 @@ import { logger } from '../logger.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface SummarizationConfig {
+interface SummarizationConfig {
   batchSize: number;
   kinds: string[];
+  /** Max parallel inference requests (default 1 = sequential). */
+  concurrency: number;
 }
 
 const MAX_SOURCE_LINES = 80;
@@ -53,8 +55,9 @@ export class SummarizationPipeline {
   ): Promise<{ id: number; summary: string }[]> {
     const results: { id: number; summary: string }[] = [];
     const template = PROMPTS.summarize_symbol;
+    const concurrency = this.config.concurrency;
 
-    for (const sym of symbols) {
+    const summarizeOne = async (sym: (typeof symbols)[number]): Promise<void> => {
       try {
         const source = this.readSource(sym.file_path, sym.byte_start, sym.byte_end);
         const prompt = template.build({
@@ -76,6 +79,17 @@ export class SummarizationPipeline {
         }
       } catch (e) {
         logger.warn({ symbolId: sym.id, name: sym.name, error: e }, 'Failed to summarize symbol');
+      }
+    };
+
+    if (concurrency <= 1) {
+      for (const sym of symbols) {
+        await summarizeOne(sym);
+      }
+    } else {
+      for (let i = 0; i < symbols.length; i += concurrency) {
+        const chunk = symbols.slice(i, i + concurrency);
+        await Promise.all(chunk.map(summarizeOne));
       }
     }
 
