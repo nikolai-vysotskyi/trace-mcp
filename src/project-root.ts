@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const ROOT_MARKERS = [
+export const ROOT_MARKERS = [
   '.git',
   'package.json',
   'go.mod',
@@ -18,6 +18,42 @@ const ROOT_MARKERS = [
   'build.gradle',
   'build.gradle.kts',
 ];
+
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.svn', '__pycache__', '.tox']);
+
+/**
+ * Scan immediate subdirectories of `parentDir` for project root markers.
+ * Returns sorted absolute paths of discovered child project roots.
+ * Only scans depth-1 (no recursion).
+ */
+export function discoverChildProjects(parentDir: string): string[] {
+  const absParent = path.resolve(parentDir);
+  if (!fs.existsSync(absParent)) return [];
+
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(absParent, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const children: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('.')) continue;
+    if (SKIP_DIRS.has(entry.name)) continue;
+
+    const childDir = path.join(absParent, entry.name);
+    for (const marker of ROOT_MARKERS) {
+      if (fs.existsSync(path.join(childDir, marker))) {
+        children.push(childDir);
+        break;
+      }
+    }
+  }
+
+  return children.sort();
+}
 
 /**
  * Walk up from `from` (default: cwd) and return the first directory

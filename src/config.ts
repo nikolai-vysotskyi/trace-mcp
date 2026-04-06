@@ -202,6 +202,7 @@ export const TraceMcpConfigSchema = z.object({
     enabled: z.boolean().default(true),
     debounceMs: z.number().int().min(500).max(30000).default(2000),
   }).default({}),
+  children: z.array(z.string()).optional(),
 });
 
 export type TraceMcpConfig = z.infer<typeof TraceMcpConfigSchema>;
@@ -301,6 +302,15 @@ export function saveProjectConfig(projectRoot: string, config: Record<string, un
   const existing = loadGlobalConfigRaw();
   const projects = (existing.projects as Record<string, unknown>) ?? {};
   projects[projectRoot] = config;
+  existing.projects = projects;
+  fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(existing, null, 2) + '\n');
+}
+
+/** Remove a per-project config section from the global config file. */
+export function removeProjectConfig(projectRoot: string): void {
+  const existing = loadGlobalConfigRaw();
+  const projects = (existing.projects as Record<string, unknown>) ?? {};
+  delete projects[projectRoot];
   existing.projects = projects;
   fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(existing, null, 2) + '\n');
 }
