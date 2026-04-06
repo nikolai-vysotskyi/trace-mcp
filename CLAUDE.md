@@ -57,7 +57,9 @@ batch({ calls: [
 
 **Monitor waste:** Run `get_optimization_report` to detect repeated reads, Bash grep usage, and missed trace-mcp opportunities.
 
-**After editing a file:** Call `register_edit` { file_path: "path/to/file" } to reindex that single file and invalidate caches. Much lighter than full `reindex`. Do this after every Edit/Write to keep the index fresh.
+**After editing a file:** Call `register_edit` { file_path: "path/to/file" } to reindex that single file and invalidate caches. Much lighter than full `reindex`. Do this after every Edit/Write to keep the index fresh. If `_duplication_warnings` appears in the response, review the referenced symbols — you may be duplicating existing logic.
+
+**Before creating new functions/classes:** Call `check_duplication` { name: "functionName", kind: "function" } to verify no similar symbol exists. Prevents reinventing existing logic.
 
 ### The ONLY cases where native tools are allowed
 
