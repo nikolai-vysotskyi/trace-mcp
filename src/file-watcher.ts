@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from './logger.js';
+import { TraceignoreMatcher, type TraceignoreConfig } from './utils/traceignore.js';
 
 interface FileWatcherOptions {
   /** Debounce interval in ms (default 2000) */
@@ -17,6 +18,8 @@ interface FileWatcherOptions {
   extensions?: Set<string>;
   /** Directories/patterns to ignore */
   ignoreDirs?: string[];
+  /** Traceignore config from project/global config */
+  ignoreConfig?: TraceignoreConfig;
 }
 
 export class FileWatcher {
@@ -25,7 +28,7 @@ export class FileWatcher {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly debounceMs: number;
   private readonly extensions: Set<string>;
-  private readonly ignoreDirs: Set<string>;
+  private readonly traceignore: TraceignoreMatcher;
   private readonly projectRoot: string;
   private readonly onChanged: (files: string[]) => Promise<void>;
 
@@ -38,10 +41,7 @@ export class FileWatcher {
     this.onChanged = onChanged;
     this.debounceMs = options.debounceMs ?? 2000;
     this.extensions = options.extensions ?? new Set();
-    this.ignoreDirs = new Set(options.ignoreDirs ?? [
-      'node_modules', '.git', 'dist', 'build', '.next', '__pycache__',
-      '.venv', 'vendor', '.trace-mcp', 'coverage', '.turbo',
-    ]);
+    this.traceignore = new TraceignoreMatcher(projectRoot, options.ignoreConfig);
   }
 
   start(): void {
@@ -98,7 +98,6 @@ export class FileWatcher {
   }
 
   private shouldIgnore(filePath: string): boolean {
-    const parts = filePath.split(path.sep);
-    return parts.some((p) => this.ignoreDirs.has(p));
+    return this.traceignore.isIgnored(filePath);
   }
 }

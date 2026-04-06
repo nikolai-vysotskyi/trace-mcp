@@ -2,11 +2,7 @@ import * as parcelWatcher from '@parcel/watcher';
 import path from 'node:path';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
-
-const IGNORE_DIRS = [
-  'vendor', 'node_modules', '.git', 'storage',
-  'bootstrap/cache', '.nuxt', '.next', 'dist', 'build', '.idea',
-];
+import { TraceignoreMatcher } from '../utils/traceignore.js';
 
 /** Debounce window in ms — coalesces rapid saves from editors. */
 const DEFAULT_DEBOUNCE_MS = 300;
@@ -28,7 +24,8 @@ export class FileWatcher {
     debounceMs = DEFAULT_DEBOUNCE_MS,
     onDeletes?: (paths: string[]) => Promise<void>,
   ): Promise<void> {
-    const ignoreDirs = IGNORE_DIRS.map((d) => path.join(rootPath, d));
+    const traceignore = new TraceignoreMatcher(rootPath, config.ignore ?? {});
+    const ignoreDirs = [...traceignore.getSkipDirs()].map((d) => path.join(rootPath, d));
 
     this.subscription = await parcelWatcher.subscribe(
       rootPath,
@@ -38,7 +35,11 @@ export class FileWatcher {
           return;
         }
 
-        const notIgnored = (p: string) => !ignoreDirs.some((d) => p.startsWith(d));
+        const notIgnored = (p: string) => {
+          if (ignoreDirs.some((d) => p.startsWith(d))) return false;
+          const rel = path.relative(rootPath, p);
+          return !traceignore.isIgnored(rel);
+        };
 
         const changed = events
           .filter((e) => e.type === 'create' || e.type === 'update')
