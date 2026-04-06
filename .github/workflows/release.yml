@@ -19,6 +19,61 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  # GITHUB_TOKEN actions don't trigger pull_request events, so the CI
+  # impact-report never fires for release-please PRs.  Run it here instead.
+  impact-report:
+    needs: release-please
+    if: needs.release-please.outputs.release_created != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Index project
+        run: node dist/cli.js index . --force
+
+      - name: Find release-please PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_JSON=$(gh pr list --head "release-please--branches--master" --json number,baseRefName --limit 1 --jq '.[0] // empty')
+          if [ -n "$PR_JSON" ]; then
+            PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+            BASE_BRANCH=$(echo "$PR_JSON" | jq -r '.baseRefName')
+            echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "base=$(git merge-base origin/$BASE_BRANCH HEAD)" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate impact report
+        if: steps.pr.outputs.number != ''
+        run: |
+          node dist/cli.js ci-report \
+            --base ${{ steps.pr.outputs.base }} \
+            --head ${{ steps.pr.outputs.head }} \
+            --format markdown \
+            --output report.md
+
+      - name: Post PR comment
+        if: steps.pr.outputs.number != '' && hashFiles('report.md') != ''
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          number: ${{ steps.pr.outputs.number }}
+          path: report.md
+
   publish:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
