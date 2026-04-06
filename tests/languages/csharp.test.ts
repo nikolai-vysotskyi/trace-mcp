@@ -3,8 +3,8 @@ import { CSharpLanguagePlugin } from '../../src/indexer/plugins/language/csharp/
 
 const plugin = new CSharpLanguagePlugin();
 
-function extract(code: string, filePath = 'src/Program.cs') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'src/Program.cs') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   if (!result.isOk()) {
     throw new Error(`C# extractSymbols failed: ${JSON.stringify(result._unsafeUnwrapErr())}`);
   }
@@ -12,8 +12,8 @@ function extract(code: string, filePath = 'src/Program.cs') {
 }
 
 describe('CSharpLanguagePlugin', () => {
-  beforeAll(() => {
-    const probe = plugin.extractSymbols('probe.cs', Buffer.from('class Probe {}\n'));
+  beforeAll(async () => {
+    const probe = await plugin.extractSymbols('probe.cs', Buffer.from('class Probe {}\n'));
     expect(probe.isOk(), `C# parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
   });
 
@@ -22,8 +22,8 @@ describe('CSharpLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.cs');
   });
 
-  it('extracts namespaces and classes', () => {
-    const result = extract(`
+  it('extracts namespaces and classes', async () => {
+    const result = await extract(`
 namespace MyApp.Models {
     public class User {
         public string Name { get; set; }
@@ -36,8 +36,8 @@ namespace MyApp.Models {
     expect(cls).toBeDefined();
   });
 
-  it('extracts interfaces', () => {
-    const result = extract(`
+  it('extracts interfaces', async () => {
+    const result = await extract(`
 public interface IService {
     void Start();
     void Stop();
@@ -47,8 +47,8 @@ public interface IService {
     expect(iface).toBeDefined();
   });
 
-  it('extracts enums with members', () => {
-    const result = extract(`
+  it('extracts enums with members', async () => {
+    const result = await extract(`
 public enum Color {
     Red,
     Green,
@@ -62,8 +62,8 @@ public enum Color {
     expect(cases.length).toBe(3);
   });
 
-  it('extracts methods', () => {
-    const result = extract(`
+  it('extracts methods', async () => {
+    const result = await extract(`
 public class Calculator {
     public int Add(int a, int b) {
         return a + b;
@@ -74,8 +74,8 @@ public class Calculator {
     expect(method).toBeDefined();
   });
 
-  it('extracts using directives as import edges', () => {
-    const result = extract(`
+  it('extracts using directives as import edges', async () => {
+    const result = await extract(`
 using System;
 using System.Collections.Generic;
 
@@ -86,8 +86,8 @@ class Foo {}
     expect(imports.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('extracts structs', () => {
-    const result = extract(`
+  it('extracts structs', async () => {
+    const result = await extract(`
 public struct Point {
     public double X;
     public double Y;
@@ -98,8 +98,8 @@ public struct Point {
     expect(st!.metadata?.csharpKind).toBe('struct');
   });
 
-  it('extracts records', () => {
-    const result = extract(`
+  it('extracts records', async () => {
+    const result = await extract(`
 public record Person(string Name, int Age);
     `);
     const rec = result.symbols.find((s) => s.name === 'Person' && s.kind === 'class');
@@ -107,8 +107,8 @@ public record Person(string Name, int Age);
     expect(rec!.metadata?.csharpKind).toBe('record');
   });
 
-  it('handles syntax errors gracefully', () => {
-    const result = extract(`
+  it('handles syntax errors gracefully', async () => {
+    const result = await extract(`
 public class Broken {
     public void Foo( {
     }

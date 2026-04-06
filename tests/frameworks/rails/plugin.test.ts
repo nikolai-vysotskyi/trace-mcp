@@ -29,7 +29,7 @@ describe('RailsPlugin — schema', () => {
 });
 
 describe('RailsPlugin — route extraction', () => {
-  it('extracts resources routes', () => {
+  it('extracts resources routes', async () => {
     const source = `
 Rails.application.routes.draw do
   resources :users
@@ -37,7 +37,7 @@ Rails.application.routes.draw do
 end
     `;
     const plugin = new RailsPlugin();
-    const result = plugin.extractNodes!('config/routes.rb', Buffer.from(source), 'ruby');
+    const result = await plugin.extractNodes!('config/routes.rb', Buffer.from(source), 'ruby');
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     // resources :users generates 6 routes + 1 get
@@ -47,7 +47,7 @@ end
     expect(uris).toContain('/about');
   });
 
-  it('handles namespace prefix', () => {
+  it('handles namespace prefix', async () => {
     const source = `
 Rails.application.routes.draw do
   namespace :api do
@@ -56,7 +56,7 @@ Rails.application.routes.draw do
 end
     `;
     const plugin = new RailsPlugin();
-    const result = plugin.extractNodes!('config/routes.rb', Buffer.from(source), 'ruby');
+    const result = await plugin.extractNodes!('config/routes.rb', Buffer.from(source), 'ruby');
     expect(result.isOk()).toBe(true);
     const uris = result._unsafeUnwrap().routes!.map((r) => r.uri);
     expect(uris.some((u) => u.startsWith('/api/posts'))).toBe(true);
@@ -64,7 +64,7 @@ end
 });
 
 describe('RailsPlugin — model extraction', () => {
-  it('extracts ActiveRecord associations', () => {
+  it('extracts ActiveRecord associations', async () => {
     const source = `
 class User < ApplicationRecord
   has_many :posts
@@ -74,7 +74,7 @@ class User < ApplicationRecord
 end
     `;
     const plugin = new RailsPlugin();
-    const result = plugin.extractNodes!('app/models/user.rb', Buffer.from(source), 'ruby');
+    const result = await plugin.extractNodes!('app/models/user.rb', Buffer.from(source), 'ruby');
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.frameworkRole).toBe('model');
@@ -87,7 +87,7 @@ end
 });
 
 describe('RailsPlugin — controller extraction', () => {
-  it('extracts before_action callbacks', () => {
+  it('extracts before_action callbacks', async () => {
     const source = `
 class UsersController < ApplicationController
   before_action :authenticate_user
@@ -97,7 +97,7 @@ class UsersController < ApplicationController
 end
     `;
     const plugin = new RailsPlugin();
-    const result = plugin.extractNodes!('app/controllers/users_controller.rb', Buffer.from(source), 'ruby');
+    const result = await plugin.extractNodes!('app/controllers/users_controller.rb', Buffer.from(source), 'ruby');
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.frameworkRole).toBe('controller');
@@ -107,7 +107,7 @@ end
 });
 
 describe('RailsPlugin — migration extraction', () => {
-  it('extracts create_table migrations', () => {
+  it('extracts create_table migrations', async () => {
     const source = `
 class CreateUsers < ActiveRecord::Migration[7.0]
   def change
@@ -120,7 +120,7 @@ class CreateUsers < ActiveRecord::Migration[7.0]
 end
     `;
     const plugin = new RailsPlugin();
-    const result = plugin.extractNodes!('db/migrate/20230101000000_create_users.rb', Buffer.from(source), 'ruby');
+    const result = await plugin.extractNodes!('db/migrate/20230101000000_create_users.rb', Buffer.from(source), 'ruby');
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.frameworkRole).toBe('migration');

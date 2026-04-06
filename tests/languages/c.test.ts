@@ -3,8 +3,8 @@ import { CLanguagePlugin } from '../../src/indexer/plugins/language/c/index.js';
 
 const plugin = new CLanguagePlugin();
 
-function extract(code: string, filePath = 'src/main.c') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'src/main.c') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   if (!result.isOk()) {
     throw new Error(`C extractSymbols failed: ${JSON.stringify(result._unsafeUnwrapErr())}`);
   }
@@ -12,8 +12,8 @@ function extract(code: string, filePath = 'src/main.c') {
 }
 
 describe('CLanguagePlugin', () => {
-  beforeAll(() => {
-    const probe = plugin.extractSymbols('probe.c', Buffer.from('int probe(void) { return 0; }\n'));
+  beforeAll(async () => {
+    const probe = await plugin.extractSymbols('probe.c', Buffer.from('int probe(void) { return 0; }\n'));
     expect(probe.isOk(), `C parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
   });
 
@@ -23,8 +23,8 @@ describe('CLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.h');
   });
 
-  it('extracts functions', () => {
-    const result = extract(`
+  it('extracts functions', async () => {
+    const result = await extract(`
 int main(int argc, char **argv) {
     return 0;
 }
@@ -35,8 +35,8 @@ static void helper(void) {}
     expect(main).toBeDefined();
   });
 
-  it('extracts structs with fields', () => {
-    const result = extract(`
+  it('extracts structs with fields', async () => {
+    const result = await extract(`
 struct Point {
     int x;
     int y;
@@ -49,8 +49,8 @@ struct Point {
     expect(fields.length).toBe(2);
   });
 
-  it('extracts enums with constants', () => {
-    const result = extract(`
+  it('extracts enums with constants', async () => {
+    const result = await extract(`
 enum Color {
     RED,
     GREEN,
@@ -64,8 +64,8 @@ enum Color {
     expect(cases.length).toBe(3);
   });
 
-  it('extracts #include edges', () => {
-    const result = extract(`
+  it('extracts #include edges', async () => {
+    const result = await extract(`
 #include <stdio.h>
 #include "myheader.h"
 
@@ -76,8 +76,8 @@ int main() { return 0; }
     expect(imports.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('extracts #define macros', () => {
-    const result = extract(`
+  it('extracts #define macros', async () => {
+    const result = await extract(`
 #define MAX_SIZE 1024
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
     `);
@@ -86,8 +86,8 @@ int main() { return 0; }
     expect(macros.map((m) => m.name)).toContain('MAX_SIZE');
   });
 
-  it('extracts typedef', () => {
-    const result = extract(`
+  it('extracts typedef', async () => {
+    const result = await extract(`
 typedef unsigned long size_t;
 typedef struct Node {
     int value;
@@ -97,8 +97,8 @@ typedef struct Node {
     expect(types.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('handles syntax errors gracefully', () => {
-    const result = extract(`
+  it('handles syntax errors gracefully', async () => {
+    const result = await extract(`
 int broken( {
     // bad syntax
 }

@@ -3,25 +3,7 @@
  */
 import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 
-type TSNode = {
-  type: string;
-  text: string;
-  startIndex: number;
-  endIndex: number;
-  startPosition: { row: number; column: number };
-  endPosition: { row: number; column: number };
-  namedChildCount: number;
-  childCount: number;
-  namedChildren: TSNode[];
-  namedChild(index: number): TSNode | null;
-  child(index: number): TSNode | null;
-  childForFieldName(name: string): TSNode | null;
-  parent: TSNode | null;
-  isNamed: boolean;
-  hasError: boolean;
-};
-
-export type { TSNode };
+export type { TSNode } from '../../../../parser/tree-sitter.js';
 
 export function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parentName?: string): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;

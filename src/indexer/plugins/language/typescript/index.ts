@@ -4,11 +4,11 @@
  * Extracts functions, classes, variables (exported const/let), types,
  * interfaces, enums, methods, and import edges from TS/JS source files.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -29,28 +29,6 @@ import {
   detectMinEsVersion,
 } from './version-features.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const TsGrammar = require('tree-sitter-typescript');
-
-let tsParser: InstanceType<typeof Parser> | null = null;
-let tsxParser: InstanceType<typeof Parser> | null = null;
-
-function getParser(tsx: boolean): InstanceType<typeof Parser> {
-  if (tsx) {
-    if (!tsxParser) {
-      tsxParser = new Parser();
-      tsxParser!.setLanguage(TsGrammar.tsx);
-    }
-    return tsxParser!;
-  }
-  if (!tsParser) {
-    tsParser = new Parser();
-    tsParser!.setLanguage(TsGrammar.typescript);
-  }
-  return tsParser!;
-}
-
 const TSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
 const JS_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs']);
 
@@ -64,11 +42,11 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
   supportedVersions = ['12', '14', '16', '17', '18', '19', '20', '21', '22', '23', '24'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const ext = filePath.substring(filePath.lastIndexOf('.'));
       const useTsx = TSX_EXTENSIONS.has(ext);
-      const parser = getParser(useTsx);
+      const parser = await getParser(useTsx ? 'tsx' : 'typescript');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

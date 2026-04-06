@@ -1,11 +1,11 @@
 /**
  * Ruby Language Plugin — tree-sitter based symbol extraction.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import { detectMinRubyVersionFromSource } from './version-features.js';
 import {
   type TSNode,
@@ -21,20 +21,6 @@ import {
   getNodeName,
 } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const RubyGrammar = require('tree-sitter-ruby');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(RubyGrammar);
-  }
-  return parserInstance!;
-}
-
 export class RubyLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'ruby-language',
@@ -45,9 +31,9 @@ export class RubyLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.rb', '.rake'];
   supportedVersions = ['2.0', '2.3', '2.5', '2.6', '2.7', '3.0', '3.1', '3.2', '3.3'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('ruby');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

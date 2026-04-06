@@ -3,8 +3,8 @@ import { RustLanguagePlugin } from '../../src/indexer/plugins/language/rust/inde
 
 const plugin = new RustLanguagePlugin();
 
-function extract(code: string, filePath = 'src/lib.rs') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'src/lib.rs') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   if (!result.isOk()) {
     throw new Error(`Rust extractSymbols failed: ${JSON.stringify(result._unsafeUnwrapErr())}`);
   }
@@ -12,8 +12,8 @@ function extract(code: string, filePath = 'src/lib.rs') {
 }
 
 describe('RustLanguagePlugin', () => {
-  beforeAll(() => {
-    const probe = plugin.extractSymbols('probe.rs', Buffer.from('fn probe() {}\n'));
+  beforeAll(async () => {
+    const probe = await plugin.extractSymbols('probe.rs', Buffer.from('fn probe() {}\n'));
     expect(probe.isOk(), `Rust parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
   });
 
@@ -22,8 +22,8 @@ describe('RustLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.rs');
   });
 
-  it('extracts functions', () => {
-    const result = extract(`
+  it('extracts functions', async () => {
+    const result = await extract(`
 pub fn hello(name: &str) -> String {
     format!("Hello, {}", name)
 }
@@ -39,8 +39,8 @@ fn private_fn() {}
     expect(priv!.metadata?.exported).toBeUndefined();
   });
 
-  it('extracts structs with fields', () => {
-    const result = extract(`
+  it('extracts structs with fields', async () => {
+    const result = await extract(`
 pub struct Config {
     pub name: String,
     pub port: u16,
@@ -59,8 +59,8 @@ pub struct Config {
     expect(nameField!.metadata?.exported).toBe(1);
   });
 
-  it('extracts enums with variants', () => {
-    const result = extract(`
+  it('extracts enums with variants', async () => {
+    const result = await extract(`
 pub enum Status {
     Active,
     Inactive,
@@ -76,8 +76,8 @@ pub enum Status {
     expect(variants.map((v) => v.name)).toContain('Error');
   });
 
-  it('extracts traits with methods', () => {
-    const result = extract(`
+  it('extracts traits with methods', async () => {
+    const result = await extract(`
 pub trait Service {
     fn start(&self) -> Result<(), Box<dyn std::error::Error>>;
     fn stop(&self);
@@ -93,8 +93,8 @@ pub trait Service {
     expect(methods.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('extracts impl methods', () => {
-    const result = extract(`
+  it('extracts impl methods', async () => {
+    const result = await extract(`
 struct Config {
     name: String,
 }
@@ -117,8 +117,8 @@ impl Config {
     expect(newFn!.metadata?.exported).toBe(1);
   });
 
-  it('extracts trait impl methods', () => {
-    const result = extract(`
+  it('extracts trait impl methods', async () => {
+    const result = await extract(`
 struct MyService;
 
 trait Service {
@@ -136,8 +136,8 @@ impl Service for MyService {
     expect(method!.metadata?.implTrait).toBe('Service');
   });
 
-  it('extracts import edges', () => {
-    const result = extract(`
+  it('extracts import edges', async () => {
+    const result = await extract(`
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 extern crate log;
@@ -147,8 +147,8 @@ extern crate log;
     expect(imports.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('extracts const and static', () => {
-    const result = extract(`
+  it('extracts const and static', async () => {
+    const result = await extract(`
 pub const MAX_RETRIES: u32 = 3;
 static mut COUNTER: u32 = 0;
     `);
@@ -161,8 +161,8 @@ static mut COUNTER: u32 = 0;
     expect(s!.kind).toBe('variable');
   });
 
-  it('extracts modules', () => {
-    const result = extract(`
+  it('extracts modules', async () => {
+    const result = await extract(`
 pub mod utils;
 mod internal {}
     `);
@@ -170,8 +170,8 @@ mod internal {}
     expect(mods.length).toBe(2);
   });
 
-  it('extracts macro_rules', () => {
-    const result = extract(`
+  it('extracts macro_rules', async () => {
+    const result = await extract(`
 macro_rules! log {
     ($msg:expr) => { println!("{}", $msg) };
 }
@@ -181,16 +181,16 @@ macro_rules! log {
     expect(m!.metadata?.rustKind).toBe('macro');
   });
 
-  it('extracts type aliases', () => {
-    const result = extract(`
+  it('extracts type aliases', async () => {
+    const result = await extract(`
 pub type Result<T> = std::result::Result<T, Error>;
     `);
     const t = result.symbols.find((s) => s.name === 'Result' && s.kind === 'type');
     expect(t).toBeDefined();
   });
 
-  it('handles syntax errors gracefully', () => {
-    const result = extract(`
+  it('handles syntax errors gracefully', async () => {
+    const result = await extract(`
 pub fn broken( {
     // missing closing paren and body
 }

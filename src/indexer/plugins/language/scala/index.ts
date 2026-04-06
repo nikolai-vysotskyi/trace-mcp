@@ -5,11 +5,11 @@
  * vals, vars, type aliases, given instances, and import edges.
  * Supports both Scala 2 and Scala 3 constructs.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -29,20 +29,6 @@ import {
   extractValVarName,
 } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const ScalaGrammar = require('tree-sitter-scala');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(ScalaGrammar);
-  }
-  return parserInstance!;
-}
-
 export class ScalaLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'scala-language',
@@ -53,9 +39,9 @@ export class ScalaLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.scala', '.sc'];
   supportedVersions = ['2.11', '2.12', '2.13', '3.0', '3.1', '3.2', '3.3', '3.4', '3.5'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('scala');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

@@ -4,11 +4,11 @@
  * Extracts classes, methods, functions, constants, variables, properties,
  * decorators, and import edges from Python source files.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -29,20 +29,6 @@ import {
 } from './helpers.js';
 import { detectMinPythonVersion } from './version-features.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const PythonGrammar = require('tree-sitter-python');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(PythonGrammar);
-  }
-  return parserInstance!;
-}
-
 export class PythonLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'python-language',
@@ -57,9 +43,9 @@ export class PythonLanguagePlugin implements LanguagePlugin {
     '3.9', '3.10', '3.11', '3.12', '3.13', '3.14',
   ];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('python');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

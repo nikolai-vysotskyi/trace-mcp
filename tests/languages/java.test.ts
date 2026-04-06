@@ -3,8 +3,8 @@ import { JavaLanguagePlugin } from '../../src/indexer/plugins/language/java/inde
 
 const plugin = new JavaLanguagePlugin();
 
-function extract(code: string, filePath = 'com/example/App.java') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'com/example/App.java') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -15,8 +15,8 @@ describe('JavaLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.java');
   });
 
-  it('extracts class with package', () => {
-    const result = extract(`
+  it('extracts class with package', async () => {
+    const result = await extract(`
 package com.example;
 
 public class UserService {
@@ -31,8 +31,8 @@ public class UserService {
     expect(cls!.fqn).toBe('com.example.UserService');
   });
 
-  it('extracts methods and fields', () => {
-    const result = extract(`
+  it('extracts methods and fields', async () => {
+    const result = await extract(`
 package com.example;
 
 public class Service {
@@ -51,8 +51,8 @@ public class Service {
     expect(constant!.kind).toBe('constant');
   });
 
-  it('extracts interface with extends', () => {
-    const result = extract(`
+  it('extracts interface with extends', async () => {
+    const result = await extract(`
 package com.example;
 
 public interface Repository extends CrudRepository {
@@ -64,8 +64,8 @@ public interface Repository extends CrudRepository {
     expect(iface!.kind).toBe('interface');
   });
 
-  it('extracts enum with constants', () => {
-    const result = extract(`
+  it('extracts enum with constants', async () => {
+    const result = await extract(`
 package com.example;
 
 public enum Color {
@@ -82,8 +82,8 @@ public enum Color {
     expect(red!.kind).toBe('enum_case');
   });
 
-  it('extracts import edges', () => {
-    const result = extract(`
+  it('extracts import edges', async () => {
+    const result = await extract(`
 package com.example;
 
 import java.util.List;
@@ -96,8 +96,8 @@ import static java.lang.Math.PI;
     expect(froms).toContain('java.util.List');
   });
 
-  it('detects extends and implements', () => {
-    const result = extract(`
+  it('detects extends and implements', async () => {
+    const result = await extract(`
 package com.example;
 
 public class UserServiceImpl extends BaseService implements UserService, Serializable {
@@ -109,8 +109,8 @@ public class UserServiceImpl extends BaseService implements UserService, Seriali
     expect(cls!.metadata!.implements).toContain('UserService');
   });
 
-  it('detects annotations', () => {
-    const result = extract(`
+  it('detects annotations', async () => {
+    const result = await extract(`
 package com.example;
 
 @RestController

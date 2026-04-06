@@ -4,26 +4,7 @@
  */
 import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 
-// tree-sitter types (CJS interop — no type package available)
-type TSNode = {
-  type: string;
-  text: string;
-  startIndex: number;
-  endIndex: number;
-  startPosition: { row: number; column: number };
-  endPosition: { row: number; column: number };
-  namedChildCount: number;
-  childCount: number;
-  namedChildren: TSNode[];
-  namedChild(index: number): TSNode | null;
-  child(index: number): TSNode | null;
-  childForFieldName(name: string): TSNode | null;
-  parent: TSNode | null;
-  isNamed: boolean;
-  hasError: boolean;
-};
-
-export type { TSNode };
+export type { TSNode } from '../../../../parser/tree-sitter.js';
 
 /**
  * Collect all unique AST node types within a subtree (shallow — immediate children + one level deeper).

@@ -12,7 +12,6 @@
  *
  * Uses tree-sitter-typescript for AST-based extraction of JSX/TSX.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type {
   FrameworkPlugin,
@@ -25,47 +24,7 @@ import type {
 } from '../../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../../errors.js';
 import { parseError } from '../../../../../errors.js';
-
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const TsGrammar = require('tree-sitter-typescript');
-
-// tree-sitter types (CJS interop)
-type TSNode = {
-  type: string;
-  text: string;
-  startIndex: number;
-  endIndex: number;
-  startPosition: { row: number; column: number };
-  endPosition: { row: number; column: number };
-  namedChildCount: number;
-  childCount: number;
-  namedChildren: TSNode[];
-  namedChild(index: number): TSNode | null;
-  child(index: number): TSNode | null;
-  childForFieldName(name: string): TSNode | null;
-  parent: TSNode | null;
-  isNamed: boolean;
-  hasError: boolean;
-};
-
-let tsParser: InstanceType<typeof Parser> | null = null;
-let tsxParser: InstanceType<typeof Parser> | null = null;
-
-function getParser(tsx: boolean): InstanceType<typeof Parser> {
-  if (tsx) {
-    if (!tsxParser) {
-      tsxParser = new Parser();
-      tsxParser!.setLanguage(TsGrammar.tsx);
-    }
-    return tsxParser!;
-  }
-  if (!tsParser) {
-    tsParser = new Parser();
-    tsParser!.setLanguage(TsGrammar.typescript);
-  }
-  return tsParser!;
-}
+import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 
 // ============================================================
 // Built-in hooks — we skip these when detecting custom hook usage
@@ -181,11 +140,11 @@ export class ReactPlugin implements FrameworkPlugin {
     };
   }
 
-  extractNodes(
+  async extractNodes(
     filePath: string,
     content: Buffer,
     language: string,
-  ): TraceMcpResult<FileParseResult> {
+  ): Promise<TraceMcpResult<FileParseResult>> {
     if (!['typescript', 'typescriptreact', 'javascript', 'javascriptreact'].includes(language)) {
       return ok({ status: 'ok', symbols: [] });
     }
@@ -208,7 +167,7 @@ export class ReactPlugin implements FrameworkPlugin {
     // 2-7. AST-based extraction
     try {
       const useTsx = /\.(tsx|jsx)$/.test(filePath);
-      const parser = getParser(useTsx);
+      const parser = await getParser(useTsx ? 'tsx' : 'typescript');
       const tree = parser.parse(source);
       const root: TSNode = tree.rootNode;
 

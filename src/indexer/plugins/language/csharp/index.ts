@@ -5,11 +5,11 @@
  * delegates, methods, properties, fields, events, constructors,
  * and using directive edges from C# source files.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -28,20 +28,6 @@ import {
   getNodeName,
 } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const CSharpGrammar = require('tree-sitter-c-sharp');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(CSharpGrammar);
-  }
-  return parserInstance!;
-}
-
 export class CSharpLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'csharp-language',
@@ -55,9 +41,9 @@ export class CSharpLanguagePlugin implements LanguagePlugin {
     '8.0', '9.0', '10.0', '11.0', '12.0', '13.0',
   ];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('csharp');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

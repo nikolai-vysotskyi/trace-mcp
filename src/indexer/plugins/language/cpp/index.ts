@@ -1,11 +1,11 @@
 /**
  * C++ Language Plugin — tree-sitter based symbol extraction.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -21,20 +21,6 @@ import {
   isVirtual,
 } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const CppGrammar = require('tree-sitter-cpp');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(CppGrammar);
-  }
-  return parserInstance!;
-}
-
 export class CppLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'cpp-language',
@@ -44,9 +30,9 @@ export class CppLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.cpp', '.cxx', '.cc', '.hpp', '.hxx', '.hh', '.h++'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('cpp');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

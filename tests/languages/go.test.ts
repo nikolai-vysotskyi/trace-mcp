@@ -3,8 +3,8 @@ import { GoLanguagePlugin } from '../../src/indexer/plugins/language/go/index.js
 
 const plugin = new GoLanguagePlugin();
 
-function extract(code: string, filePath = 'pkg/service/user.go') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'pkg/service/user.go') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   if (!result.isOk()) {
     // Surface the actual error so full-suite failures are diagnosable
     throw new Error(`Go extractSymbols failed: ${JSON.stringify(result._unsafeUnwrapErr())}`);
@@ -15,8 +15,8 @@ function extract(code: string, filePath = 'pkg/service/user.go') {
 describe('GoLanguagePlugin', () => {
   // Eagerly initialise the parser to catch native-module loading issues
   // that can surface when other tree-sitter plugins run first in the suite.
-  beforeAll(() => {
-    const probe = plugin.extractSymbols('probe.go', Buffer.from('package probe\n'));
+  beforeAll(async () => {
+    const probe = await plugin.extractSymbols('probe.go', Buffer.from('package probe\n'));
     expect(probe.isOk(), `Go parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
   });
   it('has correct manifest', () => {
@@ -24,8 +24,8 @@ describe('GoLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.go');
   });
 
-  it('extracts package and function', () => {
-    const result = extract(`
+  it('extracts package and function', async () => {
+    const result = await extract(`
 package main
 
 func main() {
@@ -37,8 +37,8 @@ func main() {
     expect(fn!.fqn).toBe('main.main');
   });
 
-  it('extracts struct type', () => {
-    const result = extract(`
+  it('extracts struct type', async () => {
+    const result = await extract(`
 package models
 
 type User struct {
@@ -52,8 +52,8 @@ type User struct {
     expect(st!.metadata?.exported).toBe(1);
   });
 
-  it('extracts methods with receivers', () => {
-    const result = extract(`
+  it('extracts methods with receivers', async () => {
+    const result = await extract(`
 package models
 
 type User struct {
@@ -75,8 +75,8 @@ func (u User) String() string {
     expect(fn!.fqn).toBe('models.User.FullName');
   });
 
-  it('extracts interface', () => {
-    const result = extract(`
+  it('extracts interface', async () => {
+    const result = await extract(`
 package service
 
 type UserRepository interface {
@@ -89,8 +89,8 @@ type UserRepository interface {
     expect(iface!.fqn).toBe('service.UserRepository');
   });
 
-  it('extracts constants', () => {
-    const result = extract(`
+  it('extracts constants', async () => {
+    const result = await extract(`
 package config
 
 const MaxRetries = 3
@@ -101,8 +101,8 @@ const DefaultTimeout = 30
     expect(c!.kind).toBe('constant');
   });
 
-  it('extracts import edges', () => {
-    const result = extract(`
+  it('extracts import edges', async () => {
+    const result = await extract(`
 package main
 
 import (
@@ -118,8 +118,8 @@ import (
     expect(modules).toContain('fmt');
   });
 
-  it('extracts variables', () => {
-    const result = extract(`
+  it('extracts variables', async () => {
+    const result = await extract(`
 package app
 
 var GlobalConfig Config

@@ -1,11 +1,11 @@
 /**
  * Rust Language Plugin — tree-sitter based symbol extraction.
  */
-import { createRequire } from 'node:module';
 import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -20,20 +20,6 @@ import {
   extractTraitMethods,
 } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const RustGrammar = require('tree-sitter-rust');
-
-let parserInstance: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!parserInstance) {
-    parserInstance = new Parser();
-    parserInstance!.setLanguage(RustGrammar);
-  }
-  return parserInstance!;
-}
-
 export class RustLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'rust-language',
@@ -43,9 +29,9 @@ export class RustLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.rs'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = getParser();
+      const parser = await getParser('rust');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;

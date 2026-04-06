@@ -3,8 +3,8 @@ import { RubyLanguagePlugin } from '../../src/indexer/plugins/language/ruby/inde
 
 const plugin = new RubyLanguagePlugin();
 
-function extract(code: string, filePath = 'app/models/user.rb') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'app/models/user.rb') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -16,8 +16,8 @@ describe('RubyLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.rake');
   });
 
-  it('extracts class with inheritance', () => {
-    const result = extract(`
+  it('extracts class with inheritance', async () => {
+    const result = await extract(`
 class User < ApplicationRecord
   def full_name
     "#{first_name} #{last_name}"
@@ -34,8 +34,8 @@ end
     expect(method!.kind).toBe('method');
   });
 
-  it('extracts module', () => {
-    const result = extract(`
+  it('extracts module', async () => {
+    const result = await extract(`
 module Concerns
   module Searchable
     def search(query)
@@ -48,8 +48,8 @@ end
     expect(mod!.kind).toBe('namespace');
   });
 
-  it('extracts class methods (def self.xxx)', () => {
-    const result = extract(`
+  it('extracts class methods (def self.xxx)', async () => {
+    const result = await extract(`
 class Config
   def self.load
   end
@@ -60,8 +60,8 @@ end
     expect(method!.metadata?.static).toBe(true);
   });
 
-  it('extracts attr_accessor properties', () => {
-    const result = extract(`
+  it('extracts attr_accessor properties', async () => {
+    const result = await extract(`
 class Person
   attr_accessor :name, :age
   attr_reader :id
@@ -75,8 +75,8 @@ end
     expect(id).toBeDefined();
   });
 
-  it('extracts require import edges', () => {
-    const result = extract(`
+  it('extracts require import edges', async () => {
+    const result = await extract(`
 require 'json'
 require_relative './helpers'
 
@@ -90,8 +90,8 @@ class App; end
     expect(froms).toContain('./helpers');
   });
 
-  it('extracts constants', () => {
-    const result = extract(`
+  it('extracts constants', async () => {
+    const result = await extract(`
 class Config
   VERSION = "1.0.0"
   MAX_RETRIES = 3
@@ -102,8 +102,8 @@ end
     expect(ver!.kind).toBe('constant');
   });
 
-  it('extracts include/extend mixins', () => {
-    const result = extract(`
+  it('extracts include/extend mixins', async () => {
+    const result = await extract(`
 class User
   include Comparable
   extend ClassMethods

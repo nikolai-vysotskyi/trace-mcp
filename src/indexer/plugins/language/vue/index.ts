@@ -6,7 +6,6 @@
  *   - Parses <script> blocks with tree-sitter-typescript for symbol extraction
  *   - Extracts custom component tags from <template>
  */
-import { createRequire } from 'node:module';
 import { parse as parseSFC } from '@vue/compiler-sfc';
 import { ok, err } from 'neverthrow';
 import type {
@@ -19,6 +18,7 @@ import type {
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
+import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
@@ -33,20 +33,6 @@ import {
   extractTemplateComponents,
 } from './helpers.js';
 
-const require = createRequire(import.meta.url);
-const Parser = require('tree-sitter');
-const TsGrammar = require('tree-sitter-typescript');
-
-let tsParser: InstanceType<typeof Parser> | null = null;
-
-function getParser(): InstanceType<typeof Parser> {
-  if (!tsParser) {
-    tsParser = new Parser();
-    tsParser.setLanguage(TsGrammar.typescript);
-  }
-  return tsParser;
-}
-
 export class VueLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'vue-language',
@@ -56,7 +42,7 @@ export class VueLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.vue'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const sourceCode = content.toString('utf-8');
       const { descriptor, errors } = parseSFC(sourceCode, {
@@ -105,17 +91,17 @@ export class VueLanguagePlugin implements LanguagePlugin {
         composables = extractComposables(setupContent);
 
         // Extract import edges from script setup via tree-sitter
-        const setupEdges = this.parseScriptEdges(setupContent);
+        const setupEdges = await this.parseScriptEdges(setupContent);
         edges.push(...setupEdges);
       }
 
       // Extract from <script> (Options API or regular)
       if (descriptor.script) {
         const scriptContent = descriptor.script.content;
-        const scriptSymbols = this.parseScriptSymbols(scriptContent, filePath);
+        const scriptSymbols = await this.parseScriptSymbols(scriptContent, filePath);
         symbols.push(...scriptSymbols);
 
-        const scriptEdges = this.parseScriptEdges(scriptContent);
+        const scriptEdges = await this.parseScriptEdges(scriptContent);
         edges.push(...scriptEdges);
       }
 
@@ -164,9 +150,9 @@ export class VueLanguagePlugin implements LanguagePlugin {
   /**
    * Parse a script block with tree-sitter to extract import edges.
    */
-  private parseScriptEdges(scriptContent: string): RawEdge[] {
+  private async parseScriptEdges(scriptContent: string): Promise<RawEdge[]> {
     try {
-      const parser = getParser();
+      const parser = await getParser('typescript');
       const tree = parser.parse(scriptContent);
       return extractImportEdges(tree.rootNode as TSNode);
     } catch {
@@ -178,9 +164,9 @@ export class VueLanguagePlugin implements LanguagePlugin {
    * Parse a <script> block with tree-sitter to extract top-level symbols.
    * Used for Options API / non-setup scripts.
    */
-  private parseScriptSymbols(scriptContent: string, filePath: string): RawSymbol[] {
+  private async parseScriptSymbols(scriptContent: string, filePath: string): Promise<RawSymbol[]> {
     try {
-      const parser = getParser();
+      const parser = await getParser('typescript');
       const tree = parser.parse(scriptContent);
       const root: TSNode = tree.rootNode;
       const symbols: RawSymbol[] = [];
