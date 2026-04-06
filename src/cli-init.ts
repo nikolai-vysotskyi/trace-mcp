@@ -171,7 +171,13 @@ export const initCommand = new Command('init')
     if (!nonInteractive) {
       const spin = p.spinner();
       spin.start('Setting up trace-mcp');
-      executeSteps(steps, { selectedClients, installHooks, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
+      try {
+        executeSteps(steps, { selectedClients, installHooks, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
+      } catch (err) {
+        spin.stop('Failed');
+        p.log.error(`Setup failed: ${(err as Error).message}`);
+        process.exit(1);
+      }
       spin.stop('Done');
     } else {
       executeSteps(steps, { selectedClients, installHooks, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
@@ -179,25 +185,33 @@ export const initCommand = new Command('init')
 
     // --- Fix competing tools ---
     if (fixConflicts) {
-      let projectRoot: string | undefined;
-      try { projectRoot = findProjectRoot(process.cwd()); } catch { /* no project */ }
-      const conflictReport = detectConflicts(projectRoot);
-      const clientSet = new Set(selectedClients);
-      const fixable = conflictReport.conflicts.filter((c) => {
-        if (!c.fixable) return false;
-        // Only fix MCP server conflicts for clients the user selected
-        if (c.category === 'mcp_server') {
-          const clientName = c.id.split(':')[2]; // id format: "mcp:<server>:<client>:<path>"
-          return clientSet.has(clientName);
-        }
-        return true;
-      });
-      if (fixable.length > 0) {
-        const results = fixAllConflicts(fixable, { dryRun: opts.dryRun });
-        for (const r of results) {
-          if (r.action !== 'skipped') {
-            steps.push({ target: r.target, action: 'updated', detail: `${r.action}: ${r.detail}` });
+      try {
+        let projectRoot: string | undefined;
+        try { projectRoot = findProjectRoot(process.cwd()); } catch { /* no project */ }
+        const conflictReport = detectConflicts(projectRoot);
+        const clientSet = new Set(selectedClients);
+        const fixable = conflictReport.conflicts.filter((c) => {
+          if (!c.fixable) return false;
+          // Only fix MCP server conflicts for clients the user selected
+          if (c.category === 'mcp_server') {
+            const clientName = c.id.split(':')[2]; // id format: "mcp:<server>:<client>:<path>"
+            return clientSet.has(clientName);
           }
+          return true;
+        });
+        if (fixable.length > 0) {
+          const results = fixAllConflicts(fixable, { dryRun: opts.dryRun });
+          for (const r of results) {
+            if (r.action !== 'skipped') {
+              steps.push({ target: r.target, action: 'updated', detail: `${r.action}: ${r.detail}` });
+            }
+          }
+        }
+      } catch (err) {
+        if (!nonInteractive) {
+          p.log.error(`Conflict resolution failed: ${(err as Error).message}`);
+        } else {
+          console.error(`Conflict resolution failed: ${(err as Error).message}`);
         }
       }
     }

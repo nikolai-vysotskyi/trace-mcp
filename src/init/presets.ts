@@ -3,7 +3,7 @@
  * Used by config-generator to produce smart .trace-mcp.json defaults.
  */
 
-export interface IncludePreset {
+interface IncludePreset {
   include: string[];
   exclude: string[];
 }
