@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.5.0...v1.5.1) (2026-04-06)
+
+
+### Bug Fixes
+
+* **ci:** set node22 tsup target for npm OIDC publish compatibility ([ebb45f7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ebb45f78798687032b4c29340895910ddd5561b2))
+
 ## [1.5.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.4.1...v1.5.0) (2026-04-06)
 
 
