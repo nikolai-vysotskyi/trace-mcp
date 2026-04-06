@@ -3,7 +3,7 @@ import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
 import type { DetectedVersion, ParsedDependency, ProjectContext } from '../plugin-api/types.js';
 
-export interface IndexHealthResult {
+interface IndexHealthResult {
   status: 'ok' | 'degraded' | 'empty';
   stats: IndexStats;
   schemaVersion: number;
@@ -46,7 +46,7 @@ export function getIndexHealth(
   };
 }
 
-export interface ProjectMapResult {
+interface ProjectMapResult {
   frameworks: string[];
   stats: IndexStats;
   languages: { language: string; count: number }[];
@@ -54,7 +54,7 @@ export interface ProjectMapResult {
   dependencySummary?: { total: number; dev: number; byEcosystem: Record<string, number> };
 }
 
-export interface ProjectMapSummary {
+interface ProjectMapSummary {
   frameworks: string[];
   fileCount: number;
   symbolCount: number;

@@ -5,7 +5,7 @@
 import type { Store } from '../db/store.js';
 import { ok, type TraceMcpResult } from '../errors.js';
 
-export interface TableColumn {
+interface TableColumn {
   name: string;
   type: string;
   nullable?: boolean;
@@ -16,19 +16,19 @@ export interface TableColumn {
   autoIncrement?: boolean;
 }
 
-export interface TableSchema {
+interface TableSchema {
   tableName: string;
   columns: TableColumn[];
   operations: { operation: string; timestamp?: string }[];
 }
 
-export interface SchemaResult {
+interface SchemaResult {
   tables: TableSchema[];
   /** Mongoose/Sequelize ORM schemas (collections or model schemas) */
   ormSchemas?: OrmSchema[];
 }
 
-export interface OrmSchema {
+interface OrmSchema {
   name: string;
   orm: string;
   collection: string | undefined;

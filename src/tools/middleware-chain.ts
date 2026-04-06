@@ -14,7 +14,7 @@ import { ok, err, type TraceMcpResult } from '../errors.js';
 import { escapeRegExp } from '../utils/security.js';
 import { notFound } from '../errors.js';
 
-export interface MiddlewareEntry {
+interface MiddlewareEntry {
   name: string;
   scope: 'global' | 'router' | 'route' | 'guard' | 'pipe' | 'interceptor' | 'filter'
     | 'before_request' | 'after_request' | 'error_handler' | 'depends' | 'middleware' | 'view_decorator';
@@ -22,7 +22,7 @@ export interface MiddlewareEntry {
   file?: string;
 }
 
-export interface MiddlewareChainResult {
+interface MiddlewareChainResult {
   url: string;
   framework: 'express' | 'nestjs' | 'flask' | 'fastapi' | 'django' | 'unknown';
   chain: MiddlewareEntry[];

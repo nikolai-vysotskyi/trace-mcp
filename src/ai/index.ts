@@ -33,9 +33,9 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
   if (config.ai.provider === 'ollama') {
     return new OllamaProvider({
       baseUrl: config.ai.base_url ?? 'http://localhost:11434',
-      embeddingModel: config.ai.embedding_model ?? 'nomic-embed-text',
-      inferenceModel: config.ai.inference_model ?? 'qwen2.5-coder:7b',
-      fastModel: config.ai.fast_model ?? 'qwen2.5-coder:1.5b',
+      embeddingModel: config.ai.embedding_model ?? 'qwen3-embedding:0.6b',
+      inferenceModel: config.ai.inference_model ?? 'gemma4-e4b',
+      fastModel: config.ai.fast_model ?? 'gemma4-e4b',
       embeddingDimensions: config.ai.embedding_dimensions,
     });
   }

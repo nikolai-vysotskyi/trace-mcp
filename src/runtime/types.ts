@@ -11,17 +11,17 @@ export interface OtlpExportRequest {
   resourceSpans: ResourceSpans[];
 }
 
-export interface ResourceSpans {
+interface ResourceSpans {
   resource: { attributes: KeyValue[] };
   scopeSpans: ScopeSpans[];
 }
 
-export interface ScopeSpans {
+interface ScopeSpans {
   scope?: { name: string; version?: string };
   spans: OtlpSpan[];
 }
 
-export interface OtlpSpan {
+interface OtlpSpan {
   traceId: string;
   spanId: string;
   parentSpanId?: string;
@@ -33,7 +33,7 @@ export interface OtlpSpan {
   status?: { code?: number; message?: string };
 }
 
-export interface KeyValue {
+interface KeyValue {
   key: string;
   value: {
     stringValue?: string;
@@ -56,7 +56,7 @@ export const SPAN_KIND_MAP: Record<number, string> = {
   5: 'consumer',
 };
 
-export interface RuntimeTraceRow {
+interface RuntimeTraceRow {
   id: number;
   trace_id: string;
   root_service: string | null;
@@ -84,7 +84,7 @@ export interface RuntimeSpanRow {
   mapping_method: string | null;
 }
 
-export interface RuntimeServiceRow {
+interface RuntimeServiceRow {
   id: number;
   name: string;
   kind: string | null;
@@ -93,7 +93,7 @@ export interface RuntimeServiceRow {
   metadata: string | null;
 }
 
-export interface RuntimeAggregateRow {
+interface RuntimeAggregateRow {
   id: number;
   node_id: number;
   bucket: string;
@@ -111,7 +111,7 @@ export interface IngestResult {
   services: number;
 }
 
-export interface AggregateStats {
+interface AggregateStats {
   callCount: number;
   errorCount: number;
   totalDurationUs: number;

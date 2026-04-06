@@ -26,7 +26,7 @@ import type {
 import type { TraceMcpResult } from '../../../../../errors.js';
 
 /** Map an Expo Router app/ file path to a route string. Returns null if not in app/ dir. */
-export function expoFileToRoute(filePath: string): { route: string; isLayout: boolean; is404: boolean } | null {
+function expoFileToRoute(filePath: string): { route: string; isLayout: boolean; is404: boolean } | null {
   // Normalize to forward slashes
   const normalized = filePath.replace(/\\/g, '/');
   const match = normalized.match(/(?:^|\/)app\/(.+)\.(tsx?|jsx?)$/);

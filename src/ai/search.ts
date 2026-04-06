@@ -6,7 +6,7 @@ import type Database from 'better-sqlite3';
 import { searchFts, type FtsResult } from '../db/fts.js';
 import type { VectorStore, EmbeddingService, RerankerService } from './interfaces.js';
 
-export interface HybridSearchResult {
+interface HybridSearchResult {
   symbolId: number;
   name: string;
   fqn: string | null;

@@ -12,7 +12,7 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface ChurnEntry {
+interface ChurnEntry {
   file: string;
   commits: number;
   unique_authors: number;
@@ -23,7 +23,7 @@ export interface ChurnEntry {
   assessment: 'stable' | 'active' | 'volatile';
 }
 
-export interface HotspotEntry {
+interface HotspotEntry {
   file: string;
   /** Max cyclomatic complexity among symbols in this file */
   max_cyclomatic: number;

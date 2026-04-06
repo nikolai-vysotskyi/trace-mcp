@@ -104,7 +104,7 @@ const DEFAULT_MAX_FILE_SIZE = 1_048_576; // 1 MB
 
 const ARTISAN_WHITELIST = new Set(['route:list', 'model:show', 'event:list']);
 
-export interface SecurityConfig {
+interface SecurityConfig {
   secretPatterns?: string[];
   maxFileSizeBytes?: number;
   rootPath: string;

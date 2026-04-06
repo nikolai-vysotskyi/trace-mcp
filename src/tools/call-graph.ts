@@ -2,7 +2,7 @@ import type { Store } from '../db/store.js';
 import { notFound, type TraceMcpResult } from '../errors.js';
 import { ok, err } from 'neverthrow';
 
-export interface CallGraphNode {
+interface CallGraphNode {
   symbol_id: string;
   name: string;
   kind: string;
@@ -12,7 +12,7 @@ export interface CallGraphNode {
   called_by?: CallGraphNode[];
 }
 
-export interface CallGraphResult {
+interface CallGraphResult {
   root: CallGraphNode;
   /** Edge types that were treated as calls */
   edge_types_used: string[];

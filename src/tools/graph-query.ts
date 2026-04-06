@@ -4,7 +4,7 @@ import { searchFts } from '../db/fts.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type GraphQueryIntent =
+type GraphQueryIntent =
   | 'path'         // "How does X flow to Y?"
   | 'dependents'   // "What depends on X?"
   | 'dependencies' // "What does X depend on?"
@@ -35,7 +35,7 @@ interface PathStep {
   edge_to_next: string | null;
 }
 
-export interface GraphQueryResult {
+interface GraphQueryResult {
   query: string;
   intent: GraphQueryIntent;
   anchors: string[];

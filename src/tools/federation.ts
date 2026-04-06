@@ -84,7 +84,7 @@ export function federationSync(
 // 5. FEDERATION CLIENTS — find all client calls to a specific endpoint
 // ════════════════════════════════════════════════════════════════════════
 
-export interface FederationClientCallsResult {
+interface FederationClientCallsResult {
   endpoint: { method: string | null; path: string; service: string };
   clients: Array<{
     repo: string;

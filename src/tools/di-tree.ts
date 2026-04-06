@@ -7,13 +7,13 @@ import type { Store } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 
-export interface DINode {
+interface DINode {
   name: string;
   symbolId?: string;
   file?: string;
 }
 
-export interface DITreeResult {
+interface DITreeResult {
   service: DINode;
   injects: DINode[];     // what this service depends on
   injectedBy: DINode[];  // what depends on this service

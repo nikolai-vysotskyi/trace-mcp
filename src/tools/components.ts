@@ -3,7 +3,7 @@ import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 import { estimateTokens } from '../utils/token-counter.js';
 
-export interface ComponentTreeNode {
+interface ComponentTreeNode {
   name: string;
   path: string;
   props?: string[];
@@ -13,7 +13,7 @@ export interface ComponentTreeNode {
   children: ComponentTreeNode[];
 }
 
-export interface ComponentTreeResult {
+interface ComponentTreeResult {
   root: ComponentTreeNode;
   totalComponents: number;
   truncated?: boolean;

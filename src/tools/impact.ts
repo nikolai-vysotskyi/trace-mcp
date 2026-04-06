@@ -6,13 +6,13 @@ import { execSync } from 'node:child_process';
 
 // ─── Pennant (feature-flag) types ────────────────────────────────────────────
 
-export interface PennantUsageSite {
+interface PennantUsageSite {
   filePath: string;
   line: number;
   usageType: string;
 }
 
-export interface PennantImpactResult {
+interface PennantImpactResult {
   featureName: string;
   definedIn: { filePath: string; line: number }[];
   checkedBy: PennantUsageSite[];
@@ -21,7 +21,7 @@ export interface PennantImpactResult {
 
 // ─── Enriched dependent (per-file, deduped) ─────────────────────────────────
 
-export interface DependentSymbol {
+interface DependentSymbol {
   symbolId: string;
   symbolName: string;
   symbolKind: string;
@@ -29,7 +29,7 @@ export interface DependentSymbol {
   isExported?: boolean;
 }
 
-export interface EnrichedDependent {
+interface EnrichedDependent {
   path: string;
   edgeTypes: string[];
   depth: number;
@@ -39,7 +39,7 @@ export interface EnrichedDependent {
 
 // ─── Grouped summaries ──────────────────────────────────────────────────────
 
-export interface ModuleImpact {
+interface ModuleImpact {
   module: string;
   count: number;
   files: string[];
@@ -47,14 +47,14 @@ export interface ModuleImpact {
   hasUntested: boolean;
 }
 
-export interface CoChangeHidden {
+interface CoChangeHidden {
   file: string;
   confidence: number;
   /** true if already in dependency graph, false = hidden coupling */
   inGraph: boolean;
 }
 
-export interface ImpactSummary {
+interface ImpactSummary {
   totalFiles: number;
   totalSymbols: number;
   maxDepth: number;
@@ -65,7 +65,7 @@ export interface ImpactSummary {
   sentence: string;
 }
 
-export interface RiskSignals {
+interface RiskSignals {
   score: number;
   level: 'low' | 'medium' | 'high' | 'critical';
   publicApiBreaking: boolean;
@@ -76,7 +76,7 @@ export interface RiskSignals {
 
 // ─── Breaking changes ────────────────────────────────────────────────────────
 
-export interface BreakingChange {
+interface BreakingChange {
   symbolId: string;
   symbolName: string;
   kind: string;

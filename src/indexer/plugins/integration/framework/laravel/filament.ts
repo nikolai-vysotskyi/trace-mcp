@@ -15,7 +15,7 @@ import { escapeRegExp } from '../../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 
-export interface FilamentResourceInfo {
+interface FilamentResourceInfo {
   className: string;
   namespace: string;
   fqn: string;
@@ -26,17 +26,17 @@ export interface FilamentResourceInfo {
   formRelationships: FilamentRelRef[];
 }
 
-export interface FilamentPageRef {
+interface FilamentPageRef {
   action: string;   // 'index' | 'create' | 'edit' | 'view'
   pageClass: string;
 }
 
-export interface FilamentRelRef {
+interface FilamentRelRef {
   /** Relationship name string (e.g. 'role', 'posts') */
   relationName: string;
 }
 
-export interface FilamentRelationManagerInfo {
+interface FilamentRelationManagerInfo {
   className: string;
   namespace: string;
   fqn: string;
@@ -44,7 +44,7 @@ export interface FilamentRelationManagerInfo {
   relationshipName: string | null;
 }
 
-export interface FilamentPanelInfo {
+interface FilamentPanelInfo {
   className: string;
   namespace: string;
   fqn: string;
@@ -54,7 +54,7 @@ export interface FilamentPanelInfo {
   widgets: string[];
 }
 
-export interface FilamentWidgetInfo {
+interface FilamentWidgetInfo {
   className: string;
   namespace: string;
   fqn: string;
@@ -180,7 +180,7 @@ export function extractFilamentWidget(
 
 // ─── Edge builders ────────────────────────────────────────────
 
-export function buildFilamentResourceEdges(resource: FilamentResourceInfo): RawEdge[] {
+function buildFilamentResourceEdges(resource: FilamentResourceInfo): RawEdge[] {
   const edges: RawEdge[] = [];
 
   if (resource.modelFqn) {
@@ -207,7 +207,7 @@ export function buildFilamentResourceEdges(resource: FilamentResourceInfo): RawE
   return edges;
 }
 
-export function buildFilamentPanelEdges(panel: FilamentPanelInfo): RawEdge[] {
+function buildFilamentPanelEdges(panel: FilamentPanelInfo): RawEdge[] {
   const edges: RawEdge[] = [];
   for (const fqn of [...panel.resources, ...panel.pages, ...panel.widgets]) {
     edges.push({
@@ -218,7 +218,7 @@ export function buildFilamentPanelEdges(panel: FilamentPanelInfo): RawEdge[] {
   return edges;
 }
 
-export function buildFilamentWidgetEdges(widget: FilamentWidgetInfo): RawEdge[] {
+function buildFilamentWidgetEdges(widget: FilamentWidgetInfo): RawEdge[] {
   const edges: RawEdge[] = [];
   const targets = [
     ...(widget.modelFqn ? [widget.modelFqn] : []),

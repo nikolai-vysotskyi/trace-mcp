@@ -4,7 +4,7 @@
  */
 
 /** Minimum PHP version required for specific AST constructs. */
-export const PHP_MIN_VERSION: Record<string, string> = {
+const PHP_MIN_VERSION: Record<string, string> = {
   // PHP 5.3
   'namespace_definition': '5.3',
   // PHP 5.4

@@ -6,7 +6,7 @@ import type { Store, RouteRow } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 
-export interface RequestFlowStep {
+interface RequestFlowStep {
   type: 'route' | 'middleware' | 'controller' | 'form_request' | 'model' | 'inertia_page';
   name: string;
   symbolId?: string;
@@ -14,7 +14,7 @@ export interface RequestFlowStep {
   details?: Record<string, unknown>;
 }
 
-export interface RequestFlowResult {
+interface RequestFlowResult {
   url: string;
   method: string;
   steps: RequestFlowStep[];

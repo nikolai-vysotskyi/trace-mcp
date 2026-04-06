@@ -5,7 +5,7 @@
  */
 import { assembleContext, type ContextItem, type AssembledItem } from './assembly.js';
 
-export interface StructuredContextRequest {
+interface StructuredContextRequest {
   primary: ContextItem[];
   dependencies: ContextItem[];
   callers: ContextItem[];
@@ -14,7 +14,7 @@ export interface StructuredContextRequest {
   budgetWeights?: { primary: number; dependencies: number; callers: number; typeContext: number };
 }
 
-export interface StructuredContextResult {
+interface StructuredContextResult {
   primary: AssembledItem[];
   dependencies: AssembledItem[];
   callers: AssembledItem[];

@@ -15,21 +15,21 @@ import { validationError } from '../errors.js';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface BatchChangeInput {
+interface BatchChangeInput {
   package: string;
   fromVersion?: string;
   toVersion?: string;
   breakingChanges?: string[];
 }
 
-export interface AffectedFile {
+interface AffectedFile {
   file: string;
   imports: string[];
   symbols_using: string[];
   line_references: number[];
 }
 
-export interface BatchChangeResult {
+interface BatchChangeResult {
   package: string;
   from_version?: string;
   to_version?: string;

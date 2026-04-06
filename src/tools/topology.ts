@@ -19,7 +19,7 @@ import path from 'node:path';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface ServiceMapResult {
+interface ServiceMapResult {
   services: Array<{
     name: string;
     type: string | null;
@@ -36,7 +36,7 @@ export interface ServiceMapResult {
   stats: { services: number; contracts: number; endpoints: number; events: number; crossEdges: number };
 }
 
-export interface CrossServiceImpactResult {
+interface CrossServiceImpactResult {
   target: { service: string; endpoint?: string; event?: string };
   affected_services: Array<{
     name: string;
@@ -47,7 +47,7 @@ export interface CrossServiceImpactResult {
   risk_level: 'low' | 'medium' | 'high';
 }
 
-export interface ApiContractResult {
+interface ApiContractResult {
   service: string;
   contracts: Array<{
     type: string;
@@ -59,13 +59,13 @@ export interface ApiContractResult {
   events: Array<{ channel: string; direction: string }>;
 }
 
-export interface ServiceDepsResult {
+interface ServiceDepsResult {
   service: string;
   outgoing: Array<{ target: string; edge_type: string; count: number }>;
   incoming: Array<{ source: string; edge_type: string; count: number }>;
 }
 
-export interface ContractDriftResult {
+interface ContractDriftResult {
   service: string;
   drifts: Array<{
     type: 'missing_endpoint' | 'extra_endpoint' | 'unmatched_spec';

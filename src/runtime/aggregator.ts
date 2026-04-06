@@ -6,7 +6,7 @@
 import type Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-export interface AggregateResult {
+interface AggregateResult {
   bucketsUpdated: number;
   nodesAffected: number;
 }

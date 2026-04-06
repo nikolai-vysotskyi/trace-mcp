@@ -10,7 +10,7 @@
 import type { Store } from '../db/store.js';
 import { ok, type TraceMcpResult } from '../errors.js';
 
-export interface Community {
+interface Community {
   id: number;
   label: string;
   fileCount: number;
@@ -20,13 +20,13 @@ export interface Community {
   keyFiles: string[];
 }
 
-export interface CommunityDetail extends Community {
+interface CommunityDetail extends Community {
   files: string[];
   dependsOn: Array<{ community: string; edgeCount: number }>;
   dependedBy: Array<{ community: string; edgeCount: number }>;
 }
 
-export interface CommunitiesResult {
+interface CommunitiesResult {
   communities: Community[];
   totalFiles: number;
   resolution: number;

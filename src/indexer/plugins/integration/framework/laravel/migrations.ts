@@ -50,7 +50,7 @@ export interface MigrationColumn {
   default?: string;
 }
 
-export interface MigrationExtractionResult {
+interface MigrationExtractionResult {
   migrations: RawMigration[];
   warnings: string[];
 }

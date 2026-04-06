@@ -15,7 +15,7 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface ComplexitySnapshot {
+interface ComplexitySnapshot {
   date: string;
   commit: string;
   max_cyclomatic: number;
@@ -24,7 +24,7 @@ export interface ComplexitySnapshot {
   functions_counted: number;
 }
 
-export interface ComplexityTrendEntry {
+interface ComplexityTrendEntry {
   file: string;
   current: ComplexitySnapshot;
   historical: ComplexitySnapshot[];

@@ -8,7 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { REGISTRY_PATH, ensureGlobalDirs, getDbPath, projectName } from './global.js';
 
-export interface RegistryEntry {
+interface RegistryEntry {
   name: string;
   root: string;
   dbPath: string;
@@ -16,7 +16,7 @@ export interface RegistryEntry {
   addedAt: string;
 }
 
-export interface Registry {
+interface Registry {
   version: 1;
   projects: Record<string, RegistryEntry>;
 }
@@ -25,7 +25,7 @@ function emptyRegistry(): Registry {
   return { version: 1, projects: {} };
 }
 
-export function loadRegistry(): Registry {
+function loadRegistry(): Registry {
   if (!fs.existsSync(REGISTRY_PATH)) return emptyRegistry();
   try {
     const raw = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
@@ -37,7 +37,7 @@ export function loadRegistry(): Registry {
 }
 
 /** Atomic write: tmp file + rename to avoid partial reads. */
-export function saveRegistry(reg: Registry): void {
+function saveRegistry(reg: Registry): void {
   ensureGlobalDirs();
   const tmp = REGISTRY_PATH + '.tmp.' + process.pid;
   fs.writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
@@ -65,7 +65,7 @@ export function registerProject(root: string): RegistryEntry {
   return entry;
 }
 
-export function unregisterProject(root: string): void {
+function unregisterProject(root: string): void {
   const absRoot = path.resolve(root);
   const reg = loadRegistry();
   delete reg.projects[absRoot];
@@ -84,7 +84,7 @@ export function listProjects(): RegistryEntry[] {
 }
 
 /** Remove entries whose root directory no longer exists. Returns removed paths. */
-export function pruneStaleProjects(): string[] {
+function pruneStaleProjects(): string[] {
   const reg = loadRegistry();
   const removed: string[] = [];
 

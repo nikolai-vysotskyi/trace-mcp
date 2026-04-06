@@ -12,7 +12,7 @@ import type { RawEdge } from '../../../../../plugin-api/types.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 
-export interface DataClassInfo {
+interface DataClassInfo {
   className: string;
   namespace: string;
   fqn: string;
@@ -26,14 +26,14 @@ export interface DataClassInfo {
   sourceModels: string[];
 }
 
-export interface DataField {
+interface DataField {
   name: string;
   type: string | null;
   nullable: boolean;
   mapFrom: string | null; // from #[MapFrom('...')]
 }
 
-export interface InertiaDataProp {
+interface InertiaDataProp {
   propKey: string;
   dataClass: string; // FQN of Data class
   isCollection: boolean;

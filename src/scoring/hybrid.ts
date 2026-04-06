@@ -1,4 +1,4 @@
-export interface HybridScoreParams {
+interface HybridScoreParams {
   /** FTS5 BM25 rank, normalized 0-1 */
   relevance: number;
   /** PageRank score (already normalized 0-1) */

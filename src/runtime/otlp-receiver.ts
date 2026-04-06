@@ -8,7 +8,7 @@ import { createServer, type Server, type IncomingMessage, type ServerResponse } 
 import { logger } from '../logger.js';
 import type { OtlpExportRequest } from './types.js';
 
-export interface OtlpReceiverOptions {
+interface OtlpReceiverOptions {
   host: string;
   port: number;
   maxBodyBytes: number;

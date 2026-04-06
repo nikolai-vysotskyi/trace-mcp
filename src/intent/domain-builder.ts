@@ -12,7 +12,7 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface DomainBuildResult {
+interface DomainBuildResult {
   domains_created: number;
   symbols_classified: number;
   method: 'heuristic' | 'ai';

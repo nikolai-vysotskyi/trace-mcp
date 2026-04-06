@@ -9,7 +9,7 @@ import { SpanMapper } from './mapper.js';
 import { RuntimeAggregator } from './aggregator.js';
 import { logger } from '../logger.js';
 
-export interface RuntimeConfig {
+interface RuntimeConfig {
   enabled: boolean;
   otlp: {
     port: number;

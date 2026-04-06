@@ -23,17 +23,17 @@ import type { VectorStore, EmbeddingService } from '../ai/interfaces.js';
 // TYPES
 // ═══════════════════════════════════════════════════════════════════
 
-export type TaskIntent = 'bugfix' | 'new_feature' | 'refactor' | 'understand';
+type TaskIntent = 'bugfix' | 'new_feature' | 'refactor' | 'understand';
 export type FocusMode = 'minimal' | 'broad' | 'deep';
 
-export interface TaskContextOptions {
+interface TaskContextOptions {
   task: string;
   tokenBudget?: number;
   focus?: FocusMode;
   includeTests?: boolean;
 }
 
-export interface TaskContextResult {
+interface TaskContextResult {
   task: string;
   intent: TaskIntent;
   sections: {

@@ -23,7 +23,7 @@ const PROCEDURE_RE =
 const ROUTER_RE =
   /(?:t\.router|router)\s*\(\s*\{/g;
 
-export interface TrpcProcedure {
+interface TrpcProcedure {
   name: string;
   type: 'query' | 'mutation' | 'subscription';
 }

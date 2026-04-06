@@ -35,18 +35,18 @@ const CREATE_THEME_RE =
 const STYLED_RE =
   /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*styled\s*\(\s*(?:['"](\w+)['"]|(\w+))\s*\)/g;
 
-export interface MuiTheme {
+interface MuiTheme {
   name: string;
   sections: string[];    // e.g. ['palette', 'typography', 'spacing']
 }
 
-export interface MuiStyledComponent {
+interface MuiStyledComponent {
   name: string;
   baseComponent: string; // 'div', 'Button', etc.
 }
 
 /** Extract createTheme() definitions and their top-level configuration keys. */
-export function extractMuiThemes(source: string): MuiTheme[] {
+function extractMuiThemes(source: string): MuiTheme[] {
   const themes: MuiTheme[] = [];
   const re = new RegExp(CREATE_THEME_RE.source, 'g');
   let match: RegExpExecArray | null;
@@ -74,7 +74,7 @@ export function extractMuiThemes(source: string): MuiTheme[] {
 }
 
 /** Extract styled() component definitions. */
-export function extractStyledComponents(source: string): MuiStyledComponent[] {
+function extractStyledComponents(source: string): MuiStyledComponent[] {
   const components: MuiStyledComponent[] = [];
   const re = new RegExp(STYLED_RE.source, 'g');
   let match: RegExpExecArray | null;
@@ -90,7 +90,7 @@ export function extractStyledComponents(source: string): MuiStyledComponent[] {
 }
 
 /** Count sx prop usages in JSX. */
-export function countSxUsage(source: string): number {
+function countSxUsage(source: string): number {
   const sxRe = /\bsx\s*=\s*\{/g;
   let count = 0;
   while (sxRe.exec(source) !== null) count++;
@@ -98,7 +98,7 @@ export function countSxUsage(source: string): number {
 }
 
 /** Extract MUI component imports. */
-export function extractMuiImports(source: string): { name: string; package: string }[] {
+function extractMuiImports(source: string): { name: string; package: string }[] {
   const imports: { name: string; package: string }[] = [];
 
   // Match: import { Button, TextField } from '@mui/material'

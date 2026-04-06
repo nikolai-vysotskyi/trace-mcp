@@ -16,7 +16,7 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface CouplingSnapshot {
+interface CouplingSnapshot {
   date: string;
   commit: string;
   /** Afferent coupling — files that import this file */
@@ -27,7 +27,7 @@ export interface CouplingSnapshot {
   instability: number;
 }
 
-export interface CouplingTrendResult {
+interface CouplingTrendResult {
   file: string;
   current: CouplingSnapshot;
   historical: CouplingSnapshot[];
@@ -38,7 +38,7 @@ export interface CouplingTrendResult {
   coupling_delta: number;
 }
 
-export interface SymbolComplexitySnapshot {
+interface SymbolComplexitySnapshot {
   date: string;
   commit: string;
   cyclomatic: number;
@@ -47,7 +47,7 @@ export interface SymbolComplexitySnapshot {
   lines: number;
 }
 
-export interface SymbolComplexityTrendResult {
+interface SymbolComplexityTrendResult {
   symbol_id: string;
   name: string;
   file: string;

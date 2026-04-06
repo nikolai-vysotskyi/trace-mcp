@@ -12,7 +12,7 @@
  */
 import type { RawEdge } from '../../../../../plugin-api/types.js';
 
-export interface AdminRegistration {
+interface AdminRegistration {
   modelName: string;
   adminClass?: string;
   line: number;

@@ -11,7 +11,7 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface ParsedContract {
+interface ParsedContract {
   type: 'openapi' | 'grpc' | 'graphql';
   specPath: string;
   version: string;
@@ -19,14 +19,14 @@ export interface ParsedContract {
   events: ParsedEvent[];
 }
 
-export interface ParsedEndpoint {
+interface ParsedEndpoint {
   method: string | null;
   path: string;
   operationId?: string;
   tags?: string[];
 }
 
-export interface ParsedEvent {
+interface ParsedEvent {
   channelName: string;
   direction: 'publish' | 'subscribe';
 }

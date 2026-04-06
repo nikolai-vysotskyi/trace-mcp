@@ -31,7 +31,7 @@ const HOOK_RE =
 const REGISTER_RE =
   /\.register\s*\(\s*([A-Za-z][\w.]*)/g;
 
-export interface FastifyRoute {
+interface FastifyRoute {
   method: string;
   path: string;
 }

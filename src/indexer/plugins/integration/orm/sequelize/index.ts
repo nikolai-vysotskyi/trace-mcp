@@ -117,7 +117,7 @@ export class SequelizePlugin implements FrameworkPlugin {
 // Model extraction
 // ============================================================
 
-export interface SequelizeModelResult {
+interface SequelizeModelResult {
   model: RawOrmModel;
   associations: RawOrmAssociation[];
 }

@@ -41,14 +41,14 @@ const NEEDS_RE =
 
 // --- Helpers -------------------------------------------------------------------
 
-export interface GhaWorkflow {
+interface GhaWorkflow {
   name?: string;
   triggers: string[];
   jobs: string[];
   actions: string[];
 }
 
-export function extractGhaWorkflow(source: string): GhaWorkflow {
+function extractGhaWorkflow(source: string): GhaWorkflow {
   const result: GhaWorkflow = { triggers: [], jobs: [], actions: [] };
 
   // Name

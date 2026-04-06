@@ -14,13 +14,13 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface FileOwnership {
+interface FileOwnership {
   file: string;
   owners: { author: string; commits: number; percentage: number }[];
   total_commits: number;
 }
 
-export interface SymbolOwnership {
+interface SymbolOwnership {
   symbol_id: string;
   name: string;
   file: string;

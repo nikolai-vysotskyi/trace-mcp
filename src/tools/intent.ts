@@ -17,7 +17,7 @@ import { searchFts, type FtsResult } from '../db/fts.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface QueryByIntentResult {
+interface QueryByIntentResult {
   query: string;
   symbols: Array<{
     symbol_id: string;
@@ -30,12 +30,12 @@ export interface QueryByIntentResult {
   domains_touched: string[];
 }
 
-export interface DomainMapResult {
+interface DomainMapResult {
   domains: DomainTreeNode[];
   stats: { totalDomains: number; mappedSymbols: number; unmappedSymbols: number };
 }
 
-export interface DomainContextResult {
+interface DomainContextResult {
   domain: { name: string; description: string | null };
   symbols: Array<{
     symbol_id: string;
@@ -48,7 +48,7 @@ export interface DomainContextResult {
   related_domains: string[];
 }
 
-export interface CrossDomainResult {
+interface CrossDomainResult {
   dependencies: CrossDomainDep[];
 }
 

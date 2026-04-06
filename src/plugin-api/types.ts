@@ -2,7 +2,7 @@ import type { TraceMcpResult } from '../errors.js';
 
 // --- Node & Edge type declarations ---
 
-export interface NodeTypeDeclaration {
+interface NodeTypeDeclaration {
   name: string;
 }
 
@@ -127,7 +127,7 @@ export interface FileParseResult {
 
 // --- Plugin manifest ---
 
-export type PluginCategory = 'framework' | 'orm' | 'validation' | 'state' | 'api' | 'realtime' | 'testing' | 'tooling' | 'view';
+type PluginCategory = 'framework' | 'orm' | 'validation' | 'state' | 'api' | 'realtime' | 'testing' | 'tooling' | 'view';
 
 export interface PluginManifest {
   name: string;

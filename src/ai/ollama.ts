@@ -5,7 +5,7 @@ import type { AIProvider, EmbeddingService, InferenceService } from './interface
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 
-export interface OllamaConfig {
+interface OllamaConfig {
   baseUrl: string;
   embeddingModel: string;
   inferenceModel: string;

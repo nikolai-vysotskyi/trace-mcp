@@ -43,20 +43,20 @@ const RADIX_ROOTS = new Set([
   'Tooltip', 'VisuallyHidden',
 ]);
 
-export interface CompoundComponentUsage {
+interface CompoundComponentUsage {
   root: string;       // e.g. 'Dialog'
   parts: string[];    // e.g. ['Trigger', 'Content', 'Close']
   library: 'headless-ui' | 'radix' | 'ark-ui';
 }
 
-export interface HeadlessImport {
+interface HeadlessImport {
   name: string;
   package: string;
   library: 'headless-ui' | 'radix' | 'ark-ui';
 }
 
 /** Extract imports from headless UI libraries. */
-export function extractHeadlessImports(source: string): HeadlessImport[] {
+function extractHeadlessImports(source: string): HeadlessImport[] {
   const imports: HeadlessImport[] = [];
 
   // Headless UI: import { Dialog, Menu } from '@headlessui/react'
@@ -101,7 +101,7 @@ export function extractHeadlessImports(source: string): HeadlessImport[] {
 }
 
 /** Detect compound component usage patterns (Root.Trigger, Dialog.Panel, etc.) */
-export function extractCompoundComponents(
+function extractCompoundComponents(
   source: string,
   imports: HeadlessImport[],
 ): CompoundComponentUsage[] {

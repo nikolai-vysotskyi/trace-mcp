@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from './logger.js';
 
-export interface FileWatcherOptions {
+interface FileWatcherOptions {
   /** Debounce interval in ms (default 2000) */
   debounceMs?: number;
   /** Set of file extensions to watch (e.g. '.ts', '.py'). If empty, watches all. */

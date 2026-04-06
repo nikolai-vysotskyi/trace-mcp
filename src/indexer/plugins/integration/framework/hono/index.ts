@@ -42,12 +42,12 @@ const MIDDLEWARE_GLOBAL_RE =
 const BASEPATH_RE =
   /(?:app|router|hono)\s*\.\s*basePath\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
-export interface HonoRoute {
+interface HonoRoute {
   method: string;
   path: string;
 }
 
-export interface HonoMiddleware {
+interface HonoMiddleware {
   path: string | null;
   name: string;
 }

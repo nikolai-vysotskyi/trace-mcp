@@ -13,7 +13,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname, relative, normalize } from 'node:path';
 
-export interface PyModuleResolveResult {
+interface PyModuleResolveResult {
   path: string;
   isPackage: boolean;
 }

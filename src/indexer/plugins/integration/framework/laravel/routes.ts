@@ -33,7 +33,7 @@ const API_RESOURCE_METHODS = RESOURCE_METHODS.filter(
   (m) => m.action !== 'create' && m.action !== 'edit',
 );
 
-export interface RouteExtractionResult {
+interface RouteExtractionResult {
   routes: RawRoute[];
   warnings: string[];
 }

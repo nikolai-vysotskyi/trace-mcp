@@ -22,27 +22,27 @@ import { getChurnRate } from '../tools/git-analysis.js';
 // TYPES
 // ═══════════════════════════════════════════════════════════════════
 
-export interface CIReportInput {
+interface CIReportInput {
   changedFiles: string[];
   store: Store;
   rootPath: string;
   layers?: LayerDefinition[];
 }
 
-export interface ChangedFileInfo {
+interface ChangedFileInfo {
   path: string;
   symbolCount: number;
   avgCyclomatic: number;
 }
 
-export interface BlastRadiusEntry {
+interface BlastRadiusEntry {
   path: string;
   symbolId?: string;
   edgeType: string;
   depth: number;
 }
 
-export interface TestCoverageGap {
+interface TestCoverageGap {
   symbolId: string;
   name: string;
   kind: string;
@@ -50,7 +50,7 @@ export interface TestCoverageGap {
   signature: string | null;
 }
 
-export interface RiskFileEntry {
+interface RiskFileEntry {
   file: string;
   complexity: number;
   churn: number;

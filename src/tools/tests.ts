@@ -3,7 +3,7 @@ import type { Store } from '../db/store.js';
 import { notFound, type TraceMcpResult } from '../errors.js';
 import { ok, err } from 'neverthrow';
 
-export interface TestReference {
+interface TestReference {
   test_file: string;
   /** Symbol ID of the test function/method, if resolved */
   symbol_id?: string;
@@ -11,7 +11,7 @@ export interface TestReference {
   edge_type: string;
 }
 
-export interface GetTestsForResult {
+interface GetTestsForResult {
   target: { symbol_id?: string; file?: string };
   tests: TestReference[];
   total: number;

@@ -9,7 +9,7 @@
  */
 import type { RawEdge } from '../../../../../plugin-api/types.js';
 
-export interface SignalConnection {
+interface SignalConnection {
   signal: string;
   handler: string;
   sender?: string;

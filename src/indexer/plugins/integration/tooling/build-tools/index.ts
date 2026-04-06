@@ -49,14 +49,14 @@ const EXTERNAL_RE =
 const CONFIG_EXPORT_RE =
   /(?:defineConfig|export\s+default)\s*(?:\(\s*)?\{/;
 
-export interface BuildConfig {
+interface BuildConfig {
   entries: string[];
   formats: string[];
   targets: string[];
   externals: string[];
 }
 
-export function extractBuildConfig(source: string): BuildConfig {
+function extractBuildConfig(source: string): BuildConfig {
   const config: BuildConfig = { entries: [], formats: [], targets: [], externals: [] };
 
   let m: RegExpExecArray | null;

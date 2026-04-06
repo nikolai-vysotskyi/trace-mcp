@@ -29,8 +29,12 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_event_graph', 'get_schema',
     // predictive
     'predict_bugs', 'assess_change_risk', 'get_tech_debt',
+    // trends
+    'get_complexity_trend', 'get_coupling_trend', 'get_symbol_complexity_trend',
     // workspace
     'get_workspace_map',
+    // session
+    'get_session_resume',
   ],
 
   full: 'all',
@@ -51,11 +55,13 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_project_health', 'self_audit',
     'get_workspace_map', 'get_cross_workspace_impact',
     'graph_query', 'get_domain_map',
+    'benchmark_project',
+    'get_complexity_trend', 'get_coupling_trend', 'get_symbol_complexity_trend',
   ],
 };
 
 /** All known preset names */
-export type PresetName = keyof typeof TOOL_PRESETS;
+type PresetName = keyof typeof TOOL_PRESETS;
 
 /** Resolve a preset by name, returning the tool set or null if unknown. */
 export function resolvePreset(name: string): Set<string> | 'all' | null {

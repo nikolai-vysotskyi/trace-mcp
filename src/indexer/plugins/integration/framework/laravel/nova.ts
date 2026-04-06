@@ -16,7 +16,7 @@ import { escapeRegExp } from '../../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 
-export interface NovaResourceInfo {
+interface NovaResourceInfo {
   className: string;
   namespace: string;
   fqn: string;
@@ -34,7 +34,7 @@ export interface NovaResourceInfo {
   metrics: string[];
 }
 
-export interface NovaFieldRelationship {
+interface NovaFieldRelationship {
   /** Field type: BelongsTo, HasMany, HasOne, MorphMany, MorphTo, MorphToMany */
   fieldType: string;
   /** Label string */
@@ -45,7 +45,7 @@ export interface NovaFieldRelationship {
   targetResourceFqn: string;
 }
 
-export interface NovaMetricInfo {
+interface NovaMetricInfo {
   className: string;
   namespace: string;
   fqn: string;
@@ -144,7 +144,7 @@ export function extractNovaMetric(
 
 // ─── Edge builders ────────────────────────────────────────────
 
-export function buildNovaResourceEdges(resource: NovaResourceInfo): RawEdge[] {
+function buildNovaResourceEdges(resource: NovaResourceInfo): RawEdge[] {
   const edges: RawEdge[] = [];
 
   if (resource.modelFqn) {
@@ -191,7 +191,7 @@ export function buildNovaResourceEdges(resource: NovaResourceInfo): RawEdge[] {
   return edges;
 }
 
-export function buildNovaMetricEdges(metric: NovaMetricInfo): RawEdge[] {
+function buildNovaMetricEdges(metric: NovaMetricInfo): RawEdge[] {
   return metric.queriedModels.map((modelFqn) => ({
     edgeType: 'nova_metric_queries',
     metadata: { sourceFqn: metric.fqn, targetFqn: modelFqn },

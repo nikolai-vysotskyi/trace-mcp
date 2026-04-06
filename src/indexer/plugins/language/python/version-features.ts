@@ -4,7 +4,7 @@
  */
 
 /** Minimum Python version required for specific AST constructs. */
-export const PYTHON_MIN_VERSION: Record<string, string> = {
+const PYTHON_MIN_VERSION: Record<string, string> = {
   // Python 3.0
   'nonlocal_statement': '3.0',
   // Python 3.3

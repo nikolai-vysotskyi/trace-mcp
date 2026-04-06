@@ -22,13 +22,13 @@ import { TRACE_MCP_HOME } from './global.js';
 // Paths
 // ---------------------------------------------------------------------------
 
-export const BUNDLES_DIR = path.join(TRACE_MCP_HOME, 'bundles');
+const BUNDLES_DIR = path.join(TRACE_MCP_HOME, 'bundles');
 
 export function ensureBundlesDir(): void {
   fs.mkdirSync(BUNDLES_DIR, { recursive: true });
 }
 
-export function getBundlePath(packageName: string, version: string): string {
+function getBundlePath(packageName: string, version: string): string {
   const safeName = packageName.replace(/[^a-zA-Z0-9._-]/g, '_');
   return path.join(BUNDLES_DIR, `${safeName}-${version}.bundle.db`);
 }
@@ -37,7 +37,7 @@ export function getBundlePath(packageName: string, version: string): string {
 // Bundle manifest
 // ---------------------------------------------------------------------------
 
-export interface BundleManifestEntry {
+interface BundleManifestEntry {
   package: string;
   version: string;
   file: string;
@@ -48,7 +48,7 @@ export interface BundleManifestEntry {
   sha256: string;
 }
 
-export interface BundleManifest {
+interface BundleManifest {
   bundles: BundleManifestEntry[];
 }
 
@@ -56,7 +56,7 @@ function getManifestPath(): string {
   return path.join(BUNDLES_DIR, 'manifest.json');
 }
 
-export function loadManifest(): BundleManifest {
+function loadManifest(): BundleManifest {
   const p = getManifestPath();
   if (!fs.existsSync(p)) return { bundles: [] };
   try {
@@ -295,13 +295,13 @@ export function removeBundle(packageName: string, version?: string): number {
 // Load bundle for cross-index queries
 // ---------------------------------------------------------------------------
 
-export interface LoadedBundle {
+interface LoadedBundle {
   package: string;
   version: string;
   db: Database.Database;
 }
 
-export function loadBundle(packageName: string, version: string): LoadedBundle | null {
+function loadBundle(packageName: string, version: string): LoadedBundle | null {
   const bundlePath = getBundlePath(packageName, version);
   if (!fs.existsSync(bundlePath)) return null;
   try {
@@ -327,7 +327,7 @@ export function loadAllBundles(): LoadedBundle[] {
 // Cross-index symbol search in bundles
 // ---------------------------------------------------------------------------
 
-export interface BundleSymbol {
+interface BundleSymbol {
   symbol_id: string;
   name: string;
   kind: string;

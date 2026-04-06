@@ -3,7 +3,7 @@
  * Detects classes extending FormRequest and extracts validation rules.
  */
 
-export interface FormRequestInfo {
+interface FormRequestInfo {
   className: string;
   namespace: string | undefined;
   fqn: string;

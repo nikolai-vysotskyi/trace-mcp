@@ -32,19 +32,19 @@ import type { TraceMcpResult } from '../../../../../errors.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export interface NuxtUiThemeOverride {
+interface NuxtUiThemeOverride {
   componentName: string;
   keys: string[];       // customized keys like 'base', 'color', 'size', 'variant'
 }
 
-export interface NuxtUiFormDef {
+interface NuxtUiFormDef {
   name: string;
   schemaType: 'zod' | 'yup' | 'joi' | 'valibot' | 'unknown';
   schemaRef: string;
   fields: string[];
 }
 
-export interface NuxtUiComponentUsage {
+interface NuxtUiComponentUsage {
   name: string;             // e.g. 'UButton', 'UCard'
   propsUsed: string[];      // props explicitly set
   variants: string[];       // variant prop values
@@ -84,7 +84,7 @@ const NUXT_UI_PRO_COMPONENTS = new Set([
 // ── Extraction functions ──────────────────────────────────────────────────
 
 /** Extract app.config.ts/js theme overrides. */
-export function extractAppConfigTheme(source: string): NuxtUiThemeOverride[] {
+function extractAppConfigTheme(source: string): NuxtUiThemeOverride[] {
   const overrides: NuxtUiThemeOverride[] = [];
 
   // Match: ui: { button: { ... }, card: { ... } }
@@ -119,7 +119,7 @@ export function extractAppConfigTheme(source: string): NuxtUiThemeOverride[] {
 }
 
 /** Extract U-prefixed component usage from Vue templates. */
-export function extractNuxtUiComponentUsage(source: string): NuxtUiComponentUsage[] {
+function extractNuxtUiComponentUsage(source: string): NuxtUiComponentUsage[] {
   const usages: NuxtUiComponentUsage[] = [];
   const seen = new Map<string, NuxtUiComponentUsage>();
 
@@ -168,7 +168,7 @@ export function extractNuxtUiComponentUsage(source: string): NuxtUiComponentUsag
 }
 
 /** Extract UForm schema definitions. */
-export function extractNuxtUiFormSchemas(source: string): NuxtUiFormDef[] {
+function extractNuxtUiFormSchemas(source: string): NuxtUiFormDef[] {
   const forms: NuxtUiFormDef[] = [];
 
   // Pattern 1: <UForm :schema="loginSchema" :state="state">
@@ -209,7 +209,7 @@ export function extractNuxtUiFormSchemas(source: string): NuxtUiFormDef[] {
 }
 
 /** Extract tailwind-variants tv() definitions. */
-export function extractTvDefinitions(source: string): { name: string; variants: Record<string, string[]>; slots: string[] }[] {
+function extractTvDefinitions(source: string): { name: string; variants: Record<string, string[]>; slots: string[] }[] {
   const defs: { name: string; variants: Record<string, string[]>; slots: string[] }[] = [];
   const tvRe = /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*tv\s*\(/g;
   let match: RegExpExecArray | null;
@@ -257,7 +257,7 @@ export function extractTvDefinitions(source: string): { name: string; variants: 
 }
 
 /** Extract useColorMode() and color-mode related patterns. */
-export function extractColorModeUsage(source: string): boolean {
+function extractColorModeUsage(source: string): boolean {
   return /\buseColorMode\b/.test(source) ||
     /\bcolorMode\b/.test(source) ||
     /\$colorMode/.test(source);

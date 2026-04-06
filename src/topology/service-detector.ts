@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logger.js';
 
-export interface DetectedService {
+interface DetectedService {
   name: string;
   repoRoot: string;
   serviceType: 'http' | 'grpc' | 'graphql' | 'worker' | 'monolith';

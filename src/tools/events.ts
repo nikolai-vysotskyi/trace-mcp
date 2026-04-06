@@ -6,13 +6,13 @@ import type { Store, SymbolRow } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 
-export interface BroadcastingInfo {
+interface BroadcastingInfo {
   channels: { name: string; type: string }[];
   broadcastAs?: string;
   payloadFields?: string[];
 }
 
-export interface EventNode {
+interface EventNode {
   name: string;
   fqn: string;
   symbolId: string;
@@ -21,7 +21,7 @@ export interface EventNode {
   broadcasting?: BroadcastingInfo;
 }
 
-export interface EventGraphResult {
+interface EventGraphResult {
   events: EventNode[];
 }
 

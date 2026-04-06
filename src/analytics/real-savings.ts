@@ -24,7 +24,7 @@ interface ToolReplacement {
   savingsTokens: number;
 }
 
-export interface RealSavingsReport {
+interface RealSavingsReport {
   period: string;
   sessionsAnalyzed: number;
   fileReadsAnalyzed: number;

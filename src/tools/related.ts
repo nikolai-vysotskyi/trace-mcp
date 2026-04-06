@@ -19,7 +19,7 @@ interface RelatedSymbolItem {
   };
 }
 
-export interface RelatedSymbolsResult {
+interface RelatedSymbolsResult {
   target: { symbol_id: string; name: string; file: string };
   related: RelatedSymbolItem[];
 }

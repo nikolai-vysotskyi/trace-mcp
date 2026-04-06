@@ -19,7 +19,7 @@ import { buildFileGraph, getCouplingMetrics, getPageRank, type CouplingResult, t
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface BugPredictionWeights {
+interface BugPredictionWeights {
   churn: number;
   fix_ratio: number;
   complexity: number;
@@ -28,7 +28,7 @@ export interface BugPredictionWeights {
   authors: number;
 }
 
-export interface BugPrediction {
+interface BugPrediction {
   file: string;
   score: number;
   risk: 'low' | 'medium' | 'high' | 'critical';
@@ -41,14 +41,14 @@ export interface BugPrediction {
   }>;
 }
 
-export interface BugPredictionResult {
+interface BugPredictionResult {
   predictions: BugPrediction[];
   total_files_analyzed: number;
   snapshot_id: number | null;
   cached: boolean;
 }
 
-export interface CoChangeAnomaly {
+interface CoChangeAnomaly {
   file_a: string;
   file_b: string;
   co_change_count: number;
@@ -57,14 +57,14 @@ export interface CoChangeAnomaly {
   module_b: string;
 }
 
-export interface ShotgunEntry {
+interface ShotgunEntry {
   file: string;
   shotgun_commits: number;
   total_commits: number;
   ratio: number;
 }
 
-export interface DriftReport {
+interface DriftReport {
   co_change_anomalies: CoChangeAnomaly[];
   shotgun_surgery: ShotgunEntry[];
   summary: {
@@ -73,7 +73,7 @@ export interface DriftReport {
   };
 }
 
-export interface TechDebtModule {
+interface TechDebtModule {
   module: string;
   score: number;
   grade: 'A' | 'B' | 'C' | 'D' | 'F';
@@ -88,7 +88,7 @@ export interface TechDebtResult {
   project_grade: 'A' | 'B' | 'C' | 'D' | 'F';
 }
 
-export interface ChangeRiskResult {
+interface ChangeRiskResult {
   target: { file: string; symbol_id?: string };
   risk_score: number;
   risk_level: 'low' | 'medium' | 'high' | 'critical';
@@ -104,7 +104,7 @@ export interface ChangeRiskResult {
   blast_radius: { files: number; symbols: number };
 }
 
-export interface HealthTrendPoint {
+interface HealthTrendPoint {
   date: string;
   bug_score: number | null;
   complexity_avg: number | null;
@@ -113,7 +113,7 @@ export interface HealthTrendPoint {
   test_coverage: number | null;
 }
 
-export interface HealthTrendResult {
+interface HealthTrendResult {
   target: string;
   data_points: HealthTrendPoint[];
   trend: 'improving' | 'stable' | 'degrading';

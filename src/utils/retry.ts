@@ -3,7 +3,7 @@
  */
 import { logger } from '../logger.js';
 
-export interface RetryOptions {
+interface RetryOptions {
   /** Maximum number of attempts (including the first). Default: 3 */
   maxAttempts?: number;
   /** Initial delay in ms before first retry. Default: 500 */

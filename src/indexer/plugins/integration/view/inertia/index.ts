@@ -14,7 +14,7 @@ import type {
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
-export interface InertiaRenderCall {
+interface InertiaRenderCall {
   pageName: string;
   propNames: string[];
   line: number;
@@ -211,7 +211,7 @@ export class InertiaPlugin implements FrameworkPlugin {
 /**
  * Detect prop mismatches between PHP-side Inertia::render props and Vue defineProps.
  */
-export interface PropMismatch {
+interface PropMismatch {
   pageName: string;
   pagePath: string;
   phpProps: string[];

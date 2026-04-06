@@ -9,14 +9,14 @@ import { computePageRank } from '../scoring/pagerank.js';
 import { assembleContext, type ContextItem } from '../scoring/assembly.js';
 import { readByteRange } from '../utils/source-reader.js';
 
-export interface FeatureContextResult {
+interface FeatureContextResult {
   description: string;
   items: FeatureContextItem[];
   totalTokens: number;
   truncated: boolean;
 }
 
-export interface FeatureContextItem {
+interface FeatureContextItem {
   symbolId: string;
   name: string;
   kind: string;

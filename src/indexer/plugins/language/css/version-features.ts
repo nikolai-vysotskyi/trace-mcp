@@ -14,7 +14,7 @@
 // CSS specification features — pattern → minimum spec year
 // ═══════════════════════════════════════════════════════
 
-export const CSS_SPEC_FEATURES: [RegExp, string, string][] = [
+const CSS_SPEC_FEATURES: [RegExp, string, string][] = [
   // [pattern, spec year, feature name]
 
   // --- 2017 ---
@@ -75,7 +75,7 @@ export const CSS_SPEC_FEATURES: [RegExp, string, string][] = [
 // Sass/SCSS compiler — pattern → minimum Sass version
 // ═══════════════════════════════════════════════════════
 
-export const SASS_VERSION_FEATURES: [RegExp, string, string][] = [
+const SASS_VERSION_FEATURES: [RegExp, string, string][] = [
   // [pattern, min Sass version, feature description]
 
   // --- Sass 1.23 (Oct 2019) — module system ---
@@ -136,7 +136,7 @@ export const SASS_VERSION_FEATURES: [RegExp, string, string][] = [
 // LESS compiler — pattern → minimum LESS version
 // ═══════════════════════════════════════════════════════
 
-export const LESS_VERSION_FEATURES: [RegExp, string, string][] = [
+const LESS_VERSION_FEATURES: [RegExp, string, string][] = [
   // --- LESS 2.0 (2014) — inline JS deprecated, extend ---
   [/&:extend\s*\(/, '2.0', ':extend()'],
 
@@ -165,7 +165,7 @@ export const LESS_VERSION_FEATURES: [RegExp, string, string][] = [
 // Detection functions
 // ═══════════════════════════════════════════════════════
 
-export interface CssVersionInfo {
+interface CssVersionInfo {
   /** Minimum CSS spec year required (e.g. "2022", "2024"). */
   minCssSpec?: string;
   /** CSS features detected. */

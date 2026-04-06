@@ -16,14 +16,14 @@ import type { Store, SymbolRow } from '../db/store.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-export interface DataflowParam {
+interface DataflowParam {
   name: string;
   type: string | null;
   flows_to: DataflowSink[];
   mutations: DataflowMutation[];
 }
 
-export interface DataflowSink {
+interface DataflowSink {
   kind: 'call_arg' | 'return' | 'assign' | 'property_access';
   target: string;       // function name or variable
   line: number;
@@ -31,26 +31,26 @@ export interface DataflowSink {
   file?: string;
 }
 
-export interface DataflowMutation {
+interface DataflowMutation {
   expression: string;   // e.g. "order.status = 'processing'"
   line: number;
   property: string;     // e.g. "status"
 }
 
-export interface DataflowReturn {
+interface DataflowReturn {
   expression: string;
   line: number;
   sources: string[];    // param names or calls that contribute
 }
 
-export interface DataflowResult {
+interface DataflowResult {
   symbol: { symbolId: string; name: string; kind: string; file: string };
   parameters: DataflowParam[];
   returns: DataflowReturn[];
   localAssignments: { name: string; source: string; line: number }[];
 }
 
-export interface DataflowOptions {
+interface DataflowOptions {
   symbolId?: string;
   fqn?: string;
   direction?: 'forward' | 'backward' | 'both';

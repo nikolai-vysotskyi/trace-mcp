@@ -11,7 +11,7 @@ export interface ContextItem {
   metadata: string;
 }
 
-export type DetailLevel = 'full' | 'no_source' | 'signature_only';
+type DetailLevel = 'full' | 'no_source' | 'signature_only';
 
 export interface AssembledItem {
   id: string;
@@ -21,7 +21,7 @@ export interface AssembledItem {
   tokens: number;
 }
 
-export interface AssembledContext {
+interface AssembledContext {
   items: AssembledItem[];
   totalTokens: number;
   truncated: boolean;

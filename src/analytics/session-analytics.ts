@@ -4,13 +4,13 @@ import { analyzeOptimizations, type OptimizationReport } from './rules.js';
 
 export type { OptimizationReport } from './rules.js';
 
-export interface AnalyticsOptions {
+interface AnalyticsOptions {
   period?: 'today' | 'week' | 'month' | 'all';
   sessionId?: string;
   projectPath?: string;
 }
 
-export interface SessionAnalytics {
+interface SessionAnalytics {
   period: string;
   sessionsCount: number;
   totals: {

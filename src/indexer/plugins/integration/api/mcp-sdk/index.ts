@@ -48,13 +48,13 @@ const MCP_TRANSPORT_IMPORT_RE =
 
 // --- Helpers -------------------------------------------------------------------
 
-export interface McpRegistration {
+interface McpRegistration {
   kind: 'tool' | 'resource' | 'prompt';
   name: string;
   description?: string;
 }
 
-export function extractMcpRegistrations(source: string): McpRegistration[] {
+function extractMcpRegistrations(source: string): McpRegistration[] {
   const results: McpRegistration[] = [];
 
   let m: RegExpExecArray | null;
