@@ -411,7 +411,7 @@ describe('CI Report Markdown Formatter', () => {
     expect(md).toContain('| Dead exports introduced | 1 |');
 
     // Changed files section
-    expect(md).toContain('Changed Files (2)');
+    expect(md).toContain('Changed Code Files (2)');
     expect(md).toContain('`src/foo.ts`');
     expect(md).toContain('`src/bar.ts`');
 
@@ -463,7 +463,7 @@ describe('CI Report Markdown Formatter', () => {
 
     // Should still have summary and changed files
     expect(md).toContain('## trace-mcp Change Impact Report');
-    expect(md).toContain('Changed Files (1)');
+    expect(md).toContain('Changed Code Files (1)');
 
     // Should NOT have blast radius, test coverage, violations, dead code sections
     expect(md).not.toContain('Blast Radius');

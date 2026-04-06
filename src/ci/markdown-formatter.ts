@@ -23,18 +23,34 @@ export function formatMarkdown(report: CIReport): string {
   lines.push(`| Dead exports introduced | ${report.summary.deadExports} |`);
   lines.push('');
 
-  // Changed files
+  // Changed files — split into code (has symbols) and non-code
   if (report.changedFiles.length > 0) {
-    lines.push(`<details><summary>Changed Files (${report.changedFiles.length})</summary>`);
-    lines.push('');
-    lines.push('| File | Symbols | Avg Complexity |');
-    lines.push('|------|---------|----------------|');
-    for (const f of report.changedFiles) {
-      lines.push(`| \`${f.path}\` | ${f.symbolCount} | ${f.avgCyclomatic} |`);
+    const codeFiles = report.changedFiles.filter((f) => f.symbolCount > 0);
+    const nonCodeFiles = report.changedFiles.filter((f) => f.symbolCount === 0);
+
+    if (codeFiles.length > 0) {
+      lines.push(`<details><summary>Changed Code Files (${codeFiles.length})</summary>`);
+      lines.push('');
+      lines.push('| File | Symbols | Avg Complexity |');
+      lines.push('|------|---------|----------------|');
+      for (const f of codeFiles) {
+        lines.push(`| \`${f.path}\` | ${f.symbolCount} | ${f.avgCyclomatic} |`);
+      }
+      lines.push('');
+      lines.push('</details>');
+      lines.push('');
     }
-    lines.push('');
-    lines.push('</details>');
-    lines.push('');
+
+    if (nonCodeFiles.length > 0) {
+      lines.push(`<details><summary>Changed Non-Code Files (${nonCodeFiles.length})</summary>`);
+      lines.push('');
+      for (const f of nonCodeFiles) {
+        lines.push(`- \`${f.path}\``);
+      }
+      lines.push('');
+      lines.push('</details>');
+      lines.push('');
+    }
   }
 
   // Blast radius
