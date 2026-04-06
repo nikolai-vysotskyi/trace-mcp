@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.6.0...v1.6.1) (2026-04-06)
+
+
+### Bug Fixes
+
+* deduplicate trigram batch by symbolId to prevent INSERT OR REPLACE conflicts ([2fd4dfa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2fd4dfa30619521471874d76cdf7a70a971d0bdc))
+* skip missing child directories in multi-root workspace builds ([270f114](https://github.com/nikolai-vysotskyi/trace-mcp/commit/270f1146e4c6d1bb3995c33975e1e33f196cb119))
+* wrap CLI upgrade operations in try/catch for graceful error handling ([a481bb5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a481bb5dd555a8cbd7920bab40dec79c26438d72))
+
 ## [1.6.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.5.4...v1.6.0) (2026-04-06)
 
 
