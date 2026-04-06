@@ -320,7 +320,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'check_duplication',
-    'Check if a symbol or function name has potential duplicates elsewhere in the codebase. Use BEFORE creating new functions/classes to avoid reinventing existing logic. Returns scored matches with similarity signals.',
+    'Check if a function/class name already exists elsewhere in the codebase before creating it. Prevents duplicating existing logic. Call with just a name when planning new code, or symbol_id to check an existing symbol. Returns scored matches — score ≥0.7 means high likelihood of duplication, review the existing symbol before proceeding.',
     {
       symbol_id: z.string().max(512).optional().describe('Existing symbol ID to check for duplicates'),
       name: z.string().max(256).optional().describe('Function/class name to check (when symbol_id not available)'),

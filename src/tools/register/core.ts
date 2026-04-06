@@ -47,7 +47,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'register_edit',
-    'Notify trace-mcp that a file was edited. Reindexes the single file and invalidates search caches that reference it. Call after using Edit/Write tools to keep the index fresh — much lighter than full reindex.',
+    'Notify trace-mcp that a file was edited. Reindexes the single file and invalidates search caches. Call after Edit/Write to keep index fresh. Also checks for duplicate symbols — if `_duplication_warnings` appears in the response, you may be recreating existing logic; review the referenced symbols before continuing.',
     {
       file_path: z.string().min(1).max(512).describe('Relative path to the edited file'),
     },
