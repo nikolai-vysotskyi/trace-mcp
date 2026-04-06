@@ -423,14 +423,15 @@ node.append('text')
 
 // Tooltip
 const tooltip = document.getElementById('tooltip');
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 node.on('mouseover', (e, d) => {
   tooltip.style.display = 'block';
-  tooltip.innerHTML = '<strong>' + d.label + '</strong><br>'
-    + 'Type: ' + d.type + '<br>'
-    + (d.language ? 'Lang: ' + d.language + '<br>' : '')
-    + (d.framework_role ? 'Role: ' + d.framework_role + '<br>' : '')
-    + 'Community: ' + d.community + '<br>'
-    + 'Importance: ' + d.importance;
+  tooltip.innerHTML = '<strong>' + esc(d.label) + '</strong><br>'
+    + 'Type: ' + esc(d.type) + '<br>'
+    + (d.language ? 'Lang: ' + esc(d.language) + '<br>' : '')
+    + (d.framework_role ? 'Role: ' + esc(d.framework_role) + '<br>' : '')
+    + 'Community: ' + esc(String(d.community)) + '<br>'
+    + 'Importance: ' + esc(String(d.importance));
 }).on('mousemove', (e) => {
   tooltip.style.left = (e.pageX + 12) + 'px';
   tooltip.style.top = (e.pageY - 12) + 'px';

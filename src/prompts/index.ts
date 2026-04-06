@@ -52,8 +52,8 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       // 1. Get changed files from git
       let changedFiles: string[] = [];
       try {
-        const { execSync } = await import('node:child_process');
-        const diff = execSync(`git diff --name-only ${baseRef}...${branch}`, {
+        const { execFileSync } = await import('node:child_process');
+        const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}...${branch}`], {
           cwd: projectRoot,
           encoding: 'utf-8',
           timeout: 10000,
@@ -300,8 +300,8 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       // Changed files
       let changedFiles: string[] = [];
       try {
-        const { execSync } = await import('node:child_process');
-        const diff = execSync(`git diff --name-only ${baseRef}...${branch}`, {
+        const { execFileSync } = await import('node:child_process');
+        const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}...${branch}`], {
           cwd: projectRoot,
           encoding: 'utf-8',
           timeout: 10000,
