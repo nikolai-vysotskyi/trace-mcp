@@ -1,6 +1,6 @@
 # trace-mcp
 
-**Framework-aware code intelligence MCP server — 14 frameworks, 7 ORMs, 12 UI libraries, 20+ other integrations (53 total) across 68 languages.**
+**Framework-aware code intelligence MCP server — 14 frameworks, 7 ORMs, 12 UI libraries, 20+ other integrations (53 total) across 68 languages. Up to 97% token reduction.**
 
 > Your AI agent reads `UserController.php` and sees a class.
 > trace-mcp reads it and sees a route → controller → FormRequest → Eloquent model → Inertia render → Vue page → child components — **in one graph.**
