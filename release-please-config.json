@@ -6,31 +6,13 @@
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
       "include-v-in-tag": true,
-      "categories": [
-        {
-          "title": "Features",
-          "labels": ["feat"]
-        },
-        {
-          "title": "Bug Fixes",
-          "labels": ["fix"]
-        },
-        {
-          "title": "Performance",
-          "labels": ["perf"]
-        },
-        {
-          "title": "Documentation",
-          "labels": ["docs"]
-        },
-        {
-          "title": "Tests",
-          "labels": ["test"]
-        },
-        {
-          "title": "Refactoring",
-          "labels": ["refactor"]
-        }
+      "changelog-sections": [
+        { "type": "feat",     "section": "Features" },
+        { "type": "fix",      "section": "Bug Fixes" },
+        { "type": "perf",     "section": "Performance" },
+        { "type": "refactor", "section": "Refactoring" },
+        { "type": "docs",     "section": "Documentation" },
+        { "type": "test",     "section": "Tests" }
       ]
     }
   }

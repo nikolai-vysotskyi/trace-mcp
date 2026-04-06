@@ -50,7 +50,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          PR_JSON=$(gh pr list --head "release-please--branches--master" --json number,baseRefName --limit 1 --jq '.[0] // empty')
+          PR_JSON=$(gh pr list --search "head:release-please--branches--master" --json number,baseRefName --limit 1 --jq '.[0] // empty')
           if [ -n "$PR_JSON" ]; then
             PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
             BASE_BRANCH=$(echo "$PR_JSON" | jq -r '.baseRefName')
