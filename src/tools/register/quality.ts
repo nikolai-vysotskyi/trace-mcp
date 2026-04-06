@@ -1,0 +1,205 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import type { ServerContext } from '../../server-types.js';
+import { formatToolError } from '../../errors.js';
+import { getCoChanges, collectCoChanges, persistCoChanges } from '../co-changes.js';
+import { getChangedSymbols, compareBranches } from '../changed-symbols.js';
+import { detectCommunities, getCommunities, getCommunityDetail } from '../communities.js';
+import { auditConfig } from '../audit-config.js';
+import { getControlFlow } from '../control-flow.js';
+import { getPackageDeps } from '../package-deps.js';
+import { generateDocs } from '../generate-docs.js';
+import { packContext } from '../pack-context.js';
+import { evaluateQualityGates, QualityGatesConfigSchema, type QualityGatesConfig } from '../quality-gates.js';
+
+export function registerQualityTools(server: McpServer, ctx: ServerContext): void {
+  const { store, registry, config, projectRoot, j } = ctx;
+
+  // --- Co-Change Analysis ---
+  server.tool('get_co_changes', 'Find files that frequently change together in git history (temporal coupling).', { file: z.string().min(1).max(512).describe('File path to analyze'), min_confidence: z.number().min(0).max(1).optional().describe('Minimum confidence threshold (default 0.3)'), min_count: z.number().int().min(1).optional().describe('Minimum co-change count (default 3)'), window_days: z.number().int().min(1).max(730).optional().describe('Git history window in days (default 180)'), limit: z.number().int().min(1).max(100).optional().describe('Max results (default 20)') }, async ({ file, min_confidence, min_count, window_days, limit: lim }) => { const result = getCoChanges(store, { file, minConfidence: min_confidence, minCount: min_count, windowDays: window_days, limit: lim }); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+  server.tool('refresh_co_changes', 'Rebuild co-change index from git history.', { window_days: z.number().int().min(1).max(730).optional().describe('Git history window in days (default 180)') }, async ({ window_days }) => { const days = window_days ?? 180; const pairs = collectCoChanges(projectRoot, days); const count = persistCoChanges(store, pairs, projectRoot, days); return { content: [{ type: 'text', text: j({ status: 'completed', pairs_stored: count, window_days: days }) }] }; });
+  // --- Changed Symbols ---
+  server.tool('get_changed_symbols', 'Map a git diff to affected symbols (functions, classes, methods). For PR review.', { since: z.string().min(1).max(256).describe('Git ref to compare from (SHA, branch, tag)'), until: z.string().max(256).optional().describe('Git ref to compare to (default: HEAD)'), include_blast_radius: z.boolean().optional().describe('Include blast radius for each changed symbol (default false)'), max_blast_depth: z.number().int().min(1).max(10).optional().describe('Max blast radius traversal depth (default 3)') }, async ({ since, until, include_blast_radius, max_blast_depth }) => { const result = getChangedSymbols(store, projectRoot, { since, until, includeBlastRadius: include_blast_radius, maxBlastDepth: max_blast_depth }); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+
+  server.tool(
+    'compare_branches',
+    'Compare two branches at symbol level: what was added, modified, removed. Resolves merge-base automatically, groups by category/file/risk, includes blast radius and risk assessment.',
+    {
+      branch: z.string().min(1).max(256).describe('Branch to compare (e.g. "feature/payments")'),
+      base: z.string().max(256).optional().describe('Base branch (default: "main")'),
+      include_blast_radius: z.boolean().optional().describe('Include blast radius per symbol (default true)'),
+      max_blast_depth: z.number().int().min(1).max(10).optional().describe('Max blast radius depth (default 3)'),
+      group_by: z.enum(['file', 'category', 'risk']).optional().describe('Group results by: file, category (added/modified/removed), or risk level (default: category)'),
+    },
+    async ({ branch, base, include_blast_radius, max_blast_depth, group_by }) => {
+      const result = compareBranches(store, projectRoot, {
+        branch,
+        base,
+        includeBlastRadius: include_blast_radius,
+        maxBlastDepth: max_blast_depth,
+        groupBy: group_by,
+      });
+      if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Community Detection ---
+  server.tool('detect_communities', 'Run Leiden community detection on the file dependency graph. Identifies tightly-coupled file clusters (modules).', { resolution: z.number().min(0.1).max(5).optional().describe('Resolution parameter — higher values produce more communities (default 1.0)') }, async ({ resolution }) => { const result = detectCommunities(store, resolution ?? 1.0); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+  server.tool('get_communities', 'Get previously detected communities (file clusters). Run detect_communities first.', {}, async () => { const result = getCommunities(store); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+  server.tool('get_community', 'Get details for a specific community: files, inter-community dependencies.', { id: z.number().int().min(0).describe('Community ID') }, async ({ id }) => { const result = getCommunityDetail(store, id); if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true }; return { content: [{ type: 'text', text: j(result.value) }] }; });
+
+  // --- Audit Config ---
+  server.tool('audit_config', 'Scan AI agent config files for stale references, dead paths, and token bloat.', { config_files: z.array(z.string().max(512)).optional().describe('Specific config files to audit (default: auto-detect)'), fix_suggestions: z.boolean().optional().describe('Include fix suggestions (default true)') }, async ({ config_files, fix_suggestions }) => { const result = auditConfig(store, projectRoot, { configFiles: config_files, fixSuggestions: fix_suggestions ?? true }); return { content: [{ type: 'text', text: j(result) }] }; });
+
+
+  // --- Control Flow Graph ---
+  server.tool(
+    'get_control_flow',
+    'Build a Control Flow Graph (CFG) for a function/method: if/else branches, loops, try/catch, returns, throws. Shows logical paths through the code. Outputs Mermaid diagram, ASCII, or JSON.',
+    {
+      symbol_id: z.string().max(512).optional().describe('Symbol ID of the function/method'),
+      fqn: z.string().max(512).optional().describe('Fully qualified name of the function/method'),
+      format: z.enum(['json', 'mermaid', 'ascii']).optional().describe('Output format (default: mermaid)'),
+      simplify: z.boolean().optional().describe('Collapse sequential statements (default: true)'),
+    },
+    async ({ symbol_id, fqn, format: fmt, simplify }) => {
+      const result = getControlFlow(store, projectRoot, {
+        symbolId: symbol_id,
+        fqn,
+        format: fmt ?? 'mermaid',
+        simplify: simplify ?? true,
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Cross-Repo Package Dependencies ---
+  server.tool(
+    'get_package_deps',
+    'Cross-repo package dependency analysis: find which registered projects depend on a package, or what packages a project publishes. Scans package.json/composer.json/pyproject.toml across all repos in the registry.',
+    {
+      package: z.string().max(256).optional().describe('Package name to analyze (e.g. "@myorg/shared-utils")'),
+      project: z.string().max(256).optional().describe('Project name — analyze all packages it publishes'),
+      direction: z.enum(['dependents', 'dependencies', 'both']).optional().describe('Direction (default: both)'),
+    },
+    async ({ package: pkg, project, direction }) => {
+      const result = getPackageDeps({
+        package: pkg,
+        project,
+        direction: direction ?? 'both',
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- Documentation Generation ---
+  server.tool(
+    'generate_docs',
+    'Auto-generate project documentation from the code graph. Produces structured docs with architecture, API surface, data models, components, and dependency analysis.',
+    {
+      scope: z.enum(['project', 'module', 'directory']).optional().describe('Scope (default: project)'),
+      path: z.string().max(512).optional().describe('Path for module/directory scope'),
+      format: z.enum(['markdown', 'html']).optional().describe('Output format (default: markdown)'),
+      sections: z.array(z.enum(['overview', 'architecture', 'api_surface', 'data_model', 'components', 'events', 'dependencies'])).optional()
+        .describe('Sections to include (default: all)'),
+    },
+    async ({ scope, path: scopePath, format: fmt, sections: secs }) => {
+      const result = generateDocs(store, registry, {
+        scope: scope ?? 'project',
+        path: scopePath,
+        format: fmt ?? 'markdown',
+        sections: secs ?? ['overview', 'architecture', 'api_surface', 'data_model', 'components', 'events', 'dependencies'],
+        projectRoot,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- Repo Packing ---
+  server.tool(
+    'pack_context',
+    'Pack project context into a single document for external LLMs. Intelligent selection by graph importance, fits within token budget. Better than Repomix for focused context.',
+    {
+      scope: z.enum(['project', 'module', 'feature']).describe('Scope: project (whole repo), module (subdirectory), feature (NL query)'),
+      path: z.string().max(512).optional().describe('Subdirectory path (for module scope)'),
+      query: z.string().max(500).optional().describe('Natural language query (for feature scope)'),
+      format: z.enum(['xml', 'markdown', 'json']).optional().describe('Output format (default: markdown)'),
+      max_tokens: z.number().int().min(1000).max(200000).optional().describe('Token budget (default: 50000)'),
+      include: z.array(z.enum(['file_tree', 'outlines', 'source', 'dependencies', 'routes', 'models', 'tests'])).optional()
+        .describe('Sections to include (default: outlines + source + routes)'),
+      compress: z.boolean().optional().describe('Strip function bodies, keep signatures (default: true)'),
+    },
+    async ({ scope, path: scopePath, query, format: fmt, max_tokens, include: inc, compress }) => {
+      const result = packContext(store, registry, {
+        scope,
+        path: scopePath,
+        query,
+        format: fmt ?? 'markdown',
+        maxTokens: max_tokens ?? 50000,
+        include: inc ?? ['outlines', 'source', 'routes'],
+        compress: compress ?? true,
+        projectRoot,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- Quality Gates ---
+
+  server.tool(
+    'check_quality_gates',
+    'Run configurable quality gate checks against the project. Returns pass/fail for each gate (complexity, coupling, circular imports, dead exports, tech debt, security, antipatterns, code smells). Designed for CI integration — AI can verify gates pass before committing.',
+    {
+      scope: z.enum(['project', 'changed']).optional().describe('Scope: "project" (all) or "changed" (git diff). Default: project'),
+      since: z.string().max(128).optional().describe('Git ref for "changed" scope (e.g. "main")'),
+      config: z.object({
+        fail_on: z.enum(['error', 'warning', 'none']).optional(),
+        rules: z.record(z.string(), z.object({
+          threshold: z.union([z.number(), z.string()]),
+          severity: z.enum(['error', 'warning']).optional(),
+        })).optional(),
+      }).optional().describe('Inline config overrides (merged with project config)'),
+    },
+    async ({ scope: _scope, since: _since, config: inlineConfig }) => {
+      // Load quality gates config from project config
+      let gatesConfig: QualityGatesConfig;
+      const rawQG = (config as Record<string, unknown>).quality_gates;
+      if (rawQG) {
+        const parsed = QualityGatesConfigSchema.safeParse(rawQG);
+        gatesConfig = parsed.success ? parsed.data : { enabled: true, fail_on: 'error', rules: {
+          max_cyclomatic_complexity: { threshold: 30, severity: 'warning' },
+          max_circular_import_chains: { threshold: 0, severity: 'error' },
+          max_security_critical_findings: { threshold: 0, severity: 'error' },
+        }};
+      } else {
+        gatesConfig = { enabled: true, fail_on: 'error', rules: {
+          max_cyclomatic_complexity: { threshold: 30, severity: 'warning' },
+          max_circular_import_chains: { threshold: 0, severity: 'error' },
+          max_security_critical_findings: { threshold: 0, severity: 'error' },
+        }};
+      }
+
+      // Apply inline overrides
+      if (inlineConfig?.fail_on) gatesConfig.fail_on = inlineConfig.fail_on;
+      if (inlineConfig?.rules) {
+        for (const [key, val] of Object.entries(inlineConfig.rules)) {
+          (gatesConfig.rules as Record<string, unknown>)[key] = {
+            ...(gatesConfig.rules as Record<string, unknown>)[key] as Record<string, unknown> | undefined,
+            ...val,
+          };
+        }
+      }
+
+      const report = evaluateQualityGates(store, projectRoot, gatesConfig, {
+        sinceDays: config.predictive?.git_since_days,
+        moduleDepth: config.predictive?.module_depth,
+      });
+
+      return { content: [{ type: 'text', text: j(report) }] };
+    },
+  );
+}

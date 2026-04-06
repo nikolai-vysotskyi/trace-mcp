@@ -1,0 +1,290 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import type { ServerContext } from '../../server-types.js';
+import { getSymbol, search, getFileOutline, type SearchResultItemProjected } from '../navigation.js';
+import { getChangeImpact } from '../impact.js';
+import { getFeatureContext } from '../context.js';
+import { getContextBundle } from '../context-bundle.js';
+import { getTaskContext } from '../task-context.js';
+import { suggestQueries } from '../suggest.js';
+import { getRelatedSymbols } from '../related.js';
+import { formatToolError } from '../../errors.js';
+import { buildNegativeEvidence } from '../evidence.js';
+import { searchText } from '../search-text.js';
+import { fallbackSearch, fallbackOutline } from '../zero-index.js';
+import { computeAdaptiveBudget } from '../../adaptive-budget.js';
+
+export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
+  const { store, projectRoot, guardPath, j, jh, savings, vectorStore, embeddingService, reranker } = ctx;
+
+  // --- Level 1 Navigation Tools ---
+
+  server.tool(
+    'get_symbol',
+    'Look up a symbol by symbol_id or FQN and return its source code. Use instead of Read when you need one specific function/class/method — returns only the symbol, not the whole file.',
+    {
+      symbol_id: z.string().max(512).optional().describe('The symbol_id to look up'),
+      fqn: z.string().max(512).optional().describe('The fully qualified name to look up'),
+      max_lines: z.number().int().min(1).max(10000).optional().describe('Truncate source to this many lines (omit for full source)'),
+    },
+    async ({ symbol_id, fqn, max_lines }) => {
+      const result = getSymbol(store, projectRoot, { symbolId: symbol_id, fqn, maxLines: max_lines });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      const { symbol, file, source, truncated } = result.value;
+      return {
+        content: [{
+          type: 'text',
+          text: jh('get_symbol', {
+            symbol_id: symbol.symbol_id,
+            name: symbol.name,
+            kind: symbol.kind,
+            fqn: symbol.fqn,
+            signature: symbol.signature,
+            summary: symbol.summary,
+            file: file.path,
+            line_start: symbol.line_start,
+            line_end: symbol.line_end,
+            source,
+            ...(truncated ? { truncated: true } : {}),
+          }),
+        }],
+      };
+    },
+  );
+
+  server.tool(
+    'search',
+    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). Auto-falls back to fuzzy if exact search returns 0 results.',
+    {
+      query: z.string().min(1).max(500).describe('Search query'),
+      kind: z.string().max(64).optional().describe('Filter by symbol kind (class, method, function, etc.)'),
+      language: z.string().max(64).optional().describe('Filter by language'),
+      file_pattern: z.string().max(512).optional().describe('Filter by file path pattern'),
+      implements: z.string().max(256).optional().describe('Filter to classes implementing this interface'),
+      extends: z.string().max(256).optional().describe('Filter to classes/interfaces extending this name'),
+      fuzzy: z.boolean().optional().describe('Enable fuzzy search (trigram + Levenshtein). Auto-enabled when exact search returns 0 results.'),
+      fuzzy_threshold: z.number().min(0).max(1).optional().describe('Minimum Jaccard trigram similarity (default 0.3)'),
+      max_edit_distance: z.number().int().min(1).max(10).optional().describe('Maximum Levenshtein edit distance (default 3)'),
+      limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
+      offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
+    },
+    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext, fuzzy, fuzzy_threshold, max_edit_distance }) => {
+      // Zero-index fallback: if index is empty, use ripgrep
+      const stats = store.getStats();
+      if (stats.totalFiles === 0) {
+        const fbResult = fallbackSearch(projectRoot, query, {
+          filePattern: file_pattern,
+          maxResults: limit ?? 20,
+        });
+        return { content: [{ type: 'text', text: jh('search', { ...fbResult, search_mode: 'zero_index_fallback', _hint: 'Index is empty. Run reindex to enable full symbol search.' }) }] };
+      }
+
+      const result = await search(
+        store,
+        query,
+        { kind, language, filePattern: file_pattern, implements: impl, extends: ext },
+        limit ?? 20,
+        offset ?? 0,
+        { vectorStore, embeddingService, reranker },
+        { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
+      );
+      // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
+      const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => ({
+        symbol_id: symbol.symbol_id,
+        name: symbol.name,
+        kind: symbol.kind,
+        fqn: symbol.fqn,
+        signature: symbol.signature,
+        summary: symbol.summary,
+        file: file.path,
+        line: symbol.line_start,
+        score,
+      }));
+      const response: Record<string, unknown> = { items, total: result.total, search_mode: result.search_mode };
+      if (items.length === 0) {
+        // Auto-fallback: try text search when symbol search finds nothing
+        const textResult = searchText(store, projectRoot, {
+          query,
+          filePattern: file_pattern,
+          language,
+          maxResults: Math.min(limit ?? 20, 10),
+          contextLines: 1,
+        });
+        if (textResult.isOk() && textResult.value.matches.length > 0) {
+          const tv = textResult.value;
+          response.fallback_text_matches = tv.matches;
+          response.fallback_total = tv.total_matches;
+          response.search_mode = 'symbol_miss_text_fallback';
+        } else {
+          response.evidence = buildNegativeEvidence(
+            stats.totalFiles, stats.totalSymbols,
+            result.search_mode === 'fuzzy' || !!fuzzy,
+            'search',
+          );
+        }
+      }
+      return { content: [{ type: 'text', text: jh('search', response) }] };
+    },
+  );
+
+  server.tool(
+    'get_outline',
+    'Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens.',
+    {
+      path: z.string().max(512).describe('Relative file path'),
+    },
+    async ({ path: filePath }) => {
+      const blocked = guardPath(filePath);
+      if (blocked) return blocked;
+
+      // Zero-index fallback: if index is empty, use regex-based extraction
+      const stats = store.getStats();
+      if (stats.totalFiles === 0) {
+        try {
+          const fbResult = fallbackOutline(projectRoot, filePath);
+          return { content: [{ type: 'text', text: jh('get_outline', { ...fbResult, _hint: 'Index is empty. Run reindex to enable full symbol extraction.' }) }] };
+        } catch {
+          return { content: [{ type: 'text', text: j({ error: 'File not found or unreadable (index is empty)', path: filePath }) }], isError: true };
+        }
+      }
+
+      const result = getFileOutline(store, filePath);
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: jh('get_outline', result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_change_impact',
+    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Supports diff-aware mode via symbol_ids to scope analysis to only changed symbols.',
+    {
+      file_path: z.string().max(512).optional().describe('Relative file path to analyze'),
+      symbol_id: z.string().max(512).optional().describe('Symbol ID to analyze'),
+      symbol_ids: z.array(z.string().max(512)).max(50).optional().describe('Diff-aware: only analyze impact of these specific symbols (e.g. from get_changed_symbols)'),
+      depth: z.number().int().min(1).max(20).optional().describe('Max traversal depth (default 3)'),
+      max_dependents: z.number().int().min(1).max(5000).optional().describe('Cap on returned dependents (default 200)'),
+    },
+    async ({ file_path, symbol_id, symbol_ids, depth, max_dependents }) => {
+      if (file_path) {
+        const blocked = guardPath(file_path);
+        if (blocked) return blocked;
+      }
+      const result = getChangeImpact(
+        store,
+        { filePath: file_path, symbolId: symbol_id, symbolIds: symbol_ids },
+        depth ?? 3,
+        max_dependents ?? 200,
+        projectRoot,
+      );
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: jh('get_change_impact', result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_feature_context',
+    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature.',
+    {
+      description: z.string().min(1).max(2000).describe('Natural language description of the feature to find context for'),
+      token_budget: z.number().int().min(100).max(100000).optional().describe('Max tokens for assembled context (default 4000)'),
+    },
+    async ({ description, token_budget }) => {
+      const budgetState = { totalCalls: savings.getSessionStats().total_calls, totalRawTokens: savings.getSessionStats().total_raw_tokens };
+      const adaptive = computeAdaptiveBudget('get_feature_context', budgetState, token_budget);
+      const result = getFeatureContext(store, projectRoot, description, adaptive.budget);
+      if (result.items.length === 0) {
+        const stats = store.getStats();
+        const enriched = { ...result, evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'get_feature_context') };
+        return { content: [{ type: 'text', text: jh('get_feature_context', enriched) }] };
+      }
+      return { content: [{ type: 'text', text: jh('get_feature_context', result) }] };
+    },
+  );
+
+  server.tool(
+    'suggest_queries',
+    'Onboarding helper: shows top imported files, most connected symbols (PageRank), language stats, and example tool calls. Call this first when exploring an unfamiliar project.',
+    {},
+    async () => {
+      const result = suggestQueries(store);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'get_related_symbols',
+    'Find symbols related via co-location (same file), shared importers, and name similarity. Useful for discovering related code when exploring a symbol.',
+    {
+      symbol_id: z.string().max(512).describe('Symbol ID to find related symbols for'),
+      max_results: z.number().int().min(1).max(100).optional().describe('Max results (default 20)'),
+    },
+    async ({ symbol_id, max_results }) => {
+      const result = getRelatedSymbols(store, { symbolId: symbol_id, maxResults: max_results ?? 20 });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: jh('get_related_symbols', result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_context_bundle',
+    'Get a symbol\'s source code + its import dependencies + optional callers, packed within a token budget. Supports batch queries with shared-import deduplication.',
+    {
+      symbol_id: z.string().max(512).optional().describe('Single symbol ID'),
+      symbol_ids: z.array(z.string().max(512)).max(20).optional().describe('Batch: multiple symbol IDs'),
+      fqn: z.string().max(512).optional().describe('Alternative: look up by FQN'),
+      include_callers: z.boolean().optional().describe('Include who calls these symbols (default false)'),
+      token_budget: z.number().int().min(100).max(100000).optional().describe('Max tokens (default 8000)'),
+      output_format: z.enum(['json', 'markdown']).optional().describe('Output format (default json)'),
+    },
+    async ({ symbol_id, symbol_ids, fqn, include_callers, token_budget, output_format }) => {
+      const ids = symbol_ids ?? (symbol_id ? [symbol_id] : []);
+      const budgetState = { totalCalls: savings.getSessionStats().total_calls, totalRawTokens: savings.getSessionStats().total_raw_tokens };
+      const adaptive = computeAdaptiveBudget('get_context_bundle', budgetState, token_budget);
+      const result = getContextBundle(store, projectRoot, {
+        symbolIds: ids,
+        fqn: fqn ?? undefined,
+        includeCallers: include_callers ?? false,
+        tokenBudget: adaptive.budget,
+        outputFormat: output_format ?? 'json',
+      });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: jh('get_context_bundle', result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_task_context',
+    'All-in-one context for starting a dev task: execution paths, tests, entry points, adapted by task type. Use as your FIRST call when beginning any new task.',
+    {
+      task: z.string().min(1).max(2000).describe('Natural language description of the task'),
+      token_budget: z.number().int().min(100).max(100000).optional().describe('Max tokens (default 8000)'),
+      focus: z.enum(['minimal', 'broad', 'deep']).optional().describe('Context strategy: minimal (fast, essential only), broad (default, wide net), deep (follow full execution chains)'),
+      include_tests: z.boolean().optional().describe('Include relevant test files (default true)'),
+    },
+    async ({ task, token_budget, focus, include_tests }) => {
+      const budgetState = { totalCalls: savings.getSessionStats().total_calls, totalRawTokens: savings.getSessionStats().total_raw_tokens };
+      const adaptive = computeAdaptiveBudget('get_task_context', budgetState, token_budget);
+      const result = await getTaskContext(store, projectRoot, {
+        task,
+        tokenBudget: adaptive.budget,
+        focus: focus ?? 'broad',
+        includeTests: include_tests ?? true,
+      }, { vectorStore, embeddingService });
+      const output: Record<string, unknown> = typeof result === 'object' && result !== null ? { ...(result as unknown as Record<string, unknown>) } : { data: result };
+      if (adaptive.reduced) {
+        output._budget_adaptive = { budget: adaptive.budget, reason: adaptive.reason };
+      }
+      return { content: [{ type: 'text', text: jh('get_task_context', output) }] };
+    },
+  );
+}
