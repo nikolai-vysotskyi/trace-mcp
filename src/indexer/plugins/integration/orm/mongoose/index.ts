@@ -109,7 +109,7 @@ export class MongoosePlugin implements FrameworkPlugin {
 // Schema extraction
 // ============================================================
 
-export interface MongooseExtractionResult {
+interface MongooseExtractionResult {
   model: RawOrmModel;
   associations: RawOrmAssociation[];
 }

@@ -28,7 +28,7 @@ export type RuleName =
   | 'ssrf'
   | 'all';
 
-export interface SecurityFinding {
+interface SecurityFinding {
   rule_id: string;
   rule_name: string;
   severity: Severity;

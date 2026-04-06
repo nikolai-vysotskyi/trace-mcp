@@ -35,7 +35,7 @@ import type { TraceMcpResult } from '../../../../../errors.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export interface ShadcnConfig {
+interface ShadcnConfig {
   $schema?: string;
   style?: string;                    // 'default' | 'new-york'
   rsc?: boolean;                     // React Server Components
@@ -58,7 +58,7 @@ export interface ShadcnConfig {
   iconLibrary?: string;              // 'lucide' | 'radix-icons' etc.
 }
 
-export interface CvaDefinition {
+interface CvaDefinition {
   name: string;
   baseClasses: string;
   variants: Record<string, string[]>;
@@ -66,14 +66,14 @@ export interface CvaDefinition {
   compoundVariants: number;           // count of compound variant rules
 }
 
-export interface TvDefinition {
+interface TvDefinition {
   name: string;
   slots: string[];
   variants: Record<string, string[]>;
   defaultVariants: Record<string, string>;
 }
 
-export interface ShadcnComponentInfo {
+interface ShadcnComponentInfo {
   name: string;
   hasForwardRef: boolean;
   usesSlot: boolean;                  // @radix-ui/react-slot
@@ -88,7 +88,7 @@ export interface ShadcnComponentInfo {
   usesCn: boolean;                    // uses cn() utility
 }
 
-export interface InstalledComponent {
+interface InstalledComponent {
   name: string;
   fileName: string;
   relativePath: string;
@@ -100,7 +100,7 @@ const CVA_RE =
   /(?:export\s+(?:default\s+)?)?(?:const|let)\s+(\w+)\s*=\s*cva\s*\(/g;
 
 /** Extract CVA variant definitions from source code. */
-export function extractCvaDefinitions(source: string): CvaDefinition[] {
+function extractCvaDefinitions(source: string): CvaDefinition[] {
   const defs: CvaDefinition[] = [];
   const re = new RegExp(CVA_RE.source, 'g');
   let match: RegExpExecArray | null;
@@ -169,7 +169,7 @@ const TV_RE =
   /(?:export\s+(?:default\s+)?)?(?:const|let)\s+(\w+)\s*=\s*tv\s*\(/g;
 
 /** Extract tailwind-variants tv() definitions. */
-export function extractTvDefinitions(source: string): TvDefinition[] {
+function extractTvDefinitions(source: string): TvDefinition[] {
   const defs: TvDefinition[] = [];
   const re = new RegExp(TV_RE.source, 'g');
   let match: RegExpExecArray | null;
@@ -232,7 +232,7 @@ export function extractTvDefinitions(source: string): TvDefinition[] {
 // ── Component extraction (React) ──────────────────────────────────────────
 
 /** Extract comprehensive shadcn component info from a React/TSX file. */
-export function extractShadcnComponents(source: string, filePath: string): ShadcnComponentInfo[] {
+function extractShadcnComponents(source: string, filePath: string): ShadcnComponentInfo[] {
   const components: ShadcnComponentInfo[] = [];
 
   // Gather file-level data
@@ -331,7 +331,7 @@ export function extractShadcnComponents(source: string, filePath: string): Shadc
 
 // ── Component extraction (Vue — shadcn-vue) ───────────────────────────────
 
-export interface ShadcnVueComponentInfo {
+interface ShadcnVueComponentInfo {
   name: string;
   props: string[];
   emits: string[];
@@ -343,7 +343,7 @@ export interface ShadcnVueComponentInfo {
 }
 
 /** Extract shadcn-vue component info from a .vue SFC. */
-export function extractShadcnVueComponent(source: string, filePath: string): ShadcnVueComponentInfo | null {
+function extractShadcnVueComponent(source: string, filePath: string): ShadcnVueComponentInfo | null {
   const fileName = path.basename(filePath, path.extname(filePath));
   const name = toPascalCase(fileName);
 
@@ -498,7 +498,7 @@ function extractPropFieldsFromBody(body: string): string[] {
 }
 
 /** Extract imports from shadcn/ui component paths. */
-export function extractShadcnImports(source: string): { name: string; path: string; isDefault: boolean }[] {
+function extractShadcnImports(source: string): { name: string; path: string; isDefault: boolean }[] {
   const imports: { name: string; path: string; isDefault: boolean }[] = [];
 
   // Named: import { Button } from "@/components/ui/button"

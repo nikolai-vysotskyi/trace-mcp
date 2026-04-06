@@ -5,7 +5,7 @@ import { TRACE_MCP_HOME, ensureGlobalDirs } from '../global.js';
 import { logger } from '../logger.js';
 import type { ParsedSession, ToolCallEvent, ToolResultEvent, TokenUsage } from './log-parser.js';
 
-export const ANALYTICS_DB_PATH = path.join(TRACE_MCP_HOME, 'analytics.db');
+const ANALYTICS_DB_PATH = path.join(TRACE_MCP_HOME, 'analytics.db');
 
 export interface ToolCallRow {
   tool_name: string;

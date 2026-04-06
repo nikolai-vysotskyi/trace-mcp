@@ -29,7 +29,7 @@ export interface LayerViolation {
   rule: string;
 }
 
-export interface LayerViolationResult {
+interface LayerViolationResult {
   total_violations: number;
   violations: LayerViolation[];
   layers_checked: string[];

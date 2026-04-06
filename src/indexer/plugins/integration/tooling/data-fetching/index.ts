@@ -46,7 +46,7 @@ const USE_SWR_FUNCTION_RE =
 const FETCH_TEMPLATE_RE =
   /fetch\s*\(\s*`(\/[^`]*?)\$\{[^}]+\}([^`]*?)`/g;
 
-export interface DataFetchingHook {
+interface DataFetchingHook {
   hook: string;
   endpoint: string | null;
   method: string;

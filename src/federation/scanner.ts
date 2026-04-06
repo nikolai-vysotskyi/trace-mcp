@@ -12,7 +12,7 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface ScannedClientCall {
+interface ScannedClientCall {
   filePath: string;
   line: number;
   callType: string;

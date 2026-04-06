@@ -15,7 +15,7 @@ import picomatch from 'picomatch';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export interface VisualizeGraphOptions {
+interface VisualizeGraphOptions {
   scope: string;            // file path, directory, or "project"
   depth?: number;           // max hops from scope (default: 2)
   layout?: 'force' | 'hierarchical' | 'radial';
@@ -48,21 +48,21 @@ interface VizCommunity {
   color: string;
 }
 
-export interface VisualizeGraphResult {
+interface VisualizeGraphResult {
   outputPath: string;
   nodes: number;
   edges: number;
   communities: number;
 }
 
-export interface MermaidDiagramOptions {
+interface MermaidDiagramOptions {
   scope: string;
   depth?: number;
   maxNodes?: number;
   format?: 'mermaid' | 'dot';
 }
 
-export interface MermaidDiagramResult {
+interface MermaidDiagramResult {
   diagram: string;
   format: string;
   nodes: number;

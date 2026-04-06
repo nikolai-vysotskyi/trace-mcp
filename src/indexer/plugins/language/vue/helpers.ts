@@ -45,7 +45,7 @@ const VUE_BUILTINS = new Set([
  * Check if a tag name is a custom component (not HTML built-in).
  * Custom components are PascalCase or kebab-case with a hyphen.
  */
-export function isCustomComponent(tag: string): boolean {
+function isCustomComponent(tag: string): boolean {
   if (VUE_BUILTINS.has(tag)) return false;
   if (HTML_ELEMENTS.has(tag.toLowerCase())) return false;
   if (SVG_ELEMENTS.has(tag)) return false;

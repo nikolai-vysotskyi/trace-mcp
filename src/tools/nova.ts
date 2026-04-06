@@ -6,14 +6,14 @@ import type { Store } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 
-export interface NovaFieldInfo {
+interface NovaFieldInfo {
   fieldType: string;
   label: string;
   attribute: string;
   targetResource?: string;
 }
 
-export interface NovaResourceResult {
+interface NovaResourceResult {
   resource: {
     name: string;
     fqn: string;

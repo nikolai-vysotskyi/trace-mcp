@@ -5,7 +5,7 @@
 
 import type { Store } from '../db/store.js';
 
-export interface BenchmarkScenarioResult {
+interface BenchmarkScenarioResult {
   name: string;
   description: string;
   queries: number;
@@ -15,7 +15,7 @@ export interface BenchmarkScenarioResult {
   details: { query: string; file: string; baseline_tokens: number; trace_mcp_tokens: number; reduction_pct: number }[];
 }
 
-export interface BenchmarkResult {
+interface BenchmarkResult {
   project: string;
   index_stats: { files: number; symbols: number; frameworks: string[] };
   scenarios: BenchmarkScenarioResult[];

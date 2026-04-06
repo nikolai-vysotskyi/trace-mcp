@@ -19,7 +19,7 @@ import { validationError } from '../errors.js';
 
 export type SbomFormat = 'cyclonedx' | 'spdx' | 'json';
 
-export interface SbomComponent {
+interface SbomComponent {
   name: string;
   version: string;
   ecosystem: string;
@@ -28,14 +28,14 @@ export interface SbomComponent {
   resolved?: string; // resolved URL or hash
 }
 
-export interface LicenseWarning {
+interface LicenseWarning {
   component: string;
   version: string;
   license: string;
   reason: string;
 }
 
-export interface SbomResult {
+interface SbomResult {
   format: SbomFormat;
   components: SbomComponent[];
   direct_count: number;

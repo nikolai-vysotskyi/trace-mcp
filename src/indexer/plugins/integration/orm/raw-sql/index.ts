@@ -55,13 +55,13 @@ const SQL_IMPORT_RE =
 
 // --- Helpers -------------------------------------------------------------------
 
-export interface SqlStatement {
+interface SqlStatement {
   kind: 'ddl' | 'dml' | 'pragma';
   tables: string[];
   raw?: string;
 }
 
-export function extractSqlStatements(source: string): SqlStatement[] {
+function extractSqlStatements(source: string): SqlStatement[] {
   const results: SqlStatement[] = [];
   const seen = new Set<string>();
 

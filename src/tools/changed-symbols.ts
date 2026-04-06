@@ -9,9 +9,9 @@ import type { Store, SymbolRow, FileRow } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { logger } from '../logger.js';
 
-export type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
+type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
 
-export interface ChangedSymbolEntry {
+interface ChangedSymbolEntry {
   symbolId: string;
   name: string;
   kind: string;
@@ -22,7 +22,7 @@ export interface ChangedSymbolEntry {
   blastRadius?: number;
 }
 
-export interface ChangedSymbolsResult {
+interface ChangedSymbolsResult {
   since: string;
   until: string;
   changedFiles: number;
@@ -30,7 +30,7 @@ export interface ChangedSymbolsResult {
   summary: { added: number; modified: number; removed: number; renamed: number };
 }
 
-export interface ChangedSymbolsOptions {
+interface ChangedSymbolsOptions {
   since: string;
   until?: string;
   includeBlastRadius?: boolean;
@@ -227,7 +227,7 @@ function statusToChangeKind(status: string): ChangeKind {
 
 // --- Branch Comparison (sugar over getChangedSymbols) ---
 
-export interface BranchComparisonOptions {
+interface BranchComparisonOptions {
   branch: string;
   base?: string;
   includeBlastRadius?: boolean;
@@ -235,7 +235,7 @@ export interface BranchComparisonOptions {
   groupBy?: 'file' | 'category' | 'risk';
 }
 
-export interface BranchComparisonResult extends ChangedSymbolsResult {
+interface BranchComparisonResult extends ChangedSymbolsResult {
   branch: string;
   base: string;
   mergeBase: string;

@@ -3,9 +3,9 @@
  * Never exposes actual values — only structural metadata.
  */
 
-export type EnvValueType = 'string' | 'number' | 'boolean' | 'empty';
+type EnvValueType = 'string' | 'number' | 'boolean' | 'empty';
 
-export type EnvValueFormat =
+type EnvValueFormat =
   | 'url'
   | 'email'
   | 'ip'

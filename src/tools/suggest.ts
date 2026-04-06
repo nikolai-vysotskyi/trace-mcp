@@ -35,7 +35,7 @@ interface ExampleQuery {
   params: Record<string, unknown>;
 }
 
-export interface SuggestQueriesResult {
+interface SuggestQueriesResult {
   stats: {
     files: number;
     symbols: number;

@@ -17,7 +17,7 @@ import type { Store } from '../db/store.js';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface FallbackSearchResult {
+interface FallbackSearchResult {
   fallback: true;
   reason: string;
   matches: FallbackMatch[];
@@ -25,7 +25,7 @@ export interface FallbackSearchResult {
   hint: string;
 }
 
-export interface FallbackMatch {
+interface FallbackMatch {
   file: string;
   line: number;
   column: number;
@@ -33,7 +33,7 @@ export interface FallbackMatch {
   context?: string;
 }
 
-export interface FallbackOutlineResult {
+interface FallbackOutlineResult {
   fallback: true;
   reason: string;
   file: string;
@@ -41,7 +41,7 @@ export interface FallbackOutlineResult {
   hint: string;
 }
 
-export interface FallbackSymbol {
+interface FallbackSymbol {
   name: string;
   kind: string;
   line: number;

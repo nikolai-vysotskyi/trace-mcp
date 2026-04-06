@@ -28,7 +28,7 @@ export interface LivewireComponentInfo {
   version: 2 | 3;
 }
 
-export interface LivewireProperty {
+interface LivewireProperty {
   name: string;
   type: string | null;
   hasUrlAttribute: boolean;
@@ -37,28 +37,28 @@ export interface LivewireProperty {
   hasComputedAttribute: boolean;
 }
 
-export interface LivewireEventRef {
+interface LivewireEventRef {
   eventName: string;
   method: string; // which method dispatches it
 }
 
-export interface LivewireListenerRef {
+interface LivewireListenerRef {
   eventName: string;
   handlerMethod: string;
 }
 
-export interface LivewireFormRef {
+interface LivewireFormRef {
   propertyName: string;
   formClass: string;
 }
 
-export interface LivewireBladeUsage {
+interface LivewireBladeUsage {
   componentName: string; // kebab-case: 'order-form'
   line: number;
   syntax: 'tag' | 'directive'; // <livewire:x/> vs @livewire('x')
 }
 
-export interface LivewireWireDirective {
+interface LivewireWireDirective {
   directive: string; // 'click', 'submit', 'model'
   value: string;     // method name or property name
   line: number;
@@ -249,7 +249,7 @@ export function extractWireDirectives(source: string): LivewireWireDirective[] {
  * Build edges from Livewire component info.
  * Creates livewire_renders, livewire_dispatches, livewire_listens edges.
  */
-export function buildLivewireEdges(
+function buildLivewireEdges(
   component: LivewireComponentInfo,
 ): RawEdge[] {
   const edges: RawEdge[] = [];

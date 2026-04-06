@@ -33,22 +33,22 @@ const MIDDLEWARE_RE =
 const STATIC_RE =
   /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
 
-export interface EchoRoute {
+interface EchoRoute {
   method: string;
   path: string;
   handler?: string;
 }
 
-export interface EchoMiddleware {
+interface EchoMiddleware {
   name: string;
 }
 
-export interface EchoGroup {
+interface EchoGroup {
   prefix: string;
 }
 
 /** Extract route definitions from Echo source code. */
-export function extractEchoRoutes(source: string): EchoRoute[] {
+function extractEchoRoutes(source: string): EchoRoute[] {
   const routes: EchoRoute[] = [];
 
   const routeRe = new RegExp(ROUTE_RE.source, 'g');
@@ -73,7 +73,7 @@ export function extractEchoRoutes(source: string): EchoRoute[] {
 }
 
 /** Extract middleware Use()/Pre() calls from Echo source code. */
-export function extractEchoMiddleware(source: string): EchoMiddleware[] {
+function extractEchoMiddleware(source: string): EchoMiddleware[] {
   const middlewares: EchoMiddleware[] = [];
 
   const mwRe = new RegExp(MIDDLEWARE_RE.source, 'g');
@@ -88,7 +88,7 @@ export function extractEchoMiddleware(source: string): EchoMiddleware[] {
 }
 
 /** Extract route group definitions from Echo source code. */
-export function extractEchoGroups(source: string): EchoGroup[] {
+function extractEchoGroups(source: string): EchoGroup[] {
   const groups: EchoGroup[] = [];
 
   const groupRe = new RegExp(GROUP_RE.source, 'g');

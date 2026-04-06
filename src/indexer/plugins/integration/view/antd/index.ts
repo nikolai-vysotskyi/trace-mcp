@@ -35,25 +35,25 @@ const CONFIG_PROVIDER_THEME_RE =
 const THEME_CONFIG_RE =
   /(?:export\s+)?(?:const|let)\s+(\w+)\s*(?::\s*ThemeConfig\s*)?=\s*\{/g;
 
-export interface AntdThemeConfig {
+interface AntdThemeConfig {
   name: string;
   hasToken: boolean;
   hasComponents: boolean;
   hasAlgorithm: boolean;
 }
 
-export interface AntdFormDef {
+interface AntdFormDef {
   name: string;
   fields: string[];
 }
 
-export interface AntdTableDef {
+interface AntdTableDef {
   name: string;
   columns: string[];
 }
 
 /** Extract theme configuration objects that match Ant Design ThemeConfig shape. */
-export function extractAntdThemes(source: string): AntdThemeConfig[] {
+function extractAntdThemes(source: string): AntdThemeConfig[] {
   const themes: AntdThemeConfig[] = [];
   const re = new RegExp(THEME_CONFIG_RE.source, 'g');
   let match: RegExpExecArray | null;
@@ -77,7 +77,7 @@ export function extractAntdThemes(source: string): AntdThemeConfig[] {
 }
 
 /** Extract Form field names from Form.Item name props. */
-export function extractAntdFormFields(source: string): AntdFormDef[] {
+function extractAntdFormFields(source: string): AntdFormDef[] {
   const forms: AntdFormDef[] = [];
 
   // Detect Form.useForm() or Form.create()
@@ -114,7 +114,7 @@ export function extractAntdFormFields(source: string): AntdFormDef[] {
 }
 
 /** Extract Table column definitions. */
-export function extractAntdTableColumns(source: string): AntdTableDef[] {
+function extractAntdTableColumns(source: string): AntdTableDef[] {
   const tables: AntdTableDef[] = [];
 
   // Match: const columns = [...] or const columns: ColumnsType<T> = [...]
@@ -142,7 +142,7 @@ export function extractAntdTableColumns(source: string): AntdTableDef[] {
 }
 
 /** Extract antd component imports. */
-export function extractAntdImports(source: string): { name: string; package: string }[] {
+function extractAntdImports(source: string): { name: string; package: string }[] {
   const imports: { name: string; package: string }[] = [];
 
   const importRe =

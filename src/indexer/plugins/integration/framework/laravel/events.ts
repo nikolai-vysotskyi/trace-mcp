@@ -4,12 +4,12 @@
  */
 import type { RawEdge } from '../../../../../plugin-api/types.js';
 
-export interface EventListenerMapping {
+interface EventListenerMapping {
   eventClass: string;
   listenerClasses: string[];
 }
 
-export interface EventDispatch {
+interface EventDispatch {
   eventClass: string;
   location: string; // 'ClassName::methodName' or similar
 }

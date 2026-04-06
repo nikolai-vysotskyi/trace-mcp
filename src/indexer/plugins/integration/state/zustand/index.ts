@@ -127,7 +127,7 @@ export class ZustandReduxPlugin implements FrameworkPlugin {
 
 // ── Zustand extraction ─────────────────────────────────────────────────────
 
-export interface ZustandStore {
+interface ZustandStore {
   name: string;
   stateFields: string[];
   actions: string[];
@@ -181,7 +181,7 @@ export function extractZustandStores(source: string): ZustandStore[] {
 
 // ── Redux Toolkit extraction ───────────────────────────────────────────────
 
-export interface ReduxSlice {
+interface ReduxSlice {
   name: string;
   varName: string;
   reducers: string[];

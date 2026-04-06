@@ -11,7 +11,7 @@ import type { Store } from '../db/store.js';
 import type { RuntimeSpanRow } from './types.js';
 import { logger } from '../logger.js';
 
-export interface MappingConfig {
+interface MappingConfig {
   fqnAttributes: string[];
   routePatterns: RegExp[];
 }

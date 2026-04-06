@@ -3,7 +3,7 @@
  * Maps AST constructs and source patterns to the minimum Ruby version.
  */
 
-export const RUBY_MIN_VERSION: Record<string, string> = {
+const RUBY_MIN_VERSION: Record<string, string> = {
   // Ruby 2.0 — keyword arguments, lazy enumerator
   'keyword_parameter': '2.0',
 
@@ -22,7 +22,7 @@ export const RUBY_MIN_VERSION: Record<string, string> = {
 };
 
 /** Source-level patterns for Ruby features. */
-export const RUBY_SOURCE_PATTERNS: [RegExp, string, string][] = [
+const RUBY_SOURCE_PATTERNS: [RegExp, string, string][] = [
   // Ruby 2.0 — keyword arguments
   [/def\s+\w+\s*\(\s*\w+:/, '2.0', 'keyword arguments'],
 
@@ -72,7 +72,7 @@ function semverGt(a: string, b: string): boolean {
 }
 
 /** Detect minimum Ruby version from AST node types. */
-export function detectMinRubyVersion(nodeTypes: string[]): string | undefined {
+function detectMinRubyVersion(nodeTypes: string[]): string | undefined {
   let max = '0';
   for (const nt of nodeTypes) {
     const ver = RUBY_MIN_VERSION[nt];

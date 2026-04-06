@@ -6,7 +6,7 @@
 import type { Store, RnScreenRow } from '../db/store.js';
 import { ok, type TraceMcpResult } from '../errors.js';
 
-export interface NavigationNode {
+interface NavigationNode {
   screen: string;
   component?: string;
   navigatorType?: string;
@@ -15,7 +15,7 @@ export interface NavigationNode {
   metadata?: Record<string, unknown>;
 }
 
-export interface NavigationGraphResult {
+interface NavigationGraphResult {
   screens: NavigationNode[];
   navigatorTypes: string[];
   deepLinks: { screen: string; path: string }[];

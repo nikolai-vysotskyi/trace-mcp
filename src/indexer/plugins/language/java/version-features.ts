@@ -3,7 +3,7 @@
  * Maps AST constructs to the minimum Java version that introduced them.
  */
 
-export const JAVA_MIN_VERSION: Record<string, string> = {
+const JAVA_MIN_VERSION: Record<string, string> = {
   // Java 8 — lambda, method reference, default methods
   'lambda_expression': '8',
   'method_reference': '8',
@@ -26,7 +26,7 @@ export const JAVA_MIN_VERSION: Record<string, string> = {
 };
 
 /** Source-level patterns for Java features. */
-export const JAVA_SOURCE_PATTERNS: [RegExp, string, string][] = [
+const JAVA_SOURCE_PATTERNS: [RegExp, string, string][] = [
   // Java 8
   [/->/, '8', 'lambda expression'],
 
@@ -57,7 +57,7 @@ export const JAVA_SOURCE_PATTERNS: [RegExp, string, string][] = [
 ];
 
 /** Detect minimum Java version from AST node types. */
-export function detectMinJavaVersion(nodeTypes: string[]): string | undefined {
+function detectMinJavaVersion(nodeTypes: string[]): string | undefined {
   let max = 0;
   let result: string | undefined;
   for (const nt of nodeTypes) {

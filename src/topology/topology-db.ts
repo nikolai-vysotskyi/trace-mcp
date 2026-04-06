@@ -21,7 +21,7 @@ export interface ServiceRow {
   indexed_at: string;
 }
 
-export interface ContractRow {
+interface ContractRow {
   id: number;
   service_id: number;
   contract_type: string;
@@ -44,7 +44,7 @@ export interface EndpointRow {
   metadata: string | null;
 }
 
-export interface EventChannelRow {
+interface EventChannelRow {
   id: number;
   contract_id: number | null;
   service_id: number;

@@ -8,7 +8,7 @@
  * on the source code to identify control flow nodes and edges.
  */
 
-export type CFGNodeKind =
+type CFGNodeKind =
   | 'entry' | 'exit'
   | 'if' | 'else' | 'else_if'
   | 'for' | 'while' | 'do_while' | 'for_of' | 'for_in'
@@ -18,7 +18,7 @@ export type CFGNodeKind =
   | 'await' | 'yield'
   | 'statement';
 
-export interface CFGNode {
+interface CFGNode {
   id: number;
   kind: CFGNodeKind;
   line: number;
@@ -26,7 +26,7 @@ export interface CFGNode {
   condition?: string;
 }
 
-export interface CFGEdge {
+interface CFGEdge {
   from: number;
   to: number;
   label?: 'true' | 'false' | 'exception' | 'default' | 'fallthrough';

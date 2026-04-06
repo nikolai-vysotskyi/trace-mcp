@@ -10,20 +10,20 @@ import type { Store } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { logger } from '../logger.js';
 
-export interface CoChangeEntry {
+interface CoChangeEntry {
   file: string;
   count: number;
   confidence: number;
   lastCoChange: string | null;
 }
 
-export interface CoChangeResult {
+interface CoChangeResult {
   file: string;
   coChanges: CoChangeEntry[];
   windowDays: number;
 }
 
-export interface CoChangeOptions {
+interface CoChangeOptions {
   file: string;
   minConfidence?: number;
   minCount?: number;

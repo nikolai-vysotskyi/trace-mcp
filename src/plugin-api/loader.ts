@@ -2,7 +2,7 @@ import path from 'node:path';
 import { logger } from '../logger.js';
 import type { LanguagePlugin, FrameworkPlugin } from './types.js';
 
-export type ExternalPlugin = LanguagePlugin | FrameworkPlugin;
+type ExternalPlugin = LanguagePlugin | FrameworkPlugin;
 
 /**
  * Load external plugins from file paths or npm package names.

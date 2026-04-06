@@ -97,7 +97,7 @@ export function extractControllerRoutes(
   return { basePath, routes, guards };
 }
 
-export function extractGatewayEvents(source: string): string[] {
+function extractGatewayEvents(source: string): string[] {
   const events: string[] = [];
   const re = new RegExp(SUBSCRIBE_RE.source, 'g');
   let m: RegExpExecArray | null;
@@ -107,7 +107,7 @@ export function extractGatewayEvents(source: string): string[] {
   return events;
 }
 
-export function extractMicroservicePatterns(source: string): { type: 'message' | 'event'; pattern: string }[] {
+function extractMicroservicePatterns(source: string): { type: 'message' | 'event'; pattern: string }[] {
   const results: { type: 'message' | 'event'; pattern: string }[] = [];
   const eventRe = new RegExp(EVENT_PATTERN_RE.source, 'g');
   let m: RegExpExecArray | null;

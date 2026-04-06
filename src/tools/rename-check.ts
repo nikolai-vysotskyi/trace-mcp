@@ -8,7 +8,7 @@
 
 import type { Store } from '../db/store.js';
 
-export interface RenameConflict {
+interface RenameConflict {
   file: string;
   existing_symbol_id: string;
   existing_name: string;
@@ -17,7 +17,7 @@ export interface RenameConflict {
   reason: 'same_file' | 'importing_file';
 }
 
-export interface RenameCheckResult {
+interface RenameCheckResult {
   symbol_id: string;
   current_name: string;
   target_name: string;

@@ -3,7 +3,7 @@
  * Maps AST constructs to the minimum Go version that introduced them.
  */
 
-export const GO_MIN_VERSION: Record<string, string> = {
+const GO_MIN_VERSION: Record<string, string> = {
   // Go 1.18 — generics
   'type_parameter_list': '1.18',
   'type_constraint': '1.18',
@@ -16,7 +16,7 @@ export const GO_MIN_VERSION: Record<string, string> = {
 };
 
 /** Source-level patterns for Go features. */
-export const GO_SOURCE_PATTERNS: [RegExp, string, string][] = [
+const GO_SOURCE_PATTERNS: [RegExp, string, string][] = [
   // Go 1.13 — binary literals, digit separators
   [/0b[01]/, '1.13', 'binary literal'],
   [/\d_\d/, '1.13', 'digit separator'],
@@ -55,7 +55,7 @@ function semverGt(a: string, b: string): boolean {
 }
 
 /** Detect minimum Go version from AST node types. */
-export function detectMinGoVersion(nodeTypes: string[]): string | undefined {
+function detectMinGoVersion(nodeTypes: string[]): string | undefined {
   let max = '0';
   for (const nt of nodeTypes) {
     const ver = GO_MIN_VERSION[nt];

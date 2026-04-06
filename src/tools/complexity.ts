@@ -115,7 +115,7 @@ export function computeParamCount(signature: string | null | undefined): number 
 
 // ── Combined metrics ────────────────────────────────────────────────────
 
-export interface ComplexityMetrics {
+interface ComplexityMetrics {
   cyclomatic: number;
   max_nesting: number;
   param_count: number;

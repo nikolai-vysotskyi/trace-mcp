@@ -11,7 +11,7 @@
 // Node.js runtime — AST constructs → minimum Node version
 // ═══════════════════════════════════════════════════════
 
-export const NODEJS_MIN_VERSION: Record<string, string> = {
+const NODEJS_MIN_VERSION: Record<string, string> = {
   // Node 14 (V8 8.4) — ES2020
   'optional_chaining': '14',
   'nullish_coalescing': '14',
@@ -36,7 +36,7 @@ export const NODEJS_MIN_VERSION: Record<string, string> = {
 };
 
 /** API identifiers → minimum Node.js version (string-match in source). */
-export const NODEJS_API_VERSIONS: Record<string, string> = {
+const NODEJS_API_VERSIONS: Record<string, string> = {
   'structuredClone': '17',
   'fetch': '18',
   'AbortSignal.timeout': '18',
@@ -53,7 +53,7 @@ export const NODEJS_API_VERSIONS: Record<string, string> = {
 // TypeScript compiler — AST constructs → minimum TS version
 // ═══════════════════════════════════════════════════════
 
-export const TS_MIN_VERSION: Record<string, string> = {
+const TS_MIN_VERSION: Record<string, string> = {
   // TS 4.0 — variadic tuple types, labeled tuple elements
   'labeled_tuple_member': '4.0',
 
@@ -86,7 +86,7 @@ export const TS_MIN_VERSION: Record<string, string> = {
 };
 
 /** TS source-level patterns (regex-matched). */
-export const TS_SOURCE_PATTERNS: [RegExp, string][] = [
+const TS_SOURCE_PATTERNS: [RegExp, string][] = [
   // TS 4.9 — satisfies
   [/\bsatisfies\s+[A-Z]/, '4.9'],
   // TS 5.0 — const type parameter: <const T>
@@ -101,7 +101,7 @@ export const TS_SOURCE_PATTERNS: [RegExp, string][] = [
 // ECMAScript standard — AST constructs → minimum ES version
 // ═══════════════════════════════════════════════════════
 
-export const ES_MIN_VERSION: Record<string, string> = {
+const ES_MIN_VERSION: Record<string, string> = {
   // ES2015 (ES6)
   'arrow_function': 'ES2015',
   'class_declaration': 'ES2015',

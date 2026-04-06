@@ -7,7 +7,7 @@ import { validatePath } from '../utils/security.js';
 // @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
 
-export interface SearchTextMatch {
+interface SearchTextMatch {
   file: string;
   language: string | null;
   line: number;
@@ -16,7 +16,7 @@ export interface SearchTextMatch {
   context: string[];
 }
 
-export interface SearchTextResult {
+interface SearchTextResult {
   matches: SearchTextMatch[];
   total_matches: number;
   files_searched: number;
@@ -24,7 +24,7 @@ export interface SearchTextResult {
   truncated: boolean;
 }
 
-export interface SearchTextOptions {
+interface SearchTextOptions {
   query: string;
   isRegex?: boolean;
   filePattern?: string;

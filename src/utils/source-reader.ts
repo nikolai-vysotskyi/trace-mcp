@@ -31,7 +31,7 @@ export function readByteRange(
 const ENV_BASENAME_RE = /^\.env(\..+)?$/;
 
 /** Check if a file path is a .env file. */
-export function isEnvFile(filePath: string): boolean {
+function isEnvFile(filePath: string): boolean {
   return ENV_BASENAME_RE.test(path.basename(filePath));
 }
 
@@ -41,7 +41,7 @@ export function isEnvFile(filePath: string): boolean {
  * - gitignored files → return notice instead of source
  * - all other files → return content as-is
  */
-export function readFileSafe(filePath: string, gitignored?: boolean): string {
+function readFileSafe(filePath: string, gitignored?: boolean): string {
   // .env redaction takes priority over gitignore — keys/types are always safe to expose
   if (isEnvFile(filePath)) {
     const content = fs.readFileSync(filePath, 'utf-8');

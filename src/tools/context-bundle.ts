@@ -32,7 +32,7 @@ interface BundleSymbolItem {
   line: number | null;
 }
 
-export interface ContextBundleResult {
+interface ContextBundleResult {
   primary: BundleSymbolItem[];
   dependencies: BundleSymbolItem[];
   callers: BundleSymbolItem[];

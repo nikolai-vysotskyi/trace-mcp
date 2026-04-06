@@ -6,27 +6,27 @@ import type { Store, SymbolRow, OrmModelRow, OrmAssociationRow } from '../db/sto
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 
-export interface ModelRelationship {
+interface ModelRelationship {
   type: string;      // edge type name: has_many, belongs_to, etc.
   relatedModel: string;
   relatedSymbolId?: string;
   method?: string;
 }
 
-export interface ModelSchema {
+interface ModelSchema {
   tableName: string;
   columns: Record<string, unknown>[];
   operation: string;
   timestamp?: string;
 }
 
-export interface EcosystemRef {
+interface EcosystemRef {
   name: string;
   fqn?: string;
   symbolId?: string;
 }
 
-export interface ModelContextResult {
+interface ModelContextResult {
   model: {
     name: string;
     fqn: string;

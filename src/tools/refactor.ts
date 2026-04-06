@@ -15,14 +15,14 @@ import { checkRenameSafe } from './rename-check.js';
 // SHARED TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface FileEdit {
+interface FileEdit {
   file: string;
   original_line: number;
   original_text: string;
   new_text: string;
 }
 
-export interface RefactorResult {
+interface RefactorResult {
   success: boolean;
   tool: string;
   edits: FileEdit[];

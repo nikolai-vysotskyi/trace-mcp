@@ -38,7 +38,7 @@ export function extractSignature(text: string, maxLen = 120): string {
   return sig.length > maxLen ? sig.slice(0, maxLen) + '…' : sig;
 }
 
-export interface SymbolPattern {
+interface SymbolPattern {
   kind: SymbolKind;
   pattern: RegExp;
   /** Which capture group is the name (default 1). */
@@ -49,13 +49,13 @@ export interface SymbolPattern {
   meta?: Record<string, unknown>;
 }
 
-export interface ImportPattern {
+interface ImportPattern {
   pattern: RegExp;
   /** Which capture group is the module/path (default 1). */
   moduleGroup?: number;
 }
 
-export interface RegexLanguageConfig {
+interface RegexLanguageConfig {
   name: string;
   language: string;
   extensions: string[];

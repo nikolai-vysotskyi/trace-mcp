@@ -10,7 +10,7 @@ import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 import { extractModuleInfo } from '../indexer/plugins/integration/framework/nestjs/index.js';
 
-export interface ModuleGraphNode {
+interface ModuleGraphNode {
   name: string;
   file?: string;
   imports: string[];
@@ -19,7 +19,7 @@ export interface ModuleGraphNode {
   exports: string[];
 }
 
-export interface ModuleGraphResult {
+interface ModuleGraphResult {
   rootModule: string;
   modules: ModuleGraphNode[];
 }

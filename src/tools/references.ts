@@ -2,7 +2,7 @@ import type { Store, SymbolRow, FileRow } from '../db/store.js';
 import { notFound, type TraceMcpResult } from '../errors.js';
 import { ok, err } from 'neverthrow';
 
-export interface ReferenceItem {
+interface ReferenceItem {
   /** Edge type describing the relationship (e.g. 'imports', 'calls', 'renders_component') */
   edge_type: string;
   /** Symbol that references the target (null if the referencing node is a file/route/component) */
@@ -17,7 +17,7 @@ export interface ReferenceItem {
   file: string;
 }
 
-export interface FindReferencesResult {
+interface FindReferencesResult {
   target: {
     symbol_id?: string;
     file?: string;

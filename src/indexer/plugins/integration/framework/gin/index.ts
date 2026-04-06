@@ -33,22 +33,22 @@ const MIDDLEWARE_RE =
 const STATIC_RE =
   /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
 
-export interface GinRoute {
+interface GinRoute {
   method: string;
   path: string;
   handler?: string;
 }
 
-export interface GinMiddleware {
+interface GinMiddleware {
   name: string;
 }
 
-export interface GinGroup {
+interface GinGroup {
   prefix: string;
 }
 
 /** Extract route definitions from Gin source code. */
-export function extractGinRoutes(source: string): GinRoute[] {
+function extractGinRoutes(source: string): GinRoute[] {
   const routes: GinRoute[] = [];
 
   const routeRe = new RegExp(ROUTE_RE.source, 'g');
@@ -73,7 +73,7 @@ export function extractGinRoutes(source: string): GinRoute[] {
 }
 
 /** Extract middleware Use() calls from Gin source code. */
-export function extractGinMiddleware(source: string): GinMiddleware[] {
+function extractGinMiddleware(source: string): GinMiddleware[] {
   const middlewares: GinMiddleware[] = [];
 
   const mwRe = new RegExp(MIDDLEWARE_RE.source, 'g');
@@ -88,7 +88,7 @@ export function extractGinMiddleware(source: string): GinMiddleware[] {
 }
 
 /** Extract route group definitions from Gin source code. */
-export function extractGinGroups(source: string): GinGroup[] {
+function extractGinGroups(source: string): GinGroup[] {
   const groups: GinGroup[] = [];
 
   const groupRe = new RegExp(GROUP_RE.source, 'g');

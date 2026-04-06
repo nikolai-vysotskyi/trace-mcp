@@ -7,7 +7,7 @@
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface DomainSuggestion {
+interface DomainSuggestion {
   domainPath: string[];  // e.g. ['payments', 'refunds']
   confidence: number;    // 0..1
   reason: string;
@@ -121,7 +121,7 @@ const NAME_DOMAIN_PATTERNS: Array<{ pattern: RegExp; domain: string }> = [
 /**
  * Classify a symbol by its file path — looks at directory segments.
  */
-export function classifyByPath(filePath: string): DomainSuggestion[] {
+function classifyByPath(filePath: string): DomainSuggestion[] {
   const segments = filePath.toLowerCase().split('/').filter(Boolean);
   const suggestions: DomainSuggestion[] = [];
 
@@ -142,7 +142,7 @@ export function classifyByPath(filePath: string): DomainSuggestion[] {
 /**
  * Classify a symbol by its name using regex patterns.
  */
-export function classifyByName(name: string, kind: string): DomainSuggestion[] {
+function classifyByName(name: string, kind: string): DomainSuggestion[] {
   const suggestions: DomainSuggestion[] = [];
 
   for (const { pattern, domain } of NAME_DOMAIN_PATTERNS) {

@@ -14,7 +14,7 @@ import type {
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
-export interface BladeDirective {
+interface BladeDirective {
   type: 'extends' | 'include' | 'component' | 'x-component';
   name: string;
   line: number;

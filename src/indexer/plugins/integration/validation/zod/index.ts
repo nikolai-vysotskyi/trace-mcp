@@ -34,17 +34,17 @@ const ZOD_FIELD_RE =
 const ZOD_INFER_RE =
   /type\s+(\w+)\s*=\s*z\.infer\s*<\s*typeof\s+(\w+)\s*>/g;
 
-export interface ZodField {
+interface ZodField {
   name: string;
   type: string;
 }
 
-export interface ZodSchema {
+interface ZodSchema {
   name: string;
   fields: ZodField[];
 }
 
-export interface ZodInference {
+interface ZodInference {
   typeName: string;
   schemaName: string;
 }

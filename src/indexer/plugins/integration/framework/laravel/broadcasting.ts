@@ -11,7 +11,7 @@ import type { RawEdge } from '../../../../../plugin-api/types.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 
-export interface BroadcastingEventInfo {
+interface BroadcastingEventInfo {
   className: string;
   namespace: string;
   fqn: string;
@@ -22,13 +22,13 @@ export interface BroadcastingEventInfo {
   payloadFields: string[];
 }
 
-export interface BroadcastChannel {
+interface BroadcastChannel {
   /** Channel name / pattern (may contain variables: 'orders.{userId}') */
   name: string;
   type: 'public' | 'private' | 'presence';
 }
 
-export interface ChannelAuthMapping {
+interface ChannelAuthMapping {
   /** Channel name pattern e.g. 'orders.{userId}' */
   pattern: string;
   /** FQN of authorization class, or 'closure' */

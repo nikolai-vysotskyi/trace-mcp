@@ -10,7 +10,7 @@
  */
 import type { RawRoute, RawEdge } from '../../../../../plugin-api/types.js';
 
-export interface UrlExtractionResult {
+interface UrlExtractionResult {
   routes: RawRoute[];
   edges: RawEdge[];
   warnings: string[];

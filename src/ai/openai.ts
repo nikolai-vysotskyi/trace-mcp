@@ -6,7 +6,7 @@ import type { AIProvider, EmbeddingService, InferenceService } from './interface
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 
-export interface OpenAIConfig {
+interface OpenAIConfig {
   apiKey: string;
   baseUrl: string;
   embeddingModel: string;

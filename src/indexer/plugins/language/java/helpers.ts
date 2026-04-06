@@ -370,7 +370,7 @@ export function extractEnumConstants(
 }
 
 /** Check if a name is ALL_CAPS (constant naming convention). */
-export function isAllCaps(name: string): boolean {
+function isAllCaps(name: string): boolean {
   return /^[A-Z][A-Z0-9_]{2,}$/.test(name);
 }
 

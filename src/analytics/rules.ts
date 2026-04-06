@@ -5,7 +5,7 @@
 
 import type { ToolCallRow } from './analytics-store.js';
 
-export interface OptimizationHit {
+interface OptimizationHit {
   rule: string;
   severity: 'high' | 'medium' | 'low';
   occurrences: number;

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { KNOWN_PACKAGES, type PackageMeta } from './known-packages.js';
 import { logger } from '../logger.js';
 
-export interface DependencyInfo {
+interface DependencyInfo {
   name: string;
   version: string;
   category: PackageMeta['category'];
@@ -17,7 +17,7 @@ export interface DependencyInfo {
   priority: PackageMeta['priority'];
 }
 
-export interface CoverageGap {
+interface CoverageGap {
   name: string;
   version: string;
   category: string;
@@ -25,7 +25,7 @@ export interface CoverageGap {
   reason?: string;
 }
 
-export interface CoverageReport {
+interface CoverageReport {
   project: string;
   manifests_analyzed: string[];
   dependencies: DependencyInfo[];

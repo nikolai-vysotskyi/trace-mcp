@@ -9,7 +9,7 @@ import type Database from 'better-sqlite3';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface DomainRow {
+interface DomainRow {
   id: number;
   name: string;
   parent_id: number | null;
@@ -22,7 +22,7 @@ export interface DomainRow {
   updated_at: string;
 }
 
-export interface SymbolDomainRow {
+interface SymbolDomainRow {
   id: number;
   symbol_id: number;
   domain_id: number;
@@ -32,7 +32,7 @@ export interface SymbolDomainRow {
   metadata: string | null;
 }
 
-export interface FileDomainRow {
+interface FileDomainRow {
   id: number;
   file_id: number;
   domain_id: number;
@@ -41,7 +41,7 @@ export interface FileDomainRow {
   inferred_by: string;
 }
 
-export interface DomainTreeNode {
+interface DomainTreeNode {
   id: number;
   name: string;
   description: string | null;

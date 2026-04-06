@@ -4,7 +4,7 @@ import { PluginRegistry } from './registry.js';
 import type { LanguagePlugin, FrameworkPlugin, FileParseResult } from './types.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes } from './executor.js';
 
-export interface PluginTestHarness {
+interface PluginTestHarness {
   store: Store;
   registry: PluginRegistry;
   indexFile(path: string, content: string): Promise<FileParseResult | null>;

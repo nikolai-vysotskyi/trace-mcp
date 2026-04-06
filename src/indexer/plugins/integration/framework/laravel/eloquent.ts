@@ -17,14 +17,14 @@ const RELATIONSHIP_MAP: Record<string, string> = {
   hasManyThrough: 'has_many',
 };
 
-export interface EloquentRelationship {
+interface EloquentRelationship {
   methodName: string;
   type: string;       // e.g. 'hasMany'
   relatedClass: string; // FQN of related model
   edgeType: string;   // e.g. 'has_many'
 }
 
-export interface EloquentModelInfo {
+interface EloquentModelInfo {
   className: string;
   namespace: string | undefined;
   fqn: string;

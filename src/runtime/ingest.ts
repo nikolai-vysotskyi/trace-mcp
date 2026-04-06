@@ -15,6 +15,12 @@ import {
   SPAN_KIND_MAP,
 } from './types.js';
 
+interface IngestCounters {
+  traces: number;
+  spans: number;
+  services: number;
+}
+
 export class SpanIngester {
   private batchCount = 0;
   private insertTrace: Database.Statement;
@@ -57,62 +63,17 @@ export class SpanIngester {
   }
 
   ingest(request: OtlpExportRequest): IngestResult {
-    let traces = 0;
-    let spans = 0;
-    let services = 0;
+    const counters: IngestCounters = { traces: 0, spans: 0, services: 0 };
 
     this.db.transaction(() => {
       for (const rs of request.resourceSpans) {
         const resourceAttrs = rs.resource?.attributes ?? [];
         const serviceName = getServiceName(resourceAttrs);
-
-        // Discover service
-        const serviceKind = this.detectServiceKind(resourceAttrs);
-        this.upsertService.run(serviceName, serviceKind, null);
-        services++;
+        this.discoverService(serviceName, resourceAttrs, counters);
 
         for (const ss of rs.scopeSpans) {
           for (const span of ss.spans) {
-            const startedAt = nanoToIso(span.startTimeUnixNano);
-            const durationUs = nanoDurationUs(span.startTimeUnixNano, span.endTimeUnixNano);
-            const statusCode = span.status?.code ?? 0;
-            const kind = SPAN_KIND_MAP[span.kind] ?? 'unspecified';
-
-            // Ensure trace exists
-            const existing = this.getTrace.get(span.traceId) as { id: number } | undefined;
-            let traceRowId: number;
-
-            if (!existing) {
-              const isRoot = !span.parentSpanId;
-              this.insertTrace.run(
-                span.traceId,
-                isRoot ? serviceName : null,
-                isRoot ? span.name : null,
-                startedAt,
-                durationUs,
-                statusCode === 2 ? 'error' : 'ok',
-              );
-              traceRowId = (this.getTrace.get(span.traceId) as { id: number }).id;
-              traces++;
-            } else {
-              traceRowId = existing.id;
-            }
-
-            // Insert span
-            this.insertSpan.run(
-              traceRowId,
-              span.spanId,
-              span.parentSpanId ?? null,
-              serviceName,
-              span.name,
-              kind,
-              startedAt,
-              durationUs,
-              statusCode,
-              span.status?.message ?? null,
-              span.attributes ? JSON.stringify(span.attributes) : null,
-            );
-            spans++;
+            this.processSpan(span, serviceName, counters);
           }
         }
       }
@@ -123,8 +84,70 @@ export class SpanIngester {
       this.prune(7, 90);
     }
 
-    logger.debug({ traces, spans, services }, 'Ingested OTLP batch');
-    return { traces, spans, services };
+    logger.debug(counters, 'Ingested OTLP batch');
+    return counters;
+  }
+
+  private discoverService(
+    serviceName: string,
+    attrs: Array<{ key: string; value: { stringValue?: string } }>,
+    counters: IngestCounters,
+  ): void {
+    const serviceKind = this.detectServiceKind(attrs);
+    this.upsertService.run(serviceName, serviceKind, null);
+    counters.services++;
+  }
+
+  private processSpan(
+    span: { traceId: string; spanId: string; parentSpanId?: string; name: string; kind: number; startTimeUnixNano: string; endTimeUnixNano: string; status?: { code?: number; message?: string }; attributes?: unknown[] },
+    serviceName: string,
+    counters: IngestCounters,
+  ): void {
+    const startedAt = nanoToIso(span.startTimeUnixNano);
+    const durationUs = nanoDurationUs(span.startTimeUnixNano, span.endTimeUnixNano);
+    const statusCode = span.status?.code ?? 0;
+    const kind = SPAN_KIND_MAP[span.kind] ?? 'unspecified';
+
+    const traceRowId = this.ensureTrace(span, serviceName, startedAt, durationUs, statusCode, counters);
+
+    this.insertSpan.run(
+      traceRowId,
+      span.spanId,
+      span.parentSpanId ?? null,
+      serviceName,
+      span.name,
+      kind,
+      startedAt,
+      durationUs,
+      statusCode,
+      span.status?.message ?? null,
+      span.attributes ? JSON.stringify(span.attributes) : null,
+    );
+    counters.spans++;
+  }
+
+  private ensureTrace(
+    span: { traceId: string; parentSpanId?: string; name: string },
+    serviceName: string,
+    startedAt: string,
+    durationUs: number,
+    statusCode: number,
+    counters: IngestCounters,
+  ): number {
+    const existing = this.getTrace.get(span.traceId) as { id: number } | undefined;
+    if (existing) return existing.id;
+
+    const isRoot = !span.parentSpanId;
+    this.insertTrace.run(
+      span.traceId,
+      isRoot ? serviceName : null,
+      isRoot ? span.name : null,
+      startedAt,
+      durationUs,
+      statusCode === 2 ? 'error' : 'ok',
+    );
+    counters.traces++;
+    return (this.getTrace.get(span.traceId) as { id: number }).id;
   }
 
   /** Prune old data per retention policy */
@@ -134,8 +157,6 @@ export class SpanIngester {
 
     const spansDeleted = this.pruneSpans.run(spanCutoff).changes;
     const aggsDeleted = this.pruneAggs.run(aggCutoff).changes;
-
-    // Clean orphaned traces (no spans left)
     const tracesDeleted = this.pruneOrphanTraces.run().changes;
 
     if (spansDeleted > 0 || tracesDeleted > 0) {

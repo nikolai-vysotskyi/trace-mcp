@@ -2,7 +2,7 @@ import { AnalyticsStore } from './analytics-store.js';
 import { parseSessionFile, listAllSessions } from './log-parser.js';
 import { logger } from '../logger.js';
 
-export interface SyncResult {
+interface SyncResult {
   files_scanned: number;
   files_parsed: number;
   files_skipped: number;

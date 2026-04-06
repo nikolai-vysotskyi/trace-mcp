@@ -33,7 +33,7 @@ type GateSeverity = z.infer<typeof GateSeverity>;
 
 const GateScope = z.enum(['all', 'new_symbols', 'changed_symbols']);
 
-export const QualityGateRuleSchema = z.object({
+const QualityGateRuleSchema = z.object({
   threshold: z.union([z.number(), z.string()]),
   severity: GateSeverity.default('error'),
   scope: GateScope.optional(),
@@ -56,13 +56,13 @@ export const QualityGatesConfigSchema = z.object({
 });
 
 export type QualityGatesConfig = z.infer<typeof QualityGatesConfigSchema>;
-export type QualityGateRuleName = keyof QualityGatesConfig['rules'];
+type QualityGateRuleName = keyof QualityGatesConfig['rules'];
 
 // ---------------------------------------------------------------------------
 // Result types
 // ---------------------------------------------------------------------------
 
-export interface GateCheckResult {
+interface GateCheckResult {
   rule: string;
   status: 'pass' | 'warning' | 'error';
   actual: number | string;
@@ -71,7 +71,7 @@ export interface GateCheckResult {
   details?: string;
 }
 
-export interface QualityGateReport {
+interface QualityGateReport {
   gates: GateCheckResult[];
   summary: {
     total: number;

@@ -31,7 +31,7 @@ const ALL_CATEGORIES: SmellCategory[] = [
 
 export type SmellPriority = 'high' | 'medium' | 'low';
 
-export interface CodeSmellFinding {
+interface CodeSmellFinding {
   category: SmellCategory;
   priority: SmellPriority;
   tag?: string;            // e.g. TODO, FIXME, HACK, XXX for todo_comment

@@ -12,7 +12,7 @@ import type { VectorStore, EmbeddingService, RerankerService } from '../ai/inter
 
 // ─── get_symbol ─────────────────────────────────────────────
 
-export interface GetSymbolResult {
+interface GetSymbolResult {
   symbol: SymbolRow;
   file: FileRow;
   source: string;
@@ -62,7 +62,7 @@ export function getSymbol(
 
 // ─── search ─────────────────────────────────────────────────
 
-export interface SearchFilters {
+interface SearchFilters {
   kind?: string;
   language?: string;
   filePattern?: string;
@@ -72,7 +72,7 @@ export interface SearchFilters {
   extends?: string;
 }
 
-export interface SearchResultItem {
+interface SearchResultItem {
   symbol: SymbolRow;
   file: FileRow;
   score: number;
@@ -91,19 +91,19 @@ export interface SearchResultItemProjected {
   score: number;
 }
 
-export interface SearchAIOptions {
+interface SearchAIOptions {
   vectorStore?: VectorStore | null;
   embeddingService?: EmbeddingService | null;
   reranker?: RerankerService | null;
 }
 
-export interface FuzzyOptions {
+interface FuzzyOptions {
   fuzzy?: boolean;
   fuzzyThreshold?: number;
   maxEditDistance?: number;
 }
 
-export interface SearchResult {
+interface SearchResult {
   items: SearchResultItem[];
   total: number;
   search_mode?: 'hybrid_ai' | 'fts' | 'fuzzy';
@@ -290,7 +290,7 @@ function runFuzzySearch(
 
 // ─── get_outline ───────────────────────────────────────
 
-export interface FileOutlineSymbol {
+interface FileOutlineSymbol {
   symbolId: string;
   name: string;
   kind: string;
@@ -300,7 +300,7 @@ export interface FileOutlineSymbol {
   lineEnd: number | null;
 }
 
-export interface FileOutlineResult {
+interface FileOutlineResult {
   path: string;
   language: string | null;
   symbols: FileOutlineSymbol[];

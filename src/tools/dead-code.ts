@@ -18,7 +18,7 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface DeadCodeItem {
+interface DeadCodeItem {
   symbol_id: string;
   name: string;
   kind: string;
@@ -32,7 +32,7 @@ export interface DeadCodeItem {
   };
 }
 
-export interface DeadCodeResult {
+interface DeadCodeResult {
   file_pattern: string | null;
   dead_symbols: DeadCodeItem[];
   total_exports: number;

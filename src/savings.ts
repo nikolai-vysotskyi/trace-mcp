@@ -53,13 +53,13 @@ const DEFAULT_RAW_COST = 500;
 /** Estimated compression ratio (trace-mcp response tokens / raw tokens) */
 const COMPRESSION_RATIO = 0.15;
 
-export interface ToolCallRecord {
+interface ToolCallRecord {
   calls: number;
   tokens_saved: number;
   raw_tokens: number;
 }
 
-export interface SessionStats {
+interface SessionStats {
   started_at: string;
   total_calls: number;
   total_tokens_saved: number;
@@ -68,7 +68,7 @@ export interface SessionStats {
   per_tool: Record<string, ToolCallRecord>;
 }
 
-export interface PersistentSavings {
+interface PersistentSavings {
   version: 1;
   total_tokens_saved: number;
   total_raw_tokens: number;

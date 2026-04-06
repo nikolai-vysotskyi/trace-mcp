@@ -31,12 +31,12 @@ import type {
 
 // ── Types ────────────────────────────────────────────────────────────────
 
-export interface N8nCredentialRef {
+interface N8nCredentialRef {
   id: string | null;
   name: string;
 }
 
-export interface N8nNode {
+interface N8nNode {
   id?: string;
   name: string;
   type: string;
@@ -58,13 +58,13 @@ export interface N8nNode {
   color?: number;
 }
 
-export interface N8nConnectionTarget {
+interface N8nConnectionTarget {
   node: string;
   type: string;   // "main", "ai_languageModel", "ai_tool", etc.
   index: number;
 }
 
-export interface N8nConnection {
+interface N8nConnection {
   sourceNode: string;
   sourceOutput: number;
   targetNode: string;
@@ -72,7 +72,7 @@ export interface N8nConnection {
   connectionType: string;   // "main", "ai_languageModel", "ai_tool", etc.
 }
 
-export interface N8nWorkflowSettings {
+interface N8nWorkflowSettings {
   timezone?: string;
   errorWorkflow?: string;
   callerIds?: string;
@@ -85,7 +85,7 @@ export interface N8nWorkflowSettings {
   executionOrder?: 'v0' | 'v1';
 }
 
-export interface N8nWorkflow {
+interface N8nWorkflow {
   id?: string;
   name?: string;
   nodes: N8nNode[];
@@ -186,7 +186,7 @@ const AI_CONNECTION_TYPES = new Set([
 // This covers every n8n-nodes-base.* action/trigger node.
 // Pattern: n8n-nodes-base.<nodeName> → lookup SERVICE_DOMAINS[<nodeName lower>]
 
-export type N8nServiceDomain =
+type N8nServiceDomain =
   | 'communication' | 'database' | 'cloud_storage' | 'dev_tools'
   | 'crm_sales' | 'marketing' | 'productivity' | 'finance'
   | 'analytics' | 'cms' | 'social_media' | 'ecommerce'
@@ -732,7 +732,7 @@ function parseCustomNodeSource(filePath: string, source: string): CustomNodeDefi
 
 // ── Node category classification ─────────────────────────────────────────
 
-export type N8nNodeCategory =
+type N8nNodeCategory =
   | 'trigger' | 'code' | 'flow_control' | 'data_transform'
   | 'ai' | 'subworkflow' | 'http_request' | 'sticky_note' | 'action';
 
@@ -761,7 +761,7 @@ export function isTriggerNode(node: N8nNode): boolean {
   return false;
 }
 
-export function isAiNode(node: N8nNode): boolean {
+function isAiNode(node: N8nNode): boolean {
   return node.type.startsWith('@n8n/n8n-nodes-langchain.')
     || node.type.includes('langchain');
 }
@@ -1013,7 +1013,7 @@ export function extractStickyNotes(workflow: N8nWorkflow): Array<{
 
 // ── AI node extraction ───────────────────────────────────────────────────
 
-export type AiNodeRole = 'agent' | 'chain' | 'llm' | 'embedding' | 'memory'
+type AiNodeRole = 'agent' | 'chain' | 'llm' | 'embedding' | 'memory'
   | 'vector_store' | 'retriever' | 'tool' | 'output_parser' | 'document_loader'
   | 'text_splitter' | 'reranker' | 'standalone';
 
@@ -1074,7 +1074,7 @@ export function extractAllExpressionDeps(workflow: N8nWorkflow): Map<string, Set
 
 // ── Credential extraction (full details) ─────────────────────────────────
 
-export interface CredentialUsage {
+interface CredentialUsage {
   node: N8nNode;
   credentialType: string;
   credentialId: string | null;
@@ -1100,7 +1100,7 @@ export function extractCredentialUsages(workflow: N8nWorkflow): CredentialUsage[
 
 // ── Flow control analysis ────────────────────────────────────────────────
 
-export interface FlowControlInfo {
+interface FlowControlInfo {
   node: N8nNode;
   controlType: 'conditional' | 'switch' | 'merge' | 'loop' | 'wait' | 'filter' | 'respond' | 'other';
   outputCount?: number;

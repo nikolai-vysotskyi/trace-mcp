@@ -19,7 +19,7 @@ import type { Store } from '../db/store.js';
 
 export type ArtifactCategory = 'database' | 'api' | 'infra' | 'ci' | 'config' | 'all';
 
-export interface Artifact {
+interface Artifact {
   category: string;
   kind: string;
   name: string;
@@ -28,7 +28,7 @@ export interface Artifact {
   details?: Record<string, unknown>;
 }
 
-export interface ArtifactsResult {
+interface ArtifactsResult {
   artifacts: Artifact[];
   summary: Record<string, number>;
 }

@@ -25,7 +25,7 @@ function safeParseMeta(raw: string | null | undefined): Record<string, unknown> 
 // get_implementations
 // ---------------------------------------------------------------------------
 
-export interface ImplementorItem {
+interface ImplementorItem {
   symbol_id: string;
   name: string;
   kind: string;
@@ -37,7 +37,7 @@ export interface ImplementorItem {
   via: string | string[];
 }
 
-export interface GetImplementationsResult {
+interface GetImplementationsResult {
   target: string;
   implementors: ImplementorItem[];
   total: number;
@@ -81,7 +81,7 @@ export function getImplementations(
 // get_api_surface
 // ---------------------------------------------------------------------------
 
-export interface ApiSurfaceSymbol {
+interface ApiSurfaceSymbol {
   symbol_id: string;
   name: string;
   kind: string;
@@ -90,12 +90,12 @@ export interface ApiSurfaceSymbol {
   default: boolean;
 }
 
-export interface ApiSurfaceFile {
+interface ApiSurfaceFile {
   file: string;
   exports: ApiSurfaceSymbol[];
 }
 
-export interface GetApiSurfaceResult {
+interface GetApiSurfaceResult {
   file_pattern: string | null;
   files: ApiSurfaceFile[];
   total_symbols: number;
@@ -140,14 +140,14 @@ export function getApiSurface(
 // get_plugin_registry
 // ---------------------------------------------------------------------------
 
-export interface LanguagePluginInfo {
+interface LanguagePluginInfo {
   name: string;
   version: string;
   priority: number;
   extensions: string[];
 }
 
-export interface FrameworkPluginInfo {
+interface FrameworkPluginInfo {
   name: string;
   version: string;
   priority: number;
@@ -155,13 +155,13 @@ export interface FrameworkPluginInfo {
   active: boolean;
 }
 
-export interface EdgeTypeInfo {
+interface EdgeTypeInfo {
   name: string;
   category: string;
   description: string;
 }
 
-export interface GetPluginRegistryResult {
+interface GetPluginRegistryResult {
   language_plugins: LanguagePluginInfo[];
   framework_plugins: FrameworkPluginInfo[];
   edge_types: EdgeTypeInfo[];
@@ -206,7 +206,7 @@ export function getPluginRegistry(
 // get_type_hierarchy
 // ---------------------------------------------------------------------------
 
-export interface HierarchyNode {
+interface HierarchyNode {
   name: string;
   kind: string;
   symbol_id: string;
@@ -216,7 +216,7 @@ export interface HierarchyNode {
   children: HierarchyNode[];
 }
 
-export interface GetTypeHierarchyResult {
+interface GetTypeHierarchyResult {
   root: string;
   ancestors: HierarchyNode[];
   descendants: HierarchyNode[];
@@ -348,7 +348,7 @@ function walkDescendants(
 // get_dead_exports
 // ---------------------------------------------------------------------------
 
-export interface DeadExportItem {
+interface DeadExportItem {
   symbol_id: string;
   name: string;
   kind: string;
@@ -356,7 +356,7 @@ export interface DeadExportItem {
   line: number | null;
 }
 
-export interface GetDeadExportsResult {
+interface GetDeadExportsResult {
   file_pattern: string | null;
   dead_exports: DeadExportItem[];
   total_exports: number;
@@ -422,13 +422,13 @@ export function getDeadExports(
 // get_import_graph
 // ---------------------------------------------------------------------------
 
-export interface DependencyEdge {
+interface DependencyEdge {
   source: string;
   target: string;
   specifiers: string[];
 }
 
-export interface GetDependencyGraphResult {
+interface GetDependencyGraphResult {
   file: string;
   imports: DependencyEdge[];
   imported_by: DependencyEdge[];
@@ -500,7 +500,7 @@ export function getDependencyGraph(
 // get_untested_exports
 // ---------------------------------------------------------------------------
 
-export interface UntestedExportItem {
+interface UntestedExportItem {
   symbol_id: string;
   name: string;
   kind: string;
@@ -509,7 +509,7 @@ export interface UntestedExportItem {
   signature: string | null;
 }
 
-export interface GetUntestedExportsResult {
+interface GetUntestedExportsResult {
   file_pattern: string | null;
   untested: UntestedExportItem[];
   total_exports: number;
@@ -585,7 +585,7 @@ function toKebab(name: string): string {
 // self_audit
 // ---------------------------------------------------------------------------
 
-export interface SelfAuditResult {
+interface SelfAuditResult {
   summary: {
     total_files: number;
     total_symbols: number;

@@ -6,7 +6,7 @@ import type { Store, RnScreenRow } from '../db/store.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { notFound } from '../errors.js';
 
-export interface ScreenContextResult {
+interface ScreenContextResult {
   screen: string;
   component: string | undefined;
   filePath: string | undefined;

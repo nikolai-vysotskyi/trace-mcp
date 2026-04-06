@@ -6,7 +6,7 @@
  * detection is source-pattern only.
  */
 
-export const KOTLIN_SOURCE_PATTERNS: [RegExp, string, string][] = [
+const KOTLIN_SOURCE_PATTERNS: [RegExp, string, string][] = [
   // Kotlin 1.1 — coroutines (experimental), type aliases
   [/\btypealias\s+/, '1.1', 'type alias'],
 

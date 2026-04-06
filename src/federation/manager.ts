@@ -23,7 +23,7 @@ import { logger } from '../logger.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface FederationAddResult {
+interface FederationAddResult {
   repo: string;
   name: string;
   services: number;
@@ -33,7 +33,7 @@ export interface FederationAddResult {
   linkedCalls: number;
 }
 
-export interface FederationSyncResult {
+interface FederationSyncResult {
   repos: number;
   servicesUpdated: number;
   contractsUpdated: number;

@@ -2,18 +2,18 @@ import type { Store } from '../db/store.js';
 import { notFound, type TraceMcpResult } from '../errors.js';
 import { ok, err } from 'neverthrow';
 
-export interface LivewireProperty {
+interface LivewireProperty {
   name: string;
   type?: string;
   is_lazy?: boolean;
 }
 
-export interface LivewireAction {
+interface LivewireAction {
   name: string;
   wire_targets?: string[]; // wire:click="methodName" found in blade
 }
 
-export interface LivewireContextResult {
+interface LivewireContextResult {
   component_class: {
     symbol_id: string;
     name: string;

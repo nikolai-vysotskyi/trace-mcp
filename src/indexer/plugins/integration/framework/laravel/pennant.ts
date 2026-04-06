@@ -12,14 +12,14 @@ import type { RawEdge } from '../../../../../plugin-api/types.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 
-export interface PennantFeatureDefinition {
+interface PennantFeatureDefinition {
   name: string;
   /** File + line where Feature::define() is called */
   location: string;
   line: number;
 }
 
-export interface PennantFeatureUsage {
+interface PennantFeatureUsage {
   name: string;
   usageType: 'active' | 'when' | 'value' | 'for' | 'blade' | 'middleware' | 'attribute';
   line: number;

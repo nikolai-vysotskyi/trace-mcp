@@ -27,7 +27,7 @@ const EMITTER_RE =
 const NAMESPACE_RE =
   /(?:io|server)\s*\.\s*of\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
-export interface SocketEvent {
+interface SocketEvent {
   name: string;
   type: 'listener' | 'emitter';
 }

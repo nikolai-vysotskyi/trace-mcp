@@ -51,14 +51,14 @@ const CLI_IMPORT_RE =
 
 // --- Helpers -------------------------------------------------------------------
 
-export interface CliCommand {
+interface CliCommand {
   name: string;
   description?: string;
   options: string[];
   arguments: string[];
 }
 
-export function extractCliCommands(source: string): CliCommand[] {
+function extractCliCommands(source: string): CliCommand[] {
   const commands: CliCommand[] = [];
 
   const cmdRe = new RegExp(COMMAND_RE.source, 'g');
@@ -86,7 +86,7 @@ export function extractCliCommands(source: string): CliCommand[] {
   return commands;
 }
 
-export function extractCliOptions(source: string): string[] {
+function extractCliOptions(source: string): string[] {
   const options: string[] = [];
   const re = new RegExp(OPTION_RE.source, 'g');
   let m: RegExpExecArray | null;

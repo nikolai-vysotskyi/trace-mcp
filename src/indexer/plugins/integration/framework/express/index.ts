@@ -22,13 +22,13 @@ const MIDDLEWARE_RE =
 const GLOBAL_MIDDLEWARE_RE =
   /(?:app|router)\s*\.\s*use\s*\(\s*([A-Za-z][\w.]*(?:\s*\(\s*[^)]*\))?)\s*[,)]/g;
 
-export interface ExpressRoute {
+interface ExpressRoute {
   method: string;
   path: string;
   line?: number;
 }
 
-export interface ExpressMiddleware {
+interface ExpressMiddleware {
   path: string;
   isGlobal: boolean;
   name?: string;

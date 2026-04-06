@@ -9,7 +9,7 @@
  */
 import type { RawOrmModel, RawOrmAssociation } from '../../../../../plugin-api/types.js';
 
-export interface DjangoModelExtractionResult {
+interface DjangoModelExtractionResult {
   model: RawOrmModel;
   associations: RawOrmAssociation[];
 }

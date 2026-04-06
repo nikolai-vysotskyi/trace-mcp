@@ -15,7 +15,7 @@ import { validationError, notFound } from '../errors.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface RuntimeProfileResult {
+interface RuntimeProfileResult {
   target: { type: string; id: string; name: string };
   period: { since: string; until: string };
   total_calls: number;
@@ -31,7 +31,7 @@ export interface RuntimeProfileResult {
   calls_per_hour: Array<{ bucket: string; count: number; errors: number }>;
 }
 
-export interface RuntimeCallGraphNode {
+interface RuntimeCallGraphNode {
   node_id: number;
   name: string;
   type: string;
@@ -40,12 +40,12 @@ export interface RuntimeCallGraphNode {
   children: RuntimeCallGraphNode[];
 }
 
-export interface RuntimeCallGraphResult {
+interface RuntimeCallGraphResult {
   root: RuntimeCallGraphNode;
   total_nodes: number;
 }
 
-export interface EndpointAnalyticsResult {
+interface EndpointAnalyticsResult {
   route: { method: string; uri: string; handler?: string };
   period: { since: string; until: string };
   request_count: number;
@@ -55,7 +55,7 @@ export interface EndpointAnalyticsResult {
   callers: Array<{ service: string; call_count: number }>;
 }
 
-export interface RuntimeDependency {
+interface RuntimeDependency {
   name: string;
   kind: string;
   call_count: number;
@@ -63,7 +63,7 @@ export interface RuntimeDependency {
   error_rate: number;
 }
 
-export interface RuntimeDependenciesResult {
+interface RuntimeDependenciesResult {
   target: { type: string; id: string };
   services: RuntimeDependency[];
 }
