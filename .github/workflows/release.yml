@@ -99,5 +99,7 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+        env:
+          TSUP_TARGET: node22
       - run: npm test
       - run: npm publish --provenance --access public

@@ -9,7 +9,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  target: 'node20',
+  target: process.env.TSUP_TARGET || 'node20',
   splitting: false,
   define: {
     'PKG_VERSION_INJECTED': JSON.stringify(version),
