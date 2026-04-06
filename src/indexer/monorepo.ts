@@ -38,6 +38,11 @@ export function buildMultiRootWorkspaces(parentDir: string, childRoots: string[]
   const workspaces: WorkspaceInfo[] = [];
 
   for (const childRoot of childRoots) {
+    if (!fs.existsSync(childRoot)) {
+      logger.warn({ childRoot }, 'Skipping missing multi-root child directory');
+      continue;
+    }
+
     const relPath = path.relative(parentDir, childRoot).replace(/\\/g, '/');
     const childName = path.basename(childRoot);
 
