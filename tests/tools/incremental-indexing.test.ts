@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
 import { initializeDatabase } from '../../src/db/schema.js';
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
+import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, path: string, lang = 'typescript'): number {
   return store.insertFile(path, lang, 'hash_' + path, 100);
@@ -30,7 +26,7 @@ describe('deleteOutgoingEdgesForFileNodes', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('deletes outgoing edges from file nodes but preserves incoming', () => {
@@ -121,7 +117,7 @@ describe('Graph Snapshots', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   it('inserts and retrieves graph snapshots', () => {

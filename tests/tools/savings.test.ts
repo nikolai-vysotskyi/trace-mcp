@@ -1,22 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { SavingsTracker, loadPersistentSavings, SAVINGS_PATH } from '../../src/savings.js';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 // Use a temp dir to avoid polluting real ~/.trace-mcp
-const ORIG_HOME = process.env.HOME;
 let tmpDir: string;
 
 describe('SavingsTracker', () => {
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-savings-'));
+    tmpDir = createTmpDir('trace-mcp-savings-');
     // Override TRACE_MCP_HOME by monkey-patching the module's SAVINGS_PATH
     // We test the class logic directly — persistence tests use the real path logic
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
   });
 
   describe('session tracking', () => {

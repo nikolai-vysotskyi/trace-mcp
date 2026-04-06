@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import Database from 'better-sqlite3';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
+import type { Store } from '../../src/db/store.js';
 import type { InferenceService } from '../../src/ai/interfaces.js';
 import { SummarizationPipeline } from '../../src/ai/summarization-pipeline.js';
 
@@ -43,8 +42,7 @@ describe('SummarizationPipeline', () => {
   let store: Store;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
   });
 
   it('summarizes unsummarized symbols matching configured kinds', async () => {

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { getIndexHealth, getProjectMap } from '../../src/tools/project/project.js';
 import { search, getFileOutline } from '../../src/tools/navigation/navigation.js';
+import type { Store } from '../../src/db/store.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 function makeConfig(): TraceMcpConfig {
@@ -17,11 +17,10 @@ function makeConfig(): TraceMcpConfig {
 }
 
 function setup() {
-  const db = initializeDatabase(':memory:');
-  const store = new Store(db);
+  const store = createTestStore();
   const registry = new PluginRegistry();
   const config = makeConfig();
-  return { db, store, registry, config };
+  return { store, registry, config };
 }
 
 describe('MCP Protocol E2E', () => {

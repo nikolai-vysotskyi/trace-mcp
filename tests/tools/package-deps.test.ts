@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { getPackageDeps } from '../../src/tools/project/package-deps.js';
 import { REGISTRY_PATH } from '../../src/global.js';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 let tmpDir: string;
 let repoA: string;
@@ -13,7 +13,7 @@ let origRegistryContent: string | null = null;
 
 describe('getPackageDeps', () => {
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-pkg-deps-'));
+    tmpDir = createTmpDir('trace-pkg-deps-');
 
     // Create mock repos
     repoA = path.join(tmpDir, 'repo-a');
@@ -59,7 +59,7 @@ describe('getPackageDeps', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
     // Restore original registry
     if (origRegistryContent !== null) {
       fs.writeFileSync(REGISTRY_PATH, origRegistryContent);
@@ -135,7 +135,7 @@ describe('getPackageDeps', () => {
 
 describe('getPackageDeps with composer.json', () => {
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-pkg-composer-'));
+    tmpDir = createTmpDir('trace-pkg-composer-');
     const repo = path.join(tmpDir, 'laravel-app');
     fs.mkdirSync(repo, { recursive: true });
     fs.writeFileSync(path.join(repo, 'composer.json'), JSON.stringify({
@@ -154,7 +154,7 @@ describe('getPackageDeps with composer.json', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
     if (origRegistryContent !== null) {
       fs.writeFileSync(REGISTRY_PATH, origRegistryContent);
     }

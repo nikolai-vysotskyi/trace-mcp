@@ -3,14 +3,9 @@
  * Uses in-memory store with manually inserted symbols and edges.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { getCallGraph } from '../../src/tools/framework/call-graph.js';
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function addSymbol(
   store: Store,
@@ -48,7 +43,7 @@ describe('getCallGraph', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
     store.ensureEdgeType('calls', 'code', 'Function calls');
     store.ensureEdgeType('dispatches', 'code', 'Event dispatch');
   });

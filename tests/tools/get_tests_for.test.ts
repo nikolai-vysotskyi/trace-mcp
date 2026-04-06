@@ -3,20 +3,15 @@
  * Uses in-memory store to verify heuristic path matching and edge-based resolution.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { getTestsFor } from '../../src/tools/framework/tests.js';
-
-function makeStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
+import { createTestStore } from '../test-utils.js';
 
 describe('get_tests_for', () => {
   let store: Store;
 
   beforeEach(() => {
-    store = makeStore();
+    store = createTestStore();
   });
 
   it('returns NOT_FOUND when no target specified', () => {

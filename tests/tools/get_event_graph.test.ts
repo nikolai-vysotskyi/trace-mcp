@@ -3,14 +3,9 @@
  * Uses in-memory store with manually inserted symbols + edges.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { getEventGraph } from '../../src/tools/framework/events.js';
-
-function makeStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
+import { createTestStore } from '../test-utils.js';
 
 function insertSymbol(
   store: Store,
@@ -34,7 +29,7 @@ describe('get_event_graph', () => {
   let fileId: number;
 
   beforeEach(() => {
-    store = makeStore();
+    store = createTestStore();
     fileId = store.insertFile('app/Events/OrderShipped.php', 'php', 'h1', 100);
   });
 

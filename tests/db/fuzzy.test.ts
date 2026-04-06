@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { generateTrigrams, fuzzySearch, indexTrigramsBatch, deleteTrigramsByFile } from '../../src/db/fuzzy.js';
 import type Database from 'better-sqlite3';
+import type { Store } from '../../src/db/store.js';
 
 describe('Fuzzy search', () => {
   let db: Database.Database;
   let store: Store;
 
   beforeAll(() => {
-    db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
+    db = store.db;
 
     // Insert test files
     const fileId1 = store.insertFile('src/services/user.ts', 'typescript', 'hash1', 1000);

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
+import { createTestStore } from '../test-utils.js';
 import { BlobVectorStore } from '../../src/ai/vector-store.js';
 import type Database from 'better-sqlite3';
 
@@ -8,7 +8,7 @@ describe('BlobVectorStore', () => {
   let store: BlobVectorStore;
 
   beforeEach(() => {
-    db = initializeDatabase(':memory:');
+    db = createTestStore().db;
     // Insert a fake file and symbols so foreign keys work
     db.exec(`
       INSERT INTO files (id, path, language, indexed_at) VALUES (1, 'test.ts', 'ts', datetime('now'));

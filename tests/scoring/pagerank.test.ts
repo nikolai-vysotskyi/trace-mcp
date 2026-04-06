@@ -3,15 +3,14 @@
  * convergence on cycles, and edge cases (empty graph, all sinks, star topologies).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { computePageRank, invalidatePageRankCache } from '../../src/scoring/pagerank.js';
 import type Database from 'better-sqlite3';
+import type { Store } from '../../src/db/store.js';
 
 function setup() {
-  const db = initializeDatabase(':memory:');
-  const store = new Store(db);
-  return { db, store };
+  const store = createTestStore();
+  return { db: store.db, store };
 }
 
 /** Insert a bare file + symbol so we can create a node. Returns the node id. */

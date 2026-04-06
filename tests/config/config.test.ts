@@ -2,20 +2,18 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { loadConfig, TraceMcpConfigSchema } from '../../src/config.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('config', () => {
   let tmpDir: string;
 
   afterEach(() => {
-    if (tmpDir && fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true });
-    }
+    if (tmpDir) removeTmpDir(tmpDir);
     delete process.env.TRACE_MCP_DB_PATH;
   });
 
   it('loads defaults when no config file exists', async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-test-'));
+    tmpDir = createTmpDir('trace-mcp-test-');
     const result = await loadConfig(tmpDir);
 
     expect(result.isOk()).toBe(true);
@@ -28,7 +26,7 @@ describe('config', () => {
   });
 
   it('loads .trace-mcp.json config file', async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-test-'));
+    tmpDir = createTmpDir('trace-mcp-test-');
     const configFile = path.join(tmpDir, '.trace-mcp.json');
     fs.writeFileSync(configFile, JSON.stringify({
       root: './src',
@@ -47,7 +45,7 @@ describe('config', () => {
   });
 
   it('env vars override file config', async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-test-'));
+    tmpDir = createTmpDir('trace-mcp-test-');
     const configFile = path.join(tmpDir, '.trace-mcp.json');
     fs.writeFileSync(configFile, JSON.stringify({
       db: { path: 'file-path.db' },

@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { searchText } from '../../src/tools/navigation/search-text.js';
 
 describe('searchText', () => {
@@ -11,11 +10,10 @@ describe('searchText', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
 
     // Create a temp project directory with test files
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'search-text-'));
+    tmpDir = createTmpDir('search-text-');
 
     fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
     fs.mkdirSync(path.join(tmpDir, 'config'), { recursive: true });
@@ -71,7 +69,7 @@ describe('searchText', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
   });
 
   it('finds literal string matches', () => {

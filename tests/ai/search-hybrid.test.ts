@@ -4,8 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
@@ -52,13 +51,13 @@ function makeMockEmbedding(): EmbeddingService {
 }
 
 describe('Hybrid AI search', () => {
-  let store: Store;
+  let store: ReturnType<typeof createTestStore>;
   let vectorStore: BlobVectorStore;
   let embeddingService: EmbeddingService;
 
   beforeAll(async () => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
+    const db = store.db;
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
 

@@ -5,8 +5,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
@@ -18,8 +17,7 @@ import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/v
 import { InertiaPlugin } from '../../src/indexer/plugins/integration/view/inertia/index.js';
 
 function setupPipeline(fixturePath: string) {
-  const db = initializeDatabase(':memory:');
-  const store = new Store(db);
+  const store = createTestStore();
   const registry = new PluginRegistry();
 
   registry.registerLanguagePlugin(new PhpLanguagePlugin());
@@ -35,7 +33,7 @@ function setupPipeline(fixturePath: string) {
   });
 
   const pipeline = new IndexingPipeline(store, registry, config, fixturePath);
-  return { db, store, pipeline, registry };
+  return { store, pipeline, registry };
 }
 
 describe('pipeline edge creation (laravel-10)', () => {

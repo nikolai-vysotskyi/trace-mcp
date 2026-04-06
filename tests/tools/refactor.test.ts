@@ -1,19 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
+import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 import { applyRename, removeDeadCode, extractFunction } from '../../src/tools/refactoring/refactor.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════════════
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
   return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
@@ -57,23 +51,8 @@ function insertEdge(
   store.insertEdge(srcNodeId, tgtNodeId, edgeType, true, metadata);
 }
 
-/** Create a temp directory with files for filesystem-dependent tests. */
-function createTempProject(files: Record<string, string>): string {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'refactor-test-'));
-  for (const [relPath, content] of Object.entries(files)) {
-    const absPath = path.join(tmpDir, relPath);
-    fs.mkdirSync(path.dirname(absPath), { recursive: true });
-    fs.writeFileSync(absPath, content, 'utf-8');
-  }
-  return tmpDir;
-}
-
 function readFile(projectRoot: string, relPath: string): string {
   return fs.readFileSync(path.join(projectRoot, relPath), 'utf-8');
-}
-
-function cleanupTempDir(dir: string): void {
-  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -85,11 +64,11 @@ describe('applyRename', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   afterEach(() => {
-    if (tmpDir) cleanupTempDir(tmpDir);
+    if (tmpDir) removeTmpDir(tmpDir);
   });
 
   it('returns error for unknown symbol', () => {
@@ -99,7 +78,7 @@ describe('applyRename', () => {
   });
 
   it('returns error when new name equals old name', () => {
-    tmpDir = createTempProject({ 'src/a.ts': 'export function foo() {}' });
+    tmpDir = createTmpFixture({ 'src/a.ts': 'export function foo() {}' }, 'refactor-test-');
     const fA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fA, 'foo');
 
@@ -109,7 +88,7 @@ describe('applyRename', () => {
   });
 
   it('aborts on naming conflict in same file', () => {
-    tmpDir = createTempProject({ 'src/a.ts': 'export function foo() {}\nfunction bar() {}' });
+    tmpDir = createTmpFixture({ 'src/a.ts': 'export function foo() {}\nfunction bar() {}' });
     const fA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fA, 'foo');
     insertSymbol(store, fA, 'bar');
@@ -121,7 +100,7 @@ describe('applyRename', () => {
   });
 
   it('renames symbol in definition file', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': 'export function oldName() {\n  return oldName;\n}\n',
     });
     const fA = insertFile(store, 'src/a.ts');
@@ -138,7 +117,7 @@ describe('applyRename', () => {
   });
 
   it('renames across importing files', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': 'export function myFunc() {}\n',
       'src/b.ts': 'import { myFunc } from "./a";\nmyFunc();\n',
     });
@@ -166,7 +145,7 @@ describe('applyRename', () => {
   });
 
   it('respects word boundaries (does not rename substrings)', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': 'export function get() {}\nfunction getAll() {}\nfunction doGet() {}\n',
     });
     const fA = insertFile(store, 'src/a.ts');
@@ -183,7 +162,7 @@ describe('applyRename', () => {
   });
 
   it('warns when file missing on disk', () => {
-    tmpDir = createTempProject({});
+    tmpDir = createTmpFixture({});
     const fA = insertFile(store, 'src/missing.ts');
     insertSymbol(store, fA, 'foo');
 
@@ -203,11 +182,11 @@ describe('removeDeadCode', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   afterEach(() => {
-    if (tmpDir) cleanupTempDir(tmpDir);
+    if (tmpDir) removeTmpDir(tmpDir);
   });
 
   it('returns error for unknown symbol', () => {
@@ -217,7 +196,7 @@ describe('removeDeadCode', () => {
   });
 
   it('refuses to remove symbol with incoming references', () => {
-    tmpDir = createTempProject({ 'src/a.ts': 'export function used() {}' });
+    tmpDir = createTmpFixture({ 'src/a.ts': 'export function used() {}' });
     const fA = insertFile(store, 'src/a.ts');
     const symDbId = insertSymbol(store, fA, 'used', { lineStart: 1, lineEnd: 1 });
     const fB = insertFile(store, 'src/b.ts');
@@ -235,7 +214,7 @@ describe('removeDeadCode', () => {
   });
 
   it('returns error when symbol has no line range', () => {
-    tmpDir = createTempProject({ 'src/a.ts': 'export function noLines() {}' });
+    tmpDir = createTmpFixture({ 'src/a.ts': 'export function noLines() {}' });
     const fA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fA, 'noLines'); // no lineStart/lineEnd
 
@@ -245,7 +224,7 @@ describe('removeDeadCode', () => {
   });
 
   it('removes dead symbol from file', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': [
         'const x = 1;',
         'export function deadFunc() {',
@@ -268,7 +247,7 @@ describe('removeDeadCode', () => {
   });
 
   it('removes JSDoc and decorators above the symbol', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': [
         'const keep = 1;',
         '/** This is a dead func */',
@@ -294,7 +273,7 @@ describe('removeDeadCode', () => {
   });
 
   it('warns about orphaned imports when last export removed', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': 'export function onlyExport() {\n  return 1;\n}\n',
       'src/b.ts': 'import { onlyExport } from "./a";\n',
     });
@@ -318,7 +297,7 @@ describe('removeDeadCode', () => {
   });
 
   it('cleans up consecutive blank lines after removal', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': [
         'const before = 1;',
         '',
@@ -352,36 +331,36 @@ describe('extractFunction', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    store = createStore();
+    store = createTestStore();
   });
 
   afterEach(() => {
-    if (tmpDir) cleanupTempDir(tmpDir);
+    if (tmpDir) removeTmpDir(tmpDir);
   });
 
   it('returns error for missing file', () => {
-    tmpDir = createTempProject({});
+    tmpDir = createTmpFixture({});
     const result = extractFunction(store, tmpDir, 'src/nope.ts', 1, 3, 'extracted');
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
   });
 
   it('returns error for invalid line range', () => {
-    tmpDir = createTempProject({ 'src/a.ts': 'line1\nline2\n' });
+    tmpDir = createTmpFixture({ 'src/a.ts': 'line1\nline2\n' });
     const result = extractFunction(store, tmpDir, 'src/a.ts', 5, 10, 'extracted');
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid line range');
   });
 
   it('returns error for inverted range (start > end)', () => {
-    tmpDir = createTempProject({ 'src/a.ts': 'line1\nline2\nline3\n' });
+    tmpDir = createTmpFixture({ 'src/a.ts': 'line1\nline2\nline3\n' });
     const result = extractFunction(store, tmpDir, 'src/a.ts', 3, 1, 'extracted');
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid line range');
   });
 
   it('extracts simple TS function with no params/returns', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': [
         'function main() {',
         '  console.log("hello");',
@@ -401,7 +380,7 @@ describe('extractFunction', () => {
   });
 
   it('detects parameters from outer scope', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': [
         'const items = [1, 2, 3];',
         'const multiplier = 2;',
@@ -424,7 +403,7 @@ describe('extractFunction', () => {
   });
 
   it('detects return values used after extraction', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': [
         'const input = 10;',
         'const doubled = input * 2;',
@@ -444,7 +423,7 @@ describe('extractFunction', () => {
   });
 
   it('generates Python syntax for .py files', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/main.py': [
         'data = [1, 2, 3]',
         'total = sum(data)',
@@ -462,7 +441,7 @@ describe('extractFunction', () => {
   });
 
   it('generates Go syntax for .go files', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/main.go': [
         'package main',
         '',
@@ -484,7 +463,7 @@ describe('extractFunction', () => {
   });
 
   it('preserves lines before and after extraction', () => {
-    tmpDir = createTempProject({
+    tmpDir = createTmpFixture({
       'src/a.ts': [
         'const header = "start";',
         'const a = 1;',

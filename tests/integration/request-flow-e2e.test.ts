@@ -5,8 +5,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
@@ -23,8 +22,7 @@ describe('get_request_flow end-to-end (laravel-10)', () => {
 
   beforeAll(async () => {
     const fixturePath = path.resolve(__dirname, '../fixtures/laravel-10');
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
 
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
@@ -99,8 +97,7 @@ describe('get_request_flow end-to-end (inertia-laravel-vue)', () => {
 
   beforeAll(async () => {
     const fixturePath = path.resolve(__dirname, '../fixtures/inertia-laravel-vue');
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
 
     registry.registerLanguagePlugin(new PhpLanguagePlugin());

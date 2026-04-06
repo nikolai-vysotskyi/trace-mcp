@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { SpanMapper } from '../../src/runtime/mapper.js';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
+import type { Store } from '../../src/db/store.js';
 
 function createTestDb(): { db: Database.Database; store: Store } {
-  const db = initializeDatabase(':memory:');
+  const store = createTestStore();
+  const db = store.db;
   // Runtime tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS runtime_spans (
@@ -25,7 +26,6 @@ function createTestDb(): { db: Database.Database; store: Store } {
       mapping_method TEXT
     );
   `);
-  const store = new Store(db);
   return { db, store };
 }
 

@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { getDataflow } from '../../src/tools/analysis/dataflow.js';
 
 describe('getDataflow', () => {
@@ -11,14 +10,13 @@ describe('getDataflow', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dataflow-'));
+    store = createTestStore();
+    tmpDir = createTmpDir('dataflow-');
     fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
   });
 
   function setupFile(filePath: string, content: string) {

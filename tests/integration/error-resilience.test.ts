@@ -3,11 +3,7 @@
  * Does the pipeline handle broken files, missing references, mixed valid/invalid?
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
-import fs from 'node:fs';
-import os from 'node:os';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore, createTmpFixture, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
@@ -15,16 +11,6 @@ import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
-
-function createTmpFixture(files: Record<string, string>): string {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-err-'));
-  for (const [relPath, content] of Object.entries(files)) {
-    const absPath = path.join(tmpDir, relPath);
-    fs.mkdirSync(path.dirname(absPath), { recursive: true });
-    fs.writeFileSync(absPath, content, 'utf-8');
-  }
-  return tmpDir;
-}
 
 describe('error resilience', () => {
   let cleanup: (() => void)[] = [];
@@ -35,11 +21,10 @@ describe('error resilience', () => {
   });
 
   function setupPipeline(files: Record<string, string>) {
-    const tmpDir = createTmpFixture(files);
-    cleanup.push(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+    const tmpDir = createTmpFixture(files, 'trace-mcp-err-');
+    cleanup.push(() => removeTmpDir(tmpDir));
 
-    const db = initializeDatabase(':memory:');
-    const store = new Store(db);
+    const store = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
@@ -145,11 +130,10 @@ Route::get('/test', [NonExistentController::class, 'index']);`,
   });
 
   it('handles empty project', async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-empty-'));
-    cleanup.push(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+    const tmpDir = createTmpDir('trace-mcp-empty-');
+    cleanup.push(() => removeTmpDir(tmpDir));
 
-    const db = initializeDatabase(':memory:');
-    const store = new Store(db);
+    const store = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
 

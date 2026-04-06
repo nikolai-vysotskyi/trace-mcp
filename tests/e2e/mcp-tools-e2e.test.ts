@@ -4,8 +4,8 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
+import type { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TraceMcpConfigSchema } from '../../src/config.js';
@@ -32,8 +32,7 @@ describe('MCP Tools E2E — Laravel', () => {
 
   beforeAll(async () => {
     const fixturePath = path.resolve(__dirname, '../fixtures/laravel-10');
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
     registry.registerFrameworkPlugin(new LaravelPlugin());
@@ -145,8 +144,7 @@ describe('MCP Tools E2E — Vue', () => {
 
   beforeAll(async () => {
     const fixturePath = path.resolve(__dirname, '../fixtures/vue3-composition');
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
     registry.registerLanguagePlugin(new VueLanguagePlugin());
@@ -197,8 +195,7 @@ describe('MCP Tools E2E — Search scoring', () => {
 
   beforeAll(async () => {
     const fixturePath = path.resolve(__dirname, '../fixtures/laravel-10');
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
     registry.registerFrameworkPlugin(new LaravelPlugin());

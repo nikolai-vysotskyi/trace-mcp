@@ -1,7 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { initializeDatabase, getTableNames } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
@@ -9,21 +7,20 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import type { TraceMcpConfig } from '../../src/config.js';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');
 
 let tmpDir: string;
 
 function makeDbDir(): string {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-cli-'));
+  tmpDir = createTmpDir('trace-mcp-cli-');
   return tmpDir;
 }
 
 describe('CLI smoke tests', () => {
   afterEach(() => {
-    if (tmpDir && fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    if (tmpDir) removeTmpDir(tmpDir);
   });
 
   it('index command creates DB with expected tables', () => {

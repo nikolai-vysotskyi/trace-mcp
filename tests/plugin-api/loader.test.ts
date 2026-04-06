@@ -1,20 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { loadExternalPlugins } from '../../src/plugin-api/loader.js';
 import { createTestHarness } from '../../src/plugin-api/test-harness.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 let tmpDir: string;
 
 describe('loadExternalPlugins', () => {
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-plugin-'));
+    tmpDir = createTmpDir('trace-mcp-plugin-');
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    removeTmpDir(tmpDir);
   });
 
   it('loads a plugin from a relative path with default object export', async () => {

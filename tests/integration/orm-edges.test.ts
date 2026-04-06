@@ -4,8 +4,7 @@
  * associations are correctly mapped to ORM-specific edge types.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore, createTmpDir, writeFixtureFile, removeTmpDir } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
@@ -23,8 +22,7 @@ describe('ORM edge type resolution', () => {
   describe('Mongoose → mongoose_references edges', () => {
     it('creates mongoose_references edges for ref fields', async () => {
       const fixturePath = path.resolve(__dirname, '../fixtures/mongoose-8');
-      const db = initializeDatabase(':memory:');
-      const store = new Store(db);
+      const store = createTestStore();
       const registry = new PluginRegistry();
       registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
       registry.registerFrameworkPlugin(new MongoosePlugin());
@@ -43,8 +41,7 @@ describe('ORM edge type resolution', () => {
   describe('Sequelize → sequelize_* edges', () => {
     it('creates sequelize-specific edges for associations', async () => {
       const fixturePath = path.resolve(__dirname, '../fixtures/sequelize-6');
-      const db = initializeDatabase(':memory:');
-      const store = new Store(db);
+      const store = createTestStore();
       const registry = new PluginRegistry();
       registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
       registry.registerFrameworkPlugin(new SequelizePlugin());
@@ -63,8 +60,7 @@ describe('ORM edge type resolution', () => {
 
   describe('Prisma → prisma_relation edges', () => {
     it('creates prisma_relation edges for model relations', async () => {
-      const db = initializeDatabase(':memory:');
-      const store = new Store(db);
+      const store = createTestStore();
       const registry = new PluginRegistry();
       registry.registerLanguagePlugin(new PrismaLanguagePlugin());
       registry.registerFrameworkPlugin(new PrismaPlugin());
@@ -82,10 +78,8 @@ model Post {
   author   User @relation(fields: [authorId], references: [id])
 }
 `;
-      const tmpDir = path.resolve(__dirname, '../../.tmp-prisma-test');
-      const fs = await import('node:fs');
-      fs.mkdirSync(path.join(tmpDir, 'prisma'), { recursive: true });
-      fs.writeFileSync(path.join(tmpDir, 'prisma', 'schema.prisma'), schema);
+      const tmpDir = createTmpDir('prisma-test-');
+      writeFixtureFile(tmpDir, 'prisma/schema.prisma', schema);
 
       try {
         const pipeline = new IndexingPipeline(
@@ -107,7 +101,7 @@ model Post {
         expect(store.getEdgesByType('sequelize_has_many')).toHaveLength(0);
         expect(store.getEdgesByType('sequelize_belongs_to')).toHaveLength(0);
       } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
+        removeTmpDir(tmpDir);
       }
     });
   });

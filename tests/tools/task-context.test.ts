@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
@@ -90,8 +90,7 @@ describe('getTaskContext', () => {
   let store: Store;
 
   beforeAll(async () => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
@@ -409,8 +408,7 @@ describe('getTaskContext with empty index', () => {
   let emptyStore: Store;
 
   beforeAll(() => {
-    const db = initializeDatabase(':memory:');
-    emptyStore = new Store(db);
+    emptyStore = createTestStore();
   });
 
   it('returns empty result on empty index', async () => {

@@ -1,14 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
+import type { Store } from '../../src/db/store.js';
 import { runBenchmark, formatBenchmarkMarkdown } from '../../src/analytics/benchmark.js';
 
 describe('benchmark', () => {
   let store: Store;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
 
     const file1Id = store.insertFile('src/parser.ts', 'typescript', 'hash1', 5000);
     const file2Id = store.insertFile('src/store.ts', 'typescript', 'hash2', 8000);

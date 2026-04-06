@@ -1,19 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { getFileOwnership, getSymbolOwnership } from '../../src/tools/git/git-ownership.js';
+import { createTestStore } from '../test-utils.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
 }));
 
 const mockExecFileSync = vi.mocked(execFileSync);
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 describe('getFileOwnership', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -56,7 +51,7 @@ describe('getSymbolOwnership', () => {
     mockExecFileSync.mockImplementation(() => {
       throw new Error('not a git repo');
     });
-    const store = createStore();
+    const store = createTestStore();
     expect(getSymbolOwnership(store, '/project', 'sym:foo')).toBeNull();
   });
 
@@ -95,7 +90,7 @@ describe('getSymbolOwnership', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fileId = store.insertFile('src/a.ts', 'typescript', 'h1', 100);
     store.insertSymbol(fileId, {
       symbolId: 'sym:foo',

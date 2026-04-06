@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
+import type { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
@@ -38,8 +38,7 @@ describe('CI Report Generator', () => {
   let allFilePaths: string[];
 
   beforeAll(async () => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
@@ -324,8 +323,7 @@ describe('CI Report Generator with empty index', () => {
   let emptyStore: Store;
 
   beforeAll(() => {
-    const db = initializeDatabase(':memory:');
-    emptyStore = new Store(db);
+    emptyStore = createTestStore();
   });
 
   it('produces a valid report on empty index', () => {
@@ -513,8 +511,7 @@ describe('CI Report Markdown Formatter', () => {
   });
 
   it('formatMarkdown produces real markdown from real fixture data', () => {
-    const db = initializeDatabase(':memory:');
-    const realStore = new Store(db);
+    const realStore = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
@@ -543,6 +540,6 @@ describe('CI Report Markdown Formatter', () => {
     expect(md).toContain('## trace-mcp Change Impact Report');
     expect(md).toContain('### Summary');
 
-    db.close();
+    realStore.db.close();
   });
 });

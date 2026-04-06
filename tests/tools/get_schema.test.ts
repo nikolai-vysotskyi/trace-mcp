@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
@@ -29,8 +29,7 @@ describe('get_schema', () => {
   let store: Store;
 
   beforeAll(async () => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new PhpLanguagePlugin());
     registry.registerFrameworkPlugin(new LaravelPlugin());
@@ -81,8 +80,7 @@ describe('get_schema — ORM (Mongoose/Sequelize) schemas', () => {
   let store: Store;
 
   beforeEach(() => {
-    const db = initializeDatabase(':memory:');
-    store = new Store(db);
+    store = createTestStore();
   });
 
   it('returns ormSchemas for Mongoose model', () => {

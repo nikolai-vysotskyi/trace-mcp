@@ -3,21 +3,16 @@
  * Uses in-memory store populated via insertRnScreen to avoid full pipeline.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { getScreenContext } from '../../src/tools/framework/screen-context.js';
-
-function makeStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
+import { createTestStore } from '../test-utils.js';
 
 describe('get_screen_context', () => {
   let store: Store;
   let fileId: number;
 
   beforeEach(() => {
-    store = makeStore();
+    store = createTestStore();
     fileId = store.insertFile('src/screens/ProfileScreen.tsx', 'typescript', 'h1', 200);
   });
 

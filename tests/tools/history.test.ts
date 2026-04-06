@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { Store } from '../../src/db/store.js';
-import { initializeDatabase } from '../../src/db/schema.js';
+import { createTestStore } from '../test-utils.js';
 import {
   getCouplingTrend,
   getSymbolComplexityTrend,
@@ -14,11 +14,6 @@ vi.mock('node:child_process', () => ({
 }));
 
 const mockExecFileSync = vi.mocked(execFileSync);
-
-function createStore(): Store {
-  const db = initializeDatabase(':memory:');
-  return new Store(db);
-}
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
   return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
@@ -257,7 +252,7 @@ describe('getCouplingTrend', () => {
     mockExecFileSync.mockImplementation(() => {
       throw new Error('not a git repo');
     });
-    const store = createStore();
+    const store = createTestStore();
     insertFile(store, 'src/a.ts');
     expect(getCouplingTrend(store, '/project', 'src/a.ts')).toBeNull();
   });
@@ -267,7 +262,7 @@ describe('getCouplingTrend', () => {
       if ((args as string[])[0] === 'rev-parse') return Buffer.from('true');
       return Buffer.from('');
     });
-    const store = createStore();
+    const store = createTestStore();
     expect(getCouplingTrend(store, '/project', 'nonexistent.ts')).toBeNull();
   });
 
@@ -294,7 +289,7 @@ describe('getCouplingTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fA = insertFile(store, 'src/tools/target.ts');
     const fB = insertFile(store, 'src/tools/importer.ts');
 
@@ -333,7 +328,7 @@ describe('getCouplingTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fTarget = insertFile(store, 'src/tools/target.ts');
     const fDep = insertFile(store, 'src/tools/dependency.ts');
     const nodeTarget = store.getNodeId('file', fTarget)!;
@@ -358,7 +353,7 @@ describe('getCouplingTrend', () => {
       return Buffer.from(''); // No git log results
     });
 
-    const store = createStore();
+    const store = createTestStore();
     insertFile(store, 'src/tools/target.ts');
 
     const result = getCouplingTrend(store, '/project', 'src/tools/target.ts');
@@ -369,7 +364,7 @@ describe('getCouplingTrend', () => {
 
   it('computes current coupling via single SQL query', () => {
     // Verify Ca and Ce are both computed from one query path (no N+1)
-    const store = createStore();
+    const store = createTestStore();
     const fA = insertFile(store, 'src/tools/target.ts');
     const fB = insertFile(store, 'src/tools/dep1.ts');
     const fC = insertFile(store, 'src/tools/dep2.ts');
@@ -410,7 +405,7 @@ describe('getSymbolComplexityTrend', () => {
     mockExecFileSync.mockImplementation(() => {
       throw new Error('not a git repo');
     });
-    const store = createStore();
+    const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fId, 'foo', 'function', { cyclomatic: 5, max_nesting: 2, param_count: 1 });
     expect(getSymbolComplexityTrend(store, '/project', 'sym:foo')).toBeNull();
@@ -421,7 +416,7 @@ describe('getSymbolComplexityTrend', () => {
       if ((args as string[])[0] === 'rev-parse') return Buffer.from('true');
       return Buffer.from('');
     });
-    const store = createStore();
+    const store = createTestStore();
     expect(getSymbolComplexityTrend(store, '/project', 'sym:nonexistent')).toBeNull();
   });
 
@@ -431,7 +426,7 @@ describe('getSymbolComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fId, 'foo', 'function', {
       cyclomatic: 8, max_nesting: 3, param_count: 2,
@@ -461,7 +456,7 @@ describe('getSymbolComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     // Current: high complexity
     insertSymbol(store, fId, 'foo', 'function', {
@@ -497,7 +492,7 @@ describe('getSymbolComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     // Current: simple
     insertSymbol(store, fId, 'foo', 'function', {
@@ -519,7 +514,7 @@ describe('getSymbolComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fId, 'foo', 'function', { cyclomatic: 3, max_nesting: 1, param_count: 0 });
 
@@ -538,7 +533,7 @@ describe('getSymbolComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fId, 'foo', 'function', { cyclomatic: 3, max_nesting: 1, param_count: 0 });
 
@@ -554,7 +549,7 @@ describe('getSymbolComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     // lineStart=1, lineEnd=10 → 10 lines
     store.insertSymbol(fId, {
@@ -594,7 +589,7 @@ describe('getSymbolComplexityTrend', () => {
       return Buffer.from('');
     });
 
-    const store = createStore();
+    const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fId, 'foo', 'function', {
       cyclomatic: 5, max_nesting: 3, param_count: 2,

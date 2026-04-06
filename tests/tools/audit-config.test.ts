@@ -5,7 +5,7 @@ import { auditConfig } from '../../src/tools/quality/audit-config.js';
 import { indexTrigramsBatch } from '../../src/db/fuzzy.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { createTmpDir } from '../test-utils.js';
 import type Database from 'better-sqlite3';
 
 describe('Audit Config', () => {
@@ -18,7 +18,7 @@ describe('Audit Config', () => {
     store = new Store(db);
 
     // Create temp directory for config files
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-test-'));
+    tmpDir = createTmpDir('audit-test-');
 
     // Insert some symbols so we can check stale references
     const fileId = store.insertFile('src/services/auth.ts', 'typescript', 'h1', 500);

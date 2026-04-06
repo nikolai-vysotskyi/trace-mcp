@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
-import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
@@ -23,8 +23,7 @@ function makeConfig(): TraceMcpConfig {
 }
 
 function setup() {
-  const db = initializeDatabase(':memory:');
-  const store = new Store(db);
+  const store = createTestStore();
   const registry = new PluginRegistry();
   registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
   registry.registerLanguagePlugin(new VueLanguagePlugin());
@@ -32,7 +31,7 @@ function setup() {
 
   const config = makeConfig();
   const pipeline = new IndexingPipeline(store, registry, config, FIXTURE_DIR);
-  return { db, store, registry, config, pipeline };
+  return { store, registry, config, pipeline };
 }
 
 describe('get_component_tree', () => {
