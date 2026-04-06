@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
-import { applyRename, removeDeadCode, extractFunction } from '../../src/tools/refactoring/refactor.js';
+import { applyRename, removeDeadCode, extractFunction, applyCodemod } from '../../src/tools/refactoring/refactor.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -478,5 +478,186 @@ describe('extractFunction', () => {
     const content = readFile(tmpDir, 'src/a.ts');
     expect(content).toContain('const header = "start";');
     expect(content).toContain('const footer = "end";');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// APPLY CODEMOD
+// ════════════════════════════════════════════════════════════════════════
+
+describe('applyCodemod', () => {
+  let tmpDir: string;
+
+  afterEach(() => {
+    if (tmpDir) removeTmpDir(tmpDir);
+  });
+
+  it('dry_run returns preview without writing', () => {
+    tmpDir = createTmpFixture({
+      'tests/a.test.ts': "it('works', () => {\n  doStuff();\n});\n",
+      'tests/b.test.ts': "it('also works', () => {\n  doOther();\n});\n",
+    });
+
+    const result = applyCodemod(tmpDir, "it\\('([^']+)',\\s*\\(\\)", "it('$1', async ()", 'tests/**/*.test.ts', {
+      dryRun: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.dry_run).toBe(true);
+    expect(result.total_replacements).toBe(2);
+    expect(result.total_files).toBe(2);
+    expect(result.files_modified).toHaveLength(0); // dry run — no writes
+
+    // Files should be unchanged
+    expect(readFile(tmpDir, 'tests/a.test.ts')).toContain('() => {');
+    expect(readFile(tmpDir, 'tests/a.test.ts')).not.toContain('async');
+  });
+
+  it('applies changes when dry_run=false', () => {
+    tmpDir = createTmpFixture({
+      'tests/a.test.ts': "it('works', () => {\n  doStuff();\n});\n",
+      'tests/b.test.ts': "it('also works', () => {\n  doOther();\n});\n",
+    });
+
+    const result = applyCodemod(tmpDir, "it\\('([^']+)',\\s*\\(\\)", "it('$1', async ()", 'tests/**/*.test.ts', {
+      dryRun: false,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.dry_run).toBe(false);
+    expect(result.files_modified).toHaveLength(2);
+
+    expect(readFile(tmpDir, 'tests/a.test.ts')).toContain('async ()');
+    expect(readFile(tmpDir, 'tests/b.test.ts')).toContain('async ()');
+  });
+
+  it('returns error for invalid regex', () => {
+    tmpDir = createTmpFixture({ 'src/a.ts': 'hello' });
+    const result = applyCodemod(tmpDir, '(unclosed', 'x', 'src/**', { dryRun: true });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid regex');
+  });
+
+  it('returns error when no files match glob', () => {
+    tmpDir = createTmpFixture({ 'src/a.ts': 'hello' });
+    const result = applyCodemod(tmpDir, 'hello', 'bye', 'nonexistent/**/*.xyz', { dryRun: true });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('No files matched');
+  });
+
+  it('returns error when no content matches pattern', () => {
+    tmpDir = createTmpFixture({ 'src/a.ts': 'hello world' });
+    const result = applyCodemod(tmpDir, 'zzzzz', 'x', 'src/**', { dryRun: true });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('No matches found');
+  });
+
+  it('filter_content narrows scope', () => {
+    tmpDir = createTmpFixture({
+      'src/a.ts': "import { foo } from './foo';\nconst x = foo();\n",
+      'src/b.ts': "const y = 42;\n",
+    });
+
+    const result = applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
+      dryRun: true,
+      filterContent: 'foo',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.total_files).toBe(1);
+    // Only a.ts matches because it contains 'foo'
+    expect(result.matches[0].file).toBe('src/a.ts');
+  });
+
+  it('blocks large changes without confirm_large', () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 25; i++) {
+      files[`src/file${i}.ts`] = 'const x = 1;\n';
+    }
+    tmpDir = createTmpFixture(files);
+
+    const result = applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
+      dryRun: false,
+    });
+
+    // Should be forced into dry_run mode
+    expect(result.success).toBe(true);
+    expect(result.dry_run).toBe(true);
+    expect(result.warnings.some((w) => w.includes('confirm_large'))).toBe(true);
+    expect(result.files_modified).toHaveLength(0);
+  });
+
+  it('allows large changes with confirm_large=true', () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 25; i++) {
+      files[`src/file${i}.ts`] = 'const x = 1;\n';
+    }
+    tmpDir = createTmpFixture(files);
+
+    const result = applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
+      dryRun: false,
+      confirmLarge: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.dry_run).toBe(false);
+    expect(result.files_modified).toHaveLength(25);
+  });
+
+  it('skips binary files', () => {
+    tmpDir = createTmpFixture({
+      'assets/icon.png': 'fake binary content with const keyword',
+      'src/a.ts': 'const x = 1;\n',
+    });
+
+    const result = applyCodemod(tmpDir, 'const', 'let', '**/*', { dryRun: true });
+    expect(result.success).toBe(true);
+    expect(result.total_files).toBe(1);
+    expect(result.matches[0].file).toBe('src/a.ts');
+  });
+
+  it('provides context lines in preview', () => {
+    tmpDir = createTmpFixture({
+      'src/a.ts': 'line1\nline2\nconst target = 1;\nline4\nline5\n',
+    });
+
+    const result = applyCodemod(tmpDir, 'const target', 'let target', 'src/**', { dryRun: true });
+    expect(result.success).toBe(true);
+    expect(result.matches[0].context_before.length).toBeGreaterThan(0);
+    expect(result.matches[0].context_after.length).toBeGreaterThan(0);
+  });
+
+  it('supports multiline mode', () => {
+    tmpDir = createTmpFixture({
+      'src/a.ts': "if (cond) {\n  doA();\n  doB();\n}\n",
+    });
+
+    const result = applyCodemod(tmpDir, 'if \\(cond\\) \\{\\n  doA\\(\\);', 'if (cond) {\n  doX();', 'src/**', {
+      dryRun: false,
+      multiline: true,
+    });
+
+    expect(result.success).toBe(true);
+    const content = readFile(tmpDir, 'src/a.ts');
+    expect(content).toContain('doX()');
+    expect(content).not.toContain('doA()');
+  });
+
+  it('handles multiple matches per file', () => {
+    tmpDir = createTmpFixture({
+      'src/a.ts': "it('test1', () => {});\nit('test2', () => {});\nit('test3', () => {});\n",
+    });
+
+    const result = applyCodemod(tmpDir, "it\\('([^']+)',\\s*\\(\\)", "it('$1', async ()", 'src/**', {
+      dryRun: false,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.total_replacements).toBe(3);
+    const content = readFile(tmpDir, 'src/a.ts');
+    // All 3 callbacks should now be async
+    expect((content.match(/async \(\)/g) || []).length).toBe(3);
+    // No non-async callbacks left
+    expect(content).not.toMatch(/,\s*\(\)\s*=>/);
   });
 });

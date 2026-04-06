@@ -48,7 +48,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Framework-aware edges | ✅ 53 integrations (14 frameworks, 7 ORMs, 12 UI libs) | ❌ | ❌ | ❌ | partial (4 frameworks) | partial (REST routes) |
 | Impact analysis | ✅ reverse dep traversal | ❌ | ❌ | ❌ | ✅ blast radius | ✅ detect_changes |
 | Call graph | ✅ bidirectional | ❌ | ❌ | ❌ | ✅ class hierarchy | ✅ trace_call_path |
-| Refactoring tools | ✅ rename, extract, dead code | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ |
+| Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ |
 | Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ |
 | Multi-repo federation | ✅ cross-repo API linking | ✅ remote repos | ❌ | ❌ | ✅ GitHub repos | ❌ |
 | Session memory | ✅ built-in | ❌ | ✅ SQLite journal | ❌ | ✅ index persistence | ✅ persistent graph |
