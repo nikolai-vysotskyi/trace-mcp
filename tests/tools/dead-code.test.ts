@@ -212,4 +212,54 @@ describe('getDeadCodeV2', () => {
     expect(result.dead_symbols.length).toBe(3);
     expect(result.total_dead).toBe(10); // total_dead counts all, not limited
   });
+
+  it('recognizes aliased imports as used (original name matches export)', () => {
+    const fA = insertFile(store, 'src/a.ts');
+    const fB = insertFile(store, 'src/b.ts');
+    insertExportedSymbol(store, fA, 'resolveHeritageEdges');
+
+    const nodeA = store.getNodeId('file', fA)!;
+    const nodeB = store.getNodeId('file', fB)!;
+
+    // B imports with alias: import { resolveHeritageEdges as _heritage }
+    // Specifier should contain the ORIGINAL name, not the alias
+    insertEdge(store, nodeB, nodeA, 'imports', {
+      specifiers: ['resolveHeritageEdges'],
+    });
+
+    // Signal 1 (import) = false because original name matches
+    const result = getDeadCodeV2(store);
+    const found = result.dead_symbols.find((s) => s.name === 'resolveHeritageEdges');
+    if (found) {
+      expect(found.signals.import_graph).toBe(false);
+    }
+  });
+
+  it('excludes test files from dead export analysis', () => {
+    // Export in test file — should be excluded entirely
+    const fTest = insertFile(store, 'tests/force-exit-reporter.ts');
+    insertExportedSymbol(store, fTest, 'ForceExitReporter', 'class');
+
+    // Export in source file — should be included
+    const fSrc = insertFile(store, 'src/a.ts');
+    insertExportedSymbol(store, fSrc, 'realFunc');
+
+    const result = getDeadCodeV2(store);
+    const names = result.dead_symbols.map((s) => s.name);
+    expect(names).not.toContain('ForceExitReporter');
+    expect(names).toContain('realFunc');
+  });
+
+  it('excludes .test.ts and .spec.ts files from dead export analysis', () => {
+    const fTest = insertFile(store, 'src/utils.test.ts');
+    insertExportedSymbol(store, fTest, 'testHelper');
+
+    const fSpec = insertFile(store, 'src/utils.spec.ts');
+    insertExportedSymbol(store, fSpec, 'specHelper');
+
+    const result = getDeadCodeV2(store);
+    const names = result.dead_symbols.map((s) => s.name);
+    expect(names).not.toContain('testHelper');
+    expect(names).not.toContain('specHelper');
+  });
 });

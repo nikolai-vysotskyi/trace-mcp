@@ -255,6 +255,15 @@ describe('getDeadExports', () => {
       expect(typeof item.file).toBe('string');
     }
   });
+
+  it('does not include symbols from test files', () => {
+    const result = getDeadExports(store);
+    const testFiles = result.dead_exports.filter((d) =>
+      /(?:^|\/)(?:tests?|__tests__|spec)\//.test(d.file) ||
+      /\.(?:test|spec)\.[jt]sx?$/.test(d.file),
+    );
+    expect(testFiles).toHaveLength(0);
+  });
 });
 
 // ─── ESM import edge resolution ─────────────────────────────
@@ -276,6 +285,25 @@ describe('ESM import edge resolution', () => {
       return Array.isArray(meta['specifiers']) && (meta['specifiers'] as string[]).length > 0;
     });
     expect(withSpecifiers.length).toBeGreaterThan(0);
+  });
+
+  it('stores original exported name for aliased imports, not the local alias', () => {
+    // classes.ts has: import { fromJSON as parseJSON } from './utils.js'
+    // The specifier should be "fromJSON" (original), NOT "parseJSON" (alias)
+    const importEdges = store.getEdgesByType('imports');
+    const allSpecifiers: string[] = [];
+    for (const edge of importEdges) {
+      if (!edge.metadata) continue;
+      const meta = typeof edge.metadata === 'string'
+        ? JSON.parse(edge.metadata) as Record<string, unknown>
+        : edge.metadata;
+      const specs = meta['specifiers'];
+      if (Array.isArray(specs)) {
+        allSpecifiers.push(...specs as string[]);
+      }
+    }
+    expect(allSpecifiers).toContain('fromJSON');
+    expect(allSpecifiers).not.toContain('parseJSON');
   });
 });
 
