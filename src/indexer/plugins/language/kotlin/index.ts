@@ -38,7 +38,9 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
           edgeType: 'imports',
           metadata: {
             from: im[1],
-            specifiers: [im[2] ?? parts[parts.length - 1]],
+            // Always store the original name, not the alias.
+            // `import foo.Bar as Baz` → specifier = "Bar" (matches the export).
+            specifiers: [parts[parts.length - 1]],
           },
         });
       }

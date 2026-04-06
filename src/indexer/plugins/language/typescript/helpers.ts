@@ -118,7 +118,9 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
               if (spec.type === 'import_specifier') {
                 const alias = spec.childForFieldName('alias');
                 const name = spec.childForFieldName('name');
-                specifiers.push(alias?.text ?? name?.text ?? spec.text);
+                // Always store the original exported name, not the local alias.
+                // `import { Foo as Bar }` → specifier = "Foo" (matches the export).
+                specifiers.push(name?.text ?? spec.text);
               }
             }
           } else if (inner.type === 'namespace_import') {

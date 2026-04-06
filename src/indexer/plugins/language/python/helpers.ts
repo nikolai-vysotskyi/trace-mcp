@@ -134,13 +134,13 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
           });
         } else if (child.type === 'aliased_import') {
           const nameNode = child.childForFieldName('name') ?? child.namedChildren[0];
-          const aliasNode = child.childForFieldName('alias');
           if (nameNode) {
             const moduleName = nameNode.text;
-            const alias = aliasNode?.text ?? moduleName.split('.')[0];
+            // Always store the original module top-level name, not the alias.
+            // `import os.path as osp` → specifier = "os" (matches the export).
             edges.push({
               edgeType: 'py_imports',
-              metadata: { from: moduleName, specifiers: [alias] },
+              metadata: { from: moduleName, specifiers: [moduleName.split('.')[0]] },
             });
           }
         }
@@ -200,9 +200,10 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
           specifiers.push(child.text);
         } else if (child.type === 'aliased_import') {
           const nameNode = child.childForFieldName('name') ?? child.namedChildren[0];
-          const aliasNode = child.childForFieldName('alias');
           if (nameNode) {
-            specifiers.push(aliasNode?.text ?? nameNode.text);
+            // Always store the original name, not the alias.
+            // `from foo import Bar as Baz` → specifier = "Bar" (matches the export).
+            specifiers.push(nameNode.text);
           }
         }
       }
