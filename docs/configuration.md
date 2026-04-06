@@ -54,17 +54,63 @@ All trace-mcp state lives in `~/.trace-mcp/`:
 }
 ```
 
-### Local override (optional)
+### Per-project config file (optional)
 
-You can also place a `.trace-mcp.json` in your project root to override settings without editing the global config. This is useful for project-specific `include`/`exclude` patterns that shouldn't live in the global config:
+You can place a config file at `.trace-mcp/.config.json` in your project root to override settings without editing the global config:
 
 ```jsonc
-// /path/to/project/.trace-mcp.json
+// /path/to/project/.trace-mcp/.config.json
 {
   "include": ["src/**/*.ts", "lib/**/*.ts"],
-  "exclude": ["node_modules/**", "dist/**", "coverage/**"]
+  "exclude": ["node_modules/**", "dist/**", "coverage/**"],
+  "ignore": {
+    "directories": ["generated", "proto"],
+    "patterns": ["**/fixtures/**", "**/*.generated.ts"]
+  }
 }
 ```
+
+Alternative locations (checked in order): `.trace-mcp/.config.json`, `.trace-mcp.json`, `.trace-mcp`, `.config/trace-mcp.json`, `package.json` (under `"trace-mcp"` key).
+
+---
+
+## .traceignore
+
+Place a `.traceignore` file in your project root to exclude files and directories from indexing. It uses the same syntax as `.gitignore`:
+
+```gitignore
+# Skip generated code
+generated/
+**/generated/**
+
+# Skip protobuf definitions
+proto/
+
+# Skip test fixtures
+tests/fixtures/
+
+# Skip specific file patterns
+*.generated.ts
+*.pb.go
+
+# Negation — re-include something
+!proto/important.proto
+```
+
+### Difference from .gitignore
+
+| | `.gitignore` | `.traceignore` |
+|---|---|---|
+| **Effect** | Files are indexed for the dependency graph, but source content is hidden from AI output | Files are **completely skipped** — not indexed at all |
+| **Use case** | Secrets, credentials, env files | Generated code, vendored deps, large data files |
+
+### Built-in skip directories
+
+These directories are always skipped (no configuration needed):
+
+`node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `.trace-mcp`, `coverage`, `.turbo`
+
+You can add more via `.traceignore` or the `ignore.directories` config key.
 
 ---
 
@@ -75,6 +121,8 @@ You can also place a `.trace-mcp.json` in your project root to override settings
 | `root` | `string` | `"."` | Project root directory |
 | `include` | `string[]` | Auto-detected | Glob patterns for files to index |
 | `exclude` | `string[]` | Common exclusions | Glob patterns to skip |
+| `ignore.directories` | `string[]` | `[]` | Extra directory names to skip (added to built-in list) |
+| `ignore.patterns` | `string[]` | `[]` | Extra gitignore-style patterns to exclude from indexing |
 | `plugins` | `string[]` | `[]` | Paths to custom plugins |
 | `security.secret_patterns` | `string[]` | Common patterns | Regex patterns for secret filtering |
 | `security.max_file_size_bytes` | `number` | `524288` | Max file size to index (bytes) |

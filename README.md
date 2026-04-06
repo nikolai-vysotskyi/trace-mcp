@@ -1,6 +1,6 @@
 # trace-mcp
 
-**Framework-aware code intelligence MCP server — 48+ framework integrations across 68 languages.**
+**Framework-aware code intelligence MCP server — 14 frameworks, 7 ORMs, 12 UI libraries, 20+ other integrations (53 total) across 68 languages.**
 
 > Your AI agent reads `UserController.php` and sees a class.
 > trace-mcp reads it and sees a route → controller → FormRequest → Eloquent model → Inertia render → Vue page → child components — **in one graph.**
@@ -29,27 +29,115 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 
 ---
 
-## Token efficiency — real-world benchmark
+## How trace-mcp compares
+
+trace-mcp is not just a code intelligence server — it combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Other projects solve one of these; trace-mcp unifies all three.
+
+_Last updated: April 2026. Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nicovs-ai/trace-mcp/issues)._
+
+### vs. token-efficient code exploration
+
+Tools that help AI agents read code with fewer tokens — AST parsing, outlines, context packing.
+
+| Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | 23K | 6.6K | 5.1K | 1.5K | 1.3K |
+| Tree-sitter AST parsing | ✅ 68 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ | ✅ ~40 languages | ✅ 66 languages |
+| Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output | ✅ | ✅ core focus | ✅ |
+| Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ knowledge graph | ✅ import graph | ✅ knowledge graph |
+| Framework-aware edges | ✅ 53 integrations (14 frameworks, 7 ORMs, 12 UI libs) | ❌ | ❌ | ❌ | partial (4 frameworks) | partial (REST routes) |
+| Impact analysis | ✅ reverse dep traversal | ❌ | ❌ | ❌ | ✅ blast radius | ✅ detect_changes |
+| Call graph | ✅ bidirectional | ❌ | ❌ | ❌ | ✅ class hierarchy | ✅ trace_call_path |
+| Refactoring tools | ✅ rename, extract, dead code | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ |
+| Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ |
+| Multi-repo federation | ✅ cross-repo API linking | ✅ remote repos | ❌ | ❌ | ✅ GitHub repos | ❌ |
+| Session memory | ✅ built-in | ❌ | ✅ SQLite journal | ❌ | ✅ index persistence | ✅ persistent graph |
+| Written in | TypeScript | TypeScript | TypeScript | Python | Python | C |
+
+### vs. AI session memory
+
+Tools that persist context across AI agent sessions — activity logs, knowledge graphs, memory compression.
+
+| Capability | trace-mcp | claude-mem | OpenMemory | engram | ConPort | memory-bank-mcp |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | 45.7K | 3.9K | 2.3K | 761 | 892 |
+| Cross-session context carryover | ✅ `get_session_resume` | ✅ core focus | ✅ | ✅ | ✅ | ✅ |
+| Session journal (what was explored) | ✅ tool calls, files, dead ends | ✅ tool call capture | ❌ | partial | ❌ | ❌ |
+| Context compaction snapshot | ✅ ~200 tokens | ✅ AI-compressed | ✅ decay engine | unverified | ❌ | ❌ |
+| Code-graph-aware memory | ✅ tied to symbols & deps | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only |
+| Token usage analytics | ✅ per-tool cost breakdown | partial | ❌ | ❌ | ❌ | ❌ |
+| Optimization recommendations | ✅ waste detection, A/B savings | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Code intelligence included | ✅ 100+ tools | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Knowledge graph | ✅ code dependency graph | ❌ | ✅ temporal | ❌ | ✅ project-level | ❌ |
+| Works as standalone memory | ❌ code-focused | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped | ✅ general-purpose |
+| Written in | TypeScript | TypeScript | TS + Python | Go | Python | TypeScript |
+
+> **Key difference:** General-purpose memory tools remember *what you said*. trace-mcp remembers *what you explored in the codebase* — which symbols you read, what searches found nothing, which files you edited — and ties it to the dependency graph. When you resume, the agent gets structural context, not just conversation history.
+
+### vs. documentation generation & RAG
+
+Tools that generate docs from code or provide embedding-based code search for AI retrieval.
+
+| Capability | trace-mcp | Repomix | DeepContext | smart-coding-mcp | mcp-local-rag¹ | knowledge-rag¹ |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | 23K | 274 | 193 | 204 | 44 |
+| Real-time code understanding | ✅ live graph, always current | ❌ snapshot at pack time | ❌ manual reindex | partial (opt-in watcher) | ❌ | partial (file watcher) |
+| Auto-generated project docs | ✅ `generate_docs` from graph | ❌ raw file dump | ❌ | ❌ | ❌ | ❌ |
+| Semantic code search | ✅ `search` + `query_by_intent` | ❌ no search | ✅ Jina embeddings | ✅ nomic embeddings | ✅ vector search | ✅ hybrid + reranking |
+| Framework-aware context | ✅ routes, models, components | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Task-focused context | ✅ `get_task_context` — code subgraph | ❌ packs everything | ❌ | ❌ | ❌ | ❌ |
+| No doc maintenance needed | ✅ derived from code | ✅ repacks on demand | ❌ manual reindex | partial (auto on startup) | ❌ manual ingest | partial (auto-reindex) |
+| Works offline, no embeddings | ✅ graph + FTS5 | ✅ | ❌ requires cloud API | ❌ requires local embeddings | ❌ requires local embeddings | ❌ requires local embeddings |
+| Incremental updates | ✅ file watcher, content hash | ❌ full repack | ✅ SHA-256 hashing | ✅ file hash + opt-in watcher | ❌ | ✅ mtime + dedup |
+| Written in | TypeScript | TypeScript | TypeScript | JavaScript | TypeScript | Python |
+
+_¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown) — not code-specific. Included for comparison as they occupy adjacent mindshare._
+
+> **Key difference:** RAG tools answer "find code similar to this query." trace-mcp answers "show me the execution path, the dependencies, and the tests for this feature." Graph traversal finds structurally relevant code that embedding similarity misses — and never returns stale results because the graph updates incrementally with every file save.
+
+### vs. code graph MCP servers
+
+| Capability | trace-mcp | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Languages | 68 | ~10 | 66 | ~15 | 32 | ~10 |
+| Framework integrations | 53 (14 fw + 7 ORM + 12 UI + 20 other) | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Cross-language edges | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| MCP tools | 100+ | ~15 | ~20 | ~25 | 90 | 139 |
+| Session memory | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| CI/PR reports | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Multi-repo federation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Security scanning | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Refactoring tools | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Architecture governance | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Token savings tracking | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Written in | TypeScript | Python | C | TypeScript | Rust | Python |
+
+> **Why framework awareness matters:** A graph that knows `UserController` exists but doesn't know it renders `Users/Show.vue` via Inertia is missing the edges that matter most. Framework integrations turn a syntax graph into a **semantic** graph — the agent sees the same connections a developer sees.
+
+---
+
+## Up to 97% token reduction — real-world benchmark
 
 AI agents burn tokens reading files they don't need. trace-mcp returns **precision context** — only the symbols, edges, and signatures relevant to the query.
 
-**Benchmark: trace-mcp's own codebase** (563 files, 2,955 symbols):
+**Benchmark: trace-mcp's own codebase** (651 files, 3,342 symbols):
 
 ```
 Task                  Without trace-mcp    With trace-mcp    Reduction
 ─────────────────────────────────────────────────────────────────────
-Symbol lookup              49,719 tokens     5,103 tokens      89.7%
-File exploration           11,284 tokens       463 tokens      95.9%
+Symbol lookup              41,211 tokens     2,098 tokens      94.9%
+File exploration           16,366 tokens       762 tokens      95.3%
 Search                     22,860 tokens     8,000 tokens      65.0%
-Impact analysis            69,223 tokens     3,464 tokens      95.0%
-Call graph                107,497 tokens     6,452 tokens      94.0%
+Impact analysis            96,717 tokens     4,841 tokens      95.0%
+Call graph                178,661 tokens    10,723 tokens      94.0%
+Composite task             71,076 tokens     2,033 tokens      97.1%
 ─────────────────────────────────────────────────────────────────────
-Total                     260,583 tokens    23,482 tokens      91.0%
+Total                     426,891 tokens    28,457 tokens      93.3%
 ```
 
-**91% fewer tokens** to accomplish the same code understanding tasks. That's ~237K tokens saved per exploration session — more headroom for actual coding, fewer context window evictions, lower API costs.
+**93% fewer tokens** to accomplish the same code understanding tasks. That's ~398K tokens saved per exploration session — more headroom for actual coding, fewer context window evictions, lower API costs.
 
-**Savings scale with project size.** On a 500-file project, trace-mcp saves ~237K tokens. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
+**Savings scale with project size.** On a 650-file project, trace-mcp saves ~398K tokens. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
 
 **Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, with 90%+ token reduction.
 
@@ -113,7 +201,7 @@ trace-mcp add         # register current project for indexing
 
 **Step 2: `add`** — registers a project. Detects frameworks and languages, creates the index database, and adds the project to the global registry. Run this in each project you want trace-mcp to understand.
 
-All state lives in `~/.trace-mcp/` — nothing is stored in your project directory.
+All state lives in `~/.trace-mcp/` — nothing is stored in your project directory (unless you add a `.traceignore` or `.trace-mcp/.config.json`).
 
 Start your MCP client and use:
 ```
@@ -181,6 +269,38 @@ All trace-mcp state is centralized:
   index/
     my-app-a1b2c3d4e5f6.db  # per-project databases (named by project + hash)
 ```
+
+### Excluding files from indexing (.traceignore)
+
+Place a `.traceignore` file in the project root to skip files/directories from indexing entirely (gitignore syntax):
+
+```gitignore
+# Skip generated code
+generated/
+*.generated.ts
+
+# Skip protobuf output
+*_pb2.py
+*.pb.go
+
+# Negation — re-include a specific path
+!generated/keep-this.ts
+```
+
+Common directories (`node_modules`, `.git`, `dist`, `build`, `vendor`, etc.) are skipped automatically.
+
+You can also configure ignore rules in `~/.trace-mcp/.config.json` (global) or `project/.trace-mcp/.config.json` (per-project):
+
+```jsonc
+{
+  "ignore": {
+    "directories": ["proto", "generated"],
+    "patterns": ["**/fixtures/**"]
+  }
+}
+```
+
+> Details: [Configuration — .traceignore](docs/configuration.md#traceignore)
 
 ---
 
@@ -427,4 +547,4 @@ The full workflow is in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) �
 
 ---
 
-Built by [Nikolai Vysotskyi](https://github.com/nickvysotskyi)
+Built by [Nikolai Vysotskyi](https://github.com/nikolai-vysotskyi)
