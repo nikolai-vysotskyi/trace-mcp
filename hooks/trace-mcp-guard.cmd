@@ -1,8 +1,11 @@
 @echo off
-REM trace-mcp-guard v0.2.0
+REM trace-mcp-guard v0.4.0
 REM trace-mcp PreToolUse guard (Windows)
 REM Blocks Read/Grep/Glob/Bash on source code files - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
+REM
+REM Consultation markers: trace-mcp server writes markers when tools access files.
+REM If a marker exists, Read is allowed immediately.
 REM
 REM Install: add to ~\.claude\settings.json or .claude\settings.local.json
 REM See README.md for setup instructions.
@@ -46,6 +49,14 @@ if %errorlevel%==0 goto :allow
 REM Block code file reads - redirect to trace-mcp
 echo "%FILE_PATH%" | findstr /i /r "\.ts$ \.tsx$ \.js$ \.jsx$ \.mjs$ \.cjs$ \.py$ \.pyi$ \.go$ \.rs$ \.java$ \.kt$ \.kts$ \.rb$ \.php$ \.cs$ \.cpp$ \.c$ \.h$ \.hpp$ \.swift$ \.scala$ \.vue$ \.svelte$ \.astro$" >nul 2>&1
 if not %errorlevel%==0 goto :allow
+
+REM Check consultation markers (trace-mcp server writes these when get_outline/get_symbol called)
+for /f "usebackq delims=" %%h in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('%CD%'))).Replace('-','').Substring(0,12).ToLower()"`) do set "PROJ_HASH=%%h"
+set "REL_FOR_HASH=%FILE_PATH%"
+set "REL_FOR_HASH=!REL_FOR_HASH:%CD%\=!"
+set "REL_FOR_HASH=!REL_FOR_HASH:\=/!"
+for /f "usebackq delims=" %%h in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.MD5]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('!REL_FOR_HASH!'))).Replace('-','').ToLower()"`) do set "FILE_HASH=%%h"
+if exist "%TEMP%\trace-mcp-consulted-!PROJ_HASH!\!FILE_HASH!" goto :allow
 
 REM Allow on second attempt (agent needs full content for Edit)
 set "SESSION_ID=default"
@@ -136,6 +147,13 @@ for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content 
 REM Allow safe commands
 echo "%COMMAND%" | findstr /i /r /c:"^git " /c:"^npm " /c:"^npx " /c:"^pnpm " /c:"^yarn " /c:"^bun " /c:"^node " /c:"^deno " /c:"^cargo " /c:"^go " /c:"^make " /c:"^mvn " /c:"^gradle " /c:"^docker " /c:"^kubectl " /c:"^helm " /c:"^terraform " /c:"^pip " /c:"^poetry " /c:"^uv " /c:"^pytest " /c:"^vitest " /c:"^jest " /c:"^phpunit " /c:"^composer " /c:"^artisan " /c:"^rails " /c:"^bundle " /c:"^mix " /c:"^dotnet " /c:"^cmake " >nul 2>&1
 if %errorlevel%==0 goto :allow
+
+REM Block bash commands targeting .env files - prevent secret leakage
+echo "%COMMAND%" | findstr /i /r "\.env" >nul 2>&1
+if %errorlevel%==0 (
+    call :deny "Use get_env_vars for .env files - it masks sensitive values (passwords, API keys, tokens)." "trace-mcp alternatives: get_env_vars to list keys + types without exposing secrets. Never access .env files via shell."
+    goto :cleanup
+)
 
 REM Block code exploration via bash
 set "HAS_EXPLORE=0"

@@ -15,7 +15,7 @@ import { fallbackSearch, fallbackOutline } from '../zero-index.js';
 import { computeAdaptiveBudget } from '../../adaptive-budget.js';
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
-  const { store, projectRoot, guardPath, j, jh, savings, vectorStore, embeddingService, reranker } = ctx;
+  const { store, projectRoot, guardPath, j, jh, savings, vectorStore, embeddingService, reranker, markExplored } = ctx;
 
   // --- Level 1 Navigation Tools ---
 
@@ -33,6 +33,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
       const { symbol, file, source, truncated } = result.value;
+      markExplored(file.path);
       return {
         content: [{
           type: 'text',
@@ -154,6 +155,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
+      markExplored(filePath);
       return { content: [{ type: 'text', text: jh('get_outline', result.value) }] };
     },
   );
@@ -257,6 +259,10 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       });
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      // Mark all files in the bundle as explored
+      for (const sym of result.value.primary ?? []) {
+        if (sym.file) markExplored(sym.file);
       }
       return { content: [{ type: 'text', text: jh('get_context_bundle', result.value) }] };
     },

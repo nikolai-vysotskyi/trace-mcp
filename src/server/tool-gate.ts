@@ -7,6 +7,7 @@ import type { TraceMcpConfig } from '../config.js';
 import type { SessionTracker } from '../session-tracker.js';
 import type { SessionJournal } from '../session-journal.js';
 import type { ToolResponse } from '../server-types.js';
+import { markToolConsultation } from './consultation-markers.js';
 
 export interface ToolGateResult {
   _originalTool: McpServer['tool'];
@@ -48,6 +49,7 @@ export function installToolGate(
   extractResultCount: (response: { content: Array<{ type: string; text: string }>; isError?: boolean }) => number,
   extractCompactResult: (toolName: string, response: { content: Array<{ type: string; text: string }>; isError?: boolean }) => Record<string, unknown> | undefined,
   stripMetaFields: (obj: Record<string, unknown>) => void,
+  projectRoot?: string,
 ): ToolGateResult {
   const includeSet = config.tools?.include ? new Set(config.tools.include) : null;
   const excludeSet = config.tools?.exclude ? new Set(config.tools.exclude) : null;
@@ -135,6 +137,9 @@ export function installToolGate(
       args[cbIdx] = async (...cbArgs: unknown[]) => {
         savings.recordCall(name);
         const params = (cbArgs[0] && typeof cbArgs[0] === 'object') ? cbArgs[0] as Record<string, unknown> : {};
+
+        // Mark files as consulted via trace-mcp (read by guard hook)
+        if (projectRoot) markToolConsultation(projectRoot, name, params);
 
         // Dedup check
         const dupInfo = journal.checkDuplicate(name, params);
