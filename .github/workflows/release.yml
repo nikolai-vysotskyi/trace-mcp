@@ -40,6 +40,7 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+      - run: npm test
 
       - name: Index project
         run: node dist/cli.js index . --force

@@ -4,10 +4,8 @@ import { Command } from 'commander';
 import path from 'node:path';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { version: PKG_VERSION } = require('../package.json');
+declare const PKG_VERSION_INJECTED: string;
+const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { initializeDatabase } from './db/schema.js';
