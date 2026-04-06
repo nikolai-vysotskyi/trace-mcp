@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import type { InitStepResult } from './types.js';
-import { GUARD_HOOK_VERSION, REINDEX_HOOK_VERSION } from './types.js';
+import { GUARD_HOOK_VERSION, REINDEX_HOOK_VERSION, PRECOMPACT_HOOK_VERSION, WORKTREE_HOOK_VERSION } from './types.js';
 
 const HOME = os.homedir();
 const IS_WINDOWS = process.platform === 'win32';
@@ -18,6 +18,11 @@ function hookCommand(hookPath: string): string {
   return IS_WINDOWS
     ? `cmd /c "set CLAUDE_TOOL_NAME={{tool_name}}&& "${hookPath}""`
     : `CLAUDE_TOOL_NAME={{tool_name}} ${hookPath}`;
+}
+
+/** Build a plain hook command (no env vars — for hooks like PreCompact). */
+function plainHookCommand(hookPath: string): string {
+  return IS_WINDOWS ? `cmd /c "${hookPath}"` : hookPath;
 }
 
 // --- Client directories (Claude + Claw) ---
@@ -36,10 +41,12 @@ const CLIENTS: ClientDir[] = [
 
 interface HookDescriptor {
   scriptName: string;           // e.g. 'trace-mcp-guard'
-  settingsKey: string;          // e.g. 'PreToolUse' or 'PostToolUse'
-  matcher: string;              // e.g. 'Read|Grep|Glob|Bash'
+  settingsKey: string;          // e.g. 'PreToolUse' or 'PostToolUse' or 'PreCompact'
+  matcher?: string;             // e.g. 'Read|Grep|Glob|Bash' (optional — PreCompact has none)
   version: string;
   dryRunLabel: string;
+  /** If true, use plain command (no CLAUDE_TOOL_NAME env var) */
+  plainCommand?: boolean;
 }
 
 const GUARD_HOOK: HookDescriptor = {
@@ -56,6 +63,31 @@ const REINDEX_HOOK: HookDescriptor = {
   matcher: 'Edit|Write|MultiEdit',
   version: REINDEX_HOOK_VERSION,
   dryRunLabel: 'Would install reindex hook',
+};
+
+const PRECOMPACT_HOOK: HookDescriptor = {
+  scriptName: 'trace-mcp-precompact',
+  settingsKey: 'PreCompact',
+  version: PRECOMPACT_HOOK_VERSION,
+  dryRunLabel: 'Would install precompact hook',
+  plainCommand: true,
+};
+
+const WORKTREE_HOOK: HookDescriptor = {
+  scriptName: 'trace-mcp-worktree',
+  settingsKey: 'WorktreeCreate',
+  version: WORKTREE_HOOK_VERSION,
+  dryRunLabel: 'Would install worktree hook',
+  plainCommand: true,
+};
+
+// WorktreeRemove uses the same script but different settings key
+const WORKTREE_REMOVE_HOOK: HookDescriptor = {
+  scriptName: 'trace-mcp-worktree',
+  settingsKey: 'WorktreeRemove',
+  version: WORKTREE_HOOK_VERSION,
+  dryRunLabel: 'Would install worktree remove hook',
+  plainCommand: true,
 };
 
 // --- Helpers ---
@@ -114,10 +146,12 @@ function addHookEntry(
     (h) => h.hooks?.some((hh) => hh.command?.includes(desc.scriptName)),
   );
   if (!alreadyExists) {
-    entries.push({
-      matcher: desc.matcher,
-      hooks: [{ type: 'command' as const, command: hookCommand(dest) }],
-    } as unknown as { hooks?: { command?: string }[] });
+    const cmd = desc.plainCommand ? plainHookCommand(dest) : hookCommand(dest);
+    const entry: Record<string, unknown> = {
+      hooks: [{ type: 'command' as const, command: cmd }],
+    };
+    if (desc.matcher) entry.matcher = desc.matcher;
+    entries.push(entry as unknown as { hooks?: { command?: string }[] });
   }
 }
 
@@ -220,4 +254,33 @@ export function installReindexHook(opts: {
 
 export function uninstallReindexHook(opts: { global?: boolean }): InitStepResult {
   return uninstallHook(REINDEX_HOOK, opts);
+}
+
+export function installPrecompactHook(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+}): InitStepResult {
+  return installHook(PRECOMPACT_HOOK, opts);
+}
+
+export function uninstallPrecompactHook(opts: { global?: boolean }): InitStepResult {
+  return uninstallHook(PRECOMPACT_HOOK, opts);
+}
+
+export function installWorktreeHook(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+}): InitStepResult[] {
+  // Install both WorktreeCreate and WorktreeRemove — same script handles both events
+  return [
+    installHook(WORKTREE_HOOK, opts),
+    installHook(WORKTREE_REMOVE_HOOK, opts),
+  ];
+}
+
+export function uninstallWorktreeHook(opts: { global?: boolean }): InitStepResult[] {
+  return [
+    uninstallHook(WORKTREE_HOOK, opts),
+    uninstallHook(WORKTREE_REMOVE_HOOK, opts),
+  ];
 }

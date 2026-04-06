@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { detectProject, detectGuardHook } from './init/detector.js';
 import { updateClaudeMd } from './init/claude-md.js';
-import { installGuardHook, isHookOutdated } from './init/hooks.js';
+import { installGuardHook, installWorktreeHook, isHookOutdated } from './init/hooks.js';
 import { loadConfig } from './config.js';
 import { initializeDatabase } from './db/schema.js';
 import { Store } from './db/store.js';
@@ -123,6 +123,11 @@ export const upgradeCommand = new Command('upgrade')
         if (allSteps.length > 0) {
           allSteps[0].steps.push(hookResult);
         }
+      }
+      // Always ensure worktree hooks are installed (new in this version)
+      const worktreeResults = installWorktreeHook({ dryRun: opts.dryRun });
+      if (allSteps.length > 0) {
+        allSteps[0].steps.push(...worktreeResults);
       }
     }
 

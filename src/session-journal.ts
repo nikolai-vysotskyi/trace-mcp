@@ -7,6 +7,8 @@
  */
 
 import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 interface JournalEntry {
   tool: string;
@@ -47,6 +49,24 @@ interface PrefetchBoost {
   frequency: number;
 }
 
+/** Structured snapshot for programmatic consumption */
+export interface SessionSnapshotStructured {
+  duration_seconds: number;
+  total_calls: number;
+  files_explored: number;
+  focus_files: Array<{ path: string; reads: number; last_tool: string }>;
+  edited_files: string[];
+  key_searches: Array<{ query: string; results: number }>;
+  dead_ends: Array<{ query: string; reason: string }>;
+}
+
+/** Full snapshot result returned by getSnapshot() */
+export interface SessionSnapshot {
+  snapshot: string;   // compact markdown for context injection
+  structured: SessionSnapshotStructured;
+  estimated_tokens: number;
+}
+
 export class SessionJournal {
   private entries: JournalEntry[] = [];
   private filesRead = new Set<string>();
@@ -55,6 +75,9 @@ export class SessionJournal {
   private dedupSavedTokens = 0;
   /** Tracks timestamps of get_task_context calls for follow-up analysis */
   private taskContextTimestamps: number[] = [];
+  /** Path for periodic snapshot flushing (set via enablePeriodicSnapshot) */
+  private snapshotPath: string | null = null;
+  private snapshotFlushInterval = 5;
 
   /** Tools whose results are content-heavy and safe to dedup (deterministic for same params) */
   private static readonly DEDUP_TOOLS = new Set([
@@ -149,6 +172,21 @@ export class SessionJournal {
     if (tool === 'get_task_context' || tool === 'get_feature_context') {
       this.taskContextTimestamps.push(entry.timestamp);
     }
+
+    // Periodic snapshot flush for PreCompact hook
+    if (this.snapshotPath && this.entries.length % this.snapshotFlushInterval === 0) {
+      try { this.flushSnapshotFile(this.snapshotPath); } catch { /* best-effort */ }
+    }
+  }
+
+  /**
+   * Enable periodic snapshot flushing to a file.
+   * After enabling, every `interval` tool calls the snapshot is written to disk
+   * so that the PreCompact hook can read it.
+   */
+  enablePeriodicSnapshot(snapshotPath: string, interval = 5): void {
+    this.snapshotPath = snapshotPath;
+    this.snapshotFlushInterval = interval;
   }
 
   /** Record tokens saved by deduplication */
@@ -292,6 +330,151 @@ export class SessionJournal {
     }
 
     return null;
+  }
+
+  /**
+   * Generate a compact session snapshot (~200 tokens) for context injection after compaction.
+   * Returns both human-readable markdown and structured data.
+   */
+  getSnapshot(opts?: {
+    maxFiles?: number;
+    maxSearches?: number;
+    maxEdits?: number;
+    includeNegativeEvidence?: boolean;
+  }): SessionSnapshot {
+    const maxFiles = opts?.maxFiles ?? 10;
+    const maxSearches = opts?.maxSearches ?? 5;
+    const maxEdits = opts?.maxEdits ?? 10;
+    const includeNegative = opts?.includeNegativeEvidence ?? true;
+
+    // Calculate duration
+    const firstTs = this.entries.length > 0 ? this.entries[0].timestamp : Date.now();
+    const durationSec = Math.round((Date.now() - firstTs) / 1000);
+
+    // Focus files: count reads per file, track last tool used
+    const fileReads = new Map<string, { reads: number; lastTool: string }>();
+    for (const entry of this.entries) {
+      const file = this.extractFileFromEntry(entry);
+      if (file) {
+        const existing = fileReads.get(file) ?? { reads: 0, lastTool: '' };
+        existing.reads++;
+        existing.lastTool = entry.tool;
+        fileReads.set(file, existing);
+      }
+    }
+    const focusFiles = [...fileReads.entries()]
+      .sort((a, b) => b[1].reads - a[1].reads)
+      .slice(0, maxFiles)
+      .map(([p, v]) => ({ path: p, reads: v.reads, last_tool: v.lastTool }));
+
+    // Edited files: entries where tool was register_edit or tool_input had edit-like semantics
+    const editedSet = new Set<string>();
+    for (const entry of this.entries) {
+      if (entry.tool === 'register_edit') {
+        const file = this.extractFileFromEntry(entry);
+        if (file) editedSet.add(file);
+      }
+    }
+    const editedFiles = [...editedSet].slice(0, maxEdits);
+
+    // Key searches: search-like tool calls with their result counts
+    const searches: Array<{ query: string; results: number }> = [];
+    const seenQueries = new Set<string>();
+    for (const entry of this.entries) {
+      if (this.isSearchTool(entry.tool)) {
+        const queryKey = entry.params_summary;
+        if (!seenQueries.has(queryKey) && entry.result_count > 0) {
+          seenQueries.add(queryKey);
+          searches.push({ query: entry.params_summary, results: entry.result_count });
+        }
+      }
+    }
+    const keySearches = searches.slice(0, maxSearches);
+
+    // Dead ends: zero-result searches
+    const deadEnds: Array<{ query: string; reason: string }> = [];
+    if (includeNegative) {
+      for (const [, summary] of this.zeroResultQueries) {
+        deadEnds.push({
+          query: summary,
+          reason: `0 results (scanned ${this.entries.length} calls)`,
+        });
+      }
+    }
+
+    const structured: SessionSnapshotStructured = {
+      duration_seconds: durationSec,
+      total_calls: this.entries.length,
+      files_explored: this.filesRead.size,
+      focus_files: focusFiles,
+      edited_files: editedFiles,
+      key_searches: keySearches,
+      dead_ends: deadEnds,
+    };
+
+    // Build compact markdown
+    const lines: string[] = [];
+    const durationStr = durationSec >= 60
+      ? `${Math.floor(durationSec / 60)}m`
+      : `${durationSec}s`;
+    lines.push(`## Session Snapshot (trace-mcp)`);
+    lines.push(`**Duration:** ${durationStr} | **Files explored:** ${this.filesRead.size} | **Tool calls:** ${this.entries.length}`);
+
+    if (focusFiles.length > 0) {
+      lines.push('');
+      lines.push('### Focus files (most accessed)');
+      for (const f of focusFiles) {
+        lines.push(`- ${f.path} (${f.reads} reads, last: ${f.last_tool})`);
+      }
+    }
+
+    if (editedFiles.length > 0) {
+      lines.push('');
+      lines.push('### Edited files');
+      for (const f of editedFiles) {
+        lines.push(`- ${f}`);
+      }
+    }
+
+    if (keySearches.length > 0) {
+      lines.push('');
+      lines.push('### Key searches');
+      for (const s of keySearches) {
+        lines.push(`- ${s.query} → ${s.results} results`);
+      }
+    }
+
+    if (includeNegative && deadEnds.length > 0) {
+      lines.push('');
+      lines.push("### Dead ends (don't re-search)");
+      for (const d of deadEnds) {
+        lines.push(`- ${d.query} → ${d.reason}`);
+      }
+    }
+
+    const snapshot = lines.join('\n');
+
+    // Rough token estimate: ~4 chars per token
+    const estimatedTokens = Math.ceil(snapshot.length / 4);
+
+    return { snapshot, structured, estimated_tokens: estimatedTokens };
+  }
+
+  /**
+   * Write current snapshot to a file so the PreCompact hook can read it.
+   * Called periodically by the server (e.g. every 5 tool calls).
+   */
+  flushSnapshotFile(snapshotPath: string): void {
+    if (this.entries.length === 0) return;
+    const snapshot = this.getSnapshot();
+    const dir = path.dirname(snapshotPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(snapshotPath, JSON.stringify({
+      timestamp: Date.now(),
+      markdown: snapshot.snapshot,
+      structured: snapshot.structured,
+      estimated_tokens: snapshot.estimated_tokens,
+    }));
   }
 
   private extractFile(params: Record<string, unknown>): string | null {

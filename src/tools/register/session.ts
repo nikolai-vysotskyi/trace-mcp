@@ -279,6 +279,26 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   );
 
   server.tool(
+    'get_session_snapshot',
+    'Compact session snapshot (~200 tokens) for context recovery after compaction. Returns focus files (by read count), edited files, key searches, and dead ends. Also used by the PreCompact hook to preserve session orientation automatically.',
+    {
+      max_files: z.number().int().min(1).max(50).optional().describe('Max focus files to include (default: 10)'),
+      max_searches: z.number().int().min(1).max(20).optional().describe('Max key searches to include (default: 5)'),
+      max_edits: z.number().int().min(1).max(50).optional().describe('Max edited files to include (default: 10)'),
+      include_negative_evidence: z.boolean().optional().describe('Include dead-end searches (default: true)'),
+    },
+    async ({ max_files, max_searches, max_edits, include_negative_evidence }) => {
+      const snapshot = journal.getSnapshot({
+        maxFiles: max_files,
+        maxSearches: max_searches,
+        maxEdits: max_edits,
+        includeNegativeEvidence: include_negative_evidence,
+      });
+      return { content: [{ type: 'text', text: j(snapshot) }] };
+    },
+  );
+
+  server.tool(
     'get_session_resume',
     'Cross-session context carryover: shows what was explored in recent past sessions (files touched, tools used, dead-end searches). Call at session start to orient yourself without re-reading files. Much cheaper than re-exploring the codebase.',
     {

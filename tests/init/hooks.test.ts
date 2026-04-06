@@ -255,6 +255,6 @@ describe('isHookOutdated', () => {
 
   it('returns false for matching version', () => {
     // The current version is exported from types
-    expect(isHookOutdated('0.2.0')).toBe(false);
+    expect(isHookOutdated('0.4.0')).toBe(false);
   });
 });

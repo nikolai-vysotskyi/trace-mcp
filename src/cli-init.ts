@@ -10,7 +10,7 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import { configureMcpClients } from './init/mcp-client.js';
 import { updateClaudeMd } from './init/claude-md.js';
-import { installGuardHook, installReindexHook } from './init/hooks.js';
+import { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook } from './init/hooks.js';
 import { installCursorRules, installWindsurfRules } from './init/ide-rules.js';
 import { formatReport } from './init/reporter.js';
 import { ensureGlobalDirs, getDbPath } from './global.js';
@@ -347,6 +347,8 @@ function executeSteps(
   if (opts.installHooks) {
     steps.push(installGuardHook({ global: true, dryRun: opts.dryRun }));
     steps.push(installReindexHook({ global: true, dryRun: opts.dryRun }));
+    steps.push(installPrecompactHook({ global: true, dryRun: opts.dryRun }));
+    steps.push(...installWorktreeHook({ global: true, dryRun: opts.dryRun }));
   }
 
   // 4. CLAUDE.md (global)
