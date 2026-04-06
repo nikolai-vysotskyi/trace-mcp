@@ -259,7 +259,9 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
         const from = braceMatch[1];
         const specifiers = braceMatch[2].split(',').map((s) => {
           const renamed = s.trim().split(/\s*(?:=>|as)\s*/);
-          return renamed.length > 1 ? renamed[1].trim() : renamed[0].trim();
+          // Always store the original name, not the rename target.
+          // `import mutable.{Map => MMap}` → specifier = "Map" (matches the export).
+          return renamed[0].trim();
         }).filter((s) => s !== '_' && s.length > 0);
         const hasWildcard = braceMatch[2].includes('_');
 

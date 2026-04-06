@@ -1,5 +1,5 @@
 import type { Serializable, Persistable, Logger } from './interfaces.js';
-import { toJSON } from './utils.js';
+import { toJSON, fromJSON as parseJSON } from './utils.js';
 
 export class JsonSerializer implements Serializable {
   serialize(): string {
