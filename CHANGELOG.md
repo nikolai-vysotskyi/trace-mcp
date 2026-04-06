@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.5.2...v1.5.3) (2026-04-06)
+
+
+### Bug Fixes
+
+* **ci:** use npx npm@11 for publish instead of global npm upgrade ([4d82eb7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4d82eb7fd3ea23361d85822e6e826ce8eb8a4e0f))
+
 ## [1.5.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.5.1...v1.5.2) (2026-04-06)
 
 
