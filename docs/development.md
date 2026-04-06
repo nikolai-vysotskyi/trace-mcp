@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-git clone https://github.com/nickvysotskyi/trace-mcp.git
+git clone https://github.com/nikolai-vysotskyi/trace-mcp.git
 cd trace-mcp
 npm install
 npm run build

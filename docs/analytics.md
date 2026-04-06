@@ -250,13 +250,14 @@ Total potential savings: 400,000 tokens (~$2.00, 33%)
 ⚡ Token Efficiency Benchmark
 
 Project: /Users/me/my-app
-Index: 554 files, 2840 symbols
+Index: 651 files, 3342 symbols
 
-symbol_lookup: 53,988 → 2,023 tokens (96.3% reduction)
-file_exploration: 18,969 → 954 tokens (95.0% reduction)
+symbol_lookup: 41,211 → 2,098 tokens (94.9% reduction)
+file_exploration: 16,366 → 762 tokens (95.3% reduction)
 search: 22,860 → 8,000 tokens (65.0% reduction)
-impact_analysis: 110,918 → 5,551 tokens (95.0% reduction)
-call_graph: 157,334 → 9,444 tokens (94.0% reduction)
+impact_analysis: 96,717 → 4,841 tokens (95.0% reduction)
+call_graph: 178,661 → 10,723 tokens (94.0% reduction)
+composite_task: 71,076 → 2,033 tokens (97.1% reduction)
 
-Total: 364,069 → 25,972 (92.9% reduction)
+Total: 426,891 → 28,457 (93.3% reduction)
 ```
