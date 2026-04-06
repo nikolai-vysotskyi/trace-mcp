@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.2.0
+# trace-mcp-guard v0.4.0
 # trace-mcp PreToolUse guard
 # Blocks Read/Grep/Glob/Bash on source code files → redirects to trace-mcp tools.
 # Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
+#
+# Consultation markers: trace-mcp server writes markers when tools access files
+# (get_outline, get_symbol, etc.). If a marker exists for a file, Read is allowed
+# immediately — the agent already consulted trace-mcp for this file.
 #
 # Install: add to ~/.claude/settings.json or .claude/settings.local.json
 # See README.md for setup instructions.
@@ -24,6 +28,11 @@ ENV_FILE_RE='\.env(\.[a-zA-Z0-9._-]+)?$'
 # Safe bash command prefixes — never block
 SAFE_BASH_RE='^(git |npm |npx |pnpm |yarn |bun |node |deno |cargo |go |make |mvn |gradle |docker |kubectl |helm |terraform |pip |poetry |uv |pytest |vitest |jest |phpunit |composer |artisan |rails |bundle |mix |dotnet |cmake |ninja |meson )'
 
+# Cross-platform md5 hash (Linux: md5sum, macOS: md5)
+file_md5() {
+  echo -n "$1" | md5sum 2>/dev/null | cut -d' ' -f1 || echo -n "$1" | md5 -q 2>/dev/null
+}
+
 deny() {
   local reason="$1"
   local context="$2"
@@ -44,6 +53,19 @@ EOF
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "default"')
 DENY_DIR="/tmp/trace-mcp-guard-${SESSION_ID}"
 mkdir -p "$DENY_DIR" 2>/dev/null
+
+# Consultation markers: trace-mcp server writes these when get_outline/get_symbol/etc. are called.
+# If a file was already consulted via trace-mcp, allow Read immediately (agent needs full content for Edit).
+# Dir format: $TMPDIR/trace-mcp-consulted-{sha256(projectRoot)[:12]}/{md5(relPath)}
+PROJECT_ROOT="$(pwd)"
+if command -v sha256sum >/dev/null 2>&1; then
+  PROJECT_HASH=$(echo -n "$PROJECT_ROOT" | sha256sum | cut -c1-12)
+elif command -v shasum >/dev/null 2>&1; then
+  PROJECT_HASH=$(echo -n "$PROJECT_ROOT" | shasum -a 256 | cut -c1-12)
+else
+  PROJECT_HASH=""
+fi
+CONSULTED_DIR="${TMPDIR:-/tmp}/trace-mcp-consulted-${PROJECT_HASH}"
 
 # --- Read ---
 if [[ "$TOOL_NAME" == "Read" ]]; then
@@ -70,8 +92,18 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
 
   # Block code file reads → redirect to trace-mcp
   if echo "$FILE_PATH" | grep -qiE "$CODE_EXT_RE"; then
+    # Compute relative path for consultation marker check (server writes markers keyed by relative path)
+    REL_PATH_FOR_HASH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
+    CONSULTED_HASH=$(file_md5 "$REL_PATH_FOR_HASH")
+
+    # Check if file was already consulted via trace-mcp (get_outline, get_symbol, etc.)
+    if [[ -n "$PROJECT_HASH" && -f "$CONSULTED_DIR/$CONSULTED_HASH" ]]; then
+      # File was consulted via trace-mcp → allow Read (agent needs full content for Edit)
+      exit 0
+    fi
+
     # Allow on second attempt — agent needs full content for Edit
-    DENY_MARKER="$DENY_DIR/$(echo "$FILE_PATH" | md5sum | cut -d' ' -f1)"
+    DENY_MARKER="$DENY_DIR/$(file_md5 "$FILE_PATH")"
     if [[ -f "$DENY_MARKER" ]]; then
       rm -f "$DENY_MARKER"
       exit 0
@@ -151,6 +183,13 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
   # Allow safe commands
   if echo "$COMMAND" | grep -qE "$SAFE_BASH_RE"; then
     exit 0
+  fi
+
+  # Block bash commands targeting .env files — prevent secret leakage
+  if echo "$COMMAND" | grep -qiE "$ENV_FILE_RE"; then
+    deny \
+      "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
+      "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever access .env files via shell — secrets will leak into AI model context."
   fi
 
   # Block code exploration via bash (grep, find, cat, head, tail on code files)

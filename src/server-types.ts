@@ -29,6 +29,8 @@ export interface ServerContext {
   j: (value: unknown) => string;
   /** JSON serializer with contextual hints + budget warnings */
   jh: (toolName: string, value: unknown) => string;
+  /** Mark a file as explored via trace-mcp (so guard hook allows subsequent Read) */
+  markExplored: (filePath: string) => void;
 }
 
 /** Extended context for meta tools that bypass preset gate */
