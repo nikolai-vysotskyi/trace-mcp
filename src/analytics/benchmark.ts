@@ -324,11 +324,12 @@ function benchmarkTypeHierarchy(store: Store, symbols: SymbolInfo[], count: numb
     if (nodeRow) {
       const impls = store.db.prepare(`
         SELECT DISTINCT f.byte_length FROM edges e
+        JOIN edge_types et ON e.edge_type_id = et.id
         JOIN nodes n2 ON e.source_node_id = n2.id AND n2.node_type = 'symbol'
         JOIN symbols s2 ON n2.ref_id = s2.id
         JOIN files f ON s2.file_id = f.id
         WHERE e.target_node_id = ?
-          AND e.edge_type IN ('implements', 'extends')
+          AND et.name IN ('implements', 'extends')
         LIMIT 10
       `).all(nodeRow.id) as { byte_length: number }[];
       implFileBytes = impls.reduce((sum, d) => sum + (d.byte_length || 0), 0);
