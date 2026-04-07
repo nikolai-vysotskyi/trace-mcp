@@ -104,6 +104,19 @@ export function discoverChildProjectsRecursive(parentDir: string, maxDepth = 10)
 }
 
 /**
+ * Check if a directory itself contains any root marker (no walk-up).
+ */
+export function hasRootMarkers(dir: string): boolean {
+  const absDir = path.resolve(dir);
+  for (const marker of ROOT_MARKERS) {
+    if (fs.existsSync(path.join(absDir, marker))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Walk up from `from` (default: cwd) and return the first directory
  * that contains any root marker. Throws if none found.
  */
