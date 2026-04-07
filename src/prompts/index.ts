@@ -95,10 +95,10 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       }
 
       // 3. Dead code check
-      const deadCode = safe(() => getDeadCodeV2(store, { threshold: 0.5, limit: 10 }), { items: [] });
-      if (deadCode.items && deadCode.items.length > 0) {
-        sections.push(`## Dead Code Candidates (${deadCode.items.length})\n`);
-        for (const d of deadCode.items.slice(0, 5)) {
+      const deadCode = safe(() => getDeadCodeV2(store, { threshold: 0.5, limit: 10 }), { dead_symbols: [], file_pattern: null, total_exports: 0, total_dead: 0, threshold: 0.5 });
+      if (deadCode.dead_symbols && deadCode.dead_symbols.length > 0) {
+        sections.push(`## Dead Code Candidates (${deadCode.dead_symbols.length})\n`);
+        for (const d of deadCode.dead_symbols.slice(0, 5)) {
           sections.push(`- ${d.name} in ${d.file} (confidence: ${d.confidence})`);
         }
         sections.push('');
@@ -143,10 +143,10 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       sections.push('```\n');
 
       // Architecture health
-      const health = safe(() => getRepoHealth(store), {} as Record<string, unknown>);
+      const health = safe(() => getRepoHealth(store), null);
       sections.push('## Architecture Health\n');
-      sections.push(`- Coupling metrics: ${(health as any).coupling_summary?.total ?? 'N/A'} files analyzed`);
-      sections.push(`- Dependency cycles: ${(health as any).cycles?.length ?? 0}`);
+      sections.push(`- Files in graph: ${health?.summary?.files_in_graph ?? 'N/A'}`);
+      sections.push(`- Dependency cycles: ${health?.cycles?.length ?? 0}`);
       sections.push('');
 
       // Top important files
@@ -238,7 +238,7 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       const cycles = safe(() => getDependencyCycles(store), []);
       sections.push(`## Dependency Cycles: ${cycles.length}\n`);
       for (const c of cycles.slice(0, 5)) {
-        sections.push(`- ${c.join(' → ')}`);
+        sections.push(`- ${c.files.join(' → ')}`);
       }
       sections.push('');
 
@@ -331,10 +331,10 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       }
 
       // Dead code
-      const dead = safe(() => getDeadCodeV2(store, { threshold: 0.6, limit: 10 }), { items: [] });
-      if (dead.items && dead.items.length > 0) {
-        sections.push(`## Potential Dead Code: ${dead.items.length}\n`);
-        for (const d of dead.items.slice(0, 5)) {
+      const dead = safe(() => getDeadCodeV2(store, { threshold: 0.6, limit: 10 }), { dead_symbols: [], file_pattern: null, total_exports: 0, total_dead: 0, threshold: 0.6 });
+      if (dead.dead_symbols && dead.dead_symbols.length > 0) {
+        sections.push(`## Potential Dead Code: ${dead.dead_symbols.length}\n`);
+        for (const d of dead.dead_symbols.slice(0, 5)) {
           sections.push(`- ${d.name} (${d.file})`);
         }
         sections.push('');
