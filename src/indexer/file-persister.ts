@@ -82,66 +82,61 @@ export class FilePersister {
       store.updateFileGitignored(fileId, true);
     }
 
-    // Insert symbols + trigrams
-    if (ext.symbols.length > 0) {
-      const insertedIds = store.insertSymbols(fileId, ext.symbols);
-      // Populate trigram index for fuzzy search (batch, no N+1).
+    // Persist base extraction symbols, edges, and entities
+    this.persistSymbolsAndEntities(fileId, ext.symbols, ext.otherEdges, ext);
+    if (ext.importEdges.length > 0) {
+      this.state.pendingImports.set(fileId, ext.importEdges);
+    }
+
+    // Persist framework extract results
+    for (const fwResult of ext.frameworkExtracts) {
+      this.persistSymbolsAndEntities(fileId, fwResult.symbols, fwResult.edges ?? [], fwResult);
+      if (fwResult.frameworkRole) {
+        store.updateFileStatus(fileId, fwResult.status, fwResult.frameworkRole);
+      }
+    }
+  }
+
+  /** Insert symbols+trigrams, edges, and entities (routes/components/migrations/ORM/screens). */
+  private persistSymbolsAndEntities(
+    fileId: number,
+    symbols: FileExtraction['symbols'],
+    edges: RawEdge[],
+    entities: {
+      routes?: FileExtraction['routes'];
+      components?: FileExtraction['components'];
+      migrations?: FileExtraction['migrations'];
+      ormModels?: FileExtraction['ormModels'];
+      ormAssociations?: FileExtraction['ormAssociations'];
+      rnScreens?: FileExtraction['rnScreens'];
+    },
+  ): void {
+    const store = this.state.store;
+
+    if (symbols.length > 0) {
+      const insertedIds = store.insertSymbols(fileId, symbols);
       // Deduplicate by symbolId: INSERT OR REPLACE invalidates earlier IDs when
       // duplicate symbol_ids appear in the same batch — only the last ID survives.
       const trigramBySymbolId = new Map<string, { id: number; name: string; fqn: string | null }>();
-      for (let i = 0; i < ext.symbols.length; i++) {
-        trigramBySymbolId.set(ext.symbols[i].symbolId, {
+      for (let i = 0; i < symbols.length; i++) {
+        trigramBySymbolId.set(symbols[i].symbolId, {
           id: insertedIds[i],
-          name: ext.symbols[i].name,
-          fqn: ext.symbols[i].fqn ?? null,
+          name: symbols[i].name,
+          fqn: symbols[i].fqn ?? null,
         });
       }
       indexTrigramsBatch(store.db, [...trigramBySymbolId.values()]);
     }
 
-    // Insert edges from language plugin
-    if (ext.otherEdges.length > 0) this.storeRawEdges(ext.otherEdges);
-    if (ext.importEdges.length > 0) {
-      this.state.pendingImports.set(fileId, ext.importEdges);
-    }
+    if (edges.length > 0) this.storeRawEdges(edges);
 
-    // Insert routes, components, migrations, ORM models
-    for (const r of ext.routes) store.insertRoute(r, fileId);
-    for (const c of ext.components) store.insertComponent(c, fileId);
-    for (const m of ext.migrations) store.insertMigration(m, fileId);
-    if (ext.ormModels.length > 0) {
-      this.storeOrmResults(ext.ormModels, ext.ormAssociations, fileId);
+    for (const r of entities.routes ?? []) store.insertRoute(r, fileId);
+    for (const c of entities.components ?? []) store.insertComponent(c, fileId);
+    for (const m of entities.migrations ?? []) store.insertMigration(m, fileId);
+    if (entities.ormModels?.length) {
+      this.storeOrmResults(entities.ormModels, entities.ormAssociations ?? [], fileId);
     }
-    for (const s of ext.rnScreens) store.insertRnScreen(s, fileId);
-
-    // Persist framework extract results
-    for (const fwResult of ext.frameworkExtracts) {
-      if (fwResult.symbols.length > 0) {
-        const fwIds = store.insertSymbols(fileId, fwResult.symbols);
-        const fwTrigramBySymbolId = new Map<string, { id: number; name: string; fqn: string | null }>();
-        for (let i = 0; i < fwResult.symbols.length; i++) {
-          fwTrigramBySymbolId.set(fwResult.symbols[i].symbolId, {
-            id: fwIds[i],
-            name: fwResult.symbols[i].name,
-            fqn: fwResult.symbols[i].fqn ?? null,
-          });
-        }
-        indexTrigramsBatch(store.db, [...fwTrigramBySymbolId.values()]);
-      }
-      if (fwResult.edges?.length) {
-        this.storeRawEdges(fwResult.edges);
-      }
-      for (const r of fwResult.routes ?? []) store.insertRoute(r, fileId);
-      for (const c of fwResult.components ?? []) store.insertComponent(c, fileId);
-      for (const m of fwResult.migrations ?? []) store.insertMigration(m, fileId);
-      if (fwResult.ormModels?.length) {
-        this.storeOrmResults(fwResult.ormModels, fwResult.ormAssociations ?? [], fileId);
-      }
-      for (const s of fwResult.rnScreens ?? []) store.insertRnScreen(s, fileId);
-      if (fwResult.frameworkRole) {
-        store.updateFileStatus(fileId, fwResult.status, fwResult.frameworkRole);
-      }
-    }
+    for (const s of entities.rnScreens ?? []) store.insertRnScreen(s, fileId);
   }
 
   /**
