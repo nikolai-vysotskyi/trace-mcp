@@ -8,6 +8,19 @@ import path from 'node:path';
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.svn', '__pycache__', '.tox']);
 
+const ROOT_MARKERS = [
+  '.git',
+  'package.json',
+  'go.mod',
+  'Cargo.toml',
+  'composer.json',
+  'pyproject.toml',
+  'Gemfile',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+];
+
 /**
  * Scan immediate subdirectories of `parentDir` for project root markers.
  * Returns sorted absolute paths of discovered child project roots.
@@ -40,6 +53,54 @@ export function discoverChildProjects(parentDir: string): string[] {
   }
 
   return children.sort();
+}
+
+/**
+ * Recursively discover child projects under `parentDir`.
+ * Unlike `discoverChildProjects`, this traverses all nested directories
+ * (e.g. the/fair/fair-front) — not just depth-1.
+ * Stops descending into a directory once it's identified as a project root.
+ */
+export function discoverChildProjectsRecursive(parentDir: string, maxDepth = 10): string[] {
+  const absParent = path.resolve(parentDir);
+  if (!fs.existsSync(absParent)) return [];
+
+  const results: string[] = [];
+
+  function walk(dir: string, depth: number): void {
+    if (depth > maxDepth) return;
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith('.')) continue;
+      if (SKIP_DIRS.has(entry.name)) continue;
+
+      const childDir = path.join(dir, entry.name);
+      let isProject = false;
+      for (const marker of ROOT_MARKERS) {
+        if (fs.existsSync(path.join(childDir, marker))) {
+          results.push(childDir);
+          isProject = true;
+          break;
+        }
+      }
+
+      // Keep descending even into project dirs — monorepos have nested projects
+      if (!isProject || depth < maxDepth) {
+        walk(childDir, depth + 1);
+      }
+    }
+  }
+
+  walk(absParent, 0);
+  return results.sort();
 }
 
 /**
