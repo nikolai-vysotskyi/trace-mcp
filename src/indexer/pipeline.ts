@@ -142,64 +142,10 @@ export class IndexingPipeline {
     this._traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
     this.registerFrameworkEdgeTypes();
 
-    const extractor = new FileExtractor({
-      store: this.store,
-      registry: this.registry,
-      rootPath: this.rootPath,
-      workspaces: this.workspaces,
-      gitignore: this._gitignore,
-      fileContentCache: this._fileContentCache,
-      buildProjectContext: () => this.buildProjectContext(),
-    });
-
     try {
-      // Pass 1: extract + persist in batched transactions
-      disableFts5Triggers(this.store.db);
-
-      const BATCH_SIZE = Math.min(500, Math.max(100, Math.ceil(relPaths.length / 20)));
-      const CONCURRENCY = Math.min(8, cpus().length);
-
-      for (let i = 0; i < relPaths.length; i += BATCH_SIZE) {
-        const batch = relPaths.slice(i, i + BATCH_SIZE);
-        const extractions: FileExtraction[] = [];
-
-        for (let c = 0; c < batch.length; c += CONCURRENCY) {
-          const chunk = batch.slice(c, c + CONCURRENCY);
-          const results = await Promise.all(
-            chunk.map(relPath => extractor.extract(relPath, force)),
-          );
-          for (const ext of results) {
-            if (ext === 'skipped') { result.skipped++; continue; }
-            if (ext === 'error') { result.errors++; continue; }
-            extractions.push(ext);
-          }
-        }
-
-        if (extractions.length > 0) {
-          const state = this.getPipelineState();
-          const persistEdgeResolver = new EdgeResolver(state);
-          const persister = new FilePersister(state, (edges) => persistEdgeResolver.storeRawEdges(edges));
-          persister.persistBatch(extractions);
-          result.indexed += extractions.length;
-        }
-
-        const processed = result.indexed + result.skipped + result.errors;
-        this.progress?.update('indexing', { processed });
-      }
-
-      enableFts5Triggers(this.store.db);
-
-      // Pass 2: resolve edges
-      const edgeResolver = new EdgeResolver(this.getPipelineState());
-      await edgeResolver.resolveEdges(this.buildProjectContext(), this.buildResolveContext());
-      edgeResolver.resolveOrmAssociationEdges();
-      edgeResolver.resolveTypeScriptHeritageEdges();
-      edgeResolver.resolveEsmImportEdges();
-      edgeResolver.resolveTestCoversEdges();
-
-      // Pass 3: Index .env files
-      const envIndexer = new EnvIndexer(this.store, this.config, this.rootPath, this._traceignore);
-      await envIndexer.indexEnvFiles(force);
+      await this.extractAndPersist(relPaths, force, result);
+      await this.resolveAllEdges();
+      await this.indexEnvFiles(force);
     } finally {
       this._fileContentCache.clear();
       this._pendingImports.clear();
@@ -226,6 +172,74 @@ export class IndexingPipeline {
 
     logger.info(result, 'Indexing pipeline completed');
     return result;
+  }
+
+  /** Pass 1: extract symbols from files and persist in batched transactions. */
+  private async extractAndPersist(
+    relPaths: string[],
+    force: boolean,
+    result: IndexingResult,
+  ): Promise<void> {
+    const extractor = new FileExtractor({
+      store: this.store,
+      registry: this.registry,
+      rootPath: this.rootPath,
+      workspaces: this.workspaces,
+      gitignore: this._gitignore,
+      fileContentCache: this._fileContentCache,
+      buildProjectContext: () => this.buildProjectContext(),
+    });
+
+    disableFts5Triggers(this.store.db);
+
+    const BATCH_SIZE = Math.min(500, Math.max(100, Math.ceil(relPaths.length / 20)));
+    const CONCURRENCY = Math.min(8, cpus().length);
+
+    for (let i = 0; i < relPaths.length; i += BATCH_SIZE) {
+      const batch = relPaths.slice(i, i + BATCH_SIZE);
+      const extractions: FileExtraction[] = [];
+
+      for (let c = 0; c < batch.length; c += CONCURRENCY) {
+        const chunk = batch.slice(c, c + CONCURRENCY);
+        const results = await Promise.all(
+          chunk.map(relPath => extractor.extract(relPath, force)),
+        );
+        for (const ext of results) {
+          if (ext === 'skipped') { result.skipped++; continue; }
+          if (ext === 'error') { result.errors++; continue; }
+          extractions.push(ext);
+        }
+      }
+
+      if (extractions.length > 0) {
+        const state = this.getPipelineState();
+        const persistEdgeResolver = new EdgeResolver(state);
+        const persister = new FilePersister(state, (edges) => persistEdgeResolver.storeRawEdges(edges));
+        persister.persistBatch(extractions);
+        result.indexed += extractions.length;
+      }
+
+      const processed = result.indexed + result.skipped + result.errors;
+      this.progress?.update('indexing', { processed });
+    }
+
+    enableFts5Triggers(this.store.db);
+  }
+
+  /** Pass 2: resolve all edge types (imports, heritage, ORM, tests). */
+  private async resolveAllEdges(): Promise<void> {
+    const edgeResolver = new EdgeResolver(this.getPipelineState());
+    await edgeResolver.resolveEdges(this.buildProjectContext(), this.buildResolveContext());
+    edgeResolver.resolveOrmAssociationEdges();
+    edgeResolver.resolveTypeScriptHeritageEdges();
+    edgeResolver.resolveEsmImportEdges();
+    edgeResolver.resolveTestCoversEdges();
+  }
+
+  /** Pass 3: index .env files for environment variable tracking. */
+  private async indexEnvFiles(force: boolean): Promise<void> {
+    const envIndexer = new EnvIndexer(this.store, this.config, this.rootPath, this._traceignore);
+    await envIndexer.indexEnvFiles(force);
   }
 
   private buildProjectContext(): ProjectContext {
