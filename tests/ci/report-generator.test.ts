@@ -26,7 +26,9 @@ function makeConfig(): TraceMcpConfig {
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],
-  };
+    ignore: { directories: [], patterns: [] },
+    watch: { enabled: false, debounceMs: 2000 },
+  } as TraceMcpConfig;
 }
 
 // ═══════════════════════════════════════════════════════════════════
