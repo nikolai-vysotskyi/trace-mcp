@@ -45,9 +45,9 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Tree-sitter AST parsing | ✅ 68 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ | ✅ ~40 languages | ✅ 66 languages |
 | Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output | ✅ | ✅ core focus | ✅ |
 | Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ knowledge graph | ✅ import graph | ✅ knowledge graph |
-| Framework-aware edges | ✅ 53 integrations (14 frameworks, 7 ORMs, 12 UI libs) | ❌ | ❌ | ❌ | partial (4 frameworks) | partial (REST routes) |
-| Impact analysis | ✅ reverse dep traversal | ❌ | ❌ | ❌ | ✅ blast radius | ✅ detect_changes |
-| Call graph | ✅ bidirectional | ❌ | ❌ | ❌ | ✅ class hierarchy | ✅ trace_call_path |
+| Framework-aware edges | ✅ 53 integrations (14 frameworks, 7 ORMs, 12 UI libs) | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) |
+| Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ❌ | ✅ blast radius + decorator filter | ✅ detect_changes |
+| Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ❌ | ✅ AST-based, bidirectional | ✅ trace_call_path |
 | Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ |
 | Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ |
 | Multi-repo federation | ✅ cross-repo API linking | ✅ remote repos | ❌ | ❌ | ✅ GitHub repos | ❌ |
