@@ -132,7 +132,6 @@ export class FederationManager {
     const repoName = opts?.name ?? path.basename(absRoot);
     const dbPath = getDbPath(absRoot);
 
-    // 1. Register federated repo
     const repoId = this.topoStore.upsertFederatedRepo({
       name: repoName,
       repoRoot: absRoot,
@@ -140,7 +139,6 @@ export class FederationManager {
       contractPaths: opts?.contractPaths,
     });
 
-    // 2. Detect services and register
     const detected = detectServices([absRoot]);
     for (const svc of detected) {
       const serviceId = this.topoStore.upsertService({
@@ -151,72 +149,10 @@ export class FederationManager {
         detectionSource: svc.detectionSource,
         metadata: svc.metadata,
       });
-
-      // 3. Parse contracts (auto-discovered + explicit)
-      const contracts = parseContracts(svc.repoRoot);
-
-      // Also parse explicitly provided contract files
-      if (opts?.contractPaths) {
-        for (const cp of opts.contractPaths) {
-          const absContract = path.resolve(absRoot, cp);
-          if (fs.existsSync(absContract)) {
-            const additionalContracts = parseContracts(path.dirname(absContract));
-            contracts.push(...additionalContracts.filter(
-              (c) => path.resolve(absRoot, c.specPath) === absContract,
-            ));
-          }
-        }
-      }
-
-      for (const contract of contracts) {
-        const contractId = this.topoStore.insertContract(serviceId, {
-          contractType: contract.type,
-          specPath: contract.specPath,
-          version: contract.version,
-          parsedSpec: JSON.stringify({ endpoints: contract.endpoints, events: contract.events }),
-        });
-
-        this.topoStore.insertEndpoints(contractId, serviceId,
-          contract.endpoints.map((e) => ({
-            method: e.method ?? undefined,
-            path: e.path,
-            operationId: e.operationId,
-            requestSchema: e.requestSchema ? JSON.stringify(e.requestSchema) : undefined,
-            responseSchema: e.responseSchema ? JSON.stringify(e.responseSchema) : undefined,
-          })),
-        );
-
-        if (contract.events.length > 0) {
-          this.topoStore.insertEventChannels(contractId, serviceId,
-            contract.events.map((e) => ({
-              channelName: e.channelName,
-              direction: e.direction,
-            })),
-          );
-        }
-      }
+      this.registerContracts(serviceId, svc.repoRoot, absRoot, opts?.contractPaths);
     }
 
-    // 4. Scan for client calls
-    this.topoStore.deleteClientCallsByRepo(repoId);
-    const clientCalls = scanClientCalls(absRoot);
-    if (clientCalls.length > 0) {
-      this.topoStore.insertClientCalls(clientCalls.map((c) => ({
-        sourceRepoId: repoId,
-        filePath: c.filePath,
-        line: c.line,
-        callType: c.callType,
-        method: c.method,
-        urlPattern: c.urlPattern,
-        confidence: c.confidence,
-      })));
-    }
-
-    // 5. Link client calls to known endpoints
-    const linkedCount = this.topoStore.linkClientCallsToEndpoints();
-
-    // 6. Create cross-service edges from linked calls
-    this.buildCrossServiceEdges();
+    const clientCalls = this.scanAndLinkClientCalls(repoId, absRoot);
 
     this.topoStore.updateFederatedRepoSyncTime(repoId);
 
@@ -227,8 +163,8 @@ export class FederationManager {
       services: detected.length,
       contracts: stats.contracts,
       endpoints: stats.endpoints,
-      clientCalls: clientCalls.length,
-      linkedCalls: linkedCount,
+      clientCalls: clientCalls.scanned,
+      linkedCalls: clientCalls.linked,
     };
   }
 
@@ -347,7 +283,6 @@ export class FederationManager {
         continue;
       }
 
-      // Re-detect services
       const detected = detectServices([repo.repo_root]);
       servicesUpdated += detected.length;
 
@@ -361,77 +296,22 @@ export class FederationManager {
           metadata: svc.metadata,
         });
 
-        // Snapshot existing contracts before replacing
-        const existingContracts = this.topoStore.getContractsByService(serviceId);
-        for (const ec of existingContracts) {
-          this.topoStore.insertContractSnapshot(ec.id, serviceId, {
-            version: ec.version,
-            specPath: ec.spec_path,
-            contentHash: ec.content_hash ?? '',
-            endpointsJson: ec.parsed_spec,
-            eventsJson: '[]',
-          });
-        }
-
-        // Clean old contracts for this service and re-parse
+        this.snapshotContracts(serviceId);
         this.topoStore.deleteContractsByService(serviceId);
 
         const contracts = parseContracts(svc.repoRoot);
         contractsUpdated += contracts.length;
-
         for (const contract of contracts) {
-          const contractId = this.topoStore.insertContract(serviceId, {
-            contractType: contract.type,
-            specPath: contract.specPath,
-            version: contract.version,
-            parsedSpec: JSON.stringify({ endpoints: contract.endpoints, events: contract.events }),
-          });
-
-          this.topoStore.insertEndpoints(contractId, serviceId,
-            contract.endpoints.map((e) => ({
-              method: e.method ?? undefined,
-              path: e.path,
-              operationId: e.operationId,
-              requestSchema: e.requestSchema ? JSON.stringify(e.requestSchema) : undefined,
-              responseSchema: e.responseSchema ? JSON.stringify(e.responseSchema) : undefined,
-            })),
-          );
           endpointsUpdated += contract.endpoints.length;
-
-          if (contract.events.length > 0) {
-            this.topoStore.insertEventChannels(contractId, serviceId,
-              contract.events.map((e) => ({
-                channelName: e.channelName,
-                direction: e.direction,
-              })),
-            );
-          }
         }
+        this.registerContracts(serviceId, svc.repoRoot);
       }
 
-      // Re-scan client calls
-      this.topoStore.deleteClientCallsByRepo(repo.id);
-      const calls = scanClientCalls(repo.repo_root);
-      clientCallsScanned += calls.length;
-
-      if (calls.length > 0) {
-        this.topoStore.insertClientCalls(calls.map((c) => ({
-          sourceRepoId: repo.id,
-          filePath: c.filePath,
-          line: c.line,
-          callType: c.callType,
-          method: c.method,
-          urlPattern: c.urlPattern,
-          confidence: c.confidence,
-        })));
-      }
+      const calls = this.scanAndLinkClientCalls(repo.id, repo.repo_root);
+      clientCallsScanned += calls.scanned;
 
       this.topoStore.updateFederatedRepoSyncTime(repo.id);
     }
-
-    // Link and build edges
-    const newlyLinked = this.topoStore.linkClientCallsToEndpoints();
-    this.buildCrossServiceEdges();
 
     return {
       repos: repos.length,
@@ -439,7 +319,7 @@ export class FederationManager {
       contractsUpdated,
       endpointsUpdated,
       clientCallsScanned,
-      newlyLinked,
+      newlyLinked: this.topoStore.linkClientCallsToEndpoints(),
       crossRepoEdges: this.topoStore.getTopologyStats().crossEdges,
     };
   }
@@ -454,108 +334,21 @@ export class FederationManager {
     method?: string;
     service?: string;
   }): CrossRepoImpactResult[] {
+    const matchingEndpoints = this.filterEndpoints(opts);
     const results: CrossRepoImpactResult[] = [];
-    const allEndpoints = this.topoStore.getAllEndpoints();
-
-    // Find matching endpoints
-    let matchingEndpoints = allEndpoints;
-    if (opts.endpoint) {
-      const normalized = opts.endpoint.toLowerCase();
-      matchingEndpoints = allEndpoints.filter((ep) =>
-        ep.path.toLowerCase().includes(normalized),
-      );
-    }
-    if (opts.method) {
-      matchingEndpoints = matchingEndpoints.filter((ep) =>
-        ep.method?.toUpperCase() === opts.method!.toUpperCase(),
-      );
-    }
-    if (opts.service) {
-      matchingEndpoints = matchingEndpoints.filter((ep) =>
-        ep.service_name.toLowerCase() === opts.service!.toLowerCase(),
-      );
-    }
 
     for (const ep of matchingEndpoints) {
       const clientCalls = this.topoStore.getClientCallsByEndpoint(ep.id);
       if (clientCalls.length === 0) continue;
 
-      // Group by repo
-      const byRepo = new Map<string, typeof clientCalls>();
-      for (const call of clientCalls) {
-        const repo = call.source_repo_name;
-        if (!byRepo.has(repo)) byRepo.set(repo, []);
-        byRepo.get(repo)!.push(call);
-      }
-
-      const clients: CrossRepoImpactResult['clients'] = [];
-
-      for (const [repoName, calls] of byRepo) {
-        const repo = this.topoStore.getFederatedRepo(repoName);
-
-        for (const call of calls) {
-          const symbols = repo?.db_path && fs.existsSync(repo.db_path)
-            ? resolveSymbolsAtLocation(repo.db_path, call.file_path, call.line)
-            : [];
-
-          clients.push({
-            repo: repoName,
-            filePath: call.file_path,
-            line: call.line,
-            callType: call.call_type,
-            confidence: call.confidence,
-            symbols,
-          });
-        }
-      }
-
+      const clients = this.collectEndpointClients(clientCalls);
       const uniqueRepos = new Set(clients.map((c) => c.repo));
-      const riskLevel = uniqueRepos.size >= 3 ? 'critical'
-        : uniqueRepos.size >= 2 ? 'high'
-        : clients.length >= 3 ? 'medium' : 'low';
+      const baseRisk = computeRiskLevel(uniqueRepos.size, clients.length);
 
-      // Find the service and repo for this endpoint
       const svc = this.topoStore.getAllServices().find((s) => s.id === ep.service_id);
-      const repo = svc
-        ? this.topoStore.getFederatedRepo(svc.repo_root)
-        : undefined;
-
-      // Check for schema-level breaking changes via contract snapshots
-      let breakingChanges: EndpointSchemaDiff[] | undefined;
-      const contracts = this.topoStore.getContractsByService(ep.service_id);
-      for (const contract of contracts) {
-        const snapshot = this.topoStore.getLatestSnapshot(contract.id);
-        if (!snapshot) continue;
-
-        let oldEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
-        try {
-          const parsed = JSON.parse(snapshot.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
-          oldEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
-        } catch { continue; }
-
-        // Get current endpoint schemas
-        const currentEndpoints = this.topoStore.getEndpointsByService(ep.service_id).map((e) => ({
-          method: e.method,
-          path: e.path,
-          requestSchema: e.request_schema,
-          responseSchema: e.response_schema,
-        }));
-
-        const epDiffs = diffEndpoints(oldEndpoints, currentEndpoints)
-          .filter((d) => d.endpoint.path === ep.path && (d.endpoint.method ?? '*') === (ep.method ?? '*'));
-
-        if (epDiffs.length > 0 && epDiffs.some((d) => d.breaking)) {
-          breakingChanges = epDiffs;
-        }
-      }
-
-      // Upgrade risk level if breaking schema changes exist
-      let finalRiskLevel = riskLevel;
-      if (breakingChanges?.some((d) => d.breaking)) {
-        const riskLevels: Array<CrossRepoImpactResult['riskLevel']> = ['low', 'medium', 'high', 'critical'];
-        const idx = riskLevels.indexOf(riskLevel);
-        if (idx < riskLevels.length - 1) finalRiskLevel = riskLevels[idx + 1];
-      }
+      const repo = svc ? this.topoStore.getFederatedRepo(svc.repo_root) : undefined;
+      const breakingChanges = this.detectBreakingChanges(ep);
+      const riskLevel = upgradeRiskIfBreaking(baseRisk, breakingChanges);
 
       results.push({
         endpoint: {
@@ -565,13 +358,169 @@ export class FederationManager {
           repo: repo?.name ?? svc?.repo_root ?? 'unknown',
         },
         clients,
-        riskLevel: finalRiskLevel,
+        riskLevel,
         summary: `${ep.method ?? '*'} ${ep.path} is called by ${clients.length} client(s) in ${uniqueRepos.size} repo(s)${breakingChanges ? ' ⚠ BREAKING SCHEMA CHANGES' : ''}`,
         breakingChanges,
       });
     }
 
     return results;
+  }
+
+  /** Register contracts for a service, including explicitly provided paths. */
+  private registerContracts(
+    serviceId: number,
+    serviceRoot: string,
+    repoRoot?: string,
+    explicitPaths?: string[],
+  ): void {
+    const contracts = parseContracts(serviceRoot);
+
+    if (explicitPaths && repoRoot) {
+      for (const cp of explicitPaths) {
+        const absContract = path.resolve(repoRoot, cp);
+        if (fs.existsSync(absContract)) {
+          const additional = parseContracts(path.dirname(absContract));
+          contracts.push(...additional.filter(
+            (c) => path.resolve(repoRoot, c.specPath) === absContract,
+          ));
+        }
+      }
+    }
+
+    for (const contract of contracts) {
+      const contractId = this.topoStore.insertContract(serviceId, {
+        contractType: contract.type,
+        specPath: contract.specPath,
+        version: contract.version,
+        parsedSpec: JSON.stringify({ endpoints: contract.endpoints, events: contract.events }),
+      });
+
+      this.topoStore.insertEndpoints(contractId, serviceId,
+        contract.endpoints.map((e) => ({
+          method: e.method ?? undefined,
+          path: e.path,
+          operationId: e.operationId,
+          requestSchema: e.requestSchema ? JSON.stringify(e.requestSchema) : undefined,
+          responseSchema: e.responseSchema ? JSON.stringify(e.responseSchema) : undefined,
+        })),
+      );
+
+      if (contract.events.length > 0) {
+        this.topoStore.insertEventChannels(contractId, serviceId,
+          contract.events.map((e) => ({
+            channelName: e.channelName,
+            direction: e.direction,
+          })),
+        );
+      }
+    }
+  }
+
+  /** Snapshot existing contracts before replacing them (for drift detection). */
+  private snapshotContracts(serviceId: number): void {
+    const existing = this.topoStore.getContractsByService(serviceId);
+    for (const ec of existing) {
+      this.topoStore.insertContractSnapshot(ec.id, serviceId, {
+        version: ec.version,
+        specPath: ec.spec_path,
+        contentHash: ec.content_hash ?? '',
+        endpointsJson: ec.parsed_spec,
+        eventsJson: '[]',
+      });
+    }
+  }
+
+  /** Scan repo for client calls, insert them, link to endpoints, and build edges. */
+  private scanAndLinkClientCalls(repoId: number, repoRoot: string): { scanned: number; linked: number } {
+    this.topoStore.deleteClientCallsByRepo(repoId);
+    const clientCalls = scanClientCalls(repoRoot);
+    if (clientCalls.length > 0) {
+      this.topoStore.insertClientCalls(clientCalls.map((c) => ({
+        sourceRepoId: repoId,
+        filePath: c.filePath,
+        line: c.line,
+        callType: c.callType,
+        method: c.method,
+        urlPattern: c.urlPattern,
+        confidence: c.confidence,
+      })));
+    }
+    const linked = this.topoStore.linkClientCallsToEndpoints();
+    this.buildCrossServiceEdges();
+    return { scanned: clientCalls.length, linked };
+  }
+
+  private filterEndpoints(opts: { endpoint?: string; method?: string; service?: string }) {
+    let endpoints = this.topoStore.getAllEndpoints();
+    if (opts.endpoint) {
+      const normalized = opts.endpoint.toLowerCase();
+      endpoints = endpoints.filter((ep) => ep.path.toLowerCase().includes(normalized));
+    }
+    if (opts.method) {
+      endpoints = endpoints.filter((ep) => ep.method?.toUpperCase() === opts.method!.toUpperCase());
+    }
+    if (opts.service) {
+      endpoints = endpoints.filter((ep) => ep.service_name.toLowerCase() === opts.service!.toLowerCase());
+    }
+    return endpoints;
+  }
+
+  private collectEndpointClients(clientCalls: ClientCallRow[]): CrossRepoImpactResult['clients'] {
+    const byRepo = new Map<string, ClientCallRow[]>();
+    for (const call of clientCalls) {
+      const repo = call.source_repo_name;
+      if (!byRepo.has(repo)) byRepo.set(repo, []);
+      byRepo.get(repo)!.push(call);
+    }
+
+    const clients: CrossRepoImpactResult['clients'] = [];
+    for (const [repoName, calls] of byRepo) {
+      const repo = this.topoStore.getFederatedRepo(repoName);
+      for (const call of calls) {
+        const symbols = repo?.db_path && fs.existsSync(repo.db_path)
+          ? resolveSymbolsAtLocation(repo.db_path, call.file_path, call.line)
+          : [];
+        clients.push({
+          repo: repoName,
+          filePath: call.file_path,
+          line: call.line,
+          callType: call.call_type,
+          confidence: call.confidence,
+          symbols,
+        });
+      }
+    }
+    return clients;
+  }
+
+  private detectBreakingChanges(ep: { id: number; method: string | null; path: string; service_id: number }): EndpointSchemaDiff[] | undefined {
+    const contracts = this.topoStore.getContractsByService(ep.service_id);
+    for (const contract of contracts) {
+      const snapshot = this.topoStore.getLatestSnapshot(contract.id);
+      if (!snapshot) continue;
+
+      let oldEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+      try {
+        const parsed = JSON.parse(snapshot.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
+        oldEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
+      } catch { continue; }
+
+      const currentEndpoints = this.topoStore.getEndpointsByService(ep.service_id).map((e) => ({
+        method: e.method,
+        path: e.path,
+        requestSchema: e.request_schema,
+        responseSchema: e.response_schema,
+      }));
+
+      const epDiffs = diffEndpoints(oldEndpoints, currentEndpoints)
+        .filter((d) => d.endpoint.path === ep.path && (d.endpoint.method ?? '*') === (ep.method ?? '*'));
+
+      if (epDiffs.length > 0 && epDiffs.some((d) => d.breaking)) {
+        return epDiffs;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -692,6 +641,23 @@ export class FederationManager {
 // ════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════════════
+
+function computeRiskLevel(uniqueRepoCount: number, clientCount: number): CrossRepoImpactResult['riskLevel'] {
+  if (uniqueRepoCount >= 3) return 'critical';
+  if (uniqueRepoCount >= 2) return 'high';
+  if (clientCount >= 3) return 'medium';
+  return 'low';
+}
+
+function upgradeRiskIfBreaking(
+  risk: CrossRepoImpactResult['riskLevel'],
+  breakingChanges: EndpointSchemaDiff[] | undefined,
+): CrossRepoImpactResult['riskLevel'] {
+  if (!breakingChanges?.some((d) => d.breaking)) return risk;
+  const levels: Array<CrossRepoImpactResult['riskLevel']> = ['low', 'medium', 'high', 'critical'];
+  const idx = levels.indexOf(risk);
+  return idx < levels.length - 1 ? levels[idx + 1] : risk;
+}
 
 /**
  * Open a per-repo DB and find symbols at a given file:line location.
