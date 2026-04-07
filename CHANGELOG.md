@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.6.1...v1.7.0) (2026-04-07)
+
+
+### Features
+
+* add benchmark scenarios for find_usages, context_bundle, type_hierarchy, tests_for ([d2a85d5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d2a85d53e8b2efd0d1e49e26874cf549d922c6a9))
+* add indexing progress tracking with CLI status/remove commands ([ca1b539](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca1b539f682ee5d57ef97a901e9e51e1d0b9c483))
+* block Agent(Explore) subagents in guard hook v0.5.0 ([8796857](https://github.com/nikolai-vysotskyi/trace-mcp/commit/879685700b7888a0717f4c1017dbb19c5e965d74))
+* seed JSONC config template with all parameters on first run ([5cb13fb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5cb13fbd01bd2579dc30f35963ae162b702e9d7d))
+* support async extractSymbols in LanguagePlugin interface ([3a92d9e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a92d9e195d66a132acaddc01b736c4682c4ca72))
+
+
+### Bug Fixes
+
+* align benchmark SQL with normalized edge_types table ([2c7e472](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2c7e4720ee0f9085b05bbcb856693f14875174a4))
+* correct TypeScript typing in hook entry filter callback ([47b4159](https://github.com/nikolai-vysotskyi/trace-mcp/commit/47b415941408e29753c6f90be2e19579b1e0da08))
+* update prompt templates to match current API response shapes ([9e8cea2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9e8cea2a883c401751389dd14e60c356a10406cc))
+
+
+### Documentation
+
+* add tweakcc system prompt routing guide ([a5633c8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a5633c820a444f2d4ac5a710b7d2d96f35fbcbed))
+* expand CLAUDE.md with Agent anti-pattern table and Read-before-Edit optimization ([7e4f930](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7e4f9303e531ff5f46ef7a5047712eb9895399c1))
+
 ## [1.6.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.6.0...v1.6.1) (2026-04-06)
 
 
