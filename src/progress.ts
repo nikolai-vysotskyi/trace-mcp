@@ -193,7 +193,7 @@ export function clearServerPid(db: Database.Database): void {
   }
 }
 
-export function readServerPid(db: Database.Database): { pid: number; startedAt: string } | null {
+function readServerPid(db: Database.Database): { pid: number; startedAt: string } | null {
   try {
     const pidRow = db.prepare(`SELECT value FROM server_state WHERE key = 'pid'`).get() as { value: string } | undefined;
     const startedRow = db.prepare(`SELECT value FROM server_state WHERE key = 'started_at'`).get() as { value: string } | undefined;

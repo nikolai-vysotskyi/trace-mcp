@@ -6,19 +6,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const ROOT_MARKERS = [
-  '.git',
-  'package.json',
-  'go.mod',
-  'Cargo.toml',
-  'composer.json',
-  'pyproject.toml',
-  'Gemfile',
-  'pom.xml',
-  'build.gradle',
-  'build.gradle.kts',
-];
-
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.svn', '__pycache__', '.tox']);
 
 /**
