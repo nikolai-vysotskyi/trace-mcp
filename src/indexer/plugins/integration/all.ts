@@ -38,6 +38,7 @@ import { HeadlessUiPlugin } from './view/headless-ui/index.js';
 import { NuxtUiPlugin } from './view/nuxt-ui/index.js';
 import { AngularPlugin } from './view/angular/index.js';
 import { SveltePlugin } from './view/svelte/index.js';
+import { TailwindPlugin } from './view/tailwind/index.js';
 
 // --- api ---
 import { GraphQLPlugin } from './api/graphql/index.js';
@@ -109,6 +110,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new NuxtUiPlugin(),
     new AngularPlugin(),
     new SveltePlugin(),
+    new TailwindPlugin(),
     // api
     new GraphQLPlugin(),
     new TrpcPlugin(),
