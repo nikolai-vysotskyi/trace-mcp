@@ -12,6 +12,7 @@ import { configureMcpClients } from '../init/mcp-client.js';
 import { updateClaudeMd } from '../init/claude-md.js';
 import { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook } from '../init/hooks.js';
 import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
+import { installTweakccPrompts, detectTweakccPrompts } from '../init/tweakcc.js';
 import { formatReport } from '../init/reporter.js';
 import { ensureGlobalDirs, getDbPath, GLOBAL_CONFIG_PATH } from '../global.js';
 import { migrateGlobalConfig } from '../config-jsonc.js';
@@ -76,6 +77,7 @@ export const initCommand = new Command('init')
     let selectedClients: DetectedMcpClient['name'][] = [];
     let installHooks = !opts.skipHooks;
     let claudeMdScope: 'global' | 'skip' = opts.skipClaudeMd ? 'skip' : 'global';
+    let installTweakcc = false;
     let indexProject = opts.index ?? false;
     let fixConflicts = false;
 
@@ -104,24 +106,45 @@ export const initCommand = new Command('init')
         selectedClients = clientResult as DetectedMcpClient['name'][];
       }
 
-      // Q2: Hooks (PreToolUse guard + PostToolUse auto-reindex)
-      if (!opts.skipHooks) {
-        const hookResult = await p.confirm({
-          message: 'Install hooks? (PreToolUse guard redirects code reads → PostToolUse auto-reindexes edits)',
-          initialValue: true,
-        });
-        if (p.isCancel(hookResult)) { p.cancel('Cancelled.'); process.exit(0); }
-        installHooks = hookResult;
-      }
+      // Q2: Enforcement level (Claude Code only — hooks & tweakcc are CC-specific)
+      const hasClaudeCode = selectedClients.includes('claude-code') || selectedClients.includes('claw-code') || selectedClients.includes('claude-desktop');
 
-      // Q3: CLAUDE.md
-      if (!opts.skipClaudeMd) {
-        const mdResult = await p.confirm({
-          message: 'Add tool routing guide to ~/.claude/CLAUDE.md?',
-          initialValue: true,
+      if (hasClaudeCode && !opts.skipHooks) {
+        const tweakccState = detectTweakccPrompts();
+
+        const levelResult = await p.select({
+          message: 'Enforcement level (Claude Code)',
+          options: [
+            {
+              value: 'base' as const,
+              label: 'Base — CLAUDE.md only',
+              hint: 'soft routing rules in project instructions',
+            },
+            {
+              value: 'standard' as const,
+              label: 'Standard — CLAUDE.md + hooks',
+              hint: 'guard hooks intercept tool calls at runtime (recommended)',
+            },
+            {
+              value: 'max' as const,
+              label: 'Max — CLAUDE.md + hooks + tweakcc',
+              hint: tweakccState.installed
+                ? 'patches Claude\'s system prompts (strongest)'
+                : 'requires tweakcc — install with `npx tweakcc` first',
+            },
+          ],
+          initialValue: 'standard' as const,
         });
-        if (p.isCancel(mdResult)) { p.cancel('Cancelled.'); process.exit(0); }
-        claudeMdScope = mdResult ? 'global' : 'skip';
+        if (p.isCancel(levelResult)) { p.cancel('Cancelled.'); process.exit(0); }
+
+        claudeMdScope = 'global';
+        installHooks = levelResult === 'standard' || levelResult === 'max';
+        installTweakcc = levelResult === 'max';
+      } else {
+        // Non-CC clients: always install CLAUDE.md, no hooks/tweakcc
+        claudeMdScope = opts.skipClaudeMd ? 'skip' : 'global';
+        installHooks = false;
+        installTweakcc = false;
       }
 
       // Q4: Index current project
@@ -183,7 +206,7 @@ export const initCommand = new Command('init')
       const spin = p.spinner();
       spin.start('Setting up trace-mcp');
       try {
-        executeSteps(steps, { selectedClients, installHooks, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
+        executeSteps(steps, { selectedClients, installHooks, installTweakcc, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
       } catch (err) {
         spin.stop('Failed');
         p.log.error(`Setup failed: ${(err as Error).message}`);
@@ -191,7 +214,7 @@ export const initCommand = new Command('init')
       }
       spin.stop('Done');
     } else {
-      executeSteps(steps, { selectedClients, installHooks, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
+      executeSteps(steps, { selectedClients, installHooks, installTweakcc, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
     }
 
     // --- Fix competing tools ---
@@ -345,6 +368,7 @@ function executeSteps(
   opts: {
     selectedClients: DetectedMcpClient['name'][];
     installHooks: boolean;
+    installTweakcc: boolean;
     claudeMdScope: 'global' | 'skip';
     force?: boolean;
     dryRun?: boolean;
@@ -382,6 +406,11 @@ function executeSteps(
       scope: 'global',
     });
     steps.push(mdResult);
+  }
+
+  // 5. tweakcc system prompt rewrites
+  if (opts.installTweakcc) {
+    steps.push(...installTweakccPrompts({ dryRun: opts.dryRun }));
   }
 }
 

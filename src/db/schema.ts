@@ -935,6 +935,15 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       INSERT OR IGNORE INTO indexing_progress (pipeline) VALUES ('embedding');
     `);
   },
+  18: (db) => {
+    // Server state tracking — allows CLI `status` to detect if serve is running.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS server_state (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+  },
 };
 
 function runMigrations(db: Database.Database, fromVersion: number): void {
