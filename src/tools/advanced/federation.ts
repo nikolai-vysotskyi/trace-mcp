@@ -3,9 +3,10 @@
  */
 
 import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
+import { validationError, notFound } from '../../errors.js';
 import { FederationManager, type CrossRepoImpactResult, type FederationGraphResult } from '../../federation/manager.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
+import { diffEndpoints, type EndpointSchemaDiff } from '../../federation/schema-diff.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // 1. FEDERATION GRAPH — show all federated repos and their connections
@@ -131,4 +132,72 @@ export function getFederationClients(
   }
 
   return ok(results);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// 6. CONTRACT VERSIONS — version history with breaking change detection
+// ════════════════════════════════════════════════════════════════════════
+
+interface ContractVersionEntry {
+  version: string | null;
+  specPath: string;
+  snapshotAt: string;
+  endpointCount: number;
+  diffs?: EndpointSchemaDiff[];
+}
+
+interface ContractVersionsResult {
+  service: string;
+  versions: ContractVersionEntry[];
+  totalBreakingChanges: number;
+}
+
+export function getContractVersions(
+  topoStore: TopologyStore,
+  opts: { service: string; limit?: number },
+): TraceMcpResult<ContractVersionsResult> {
+  const svc = topoStore.getService(opts.service);
+  if (!svc) {
+    return err(notFound(opts.service, topoStore.getAllServices().map((s) => s.name)));
+  }
+
+  const snapshots = topoStore.getSnapshotsByService(svc.id, opts.limit ?? 10);
+  const versions: ContractVersionEntry[] = [];
+  let totalBreakingChanges = 0;
+
+  for (let i = 0; i < snapshots.length; i++) {
+    const snap = snapshots[i];
+    let parsedEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+    try {
+      const parsed = JSON.parse(snap.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
+      parsedEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
+    } catch { /* malformed JSON */ }
+
+    const entry: ContractVersionEntry = {
+      version: snap.version,
+      specPath: snap.spec_path,
+      snapshotAt: snap.snapshot_at,
+      endpointCount: parsedEndpoints.length,
+    };
+
+    // Diff with the next (older) snapshot
+    if (i + 1 < snapshots.length) {
+      const olderSnap = snapshots[i + 1];
+      let olderEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+      try {
+        const parsed = JSON.parse(olderSnap.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
+        olderEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
+      } catch { /* malformed JSON */ }
+
+      const diffs = diffEndpoints(olderEndpoints, parsedEndpoints);
+      if (diffs.length > 0) {
+        entry.diffs = diffs;
+        totalBreakingChanges += diffs.filter((d) => d.breaking).length;
+      }
+    }
+
+    versions.push(entry);
+  }
+
+  return ok({ service: svc.name, versions, totalBreakingChanges });
 }

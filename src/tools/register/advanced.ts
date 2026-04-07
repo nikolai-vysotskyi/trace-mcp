@@ -3,16 +3,16 @@ import { z } from 'zod';
 import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
 import { logger } from '../../logger.js';
-import { TopologyStore } from '../../topology/topology-db.js';
-import { TOPOLOGY_DB_PATH, ensureGlobalDirs } from '../../global.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
 import { getServiceMap, getCrossServiceImpact, getApiContract, getServiceDependencies, getContractDrift } from '../project/topology.js';
-import { getFederationGraph, getFederationImpact, federationAddRepo, federationSync, getFederationClients } from '../advanced/federation.js';
+import { getFederationGraph, getFederationImpact, federationAddRepo, federationSync, getFederationClients, getContractVersions } from '../advanced/federation.js';
 import { RuntimeIntelligence } from '../../runtime/lifecycle.js';
 import { getRuntimeProfile, getRuntimeCallGraph, getEndpointAnalytics, getRuntimeDependencies } from '../advanced/runtime.js';
 import { queryByIntent, getDomainMap, getDomainContext, getCrossDomainDependencies } from '../advanced/intent.js';
 import { graphQuery } from '../analysis/graph-query.js';
 import { getDataflow } from '../analysis/dataflow.js';
 import { visualizeGraph, getDependencyDiagram } from '../analysis/visualize.js';
+import { visualizeFederationTopology } from '../analysis/visualize-federation.js';
 import { searchText } from '../navigation/search-text.js';
 import { predictBugs, detectDrift, getTechDebt, assessChangeRisk, getHealthTrends } from '../analysis/predictive-intelligence.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
@@ -21,9 +21,8 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
   const { store, config, projectRoot, guardPath, j, jh } = ctx;
 
   // --- Multi-Repo Topology Tools (optional) ---
-  if (config.topology?.enabled) {
-    ensureGlobalDirs();
-    const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+  if (config.topology?.enabled && ctx.topoStore) {
+    const topoStore = ctx.topoStore;
     const additionalRepos = config.topology.repos ?? [];
 
     server.tool(
@@ -158,6 +157,34 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       },
       async ({ endpoint, method }) => {
         const result = getFederationClients(topoStore, { endpoint, method });
+        if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'get_contract_versions',
+      'Show version history for a service API contract with breaking change detection between versions. Compares request/response schemas across snapshots to flag removed fields, type changes, and renames.',
+      {
+        service: z.string().min(1).max(256).describe('Service name'),
+        limit: z.number().int().min(1).max(50).optional().describe('Max versions to show (default 10)'),
+      },
+      async ({ service, limit }) => {
+        const result = getContractVersions(topoStore, { service, limit });
+        if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'visualize_federation',
+      'Open interactive HTML visualization of the federation topology: services as nodes, API calls as edges, health/risk indicators per service. Node size = endpoint count, color = health (green/yellow/red).',
+      {
+        output: z.string().max(512).optional().describe('Output file path (default: /tmp/trace-mcp-federation.html)'),
+        layout: z.enum(['force', 'hierarchical', 'radial']).optional().describe('Graph layout (default force)'),
+      },
+      async ({ output, layout }) => {
+        const result = visualizeFederationTopology(topoStore, { output, layout });
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },

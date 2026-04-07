@@ -12,6 +12,7 @@ import { notFound, validationError } from '../../errors.js';
 import { TopologyStore, type ServiceRow, type EndpointRow, type CrossServiceEdgeRow } from '../../topology/topology-db.js';
 import { detectServices } from '../../topology/service-detector.js';
 import { parseContracts } from '../../topology/contract-parser.js';
+import { diffEndpoints, type EndpointSchemaDiff } from '../../federation/schema-diff.js';
 import { getDbPath } from '../../global.js';
 import path from 'node:path';
 
@@ -68,9 +69,10 @@ interface ServiceDepsResult {
 interface ContractDriftResult {
   service: string;
   drifts: Array<{
-    type: 'missing_endpoint' | 'extra_endpoint' | 'unmatched_spec';
+    type: 'missing_endpoint' | 'extra_endpoint' | 'unmatched_spec' | 'schema_breaking_change';
     detail: string;
   }>;
+  schemaChanges?: EndpointSchemaDiff[];
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -385,5 +387,45 @@ export function getContractDrift(
     }
   }
 
-  return ok({ service: svc.name, drifts });
+  // Schema-level drift: compare current endpoints to latest snapshot
+  const contracts = topoStore.getContractsByService(svc.id);
+  let schemaChanges: EndpointSchemaDiff[] | undefined;
+
+  for (const contract of contracts) {
+    const latestSnapshot = topoStore.getLatestSnapshot(contract.id);
+    if (!latestSnapshot) continue;
+
+    // Parse snapshot endpoints
+    let oldEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+    try {
+      const parsed = JSON.parse(latestSnapshot.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
+      oldEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
+    } catch { continue; }
+
+    // Current endpoints with schemas
+    const currentEndpoints = specEndpoints.map((ep) => ({
+      method: ep.method,
+      path: ep.path,
+      requestSchema: ep.request_schema,
+      responseSchema: ep.response_schema,
+    }));
+
+    const epDiffs = diffEndpoints(oldEndpoints, currentEndpoints);
+    if (epDiffs.length > 0) {
+      schemaChanges = (schemaChanges ?? []).concat(epDiffs);
+      for (const epDiff of epDiffs) {
+        if (epDiff.breaking) {
+          const allChanges = [...epDiff.requestChanges, ...epDiff.responseChanges].filter((c) => c.breaking);
+          for (const change of allChanges) {
+            drifts.push({
+              type: 'schema_breaking_change',
+              detail: `${epDiff.endpoint.method ?? '*'} ${epDiff.endpoint.path}: ${change.type} at ${change.path}${change.oldValue ? ` (was: ${change.oldValue})` : ''}${change.newValue ? ` (now: ${change.newValue})` : ''}`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return ok({ service: svc.name, drifts, schemaChanges });
 }

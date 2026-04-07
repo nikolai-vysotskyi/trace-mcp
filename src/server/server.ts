@@ -15,7 +15,7 @@ import { withHints } from '../tools/shared/hints.js';
 import { SessionTracker } from '../session/tracker.js';
 import { SessionJournal } from '../session/journal.js';
 import { flushSessionSummary } from '../session/resume.js';
-import { getSnapshotPath } from '../global.js';
+import { getSnapshotPath, TOPOLOGY_DB_PATH, ensureGlobalDirs } from '../global.js';
 import { FileWatcher } from './file-watcher.js';
 import { createExploredTracker } from './explored-tracker.js';
 import type { ServerContext, MetaContext } from './types.js';
@@ -32,6 +32,7 @@ import { registerRefactoringTools } from '../tools/register/refactoring.js';
 import { registerAdvancedTools } from '../tools/register/advanced.js';
 import { registerQualityTools } from '../tools/register/quality.js';
 import { registerSessionTools } from '../tools/register/session.js';
+import { TopologyStore } from '../topology/topology-db.js';
 
 /** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response */
 function j(value: unknown): string {
@@ -284,6 +285,13 @@ export function createServer(
   // Explored-file tracker (guard hook reads markers to allow Read on explored files)
   const explored = createExploredTracker(projectRoot);
 
+  // Build topology store (shared across navigation + advanced tools)
+  let topoStore: TopologyStore | null = null;
+  if (config.topology?.enabled) {
+    ensureGlobalDirs();
+    topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+  }
+
   // Build shared context and register all tools
   const ctx: ServerContext = {
     store, registry, config, projectRoot,
@@ -292,6 +300,7 @@ export function createServer(
     has, guardPath, j, jh,
     markExplored: explored.markExplored,
     progress: progress ?? null,
+    topoStore,
   };
 
   const metaCtx: MetaContext = {

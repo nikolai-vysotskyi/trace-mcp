@@ -15,6 +15,8 @@ import { TopologyStore, type FederatedRepoRow, type ClientCallRow } from '../top
 import { parseContracts } from '../topology/contract-parser.js';
 import { detectServices } from '../topology/service-detector.js';
 import { scanClientCalls } from './scanner.js';
+import { diffEndpoints, type EndpointSchemaDiff } from './schema-diff.js';
+import { searchFts } from '../db/fts.js';
 import { getDbPath } from '../global.js';
 import { Store } from '../db/store.js';
 import { logger } from '../logger.js';
@@ -61,6 +63,8 @@ export interface CrossRepoImpactResult {
   }>;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
   summary: string;
+  /** Schema-level breaking changes detected for this endpoint (if contract snapshots exist) */
+  breakingChanges?: import('./schema-diff.js').EndpointSchemaDiff[];
 }
 
 export interface FederationGraphResult {
@@ -85,6 +89,24 @@ export interface FederationGraphResult {
     totalClientCalls: number;
     linkedCallsPercent: number;
   };
+}
+
+export interface FederatedSearchItem {
+  repo: string;
+  symbol_id: string;
+  name: string;
+  kind: string;
+  fqn: string | null;
+  signature: string | null;
+  file: string;
+  line: number | null;
+  score: number;
+}
+
+export interface FederatedSearchResult {
+  items: FederatedSearchItem[];
+  total: number;
+  repos_searched: number;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -159,6 +181,8 @@ export class FederationManager {
             method: e.method ?? undefined,
             path: e.path,
             operationId: e.operationId,
+            requestSchema: e.requestSchema ? JSON.stringify(e.requestSchema) : undefined,
+            responseSchema: e.responseSchema ? JSON.stringify(e.responseSchema) : undefined,
           })),
         );
 
@@ -337,6 +361,18 @@ export class FederationManager {
           metadata: svc.metadata,
         });
 
+        // Snapshot existing contracts before replacing
+        const existingContracts = this.topoStore.getContractsByService(serviceId);
+        for (const ec of existingContracts) {
+          this.topoStore.insertContractSnapshot(ec.id, serviceId, {
+            version: ec.version,
+            specPath: ec.spec_path,
+            contentHash: ec.content_hash ?? '',
+            endpointsJson: ec.parsed_spec,
+            eventsJson: '[]',
+          });
+        }
+
         // Clean old contracts for this service and re-parse
         this.topoStore.deleteContractsByService(serviceId);
 
@@ -356,6 +392,8 @@ export class FederationManager {
               method: e.method ?? undefined,
               path: e.path,
               operationId: e.operationId,
+              requestSchema: e.requestSchema ? JSON.stringify(e.requestSchema) : undefined,
+              responseSchema: e.responseSchema ? JSON.stringify(e.responseSchema) : undefined,
             })),
           );
           endpointsUpdated += contract.endpoints.length;
@@ -482,6 +520,43 @@ export class FederationManager {
         ? this.topoStore.getFederatedRepo(svc.repo_root)
         : undefined;
 
+      // Check for schema-level breaking changes via contract snapshots
+      let breakingChanges: EndpointSchemaDiff[] | undefined;
+      const contracts = this.topoStore.getContractsByService(ep.service_id);
+      for (const contract of contracts) {
+        const snapshot = this.topoStore.getLatestSnapshot(contract.id);
+        if (!snapshot) continue;
+
+        let oldEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+        try {
+          const parsed = JSON.parse(snapshot.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
+          oldEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
+        } catch { continue; }
+
+        // Get current endpoint schemas
+        const currentEndpoints = this.topoStore.getEndpointsByService(ep.service_id).map((e) => ({
+          method: e.method,
+          path: e.path,
+          requestSchema: e.request_schema,
+          responseSchema: e.response_schema,
+        }));
+
+        const epDiffs = diffEndpoints(oldEndpoints, currentEndpoints)
+          .filter((d) => d.endpoint.path === ep.path && (d.endpoint.method ?? '*') === (ep.method ?? '*'));
+
+        if (epDiffs.length > 0 && epDiffs.some((d) => d.breaking)) {
+          breakingChanges = epDiffs;
+        }
+      }
+
+      // Upgrade risk level if breaking schema changes exist
+      let finalRiskLevel = riskLevel;
+      if (breakingChanges?.some((d) => d.breaking)) {
+        const riskLevels: Array<CrossRepoImpactResult['riskLevel']> = ['low', 'medium', 'high', 'critical'];
+        const idx = riskLevels.indexOf(riskLevel);
+        if (idx < riskLevels.length - 1) finalRiskLevel = riskLevels[idx + 1];
+      }
+
       results.push({
         endpoint: {
           method: ep.method,
@@ -490,12 +565,95 @@ export class FederationManager {
           repo: repo?.name ?? svc?.repo_root ?? 'unknown',
         },
         clients,
-        riskLevel,
-        summary: `${ep.method ?? '*'} ${ep.path} is called by ${clients.length} client(s) in ${uniqueRepos.size} repo(s)`,
+        riskLevel: finalRiskLevel,
+        summary: `${ep.method ?? '*'} ${ep.path} is called by ${clients.length} client(s) in ${uniqueRepos.size} repo(s)${breakingChanges ? ' ⚠ BREAKING SCHEMA CHANGES' : ''}`,
+        breakingChanges,
       });
     }
 
     return results;
+  }
+
+  /**
+   * Search across all federated repos. Opens each per-repo DB readonly,
+   * runs FTS search, normalizes scores, merges results.
+   */
+  federatedSearch(
+    query: string,
+    filters?: { kind?: string; language?: string; filePattern?: string },
+    limit = 20,
+  ): FederatedSearchResult {
+    const repos = this.topoStore.getAllFederatedRepos();
+    const allItems: FederatedSearchItem[] = [];
+    let reposSearched = 0;
+
+    for (const repo of repos) {
+      if (!repo.db_path || !fs.existsSync(repo.db_path)) continue;
+
+      let db: Database.Database | null = null;
+      try {
+        db = new Database(repo.db_path, { readonly: true });
+        db.pragma('busy_timeout = 3000');
+
+        const ftsResults = searchFts(db, query, limit, 0, {
+          kind: filters?.kind,
+          language: filters?.language,
+          filePattern: filters?.filePattern,
+        });
+
+        if (ftsResults.length === 0) continue;
+        reposSearched++;
+
+        // Normalize BM25 scores within this repo (rank is negative, lower = better)
+        const minRank = Math.min(...ftsResults.map((r) => r.rank));
+        const maxRank = Math.max(...ftsResults.map((r) => r.rank));
+        const rankSpread = maxRank - minRank || 1;
+
+        // Batch-fetch file paths and symbol lines
+        const symbolIds = ftsResults.map((r) => r.symbolId);
+        const symbolRows = db.prepare(
+          `SELECT s.id, s.symbol_id, s.name, s.kind, s.fqn, s.signature, s.line_start, f.path as file_path
+           FROM symbols s JOIN files f ON f.id = s.file_id
+           WHERE s.id IN (${symbolIds.map(() => '?').join(',')})`,
+        ).all(...symbolIds) as Array<{
+          id: number; symbol_id: string; name: string; kind: string;
+          fqn: string | null; signature: string | null; line_start: number | null;
+          file_path: string;
+        }>;
+
+        const symbolMap = new Map(symbolRows.map((s) => [s.id, s]));
+
+        for (const fts of ftsResults) {
+          const sym = symbolMap.get(fts.symbolId);
+          if (!sym) continue;
+
+          allItems.push({
+            repo: repo.name,
+            symbol_id: sym.symbol_id,
+            name: sym.name,
+            kind: sym.kind,
+            fqn: sym.fqn,
+            signature: sym.signature,
+            file: sym.file_path,
+            line: sym.line_start,
+            score: 1 - (fts.rank - minRank) / rankSpread,
+          });
+        }
+      } catch (e) {
+        logger.warn({ repo: repo.name, error: e }, 'Failed to search federated repo');
+      } finally {
+        db?.close();
+      }
+    }
+
+    // Sort by score descending and apply global limit
+    allItems.sort((a, b) => b.score - a.score);
+
+    return {
+      items: allItems.slice(0, limit),
+      total: allItems.length,
+      repos_searched: reposSearched,
+    };
   }
 
   /**
