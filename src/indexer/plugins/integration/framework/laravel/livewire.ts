@@ -8,7 +8,7 @@
  * - Public properties (reactive state) and methods (callable actions)
  * - Blade-side: <livewire:name/>, @livewire(), wire:click directives
  */
-import type { RawEdge } from '../../../../../plugin-api/types.js';
+import type { RawEdge, FileParseResult, ResolveContext } from '../../../../../plugin-api/types.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 
@@ -245,6 +245,20 @@ export function extractWireDirectives(source: string): LivewireWireDirective[] {
   return directives;
 }
 
+/** Pass-1: extract Livewire metadata edges from a single component file. */
+export function processLivewireNode(
+  source: string,
+  filePath: string,
+  result: FileParseResult,
+): void {
+  const componentInfo = extractLivewireComponent(source, filePath);
+  if (!componentInfo) return;
+
+  result.frameworkRole = 'livewire_component';
+  result.edges = result.edges ?? [];
+  result.edges.push(...buildLivewireEdges(componentInfo));
+}
+
 /**
  * Build edges from Livewire component info.
  * Creates livewire_renders, livewire_dispatches, livewire_listens edges.
@@ -320,6 +334,134 @@ function buildLivewireEdges(
   }
 
   return edges;
+}
+
+// ─── Edge resolvers (called from LaravelPlugin) ─────────────
+
+/** Check if a file path is a Livewire component file. */
+export function isLivewireFile(filePath: string): boolean {
+  // v3: app/Livewire/**/*.php
+  // v2: app/Http/Livewire/**/*.php
+  return /app\/(?:Http\/)?Livewire\//.test(filePath);
+}
+
+/** Pass-2: resolve Livewire PHP-side edges (component → view, events, forms, models). */
+export function resolveLivewirePhpEdges(
+  source: string,
+  file: { id: number; path: string },
+  ctx: ResolveContext,
+  edges: RawEdge[],
+  fileMap: Map<string, { id: number; path: string }>,
+): void {
+  const componentInfo = extractLivewireComponent(source, file.path);
+  if (!componentInfo) return;
+
+  const sourceSymbol = ctx.getSymbolByFqn(componentInfo.fqn);
+  if (!sourceSymbol) return;
+
+  // livewire_renders: Component → Blade view file
+  const viewPath = componentInfo.viewName
+    ? `resources/views/${componentInfo.viewName.replace(/\./g, '/')}.blade.php`
+    : componentInfo.conventionViewPath;
+  const viewFile = fileMap.get(viewPath);
+  if (viewFile) {
+    edges.push({
+      sourceNodeType: 'symbol',
+      sourceRefId: sourceSymbol.id,
+      targetNodeType: 'file',
+      targetRefId: viewFile.id,
+      edgeType: 'livewire_renders',
+      metadata: { viewPath, convention: !componentInfo.viewName },
+    });
+  }
+
+  // livewire_dispatches
+  for (const dispatch of componentInfo.dispatches) {
+    edges.push({
+      sourceNodeType: 'symbol',
+      sourceRefId: sourceSymbol.id,
+      edgeType: 'livewire_dispatches',
+      metadata: { eventName: dispatch.eventName, method: dispatch.method },
+    });
+  }
+
+  // livewire_listens
+  for (const listener of componentInfo.listeners) {
+    edges.push({
+      sourceNodeType: 'symbol',
+      sourceRefId: sourceSymbol.id,
+      edgeType: 'livewire_listens',
+      metadata: { eventName: listener.eventName, handlerMethod: listener.handlerMethod },
+    });
+  }
+
+  // livewire_form: Component → Form class
+  if (componentInfo.formProperty) {
+    const formSymbol = ctx.getSymbolByFqn(componentInfo.formProperty.formClass);
+    if (formSymbol) {
+      edges.push({
+        sourceNodeType: 'symbol',
+        sourceRefId: sourceSymbol.id,
+        targetNodeType: 'symbol',
+        targetRefId: formSymbol.id,
+        edgeType: 'livewire_form',
+        metadata: { propertyName: componentInfo.formProperty.propertyName },
+      });
+    }
+  }
+
+  // livewire_uses_model: Component → Eloquent Model
+  for (const prop of componentInfo.properties) {
+    if (!prop.type || !/\\Models\\/.test(prop.type)) continue;
+    const modelSymbol = ctx.getSymbolByFqn(prop.type);
+    if (!modelSymbol) continue;
+    edges.push({
+      sourceNodeType: 'symbol',
+      sourceRefId: sourceSymbol.id,
+      targetNodeType: 'symbol',
+      targetRefId: modelSymbol.id,
+      edgeType: 'livewire_uses_model',
+      metadata: { propertyName: prop.name },
+    });
+  }
+}
+
+/** Pass-2: resolve Livewire Blade-side edges (<livewire:name/>, wire:click). */
+export function resolveLivewireBladeEdges(
+  source: string,
+  file: { id: number; path: string },
+  ctx: ResolveContext,
+  edges: RawEdge[],
+  livewireVersion: 2 | 3,
+): void {
+  // <livewire:component-name /> and @livewire('component-name')
+  const usages = extractLivewireBladeUsages(source);
+  for (const usage of usages) {
+    const componentFqn = resolveComponentName(usage.componentName, livewireVersion);
+    const componentSymbol = ctx.getSymbolByFqn(componentFqn);
+    if (!componentSymbol) continue;
+
+    edges.push({
+      sourceNodeType: 'file',
+      sourceRefId: file.id,
+      targetNodeType: 'symbol',
+      targetRefId: componentSymbol.id,
+      edgeType: 'livewire_child_of',
+      metadata: { componentName: usage.componentName, line: usage.line, syntax: usage.syntax },
+    });
+  }
+
+  // wire:click="method" → livewire_action
+  const wireDirectives = extractWireDirectives(source);
+  for (const directive of wireDirectives) {
+    if (directive.directive === 'model') continue;
+    edges.push({
+      sourceNodeType: 'file',
+      sourceRefId: file.id,
+      edgeType: 'livewire_action',
+      metadata: { directive: directive.directive, method: directive.value, line: directive.line },
+    });
+  }
 }
 
 /**
