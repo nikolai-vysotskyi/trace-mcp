@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { ok, err, type TraceMcpResult } from './errors.js';
 import { configError } from './errors.js';
 import { logger } from './logger.js';
-import { GLOBAL_CONFIG_PATH, ensureGlobalDirs } from './global.js';
+import { GLOBAL_CONFIG_PATH, ensureGlobalDirs, stripJsonComments } from './global.js';
 
 const SecurityConfigSchema = z.object({
   secret_patterns: z.array(z.string()).optional(),
@@ -211,7 +211,7 @@ export type TraceMcpConfig = z.infer<typeof TraceMcpConfigSchema>;
 function loadGlobalConfigRaw(): Record<string, unknown> {
   if (!fs.existsSync(GLOBAL_CONFIG_PATH)) return {};
   try {
-    return JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8'));
+    return JSON.parse(stripJsonComments(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')));
   } catch {
     return {};
   }
