@@ -20,7 +20,7 @@ import { IndexingPipeline } from './indexer/pipeline.js';
 import { FileWatcher } from './indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from './ai/index.js';
 import { SummarizationPipeline } from './ai/summarization-pipeline.js';
-import { ProgressState } from './progress.js';
+import { ProgressState, writeServerPid, clearServerPid } from './progress.js';
 import http from 'node:http';
 import { initCommand } from './cli/init.js';
 import { upgradeCommand } from './cli/upgrade.js';
@@ -135,6 +135,7 @@ program
     ensureGlobalDirs();
 
     const db = initializeDatabase(dbPath);
+    writeServerPid(db);
     const store = new Store(db);
     const registry = new PluginRegistry();
     registerDefaultPlugins(registry);
@@ -199,6 +200,7 @@ program
     });
 
     const shutdown = async () => {
+      clearServerPid(db);
       await watcher.stop();
       process.exit(0);
     };
@@ -231,6 +233,7 @@ program
     ensureGlobalDirs();
 
     const db = initializeDatabase(dbPath);
+    writeServerPid(db);
     const store = new Store(db);
     const registry = new PluginRegistry();
     registerDefaultPlugins(registry);
@@ -401,6 +404,7 @@ program
     });
 
     const shutdown = async () => {
+      clearServerPid(db);
       await watcher.stop();
       await transport.close();
       await server.close();

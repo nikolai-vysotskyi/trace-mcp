@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { getDbPath } from '../global.js';
 import { getProject } from '../registry.js';
 import { findProjectRoot } from '../project-root.js';
-import { readProgressFromDb, type PipelineProgressSnapshot } from '../progress.js';
+import { readProgressFromDb, isServerRunning, type PipelineProgressSnapshot } from '../progress.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);
@@ -82,8 +82,10 @@ export const statusCommand = new Command('status')
           (SELECT COUNT(*) FROM edges) as edges
       `).get() as { files: number; symbols: number; edges: number };
 
+      const serverRunning = isServerRunning(db);
+
       if (opts.json) {
-        console.log(JSON.stringify({ projectRoot, stats, progress }, null, 2));
+        console.log(JSON.stringify({ projectRoot, stats, progress, serverRunning }, null, 2));
         return;
       }
 
@@ -93,8 +95,14 @@ export const statusCommand = new Command('status')
         console.log(formatPipeline('Indexing:', progress.indexing));
         console.log(formatPipeline('Summarization:', progress.summarization));
         console.log(formatPipeline('Embedding:', progress.embedding));
+      } else if (stats.files > 0 && serverRunning) {
+        console.log('  Index is up to date (server running, incremental indexing active)');
+      } else if (stats.files > 0) {
+        console.log('  Project indexed (server not running, no background indexing)');
+      } else if (serverRunning) {
+        console.log('  Server is running, waiting for initial indexing...');
       } else {
-        console.log('  No progress data available (server may not have run yet)');
+        console.log('  Index is empty. Run `trace-mcp serve` or `trace-mcp index` to index the project.');
       }
 
       console.log(`\n  Stats: ${stats.files} files · ${stats.symbols} symbols · ${stats.edges} edges\n`);

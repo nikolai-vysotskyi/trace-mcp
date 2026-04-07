@@ -173,3 +173,44 @@ export function readProgressFromDb(db: Database.Database): ProgressSnapshot | nu
     return null;
   }
 }
+
+// ── Server state (PID tracking) ──────────────────────────────────
+
+export function writeServerPid(db: Database.Database): void {
+  try {
+    db.prepare(`INSERT OR REPLACE INTO server_state (key, value) VALUES ('pid', ?)`).run(String(process.pid));
+    db.prepare(`INSERT OR REPLACE INTO server_state (key, value) VALUES ('started_at', ?)`).run(new Date().toISOString());
+  } catch {
+    // Table may not exist yet (pre-migration-18 DB)
+  }
+}
+
+export function clearServerPid(db: Database.Database): void {
+  try {
+    db.prepare(`DELETE FROM server_state WHERE key IN ('pid', 'started_at')`).run();
+  } catch {
+    // Table may not exist
+  }
+}
+
+export function readServerPid(db: Database.Database): { pid: number; startedAt: string } | null {
+  try {
+    const pidRow = db.prepare(`SELECT value FROM server_state WHERE key = 'pid'`).get() as { value: string } | undefined;
+    const startedRow = db.prepare(`SELECT value FROM server_state WHERE key = 'started_at'`).get() as { value: string } | undefined;
+    if (!pidRow) return null;
+    return { pid: Number(pidRow.value), startedAt: startedRow?.value ?? 'unknown' };
+  } catch {
+    return null;
+  }
+}
+
+export function isServerRunning(db: Database.Database): boolean {
+  const state = readServerPid(db);
+  if (!state) return false;
+  try {
+    process.kill(state.pid, 0); // signal 0 = check if process exists
+    return true;
+  } catch {
+    return false;
+  }
+}
