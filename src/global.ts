@@ -181,6 +181,14 @@ export const DEFAULT_CONFIG_JSONC = `{
     }
   },
 
+  // ── Logging ───────────────────────────────────────────────────────
+  "logging": {
+    "file": false,                                 // enable file logging
+    "path": "~/.trace-mcp/run.log",                // log file location
+    "level": "info",                               // "trace" | "debug" | "info" | "warn" | "error" | "fatal"
+    "max_size_mb": 10                              // rotate when log exceeds this size
+  },
+
   // ── File watcher ─────────────────────────────────────────────────
   "watch": {
     "enabled": true,
