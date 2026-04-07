@@ -10,7 +10,7 @@
  * - Widget $model / getStats() model references
  * - getPages() → Page class array
  */
-import type { RawEdge } from '../../../../../plugin-api/types.js';
+import type { RawEdge, FileParseResult, ResolveContext } from '../../../../../plugin-api/types.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
@@ -178,7 +178,100 @@ export function extractFilamentWidget(
   return { className, namespace, fqn, modelFqn, queriedModels };
 }
 
-// ─── Edge builders ────────────────────────────────────────────
+// ─── Node & edge processing (called from LaravelPlugin) ──────
+
+/** Pass-1: extract Filament metadata edges from a single file. */
+export function processFilamentNode(
+  source: string,
+  filePath: string,
+  result: FileParseResult,
+): void {
+  result.edges = result.edges ?? [];
+
+  const resource = extractFilamentResource(source, filePath);
+  if (resource) {
+    result.frameworkRole = 'filament_resource';
+    result.edges.push(...buildFilamentResourceEdges(resource));
+    return;
+  }
+
+  const rm = extractFilamentRelationManager(source, filePath);
+  if (rm) {
+    result.frameworkRole = 'filament_relation_manager';
+    return;
+  }
+
+  const panel = extractFilamentPanel(source, filePath);
+  if (panel) {
+    result.frameworkRole = 'filament_panel';
+    result.edges.push(...buildFilamentPanelEdges(panel));
+    return;
+  }
+
+  const widget = extractFilamentWidget(source, filePath);
+  if (widget) {
+    result.frameworkRole = 'filament_widget';
+    result.edges.push(...buildFilamentWidgetEdges(widget));
+  }
+}
+
+/** Pass-2: resolve Filament symbol-level edges using the full index. */
+export function resolveFilamentEdges(
+  source: string,
+  file: { id: number; path: string },
+  ctx: ResolveContext,
+  edges: RawEdge[],
+): void {
+  // Resource → Model
+  const resource = extractFilamentResource(source, file.path);
+  if (resource) {
+    if (resource.modelFqn) {
+      const sourceSymbol = ctx.getSymbolByFqn(resource.fqn);
+      const targetSymbol = ctx.getSymbolByFqn(resource.modelFqn);
+      if (sourceSymbol && targetSymbol) {
+        edges.push({
+          sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id,
+          targetNodeType: 'symbol', targetRefId: targetSymbol.id,
+          edgeType: 'filament_resource_for',
+        });
+      }
+    }
+    // Resource → RelationManagers
+    const resourceSymbol = ctx.getSymbolByFqn(resource.fqn);
+    if (resourceSymbol) {
+      for (const rmFqn of resource.relationManagers) {
+        const rmSymbol = ctx.getSymbolByFqn(rmFqn);
+        if (rmSymbol) {
+          edges.push({
+            sourceNodeType: 'symbol', sourceRefId: resourceSymbol.id,
+            targetNodeType: 'symbol', targetRefId: rmSymbol.id,
+            edgeType: 'filament_relation_manager',
+          });
+        }
+      }
+    }
+    return;
+  }
+
+  // Widget → Model
+  const widget = extractFilamentWidget(source, file.path);
+  if (widget) {
+    const widgetSymbol = ctx.getSymbolByFqn(widget.fqn);
+    if (!widgetSymbol) return;
+    const targets = [...(widget.modelFqn ? [widget.modelFqn] : []), ...widget.queriedModels];
+    for (const modelFqn of [...new Set(targets)]) {
+      const modelSymbol = ctx.getSymbolByFqn(modelFqn);
+      if (!modelSymbol) continue;
+      edges.push({
+        sourceNodeType: 'symbol', sourceRefId: widgetSymbol.id,
+        targetNodeType: 'symbol', targetRefId: modelSymbol.id,
+        edgeType: 'filament_widget_queries',
+      });
+    }
+  }
+}
+
+// ─── Edge builders (used by processFilamentNode) ─────────────
 
 function buildFilamentResourceEdges(resource: FilamentResourceInfo): RawEdge[] {
   const edges: RawEdge[] = [];

@@ -1,6 +1,6 @@
 /**
  * LaravelPlugin — Framework plugin for Laravel applications.
- * Orchestrates route, Eloquent, migration, FormRequest, event, and middleware extraction.
+ * Thin orchestrator that delegates to domain-specific sub-modules.
  *
  * Supports Laravel 6–13:
  * - L6-8: string controller syntax, Route::namespace(), Kernel.php middleware
@@ -23,27 +23,21 @@ import type { TraceMcpResult } from '../../../../../errors.js';
 import { extractRoutes } from './routes.js';
 import { extractEloquentModel } from './eloquent.js';
 import { extractMigrations } from './migrations.js';
-import { extractFormRequest, detectFormRequestUsage } from './requests.js';
-import { extractEventListeners, detectEventDispatches } from './events.js';
+import { extractFormRequest } from './requests.js';
+import { detectEventDispatches } from './events.js';
 import {
-  extractLivewireComponent,
-  extractLivewireBladeUsages,
-  extractWireDirectives,
-  resolveComponentName,
-  type LivewireComponentInfo,
+  isLivewireFile,
+  processLivewireNode,
+  resolveLivewirePhpEdges,
+  resolveLivewireBladeEdges,
 } from './livewire.js';
-import {
-  extractFilamentResource,
-  extractFilamentRelationManager,
-  extractFilamentPanel,
-  extractFilamentWidget,
-} from './filament.js';
-import { extractNovaResource, extractNovaMetric } from './nova.js';
+import { processFilamentNode, resolveFilamentEdges } from './filament.js';
+import { processNovaNode, resolveNovaEdges } from './nova.js';
 import {
   extractBroadcastingEvent,
   extractChannelAuthorizations,
 } from './broadcasting.js';
-import { extractDataClass, buildDataClassEdges, extractInertiaDataProps } from './laravel-data.js';
+import { extractDataClass, buildDataClassEdges } from './laravel-data.js';
 import {
   extractFeatureDefinitions,
   extractFeatureUsages,
@@ -57,6 +51,12 @@ import {
   parseBootstrapRouting,
   type MiddlewareConfig,
 } from './middleware.js';
+import {
+  resolveEloquentEdges,
+  resolveFormRequestEdges,
+  resolveEventEdges,
+  resolveDispatchEdges,
+} from './edges.js';
 
 export class LaravelPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -117,38 +117,17 @@ export class LaravelPlugin implements FrameworkPlugin {
 
     if (!deps?.['laravel/framework']) return false;
 
-    // Detect Nova
-    if (deps['laravel/nova']) {
-      this.hasNova = true;
-    }
-
-    // Detect Filament
-    if (deps['filament/filament'] || deps['filament/support']) {
-      this.hasFilament = true;
-    }
-
-    // Detect Livewire
+    // Detect ecosystem packages
+    if (deps['laravel/nova']) this.hasNova = true;
+    if (deps['filament/filament'] || deps['filament/support']) this.hasFilament = true;
     if (deps['livewire/livewire']) {
       this.hasLivewire = true;
-      // Detect v2 vs v3 from version constraint
       const lwVersion = deps['livewire/livewire'];
       this.livewireVersion = /^\^?3|^3/.test(lwVersion) ? 3 : 2;
     }
-
-    // Detect laravel-data
-    if (deps['spatie/laravel-data']) {
-      this.hasLaravelData = true;
-    }
-
-    // Detect Broadcasting (Reverb or Pusher)
-    if (deps['laravel/reverb'] || deps['pusher/pusher-php-server']) {
-      this.hasBroadcasting = true;
-    }
-
-    // Detect Pennant
-    if (deps['laravel/pennant']) {
-      this.hasPennant = true;
-    }
+    if (deps['spatie/laravel-data']) this.hasLaravelData = true;
+    if (deps['laravel/reverb'] || deps['pusher/pusher-php-server']) this.hasBroadcasting = true;
+    if (deps['laravel/pennant']) this.hasPennant = true;
 
     return true;
   }
@@ -224,26 +203,22 @@ export class LaravelPlugin implements FrameworkPlugin {
       warnings: [],
     };
 
-    // Kernel.php — middleware config (Laravel 6-10)
+    // ── Config files ──────────────────────────────────────────
     if (this.isKernelFile(filePath)) {
       this.middlewareConfig = parseKernelMiddleware(source);
       result.frameworkRole = 'middleware_config';
     }
-
-    // bootstrap/app.php — middleware + routing config (Laravel 11+)
     if (this.isBootstrapAppFile(filePath)) {
       this.middlewareConfig = parseBootstrapMiddleware(source);
       this.bootstrapRouting = parseBootstrapRouting(source);
       result.frameworkRole = 'bootstrap_config';
     }
-
-    // RouteServiceProvider — controller namespace (Laravel 6-8)
     if (this.isRouteServiceProvider(filePath)) {
       this.controllerNamespace = parseRouteServiceProviderNamespace(source);
       result.frameworkRole = 'route_provider';
     }
 
-    // Route files
+    // ── Core Laravel ──────────────────────────────────────────
     if (this.isRouteFile(filePath)) {
       const routeResult = extractRoutes(source, filePath);
       result.routes = routeResult.routes;
@@ -252,105 +227,27 @@ export class LaravelPlugin implements FrameworkPlugin {
         result.warnings = routeResult.warnings;
       }
     }
-
-    // Migration files
     if (this.isMigrationFile(filePath)) {
       const migResult = extractMigrations(source, filePath);
       result.migrations = migResult.migrations;
       result.frameworkRole = 'migration';
     }
-
-    // Model files — store metadata for pass 2
-    const modelInfo = extractEloquentModel(source, filePath);
-    if (modelInfo) {
+    if (extractEloquentModel(source, filePath)) {
       result.frameworkRole = 'model';
     }
-
-    // FormRequest files
-    const requestInfo = extractFormRequest(source);
-    if (requestInfo) {
+    if (extractFormRequest(source)) {
       result.frameworkRole = 'form_request';
     }
-
-    // EventServiceProvider
     if (filePath.includes('EventServiceProvider')) {
       result.frameworkRole = 'event_provider';
     }
 
-    // Nova files
-    if (this.hasNova) {
-      this.processNovaNode(source, filePath, result);
-    }
+    // ── Ecosystem packages (delegated) ────────────────────────
+    if (this.hasNova) processNovaNode(source, filePath, result);
+    if (this.hasFilament) processFilamentNode(source, filePath, result);
+    if (this.hasLivewire && isLivewireFile(filePath)) processLivewireNode(source, filePath, result);
 
-    // Filament files
-    if (this.hasFilament) {
-      this.processFilamentNode(source, filePath, result);
-    }
-
-    // Livewire component files
-    if (this.hasLivewire && this.isLivewireFile(filePath)) {
-      const componentInfo = extractLivewireComponent(source, filePath);
-      if (componentInfo) {
-        result.frameworkRole = 'livewire_component';
-        result.edges = result.edges ?? [];
-        // Attach component metadata for pass 2 via edges with FQN metadata
-        result.edges.push({
-          edgeType: 'livewire_renders',
-          metadata: {
-            sourceFqn: componentInfo.fqn,
-            targetViewPath: componentInfo.viewName
-              ? `resources/views/${componentInfo.viewName.replace(/\./g, '/')}.blade.php`
-              : componentInfo.conventionViewPath,
-            viewName: componentInfo.viewName,
-            convention: !componentInfo.viewName,
-          },
-        });
-        for (const dispatch of componentInfo.dispatches) {
-          result.edges.push({
-            edgeType: 'livewire_dispatches',
-            metadata: {
-              sourceFqn: componentInfo.fqn,
-              eventName: dispatch.eventName,
-              method: dispatch.method,
-            },
-          });
-        }
-        for (const listener of componentInfo.listeners) {
-          result.edges.push({
-            edgeType: 'livewire_listens',
-            metadata: {
-              sourceFqn: componentInfo.fqn,
-              eventName: listener.eventName,
-              handlerMethod: listener.handlerMethod,
-            },
-          });
-        }
-        if (componentInfo.formProperty) {
-          result.edges.push({
-            edgeType: 'livewire_form',
-            metadata: {
-              sourceFqn: componentInfo.fqn,
-              targetFqn: componentInfo.formProperty.formClass,
-              propertyName: componentInfo.formProperty.propertyName,
-            },
-          });
-        }
-        for (const prop of componentInfo.properties) {
-          if (prop.type && /\\Models\\/.test(prop.type)) {
-            result.edges.push({
-              edgeType: 'livewire_uses_model',
-              metadata: {
-                sourceFqn: componentInfo.fqn,
-                targetFqn: prop.type,
-                propertyName: prop.name,
-              },
-            });
-          }
-        }
-      }
-    }
-
-    // Broadcasting events
+    // ── Broadcasting ──────────────────────────────────────────
     if (this.hasBroadcasting) {
       const eventInfo = extractBroadcastingEvent(source, filePath);
       if (eventInfo) {
@@ -369,7 +266,6 @@ export class LaravelPlugin implements FrameworkPlugin {
           });
         }
       }
-      // Channel authorization in channels.php
       if (filePath.endsWith('channels.php')) {
         const mappings = extractChannelAuthorizations(source);
         result.edges = result.edges ?? [];
@@ -382,25 +278,22 @@ export class LaravelPlugin implements FrameworkPlugin {
       }
     }
 
-    // Pennant feature flags
+    // ── Pennant feature flags ─────────────────────────────────
     if (this.hasPennant) {
       result.edges = result.edges ?? [];
-      const defs = extractFeatureDefinitions(source, filePath);
-      for (const def of defs) {
+      for (const def of extractFeatureDefinitions(source, filePath)) {
         result.edges.push({
           edgeType: 'feature_defined_in',
           metadata: { featureName: def.name, filePath: def.location, line: def.line },
         });
       }
-      const usages = extractFeatureUsages(source);
-      for (const u of usages) {
+      for (const u of extractFeatureUsages(source)) {
         result.edges.push({
           edgeType: 'feature_checked_by',
           metadata: { featureName: u.name, filePath, line: u.line, usageType: u.usageType },
         });
       }
-      const middlewareUsages = extractFeatureMiddlewareUsages(source);
-      for (const u of middlewareUsages) {
+      for (const u of extractFeatureMiddlewareUsages(source)) {
         result.edges.push({
           edgeType: 'feature_gates_route',
           metadata: { featureName: u.name, filePath, line: u.line },
@@ -408,7 +301,7 @@ export class LaravelPlugin implements FrameworkPlugin {
       }
     }
 
-    // laravel-data classes
+    // ── laravel-data ──────────────────────────────────────────
     if (this.hasLaravelData) {
       const dataInfo = extractDataClass(source, filePath);
       if (dataInfo) {
@@ -418,11 +311,8 @@ export class LaravelPlugin implements FrameworkPlugin {
       }
     }
 
-    // Detect event dispatches in any file
-    const dispatches = detectEventDispatches(source);
-    if (dispatches.length > 0) {
-      // Store for pass 2
-    }
+    // Detect event dispatches (stored for pass 2)
+    detectEventDispatches(source);
 
     return ok(result);
   }
@@ -442,43 +332,24 @@ export class LaravelPlugin implements FrameworkPlugin {
       if (!source) continue;
 
       if (file.language === 'php') {
-        // Resolve Eloquent relationships
-        this.resolveEloquentEdges(source, file, ctx, edges);
+        // Core edge resolvers
+        resolveEloquentEdges(source, file, ctx, edges);
+        resolveFormRequestEdges(source, file, ctx, edges);
+        resolveEventEdges(source, file, ctx, edges);
+        resolveDispatchEdges(source, file, ctx, edges);
 
-        // Resolve FormRequest -> Controller edges
-        this.resolveFormRequestEdges(source, file, ctx, edges);
-
-        // Resolve Event listener edges
-        this.resolveEventEdges(source, file, ctx, edges);
-
-        // Resolve event dispatch edges
-        this.resolveDispatchEdges(source, file, ctx, edges);
-
-        // Resolve Livewire PHP-side edges
-        if (this.hasLivewire) {
-          this.resolveLivewirePhpEdges(source, file, ctx, edges, fileMap);
-        }
-
-        // Resolve Nova edges
-        if (this.hasNova) {
-          this.resolveNovaEdges(source, file, ctx, edges);
-        }
-
-        // Resolve Filament edges
-        if (this.hasFilament) {
-          this.resolveFilamentEdges(source, file, ctx, edges);
-        }
+        // Ecosystem edge resolvers
+        if (this.hasLivewire) resolveLivewirePhpEdges(source, file, ctx, edges, fileMap);
+        if (this.hasNova) resolveNovaEdges(source, file, ctx, edges);
+        if (this.hasFilament) resolveFilamentEdges(source, file, ctx, edges);
       }
 
-      // Resolve Livewire Blade-side edges (<livewire:name/>, wire:click)
+      // Blade-side resolvers
       if (this.hasLivewire && file.path.endsWith('.blade.php')) {
-        this.resolveLivewireBladeEdges(source, file, ctx, edges);
+        resolveLivewireBladeEdges(source, file, ctx, edges, this.livewireVersion ?? 3);
       }
-
-      // Pennant @feature directives in Blade
       if (this.hasPennant && file.path.endsWith('.blade.php')) {
-        const bladeUsages = extractFeatureBladeUsages(source);
-        for (const usage of bladeUsages) {
+        for (const usage of extractFeatureBladeUsages(source)) {
           edges.push({
             edgeType: 'feature_checked_by',
             metadata: { featureName: usage.name, filePath: file.path, line: usage.line, usageType: 'blade' },
@@ -490,162 +361,35 @@ export class LaravelPlugin implements FrameworkPlugin {
     return ok(edges);
   }
 
-  /** Get the parsed middleware config (for use by tools like get_request_flow). */
+  // ── Public getters (used by tools like get_request_flow) ───
+
   getMiddlewareConfig(): MiddlewareConfig | null {
     return this.middlewareConfig;
   }
 
-  /** Get the controller namespace from RouteServiceProvider (Laravel 6-8). */
   getControllerNamespace(): string | null {
     return this.controllerNamespace;
   }
 
-  /** Get bootstrap routing config (Laravel 11+). */
   getBootstrapRouting(): Record<string, string> | null {
     return this.bootstrapRouting;
   }
 
-  /**
-   * Resolve a middleware alias to its class FQN.
-   * Returns the alias itself if no resolution found.
-   */
   resolveMiddlewareAlias(alias: string): string {
     if (!this.middlewareConfig) return alias;
     return this.middlewareConfig.aliases[alias] ?? alias;
   }
 
-  /**
-   * Get the full middleware chain for a route, resolving aliases.
-   * Combines route-level middleware with group middleware.
-   */
   getMiddlewareChain(routeMiddleware?: string[]): string[] {
     if (!routeMiddleware || routeMiddleware.length === 0) return [];
     return routeMiddleware.map((m) => {
-      const baseName = m.split(':')[0]; // 'auth:sanctum' -> 'auth'
+      const baseName = m.split(':')[0];
       const resolved = this.resolveMiddlewareAlias(baseName);
       return resolved !== baseName ? `${resolved}${m.includes(':') ? ':' + m.split(':').slice(1).join(':') : ''}` : m;
     });
   }
 
-  private resolveEloquentEdges(
-    source: string,
-    file: { id: number; path: string },
-    ctx: ResolveContext,
-    edges: RawEdge[],
-  ): void {
-    const modelInfo = extractEloquentModel(source, file.path);
-    if (!modelInfo) return;
-
-    const sourceSymbol = ctx.getSymbolByFqn(modelInfo.fqn);
-    if (!sourceSymbol) return;
-
-    for (const rel of modelInfo.relationships) {
-      const targetSymbol = ctx.getSymbolByFqn(rel.relatedClass);
-      if (!targetSymbol) continue;
-
-      edges.push({
-        sourceNodeType: 'symbol',
-        sourceRefId: sourceSymbol.id,
-        targetNodeType: 'symbol',
-        targetRefId: targetSymbol.id,
-        edgeType: rel.edgeType,
-        metadata: {
-          method: rel.methodName,
-          relationType: rel.type,
-        },
-      });
-    }
-  }
-
-  private resolveFormRequestEdges(
-    source: string,
-    file: { id: number; path: string },
-    ctx: ResolveContext,
-    edges: RawEdge[],
-  ): void {
-    const usages = detectFormRequestUsage(source);
-    if (usages.length === 0) return;
-
-    // Find the class in this file
-    const symbols = ctx.getSymbolsByFile(file.id);
-    const controllerClass = symbols.find((s) => s.kind === 'class');
-    if (!controllerClass) return;
-
-    for (const usage of usages) {
-      const methodSymbol = symbols.find(
-        (s) => s.kind === 'method' && s.name === usage.methodName,
-      );
-      if (!methodSymbol) continue;
-
-      const requestSymbol = ctx.getSymbolByFqn(usage.requestClass);
-      if (!requestSymbol) continue;
-
-      edges.push({
-        sourceNodeType: 'symbol',
-        sourceRefId: methodSymbol.id,
-        targetNodeType: 'symbol',
-        targetRefId: requestSymbol.id,
-        edgeType: 'validates_with',
-        metadata: { method: usage.methodName },
-      });
-    }
-  }
-
-  private resolveEventEdges(
-    source: string,
-    file: { id: number; path: string },
-    ctx: ResolveContext,
-    edges: RawEdge[],
-  ): void {
-    const mappings = extractEventListeners(source);
-    if (mappings.length === 0) return;
-
-    for (const mapping of mappings) {
-      const eventSymbol = ctx.getSymbolByFqn(mapping.eventClass);
-      if (!eventSymbol) continue;
-
-      for (const listenerFqn of mapping.listenerClasses) {
-        const listenerSymbol = ctx.getSymbolByFqn(listenerFqn);
-        if (!listenerSymbol) continue;
-
-        edges.push({
-          sourceNodeType: 'symbol',
-          sourceRefId: listenerSymbol.id,
-          targetNodeType: 'symbol',
-          targetRefId: eventSymbol.id,
-          edgeType: 'listens_to',
-        });
-      }
-    }
-  }
-
-  private resolveDispatchEdges(
-    source: string,
-    file: { id: number; path: string },
-    ctx: ResolveContext,
-    edges: RawEdge[],
-  ): void {
-    const dispatches = detectEventDispatches(source);
-    if (dispatches.length === 0) return;
-
-    // Find the class in this file
-    const symbols = ctx.getSymbolsByFile(file.id);
-    const cls = symbols.find((s) => s.kind === 'class');
-    if (!cls) return;
-
-    for (const eventFqn of dispatches) {
-      const eventSymbol = ctx.getSymbolByFqn(eventFqn);
-      if (!eventSymbol) continue;
-
-      edges.push({
-        sourceNodeType: 'symbol',
-        sourceRefId: cls.id,
-        targetNodeType: 'symbol',
-        targetRefId: eventSymbol.id,
-        edgeType: 'dispatches',
-      });
-    }
-  }
+  // ── Private file-type checks ───────────────────────────────
 
   private isRouteFile(filePath: string): boolean {
     return /routes\/[\w-]+\.php$/.test(filePath);
@@ -665,307 +409,5 @@ export class LaravelPlugin implements FrameworkPlugin {
 
   private isRouteServiceProvider(filePath: string): boolean {
     return /Providers\/RouteServiceProvider\.php$/.test(filePath);
-  }
-
-  private processNovaNode(
-    source: string,
-    filePath: string,
-    result: FileParseResult,
-  ): void {
-    result.edges = result.edges ?? [];
-
-    const resource = extractNovaResource(source, filePath);
-    if (resource) {
-      result.frameworkRole = 'nova_resource';
-      if (resource.modelFqn) {
-        result.edges.push({ edgeType: 'nova_resource_for', metadata: { sourceFqn: resource.fqn, targetFqn: resource.modelFqn } });
-      }
-      for (const rel of resource.fieldRelationships) {
-        result.edges.push({ edgeType: 'nova_field_relationship', metadata: { sourceFqn: resource.fqn, targetFqn: rel.targetResourceFqn, fieldType: rel.fieldType } });
-      }
-      for (const a of resource.actions) {
-        result.edges.push({ edgeType: 'nova_action_on', metadata: { sourceFqn: a, targetFqn: resource.fqn } });
-      }
-      for (const f of resource.filters) {
-        result.edges.push({ edgeType: 'nova_filter_on', metadata: { sourceFqn: f, targetFqn: resource.fqn } });
-      }
-      for (const l of resource.lenses) {
-        result.edges.push({ edgeType: 'nova_lens_on', metadata: { sourceFqn: l, targetFqn: resource.fqn } });
-      }
-      return;
-    }
-
-    const metric = extractNovaMetric(source, filePath);
-    if (metric) {
-      result.frameworkRole = 'nova_metric';
-      for (const m of metric.queriedModels) {
-        result.edges.push({ edgeType: 'nova_metric_queries', metadata: { sourceFqn: metric.fqn, targetFqn: m } });
-      }
-    }
-  }
-
-  private resolveNovaEdges(
-    source: string,
-    file: { id: number; path: string },
-    ctx: ResolveContext,
-    edges: RawEdge[],
-  ): void {
-    const resource = extractNovaResource(source, file.path);
-    if (resource) {
-      const sourceSymbol = ctx.getSymbolByFqn(resource.fqn);
-      if (!sourceSymbol) return;
-
-      if (resource.modelFqn) {
-        const modelSymbol = ctx.getSymbolByFqn(resource.modelFqn);
-        if (modelSymbol) {
-          edges.push({ sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id, targetNodeType: 'symbol', targetRefId: modelSymbol.id, edgeType: 'nova_resource_for' });
-        }
-      }
-      for (const rel of resource.fieldRelationships) {
-        const targetSymbol = ctx.getSymbolByFqn(rel.targetResourceFqn);
-        if (targetSymbol) {
-          edges.push({ sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id, targetNodeType: 'symbol', targetRefId: targetSymbol.id, edgeType: 'nova_field_relationship', metadata: { fieldType: rel.fieldType } });
-        }
-      }
-      return;
-    }
-
-    const metric = extractNovaMetric(source, file.path);
-    if (metric) {
-      const metricSymbol = ctx.getSymbolByFqn(metric.fqn);
-      if (!metricSymbol) return;
-      for (const modelFqn of metric.queriedModels) {
-        const modelSymbol = ctx.getSymbolByFqn(modelFqn);
-        if (modelSymbol) {
-          edges.push({ sourceNodeType: 'symbol', sourceRefId: metricSymbol.id, targetNodeType: 'symbol', targetRefId: modelSymbol.id, edgeType: 'nova_metric_queries' });
-        }
-      }
-    }
-  }
-
-  private processFilamentNode(
-    source: string,
-    filePath: string,
-    result: FileParseResult,
-  ): void {
-    result.edges = result.edges ?? [];
-
-    const resource = extractFilamentResource(source, filePath);
-    if (resource) {
-      result.frameworkRole = 'filament_resource';
-      if (resource.modelFqn) {
-        result.edges.push({ edgeType: 'filament_resource_for', metadata: { sourceFqn: resource.fqn, targetFqn: resource.modelFqn } });
-      }
-      for (const rm of resource.relationManagers) {
-        result.edges.push({ edgeType: 'filament_relation_manager', metadata: { sourceFqn: resource.fqn, targetFqn: rm } });
-      }
-      for (const rel of resource.formRelationships) {
-        result.edges.push({ edgeType: 'filament_form_relationship', metadata: { sourceFqn: resource.fqn, relationName: rel.relationName } });
-      }
-      return;
-    }
-
-    const rm = extractFilamentRelationManager(source, filePath);
-    if (rm) {
-      result.frameworkRole = 'filament_relation_manager';
-      return;
-    }
-
-    const panel = extractFilamentPanel(source, filePath);
-    if (panel) {
-      result.frameworkRole = 'filament_panel';
-      for (const fqn of [...panel.resources, ...panel.pages, ...panel.widgets]) {
-        result.edges.push({ edgeType: 'filament_panel_registers', metadata: { sourceFqn: panel.fqn, targetFqn: fqn, panelId: panel.panelId } });
-      }
-      return;
-    }
-
-    const widget = extractFilamentWidget(source, filePath);
-    if (widget) {
-      result.frameworkRole = 'filament_widget';
-      const targets = [...(widget.modelFqn ? [widget.modelFqn] : []), ...widget.queriedModels];
-      for (const modelFqn of [...new Set(targets)]) {
-        result.edges.push({ edgeType: 'filament_widget_queries', metadata: { sourceFqn: widget.fqn, targetFqn: modelFqn } });
-      }
-    }
-  }
-
-  private resolveFilamentEdges(
-    source: string,
-    file: { id: number; path: string },
-    ctx: ResolveContext,
-    edges: RawEdge[],
-  ): void {
-    // Resource → Model
-    const resource = extractFilamentResource(source, file.path);
-    if (resource) {
-      if (resource.modelFqn) {
-        const sourceSymbol = ctx.getSymbolByFqn(resource.fqn);
-        const targetSymbol = ctx.getSymbolByFqn(resource.modelFqn);
-        if (sourceSymbol && targetSymbol) {
-          edges.push({
-            sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id,
-            targetNodeType: 'symbol', targetRefId: targetSymbol.id,
-            edgeType: 'filament_resource_for',
-          });
-        }
-      }
-      // Resource → RelationManagers
-      const resourceSymbol = ctx.getSymbolByFqn(resource.fqn);
-      if (resourceSymbol) {
-        for (const rmFqn of resource.relationManagers) {
-          const rmSymbol = ctx.getSymbolByFqn(rmFqn);
-          if (rmSymbol) {
-            edges.push({
-              sourceNodeType: 'symbol', sourceRefId: resourceSymbol.id,
-              targetNodeType: 'symbol', targetRefId: rmSymbol.id,
-              edgeType: 'filament_relation_manager',
-            });
-          }
-        }
-      }
-      return;
-    }
-
-    // Widget → Model
-    const widget = extractFilamentWidget(source, file.path);
-    if (widget) {
-      const widgetSymbol = ctx.getSymbolByFqn(widget.fqn);
-      if (!widgetSymbol) return;
-      const targets = [...(widget.modelFqn ? [widget.modelFqn] : []), ...widget.queriedModels];
-      for (const modelFqn of [...new Set(targets)]) {
-        const modelSymbol = ctx.getSymbolByFqn(modelFqn);
-        if (!modelSymbol) continue;
-        edges.push({
-          sourceNodeType: 'symbol', sourceRefId: widgetSymbol.id,
-          targetNodeType: 'symbol', targetRefId: modelSymbol.id,
-          edgeType: 'filament_widget_queries',
-        });
-      }
-    }
-  }
-
-  private isLivewireFile(filePath: string): boolean {
-    // v3: app/Livewire/**/*.php
-    // v2: app/Http/Livewire/**/*.php
-    return /app\/(?:Http\/)?Livewire\//.test(filePath);
-  }
-
-  private resolveLivewirePhpEdges(
-    source: string,
-    file: { id: number; path: string },
-    ctx: ResolveContext,
-    edges: RawEdge[],
-    fileMap: Map<string, { id: number; path: string }>,
-  ): void {
-    const componentInfo = extractLivewireComponent(source, file.path);
-    if (!componentInfo) return;
-
-    const sourceSymbol = ctx.getSymbolByFqn(componentInfo.fqn);
-    if (!sourceSymbol) return;
-
-    // livewire_renders: Component → Blade view file
-    const viewPath = componentInfo.viewName
-      ? `resources/views/${componentInfo.viewName.replace(/\./g, '/')}.blade.php`
-      : componentInfo.conventionViewPath;
-    const viewFile = fileMap.get(viewPath);
-    if (viewFile) {
-      edges.push({
-        sourceNodeType: 'symbol',
-        sourceRefId: sourceSymbol.id,
-        targetNodeType: 'file',
-        targetRefId: viewFile.id,
-        edgeType: 'livewire_renders',
-        metadata: { viewPath, convention: !componentInfo.viewName },
-      });
-    }
-
-    // livewire_dispatches
-    for (const dispatch of componentInfo.dispatches) {
-      edges.push({
-        sourceNodeType: 'symbol',
-        sourceRefId: sourceSymbol.id,
-        edgeType: 'livewire_dispatches',
-        metadata: { eventName: dispatch.eventName, method: dispatch.method },
-      });
-    }
-
-    // livewire_listens
-    for (const listener of componentInfo.listeners) {
-      edges.push({
-        sourceNodeType: 'symbol',
-        sourceRefId: sourceSymbol.id,
-        edgeType: 'livewire_listens',
-        metadata: { eventName: listener.eventName, handlerMethod: listener.handlerMethod },
-      });
-    }
-
-    // livewire_form: Component → Form class
-    if (componentInfo.formProperty) {
-      const formSymbol = ctx.getSymbolByFqn(componentInfo.formProperty.formClass);
-      if (formSymbol) {
-        edges.push({
-          sourceNodeType: 'symbol',
-          sourceRefId: sourceSymbol.id,
-          targetNodeType: 'symbol',
-          targetRefId: formSymbol.id,
-          edgeType: 'livewire_form',
-          metadata: { propertyName: componentInfo.formProperty.propertyName },
-        });
-      }
-    }
-
-    // livewire_uses_model: Component → Eloquent Model
-    for (const prop of componentInfo.properties) {
-      if (!prop.type || !/\\Models\\/.test(prop.type)) continue;
-      const modelSymbol = ctx.getSymbolByFqn(prop.type);
-      if (!modelSymbol) continue;
-      edges.push({
-        sourceNodeType: 'symbol',
-        sourceRefId: sourceSymbol.id,
-        targetNodeType: 'symbol',
-        targetRefId: modelSymbol.id,
-        edgeType: 'livewire_uses_model',
-        metadata: { propertyName: prop.name },
-      });
-    }
-  }
-
-  private resolveLivewireBladeEdges(
-    source: string,
-    file: { id: number; path: string },
-    ctx: ResolveContext,
-    edges: RawEdge[],
-  ): void {
-    const version = this.livewireVersion ?? 3;
-
-    // <livewire:component-name /> and @livewire('component-name')
-    const usages = extractLivewireBladeUsages(source);
-    for (const usage of usages) {
-      const componentFqn = resolveComponentName(usage.componentName, version);
-      const componentSymbol = ctx.getSymbolByFqn(componentFqn);
-      if (!componentSymbol) continue;
-
-      edges.push({
-        sourceNodeType: 'file',
-        sourceRefId: file.id,
-        targetNodeType: 'symbol',
-        targetRefId: componentSymbol.id,
-        edgeType: 'livewire_child_of',
-        metadata: { componentName: usage.componentName, line: usage.line, syntax: usage.syntax },
-      });
-    }
-
-    // wire:click="method" → livewire_action
-    const wireDirectives = extractWireDirectives(source);
-    for (const directive of wireDirectives) {
-      if (directive.directive === 'model') continue; // model is informational
-      edges.push({
-        sourceNodeType: 'file',
-        sourceRefId: file.id,
-        edgeType: 'livewire_action',
-        metadata: { directive: directive.directive, method: directive.value, line: directive.line },
-      });
-    }
   }
 }

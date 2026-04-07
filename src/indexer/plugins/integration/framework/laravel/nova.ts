@@ -11,7 +11,7 @@
  * - v2–v3: single fields() method (flat array)
  * - v4–v5: fields() + fieldsForIndex/Detail/Create/Update + Panel::make([...fields...])
  */
-import type { RawEdge } from '../../../../../plugin-api/types.js';
+import type { RawEdge, FileParseResult, ResolveContext } from '../../../../../plugin-api/types.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
@@ -142,7 +142,71 @@ export function extractNovaMetric(
   return { className, namespace, fqn, queriedModels };
 }
 
-// ─── Edge builders ────────────────────────────────────────────
+// ─── Node & edge processing (called from LaravelPlugin) ──────
+
+/** Pass-1: extract Nova metadata edges from a single file. */
+export function processNovaNode(
+  source: string,
+  filePath: string,
+  result: FileParseResult,
+): void {
+  result.edges = result.edges ?? [];
+
+  const resource = extractNovaResource(source, filePath);
+  if (resource) {
+    result.frameworkRole = 'nova_resource';
+    result.edges.push(...buildNovaResourceEdges(resource));
+    return;
+  }
+
+  const metric = extractNovaMetric(source, filePath);
+  if (metric) {
+    result.frameworkRole = 'nova_metric';
+    result.edges.push(...buildNovaMetricEdges(metric));
+  }
+}
+
+/** Pass-2: resolve Nova symbol-level edges using the full index. */
+export function resolveNovaEdges(
+  source: string,
+  file: { id: number; path: string },
+  ctx: ResolveContext,
+  edges: RawEdge[],
+): void {
+  const resource = extractNovaResource(source, file.path);
+  if (resource) {
+    const sourceSymbol = ctx.getSymbolByFqn(resource.fqn);
+    if (!sourceSymbol) return;
+
+    if (resource.modelFqn) {
+      const modelSymbol = ctx.getSymbolByFqn(resource.modelFqn);
+      if (modelSymbol) {
+        edges.push({ sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id, targetNodeType: 'symbol', targetRefId: modelSymbol.id, edgeType: 'nova_resource_for' });
+      }
+    }
+    for (const rel of resource.fieldRelationships) {
+      const targetSymbol = ctx.getSymbolByFqn(rel.targetResourceFqn);
+      if (targetSymbol) {
+        edges.push({ sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id, targetNodeType: 'symbol', targetRefId: targetSymbol.id, edgeType: 'nova_field_relationship', metadata: { fieldType: rel.fieldType } });
+      }
+    }
+    return;
+  }
+
+  const metric = extractNovaMetric(source, file.path);
+  if (metric) {
+    const metricSymbol = ctx.getSymbolByFqn(metric.fqn);
+    if (!metricSymbol) return;
+    for (const modelFqn of metric.queriedModels) {
+      const modelSymbol = ctx.getSymbolByFqn(modelFqn);
+      if (modelSymbol) {
+        edges.push({ sourceNodeType: 'symbol', sourceRefId: metricSymbol.id, targetNodeType: 'symbol', targetRefId: modelSymbol.id, edgeType: 'nova_metric_queries' });
+      }
+    }
+  }
+}
+
+// ─── Edge builders (used by processNovaNode) ─────────────────
 
 function buildNovaResourceEdges(resource: NovaResourceInfo): RawEdge[] {
   const edges: RawEdge[] = [];
