@@ -245,6 +245,123 @@ function benchmarkTaskContext(store: Store, symbols: SymbolInfo[], files: FileIn
   return buildScenario('composite_task', 'NL task → optimal code context (baseline: search + read 5-8 files + grep)', details);
 }
 
+function benchmarkFindUsages(store: Store, symbols: SymbolInfo[], count: number, rand: () => number): BenchmarkScenarioResult {
+  const sampled = sample(symbols.filter(s => s.kind === 'function' || s.kind === 'method'), count, rand);
+  const details = sampled.map(s => {
+    // Baseline: grep for symbol name across project → raw line matches with context
+    // Typically 5-15 matches × 5 lines context × 80 chars/line
+    const grepMatches = 10;
+    const grepContextLines = 5;
+    const grepChars = grepMatches * grepContextLines * 80;
+    const bl = estimateTokens(grepChars);
+    // trace-mcp: find_usages returns semantic refs (import, call, render, dispatch) — compact JSON
+    // ~20 chars per usage entry (file + line + kind)
+    const tm = estimateTokens(grepMatches * 60); // structured usage: file, line, kind, context snippet
+    return { query: s.name, file: s.file_path, baseline_tokens: bl, trace_mcp_tokens: tm, reduction_pct: reductionPct(bl, tm) };
+  });
+  return buildScenario('find_usages', 'All usages of a symbol (baseline: grep with context lines)', details);
+}
+
+function benchmarkContextBundle(store: Store, symbols: SymbolInfo[], count: number, rand: () => number): BenchmarkScenarioResult {
+  // Scenario: need 3 related symbols + their imports (typical get_context_bundle batch)
+  const funcs = symbols.filter(s => s.kind === 'function' || s.kind === 'method');
+  const batchSize = 3;
+  const batches = Math.min(count, Math.floor(funcs.length / batchSize));
+  const sampled = sample(funcs, batches * batchSize, rand);
+  const details: BenchmarkScenarioResult['details'] = [];
+
+  for (let i = 0; i < batches; i++) {
+    const group = sampled.slice(i * batchSize, (i + 1) * batchSize);
+    // Baseline: 3 × get_symbol calls (each returns full source) + each file's imports read separately
+    // Average: symbol source + 200 chars of import lines per symbol, but files may overlap
+    const totalSourceBytes = group.reduce((s, sym) => s + (sym.source_bytes || Math.round(sym.file_byte_length * 0.08)), 0);
+    const importOverhead = group.length * 200; // import lines read from each file
+    const bl = estimateTokens(totalSourceBytes + importOverhead);
+    // trace-mcp: get_context_bundle deduplicates shared imports, packs within token budget
+    // Typically 60% of raw source + imports due to deduplication
+    const tm = estimateTokens(Math.round((totalSourceBytes + importOverhead) * 0.6));
+    const names = group.map(g => g.name).join(', ');
+    details.push({ query: names, file: group[0].file_path, baseline_tokens: bl, trace_mcp_tokens: tm, reduction_pct: reductionPct(bl, tm) });
+  }
+
+  return buildScenario('context_bundle', 'Batch symbol+imports lookup (baseline: N × get_symbol + Read imports)', details);
+}
+
+function benchmarkBatchOverhead(symbols: SymbolInfo[], files: FileInfo[], count: number, rand: () => number): BenchmarkScenarioResult {
+  // Scenario: 3 independent queries that could be batched
+  // Batch saves per-call JSON overhead + MCP round-trip framing
+  const batchSize = 3;
+  const batches = Math.min(count, Math.floor(symbols.length / batchSize));
+  const sampledSymbols = sample(symbols, batches * batchSize, rand);
+  const details: BenchmarkScenarioResult['details'] = [];
+
+  for (let i = 0; i < batches; i++) {
+    const group = sampledSymbols.slice(i * batchSize, (i + 1) * batchSize);
+    // Each independent call has ~150 tokens of MCP framing overhead (tool_use block, result wrapper)
+    const perCallOverhead = 150;
+    const contentTokens = group.reduce((s, sym) => s + estimateTokens(sym.source_bytes || 200), 0);
+    const bl = contentTokens + batchSize * perCallOverhead; // 3 separate calls
+    const tm = contentTokens + perCallOverhead; // 1 batch call
+    const names = group.map(g => g.name).join(', ');
+    details.push({ query: names, file: group[0].file_path, baseline_tokens: bl, trace_mcp_tokens: tm, reduction_pct: reductionPct(bl, tm) });
+  }
+
+  return buildScenario('batch_overhead', 'N independent queries batched (baseline: N separate MCP round-trips)', details);
+}
+
+function benchmarkTypeHierarchy(store: Store, symbols: SymbolInfo[], count: number, rand: () => number): BenchmarkScenarioResult {
+  const types = symbols.filter(s => s.kind === 'interface' || s.kind === 'class');
+  const sampled = sample(types, count, rand);
+  const details = sampled.map(s => {
+    // Baseline: grep "implements InterfaceName" or "extends ClassName" + read each implementing file
+    // Find implementors via edges
+    const nodeRow = store.db.prepare(
+      'SELECT n.id FROM nodes n JOIN symbols sym ON n.ref_id = sym.id AND n.node_type = ? WHERE sym.symbol_id = ?',
+    ).get('symbol', s.symbol_id) as { id: number } | undefined;
+
+    let implFileBytes = 0;
+    let implCount = 0;
+    if (nodeRow) {
+      const impls = store.db.prepare(`
+        SELECT DISTINCT f.byte_length FROM edges e
+        JOIN nodes n2 ON e.source_node_id = n2.id AND n2.node_type = 'symbol'
+        JOIN symbols s2 ON n2.ref_id = s2.id
+        JOIN files f ON s2.file_id = f.id
+        WHERE e.target_node_id = ?
+          AND e.edge_type IN ('implements', 'extends')
+        LIMIT 10
+      `).all(nodeRow.id) as { byte_length: number }[];
+      implFileBytes = impls.reduce((sum, d) => sum + (d.byte_length || 0), 0);
+      implCount = impls.length;
+    }
+
+    // Baseline: grep output (matches across files) + reading each implementor file
+    const grepChars = Math.max(implCount, 3) * 5 * 80; // grep matches
+    const readChars = implFileBytes || s.file_byte_length * 3;
+    const bl = estimateTokens(grepChars + readChars);
+    // trace-mcp: returns compact hierarchy tree with signatures only
+    const tm = estimateTokens(Math.max(implCount, 3) * 120); // ~120 chars per implementor (signature + file + line)
+    return { query: s.name, file: s.file_path, baseline_tokens: bl, trace_mcp_tokens: tm, reduction_pct: reductionPct(bl, tm) };
+  });
+  return buildScenario('type_hierarchy', 'Find all implementations of interface/class (baseline: grep + read files)', details);
+}
+
+function benchmarkTestsFor(store: Store, symbols: SymbolInfo[], count: number, rand: () => number): BenchmarkScenarioResult {
+  const sampled = sample(symbols.filter(s => s.kind === 'function' || s.kind === 'method'), count, rand);
+  const details = sampled.map(s => {
+    // Baseline: glob("*.test.*", "*.spec.*") + grep(symbolName) in test files + read matched test files
+    // Typical: glob returns list (200 tokens) + grep matches in 2-3 test files (2400 tokens) + read 2 test files (4000 tokens)
+    const globTokens = 200;
+    const grepTokens = 3 * 5 * 80 / 3.5; // 3 files × 5 matches × 80 chars
+    const testFileReadTokens = 2 * estimateTokens(3000); // 2 test files × ~3KB avg
+    const bl = Math.round(globTokens + grepTokens + testFileReadTokens);
+    // trace-mcp: get_tests_for returns only relevant test blocks with assertions
+    const tm = estimateTokens(400); // compact: test name + file + line + assertion summary
+    return { query: s.name, file: s.file_path, baseline_tokens: bl, trace_mcp_tokens: tm, reduction_pct: reductionPct(bl, tm) };
+  });
+  return buildScenario('tests_for', 'Find tests for a symbol (baseline: glob + grep + read test files)', details);
+}
+
 export function runBenchmark(
   store: Store,
   opts: { queries?: number; seed?: number; projectName?: string; frameworks?: string[] } = {},
@@ -259,8 +376,13 @@ export function runBenchmark(
     benchmarkSymbolLookup(symbols, n, rand),
     benchmarkFileExploration(files, n, rand),
     benchmarkSearch(symbols, n, rand),
+    benchmarkFindUsages(store, symbols, n, rand),
+    benchmarkContextBundle(store, symbols, n, rand),
+    benchmarkBatchOverhead(symbols, files, n, rand),
     benchmarkImpactAnalysis(store, symbols, n, rand),
     benchmarkCallGraph(store, symbols, n, rand),
+    benchmarkTypeHierarchy(store, symbols, n, rand),
+    benchmarkTestsFor(store, symbols, n, rand),
     benchmarkTaskContext(store, symbols, files, n, rand),
   ];
 
