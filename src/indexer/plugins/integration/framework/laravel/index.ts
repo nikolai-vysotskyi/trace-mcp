@@ -39,6 +39,16 @@ import {
 } from './broadcasting.js';
 import { extractDataClass, buildDataClassEdges } from './laravel-data.js';
 import {
+  extractHorizonConfig,
+  extractHorizonJob,
+  buildHorizonJobEdges,
+  buildHorizonConfigEdges,
+  buildHorizonConfigSymbols,
+} from './horizon.js';
+import { extractBillableModel, extractCashierWebhook, buildBillableModelEdges } from './cashier.js';
+import { extractSearchableModel, buildSearchableModelEdges, buildSearchableModelSymbols } from './scout.js';
+import { extractSocialiteUsage, buildSocialiteEdges } from './socialite.js';
+import {
   extractFeatureDefinitions,
   extractFeatureUsages,
   extractFeatureBladeUsages,
@@ -91,6 +101,18 @@ export class LaravelPlugin implements FrameworkPlugin {
   /** Whether spatie/laravel-data is detected. */
   private hasLaravelData = false;
 
+  /** Whether laravel/horizon is detected. */
+  private hasHorizon = false;
+
+  /** Whether laravel/cashier is detected. */
+  private hasCashier = false;
+
+  /** Whether laravel/scout is detected. */
+  private hasScout = false;
+
+  /** Whether laravel/socialite is detected. */
+  private hasSocialite = false;
+
   /** Whether laravel/reverb or pusher/pusher-php-server is detected. */
   private hasBroadcasting = false;
 
@@ -126,6 +148,10 @@ export class LaravelPlugin implements FrameworkPlugin {
       this.livewireVersion = /^\^?3|^3/.test(lwVersion) ? 3 : 2;
     }
     if (deps['spatie/laravel-data']) this.hasLaravelData = true;
+    if (deps['laravel/horizon']) this.hasHorizon = true;
+    if (deps['laravel/cashier'] || deps['laravel/cashier-stripe']) this.hasCashier = true;
+    if (deps['laravel/scout']) this.hasScout = true;
+    if (deps['laravel/socialite']) this.hasSocialite = true;
     if (deps['laravel/reverb'] || deps['pusher/pusher-php-server']) this.hasBroadcasting = true;
     if (deps['laravel/pennant']) this.hasPennant = true;
 
@@ -177,9 +203,22 @@ export class LaravelPlugin implements FrameworkPlugin {
         { name: 'channel_authorized_by', category: 'broadcasting', description: 'Channel authorization callback or class' },
         { name: 'broadcast_as', category: 'broadcasting', description: 'Event broadcast name override' },
         // laravel-data edges
-        { name: 'data_wraps', category: 'laravel-data', description: 'Data class wraps an Eloquent model' },
-        { name: 'data_property_type', category: 'laravel-data', description: 'Data class property references another Data class' },
-        { name: 'data_collection', category: 'laravel-data', description: 'DataCollection<T> references a Data class' },
+        { name: 'data_nests', category: 'laravel-data', description: 'Data class property references another Data class' },
+        { name: 'data_collects', category: 'laravel-data', description: 'DataCollection<T> references a Data class' },
+        { name: 'data_maps_from', category: 'laravel-data', description: 'Data class maps from an Eloquent model' },
+        // Horizon edges
+        { name: 'horizon_job_on_queue', category: 'horizon', description: 'Job dispatched to a specific queue' },
+        { name: 'horizon_job_connection', category: 'horizon', description: 'Job uses a specific queue connection' },
+        { name: 'horizon_supervises_queue', category: 'horizon', description: 'Horizon supervisor manages a queue' },
+        // Cashier edges
+        { name: 'cashier_billable', category: 'cashier', description: 'Model uses Billable trait (Stripe integration)' },
+        { name: 'cashier_subscription', category: 'cashier', description: 'Model uses subscription method' },
+        { name: 'cashier_webhook', category: 'cashier', description: 'Route handles Cashier/Stripe webhook' },
+        // Scout edges
+        { name: 'scout_searchable', category: 'scout', description: 'Model uses Searchable trait (full-text search index)' },
+        // Socialite edges
+        { name: 'socialite_uses_provider', category: 'socialite', description: 'Controller uses Socialite OAuth provider' },
+        { name: 'socialite_custom_provider', category: 'socialite', description: 'Custom Socialite OAuth provider class' },
       ],
     };
   }
@@ -308,6 +347,60 @@ export class LaravelPlugin implements FrameworkPlugin {
         result.frameworkRole = 'data_class';
         result.edges = result.edges ?? [];
         result.edges.push(...buildDataClassEdges(dataInfo));
+      }
+    }
+
+    // ── Horizon ──────────────────────────────────────────────
+    if (this.hasHorizon) {
+      if (filePath.includes('config/horizon.php')) {
+        const config = extractHorizonConfig(source);
+        if (config) {
+          result.frameworkRole = 'horizon_config';
+          result.edges = result.edges ?? [];
+          result.edges.push(...buildHorizonConfigEdges(config));
+          result.symbols.push(...buildHorizonConfigSymbols(config));
+        }
+      }
+      const jobInfo = extractHorizonJob(source, filePath);
+      if (jobInfo) {
+        result.edges = result.edges ?? [];
+        result.edges.push(...buildHorizonJobEdges(jobInfo));
+      }
+    }
+
+    // ── Cashier ──────────────────────────────────────────────
+    if (this.hasCashier) {
+      const billableInfo = extractBillableModel(source, filePath);
+      if (billableInfo) {
+        result.edges = result.edges ?? [];
+        result.edges.push(...buildBillableModelEdges(billableInfo));
+      }
+      const webhookType = extractCashierWebhook(source);
+      if (webhookType) {
+        result.edges = result.edges ?? [];
+        result.edges.push({
+          edgeType: 'cashier_webhook',
+          metadata: { filePath, type: webhookType },
+        });
+      }
+    }
+
+    // ── Scout ────────────────────────────────────────────────
+    if (this.hasScout) {
+      const searchableInfo = extractSearchableModel(source, filePath);
+      if (searchableInfo) {
+        result.edges = result.edges ?? [];
+        result.edges.push(...buildSearchableModelEdges(searchableInfo));
+        result.symbols.push(...buildSearchableModelSymbols(searchableInfo));
+      }
+    }
+
+    // ── Socialite ────────────────────────────────────────────
+    if (this.hasSocialite) {
+      const socialiteInfo = extractSocialiteUsage(source, filePath);
+      if (socialiteInfo) {
+        result.edges = result.edges ?? [];
+        result.edges.push(...buildSocialiteEdges(socialiteInfo, filePath));
       }
     }
 
