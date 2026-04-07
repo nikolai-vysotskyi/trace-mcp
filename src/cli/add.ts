@@ -7,7 +7,7 @@ import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as p from '@clack/prompts';
-import { findProjectRoot, discoverChildProjects } from '../project-root.js';
+import { findProjectRoot, discoverChildProjects, hasRootMarkers } from '../project-root.js';
 import { detectProject } from '../init/detector.js';
 import { generateConfig } from '../init/config-generator.js';
 import { ensureGlobalDirs, getDbPath } from '../global.js';
@@ -73,21 +73,38 @@ export const addCommand = new Command('add')
     }
 
     // 1. Detect project root (or discover child projects)
+    //    Priority: current dir > already-registered parent > multi-root discovery
     let projectRoot: string | undefined;
-    try {
-      projectRoot = findProjectRoot(resolvedDir);
-    } catch {
-      // No root markers — try multi-root discovery
-      const children = discoverChildProjects(resolvedDir);
-      if (children.length > 0) {
-        await handleMultiRoot(resolvedDir, children, opts);
-        return;
+    if (hasRootMarkers(resolvedDir)) {
+      // Current directory has root markers — use it directly, don't walk up
+      projectRoot = resolvedDir;
+    } else {
+      // No markers in current dir — check if a parent is already registered
+      try {
+        const parentRoot = findProjectRoot(resolvedDir);
+        const parentEntry = getProject(parentRoot);
+        if (parentEntry) {
+          // Parent is already registered — use it
+          projectRoot = parentRoot;
+        }
+      } catch {
+        // No root markers found anywhere up the tree
       }
-      console.error(
-        `Could not find project root from ${resolvedDir}, ` +
-        `and no child projects discovered in subdirectories.`,
-      );
-      process.exit(1);
+
+      if (!projectRoot) {
+        // Try multi-root discovery in subdirectories
+        const children = discoverChildProjects(resolvedDir);
+        if (children.length > 0) {
+          await handleMultiRoot(resolvedDir, children, opts);
+          return;
+        }
+        console.error(
+          `Could not find project root from ${resolvedDir}. ` +
+          `No root markers (package.json, .git, composer.json, etc.) found in this directory, ` +
+          `and no child projects discovered in subdirectories.`,
+        );
+        process.exit(1);
+      }
     }
 
     const isInteractive = !opts.json;

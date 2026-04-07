@@ -20,7 +20,7 @@ import type { DetectedMcpClient, InitStepResult, InitReport } from '../init/type
 import { detectMcpClients, detectGuardHook, detectProject } from '../init/detector.js';
 import { detectConflicts } from '../init/conflict-detector.js';
 import { fixAllConflicts } from '../init/conflict-resolver.js';
-import { findProjectRoot, discoverChildProjects } from '../project-root.js';
+import { findProjectRoot, discoverChildProjects, hasRootMarkers } from '../project-root.js';
 import { generateConfig } from '../init/config-generator.js';
 import { registerProject, getProject, listProjects, updateLastIndexed, unregisterProject } from '../registry.js';
 import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
@@ -447,10 +447,21 @@ async function registerAndIndexProject(
   opts: { dryRun?: boolean; force?: boolean },
 ): Promise<InitStepResult> {
   let projectRoot: string | null = null;
-  try {
-    projectRoot = findProjectRoot(dir);
-  } catch {
-    // No root markers — try multi-root discovery
+  const resolvedDir = path.resolve(dir);
+  if (hasRootMarkers(resolvedDir)) {
+    // Current directory has root markers — use it directly
+    projectRoot = resolvedDir;
+  } else {
+    // No markers in current dir — only walk up if parent is already registered
+    try {
+      const parentRoot = findProjectRoot(resolvedDir);
+      const parentEntry = getProject(parentRoot);
+      if (parentEntry) {
+        projectRoot = parentRoot;
+      }
+    } catch {
+      // No root markers found anywhere up the tree
+    }
   }
 
   // Multi-root fallback: discover child projects
