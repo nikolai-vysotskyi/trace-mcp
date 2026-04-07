@@ -67,7 +67,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Code-graph-aware memory | ✅ tied to symbols & deps | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only |
 | Token usage analytics | ✅ per-tool cost breakdown | partial | ❌ | ❌ | ❌ | ❌ |
 | Optimization recommendations | ✅ waste detection, A/B savings | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Code intelligence included | ✅ 100+ tools | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Code intelligence included | ✅ 120+ tools | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Knowledge graph | ✅ code dependency graph | ❌ | ✅ temporal | ❌ | ✅ project-level | ❌ |
 | Works as standalone memory | ❌ code-focused | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped | ✅ general-purpose |
 | Written in | TypeScript | TypeScript | TS + Python | Go | Python | TypeScript |
@@ -102,7 +102,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | 68 | ~10 | 66 | ~15 | 32 | ~10 |
 | Framework integrations | 53 (14 fw + 7 ORM + 12 UI + 20 other) | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Cross-language edges | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| MCP tools | 100+ | ~15 | ~20 | ~25 | 90 | 139 |
+| MCP tools | 120+ | ~15 | ~20 | ~25 | 90 | 139 |
 | Session memory | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Multi-repo federation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -120,31 +120,36 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 
 AI agents burn tokens reading files they don't need. trace-mcp returns **precision context** — only the symbols, edges, and signatures relevant to the query.
 
-**Benchmark: trace-mcp's own codebase** (651 files, 3,342 symbols):
+**Benchmark: trace-mcp's own codebase** (653 files, 3,493 symbols):
 
 ```
 Task                  Without trace-mcp    With trace-mcp    Reduction
 ─────────────────────────────────────────────────────────────────────
-Symbol lookup              41,211 tokens     2,098 tokens      94.9%
-File exploration           16,366 tokens       762 tokens      95.3%
+Symbol lookup              42,518 tokens     7,353 tokens      82.7%
+File exploration           27,486 tokens       548 tokens      98.0%
 Search                     22,860 tokens     8,000 tokens      65.0%
-Impact analysis            96,717 tokens     4,841 tokens      95.0%
-Call graph                178,661 tokens    10,723 tokens      94.0%
-Composite task             71,076 tokens     2,033 tokens      97.1%
+Find usages                11,430 tokens     1,720 tokens      85.0%
+Context bundle             12,847 tokens     4,164 tokens      67.6%
+Batch overhead             16,831 tokens     9,031 tokens      46.3%
+Impact analysis            49,141 tokens     2,461 tokens      95.0%
+Call graph                178,345 tokens    10,704 tokens      94.0%
+Type hierarchy             94,762 tokens     1,030 tokens      98.9%
+Tests for                  22,590 tokens     1,150 tokens      94.9%
+Composite task             93,634 tokens     3,836 tokens      95.9%
 ─────────────────────────────────────────────────────────────────────
-Total                     426,891 tokens    28,457 tokens      93.3%
+Total                     572,444 tokens    49,997 tokens      91.3%
 ```
 
-**93% fewer tokens** to accomplish the same code understanding tasks. That's ~398K tokens saved per exploration session — more headroom for actual coding, fewer context window evictions, lower API costs.
+**91% fewer tokens** to accomplish the same code understanding tasks. That's ~522K tokens saved per exploration session — more headroom for actual coding, fewer context window evictions, lower API costs.
 
-**Savings scale with project size.** On a 650-file project, trace-mcp saves ~398K tokens. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
+**Savings scale with project size.** On a 650-file project, trace-mcp saves ~522K tokens. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
 
 **Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, with 90%+ token reduction.
 
 <details>
 <summary>Methodology</summary>
 
-Measured using `benchmark_project` — runs six real task categories (symbol lookup, file exploration, text search, impact analysis, call graph traversal, composite task context) against the indexed project. "Without trace-mcp" = estimated tokens from equivalent Read/Grep/Glob operations (full file reads, grep output). "With trace-mcp" = actual tokens returned by trace-mcp tools (targeted symbols, outlines, graph results). Token counts estimated using trace-mcp's built-in savings tracker.
+Measured using `benchmark_project` — runs eleven real task categories (symbol lookup, file exploration, text search, find usages, context bundle, batch overhead, impact analysis, call graph traversal, type hierarchy, tests-for, composite task context) against the indexed project. "Without trace-mcp" = estimated tokens from equivalent Read/Grep/Glob operations (full file reads, grep output). "With trace-mcp" = actual tokens returned by trace-mcp tools (targeted symbols, outlines, graph results). Token counts estimated using trace-mcp's built-in savings tracker.
 
 Reproduce it yourself:
 ```
@@ -390,7 +395,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         44+ tools · 2 resources
+         120+ tools · 2 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -406,9 +411,11 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 | Document | Description |
 |---|---|
 | [Supported frameworks](docs/supported-frameworks.md) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](docs/tools-reference.md) | All 38 MCP tools with descriptions and usage examples |
+| [Tools reference](docs/tools-reference.md) | All 120+ MCP tools with descriptions and usage examples |
 | [Configuration](docs/configuration.md) | Config options, AI setup, environment variables, security settings |
 | [Architecture](docs/architecture.md) | How indexing works, plugin system, project structure, tech stack |
+| [Analytics](docs/analytics.md) | Session analytics, token savings tracking, optimization reports, benchmarks |
+| [System prompt routing](docs/tweakcc.md) | Optional tweakcc integration for maximum tool routing enforcement |
 | [Development](docs/development.md) | Building, testing, contributing, adding new plugins |
 
 ---
