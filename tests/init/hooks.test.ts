@@ -70,7 +70,7 @@ describe('installGuardHook', () => {
     expect(writeCall).toBeDefined();
     const settings = JSON.parse(String(writeCall![1]).trim());
     expect(settings.hooks.PreToolUse).toHaveLength(1);
-    expect(settings.hooks.PreToolUse[0].matcher).toBe('Read|Grep|Glob|Bash');
+    expect(settings.hooks.PreToolUse[0].matcher).toBe('Read|Grep|Glob|Bash|Agent');
   });
 
   it('reports updated when hook already exists at dest', () => {
@@ -230,6 +230,6 @@ describe('isHookOutdated', () => {
 
   it('returns false for matching version', () => {
     // The current version is exported from types
-    expect(isHookOutdated('0.4.0')).toBe(false);
+    expect(isHookOutdated('0.5.0')).toBe(false);
   });
 });

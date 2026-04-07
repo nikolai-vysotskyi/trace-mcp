@@ -332,7 +332,7 @@ trace-mcp federation impact                  # Cross-repo impact analysis
   --json                       # Output as JSON
 
 # Hooks
-trace-mcp setup-hooks          # Install guard hook
+trace-mcp setup-hooks          # Install guard hook (blocks Read/Grep/Glob/Bash on code + Agent(Explore))
   --global                     # Install globally
   --uninstall                  # Remove hook
 

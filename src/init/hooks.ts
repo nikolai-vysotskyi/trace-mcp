@@ -42,7 +42,7 @@ const CLIENTS: ClientDir[] = [
 interface HookDescriptor {
   scriptName: string;           // e.g. 'trace-mcp-guard'
   settingsKey: string;          // e.g. 'PreToolUse' or 'PostToolUse' or 'PreCompact'
-  matcher?: string;             // e.g. 'Read|Grep|Glob|Bash' (optional — PreCompact has none)
+  matcher?: string;             // e.g. 'Read|Grep|Glob|Bash|Agent' (optional — PreCompact has none)
   version: string;
   dryRunLabel: string;
   /** If true, use plain command (no CLAUDE_TOOL_NAME env var) */
@@ -52,7 +52,7 @@ interface HookDescriptor {
 const GUARD_HOOK: HookDescriptor = {
   scriptName: 'trace-mcp-guard',
   settingsKey: 'PreToolUse',
-  matcher: 'Read|Grep|Glob|Bash',
+  matcher: 'Read|Grep|Glob|Bash|Agent',
   version: GUARD_HOOK_VERSION,
   dryRunLabel: 'Would install guard hook',
 };

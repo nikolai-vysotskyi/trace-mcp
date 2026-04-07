@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.4.0
+# trace-mcp-guard v0.5.0
 # trace-mcp PreToolUse guard
 # Blocks Read/Grep/Glob/Bash on source code files → redirects to trace-mcp tools.
 # Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
@@ -197,6 +197,34 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
     deny \
       "Use trace-mcp instead of shell commands for code exploration." \
       "trace-mcp has structured tools for this:\\n- search — find symbols by name\\n- get_symbol — read a specific symbol\\n- get_outline — file structure\\n- find_usages — all usages of a symbol\\nUse Bash only for builds, tests, git, and system commands."
+  fi
+
+  exit 0
+fi
+
+# --- Agent ---
+# Block Agent(Explore) and exploration-style Agent(general-purpose).
+# Each Agent subprocess costs ~50K tokens overhead (system prompt + CLAUDE.md + memory).
+# trace-mcp tools (get_task_context, get_feature_context, batch) do the same for ~4K tokens.
+if [[ "$TOOL_NAME" == "Agent" ]]; then
+  SUBAGENT_TYPE=$(echo "$INPUT" | jq -r '.tool_input.subagent_type // "general-purpose"')
+  DESCRIPTION=$(echo "$INPUT" | jq -r '.tool_input.description // ""' | tr '[:upper:]' '[:lower:]')
+
+  # Always block Explore agents — trace-mcp replaces them entirely
+  if [[ "$SUBAGENT_TYPE" == "Explore" ]]; then
+    deny \
+      "Agent(Explore) wastes ~50K tokens on overhead. Use trace-mcp tools instead (~4K tokens)." \
+      "trace-mcp alternatives:\\n- get_task_context { \\\"task\\\": \\\"your exploration goal\\\" } — focused context in one call\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — NL query → relevant symbols\\n- batch with multiple search/get_outline/get_symbol calls — parallel lookups\\n- get_project_map { \\\"summary_only\\\": true } — project overview"
+  fi
+
+  # Block general-purpose agents doing code exploration (not coding/testing/research)
+  if [[ "$SUBAGENT_TYPE" == "general-purpose" ]]; then
+    EXPLORE_RE='(explore|investigate|understand|analyze|analyse|audit|review|check .* (code|structure|architecture|implementation|pattern)|find .* (code|pattern|usage|definition)|study|deep dive|map .* (dependencies|imports)|catalog|inspect)'
+    if echo "$DESCRIPTION" | grep -qiE "$EXPLORE_RE"; then
+      deny \
+        "Agent(general-purpose) for code exploration wastes ~50K tokens. Use trace-mcp tools instead." \
+        "trace-mcp alternatives:\\n- get_task_context { \\\"task\\\": \\\"${DESCRIPTION}\\\" } — replaces exploration agents (~4K tokens)\\n- get_feature_context { \\\"description\\\": \\\"...\\\" } — NL query → relevant code\\n- find_usages / get_call_graph / get_change_impact — relationship analysis\\n- batch { \\\"calls\\\": [...] } — multiple lookups in one call\\nAgent is OK for: writing code, running tests, web research, Plan mode."
+    fi
   fi
 
   exit 0

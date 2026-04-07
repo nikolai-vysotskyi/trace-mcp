@@ -1,7 +1,7 @@
 @echo off
-REM trace-mcp-guard v0.4.0
+REM trace-mcp-guard v0.5.0
 REM trace-mcp PreToolUse guard (Windows)
-REM Blocks Read/Grep/Glob/Bash on source code files - redirects to trace-mcp tools.
+REM Blocks Read/Grep/Glob/Bash on source code files + Agent(Explore) subagents - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
 REM
 REM Consultation markers: trace-mcp server writes markers when tools access files.
@@ -137,6 +137,32 @@ if %errorlevel%==0 goto :allow
 
 call :deny "Use trace-mcp for code file discovery - it knows your project structure." "trace-mcp alternatives: get_project_map, search with file_pattern, get_outline. Use Glob only for non-code file patterns."
 goto :cleanup
+
+:check_agent
+REM --- Agent ---
+REM Block Agent(Explore) and exploration-style Agent(general-purpose).
+REM Each Agent subprocess costs ~50K tokens overhead (system prompt + CLAUDE.md + memory).
+if /i not "%TOOL_NAME%"=="Agent" goto :check_bash
+
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.subagent_type } catch { 'general-purpose' }"`) do set "SUBAGENT_TYPE=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.description"`) do set "DESCRIPTION=%%i"
+
+REM Always block Explore agents
+if /i "%SUBAGENT_TYPE%"=="Explore" (
+    call :deny "Agent(Explore) wastes ~50K tokens on overhead. Use trace-mcp tools instead (~4K tokens)." "trace-mcp alternatives: get_task_context, get_feature_context, batch with multiple search/get_outline/get_symbol calls, get_project_map."
+    goto :cleanup
+)
+
+REM Block general-purpose agents doing code exploration
+if /i "%SUBAGENT_TYPE%"=="general-purpose" (
+    echo "%DESCRIPTION%" | findstr /i /r "explore investigate understand analyze analyse audit review study inspect catalog" >nul 2>&1
+    if !errorlevel!==0 (
+        call :deny "Agent(general-purpose) for code exploration wastes ~50K tokens. Use trace-mcp tools instead." "trace-mcp alternatives: get_task_context, get_feature_context, find_usages, get_call_graph, batch. Agent is OK for: writing code, running tests, web research, Plan mode."
+        goto :cleanup
+    )
+)
+
+goto :allow
 
 :check_bash
 REM --- Bash ---
