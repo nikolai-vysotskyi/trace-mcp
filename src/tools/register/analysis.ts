@@ -9,6 +9,7 @@ import { getFileOwnership, getSymbolOwnership } from '../git/git-ownership.js';
 import { getComplexityTrend } from '../analysis/complexity-trend.js';
 import { getCouplingTrend, getSymbolComplexityTrend } from '../analysis/history.js';
 import { checkSymbolForDuplicates } from '../analysis/duplication.js';
+import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerAnalysisTools(server: McpServer, ctx: ServerContext): void {
   const { store, registry, projectRoot, guardPath, j, jh } = ctx;
@@ -133,13 +134,14 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     {},
     async () => {
       const cycles = getDependencyCycles(store);
+      const stats = store.getStats();
       return {
         content: [{
           type: 'text',
           text: jh('get_dependency_cycles', {
             total_cycles: cycles.length,
             cycles,
-            ...(cycles.length === 0 ? { message: 'No circular dependencies found' } : {}),
+            ...(cycles.length === 0 ? { evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'get_circular_imports') } : {}),
           }),
         }],
       };

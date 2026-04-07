@@ -313,6 +313,26 @@ CREATE TABLE IF NOT EXISTS community_members (
 CREATE INDEX IF NOT EXISTS idx_cm_community ON community_members(community_id);
 
 -- ============================================================
+-- PROGRESS & SERVER STATE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS indexing_progress (
+    pipeline TEXT PRIMARY KEY,
+    phase TEXT NOT NULL DEFAULT 'idle',
+    processed INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL DEFAULT 0,
+    started_at INTEGER NOT NULL DEFAULT 0,
+    completed_at INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS server_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- ============================================================
 -- SCHEMA VERSION
 -- ============================================================
 
@@ -1035,6 +1055,13 @@ function seedDatabase(db: Database.Database): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_files_workspace ON files(workspace);
     CREATE INDEX IF NOT EXISTS idx_edges_cross_ws ON edges(is_cross_ws) WHERE is_cross_ws = 1;
+  `);
+
+  // Pre-seed progress rows for all three pipelines (mirrors migration 17)
+  db.exec(`
+    INSERT OR IGNORE INTO indexing_progress (pipeline) VALUES ('indexing');
+    INSERT OR IGNORE INTO indexing_progress (pipeline) VALUES ('summarization');
+    INSERT OR IGNORE INTO indexing_progress (pipeline) VALUES ('embedding');
   `);
 }
 

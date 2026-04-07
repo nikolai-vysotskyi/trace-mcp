@@ -9,16 +9,61 @@ import path from 'node:path';
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.svn', '__pycache__', '.tox']);
 
 const ROOT_MARKERS = [
+  // VCS
   '.git',
+  // JavaScript / TypeScript
   'package.json',
+  // Go
   'go.mod',
+  // Rust
   'Cargo.toml',
+  // PHP
   'composer.json',
+  // Python
   'pyproject.toml',
+  'setup.py',
+  'setup.cfg',
+  // Ruby
   'Gemfile',
+  // Java / Kotlin (Maven)
   'pom.xml',
+  // Java / Kotlin (Gradle)
   'build.gradle',
   'build.gradle.kts',
+  // C / C++ / Fortran
+  'CMakeLists.txt',
+  'meson.build',
+  // C# / F#
+  'Directory.Build.props',
+  // Dart / Flutter
+  'pubspec.yaml',
+  // Elixir
+  'mix.exs',
+  // Erlang
+  'rebar.config',
+  // Scala
+  'build.sbt',
+  // Swift
+  'Package.swift',
+  // Haskell
+  'stack.yaml',
+  'cabal.project',
+  // OCaml
+  'dune-project',
+  // Clojure
+  'deps.edn',
+  // Julia
+  'Project.toml',
+  // Zig
+  'build.zig',
+  // Gleam
+  'gleam.toml',
+  // Elm
+  'elm.json',
+  // Nix
+  'flake.nix',
+  // GDScript (Godot)
+  'project.godot',
 ];
 
 /**
