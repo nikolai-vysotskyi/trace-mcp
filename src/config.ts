@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { ok, err, type TraceMcpResult } from './errors.js';
 import { configError } from './errors.js';
 import { logger } from './logger.js';
-import { GLOBAL_CONFIG_PATH, ensureGlobalDirs, stripJsonComments } from './global.js';
+import { GLOBAL_CONFIG_PATH, stripJsonComments } from './global.js';
 
 const SecurityConfigSchema = z.object({
   secret_patterns: z.array(z.string()).optional(),
@@ -296,21 +296,8 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
   }
 }
 
-/** Save per-project config section in the global config file. */
-export function saveProjectConfig(projectRoot: string, config: Record<string, unknown>): void {
-  ensureGlobalDirs();
-  const existing = loadGlobalConfigRaw();
-  const projects = (existing.projects as Record<string, unknown>) ?? {};
-  projects[projectRoot] = config;
-  existing.projects = projects;
-  fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(existing, null, 2) + '\n');
-}
+/** Save per-project config section in the global config file (JSONC-safe). */
+export { saveProjectConfigJsonc as saveProjectConfig } from './config-jsonc.js';
 
-/** Remove a per-project config section from the global config file. */
-export function removeProjectConfig(projectRoot: string): void {
-  const existing = loadGlobalConfigRaw();
-  const projects = (existing.projects as Record<string, unknown>) ?? {};
-  delete projects[projectRoot];
-  existing.projects = projects;
-  fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(existing, null, 2) + '\n');
-}
+/** Remove a per-project config section from the global config file (JSONC-safe). */
+export { removeProjectConfigJsonc as removeProjectConfig } from './config-jsonc.js';
