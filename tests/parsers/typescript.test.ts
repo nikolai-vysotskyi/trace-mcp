@@ -240,3 +240,53 @@ describe('TypeScript plugin — symbol ID format', () => {
     expect(method.symbolId).toBe('src/foo.ts::Foo::bar#method');
   });
 });
+
+// ---------- decorators ----------
+
+describe('TypeScript plugin — decorator extraction', () => {
+  it('extracts class decorators', async () => {
+    const code = `@Injectable()
+export class MyService {
+  handle(): void {}
+}`;
+    const result = await parse(code);
+    const cls = findSymbol(result.symbols, 'MyService', 'class');
+    expect(cls.metadata?.decorators).toContain('Injectable');
+  });
+
+  it('extracts method decorators', async () => {
+    const code = `export class Controller {
+  @Get('/users')
+  getUsers(): void {}
+
+  @Post('/users')
+  createUser(): void {}
+}`;
+    const result = await parse(code);
+    const getMethod = findSymbol(result.symbols, 'getUsers', 'method');
+    expect(getMethod.metadata?.decorators).toContain('Get');
+
+    const postMethod = findSymbol(result.symbols, 'createUser', 'method');
+    expect(postMethod.metadata?.decorators).toContain('Post');
+  });
+
+  it('extracts multiple decorators on a class', async () => {
+    const code = `@Controller('/api')
+@UseGuards(AuthGuard)
+export class ApiController {
+  handle(): void {}
+}`;
+    const result = await parse(code);
+    const cls = findSymbol(result.symbols, 'ApiController', 'class');
+    expect(cls.metadata?.decorators).toBeDefined();
+    expect(cls.metadata?.decorators).toContain('Controller');
+    expect(cls.metadata?.decorators).toContain('UseGuards');
+  });
+
+  it('omits decorators field when no decorators present', async () => {
+    const code = `export class PlainClass { run(): void {} }`;
+    const result = await parse(code);
+    const cls = findSymbol(result.symbols, 'PlainClass', 'class');
+    expect(cls.metadata?.decorators).toBeUndefined();
+  });
+});

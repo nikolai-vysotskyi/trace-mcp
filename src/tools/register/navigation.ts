@@ -66,13 +66,14 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       file_pattern: z.string().max(512).optional().describe('Filter by file path pattern'),
       implements: z.string().max(256).optional().describe('Filter to classes implementing this interface'),
       extends: z.string().max(256).optional().describe('Filter to classes/interfaces extending this name'),
+      decorator: z.string().max(256).optional().describe('Filter to symbols with this decorator/annotation/attribute (e.g. "Injectable", "Route", "Transactional")'),
       fuzzy: z.boolean().optional().describe('Enable fuzzy search (trigram + Levenshtein). Auto-enabled when exact search returns 0 results.'),
       fuzzy_threshold: z.number().min(0).max(1).optional().describe('Minimum Jaccard trigram similarity (default 0.3)'),
       max_edit_distance: z.number().int().min(1).max(10).optional().describe('Maximum Levenshtein edit distance (default 3)'),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
       offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
     },
-    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext, fuzzy, fuzzy_threshold, max_edit_distance }) => {
+    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext, decorator, fuzzy, fuzzy_threshold, max_edit_distance }) => {
       // Zero-index fallback: if index is empty, use ripgrep
       const stats = store.getStats();
       if (stats.totalFiles === 0) {
@@ -86,24 +87,39 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       const result = await search(
         store,
         query,
-        { kind, language, filePattern: file_pattern, implements: impl, extends: ext },
+        { kind, language, filePattern: file_pattern, implements: impl, extends: ext, decorator },
         limit ?? 20,
         offset ?? 0,
         { vectorStore, embeddingService, reranker },
         { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
       );
       // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
-      const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => ({
-        symbol_id: symbol.symbol_id,
-        name: symbol.name,
-        kind: symbol.kind,
-        fqn: symbol.fqn,
-        signature: symbol.signature,
-        summary: symbol.summary,
-        file: file.path,
-        line: symbol.line_start,
-        score,
-      }));
+      const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => {
+        const item: SearchResultItemProjected = {
+          symbol_id: symbol.symbol_id,
+          name: symbol.name,
+          kind: symbol.kind,
+          fqn: symbol.fqn,
+          signature: symbol.signature,
+          summary: symbol.summary,
+          file: file.path,
+          line: symbol.line_start,
+          score,
+        };
+        // Surface decorators/annotations/attributes from metadata
+        if (symbol.metadata) {
+          try {
+            const meta = (typeof symbol.metadata === 'string'
+              ? JSON.parse(symbol.metadata)
+              : symbol.metadata) as Record<string, unknown>;
+            const decs = (meta['decorators'] as string[] | undefined)
+              ?? (meta['annotations'] as string[] | undefined)
+              ?? (meta['attributes'] as string[] | undefined);
+            if (Array.isArray(decs) && decs.length > 0) item.decorators = decs;
+          } catch { /* ignore malformed metadata */ }
+        }
+        return item;
+      });
       const response: Record<string, unknown> = { items, total: result.total, search_mode: result.search_mode };
       if (items.length === 0) {
         // Auto-fallback: try text search when symbol search finds nothing
@@ -188,17 +204,18 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       file_path: z.string().max(512).optional().describe('Relative file path to analyze'),
       symbol_id: z.string().max(512).optional().describe('Symbol ID to analyze'),
       symbol_ids: z.array(z.string().max(512)).max(50).optional().describe('Diff-aware: only analyze impact of these specific symbols (e.g. from get_changed_symbols)'),
+      decorator_filter: z.string().max(256).optional().describe('Filter dependents to only those with this decorator/annotation/attribute (e.g. "Route", "Transactional", "csrf_protect")'),
       depth: z.number().int().min(1).max(20).optional().describe('Max traversal depth (default 3)'),
       max_dependents: z.number().int().min(1).max(5000).optional().describe('Cap on returned dependents (default 200)'),
     },
-    async ({ file_path, symbol_id, symbol_ids, depth, max_dependents }) => {
+    async ({ file_path, symbol_id, symbol_ids, decorator_filter, depth, max_dependents }) => {
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
       }
       const result = getChangeImpact(
         store,
-        { filePath: file_path, symbolId: symbol_id, symbolIds: symbol_ids },
+        { filePath: file_path, symbolId: symbol_id, symbolIds: symbol_ids, decoratorFilter: decorator_filter },
         depth ?? 3,
         max_dependents ?? 200,
         projectRoot,
