@@ -19,6 +19,7 @@ import {
   getNodeName,
   extractImportEdges,
   extractClassMethods,
+  extractDecorators,
   collectNodeTypes,
 } from './helpers.js';
 import {
@@ -157,11 +158,13 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
   private extractFunction(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
     const name = getNodeName(node);
     if (!name) return;
+    const decorators = extractDecorators(node);
     const metadata: Record<string, unknown> = {
       exported: isExported(node),
       default: isDefaultExport(node),
       async: isAsync(node),
     };
+    if (decorators.length > 0) metadata.decorators = decorators;
     this.attachVersionInfo(node, metadata);
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'function'),
@@ -181,10 +184,12 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
     if (!name) return;
     const symbolId = makeSymbolId(filePath, name, 'class');
 
+    const decorators = extractDecorators(node);
     const heritage = this.extractHeritage(node);
     const metadata: Record<string, unknown> = {
       exported: isExported(node),
       default: isDefaultExport(node),
+      ...(decorators.length > 0 ? { decorators } : {}),
       ...(heritage.extends ? { extends: heritage.extends } : {}),
       ...(heritage.implements.length > 0 ? { implements: heritage.implements } : {}),
     };

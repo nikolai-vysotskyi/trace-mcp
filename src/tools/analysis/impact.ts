@@ -97,6 +97,7 @@ interface RawDependent {
   hasTests?: boolean;
   isExported?: boolean;
   fileId?: number;
+  decorators?: string[];
 }
 
 // ─── Main result ─────────────────────────────────────────────────────────────
@@ -268,7 +269,7 @@ function getFileChurn(cwd: string, filePath: string, days: number): number {
 
 export function getChangeImpact(
   store: Store,
-  opts: { filePath?: string; symbolId?: string; symbolIds?: string[] },
+  opts: { filePath?: string; symbolId?: string; symbolIds?: string[]; decoratorFilter?: string },
   depth = 3,
   maxDependents = 200,
   cwd?: string,
@@ -375,13 +376,26 @@ export function getChangeImpact(
 
   const truncated = rawDeps.length >= maxDependents;
 
+  // ── Optional decorator filter: keep only dependents whose symbols have the specified decorator ──
+  const filteredDeps = opts.decoratorFilter
+    ? rawDeps.filter((d) => {
+      if (!d.decorators) return false;
+      const filter = opts.decoratorFilter!.toLowerCase();
+      return d.decorators.some((dec) =>
+        dec.toLowerCase() === filter
+        || dec.toLowerCase().endsWith(`.${filter}`)
+        || dec.toLowerCase().startsWith(`${filter}(`),
+      );
+    })
+    : rawDeps;
+
   // ── Dedup: merge per-file, collect edge types + symbols ──
-  const dependents = deduplicateByFile(rawDeps);
+  const dependents = deduplicateByFile(filteredDeps);
 
   // ── Compute stats from raw entries (before dedup, for accurate edge/depth counts) ──
   const byEdgeType: Record<string, number> = {};
   const byDepth: Record<number, number> = {};
-  for (const raw of rawDeps) {
+  for (const raw of filteredDeps) {
     byEdgeType[raw.edgeType] = (byEdgeType[raw.edgeType] ?? 0) + 1;
     byDepth[raw.depth] = (byDepth[raw.depth] ?? 0) + 1;
   }
@@ -677,6 +691,7 @@ function traverseIncoming(
       let symbolKind: string | undefined;
       let complexity: number | undefined;
       let isExported: boolean | undefined;
+      let decorators: string[] | undefined;
       let fileId: number | undefined;
 
       if (ref.nodeType === 'symbol') {
@@ -693,6 +708,10 @@ function traverseIncoming(
             try {
               const meta = JSON.parse(sym.metadata) as Record<string, unknown>;
               isExported = meta.exported === true || meta.exported === 1;
+              const decs = (meta['decorators'] as string[] | undefined)
+                ?? (meta['annotations'] as string[] | undefined)
+                ?? (meta['attributes'] as string[] | undefined);
+              if (Array.isArray(decs) && decs.length > 0) decorators = decs;
             } catch { /* ignore */ }
           }
         }
@@ -713,6 +732,7 @@ function traverseIncoming(
           complexity,
           hasTests: fileId != null ? testedFileIds.has(fileId) : undefined,
           isExported,
+          decorators,
           fileId,
         });
       }

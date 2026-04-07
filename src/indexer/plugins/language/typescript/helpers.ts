@@ -137,6 +137,68 @@ export function collectNodeTypes(node: TSNode): string[] {
   return Array.from(types);
 }
 
+/**
+ * Extract decorator names from a node's decorator children.
+ * Works for class_declaration, method_definition, and any node
+ * that can have `decorator` children in tree-sitter TS/JS grammar.
+ */
+export function extractDecorators(node: TSNode): string[] {
+  const decorators: string[] = [];
+  // Decorators are sibling children (prev siblings) of the decorated node,
+  // or in the parent export_statement. Check both the node and its parent.
+  const checkNode = (n: TSNode): void => {
+    for (let i = 0; i < n.namedChildCount; i++) {
+      const child = n.namedChild(i);
+      if (!child || child.type !== 'decorator') continue;
+      // decorator → expression (identifier, call_expression, member_expression)
+      const expr = child.namedChildren[0];
+      if (expr) {
+        if (expr.type === 'identifier') {
+          decorators.push(expr.text);
+        } else if (expr.type === 'call_expression') {
+          const fn = expr.childForFieldName('function');
+          if (fn) decorators.push(fn.text);
+        } else if (expr.type === 'member_expression') {
+          decorators.push(expr.text);
+        } else {
+          decorators.push(expr.text);
+        }
+      }
+    }
+  };
+
+  // Check previous siblings — TS grammar places decorators before the declaration
+  if (node.parent) {
+    const parent = node.parent;
+    let foundSelf = false;
+    for (let i = parent.namedChildCount - 1; i >= 0; i--) {
+      const sibling = parent.namedChild(i);
+      if (!sibling) continue;
+      if (sibling.id === node.id) { foundSelf = true; continue; }
+      if (foundSelf && sibling.type === 'decorator') {
+        const expr = sibling.namedChildren[0];
+        if (expr) {
+          if (expr.type === 'identifier') {
+            decorators.push(expr.text);
+          } else if (expr.type === 'call_expression') {
+            const fn = expr.childForFieldName('function');
+            if (fn) decorators.push(fn.text);
+          } else {
+            decorators.push(expr.text);
+          }
+        }
+      } else if (foundSelf && sibling.type !== 'decorator') {
+        break; // Stop at non-decorator
+      }
+    }
+  }
+
+  // Also check direct children (for class body method decorators)
+  checkNode(node);
+
+  return decorators;
+}
+
 /** Extract class methods from a class body. */
 export function extractClassMethods(
   body: TSNode,
@@ -150,6 +212,12 @@ export function extractClassMethods(
     const name = getNodeName(child);
     if (!name) continue;
 
+    const decorators = extractDecorators(child);
+    const metadata: Record<string, unknown> = {
+      async: isAsync(child),
+    };
+    if (decorators.length > 0) metadata.decorators = decorators;
+
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'method', className),
       name,
@@ -160,9 +228,7 @@ export function extractClassMethods(
       byteEnd: child.endIndex,
       lineStart: child.startPosition.row + 1,
       lineEnd: child.endPosition.row + 1,
-      metadata: {
-        async: isAsync(child),
-      },
+      metadata,
     });
   }
   return symbols;

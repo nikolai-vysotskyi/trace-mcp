@@ -70,6 +70,8 @@ interface SearchFilters {
   implements?: string;
   /** Filter to symbols that extend this class/interface (metadata.extends contains value) */
   extends?: string;
+  /** Filter to symbols that have this decorator/annotation/attribute (checks metadata.decorators, metadata.annotations, metadata.attributes) */
+  decorator?: string;
 }
 
 interface SearchResultItem {
@@ -89,6 +91,7 @@ export interface SearchResultItemProjected {
   file: string;
   line: number | null;
   score: number;
+  decorators?: string[];
 }
 
 interface SearchAIOptions {
@@ -187,14 +190,15 @@ export async function search(
   const symIds = allSymbols.map((s) => s.id);
   const nodeMap = store.getNodeIdsBatch('symbol', symIds);
 
-  // Heritage post-filter: implements / extends (checks symbol metadata)
+  // Post-filters: implements / extends / decorator (check symbol metadata)
   const heritageFilter = filters?.implements || filters?.extends;
+  const decoratorFilter = filters?.decorator;
 
   for (const candidate of candidates) {
     const symbol = symbolByIdStr.get(candidate.symbolIdStr);
     if (!symbol) continue;
 
-    if (heritageFilter && symbol.metadata) {
+    if ((heritageFilter || decoratorFilter) && symbol.metadata) {
       const meta = typeof symbol.metadata === 'string'
         ? JSON.parse(symbol.metadata) as Record<string, unknown>
         : symbol.metadata as Record<string, unknown>;
@@ -208,8 +212,17 @@ export async function search(
         const extArr = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
         if (!extArr.includes(filters.extends)) continue;
       }
-    } else if (heritageFilter) {
-      continue; // no metadata → can't match heritage filter
+      if (decoratorFilter) {
+        // Check all decorator-like fields: decorators (TS/Python), annotations (Java), attributes (PHP)
+        const decorators = (meta['decorators'] as string[] | undefined)
+          ?? (meta['annotations'] as string[] | undefined)
+          ?? (meta['attributes'] as string[] | undefined);
+        if (!Array.isArray(decorators) || !decorators.some((d) =>
+          d === decoratorFilter || d.endsWith(`.${decoratorFilter}`) || d.startsWith(`${decoratorFilter}(`),
+        )) continue;
+      }
+    } else if (heritageFilter || decoratorFilter) {
+      continue; // no metadata → can't match metadata filter
     }
 
     const file = fileMap.get(symbol.file_id);
@@ -298,6 +311,7 @@ interface FileOutlineSymbol {
   signature: string | null;
   lineStart: number | null;
   lineEnd: number | null;
+  decorators?: string[];
 }
 
 interface FileOutlineResult {
@@ -320,14 +334,29 @@ export function getFileOutline(
   return ok({
     path: file.path,
     language: file.language,
-    symbols: symbols.map((s) => ({
-      symbolId: s.symbol_id,
-      name: s.name,
-      kind: s.kind,
-      fqn: s.fqn,
-      signature: s.signature,
-      lineStart: s.line_start,
-      lineEnd: s.line_end,
-    })),
+    symbols: symbols.map((s) => {
+      const base: FileOutlineSymbol = {
+        symbolId: s.symbol_id,
+        name: s.name,
+        kind: s.kind,
+        fqn: s.fqn,
+        signature: s.signature,
+        lineStart: s.line_start,
+        lineEnd: s.line_end,
+      };
+      // Surface decorators/annotations/attributes from metadata
+      if (s.metadata) {
+        const meta = typeof s.metadata === 'string'
+          ? JSON.parse(s.metadata) as Record<string, unknown>
+          : s.metadata as Record<string, unknown>;
+        const decs = (meta['decorators'] as string[] | undefined)
+          ?? (meta['annotations'] as string[] | undefined)
+          ?? (meta['attributes'] as string[] | undefined);
+        if (Array.isArray(decs) && decs.length > 0) {
+          base.decorators = decs;
+        }
+      }
+      return base;
+    }),
   });
 }
