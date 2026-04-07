@@ -21,7 +21,7 @@ export interface ServiceRow {
   indexed_at: string;
 }
 
-interface ContractRow {
+export interface ContractRow {
   id: number;
   service_id: number;
   contract_type: string;
@@ -88,6 +88,18 @@ export interface ClientCallRow {
   matched_endpoint_id: number | null;
   confidence: number;
   metadata: string | null;
+}
+
+export interface ContractSnapshotRow {
+  id: number;
+  contract_id: number;
+  service_id: number;
+  version: string | null;
+  spec_path: string;
+  content_hash: string;
+  endpoints_json: string;
+  events_json: string;
+  snapshot_at: string;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -194,6 +206,24 @@ CREATE TABLE IF NOT EXISTS client_calls (
 CREATE INDEX IF NOT EXISTS idx_client_calls_source ON client_calls(source_repo_id);
 CREATE INDEX IF NOT EXISTS idx_client_calls_target ON client_calls(target_repo_id);
 CREATE INDEX IF NOT EXISTS idx_client_calls_endpoint ON client_calls(matched_endpoint_id);
+
+-- ════════════════════════════════════════════════════════════════
+-- CONTRACT SNAPSHOTS — historical contract versions for diffing
+-- ════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS contract_snapshots (
+    id              INTEGER PRIMARY KEY,
+    contract_id     INTEGER NOT NULL REFERENCES api_contracts(id) ON DELETE CASCADE,
+    service_id      INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    version         TEXT,
+    spec_path       TEXT NOT NULL,
+    content_hash    TEXT NOT NULL,
+    endpoints_json  TEXT NOT NULL,
+    events_json     TEXT NOT NULL,
+    snapshot_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_snapshots_contract ON contract_snapshots(contract_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_service ON contract_snapshots(service_id);
 `;
 
 // ════════════════════════════════════════════════════════════════════════
@@ -622,6 +652,40 @@ export class TopologyStore {
     })();
 
     return linked;
+  }
+
+  // ── Contract Snapshots ───────────────────────────────────────────
+
+  insertContractSnapshot(contractId: number, serviceId: number, input: {
+    version: string | null;
+    specPath: string;
+    contentHash: string;
+    endpointsJson: string;
+    eventsJson: string;
+  }): number {
+    const result = this.db.prepare(`
+      INSERT INTO contract_snapshots (contract_id, service_id, version, spec_path, content_hash, endpoints_json, events_json, snapshot_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(contractId, serviceId, input.version, input.specPath, input.contentHash, input.endpointsJson, input.eventsJson, new Date().toISOString());
+    return Number(result.lastInsertRowid);
+  }
+
+  getContractSnapshots(contractId: number, limit = 50): ContractSnapshotRow[] {
+    return this.db.prepare(
+      'SELECT * FROM contract_snapshots WHERE contract_id = ? ORDER BY snapshot_at DESC LIMIT ?',
+    ).all(contractId, limit) as ContractSnapshotRow[];
+  }
+
+  getLatestSnapshot(contractId: number): ContractSnapshotRow | undefined {
+    return this.db.prepare(
+      'SELECT * FROM contract_snapshots WHERE contract_id = ? ORDER BY snapshot_at DESC LIMIT 1',
+    ).get(contractId) as ContractSnapshotRow | undefined;
+  }
+
+  getSnapshotsByService(serviceId: number, limit = 50): ContractSnapshotRow[] {
+    return this.db.prepare(
+      'SELECT * FROM contract_snapshots WHERE service_id = ? ORDER BY snapshot_at DESC LIMIT ?',
+    ).all(serviceId, limit) as ContractSnapshotRow[];
   }
 
   // ── Federation Stats ─────────────────────────────────────────────

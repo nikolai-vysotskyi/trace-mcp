@@ -24,6 +24,8 @@ interface ParsedEndpoint {
   path: string;
   operationId?: string;
   tags?: string[];
+  requestSchema?: Record<string, unknown>;
+  responseSchema?: Record<string, unknown>;
 }
 
 interface ParsedEvent {
@@ -81,8 +83,71 @@ export function parseContracts(repoRoot: string): ParsedContract[] {
 // ════════════════════════════════════════════════════════════════════════
 
 /**
+ * Resolve single-level $ref pointers within a JSON Schema object.
+ * Inlines top-level references from components.schemas so field names are visible for diffing.
+ */
+function resolveRefs(
+  schema: Record<string, unknown>,
+  components: Record<string, unknown> | undefined,
+  depth = 0,
+): Record<string, unknown> {
+  if (depth > 5 || !schema || typeof schema !== 'object') return schema;
+
+  // Direct $ref: { "$ref": "#/components/schemas/User" }
+  if (typeof schema['$ref'] === 'string') {
+    const refPath = schema['$ref'] as string;
+    const match = /^#\/components\/schemas\/(\w+)$/.exec(refPath);
+    if (match && components?.[match[1]] && typeof components[match[1]] === 'object') {
+      return resolveRefs(components[match[1]] as Record<string, unknown>, components, depth + 1);
+    }
+    return schema;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'properties' && typeof value === 'object' && value) {
+      const resolved: Record<string, unknown> = {};
+      for (const [propName, propSchema] of Object.entries(value as Record<string, unknown>)) {
+        if (typeof propSchema === 'object' && propSchema) {
+          resolved[propName] = resolveRefs(propSchema as Record<string, unknown>, components, depth + 1);
+        } else {
+          resolved[propName] = propSchema;
+        }
+      }
+      result[key] = resolved;
+    } else if (key === 'items' && typeof value === 'object' && value) {
+      result[key] = resolveRefs(value as Record<string, unknown>, components, depth + 1);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Extract the response schema from an OpenAPI operation's responses object.
+ * Picks the first 2xx response with content.
+ */
+function extractResponseSchema(
+  responses: Record<string, unknown>,
+  components: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  for (const code of ['200', '201', '202', '204']) {
+    const resp = responses[code] as Record<string, unknown> | undefined;
+    if (!resp) continue;
+    const content = resp.content as Record<string, Record<string, unknown>> | undefined;
+    const jsonContent = content?.['application/json'];
+    if (jsonContent?.schema && typeof jsonContent.schema === 'object') {
+      return resolveRefs(jsonContent.schema as Record<string, unknown>, components);
+    }
+  }
+  return undefined;
+}
+
+/**
  * Parse OpenAPI spec (JSON or simple YAML key extraction).
  * No yaml dependency — uses regex for YAML, JSON.parse for JSON.
+ * JSON specs also extract request/response schemas for field-level diffing.
  */
 function parseOpenApi(content: string, specPath: string): ParsedContract | null {
   let version = '';
@@ -93,6 +158,7 @@ function parseOpenApi(content: string, specPath: string): ParsedContract | null 
     try {
       const spec = JSON.parse(content);
       version = spec.openapi ?? spec.swagger ?? '';
+      const components = spec.components?.schemas as Record<string, unknown> | undefined;
 
       const paths = spec.paths ?? {};
       for (const [pathStr, methods] of Object.entries(paths)) {
@@ -100,11 +166,27 @@ function parseOpenApi(content: string, specPath: string): ParsedContract | null 
         for (const method of ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']) {
           if ((methods as Record<string, unknown>)[method]) {
             const op = (methods as Record<string, Record<string, unknown>>)[method];
+
+            // Extract request schema
+            let requestSchema: Record<string, unknown> | undefined;
+            const reqBody = op?.requestBody as Record<string, unknown> | undefined;
+            const reqContent = reqBody?.content as Record<string, Record<string, unknown>> | undefined;
+            const reqJsonSchema = reqContent?.['application/json']?.schema;
+            if (reqJsonSchema && typeof reqJsonSchema === 'object') {
+              requestSchema = resolveRefs(reqJsonSchema as Record<string, unknown>, components);
+            }
+
+            // Extract response schema
+            const respObj = op?.responses as Record<string, unknown> | undefined;
+            const responseSchema = respObj ? extractResponseSchema(respObj, components) : undefined;
+
             endpoints.push({
               method: method.toUpperCase(),
               path: pathStr,
               operationId: op?.operationId as string | undefined,
               tags: op?.tags as string[] | undefined,
+              requestSchema,
+              responseSchema,
             });
           }
         }

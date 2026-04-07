@@ -6,6 +6,7 @@ import type { SessionTracker } from '../session/tracker.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { AIProvider, RerankerService, EmbeddingService, BlobVectorStore } from '../ai/index.js';
 import type { ProgressState } from '../progress.js';
+import type { TopologyStore } from '../topology/topology-db.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 export interface ServerContext {
@@ -32,6 +33,8 @@ export interface ServerContext {
   markExplored: (filePath: string) => void;
   /** Progress state for indexing pipelines (null if not wired) */
   progress: ProgressState | null;
+  /** Topology store for federation (null if topology disabled) */
+  topoStore: TopologyStore | null;
 }
 
 /** Extended context for meta tools that bypass preset gate */
