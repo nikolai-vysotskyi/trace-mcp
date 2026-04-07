@@ -87,7 +87,7 @@ export const initCommand = new Command('init')
 
       // Q1: Which MCP clients
       if (!opts.skipMcpClient && !opts.mcpClient) {
-        const allClients: DetectedMcpClient['name'][] = ['claude-code', 'claw-code', 'claude-desktop', 'cursor', 'windsurf', 'continue'];
+        const allClients: DetectedMcpClient['name'][] = ['claude-code', 'claw-code', 'claude-desktop', 'cursor', 'windsurf', 'continue', 'junie', 'jetbrains-ai', 'codex'];
         const detectedNames = new Set(mcpClients.map((c) => c.name));
 
         const clientResult = await p.multiselect({
@@ -576,6 +576,9 @@ function formatClientName(name: string): string {
     'cursor': 'Cursor',
     'windsurf': 'Windsurf',
     'continue': 'Continue',
+    'junie': 'Junie',
+    'jetbrains-ai': 'JetBrains AI Assistant',
+    'codex': 'Codex',
   };
   return names[name] ?? name;
 }
