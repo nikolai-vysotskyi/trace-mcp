@@ -13,7 +13,8 @@ import { updateClaudeMd } from '../init/claude-md.js';
 import { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook } from '../init/hooks.js';
 import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
 import { formatReport } from '../init/reporter.js';
-import { ensureGlobalDirs, getDbPath } from '../global.js';
+import { ensureGlobalDirs, getDbPath, GLOBAL_CONFIG_PATH } from '../global.js';
+import { migrateGlobalConfig } from '../config-jsonc.js';
 import type { DetectedMcpClient, InitStepResult, InitReport } from '../init/types.js';
 import { detectMcpClients, detectGuardHook, detectProject } from '../init/detector.js';
 import { detectConflicts } from '../init/conflict-detector.js';
@@ -53,9 +54,18 @@ export const initCommand = new Command('init')
   }) => {
     const nonInteractive = opts.yes || opts.json || opts.dryRun;
 
-    // Ensure global directory structure
+    // Ensure global directory structure + migrate config
+    let migrationStep: InitStepResult | undefined;
     if (!opts.dryRun) {
       ensureGlobalDirs();
+      const migration = migrateGlobalConfig();
+      if (migration.changed) {
+        migrationStep = {
+          target: '~/.trace-mcp/.config.json',
+          action: 'updated',
+          detail: `Config migrated — added: ${migration.added.join(', ')}`,
+        };
+      }
     }
 
     // Detect existing MCP clients and hook state
@@ -167,6 +177,7 @@ export const initCommand = new Command('init')
 
     // --- Execute ---
     const steps: InitStepResult[] = [];
+    if (migrationStep) steps.push(migrationStep);
 
     if (!nonInteractive) {
       const spin = p.spinner();
