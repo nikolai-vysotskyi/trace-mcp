@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.12.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.11.0...v1.12.0) (2026-04-07)
+
+
+### Features
+
+* add configurable file logging with rotation ([3215186](https://github.com/nikolai-vysotskyi/trace-mcp/commit/32151868998a9470713e90afa05c783994d9820c))
+* add decorator/annotation extraction and filtering ([c0f6646](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c0f6646c48eaab9ca0f99fddbdd4a33e3a1f1b43))
+* add Laravel Horizon, Cashier, Scout, and Socialite plugins ([24089c0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/24089c01435477efa855d1ba87779e8eae2f6fd4))
+* add Tailwind CSS integration plugin ([bbbb2bb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bbbb2bb24e483db3c79ad220d75b220db7a1ef49))
+* expand project root markers, add progress tables, improve evidence ([d6c77db](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d6c77db10d7d4930128c0141480ba2aa87bb504c))
+
+
+### Documentation
+
+* update README comparison table for accuracy ([aff2dd6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aff2dd6072404f477f3ad34cce2a2bfe67bf137a))
+
 ## [1.11.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.10.0...v1.11.0) (2026-04-07)
 
 
