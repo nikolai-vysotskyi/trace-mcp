@@ -13,7 +13,7 @@ import { Store } from './db/store.js';
 import { PluginRegistry } from './plugin-api/registry.js';
 import { loadConfig } from './config.js';
 import { createServer } from './server/server.js';
-import { logger } from './logger.js';
+import { logger, attachFileLogging } from './logger.js';
 import { createAllLanguagePlugins } from './indexer/plugins/language/all.js';
 import { createAllIntegrationPlugins } from './indexer/plugins/integration/all.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
@@ -131,6 +131,11 @@ program
     }
     const config = configResult.value;
 
+    // Attach file logging if configured
+    if (config.logging) {
+      attachFileLogging(config.logging);
+    }
+
     const dbPath = resolveDbPath(projectRoot);
     ensureGlobalDirs();
 
@@ -228,6 +233,11 @@ program
       process.exit(1);
     }
     const config = configResult.value;
+
+    // Attach file logging if configured
+    if (config.logging) {
+      attachFileLogging(config.logging);
+    }
 
     const dbPath = resolveDbPath(projectRoot);
     ensureGlobalDirs();

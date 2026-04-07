@@ -202,6 +202,12 @@ export const TraceMcpConfigSchema = z.object({
     enabled: z.boolean().default(true),
     debounceMs: z.number().int().min(500).max(30000).default(2000),
   }).default({}),
+  logging: z.object({
+    file: z.boolean().default(false),
+    path: z.string().default('~/.trace-mcp/run.log'),
+    level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+    max_size_mb: z.number().positive().max(500).default(10),
+  }).default({}),
   children: z.array(z.string()).optional(),
 });
 
