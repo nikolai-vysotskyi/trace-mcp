@@ -53,7 +53,18 @@ batch({ calls: [
 
 **NEVER read the same file twice.** Use `get_outline` once → then `get_symbol` for specific symbols.
 
-**Use `get_task_context` instead of Agent subagents** for code exploration. It returns focused context within a token budget.
+**NEVER use Agent(Explore) or Agent(general-purpose) for code exploration/understanding/review.** This is the single largest source of token waste — each Agent subprocess loads full system prompt + CLAUDE.md + memory (~50K tokens overhead) before doing anything. Use trace-mcp tools instead:
+
+| Instead of Agent… | Use this |
+|---|---|
+| "Explore codebase structure" | `get_project_map` (summary_only=true) |
+| "Explore/analyze/review module X" | `get_task_context` { task: "understand module X" } |
+| "Find where X is used" | `find_usages` or `get_call_graph` |
+| "Understand how feature Y works" | `get_feature_context` { query: "feature Y" } |
+| "Check architecture of Z" | `get_task_context` { task: "architecture of Z" } |
+| Multiple independent lookups | `batch` with multiple tool calls |
+
+Agent is ONLY acceptable for: writing code in parallel (background workers), running tests, web research, or Plan mode.
 
 **Monitor waste:** Run `get_optimization_report` to detect repeated reads, Bash grep usage, and missed trace-mcp opportunities.
 
@@ -67,6 +78,15 @@ batch({ calls: [
 - **Grep**: ONLY for searching non-code file content (config, markdown, yaml)
 - **Glob**: ONLY for finding non-code files by name pattern
 - **Bash**: ONLY for running builds (`npm run build`), tests (`npm test`), git commands, or other CLI operations — NEVER for code exploration
+
+### Read-before-Edit optimization (saves ~80K tokens/day)
+
+When you need to Edit a file, minimize what you Read:
+1. **Use `get_outline` first** to find the line range of the symbol you need to edit
+2. **Read only the relevant range**: `Read { file_path, offset: startLine, limit: endLine - startLine + 10 }` — not the whole file
+3. **Never re-read a file you already read** in this session unless it was modified since. If you need a reminder of structure, use `get_outline`
+4. **For files >200 lines**: ALWAYS use offset/limit. Reading a 500-line file to edit 5 lines wastes ~400 lines of tokens
+5. **After Edit**: call `register_edit` to reindex — do NOT re-read the file to verify (Edit tool confirms success)
 
 ### Plugin architecture
 
