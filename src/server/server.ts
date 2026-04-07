@@ -19,6 +19,7 @@ import { getSnapshotPath } from '../global.js';
 import { FileWatcher } from './file-watcher.js';
 import { createExploredTracker } from './explored-tracker.js';
 import type { ServerContext, MetaContext } from './types.js';
+import type { ProgressState } from '../progress.js';
 import { buildInstructions } from './instructions.js';
 import { installToolGate } from './tool-gate.js';
 
@@ -128,6 +129,7 @@ export function createServer(
   registry: PluginRegistry,
   config: TraceMcpConfig,
   rootPath?: string,
+  progress?: ProgressState,
 ): McpServer {
   const projectRoot = rootPath ?? process.cwd();
 
@@ -289,6 +291,7 @@ export function createServer(
     aiProvider, vectorStore, embeddingService, reranker,
     has, guardPath, j, jh,
     markExplored: explored.markExplored,
+    progress: progress ?? null,
   };
 
   const metaCtx: MetaContext = {

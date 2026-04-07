@@ -2,6 +2,7 @@ import type { Store, IndexStats } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../../config.js';
 import type { DetectedVersion, ParsedDependency, ProjectContext } from '../../plugin-api/types.js';
+import type { ProgressSnapshot } from '../../progress.js';
 
 interface IndexHealthResult {
   status: 'ok' | 'degraded' | 'empty';
@@ -13,6 +14,7 @@ interface IndexHealthResult {
     excludePatterns: string[];
   };
   warnings: string[];
+  progress?: ProgressSnapshot;
 }
 
 export function getIndexHealth(

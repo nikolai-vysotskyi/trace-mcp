@@ -20,6 +20,7 @@ import { IndexingPipeline } from './indexer/pipeline.js';
 import { FileWatcher } from './indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from './ai/index.js';
 import { SummarizationPipeline } from './ai/summarization-pipeline.js';
+import { ProgressState } from './progress.js';
 import http from 'node:http';
 import { initCommand } from './cli/init.js';
 import { upgradeCommand } from './cli/upgrade.js';
@@ -30,6 +31,8 @@ import { checkCommand } from './cli/check.js';
 import { bundlesCommand } from './cli/bundles.js';
 import { federationCommand } from './cli/federation.js';
 import { analyticsCommand } from './cli/analytics.js';
+import { removeCommand } from './cli/remove.js';
+import { statusCommand } from './cli/status.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH } from './global.js';
 import { getProject, listProjects, registerProject } from './registry.js';
@@ -136,14 +139,15 @@ program
     const registry = new PluginRegistry();
     registerDefaultPlugins(registry);
 
-    const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+    const progress = new ProgressState(db);
+    const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress);
     const watcher = new FileWatcher();
 
     const aiProvider = createAIProvider(config);
     const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
     const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
     const embeddingPipeline = vectorStore && embeddingService
-      ? new EmbeddingPipeline(store, embeddingService, vectorStore)
+      ? new EmbeddingPipeline(store, embeddingService, vectorStore, progress)
       : null;
 
     // Summarization pipeline (uses fast model + inference cache)
@@ -159,6 +163,7 @@ program
             kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
             concurrency: config.ai.concurrency ?? 1,
           },
+          progress,
         )
       : null;
 
@@ -200,7 +205,7 @@ program
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
 
-    const server = createServer(store, registry, config, projectRoot);
+    const server = createServer(store, registry, config, projectRoot, progress);
     const transport = new StdioServerTransport();
 
     logger.info({ projectRoot, dbPath }, 'Starting trace-mcp MCP server...');
@@ -230,14 +235,15 @@ program
     const registry = new PluginRegistry();
     registerDefaultPlugins(registry);
 
-    const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+    const progress2 = new ProgressState(db);
+    const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress2);
     const watcher = new FileWatcher();
 
     const aiProvider = createAIProvider(config);
     const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
     const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
     const embeddingPipeline = vectorStore && embeddingService
-      ? new EmbeddingPipeline(store, embeddingService, vectorStore)
+      ? new EmbeddingPipeline(store, embeddingService, vectorStore, progress2)
       : null;
 
     const inferenceCache2 = config.ai?.enabled ? new InferenceCache(store.db) : null;
@@ -252,6 +258,7 @@ program
             kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
             concurrency: config.ai.concurrency ?? 1,
           },
+          progress2,
         )
       : null;
 
@@ -289,7 +296,7 @@ program
     const host = opts.host;
 
     // Create a single MCP server + stateful transport (persists across requests)
-    const server = createServer(store, registry, config, projectRoot);
+    const server = createServer(store, registry, config, projectRoot, progress2);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
     });
@@ -523,11 +530,13 @@ program
 program.addCommand(initCommand);
 program.addCommand(upgradeCommand);
 program.addCommand(addCommand);
+program.addCommand(removeCommand);
 program.addCommand(doctorCommand);
 program.addCommand(ciReportCommand);
 program.addCommand(checkCommand);
 program.addCommand(bundlesCommand);
 program.addCommand(federationCommand);
 program.addCommand(analyticsCommand);
+program.addCommand(statusCommand);
 
 program.parse();

@@ -14,10 +14,13 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_index_health',
-    'Get index status, statistics, and health information',
+    'Get index status, statistics, health information, and pipeline progress (indexing, summarization, embedding)',
     {},
     async () => {
       const result = getIndexHealth(store, config);
+      if (ctx.progress) {
+        result.progress = ctx.progress.snapshot();
+      }
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );

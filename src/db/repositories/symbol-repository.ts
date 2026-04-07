@@ -218,6 +218,26 @@ export class SymbolRepository {
     this.db.prepare('UPDATE symbols SET summary = ? WHERE id = ?').run(summary, symbolId);
   }
 
+  countUnsummarizedSymbols(kinds: string[]): number {
+    if (kinds.length === 0) return 0;
+    const placeholders = kinds.map(() => '?').join(',');
+    const row = this.db.prepare(`
+      SELECT COUNT(*) as cnt FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      WHERE s.summary IS NULL AND s.kind IN (${placeholders}) AND f.gitignored = 0
+    `).get(...kinds) as { cnt: number };
+    return row.cnt;
+  }
+
+  countUnembeddedSymbols(): number {
+    const row = this.db.prepare(`
+      SELECT COUNT(*) as cnt FROM symbols s
+      LEFT JOIN symbol_embeddings se ON se.symbol_id = s.id
+      WHERE se.symbol_id IS NULL
+    `).get() as { cnt: number };
+    return row.cnt;
+  }
+
   getUnsummarizedSymbols(kinds: string[], limit: number): {
     id: number;
     name: string;

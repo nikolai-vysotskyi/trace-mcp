@@ -22,6 +22,7 @@ import { EnvIndexer } from './env-indexer.js';
 import type { PipelineState } from './pipeline-state.js';
 export type { FileExtraction } from './pipeline-state.js';
 import type { FileExtraction } from './pipeline-state.js';
+import type { ProgressState } from '../progress.js';
 
 export interface IndexingResult {
   totalFiles: number;
@@ -38,6 +39,7 @@ export class IndexingPipeline {
     private registry: PluginRegistry,
     private config: TraceMcpConfig,
     private rootPath: string,
+    private progress?: ProgressState,
   ) {}
 
   private workspaces: WorkspaceInfo[] = [];
@@ -129,6 +131,10 @@ export class IndexingPipeline {
       indexed: 0, skipped: 0, errors: 0, durationMs: 0,
     };
 
+    this.progress?.update('indexing', {
+      phase: 'running', processed: 0, total: relPaths.length, startedAt: Date.now(), completedAt: 0,
+    });
+
     this._projectContext = undefined;
     this.registry.clearCaches();
     this._changedFileIds.clear();
@@ -176,6 +182,9 @@ export class IndexingPipeline {
           persister.persistBatch(extractions);
           result.indexed += extractions.length;
         }
+
+        const processed = result.indexed + result.skipped + result.errors;
+        this.progress?.update('indexing', { processed });
       }
 
       enableFts5Triggers(this.store.db);
@@ -208,6 +217,13 @@ export class IndexingPipeline {
 
     result.durationMs = Date.now() - startMs;
     result.incremental = this._isIncremental;
+
+    this.progress?.update('indexing', {
+      phase: 'completed',
+      processed: result.indexed + result.skipped + result.errors,
+      completedAt: Date.now(),
+    });
+
     logger.info(result, 'Indexing pipeline completed');
     return result;
   }

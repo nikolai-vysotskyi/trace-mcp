@@ -11,16 +11,61 @@ import { findProjectRoot, discoverChildProjects } from '../project-root.js';
 import { detectProject } from '../init/detector.js';
 import { generateConfig } from '../init/config-generator.js';
 import { ensureGlobalDirs, getDbPath } from '../global.js';
-import { registerProject, getProject, unregisterProject, listProjects, findParentProject } from '../registry.js';
-import { saveProjectConfig, removeProjectConfig } from '../config.js';
+import { registerProject, getProject, unregisterProject, listProjects, findParentProject, updateLastIndexed } from '../registry.js';
+import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
+import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
+
+async function runIndexing(
+  projectRoot: string,
+  opts: { json?: boolean },
+): Promise<{ indexed: number; skipped: number; errors: number; durationMs: number } | null> {
+  const configResult = await loadConfig(projectRoot);
+  if (configResult.isErr()) {
+    if (!opts.json) {
+      p.log.warn(`Could not load config for indexing: ${configResult.error}`);
+    }
+    return null;
+  }
+
+  const dbPath = getDbPath(projectRoot);
+  const db = initializeDatabase(dbPath);
+  const store = new Store(db);
+  const registry = new PluginRegistry();
+  for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
+  for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
+
+  const pipeline = new IndexingPipeline(store, registry, configResult.value, projectRoot);
+  try {
+    const result = await pipeline.indexAll(true);
+    updateLastIndexed(projectRoot);
+    return { indexed: result.indexed, skipped: result.skipped, errors: result.errors, durationMs: result.durationMs };
+  } catch (err) {
+    if (!opts.json) {
+      p.log.warn(`Indexing failed: ${(err as Error).message}`);
+    }
+    return null;
+  } finally {
+    db.close();
+  }
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
 export const addCommand = new Command('add')
   .description('Register a project for indexing: detect root, create DB, add to registry')
   .argument('[dir]', 'Project directory (default: current directory)', '.')
   .option('--force', 'Re-register even if already registered')
+  .option('--no-index', 'Skip indexing after registration')
   .option('--json', 'Output results as JSON')
-  .action(async (dir: string, opts: { force?: boolean; json?: boolean }) => {
+  .action(async (dir: string, opts: { force?: boolean; index?: boolean; json?: boolean }) => {
     const resolvedDir = path.resolve(dir);
     if (!fs.existsSync(resolvedDir)) {
       console.error(`Directory does not exist: ${resolvedDir}`);
@@ -133,7 +178,24 @@ export const addCommand = new Command('add')
     // 8. Register in registry
     const entry = registerProject(projectRoot);
 
-    // 9. Report
+    // 9. Index immediately (unless --no-index)
+    let indexResult: Awaited<ReturnType<typeof runIndexing>> = null;
+    if (opts.index !== false) {
+      if (isInteractive) {
+        const spin = p.spinner();
+        spin.start('Indexing project...');
+        indexResult = await runIndexing(projectRoot, opts);
+        if (indexResult) {
+          spin.stop(`Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`);
+        } else {
+          spin.stop('Indexing skipped');
+        }
+      } else {
+        indexResult = await runIndexing(projectRoot, opts);
+      }
+    }
+
+    // 10. Report
     if (opts.json) {
       console.log(JSON.stringify({
         status: existing ? 're-registered' : 'registered',
@@ -143,6 +205,7 @@ export const addCommand = new Command('add')
           languages: detection.languages,
           frameworks: detection.frameworks.map((f) => f.name),
         },
+        indexing: indexResult ?? undefined,
       }, null, 2));
     } else {
       const lines: string[] = [];
@@ -152,15 +215,23 @@ export const addCommand = new Command('add')
       if (migrated) {
         lines.push(`Migrated existing index from .trace-mcp/index.db`);
       }
+      if (indexResult) {
+        lines.push(`Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`);
+        lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
+      }
       p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
-      p.outro('Project registered. It will be indexed when trace-mcp serve starts.');
+      if (indexResult) {
+        p.outro('Project registered and indexed.');
+      } else {
+        p.outro('Project registered. Run `trace-mcp index` to index it.');
+      }
     }
   });
 
 async function handleMultiRoot(
   parentDir: string,
   childRoots: string[],
-  opts: { force?: boolean; json?: boolean },
+  opts: { force?: boolean; index?: boolean; json?: boolean },
 ): Promise<void> {
   const isInteractive = !opts.json;
 
@@ -262,6 +333,23 @@ async function handleMultiRoot(
     children: childRoots,
   });
 
+  // Index immediately (unless --no-index)
+  let indexResult: Awaited<ReturnType<typeof runIndexing>> = null;
+  if (opts.index !== false) {
+    if (isInteractive) {
+      const spin = p.spinner();
+      spin.start('Indexing multi-root project...');
+      indexResult = await runIndexing(parentDir, opts);
+      if (indexResult) {
+        spin.stop(`Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`);
+      } else {
+        spin.stop('Indexing skipped');
+      }
+    } else {
+      indexResult = await runIndexing(parentDir, opts);
+    }
+  }
+
   // Report
   if (opts.json) {
     console.log(JSON.stringify({
@@ -270,6 +358,7 @@ async function handleMultiRoot(
       project: entry,
       children: childRoots.map((r) => path.basename(r)),
       cleaned,
+      indexing: indexResult ?? undefined,
     }, null, 2));
   } else {
     const lines: string[] = [];
@@ -277,8 +366,16 @@ async function handleMultiRoot(
     lines.push(`Root: ${parentDir}`);
     lines.push(`DB: ${shortPath(dbPath)}`);
     lines.push(`Children: ${childRoots.map((r) => path.basename(r)).join(', ')}`);
+    if (indexResult) {
+      lines.push(`Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`);
+      lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
+    }
     p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
-    p.outro('Multi-root project registered. It will be indexed when trace-mcp serve starts.');
+    if (indexResult) {
+      p.outro('Multi-root project registered and indexed.');
+    } else {
+      p.outro('Multi-root project registered. Run `trace-mcp index` to index it.');
+    }
   }
 }
 
