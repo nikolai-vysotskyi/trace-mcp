@@ -10,16 +10,22 @@ import type { TraceMcpConfig } from '../config.js';
 import { hashContent } from '../utils/hasher.js';
 import { validatePath } from '../utils/security.js';
 import { parseEnvFile } from '../utils/env-parser.js';
+import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { logger } from '../logger.js';
 
 const ENV_GLOB = ['.env', '.env.*', '.env.local', '**/.env', '**/.env.*'];
 
 export class EnvIndexer {
+  private traceignore: TraceignoreMatcher;
+
   constructor(
     private store: Store,
     private config: TraceMcpConfig,
     private rootPath: string,
-  ) {}
+    traceignore?: TraceignoreMatcher,
+  ) {
+    this.traceignore = traceignore ?? new TraceignoreMatcher(rootPath, config.ignore);
+  }
 
   async indexEnvFiles(force: boolean): Promise<void> {
     const envPaths = await fg(ENV_GLOB, {
@@ -35,6 +41,11 @@ export class EnvIndexer {
     logger.info({ count: envPaths.length }, 'Indexing .env files (keys only)');
 
     for (const relPath of envPaths) {
+      if (this.traceignore.isIgnored(relPath)) {
+        logger.debug({ file: relPath }, '.env file skipped by .traceignore');
+        continue;
+      }
+
       const absPath = path.resolve(this.rootPath, relPath);
 
       const pathCheck = validatePath(relPath, this.rootPath);
