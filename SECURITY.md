@@ -28,8 +28,8 @@ Symlinks can be used to escape the project root and read arbitrary files.
 
 Files are filtered through multiple layers:
 
-1. **Config exclude patterns** — directories and files excluded by default: `vendor/**`, `node_modules/**`, `.git/**`, `storage/**`, `bootstrap/cache/**`, `.nuxt/**`, `.next/**`, `dist/**`, `build/**`.
-2. **File watcher ignore** — `@parcel/watcher` is configured with the same ignore list, plus `.idea/`. Double filtering is applied (at subscription level and event processing level).
+1. **Config exclude patterns** — directories excluded by default: `node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `.trace-mcp`, `coverage`, `.turbo`.
+2. **File watcher ignore** — `@parcel/watcher` is configured with the same ignore list. Double filtering is applied (at subscription level and event processing level).
 3. User-configurable `exclude` patterns in the config file (gitignore-style globs).
 
 ---
@@ -167,8 +167,8 @@ If you discover a security vulnerability, please report it responsibly:
 | --- | --- | --- |
 | Path traversal validation | Always enabled | No |
 | Symlink blocking | Always enabled | No |
-| Directory exclusion | 9 patterns | Yes (`exclude`) |
-| Sensitive file exclusion | 26+ patterns | No |
+| Directory exclusion | 11 patterns | Yes (`exclude`) |
+| Sensitive file exclusion | 27 patterns | No |
 | `.env` value redaction | Always enabled | No |
 | `.gitignore` content gating | Always enabled | No |
 | Binary file detection | Null-byte scan (8 KB) | No |
