@@ -198,7 +198,7 @@ export class IndexingPipeline {
       edgeResolver.resolveTestCoversEdges();
 
       // Pass 3: Index .env files
-      const envIndexer = new EnvIndexer(this.store, this.config, this.rootPath);
+      const envIndexer = new EnvIndexer(this.store, this.config, this.rootPath, this._traceignore);
       await envIndexer.indexEnvFiles(force);
     } finally {
       this._fileContentCache.clear();

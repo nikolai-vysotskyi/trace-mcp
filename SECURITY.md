@@ -30,7 +30,8 @@ Files are filtered through multiple layers:
 
 1. **Config exclude patterns** — directories excluded by default: `node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `.trace-mcp`, `coverage`, `.turbo`.
 2. **File watcher ignore** — `@parcel/watcher` is configured with the same ignore list. Double filtering is applied (at subscription level and event processing level).
-3. User-configurable `exclude` patterns in the config file (gitignore-style globs).
+3. **`.traceignore`** — project-root file (gitignore syntax) that **completely excludes** matched files from indexing. Unlike `.gitignore` (which only hides content from AI output but keeps graph metadata), `.traceignore` prevents files from being parsed or stored at all. Intended for generated code, vendored dependencies, and large data files.
+4. User-configurable `exclude` patterns and `ignore.directories` / `ignore.patterns` in the config file.
 
 ---
 
@@ -60,6 +61,8 @@ When a sensitive file is detected, a warning is logged. Sensitive files are neve
 * **Never stored:** the actual value.
 
 When `.env` files are read through MCP tools, values are redacted — e.g., `DATABASE_URL=postgres://...` becomes `DATABASE_URL=<string:url>`.
+
+To completely exclude `.env` files from indexing (including metadata extraction), add them to `.traceignore`.
 
 ---
 
@@ -168,6 +171,7 @@ If you discover a security vulnerability, please report it responsibly:
 | Path traversal validation | Always enabled | No |
 | Symlink blocking | Always enabled | No |
 | Directory exclusion | 11 patterns | Yes (`exclude`) |
+| `.traceignore` exclusion | gitignore syntax | Yes (project-root file) |
 | Sensitive file exclusion | 27 patterns | No |
 | `.env` value redaction | Always enabled | No |
 | `.gitignore` content gating | Always enabled | No |
