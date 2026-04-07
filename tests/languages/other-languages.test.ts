@@ -28,11 +28,18 @@ import { AlLanguagePlugin } from '../../src/indexer/plugins/language/al/index.js
 import { BladeLanguagePlugin } from '../../src/indexer/plugins/language/blade/index.js';
 import { EjsLanguagePlugin } from '../../src/indexer/plugins/language/ejs/index.js';
 
-// Helper to parse and unwrap
-function parse(plugin: { extractSymbols: (f: string, c: Buffer) => any }, source: string, filePath: string) {
-  const result = plugin.extractSymbols(filePath, Buffer.from(source));
-  expect(result.isOk()).toBe(true);
-  return result._unsafeUnwrap();
+// Helper to parse and unwrap (handles both sync and async extractSymbols)
+function parse(plugin: { extractSymbols: (f: string, c: Buffer) => any }, source: string, filePath: string): any {
+  const resultOrPromise = plugin.extractSymbols(filePath, Buffer.from(source));
+  // If the plugin returns a Promise, resolve it first
+  if (resultOrPromise && typeof resultOrPromise.then === 'function') {
+    return resultOrPromise.then((result: any) => {
+      expect(result.isOk()).toBe(true);
+      return result._unsafeUnwrap();
+    });
+  }
+  expect(resultOrPromise.isOk()).toBe(true);
+  return resultOrPromise._unsafeUnwrap();
 }
 
 // ==============================
@@ -68,26 +75,30 @@ describe('Groovy', () => {
 // ==============================
 describe('Elixir', () => {
   const plugin = new ElixirLanguagePlugin();
-  const p = (s: string) => parse(plugin, s, 'lib/app.ex');
+  async function parseElixir(s: string) {
+    const result = await plugin.extractSymbols('lib/app.ex', Buffer.from(s));
+    expect(result.isOk()).toBe(true);
+    return result._unsafeUnwrap();
+  }
 
-  it('extracts defmodule', () => {
-    const r = p('defmodule MyApp.Users do\nend');
+  it('extracts defmodule', async () => {
+    const r = await parseElixir('defmodule MyApp.Users do\nend');
     expect(r.symbols.some((s: any) => s.name === 'MyApp.Users' && s.kind === 'class')).toBe(true);
   });
 
-  it('extracts def and defp', () => {
-    const r = p('  def hello(name) do\n  end\n  defp internal(x) do\n  end');
+  it('extracts def and defp', async () => {
+    const r = await parseElixir('  def hello(name) do\n  end\n  defp internal(x) do\n  end');
     expect(r.symbols.some((s: any) => s.name === 'hello' && s.kind === 'function')).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'internal' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts defmacro', () => {
-    const r = p('  defmacro my_macro(arg) do\n  end');
+  it('extracts defmacro', async () => {
+    const r = await parseElixir('  defmacro my_macro(arg) do\n  end');
     expect(r.symbols.some((s: any) => s.name === 'my_macro' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts @type and use/import edges', () => {
-    const r = p('  @type user :: map()\n  use GenServer\n  import Enum');
+  it('extracts @type and use/import edges', async () => {
+    const r = await parseElixir('  @type user :: map()\n  use GenServer\n  import Enum');
     expect(r.symbols.some((s: any) => s.name === 'user' && s.kind === 'type')).toBe(true);
     expect(r.edges?.some((e: any) => e.metadata?.module === 'GenServer')).toBe(true);
     expect(r.edges?.some((e: any) => e.metadata?.module === 'Enum')).toBe(true);
@@ -183,18 +194,18 @@ describe('Bash', () => {
   const plugin = new BashLanguagePlugin();
   const p = (s: string) => parse(plugin, s, 'script.sh');
 
-  it('extracts function keyword', () => {
-    const r = p('function setup {\n  echo "hi"\n}');
+  it('extracts function keyword', async () => {
+    const r = await p('function setup {\n  echo "hi"\n}');
     expect(r.symbols.some((s: any) => s.name === 'setup' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts name() { form', () => {
-    const r = p('cleanup() {\n  rm -rf /tmp/x\n}');
+  it('extracts name() { form', async () => {
+    const r = await p('cleanup() {\n  rm -rf /tmp/x\n}');
     expect(r.symbols.some((s: any) => s.name === 'cleanup' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts readonly and export', () => {
-    const r = p('readonly MAX_RETRIES=5\nexport PATH_PREFIX=/usr/local');
+  it('extracts readonly and export', async () => {
+    const r = await p('readonly MAX_RETRIES=5\nexport PATH_PREFIX=/usr/local');
     expect(r.symbols.some((s: any) => s.name === 'MAX_RETRIES' && s.kind === 'constant')).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'PATH_PREFIX' && s.kind === 'variable')).toBe(true);
   });
@@ -205,26 +216,30 @@ describe('Bash', () => {
 // ==============================
 describe('Lua', () => {
   const plugin = new LuaLanguagePlugin();
-  const p = (s: string) => parse(plugin, s, 'main.lua');
+  async function parseLua(s: string) {
+    const result = await plugin.extractSymbols('main.lua', Buffer.from(s));
+    expect(result.isOk()).toBe(true);
+    return result._unsafeUnwrap();
+  }
 
-  it('extracts global function', () => {
-    const r = p('function greet(name)\n  print(name)\nend');
+  it('extracts global function', async () => {
+    const r = await parseLua('function greet(name)\n  print(name)\nend');
     expect(r.symbols.some((s: any) => s.name === 'greet' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts local function', () => {
-    const r = p('local function helper(x)\n  return x + 1\nend');
+  it('extracts local function', async () => {
+    const r = await parseLua('local function helper(x)\n  return x + 1\nend');
     expect(r.symbols.some((s: any) => s.name === 'helper' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts Module.method and Module:method', () => {
-    const r = p('function MyMod.init(self)\nend\nfunction MyMod:update(dt)\nend');
+  it('extracts Module.method and Module:method', async () => {
+    const r = await parseLua('function MyMod.init(self)\nend\nfunction MyMod:update(dt)\nend');
     expect(r.symbols.some((s: any) => s.name === 'init' && s.kind === 'method')).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'update' && s.kind === 'method')).toBe(true);
   });
 
-  it('extracts require edge', () => {
-    const r = p('local json = require("dkjson")');
+  it('extracts require edge', async () => {
+    const r = await parseLua('local json = require("dkjson")');
     expect(r.edges?.some((e: any) => e.metadata?.module === 'dkjson')).toBe(true);
   });
 });
@@ -440,8 +455,8 @@ describe('JSON', () => {
   const plugin = new JsonLanguagePlugin();
   const p = (s: string) => parse(plugin, s, 'package.json');
 
-  it('extracts first-level keys', () => {
-    const r = p('{\n  "name": "my-app",\n  "version": "1.0.0"\n}');
+  it('extracts first-level keys', async () => {
+    const r = await p('{\n  "name": "my-app",\n  "version": "1.0.0"\n}');
     expect(r.symbols.some((s: any) => s.name === 'name' && s.kind === 'constant')).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'version' && s.kind === 'constant')).toBe(true);
   });
@@ -454,14 +469,14 @@ describe('TOML', () => {
   const plugin = new TomlLanguagePlugin();
   const p = (s: string) => parse(plugin, s, 'config.toml');
 
-  it('extracts [table] and key = value', () => {
-    const r = p('name = "my-app"\n\n[dependencies]\nlodash = "^4"');
+  it('extracts [table] and key = value', async () => {
+    const r = await p('name = "my-app"\n\n[dependencies]\nlodash = "^4"');
     expect(r.symbols.some((s: any) => s.name === 'dependencies' && s.kind === 'namespace')).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'name' && s.kind === 'constant')).toBe(true);
   });
 
-  it('extracts key = value inside tables', () => {
-    const r = p('[package]\nversion = "1.0"');
+  it('extracts key = value inside tables', async () => {
+    const r = await p('[package]\nversion = "1.0"');
     expect(r.symbols.some((s: any) => s.name === 'version' && s.kind === 'constant')).toBe(true);
   });
 });

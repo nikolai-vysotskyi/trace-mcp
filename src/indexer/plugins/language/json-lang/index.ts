@@ -1,5 +1,5 @@
 /**
- * JSON Language Plugin — dialect-aware symbol extraction.
+ * JSON Language Plugin — dialect-aware symbol extraction using tree-sitter.
  *
  * Detects JSON dialect from filename, then applies specialised extraction
  * rules for:
@@ -16,9 +16,11 @@
  *   - composer.json
  *   - Generic JSON (first-level keys as constants)
  */
-import { ok } from 'neverthrow';
+import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
+import { parseError } from '../../../../errors.js';
+import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -54,7 +56,7 @@ function stripJsonComments(source: string): string {
 
     // Single-line comment
     if (ch === '/' && i + 1 < source.length && source[i + 1] === '/') {
-      // Skip to end of line
+      // Skip to end of line, preserving newline for correct line positions
       while (i < source.length && source[i] !== '\n') i++;
       continue;
     }
@@ -67,6 +69,8 @@ function stripJsonComments(source: string): string {
           i += 2;
           break;
         }
+        // Preserve newlines for correct line positions
+        if (source[i] === '\n') result += '\n';
         i++;
       }
       continue;
@@ -77,6 +81,45 @@ function stripJsonComments(source: string): string {
   }
 
   return result;
+}
+
+// ── Tree-sitter AST helpers ──────────────────────────────────────────────
+
+/** Get the text of a string node, stripping surrounding quotes and unescaping JSON escapes */
+function getStringText(node: TSNode | null): string | undefined {
+  if (!node || node.type !== 'string') return undefined;
+  const raw = node.text; // includes surrounding quotes, e.g. "App\\"
+  // Use JSON.parse to properly unescape JSON string escapes
+  try {
+    return JSON.parse(raw) as string;
+  } catch {
+    // Fallback: just strip quotes if JSON.parse fails
+    return raw.slice(1, -1);
+  }
+}
+
+/** Get all pairs from an object node as a Map<key, valueNode> */
+function getObjectEntries(obj: TSNode): Map<string, { keyNode: TSNode; valueNode: TSNode; pairNode: TSNode }> {
+  const entries = new Map<string, { keyNode: TSNode; valueNode: TSNode; pairNode: TSNode }>();
+  for (const child of obj.namedChildren) {
+    if (child.type === 'pair') {
+      const keyNode = child.childForFieldName('key');
+      const keyText = getStringText(keyNode);
+      const valueNode = child.childForFieldName('value');
+      if (keyText && valueNode && keyNode) entries.set(keyText, { keyNode, valueNode, pairNode: child });
+    }
+  }
+  return entries;
+}
+
+/** Get string values from an array node */
+function getArrayStrings(arr: TSNode): string[] {
+  const strings: string[] = [];
+  for (const child of arr.namedChildren) {
+    const text = getStringText(child);
+    if (text !== undefined) strings.push(text);
+  }
+  return strings;
 }
 
 // ── Dialect detection ──────────────────────────────────────────────────────
@@ -117,164 +160,229 @@ function detectDialect(filePath: string): JsonDialect {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type AddFn = (name: string, kind: SymbolKind, meta?: Record<string, unknown>) => void;
+type AddFn = (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>) => void;
 
 // ── Dialect extractors ─────────────────────────────────────────────────────
 
-function extractPackageJson(obj: Record<string, unknown>, add: AddFn, edges: RawEdge[]): void {
+function extractPackageJson(root: TSNode, add: AddFn, edges: RawEdge[]): void {
+  const entries = getObjectEntries(root);
+
   // Name
-  if (typeof obj.name === 'string') add(obj.name, 'constant', { jsonKind: 'packageName' });
+  const nameEntry = entries.get('name');
+  if (nameEntry && nameEntry.valueNode.type === 'string') {
+    add(getStringText(nameEntry.valueNode)!, 'constant', nameEntry.pairNode, { jsonKind: 'packageName' });
+  }
 
   // Scripts
-  if (obj.scripts && typeof obj.scripts === 'object') {
-    for (const scriptName of Object.keys(obj.scripts as Record<string, unknown>)) {
-      add(scriptName, 'function', { jsonKind: 'script' });
+  const scriptsEntry = entries.get('scripts');
+  if (scriptsEntry && scriptsEntry.valueNode.type === 'object') {
+    for (const child of scriptsEntry.valueNode.namedChildren) {
+      if (child.type === 'pair') {
+        const key = getStringText(child.childForFieldName('key'));
+        if (key) add(key, 'function', child, { jsonKind: 'script' });
+      }
     }
   }
 
   // Dependencies → import edges
   for (const depKey of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
-    const deps = obj[depKey];
-    if (deps && typeof deps === 'object') {
+    const depEntry = entries.get(depKey);
+    if (depEntry && depEntry.valueNode.type === 'object') {
       const isDev = depKey !== 'dependencies';
-      for (const [pkg, ver] of Object.entries(deps as Record<string, unknown>)) {
-        edges.push({
-          edgeType: 'imports',
-          metadata: { module: pkg, version: ver, depType: depKey, dev: isDev, dialect: 'package-json' },
-        });
+      for (const child of depEntry.valueNode.namedChildren) {
+        if (child.type === 'pair') {
+          const pkg = getStringText(child.childForFieldName('key'));
+          const ver = getStringText(child.childForFieldName('value'));
+          if (pkg) {
+            edges.push({
+              edgeType: 'imports',
+              metadata: { module: pkg, version: ver, depType: depKey, dev: isDev, dialect: 'package-json' },
+            });
+          }
+        }
       }
     }
   }
 
   // Also extract top-level keys as constants for backwards compatibility
-  for (const key of Object.keys(obj)) {
-    add(key, 'constant', { jsonKind: 'topLevelKey' });
+  for (const [key, entry] of entries) {
+    add(key, 'constant', entry.pairNode, { jsonKind: 'topLevelKey' });
   }
 }
 
-function extractTsconfig(obj: Record<string, unknown>, add: AddFn, edges: RawEdge[]): void {
+function extractTsconfig(root: TSNode, add: AddFn, edges: RawEdge[]): void {
+  const entries = getObjectEntries(root);
+
   // compilerOptions keys
-  if (obj.compilerOptions && typeof obj.compilerOptions === 'object') {
-    for (const optKey of Object.keys(obj.compilerOptions as Record<string, unknown>)) {
-      add(optKey, 'constant', { jsonKind: 'compilerOption' });
+  const coEntry = entries.get('compilerOptions');
+  if (coEntry && coEntry.valueNode.type === 'object') {
+    const coEntries = getObjectEntries(coEntry.valueNode);
+    for (const [optKey, optEntry] of coEntries) {
+      add(optKey, 'constant', optEntry.pairNode, { jsonKind: 'compilerOption' });
     }
 
     // paths aliases
-    const co = obj.compilerOptions as Record<string, unknown>;
-    if (co.paths && typeof co.paths === 'object') {
-      for (const alias of Object.keys(co.paths as Record<string, unknown>)) {
-        add(alias, 'constant', { jsonKind: 'pathAlias' });
+    const pathsEntry = coEntries.get('paths');
+    if (pathsEntry && pathsEntry.valueNode.type === 'object') {
+      const pathEntries = getObjectEntries(pathsEntry.valueNode);
+      for (const [alias, aliasEntry] of pathEntries) {
+        add(alias, 'constant', aliasEntry.pairNode, { jsonKind: 'pathAlias' });
       }
     }
   }
 
   // extends
-  if (typeof obj.extends === 'string') {
-    edges.push({ edgeType: 'imports', metadata: { module: obj.extends, dialect: 'tsconfig' } });
+  const extendsEntry = entries.get('extends');
+  if (extendsEntry && extendsEntry.valueNode.type === 'string') {
+    const ext = getStringText(extendsEntry.valueNode);
+    if (ext) edges.push({ edgeType: 'imports', metadata: { module: ext, dialect: 'tsconfig' } });
   }
 
   // Top-level keys
-  for (const key of Object.keys(obj)) {
-    add(key, 'constant', { jsonKind: 'topLevelKey' });
+  for (const [key, entry] of entries) {
+    add(key, 'constant', entry.pairNode, { jsonKind: 'topLevelKey' });
   }
 }
 
-function extractEslint(obj: Record<string, unknown>, add: AddFn, edges: RawEdge[]): void {
+function extractEslint(root: TSNode, add: AddFn, edges: RawEdge[]): void {
+  const entries = getObjectEntries(root);
+
   // Rules
-  if (obj.rules && typeof obj.rules === 'object') {
-    for (const rule of Object.keys(obj.rules as Record<string, unknown>)) {
-      add(rule, 'constant', { jsonKind: 'eslintRule' });
+  const rulesEntry = entries.get('rules');
+  if (rulesEntry && rulesEntry.valueNode.type === 'object') {
+    for (const child of rulesEntry.valueNode.namedChildren) {
+      if (child.type === 'pair') {
+        const rule = getStringText(child.childForFieldName('key'));
+        if (rule) add(rule, 'constant', child, { jsonKind: 'eslintRule' });
+      }
     }
   }
 
   // Extends
-  const ext = obj.extends;
-  if (typeof ext === 'string') {
-    edges.push({ edgeType: 'imports', metadata: { module: ext, dialect: 'eslint' } });
-  } else if (Array.isArray(ext)) {
-    for (const e of ext) {
-      if (typeof e === 'string') edges.push({ edgeType: 'imports', metadata: { module: e, dialect: 'eslint' } });
+  const extendsEntry = entries.get('extends');
+  if (extendsEntry) {
+    if (extendsEntry.valueNode.type === 'string') {
+      const ext = getStringText(extendsEntry.valueNode);
+      if (ext) edges.push({ edgeType: 'imports', metadata: { module: ext, dialect: 'eslint' } });
+    } else if (extendsEntry.valueNode.type === 'array') {
+      for (const e of getArrayStrings(extendsEntry.valueNode)) {
+        edges.push({ edgeType: 'imports', metadata: { module: e, dialect: 'eslint' } });
+      }
     }
   }
 
   // Plugins
-  if (Array.isArray(obj.plugins)) {
-    for (const p of obj.plugins) {
-      if (typeof p === 'string') edges.push({ edgeType: 'imports', metadata: { module: p, dialect: 'eslint' } });
+  const pluginsEntry = entries.get('plugins');
+  if (pluginsEntry && pluginsEntry.valueNode.type === 'array') {
+    for (const p of getArrayStrings(pluginsEntry.valueNode)) {
+      edges.push({ edgeType: 'imports', metadata: { module: p, dialect: 'eslint' } });
     }
   }
 }
 
-function extractVscodeSettings(obj: Record<string, unknown>, add: AddFn): void {
-  for (const key of Object.keys(obj)) {
-    add(key, 'constant', { jsonKind: 'vscodeSetting' });
+function extractVscodeSettings(root: TSNode, add: AddFn): void {
+  const entries = getObjectEntries(root);
+  for (const [key, entry] of entries) {
+    add(key, 'constant', entry.pairNode, { jsonKind: 'vscodeSetting' });
   }
 }
 
-function extractVscodeLaunch(obj: Record<string, unknown>, add: AddFn): void {
-  if (Array.isArray(obj.configurations)) {
-    for (const config of obj.configurations) {
-      if (config && typeof config === 'object' && typeof (config as Record<string, unknown>).name === 'string') {
-        add((config as Record<string, unknown>).name as string, 'function', { jsonKind: 'launchConfig' });
+function extractVscodeLaunch(root: TSNode, add: AddFn): void {
+  const entries = getObjectEntries(root);
+  const configsEntry = entries.get('configurations');
+  if (configsEntry && configsEntry.valueNode.type === 'array') {
+    for (const child of configsEntry.valueNode.namedChildren) {
+      if (child.type === 'object') {
+        const configEntries = getObjectEntries(child);
+        const nameEntry = configEntries.get('name');
+        if (nameEntry && nameEntry.valueNode.type === 'string') {
+          const name = getStringText(nameEntry.valueNode);
+          if (name) add(name, 'function', child, { jsonKind: 'launchConfig' });
+        }
       }
     }
   }
 }
 
-function extractLerna(obj: Record<string, unknown>, add: AddFn): void {
-  if (Array.isArray(obj.packages)) {
-    for (const pkg of obj.packages) {
-      if (typeof pkg === 'string') add(pkg, 'constant', { jsonKind: 'lernaPackage' });
+function extractLerna(root: TSNode, add: AddFn): void {
+  const entries = getObjectEntries(root);
+
+  const pkgsEntry = entries.get('packages');
+  if (pkgsEntry && pkgsEntry.valueNode.type === 'array') {
+    for (const child of pkgsEntry.valueNode.namedChildren) {
+      const pkg = getStringText(child);
+      if (pkg) add(pkg, 'constant', child, { jsonKind: 'lernaPackage' });
     }
   }
-  for (const key of Object.keys(obj)) {
-    add(key, 'constant', { jsonKind: 'topLevelKey' });
+
+  for (const [key, entry] of entries) {
+    add(key, 'constant', entry.pairNode, { jsonKind: 'topLevelKey' });
   }
 }
 
-function extractBabel(obj: Record<string, unknown>, add: AddFn, edges: RawEdge[]): void {
-  if (Array.isArray(obj.presets)) {
-    for (const p of obj.presets) {
-      const name = typeof p === 'string' ? p : (Array.isArray(p) && typeof p[0] === 'string' ? p[0] : null);
-      if (name) edges.push({ edgeType: 'imports', metadata: { module: name, dialect: 'babel' } });
-    }
-  }
-  if (Array.isArray(obj.plugins)) {
-    for (const p of obj.plugins) {
-      const name = typeof p === 'string' ? p : (Array.isArray(p) && typeof p[0] === 'string' ? p[0] : null);
-      if (name) edges.push({ edgeType: 'imports', metadata: { module: name, dialect: 'babel' } });
+function extractBabel(root: TSNode, _add: AddFn, edges: RawEdge[]): void {
+  const entries = getObjectEntries(root);
+
+  for (const arrayKey of ['presets', 'plugins']) {
+    const arrEntry = entries.get(arrayKey);
+    if (arrEntry && arrEntry.valueNode.type === 'array') {
+      for (const child of arrEntry.valueNode.namedChildren) {
+        let name: string | undefined;
+        if (child.type === 'string') {
+          name = getStringText(child);
+        } else if (child.type === 'array') {
+          // Array form: ["preset-name", { options }]
+          name = getStringText(child.namedChildren[0]);
+        }
+        if (name) edges.push({ edgeType: 'imports', metadata: { module: name, dialect: 'babel' } });
+      }
     }
   }
 }
 
-function extractPrettier(obj: Record<string, unknown>, add: AddFn): void {
-  for (const key of Object.keys(obj)) {
-    add(key, 'constant', { jsonKind: 'prettierOption' });
+function extractPrettier(root: TSNode, add: AddFn): void {
+  const entries = getObjectEntries(root);
+  for (const [key, entry] of entries) {
+    add(key, 'constant', entry.pairNode, { jsonKind: 'prettierOption' });
   }
 }
 
-function extractNestCli(obj: Record<string, unknown>, add: AddFn): void {
-  if (obj.projects && typeof obj.projects === 'object') {
-    for (const projName of Object.keys(obj.projects as Record<string, unknown>)) {
-      add(projName, 'constant', { jsonKind: 'nestProject' });
+function extractNestCli(root: TSNode, add: AddFn): void {
+  const entries = getObjectEntries(root);
+
+  const projectsEntry = entries.get('projects');
+  if (projectsEntry && projectsEntry.valueNode.type === 'object') {
+    for (const child of projectsEntry.valueNode.namedChildren) {
+      if (child.type === 'pair') {
+        const projName = getStringText(child.childForFieldName('key'));
+        if (projName) add(projName, 'constant', child, { jsonKind: 'nestProject' });
+      }
     }
   }
-  for (const key of Object.keys(obj)) {
-    add(key, 'constant', { jsonKind: 'topLevelKey' });
+
+  for (const [key, entry] of entries) {
+    add(key, 'constant', entry.pairNode, { jsonKind: 'topLevelKey' });
   }
 }
 
-function extractAngular(obj: Record<string, unknown>, add: AddFn): void {
-  if (obj.projects && typeof obj.projects === 'object') {
-    const projects = obj.projects as Record<string, unknown>;
-    for (const projName of Object.keys(projects)) {
-      add(projName, 'namespace', { jsonKind: 'angularProject' });
-      const proj = projects[projName];
-      if (proj && typeof proj === 'object') {
-        const architect = (proj as Record<string, unknown>).architect;
-        if (architect && typeof architect === 'object') {
-          for (const target of Object.keys(architect as Record<string, unknown>)) {
-            add(target, 'function', { jsonKind: 'angularTarget', project: projName });
+function extractAngular(root: TSNode, add: AddFn): void {
+  const entries = getObjectEntries(root);
+
+  const projectsEntry = entries.get('projects');
+  if (projectsEntry && projectsEntry.valueNode.type === 'object') {
+    const projEntries = getObjectEntries(projectsEntry.valueNode);
+    for (const [projName, projEntry] of projEntries) {
+      add(projName, 'namespace', projEntry.pairNode, { jsonKind: 'angularProject' });
+
+      if (projEntry.valueNode.type === 'object') {
+        const projInnerEntries = getObjectEntries(projEntry.valueNode);
+        const architectEntry = projInnerEntries.get('architect');
+        if (architectEntry && architectEntry.valueNode.type === 'object') {
+          for (const child of architectEntry.valueNode.namedChildren) {
+            if (child.type === 'pair') {
+              const target = getStringText(child.childForFieldName('key'));
+              if (target) add(target, 'function', child, { jsonKind: 'angularTarget', project: projName });
+            }
           }
         }
       }
@@ -282,40 +390,59 @@ function extractAngular(obj: Record<string, unknown>, add: AddFn): void {
   }
 }
 
-function extractComposer(obj: Record<string, unknown>, add: AddFn, edges: RawEdge[]): void {
+function extractComposer(root: TSNode, add: AddFn, edges: RawEdge[]): void {
+  const entries = getObjectEntries(root);
+
   // Name
-  if (typeof obj.name === 'string') add(obj.name, 'constant', { jsonKind: 'composerName' });
+  const nameEntry = entries.get('name');
+  if (nameEntry && nameEntry.valueNode.type === 'string') {
+    add(getStringText(nameEntry.valueNode)!, 'constant', nameEntry.pairNode, { jsonKind: 'composerName' });
+  }
 
   // require / require-dev → import edges
   for (const depKey of ['require', 'require-dev']) {
-    const deps = obj[depKey];
-    if (deps && typeof deps === 'object') {
+    const depEntry = entries.get(depKey);
+    if (depEntry && depEntry.valueNode.type === 'object') {
       const isDev = depKey === 'require-dev';
-      for (const [pkg, ver] of Object.entries(deps as Record<string, unknown>)) {
-        edges.push({
-          edgeType: 'imports',
-          metadata: { module: pkg, version: ver, depType: depKey, dev: isDev, dialect: 'composer' },
-        });
+      for (const child of depEntry.valueNode.namedChildren) {
+        if (child.type === 'pair') {
+          const pkg = getStringText(child.childForFieldName('key'));
+          const ver = getStringText(child.childForFieldName('value'));
+          if (pkg) {
+            edges.push({
+              edgeType: 'imports',
+              metadata: { module: pkg, version: ver, depType: depKey, dev: isDev, dialect: 'composer' },
+            });
+          }
+        }
       }
     }
   }
 
   // Scripts
-  if (obj.scripts && typeof obj.scripts === 'object') {
-    for (const scriptName of Object.keys(obj.scripts as Record<string, unknown>)) {
-      add(scriptName, 'function', { jsonKind: 'composerScript' });
+  const scriptsEntry = entries.get('scripts');
+  if (scriptsEntry && scriptsEntry.valueNode.type === 'object') {
+    for (const child of scriptsEntry.valueNode.namedChildren) {
+      if (child.type === 'pair') {
+        const scriptName = getStringText(child.childForFieldName('key'));
+        if (scriptName) add(scriptName, 'function', child, { jsonKind: 'composerScript' });
+      }
     }
   }
 
   // Autoload namespaces
   for (const autoKey of ['autoload', 'autoload-dev']) {
-    const autoload = obj[autoKey];
-    if (autoload && typeof autoload === 'object') {
+    const autoEntry = entries.get(autoKey);
+    if (autoEntry && autoEntry.valueNode.type === 'object') {
+      const autoEntries = getObjectEntries(autoEntry.valueNode);
       for (const standard of ['psr-4', 'psr-0']) {
-        const map = (autoload as Record<string, unknown>)[standard];
-        if (map && typeof map === 'object') {
-          for (const ns of Object.keys(map as Record<string, unknown>)) {
-            add(ns, 'namespace', { jsonKind: 'autoloadNamespace', standard });
+        const mapEntry = autoEntries.get(standard);
+        if (mapEntry && mapEntry.valueNode.type === 'object') {
+          for (const child of mapEntry.valueNode.namedChildren) {
+            if (child.type === 'pair') {
+              const ns = getStringText(child.childForFieldName('key'));
+              if (ns) add(ns, 'namespace', child, { jsonKind: 'autoloadNamespace', standard });
+            }
           }
         }
       }
@@ -323,14 +450,15 @@ function extractComposer(obj: Record<string, unknown>, add: AddFn, edges: RawEdg
   }
 
   // Top-level keys
-  for (const key of Object.keys(obj)) {
-    add(key, 'constant', { jsonKind: 'topLevelKey' });
+  for (const [key, entry] of entries) {
+    add(key, 'constant', entry.pairNode, { jsonKind: 'topLevelKey' });
   }
 }
 
-function extractGenericJson(obj: Record<string, unknown>, add: AddFn): void {
-  for (const key of Object.keys(obj)) {
-    add(key, 'constant', { jsonKind: 'topLevelKey' });
+function extractGenericJson(root: TSNode, add: AddFn): void {
+  const entries = getObjectEntries(root);
+  for (const [key, entry] of entries) {
+    add(key, 'constant', entry.pairNode, { jsonKind: 'topLevelKey' });
   }
 }
 
@@ -339,150 +467,122 @@ function extractGenericJson(obj: Record<string, unknown>, add: AddFn): void {
 export class JsonLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'json-language',
-    version: '2.0.0',
+    version: '3.0.0',
     priority: 8,
   };
 
   supportedExtensions = ['.json', '.jsonc', '.json5'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const source = content.toString('utf-8');
       const symbols: RawSymbol[] = [];
       const edges: RawEdge[] = [];
       const seen = new Set<string>();
 
-      // Try parse — strip comments for JSONC
-      let obj: unknown;
-      try {
-        obj = JSON.parse(source);
-      } catch {
-        try {
-          obj = JSON.parse(stripJsonComments(source));
-        } catch {
-          // Unparseable — return empty
-          return ok({ language: 'json', status: 'ok', symbols: [] });
+      // tree-sitter-json does not handle JSONC comments, so strip them first
+      const cleanSource = stripJsonComments(source);
+
+      const parser = await getParser('json');
+      const tree = parser.parse(cleanSource);
+      const rootNode = tree.rootNode;
+
+      if (!rootNode || rootNode.namedChildCount === 0) {
+        return ok({ language: 'json', status: 'ok', symbols: [] });
+      }
+
+      const hasError = rootNode.hasError;
+
+      // Find the top-level object (document → object)
+      let rootObject: TSNode | null = null;
+      for (const child of rootNode.namedChildren) {
+        if (child.type === 'object') {
+          rootObject = child;
+          break;
         }
       }
 
       // We only extract from top-level objects
-      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
-        return ok({ language: 'json', status: 'ok', symbols: [] });
+      if (!rootObject) {
+        return ok({ language: 'json', status: hasError ? 'partial' : 'ok', symbols: [] });
       }
 
-      const record = obj as Record<string, unknown>;
-
-      // Approximate line numbers from key positions in source
-      const keyLines = new Map<string, number>();
-      let lineNum = 1;
-      let inStr = false;
-      let escape = false;
-      let keyBuf = '';
-      let collectingKey = false;
-      let braceDepth = 0;
-
-      for (let i = 0; i < source.length; i++) {
-        const ch = source[i];
-        if (ch === '\n') { lineNum++; continue; }
-
-        if (inStr) {
-          if (escape) { escape = false; if (collectingKey) keyBuf += ch; continue; }
-          if (ch === '\\') { escape = true; if (collectingKey) keyBuf += ch; continue; }
-          if (ch === '"') {
-            inStr = false;
-            if (collectingKey) {
-              // Check if next non-ws char is ':'
-              let j = i + 1;
-              while (j < source.length && (source[j] === ' ' || source[j] === '\t' || source[j] === '\r' || source[j] === '\n')) j++;
-              if (j < source.length && source[j] === ':') {
-                keyLines.set(`${braceDepth}:${keyBuf}`, lineNum);
-              }
-              keyBuf = '';
-              collectingKey = false;
-            }
-          } else if (collectingKey) {
-            keyBuf += ch;
-          }
-          continue;
-        }
-
-        if (ch === '{') { braceDepth++; continue; }
-        if (ch === '}') { braceDepth--; continue; }
-        if (ch === '[' || ch === ']') continue;
-        if (ch === '"') {
-          inStr = true;
-          collectingKey = true;
-          keyBuf = '';
-          continue;
-        }
-      }
-
-      const add: AddFn = (name: string, kind: SymbolKind, meta?: Record<string, unknown>) => {
+      const add: AddFn = (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>) => {
         if (!name) return;
         const id = symId(filePath, name, kind);
         if (seen.has(id)) return;
         seen.add(id);
-        // Try to find line number — check depth 1 first (top-level key), then any depth
-        const ln = keyLines.get(`1:${name}`) ?? keyLines.get(`2:${name}`) ?? 1;
         symbols.push({
-          symbolId: id, name, kind, fqn: name,
-          byteStart: 0, byteEnd: name.length,
-          lineStart: ln, lineEnd: ln,
+          symbolId: id,
+          name,
+          kind,
+          fqn: name,
+          byteStart: node.startIndex,
+          byteEnd: node.endIndex,
+          lineStart: node.startPosition.row + 1, // tree-sitter is 0-based
+          lineEnd: node.endPosition.row + 1,
           metadata: meta,
         });
       };
 
       const dialect = detectDialect(filePath);
+      const warnings: string[] = [];
+
+      if (hasError) {
+        warnings.push('Source contains syntax errors; extraction may be incomplete');
+      }
 
       switch (dialect) {
         case 'package-json':
-          extractPackageJson(record, add, edges);
+          extractPackageJson(rootObject, add, edges);
           break;
         case 'tsconfig':
-          extractTsconfig(record, add, edges);
+          extractTsconfig(rootObject, add, edges);
           break;
         case 'eslint':
-          extractEslint(record, add, edges);
+          extractEslint(rootObject, add, edges);
           break;
         case 'vscode-settings':
-          extractVscodeSettings(record, add);
+          extractVscodeSettings(rootObject, add);
           break;
         case 'vscode-launch':
-          extractVscodeLaunch(record, add);
+          extractVscodeLaunch(rootObject, add);
           break;
         case 'lerna':
-          extractLerna(record, add);
+          extractLerna(rootObject, add);
           break;
         case 'babel':
-          extractBabel(record, add, edges);
+          extractBabel(rootObject, add, edges);
           break;
         case 'prettier':
-          extractPrettier(record, add);
+          extractPrettier(rootObject, add);
           break;
         case 'nest-cli':
-          extractNestCli(record, add);
+          extractNestCli(rootObject, add);
           break;
         case 'angular':
-          extractAngular(record, add);
+          extractAngular(rootObject, add);
           break;
         case 'composer':
-          extractComposer(record, add, edges);
+          extractComposer(rootObject, add, edges);
           break;
         case 'generic':
         default:
-          extractGenericJson(record, add);
+          extractGenericJson(rootObject, add);
           break;
       }
 
       return ok({
         language: 'json',
-        status: 'ok',
+        status: hasError ? 'partial' : 'ok',
         symbols,
         edges: edges.length > 0 ? edges : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
         metadata: dialect !== 'generic' ? { jsonDialect: dialect } : undefined,
       });
-    } catch {
-      return ok({ language: 'json', status: 'ok', symbols: [] });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return err(parseError(filePath, `JSON parse failed: ${msg}`));
     }
   }
 }

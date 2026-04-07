@@ -1,29 +1,21 @@
 /**
- * TOML Language Plugin — dialect-aware symbol extraction.
+ * TOML Language Plugin — tree-sitter-based, dialect-aware symbol extraction.
+ *
+ * Uses tree-sitter-toml for structured AST parsing, providing correct handling
+ * of multiline values, inline tables, quoted keys, and dotted keys.
  *
  * Detects TOML dialect from filename (Cargo.toml, pyproject.toml, hugo.toml, etc.)
  * and applies specialized extraction for each dialect.
  *
  * Dialects: cargo, pyproject, hugo, rustfmt, deno, taplo, generic (fallback).
  */
-import { ok } from 'neverthrow';
+import { ok, err } from 'neverthrow';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
+import { parseError } from '../../../../errors.js';
+import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
 
 type TomlDialect = 'cargo' | 'pyproject' | 'hugo' | 'rustfmt' | 'deno' | 'taplo' | 'generic';
-
-function lineAt(source: string, offset: number): number {
-  let line = 1;
-  for (let i = 0; i < offset && i < source.length; i++) {
-    if (source[i] === '\n') line++;
-  }
-  return line;
-}
-
-function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parent?: string): string {
-  if (parent) return `${filePath}::${parent}::${name}#${kind}`;
-  return `${filePath}::${name}#${kind}`;
-}
 
 function detectDialect(filePath: string): TomlDialect {
   const basename = filePath.split('/').pop() ?? '';
@@ -38,197 +30,298 @@ function detectDialect(filePath: string): TomlDialect {
   return 'generic';
 }
 
+function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parent?: string): string {
+  if (parent) return `${filePath}::${parent}::${name}#${kind}`;
+  return `${filePath}::${name}#${kind}`;
+}
+
+/** Extract the key name from a table, table_array_element, or pair node. */
+function extractKeyName(node: TSNode): string | undefined {
+  // For table: [key] — children are "[", key, "]"
+  // For table_array_element: [[key]] — children are "[[", key, "]]"
+  // For pair: key = value — first named child is the key
+  for (const child of node.namedChildren) {
+    if (child.type === 'bare_key' || child.type === 'quoted_key') {
+      return child.text;
+    }
+    if (child.type === 'dotted_key') {
+      // Dotted keys like "tool.poetry.dependencies" — return full text
+      return child.text;
+    }
+  }
+  return undefined;
+}
+
+/** Extract the value text from a pair node. */
+function extractValueText(node: TSNode): string | undefined {
+  // pair has key and value children; value is the last named child
+  const children = node.namedChildren;
+  if (children.length >= 2) {
+    return children[children.length - 1].text;
+  }
+  return undefined;
+}
+
+/** Unquote a TOML string value (remove surrounding quotes). */
+function unquote(value: string): string {
+  return value.replace(/^["']|["']$/g, '');
+}
+
 export class TomlLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'toml-language',
-    version: '2.0.0',
+    version: '3.0.0',
     priority: 6,
   };
 
   supportedExtensions = ['.toml'];
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
-    const source = content.toString('utf-8');
-    const dialect = detectDialect(filePath);
-    const symbols: RawSymbol[] = [];
-    const edges: RawEdge[] = [];
-    const seen = new Set<string>();
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+    try {
+      const parser = await getParser('toml');
+      const source = content.toString('utf-8');
+      const tree = parser.parse(source);
+      const root: TSNode = tree.rootNode;
 
-    const lines = source.split('\n');
-    let currentTable = '';
-    let currentArrayTable = '';
-    let byteOffset = 0;
+      const hasError = root.hasError;
+      const dialect = detectDialect(filePath);
+      const symbols: RawSymbol[] = [];
+      const edges: RawEdge[] = [];
+      const warnings: string[] = [];
+      const seen = new Set<string>();
 
-    function addSymbol(name: string, kind: SymbolKind, line: number, offset: number, meta?: Record<string, unknown>, parent?: string): void {
-      const sid = makeSymbolId(filePath, name, kind, parent);
-      if (seen.has(sid)) return;
-      seen.add(sid);
-      symbols.push({
-        symbolId: sid,
-        name,
-        kind,
-        fqn: parent ? `${parent}.${name}` : name,
-        parentSymbolId: parent ? makeSymbolId(filePath, parent, 'namespace') : undefined,
-        byteStart: offset,
-        byteEnd: offset + name.length,
-        lineStart: line,
-        lineEnd: line,
-        metadata: meta,
-      });
-    }
-
-    function addEdge(module: string): void {
-      edges.push({ edgeType: 'imports', metadata: { module } });
-    }
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const lineNum = i + 1;
-      const lineOffset = byteOffset;
-
-      // [[array-of-tables]]
-      const arrayTableMatch = line.match(/^\s*\[\[([a-zA-Z_][a-zA-Z0-9_.-]*)\]\]/);
-      if (arrayTableMatch) {
-        currentArrayTable = arrayTableMatch[1];
-        currentTable = arrayTableMatch[1];
-
-        if (dialect === 'cargo' && currentTable === 'bin') {
-          // [[bin]] — will extract name from keys inside
-        } else if (dialect === 'generic') {
-          addSymbol(currentArrayTable, 'class', lineNum, lineOffset, { tomlKind: 'array-of-tables', dialect });
-        }
-
-        byteOffset += line.length + 1;
-        continue;
+      if (hasError) {
+        warnings.push('Source contains syntax errors; extraction may be incomplete');
       }
 
-      // [table]
-      const tableMatch = line.match(/^\s*\[([a-zA-Z_][a-zA-Z0-9_.-]*)\](?!\])/);
-      if (tableMatch) {
-        currentTable = tableMatch[1];
-        currentArrayTable = '';
+      let currentTable = '';
+      let currentArrayTable = '';
 
-        // Dialect-specific table handling
-        if (dialect === 'cargo') {
-          if (currentTable === 'package' || currentTable === 'features') {
-            // will extract keys inside
-          } else if (currentTable === 'dependencies' || currentTable.startsWith('dependencies.') ||
-                     currentTable === 'dev-dependencies' || currentTable === 'build-dependencies') {
-            // dependencies are handled per-key below
-          } else {
-            addSymbol(currentTable, 'namespace', lineNum, lineOffset, { tomlKind: 'table', dialect });
+      function addSymbol(
+        name: string,
+        kind: SymbolKind,
+        lineStart: number,
+        lineEnd: number,
+        byteStart: number,
+        byteEnd: number,
+        meta?: Record<string, unknown>,
+        parent?: string,
+      ): void {
+        const sid = makeSymbolId(filePath, name, kind, parent);
+        if (seen.has(sid)) return;
+        seen.add(sid);
+        symbols.push({
+          symbolId: sid,
+          name,
+          kind,
+          fqn: parent ? `${parent}.${name}` : name,
+          parentSymbolId: parent ? makeSymbolId(filePath, parent, 'namespace') : undefined,
+          byteStart,
+          byteEnd,
+          lineStart,
+          lineEnd,
+          metadata: meta,
+        });
+      }
+
+      function addEdge(module: string): void {
+        edges.push({ edgeType: 'imports', metadata: { module } });
+      }
+
+      for (const child of root.namedChildren) {
+        switch (child.type) {
+          case 'table': {
+            const tableName = extractKeyName(child);
+            if (!tableName) break;
+            currentTable = tableName;
+            currentArrayTable = '';
+
+            const ln = child.startPosition.row + 1;
+            const lnEnd = child.endPosition.row + 1;
+            const bs = child.startIndex;
+            const be = child.endIndex;
+
+            // Dialect-specific table handling
+            if (dialect === 'cargo') {
+              if (currentTable === 'package' || currentTable === 'features') {
+                // will extract keys inside
+              } else if (currentTable === 'dependencies' || currentTable.startsWith('dependencies.') ||
+                         currentTable === 'dev-dependencies' || currentTable === 'build-dependencies') {
+                // dependencies are handled per-key below
+              } else {
+                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+              }
+            } else if (dialect === 'pyproject') {
+              if (currentTable === 'project' || currentTable === 'build-system' ||
+                  currentTable === 'tool.poetry.dependencies' || currentTable.startsWith('tool.')) {
+                // will extract keys inside
+              } else {
+                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+              }
+            } else if (dialect === 'hugo') {
+              if (currentTable === 'params' || currentTable.startsWith('params.') ||
+                  currentTable === 'menu' || currentTable.startsWith('menu.')) {
+                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+              } else {
+                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+              }
+            } else {
+              // generic, rustfmt, deno, taplo
+              addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+            }
+
+            // Process pairs inside this table
+            this.processPairs(child, filePath, dialect, currentTable, currentArrayTable, addSymbol, addEdge);
+            break;
           }
-        } else if (dialect === 'pyproject') {
-          if (currentTable === 'project' || currentTable === 'build-system' ||
-              currentTable === 'tool.poetry.dependencies' || currentTable.startsWith('tool.')) {
-            // will extract keys inside
-          } else {
-            addSymbol(currentTable, 'namespace', lineNum, lineOffset, { tomlKind: 'table', dialect });
+
+          case 'table_array_element': {
+            const arrayTableName = extractKeyName(child);
+            if (!arrayTableName) break;
+            currentArrayTable = arrayTableName;
+            currentTable = arrayTableName;
+
+            const ln = child.startPosition.row + 1;
+            const lnEnd = child.endPosition.row + 1;
+            const bs = child.startIndex;
+            const be = child.endIndex;
+
+            if (dialect === 'cargo' && currentTable === 'bin') {
+              // [[bin]] — will extract name from keys inside
+            } else if (dialect === 'generic') {
+              addSymbol(currentArrayTable, 'class', ln, lnEnd, bs, be, { tomlKind: 'array-of-tables', dialect });
+            }
+
+            // Process pairs inside this array-of-tables element
+            this.processPairs(child, filePath, dialect, currentTable, currentArrayTable, addSymbol, addEdge);
+            break;
           }
-        } else if (dialect === 'hugo') {
-          if (currentTable === 'params' || currentTable.startsWith('params.') ||
-              currentTable === 'menu' || currentTable.startsWith('menu.')) {
-            addSymbol(currentTable, 'namespace', lineNum, lineOffset, { tomlKind: 'table', dialect });
-          } else {
-            addSymbol(currentTable, 'namespace', lineNum, lineOffset, { tomlKind: 'table', dialect });
+
+          case 'pair': {
+            // Top-level key = value (before any table)
+            this.processSinglePair(child, filePath, dialect, currentTable, currentArrayTable, addSymbol, addEdge);
+            break;
+          }
+        }
+      }
+
+      return ok({
+        language: 'toml',
+        status: hasError ? 'partial' : 'ok',
+        symbols,
+        edges: edges.length > 0 ? edges : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
+        metadata: { dialect },
+      });
+    } catch (e) {
+      return err(parseError(filePath, e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  /** Process all pair children within a table or table_array_element node. */
+  private processPairs(
+    parentNode: TSNode,
+    filePath: string,
+    dialect: TomlDialect,
+    currentTable: string,
+    currentArrayTable: string,
+    addSymbol: (name: string, kind: SymbolKind, lineStart: number, lineEnd: number, byteStart: number, byteEnd: number, meta?: Record<string, unknown>, parent?: string) => void,
+    addEdge: (module: string) => void,
+  ): void {
+    for (const child of parentNode.namedChildren) {
+      if (child.type === 'pair') {
+        this.processSinglePair(child, filePath, dialect, currentTable, currentArrayTable, addSymbol, addEdge);
+      }
+    }
+  }
+
+  /** Process a single pair node with dialect-specific logic. */
+  private processSinglePair(
+    pairNode: TSNode,
+    filePath: string,
+    dialect: TomlDialect,
+    currentTable: string,
+    currentArrayTable: string,
+    addSymbol: (name: string, kind: SymbolKind, lineStart: number, lineEnd: number, byteStart: number, byteEnd: number, meta?: Record<string, unknown>, parent?: string) => void,
+    addEdge: (module: string) => void,
+  ): void {
+    const key = extractKeyName(pairNode);
+    if (!key) return;
+
+    const valueText = extractValueText(pairNode) ?? '';
+    const unquotedValue = unquote(valueText);
+
+    const ln = pairNode.startPosition.row + 1;
+    const lnEnd = pairNode.endPosition.row + 1;
+    const bs = pairNode.startIndex;
+    const be = pairNode.endIndex;
+
+    switch (dialect) {
+      case 'cargo':
+        if (currentTable === 'package') {
+          if (key === 'name' || key === 'version') {
+            addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'package-field', dialect, value: unquotedValue }, 'package');
+          }
+        } else if (currentTable === 'dependencies' || currentTable === 'dev-dependencies' || currentTable === 'build-dependencies') {
+          addEdge(key);
+        } else if (currentTable === 'features') {
+          addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'feature', dialect }, 'features');
+        } else if (currentArrayTable === 'bin' && key === 'name') {
+          addSymbol(unquotedValue, 'constant', ln, lnEnd, bs, be, { tomlKind: 'binary', dialect });
+        } else {
+          addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+        }
+        break;
+
+      case 'pyproject':
+        if (currentTable === 'project') {
+          if (key === 'name' || key === 'version') {
+            addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'project-field', dialect, value: unquotedValue }, 'project');
+          }
+        } else if (currentTable === 'tool.poetry.dependencies') {
+          addEdge(key);
+        } else if (currentTable === 'build-system' && key === 'requires') {
+          // requires = ["setuptools"]
+          const deps = valueText.match(/"([^"]+)"/g);
+          if (deps) {
+            for (const dep of deps) {
+              addEdge(dep.replace(/"/g, '').split(/[><=!~]/)[0].trim());
+            }
           }
         } else {
-          // generic, rustfmt, deno, taplo
-          addSymbol(currentTable, 'namespace', lineNum, lineOffset, { tomlKind: 'table', dialect });
+          addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
         }
+        break;
 
-        byteOffset += line.length + 1;
-        continue;
-      }
-
-      // key = value
-      const kvMatch = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*(.*)/);
-      if (kvMatch) {
-        const key = kvMatch[1];
-        const value = kvMatch[2].trim();
-        const unquoted = value.replace(/^["']|["']$/g, '');
-
-        switch (dialect) {
-          case 'cargo':
-            if (currentTable === 'package') {
-              if (key === 'name' || key === 'version') {
-                addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'package-field', dialect, value: unquoted }, 'package');
-              }
-            } else if (currentTable === 'dependencies' || currentTable === 'dev-dependencies' || currentTable === 'build-dependencies') {
-              addEdge(key);
-            } else if (currentTable === 'features') {
-              addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'feature', dialect }, 'features');
-            } else if (currentArrayTable === 'bin' && key === 'name') {
-              addSymbol(unquoted, 'constant', lineNum, lineOffset, { tomlKind: 'binary', dialect });
-            } else {
-              addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'key', dialect }, currentTable || undefined);
-            }
-            break;
-
-          case 'pyproject':
-            if (currentTable === 'project') {
-              if (key === 'name' || key === 'version') {
-                addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'project-field', dialect, value: unquoted }, 'project');
-              }
-            } else if (currentTable === 'tool.poetry.dependencies') {
-              addEdge(key);
-            } else if (currentTable === 'build-system' && key === 'requires') {
-              // requires = ["setuptools"]
-              const deps = value.match(/"([^"]+)"/g);
-              if (deps) {
-                for (const dep of deps) {
-                  addEdge(dep.replace(/"/g, '').split(/[><=!~]/)[0].trim());
-                }
-              }
-            } else {
-              addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'key', dialect }, currentTable || undefined);
-            }
-            break;
-
-          case 'hugo':
-            if (key === 'theme') {
-              addEdge(unquoted);
-            }
-            addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'key', dialect }, currentTable || undefined);
-            break;
-
-          case 'rustfmt':
-            addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'config', dialect });
-            break;
-
-          case 'deno':
-            if (currentTable === 'tasks') {
-              addSymbol(key, 'function', lineNum, lineOffset, { tomlKind: 'task', dialect }, 'tasks');
-            } else if (currentTable === 'imports') {
-              addEdge(unquoted);
-            } else {
-              addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'key', dialect }, currentTable || undefined);
-            }
-            break;
-
-          case 'taplo':
-            addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'config', dialect });
-            break;
-
-          default:
-            // generic
-            addSymbol(key, 'constant', lineNum, lineOffset, { tomlKind: 'key', dialect }, currentTable || undefined);
-            break;
+      case 'hugo':
+        if (key === 'theme') {
+          addEdge(unquotedValue);
         }
+        addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+        break;
 
-        byteOffset += line.length + 1;
-        continue;
-      }
+      case 'rustfmt':
+        addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'config', dialect });
+        break;
 
-      byteOffset += line.length + 1;
+      case 'deno':
+        if (currentTable === 'tasks') {
+          addSymbol(key, 'function', ln, lnEnd, bs, be, { tomlKind: 'task', dialect }, 'tasks');
+        } else if (currentTable === 'imports') {
+          addEdge(unquotedValue);
+        } else {
+          addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+        }
+        break;
+
+      case 'taplo':
+        addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'config', dialect });
+        break;
+
+      default:
+        // generic
+        addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+        break;
     }
-
-    return ok({
-      language: 'toml',
-      status: 'ok',
-      symbols,
-      edges: edges.length > 0 ? edges : undefined,
-      metadata: { dialect },
-    });
   }
 }

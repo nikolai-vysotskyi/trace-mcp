@@ -1,5 +1,9 @@
 /**
- * YAML Language Plugin — dialect-aware symbol extraction.
+ * YAML Language Plugin — structural AST-based, dialect-aware symbol extraction.
+ *
+ * Uses the `yaml` package (parseDocument) for structural AST parsing with proper
+ * source ranges, then walks the AST tree to extract symbols. This replaces the
+ * fragile line-by-line regex+indent tracking approach.
  *
  * Detects YAML dialect from filename and top-level keys, then applies
  * specialised extraction rules for:
@@ -15,11 +19,96 @@
  *   - Generic YAML (top-level keys as constants)
  */
 import { ok } from 'neverthrow';
+import { parseDocument, isMap, isSeq, isPair, isScalar, type Document, type YAMLMap, type YAMLSeq, type Pair } from 'yaml';
 import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+function symId(filePath: string, name: string, kind: string): string {
+  return `${filePath}::${name}#${kind}`;
+}
+
+type AddFn = (name: string, kind: SymbolKind, offset: number, endOffset: number, meta?: Record<string, unknown>) => void;
+
+// ── YAML AST helpers ─────────────────────────────────────────────────────
+
+type YNode = ReturnType<Document['get']>;
+
+/** Get string value from a scalar node */
+function scalarVal(node: YNode): string | undefined {
+  if (isScalar(node)) return String(node.value);
+  return undefined;
+}
+
+/** Get the start offset of a YAML node */
+function nodeStart(node: YNode): number {
+  if (node && typeof node === 'object' && 'range' in node) {
+    const range = (node as { range?: [number, number, number] }).range;
+    if (range) return range[0];
+  }
+  return 0;
+}
+
+/** Get the end offset of a YAML node */
+function nodeEnd(node: YNode): number {
+  if (node && typeof node === 'object' && 'range' in node) {
+    const range = (node as { range?: [number, number, number] }).range;
+    if (range) return range[2];
+  }
+  return 0;
+}
+
+/** Get key string from a Pair */
+function pairKey(pair: Pair): string | undefined {
+  return scalarVal(pair.key as YNode);
+}
+
+/** Get value string from a Pair (only if value is a scalar) */
+function pairVal(pair: Pair): string | undefined {
+  return scalarVal(pair.value as YNode);
+}
+
+/** Get start offset of a Pair's key */
+function pairStart(pair: Pair): number {
+  return nodeStart(pair.key as YNode);
+}
+
+/** Get end offset of a Pair (end of its value, or key if no value) */
+function pairEnd(pair: Pair): number {
+  const valEnd = nodeEnd(pair.value as YNode);
+  return valEnd > 0 ? valEnd : nodeEnd(pair.key as YNode);
+}
+
+/** Get a child map entry by key name from a YAMLMap */
+function getMapPair(map: YAMLMap, key: string): Pair | undefined {
+  for (const item of map.items) {
+    if (isPair(item) && pairKey(item) === key) return item;
+  }
+  return undefined;
+}
+
+/** Get the value of a key from a YAMLMap, as a string */
+function getMapScalar(map: YAMLMap, key: string): string | undefined {
+  const pair = getMapPair(map, key);
+  return pair ? pairVal(pair) : undefined;
+}
+
+/** Get the value of a key from a YAMLMap, as a YAMLMap */
+function getMapMap(map: YAMLMap, key: string): YAMLMap | undefined {
+  const pair = getMapPair(map, key);
+  if (pair && isMap(pair.value)) return pair.value as YAMLMap;
+  return undefined;
+}
+
+/** Get the value of a key from a YAMLMap, as a YAMLSeq */
+function getMapSeq(map: YAMLMap, key: string): YAMLSeq | undefined {
+  const pair = getMapPair(map, key);
+  if (pair && isSeq(pair.value)) return pair.value as YAMLSeq;
+  return undefined;
+}
+
+/** Compute line number from offset in source */
 function lineAt(source: string, offset: number): number {
   let line = 1;
   for (let i = 0; i < offset && i < source.length; i++) {
@@ -28,8 +117,16 @@ function lineAt(source: string, offset: number): number {
   return line;
 }
 
-function symId(filePath: string, name: string, kind: string): string {
-  return `${filePath}::${name}#${kind}`;
+/** Get all key names from a YAMLMap */
+function getKeyNames(map: YAMLMap): Set<string> {
+  const keys = new Set<string>();
+  for (const item of map.items) {
+    if (isPair(item)) {
+      const k = pairKey(item);
+      if (k) keys.add(k);
+    }
+  }
+  return keys;
 }
 
 // ── Dialect detection ──────────────────────────────────────────────────────
@@ -47,10 +144,9 @@ type YamlDialect =
   | 'generic';
 
 /**
- * Detect dialect by scanning first ~50 lines for top-level keys, combined
- * with filename heuristics.
+ * Detect dialect using filename heuristics and top-level AST keys.
  */
-function detectDialect(filePath: string, lines: string[]): YamlDialect {
+function detectDialect(filePath: string, doc: Document): YamlDialect {
   const fn = filePath.toLowerCase().replace(/\\/g, '/');
   const baseName = fn.split('/').pop() ?? '';
 
@@ -64,282 +160,225 @@ function detectDialect(filePath: string, lines: string[]): YamlDialect {
   if (fn.includes('.circleci/') && (baseName === 'config.yml' || baseName === 'config.yaml')) return 'circleci';
   if (baseName === 'chart.yaml' || baseName === 'chart.yml') return 'helm-chart';
 
-  // Collect top-level keys from first ~50 lines
-  const topKeys = new Set<string>();
-  const limit = Math.min(lines.length, 50);
-  for (let i = 0; i < limit; i++) {
-    const line = lines[i];
-    // A top-level key is a non-comment, non-list-item line starting at column 0 with "key:"
-    if (line.length === 0 || line[0] === '#' || line[0] === ' ' || line[0] === '\t' || line[0] === '-') continue;
-    const colonIdx = line.indexOf(':');
-    if (colonIdx > 0) {
-      topKeys.add(line.slice(0, colonIdx).trim().toLowerCase());
-    }
-  }
+  const contents = doc.contents;
 
-  // Content-based detection
-  if (topKeys.has('services') && !topKeys.has('apiversion')) return 'docker-compose';
-  if (topKeys.has('on') && topKeys.has('jobs')) return 'github-actions';
-  if (topKeys.has('stages')) {
-    // Check for job-like keys with script: in body
-    for (let i = 0; i < limit; i++) {
-      const line = lines[i];
-      if (line.startsWith('  script:') || line.startsWith('    script:') || line === '  script:') {
-        return 'gitlab-ci';
+  // Root is a sequence -> check for Ansible
+  if (isSeq(contents)) {
+    for (const item of contents.items) {
+      if (isMap(item)) {
+        const keys = getKeyNames(item);
+        if (keys.has('hosts') || keys.has('name')) return 'ansible-playbook';
       }
     }
-    // Still likely gitlab-ci if stages is present
-    return 'gitlab-ci';
+    return 'generic';
   }
-  if (topKeys.has('apiversion') && topKeys.has('kind')) return 'kubernetes';
-  if (topKeys.has('openapi') || topKeys.has('swagger')) return 'openapi';
-  if (topKeys.has('awstemplateformatversion') || (topKeys.has('resources') && hasCloudFormationResources(lines, limit))) return 'cloudformation';
 
-  // Ansible: top-level list with "hosts:" or "- name:"
-  for (let i = 0; i < limit; i++) {
-    const line = lines[i];
-    if (line.startsWith('- hosts:') || line.startsWith('- name:')) return 'ansible-playbook';
+  if (!isMap(contents)) return 'generic';
+
+  const topKeyNames = new Set([...getKeyNames(contents)].map(k => k.toLowerCase()));
+
+  // Content-based detection
+  if (topKeyNames.has('services') && !topKeyNames.has('apiversion')) return 'docker-compose';
+  if (topKeyNames.has('on') && topKeyNames.has('jobs')) return 'github-actions';
+  if (topKeyNames.has('stages')) return 'gitlab-ci';
+  if (topKeyNames.has('apiversion') && topKeyNames.has('kind')) return 'kubernetes';
+  if (topKeyNames.has('openapi') || topKeyNames.has('swagger')) return 'openapi';
+
+  // CloudFormation
+  if (topKeyNames.has('awstemplateformatversion')) return 'cloudformation';
+  const resourcesMap = getMapMap(contents, 'Resources');
+  if (resourcesMap) {
+    for (const resPair of resourcesMap.items) {
+      if (isPair(resPair) && isMap(resPair.value)) {
+        const typeVal = getMapScalar(resPair.value as YAMLMap, 'Type');
+        if (typeVal && typeVal.includes('AWS::')) return 'cloudformation';
+      }
+    }
   }
 
   return 'generic';
 }
 
-/** Check if Resources section contains AWS resource types */
-function hasCloudFormationResources(lines: string[], limit: number): boolean {
-  let inResources = false;
-  for (let i = 0; i < limit; i++) {
-    const line = lines[i];
-    if (line === 'Resources:') { inResources = true; continue; }
-    if (inResources && line.length > 0 && line[0] !== ' ' && line[0] !== '\t') break;
-    if (inResources && line.includes('Type:') && line.includes('AWS::')) return true;
-  }
-  return false;
-}
-
-// ── Indent tracking helpers ────────────────────────────────────────────────
-
-function getIndent(line: string): number {
-  let n = 0;
-  for (let i = 0; i < line.length; i++) {
-    if (line[i] === ' ') n++;
-    else if (line[i] === '\t') n += 2;
-    else break;
-  }
-  return n;
-}
-
-function lineOffset(lines: string[], lineIdx: number): number {
-  let off = 0;
-  for (let i = 0; i < lineIdx; i++) {
-    off += lines[i].length + 1; // +1 for \n
-  }
-  return off;
-}
-
 // ── Dialect extractors ─────────────────────────────────────────────────────
 
-function extractDockerCompose(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
-  let inServices = false;
-  let serviceIndent = -1;
-  let currentService = '';
-  let currentServiceIndent = -1;
+function extractDockerCompose(
+  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+): void {
+  // Services
+  const servicesMap = getMapMap(rootMap, 'services');
+  if (servicesMap) {
+    for (const svcPair of servicesMap.items) {
+      if (!isPair(svcPair)) continue;
+      const svcName = pairKey(svcPair);
+      if (!svcName) continue;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
+      add(svcName, 'class', pairStart(svcPair), pairEnd(svcPair), { yamlKind: 'service' });
 
-    // Detect services: block
-    if (indent === 0 && trimmed.startsWith('services:')) {
-      inServices = true;
-      serviceIndent = -1;
-      continue;
-    }
-    if (indent === 0 && !trimmed.startsWith('services:')) {
-      inServices = false;
-      continue;
-    }
+      if (!isMap(svcPair.value)) continue;
+      const svcMap = svcPair.value as YAMLMap;
 
-    if (!inServices) continue;
-
-    // First indented line under services: determines service indent level
-    if (serviceIndent === -1 && indent > 0) {
-      serviceIndent = indent;
-    }
-
-    // Service name
-    if (indent === serviceIndent && trimmed.includes(':')) {
-      const colonIdx = trimmed.indexOf(':');
-      const svcName = trimmed.slice(0, colonIdx).trim();
-      if (svcName && !svcName.startsWith('-') && !svcName.startsWith('#')) {
-        currentService = svcName;
-        currentServiceIndent = indent;
-        add(svcName, 'class', lineOffset(lines, i), { yamlKind: 'service' });
-      }
-      continue;
-    }
-
-    if (currentService && indent > currentServiceIndent) {
       // image:
-      if (trimmed.startsWith('image:')) {
-        const val = trimmed.slice(6).trim();
-        if (val) add(`${currentService}:image`, 'constant', lineOffset(lines, i), { yamlKind: 'image', value: val });
+      const imagePair = getMapPair(svcMap, 'image');
+      if (imagePair) {
+        const imageVal = pairVal(imagePair);
+        if (imageVal) add(`${svcName}:image`, 'constant', pairStart(imagePair), pairEnd(imagePair), { yamlKind: 'image', value: imageVal });
       }
+
       // ports:
-      if (trimmed.startsWith('- ') && lookBackForKey(lines, i, 'ports')) {
-        const portVal = trimmed.slice(2).trim().replace(/['"]/g, '');
-        if (portVal) add(`${currentService}:${portVal}`, 'constant', lineOffset(lines, i), { yamlKind: 'port', value: portVal });
-      }
-      // depends_on entries
-      if (trimmed.startsWith('- ') && lookBackForKey(lines, i, 'depends_on')) {
-        const dep = trimmed.slice(2).trim().replace(/['"]/g, '');
-        if (dep) {
-          edges.push({
-            sourceSymbolId: symId(filePath, currentService, 'class'),
-            targetSymbolId: symId(filePath, dep, 'class'),
-            edgeType: 'depends_on',
-            metadata: { dialect: 'docker-compose' },
-          });
+      const portsSeq = getMapSeq(svcMap, 'ports');
+      if (portsSeq) {
+        for (const item of portsSeq.items) {
+          const portVal = scalarVal(item as YNode);
+          if (portVal) add(`${svcName}:${portVal}`, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'port', value: portVal });
         }
       }
-      // volumes: entries (named or bind mount)
-      if (trimmed.startsWith('- ') && lookBackForKey(lines, i, 'volumes')) {
-        const vol = trimmed.slice(2).trim().replace(/['"]/g, '');
-        if (vol) {
-          const hostPath = vol.split(':')[0];
-          add(`${currentService}:vol:${hostPath}`, 'constant', lineOffset(lines, i), { yamlKind: 'volume', value: vol, service: currentService });
+
+      // depends_on:
+      const depsPair = getMapPair(svcMap, 'depends_on');
+      if (depsPair) {
+        // depends_on can be a sequence or a mapping
+        if (isSeq(depsPair.value)) {
+          for (const item of (depsPair.value as YAMLSeq).items) {
+            const dep = scalarVal(item as YNode);
+            if (dep) {
+              edges.push({
+                sourceSymbolId: symId(filePath, svcName, 'class'),
+                targetSymbolId: symId(filePath, dep, 'class'),
+                edgeType: 'depends_on',
+                metadata: { dialect: 'docker-compose' },
+              });
+            }
+          }
+        } else if (isMap(depsPair.value)) {
+          for (const depPair of (depsPair.value as YAMLMap).items) {
+            if (!isPair(depPair)) continue;
+            const dep = pairKey(depPair);
+            if (dep) {
+              edges.push({
+                sourceSymbolId: symId(filePath, svcName, 'class'),
+                targetSymbolId: symId(filePath, dep, 'class'),
+                edgeType: 'depends_on',
+                metadata: { dialect: 'docker-compose' },
+              });
+            }
+          }
         }
       }
-      // networks: entries
-      if (trimmed.startsWith('- ') && lookBackForKey(lines, i, 'networks')) {
-        const net = trimmed.slice(2).trim().replace(/['"]/g, '');
-        if (net) {
-          add(`${currentService}:net:${net}`, 'constant', lineOffset(lines, i), { yamlKind: 'network', value: net, service: currentService });
+
+      // volumes:
+      const volsSeq = getMapSeq(svcMap, 'volumes');
+      if (volsSeq) {
+        for (const item of volsSeq.items) {
+          const vol = scalarVal(item as YNode);
+          if (vol) {
+            const hostPath = vol.split(':')[0];
+            add(`${svcName}:vol:${hostPath}`, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'volume', value: vol, service: svcName });
+          }
         }
       }
-      // environment: key=value entries
-      if (trimmed.startsWith('- ') && lookBackForKey(lines, i, 'environment')) {
-        const envEntry = trimmed.slice(2).trim().replace(/['"]/g, '');
-        const eqIdx = envEntry.indexOf('=');
-        if (eqIdx > 0) {
-          const envKey = envEntry.slice(0, eqIdx);
-          add(`${currentService}:env:${envKey}`, 'variable', lineOffset(lines, i), { yamlKind: 'envVar', key: envKey, service: currentService });
+
+      // networks:
+      const netsSeq = getMapSeq(svcMap, 'networks');
+      if (netsSeq) {
+        for (const item of netsSeq.items) {
+          const net = scalarVal(item as YNode);
+          if (net) add(`${svcName}:net:${net}`, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'network', value: net, service: svcName });
+        }
+      }
+      // networks can also be a mapping
+      const netsMap = getMapMap(svcMap, 'networks');
+      if (netsMap) {
+        for (const netPair of netsMap.items) {
+          if (!isPair(netPair)) continue;
+          const net = pairKey(netPair);
+          if (net) add(`${svcName}:net:${net}`, 'constant', pairStart(netPair), pairEnd(netPair), { yamlKind: 'network', value: net, service: svcName });
+        }
+      }
+
+      // environment:
+      const envPair = getMapPair(svcMap, 'environment');
+      if (envPair) {
+        // Mapping form: KEY: value
+        if (isMap(envPair.value)) {
+          for (const ePair of (envPair.value as YAMLMap).items) {
+            if (!isPair(ePair)) continue;
+            const envKey = pairKey(ePair);
+            if (envKey) add(`${svcName}:env:${envKey}`, 'variable', pairStart(ePair), pairEnd(ePair), { yamlKind: 'envVar', key: envKey, service: svcName });
+          }
+        }
+        // Sequence form: - KEY=value
+        if (isSeq(envPair.value)) {
+          for (const item of (envPair.value as YAMLSeq).items) {
+            const envEntry = scalarVal(item as YNode);
+            if (envEntry) {
+              const eqIdx = envEntry.indexOf('=');
+              if (eqIdx > 0) {
+                const envKey = envEntry.slice(0, eqIdx);
+                add(`${svcName}:env:${envKey}`, 'variable', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'envVar', key: envKey, service: svcName });
+              }
+            }
+          }
         }
       }
     }
   }
 
-  // Top-level volumes and networks (outside services)
-  let inTopVolumes = false;
-  let inTopNetworks = false;
-  let topBlockIndent = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
-
-    if (indent === 0 && trimmed.startsWith('volumes:')) {
-      inTopVolumes = true;
-      inTopNetworks = false;
-      topBlockIndent = -1;
-      continue;
+  // Top-level volumes
+  const volumesMap = getMapMap(rootMap, 'volumes');
+  if (volumesMap) {
+    for (const pair of volumesMap.items) {
+      if (!isPair(pair)) continue;
+      const name = pairKey(pair);
+      if (name) add(name, 'variable', pairStart(pair), pairEnd(pair), { yamlKind: 'volumeDef' });
     }
-    if (indent === 0 && trimmed.startsWith('networks:')) {
-      inTopNetworks = true;
-      inTopVolumes = false;
-      topBlockIndent = -1;
-      continue;
-    }
-    if (indent === 0) {
-      inTopVolumes = false;
-      inTopNetworks = false;
-      continue;
-    }
+  }
 
-    if (topBlockIndent === -1 && indent > 0) topBlockIndent = indent;
-
-    if (indent === topBlockIndent && trimmed.includes(':')) {
-      const colonIdx = trimmed.indexOf(':');
-      const name = trimmed.slice(0, colonIdx).trim();
-      if (name && !name.startsWith('#')) {
-        if (inTopVolumes) {
-          add(name, 'variable', lineOffset(lines, i), { yamlKind: 'volumeDef' });
-        }
-        if (inTopNetworks) {
-          add(name, 'variable', lineOffset(lines, i), { yamlKind: 'networkDef' });
-        }
-      }
+  // Top-level networks
+  const networksMap = getMapMap(rootMap, 'networks');
+  if (networksMap) {
+    for (const pair of networksMap.items) {
+      if (!isPair(pair)) continue;
+      const name = pairKey(pair);
+      if (name) add(name, 'variable', pairStart(pair), pairEnd(pair), { yamlKind: 'networkDef' });
     }
   }
 }
 
-function lookBackForKey(lines: string[], idx: number, key: string): boolean {
-  for (let i = idx - 1; i >= 0 && i >= idx - 5; i--) {
-    const t = lines[i].trimStart();
-    if (t.startsWith(key + ':')) return true;
-    if (t.length > 0 && !t.startsWith('-') && !t.startsWith('#')) return false;
-  }
-  return false;
-}
+function extractGitHubActions(
+  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+): void {
+  const jobsMap = getMapMap(rootMap, 'jobs');
+  if (!jobsMap) return;
 
-function extractGitHubActions(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
-  let inJobs = false;
-  let jobIndent = -1;
-  let currentJob = '';
-  let inSteps = false;
+  for (const jobPair of jobsMap.items) {
+    if (!isPair(jobPair)) continue;
+    const jobName = pairKey(jobPair);
+    if (!jobName) continue;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
+    add(jobName, 'function', pairStart(jobPair), pairEnd(jobPair), { yamlKind: 'job' });
 
-    if (indent === 0 && trimmed.startsWith('jobs:')) {
-      inJobs = true;
-      jobIndent = -1;
-      continue;
-    }
-    if (indent === 0 && !trimmed.startsWith('jobs:')) {
-      inJobs = false;
-      continue;
-    }
+    if (!isMap(jobPair.value)) continue;
+    const jobMap = jobPair.value as YAMLMap;
 
-    if (!inJobs) continue;
+    // Steps
+    const stepsSeq = getMapSeq(jobMap, 'steps');
+    if (!stepsSeq) continue;
 
-    if (jobIndent === -1 && indent > 0) jobIndent = indent;
+    for (const item of stepsSeq.items) {
+      if (!isMap(item)) continue;
+      const stepMap = item as YAMLMap;
 
-    // Job name at job indent level
-    if (indent === jobIndent && trimmed.includes(':') && !trimmed.startsWith('-')) {
-      const colonIdx = trimmed.indexOf(':');
-      const jobName = trimmed.slice(0, colonIdx).trim();
-      if (jobName) {
-        currentJob = jobName;
-        inSteps = false;
-        add(jobName, 'function', lineOffset(lines, i), { yamlKind: 'job' });
-      }
-      continue;
-    }
-
-    // Steps detection
-    if (trimmed === 'steps:') {
-      inSteps = true;
-      continue;
-    }
-
-    if (inSteps && indent > jobIndent) {
       // Step name
-      if (trimmed.startsWith('- name:')) {
-        const stepName = trimmed.slice(7).trim().replace(/^['"]|['"]$/g, '');
-        if (stepName) {
-          add(stepName, 'constant', lineOffset(lines, i), { yamlKind: 'step', job: currentJob });
-        }
+      const namePair = getMapPair(stepMap, 'name');
+      if (namePair) {
+        const stepName = pairVal(namePair);
+        if (stepName) add(stepName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'step', job: jobName });
       }
+
       // uses:
-      if (trimmed.startsWith('uses:') || trimmed.startsWith('- uses:')) {
-        const usesVal = trimmed.replace(/^-?\s*uses:\s*/, '').trim().replace(/^['"]|['"]$/g, '');
+      const usesPair = getMapPair(stepMap, 'uses');
+      if (usesPair) {
+        const usesVal = pairVal(usesPair);
         if (usesVal) {
           edges.push({ edgeType: 'imports', metadata: { module: usesVal, dialect: 'github-actions' } });
         }
@@ -348,421 +387,360 @@ function extractGitHubActions(filePath: string, lines: string[], symbols: RawSym
   }
 }
 
-function extractGitLabCI(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
+function extractGitLabCI(
+  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+): void {
+  const reservedKeys = new Set([
+    'stages', 'variables', 'default', 'include', 'image', 'services',
+    'before_script', 'after_script', 'cache', 'workflow',
+  ]);
+
   // Extract stages
-  let inStages = false;
-  const reservedKeys = new Set(['stages', 'variables', 'default', 'include', 'image', 'services', 'before_script', 'after_script', 'cache', 'workflow']);
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
-
-    if (indent === 0 && trimmed === 'stages:') {
-      inStages = true;
-      continue;
+  const stagesSeq = getMapSeq(rootMap, 'stages');
+  if (stagesSeq) {
+    for (const item of stagesSeq.items) {
+      const stageName = scalarVal(item as YNode);
+      if (stageName) add(stageName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'stage' });
     }
+  }
 
-    if (inStages && indent > 0 && trimmed.startsWith('- ')) {
-      const stageName = trimmed.slice(2).trim().replace(/^['"]|['"]$/g, '');
-      if (stageName) add(stageName, 'constant', lineOffset(lines, i), { yamlKind: 'stage' });
-      continue;
-    }
-
-    if (indent === 0) {
-      inStages = false;
-      // Top-level key that's not reserved = job name
-      const colonIdx = trimmed.indexOf(':');
-      if (colonIdx > 0) {
-        const key = trimmed.slice(0, colonIdx).trim();
-        if (key && !key.startsWith('.') && !reservedKeys.has(key)) {
-          add(key, 'function', lineOffset(lines, i), { yamlKind: 'job' });
-        }
-      }
+  // Top-level keys that are not reserved = job names
+  for (const pair of rootMap.items) {
+    if (!isPair(pair)) continue;
+    const key = pairKey(pair);
+    if (key && !key.startsWith('.') && !reservedKeys.has(key)) {
+      add(key, 'function', pairStart(pair), pairEnd(pair), { yamlKind: 'job' });
     }
   }
 }
 
-function extractKubernetes(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
+function extractKubernetes(
+  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+): void {
+  // kind:
   let kind = '';
+  const kindPair = getMapPair(rootMap, 'kind');
+  if (kindPair) {
+    kind = pairVal(kindPair) ?? '';
+    if (kind) add(kind, 'type', pairStart(kindPair), pairEnd(kindPair), { yamlKind: 'k8sKind' });
+  }
+
+  // metadata.name
   let metadataName = '';
-  let inMetadata = false;
-  let inContainers = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
-
-    if (indent === 0 && trimmed.startsWith('kind:')) {
-      kind = trimmed.slice(5).trim().replace(/^['"]|['"]$/g, '');
-      if (kind) add(kind, 'type', lineOffset(lines, i), { yamlKind: 'k8sKind' });
+  const metaMap = getMapMap(rootMap, 'metadata');
+  if (metaMap) {
+    const namePair = getMapPair(metaMap, 'name');
+    if (namePair) {
+      metadataName = pairVal(namePair) ?? '';
+      if (metadataName) add(metadataName, 'constant', pairStart(namePair), pairEnd(namePair), { yamlKind: 'k8sName', kind });
     }
+  }
 
-    if (indent === 0 && trimmed === 'metadata:') {
-      inMetadata = true;
-      inContainers = false;
-      continue;
-    }
+  // Walk the entire tree for containers, volume mounts, configMapRef, secretRef, selectors
+  walkK8sNode(filePath, rootMap, kind, metadataName, edges, add);
+}
 
-    if (inMetadata && indent > 0 && trimmed.startsWith('name:')) {
-      metadataName = trimmed.slice(5).trim().replace(/^['"]|['"]$/g, '');
-      if (metadataName) add(metadataName, 'constant', lineOffset(lines, i), { yamlKind: 'k8sName', kind });
-      inMetadata = false;
-    }
+/** Recursively walk Kubernetes AST nodes for nested structures */
+function walkK8sNode(
+  filePath: string, node: YNode, kind: string, metadataName: string,
+  edges: RawEdge[], add: AddFn,
+): void {
+  if (isMap(node)) {
+    const map = node as YAMLMap;
 
-    if (indent === 0) {
-      inMetadata = false;
-      inContainers = false;
-    }
-
-    // Container names and images
-    if (trimmed === 'containers:' || trimmed === '- containers:') {
-      inContainers = true;
-      continue;
-    }
-
-    if (inContainers) {
-      if (trimmed.startsWith('- name:')) {
-        const cName = trimmed.slice(7).trim().replace(/^['"]|['"]$/g, '');
-        if (cName) add(cName, 'constant', lineOffset(lines, i), { yamlKind: 'container' });
-      }
-      if (trimmed.startsWith('image:')) {
-        const img = trimmed.slice(6).trim().replace(/^['"]|['"]$/g, '');
-        if (img) add(img, 'constant', lineOffset(lines, i), { yamlKind: 'containerImage' });
-      }
-    }
-
-    // Volume mounts
-    if (trimmed.startsWith('- mountPath:')) {
-      const mp = trimmed.slice(12).trim().replace(/^['"]|['"]$/g, '');
-      if (mp) add(`mount:${mp}`, 'variable', lineOffset(lines, i), { yamlKind: 'volumeMount', kind, resource: metadataName });
-    }
-
-    // configMapRef / secretRef (may be prefixed with "- ")
-    if (trimmed.startsWith('configMapRef:') || trimmed.startsWith('- configMapRef:') || trimmed.startsWith('configMapKeyRef:') || trimmed.startsWith('- configMapKeyRef:')) {
-      // Look ahead for name:
-      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-        const next = lines[j].trimStart();
-        if (next.startsWith('name:')) {
-          const ref = next.slice(5).trim().replace(/^['"]|['"]$/g, '');
-          if (ref) {
-            add(`configMap:${ref}`, 'constant', lineOffset(lines, i), { yamlKind: 'configMapRef', resource: metadataName });
-            edges.push({
-              sourceSymbolId: symId(filePath, metadataName || kind, 'constant'),
-              targetSymbolId: symId(filePath, `configMap:${ref}`, 'constant'),
-              edgeType: 'depends_on',
-              metadata: { dialect: 'kubernetes', refKind: 'configMap' },
-            });
-          }
-          break;
+    // containers:
+    const containersSeq = getMapSeq(map, 'containers');
+    if (containersSeq) {
+      for (const item of containersSeq.items) {
+        if (!isMap(item)) continue;
+        const containerMap = item as YAMLMap;
+        const cName = getMapScalar(containerMap, 'name');
+        if (cName) {
+          const cNamePair = getMapPair(containerMap, 'name')!;
+          add(cName, 'constant', pairStart(cNamePair), pairEnd(cNamePair), { yamlKind: 'container' });
         }
-      }
-    }
-    if (trimmed.startsWith('secretRef:') || trimmed.startsWith('- secretRef:') || trimmed.startsWith('secretKeyRef:') || trimmed.startsWith('- secretKeyRef:')) {
-      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-        const next = lines[j].trimStart();
-        if (next.startsWith('name:')) {
-          const ref = next.slice(5).trim().replace(/^['"]|['"]$/g, '');
-          if (ref) {
-            add(`secret:${ref}`, 'constant', lineOffset(lines, i), { yamlKind: 'secretRef', resource: metadataName });
-            edges.push({
-              sourceSymbolId: symId(filePath, metadataName || kind, 'constant'),
-              targetSymbolId: symId(filePath, `secret:${ref}`, 'constant'),
-              edgeType: 'depends_on',
-              metadata: { dialect: 'kubernetes', refKind: 'secret' },
-            });
-          }
-          break;
+        const cImage = getMapScalar(containerMap, 'image');
+        if (cImage) {
+          const cImagePair = getMapPair(containerMap, 'image')!;
+          add(cImage, 'constant', pairStart(cImagePair), pairEnd(cImagePair), { yamlKind: 'containerImage' });
         }
       }
     }
 
-    // Service selector → creates edge to matching deployment
-    if (kind === 'Service' && trimmed.startsWith('app:') && lookBackForKey(lines, i, 'selector')) {
-      const selectorApp = trimmed.slice(4).trim().replace(/^['"]|['"]$/g, '');
-      if (selectorApp && metadataName) {
-        add(`selector:${selectorApp}`, 'constant', lineOffset(lines, i), { yamlKind: 'serviceSelector', service: metadataName, app: selectorApp });
+    // volumeMounts entries
+    const vmSeq = getMapSeq(map, 'volumeMounts');
+    if (vmSeq) {
+      for (const item of vmSeq.items) {
+        if (!isMap(item)) continue;
+        const vmMap = item as YAMLMap;
+        const mp = getMapScalar(vmMap, 'mountPath');
+        if (mp) {
+          const mpPair = getMapPair(vmMap, 'mountPath')!;
+          add(`mount:${mp}`, 'variable', pairStart(mpPair), pairEnd(mpPair), { yamlKind: 'volumeMount', kind, resource: metadataName });
+        }
       }
+    }
+
+    // configMapRef / configMapKeyRef
+    for (const refKey of ['configMapRef', 'configMapKeyRef']) {
+      const refMap = getMapMap(map, refKey);
+      if (refMap) {
+        const ref = getMapScalar(refMap, 'name');
+        if (ref) {
+          const refPair = getMapPair(map, refKey)!;
+          add(`configMap:${ref}`, 'constant', pairStart(refPair), pairEnd(refPair), { yamlKind: 'configMapRef', resource: metadataName });
+          edges.push({
+            sourceSymbolId: symId(filePath, metadataName || kind, 'constant'),
+            targetSymbolId: symId(filePath, `configMap:${ref}`, 'constant'),
+            edgeType: 'depends_on',
+            metadata: { dialect: 'kubernetes', refKind: 'configMap' },
+          });
+        }
+      }
+    }
+
+    // secretRef / secretKeyRef
+    for (const refKey of ['secretRef', 'secretKeyRef']) {
+      const refMap = getMapMap(map, refKey);
+      if (refMap) {
+        const ref = getMapScalar(refMap, 'name');
+        if (ref) {
+          const refPair = getMapPair(map, refKey)!;
+          add(`secret:${ref}`, 'constant', pairStart(refPair), pairEnd(refPair), { yamlKind: 'secretRef', resource: metadataName });
+          edges.push({
+            sourceSymbolId: symId(filePath, metadataName || kind, 'constant'),
+            targetSymbolId: symId(filePath, `secret:${ref}`, 'constant'),
+            edgeType: 'depends_on',
+            metadata: { dialect: 'kubernetes', refKind: 'secret' },
+          });
+        }
+      }
+    }
+
+    // Service selector with app: label
+    if (kind === 'Service') {
+      const selectorMap = getMapMap(map, 'selector');
+      if (selectorMap) {
+        const appPair = getMapPair(selectorMap, 'app');
+        if (appPair) {
+          const selectorApp = pairVal(appPair);
+          if (selectorApp && metadataName) {
+            add(`selector:${selectorApp}`, 'constant', pairStart(appPair), pairEnd(appPair), { yamlKind: 'serviceSelector', service: metadataName, app: selectorApp });
+          }
+        }
+      }
+    }
+
+    // Recurse into all map values
+    for (const pair of map.items) {
+      if (isPair(pair)) {
+        walkK8sNode(filePath, pair.value as YNode, kind, metadataName, edges, add);
+      }
+    }
+  } else if (isSeq(node)) {
+    for (const item of (node as YAMLSeq).items) {
+      walkK8sNode(filePath, item as YNode, kind, metadataName, edges, add);
     }
   }
 }
 
-function extractAnsible(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
+function extractAnsible(
+  filePath: string, doc: Document, edges: RawEdge[], add: AddFn,
+): void {
+  const contents = doc.contents;
+  if (!isSeq(contents)) return;
+
+  for (const item of contents.items) {
+    if (!isMap(item)) continue;
+    const playMap = item as YAMLMap;
 
     // Play name (top-level - name:)
-    if (trimmed.startsWith('- name:') && getIndent(line) === 0) {
-      const name = trimmed.slice(7).trim().replace(/^['"]|['"]$/g, '');
-      if (name) add(name, 'constant', lineOffset(lines, i), { yamlKind: 'play' });
+    const namePair = getMapPair(playMap, 'name');
+    if (namePair) {
+      const name = pairVal(namePair);
+      if (name) add(name, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'play' });
     }
 
-    // Task name (indented - name:)
-    if (trimmed.startsWith('- name:') && getIndent(line) > 0) {
-      const name = trimmed.slice(7).trim().replace(/^['"]|['"]$/g, '');
-      if (name) add(name, 'function', lineOffset(lines, i), { yamlKind: 'task' });
-    }
-
-    // Role references
-    if (trimmed.startsWith('- role:')) {
-      const role = trimmed.slice(7).trim().replace(/^['"]|['"]$/g, '');
-      if (role) edges.push({ edgeType: 'imports', metadata: { module: role, dialect: 'ansible-playbook' } });
-    }
-    // roles: list entries
-    if (trimmed.startsWith('- ') && lookBackForKey(lines, i, 'roles')) {
-      const val = trimmed.slice(2).trim().replace(/^['"]|['"]$/g, '');
-      // Could be a map (- role: name) or simple string
-      if (val && !val.includes(':')) {
-        edges.push({ edgeType: 'imports', metadata: { module: val, dialect: 'ansible-playbook' } });
-      }
-    }
-  }
-}
-
-function extractOpenAPI(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
-  let inPaths = false;
-  let pathsIndent = -1;
-  let currentPath = '';
-  let currentPathIndent = -1;
-  let inSchemas = false;
-  let schemasIndent = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
-
-    // paths:
-    if (indent === 0 && trimmed.startsWith('paths:')) {
-      inPaths = true;
-      inSchemas = false;
-      pathsIndent = -1;
-      continue;
-    }
-
-    // components: or definitions:
-    if (indent === 0) {
-      if (trimmed.startsWith('components:') || trimmed.startsWith('definitions:')) {
-        inPaths = false;
-        inSchemas = false;
-        // schemas will be nested under components
-      } else if (!trimmed.startsWith(' ')) {
-        inPaths = false;
-        inSchemas = false;
-      }
-    }
-
-    // schemas: (under components or top-level definitions)
-    if (trimmed === 'schemas:') {
-      inSchemas = true;
-      schemasIndent = -1;
-      inPaths = false;
-      continue;
-    }
-
-    // Extract paths
-    if (inPaths) {
-      if (pathsIndent === -1 && indent > 0) pathsIndent = indent;
-
-      // Path entry (e.g., /users:)
-      if (indent === pathsIndent && trimmed.includes(':')) {
-        const colonIdx = trimmed.indexOf(':');
-        currentPath = trimmed.slice(0, colonIdx).trim().replace(/^['"]|['"]$/g, '');
-        currentPathIndent = indent;
-        continue;
-      }
-
-      // HTTP method under path
-      if (currentPath && indent > currentPathIndent) {
-        const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
-        const colonIdx = trimmed.indexOf(':');
-        if (colonIdx > 0) {
-          const method = trimmed.slice(0, colonIdx).trim().toLowerCase();
-          if (methods.includes(method)) {
-            const label = `${method.toUpperCase()} ${currentPath}`;
-            add(label, 'function', lineOffset(lines, i), { yamlKind: 'endpoint', method: method.toUpperCase(), path: currentPath });
-          }
+    // Tasks
+    const tasksSeq = getMapSeq(playMap, 'tasks');
+    if (tasksSeq) {
+      for (const taskItem of tasksSeq.items) {
+        if (!isMap(taskItem)) continue;
+        const taskMap = taskItem as YAMLMap;
+        const taskNamePair = getMapPair(taskMap, 'name');
+        if (taskNamePair) {
+          const taskName = pairVal(taskNamePair);
+          if (taskName) add(taskName, 'function', nodeStart(taskItem as YNode), nodeEnd(taskItem as YNode), { yamlKind: 'task' });
         }
       }
     }
 
-    // Extract schemas
-    if (inSchemas) {
-      if (schemasIndent === -1 && indent > 0) schemasIndent = indent;
-      if (indent === schemasIndent && trimmed.includes(':')) {
-        const colonIdx = trimmed.indexOf(':');
-        const schemaName = trimmed.slice(0, colonIdx).trim();
-        if (schemaName) add(schemaName, 'type', lineOffset(lines, i), { yamlKind: 'schema' });
-      }
-    }
-  }
-}
+    // Roles
+    const rolesSeq = getMapSeq(playMap, 'roles');
+    if (rolesSeq) {
+      for (const roleItem of rolesSeq.items) {
+        // Simple string role
+        const roleText = scalarVal(roleItem as YNode);
+        if (roleText && !roleText.includes(':')) {
+          edges.push({ edgeType: 'imports', metadata: { module: roleText, dialect: 'ansible-playbook' } });
+          continue;
+        }
 
-function extractCircleCI(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
-  let inJobs = false;
-  let jobIndent = -1;
-  let inOrbs = false;
-  let orbIndent = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
-
-    if (indent === 0 && trimmed.startsWith('jobs:')) {
-      inJobs = true;
-      inOrbs = false;
-      jobIndent = -1;
-      continue;
-    }
-    if (indent === 0 && trimmed.startsWith('orbs:')) {
-      inOrbs = true;
-      inJobs = false;
-      orbIndent = -1;
-      continue;
-    }
-    if (indent === 0 && trimmed.includes(':')) {
-      inJobs = false;
-      inOrbs = false;
-      continue;
-    }
-
-    if (inJobs) {
-      if (jobIndent === -1 && indent > 0) jobIndent = indent;
-      if (indent === jobIndent && trimmed.includes(':')) {
-        const colonIdx = trimmed.indexOf(':');
-        const jobName = trimmed.slice(0, colonIdx).trim();
-        if (jobName) add(jobName, 'function', lineOffset(lines, i), { yamlKind: 'job' });
-      }
-    }
-
-    if (inOrbs) {
-      if (orbIndent === -1 && indent > 0) orbIndent = indent;
-      if (indent === orbIndent && trimmed.includes(':')) {
-        const colonIdx = trimmed.indexOf(':');
-        const orbAlias = trimmed.slice(0, colonIdx).trim();
-        const orbRef = trimmed.slice(colonIdx + 1).trim().replace(/^['"]|['"]$/g, '');
-        if (orbRef) {
-          edges.push({ edgeType: 'imports', metadata: { module: orbRef, alias: orbAlias, dialect: 'circleci' } });
+        // Mapping form: - role: name
+        if (isMap(roleItem)) {
+          const roleName = getMapScalar(roleItem as YAMLMap, 'role');
+          if (roleName) edges.push({ edgeType: 'imports', metadata: { module: roleName, dialect: 'ansible-playbook' } });
         }
       }
     }
   }
 }
 
-function extractHelmChart(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
-  let inDependencies = false;
+function extractOpenAPI(
+  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+): void {
+  // Paths
+  const pathsMap = getMapMap(rootMap, 'paths');
+  if (pathsMap) {
+    for (const pathPair of pathsMap.items) {
+      if (!isPair(pathPair)) continue;
+      const pathName = pairKey(pathPair);
+      if (!pathName || !isMap(pathPair.value)) continue;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
+      const methodMap = pathPair.value as YAMLMap;
+      const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'];
 
-    if (indent === 0 && trimmed.startsWith('name:')) {
-      const val = trimmed.slice(5).trim().replace(/^['"]|['"]$/g, '');
-      if (val) add(val, 'constant', lineOffset(lines, i), { yamlKind: 'chartName' });
+      for (const mPair of methodMap.items) {
+        if (!isPair(mPair)) continue;
+        const method = pairKey(mPair)?.toLowerCase();
+        if (method && methods.includes(method)) {
+          const label = `${method.toUpperCase()} ${pathName}`;
+          add(label, 'function', pairStart(mPair), pairEnd(mPair), { yamlKind: 'endpoint', method: method.toUpperCase(), path: pathName });
+        }
+      }
     }
-    if (indent === 0 && trimmed.startsWith('version:')) {
-      const val = trimmed.slice(8).trim().replace(/^['"]|['"]$/g, '');
-      if (val) add(val, 'constant', lineOffset(lines, i), { yamlKind: 'chartVersion' });
-    }
-    if (indent === 0 && trimmed.startsWith('dependencies:')) {
-      inDependencies = true;
-      continue;
-    }
-    if (indent === 0 && !trimmed.startsWith('dependencies:')) {
-      inDependencies = false;
-    }
+  }
 
-    if (inDependencies && trimmed.startsWith('- name:')) {
-      const depName = trimmed.slice(7).trim().replace(/^['"]|['"]$/g, '');
+  // Schemas -- under components.schemas
+  const componentsMap = getMapMap(rootMap, 'components');
+  if (componentsMap) {
+    const schemasMap = getMapMap(componentsMap, 'schemas');
+    if (schemasMap) extractSchemas(schemasMap, add);
+  }
+
+  // Swagger 2.0 definitions
+  const definitionsMap = getMapMap(rootMap, 'definitions');
+  if (definitionsMap) extractSchemas(definitionsMap, add);
+}
+
+function extractSchemas(schemasMap: YAMLMap, add: AddFn): void {
+  for (const pair of schemasMap.items) {
+    if (!isPair(pair)) continue;
+    const schemaName = pairKey(pair);
+    if (schemaName) add(schemaName, 'type', pairStart(pair), pairEnd(pair), { yamlKind: 'schema' });
+  }
+}
+
+function extractCircleCI(
+  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+): void {
+  // Jobs
+  const jobsMap = getMapMap(rootMap, 'jobs');
+  if (jobsMap) {
+    for (const pair of jobsMap.items) {
+      if (!isPair(pair)) continue;
+      const jobName = pairKey(pair);
+      if (jobName) add(jobName, 'function', pairStart(pair), pairEnd(pair), { yamlKind: 'job' });
+    }
+  }
+
+  // Orbs
+  const orbsMap = getMapMap(rootMap, 'orbs');
+  if (orbsMap) {
+    for (const pair of orbsMap.items) {
+      if (!isPair(pair)) continue;
+      const orbAlias = pairKey(pair);
+      const orbRef = pairVal(pair);
+      if (orbRef) {
+        edges.push({ edgeType: 'imports', metadata: { module: orbRef, alias: orbAlias, dialect: 'circleci' } });
+      }
+    }
+  }
+}
+
+function extractHelmChart(
+  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+): void {
+  // name:
+  const namePair = getMapPair(rootMap, 'name');
+  if (namePair) {
+    const val = pairVal(namePair);
+    if (val) add(val, 'constant', pairStart(namePair), pairEnd(namePair), { yamlKind: 'chartName' });
+  }
+
+  // version:
+  const versionPair = getMapPair(rootMap, 'version');
+  if (versionPair) {
+    const val = pairVal(versionPair);
+    if (val) add(val, 'constant', pairStart(versionPair), pairEnd(versionPair), { yamlKind: 'chartVersion' });
+  }
+
+  // dependencies:
+  const depsSeq = getMapSeq(rootMap, 'dependencies');
+  if (depsSeq) {
+    for (const item of depsSeq.items) {
+      if (!isMap(item)) continue;
+      const depMap = item as YAMLMap;
+      const depName = getMapScalar(depMap, 'name');
       if (depName) {
-        add(depName, 'constant', lineOffset(lines, i), { yamlKind: 'helmDep' });
+        add(depName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'helmDep' });
         edges.push({ edgeType: 'imports', metadata: { module: depName, dialect: 'helm-chart' } });
       }
     }
   }
 }
 
-function extractCloudFormation(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
-  let inResources = false;
-  let resourceIndent = -1;
-  let currentResource = '';
-  let currentResourceIndent = -1;
+function extractCloudFormation(
+  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+): void {
+  const resourcesMap = getMapMap(rootMap, 'Resources');
+  if (!resourcesMap) return;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.length === 0 || trimmed[0] === '#') continue;
-    const indent = getIndent(line);
+  for (const resPair of resourcesMap.items) {
+    if (!isPair(resPair)) continue;
+    const resName = pairKey(resPair);
+    if (!resName) continue;
 
-    if (indent === 0 && trimmed.startsWith('Resources:')) {
-      inResources = true;
-      resourceIndent = -1;
-      continue;
-    }
-    if (indent === 0 && !trimmed.startsWith('Resources:') && trimmed.includes(':')) {
-      inResources = false;
-      continue;
-    }
+    add(resName, 'class', pairStart(resPair), pairEnd(resPair), { yamlKind: 'cfnResource' });
 
-    if (!inResources) continue;
-
-    if (resourceIndent === -1 && indent > 0) resourceIndent = indent;
-
-    // Logical resource ID
-    if (indent === resourceIndent && trimmed.includes(':')) {
-      const colonIdx = trimmed.indexOf(':');
-      const resName = trimmed.slice(0, colonIdx).trim();
-      if (resName) {
-        currentResource = resName;
-        currentResourceIndent = indent;
-        add(resName, 'class', lineOffset(lines, i), { yamlKind: 'cfnResource' });
-      }
-      continue;
-    }
-
-    // Type: under resource
-    if (currentResource && indent > currentResourceIndent && trimmed.startsWith('Type:')) {
-      const resType = trimmed.slice(5).trim().replace(/^['"]|['"]$/g, '');
-      if (resType) add(`${currentResource}:${resType}`, 'type', lineOffset(lines, i), { yamlKind: 'cfnResourceType', resource: currentResource, type: resType });
+    if (!isMap(resPair.value)) continue;
+    const resMap = resPair.value as YAMLMap;
+    const typePair = getMapPair(resMap, 'Type');
+    if (typePair) {
+      const resType = pairVal(typePair);
+      if (resType) add(`${resName}:${resType}`, 'type', pairStart(typePair), pairEnd(typePair), { yamlKind: 'cfnResourceType', resource: resName, type: resType });
     }
   }
 }
 
-function extractGenericYaml(filePath: string, lines: string[], symbols: RawSymbol[], edges: RawEdge[], seen: Set<string>, add: AddFn): void {
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.length === 0 || line[0] === '#' || line[0] === ' ' || line[0] === '\t' || line[0] === '-') continue;
-    const colonIdx = line.indexOf(':');
-    if (colonIdx > 0) {
-      const key = line.slice(0, colonIdx).trim();
-      // Validate: must start with a letter/underscore, no spaces => standard YAML key
-      if (key && /^[a-zA-Z_][a-zA-Z0-9_.-]*$/.test(key)) {
-        add(key, 'constant', lineOffset(lines, i), { yamlKind: 'topLevelKey' });
-      }
+function extractGenericYaml(
+  filePath: string, rootMap: YAMLMap, add: AddFn,
+): void {
+  for (const pair of rootMap.items) {
+    if (!isPair(pair)) continue;
+    const key = pairKey(pair);
+    if (key && /^[a-zA-Z_][a-zA-Z0-9_.-]*$/.test(key)) {
+      add(key, 'constant', pairStart(pair), pairEnd(pair), { yamlKind: 'topLevelKey' });
     }
   }
 }
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-type AddFn = (name: string, kind: SymbolKind, offset: number, meta?: Record<string, unknown>) => void;
 
 // ── Main plugin ────────────────────────────────────────────────────────────
 
 export class YamlLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'yaml-language',
-    version: '2.0.0',
+    version: '3.0.0',
     priority: 8,
   };
 
@@ -771,69 +749,80 @@ export class YamlLanguagePlugin implements LanguagePlugin {
   extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
     try {
       const source = content.toString('utf-8');
-      const lines = source.split('\n');
+      const doc = parseDocument(source, { keepSourceTokens: true });
+
+      const hasErrors = doc.errors.length > 0;
       const symbols: RawSymbol[] = [];
       const edges: RawEdge[] = [];
       const seen = new Set<string>();
+      const warnings: string[] = [];
 
-      const add: AddFn = (name: string, kind: SymbolKind, offset: number, meta?: Record<string, unknown>) => {
+      if (hasErrors) {
+        warnings.push('Source contains syntax errors; extraction may be incomplete');
+      }
+
+      const add: AddFn = (name: string, kind: SymbolKind, offset: number, endOffset: number, meta?: Record<string, unknown>) => {
         if (!name) return;
         const id = symId(filePath, name, kind);
         if (seen.has(id)) return;
         seen.add(id);
         symbols.push({
           symbolId: id, name, kind, fqn: name,
-          byteStart: offset, byteEnd: offset + name.length,
-          lineStart: lineAt(source, offset), lineEnd: lineAt(source, offset),
+          byteStart: offset,
+          byteEnd: endOffset,
+          lineStart: lineAt(source, offset),
+          lineEnd: lineAt(source, endOffset > 0 ? endOffset - 1 : offset),
           metadata: meta,
         });
       };
 
-      const dialect = detectDialect(filePath, lines);
+      const dialect = detectDialect(filePath, doc);
+      const contents = doc.contents;
 
       switch (dialect) {
         case 'docker-compose':
-          extractDockerCompose(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractDockerCompose(filePath, contents, edges, add);
           break;
         case 'github-actions':
-          extractGitHubActions(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractGitHubActions(filePath, contents, edges, add);
           break;
         case 'gitlab-ci':
-          extractGitLabCI(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractGitLabCI(filePath, contents, edges, add);
           break;
         case 'kubernetes':
-          extractKubernetes(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractKubernetes(filePath, contents, edges, add);
           break;
         case 'ansible-playbook':
-          extractAnsible(filePath, lines, symbols, edges, seen, add);
+          extractAnsible(filePath, doc, edges, add);
           break;
         case 'openapi':
-          extractOpenAPI(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractOpenAPI(filePath, contents, edges, add);
           break;
         case 'circleci':
-          extractCircleCI(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractCircleCI(filePath, contents, edges, add);
           break;
         case 'helm-chart':
-          extractHelmChart(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractHelmChart(filePath, contents, edges, add);
           break;
         case 'cloudformation':
-          extractCloudFormation(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractCloudFormation(filePath, contents, edges, add);
           break;
         case 'generic':
         default:
-          extractGenericYaml(filePath, lines, symbols, edges, seen, add);
+          if (isMap(contents)) extractGenericYaml(filePath, contents, add);
           break;
       }
 
       return ok({
         language: 'yaml',
-        status: 'ok',
+        status: hasErrors ? 'partial' : 'ok',
         symbols,
         edges: edges.length > 0 ? edges : undefined,
         metadata: dialect !== 'generic' ? { yamlDialect: dialect } : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
       });
     } catch {
-      // Never throw — return empty result on any error
+      // Never throw -- return empty result on any error
       return ok({
         language: 'yaml',
         status: 'ok',

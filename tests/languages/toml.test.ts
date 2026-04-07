@@ -3,8 +3,8 @@ import { TomlLanguagePlugin } from '../../src/indexer/plugins/language/toml/inde
 
 const plugin = new TomlLanguagePlugin();
 
-function parse(source: string, filePath = 'settings.toml') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(source));
+async function parse(source: string, filePath = 'settings.toml') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(source));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -20,8 +20,8 @@ describe('TomlLanguagePlugin', () => {
   // ── Generic TOML ──
 
   describe('generic', () => {
-    it('extracts [table] as namespace and key=value as constant', () => {
-      const r = parse('[database]\nhost = "localhost"\nport = 5432\n\n[logging]\nlevel = "debug"');
+    it('extracts [table] as namespace and key=value as constant', async () => {
+      const r = await parse('[database]\nhost = "localhost"\nport = 5432\n\n[logging]\nlevel = "debug"');
       expect(r.metadata?.dialect).toBe('generic');
       expect(r.symbols.some(s => s.name === 'database' && s.kind === 'namespace')).toBe(true);
       expect(r.symbols.some(s => s.name === 'host' && s.kind === 'constant')).toBe(true);
@@ -30,8 +30,8 @@ describe('TomlLanguagePlugin', () => {
       expect(r.symbols.some(s => s.name === 'level' && s.kind === 'constant')).toBe(true);
     });
 
-    it('handles empty file', () => {
-      const r = parse('');
+    it('handles empty file', async () => {
+      const r = await parse('');
       expect(r.symbols).toHaveLength(0);
     });
   });
@@ -39,8 +39,8 @@ describe('TomlLanguagePlugin', () => {
   // ── Cargo.toml ──
 
   describe('cargo', () => {
-    it('extracts package name, dependencies as imports, [[bin]] names, and feature keys', () => {
-      const r = parse(
+    it('extracts package name, dependencies as imports, [[bin]] names, and feature keys', async () => {
+      const r = await parse(
         `[package]
 name = "my-crate"
 version = "0.1.0"
@@ -80,8 +80,8 @@ name = "my-binary"`,
   // ── pyproject.toml ──
 
   describe('pyproject', () => {
-    it('extracts project name and poetry dependencies as imports', () => {
-      const r = parse(
+    it('extracts project name and poetry dependencies as imports', async () => {
+      const r = await parse(
         `[project]
 name = "my-python-pkg"
 version = "0.1.0"

@@ -17,13 +17,13 @@ function parseYaml(source: string, filePath = 'config.yaml') {
   expect(r.isOk()).toBe(true);
   return r._unsafeUnwrap();
 }
-function parseJson(source: string, filePath = 'config.json') {
-  const r = jsonPlugin.extractSymbols(filePath, Buffer.from(source));
+async function parseJson(source: string, filePath = 'config.json') {
+  const r = await jsonPlugin.extractSymbols(filePath, Buffer.from(source));
   expect(r.isOk()).toBe(true);
   return r._unsafeUnwrap();
 }
-function parseToml(source: string, filePath = 'config.toml') {
-  const r = tomlPlugin.extractSymbols(filePath, Buffer.from(source));
+async function parseToml(source: string, filePath = 'config.toml') {
+  const r = await tomlPlugin.extractSymbols(filePath, Buffer.from(source));
   expect(r.isOk()).toBe(true);
   return r._unsafeUnwrap();
 }
@@ -116,8 +116,8 @@ cache:
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 describe('JSON — package.json', () => {
-  it('detects dialect and extracts scripts + deps', () => {
-    const r = parseJson(`{
+  it('detects dialect and extracts scripts + deps', async () => {
+    const r = await parseJson(`{
   "name": "my-app",
   "version": "1.0.0",
   "scripts": {
@@ -145,8 +145,8 @@ describe('JSON — package.json', () => {
 });
 
 describe('JSON — tsconfig.json', () => {
-  it('detects dialect and extracts extends', () => {
-    const r = parseJson(`{
+  it('detects dialect and extracts extends', async () => {
+    const r = await parseJson(`{
   "extends": "@tsconfig/node20/tsconfig.json",
   "compilerOptions": {
     "target": "ES2022",
@@ -160,8 +160,8 @@ describe('JSON — tsconfig.json', () => {
 });
 
 describe('JSON — composer.json', () => {
-  it('detects dialect and extracts deps', () => {
-    const r = parseJson(`{
+  it('detects dialect and extracts deps', async () => {
+    const r = await parseJson(`{
   "name": "vendor/package",
   "require": {
     "laravel/framework": "^11.0"
@@ -178,8 +178,8 @@ describe('JSON — composer.json', () => {
 });
 
 describe('JSON — turbo.json', () => {
-  it('extracts pipeline key', () => {
-    const r = parseJson(`{
+  it('extracts pipeline key', async () => {
+    const r = await parseJson(`{
   "pipeline": {
     "build": { "dependsOn": ["^build"] },
     "test": { "dependsOn": ["build"] }
@@ -191,8 +191,8 @@ describe('JSON — turbo.json', () => {
 });
 
 describe('JSON — generic', () => {
-  it('extracts top-level keys', () => {
-    const r = parseJson(`{
+  it('extracts top-level keys', async () => {
+    const r = await parseJson(`{
   "database": { "host": "localhost" },
   "cache": { "ttl": 3600 }
 }`);
@@ -200,8 +200,8 @@ describe('JSON — generic', () => {
     expect(r.symbols.some(s => s.name === 'cache')).toBe(true);
   });
 
-  it('handles empty JSON', () => {
-    const r = parseJson('{}');
+  it('handles empty JSON', async () => {
+    const r = await parseJson('{}');
     expect(r.symbols).toHaveLength(0);
   });
 });
@@ -211,8 +211,8 @@ describe('JSON — generic', () => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 describe('TOML — Cargo.toml', () => {
-  it('detects dialect and extracts package + deps', () => {
-    const r = parseToml(`[package]
+  it('detects dialect and extracts package + deps', async () => {
+    const r = await parseToml(`[package]
 name = "my-crate"
 version = "0.1.0"
 
@@ -245,8 +245,8 @@ name = "cli"
 });
 
 describe('TOML — pyproject.toml', () => {
-  it('detects dialect and extracts project + build deps', () => {
-    const r = parseToml(`[project]
+  it('detects dialect and extracts project + build deps', async () => {
+    const r = await parseToml(`[project]
 name = "my-package"
 version = "0.1.0"
 
@@ -265,9 +265,9 @@ requests = "^2.28"
 });
 
 describe('TOML — generic', () => {
-  it('extracts tables and keys', () => {
+  it('extracts tables and keys', async () => {
     // Use a non-config.toml filename to avoid hugo dialect detection
-    const r = parseToml(`[database]
+    const r = await parseToml(`[database]
 host = "localhost"
 port = 5432
 

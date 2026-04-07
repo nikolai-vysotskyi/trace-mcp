@@ -3,8 +3,8 @@ import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang
 
 const plugin = new JsonLanguagePlugin();
 
-function parse(source: string, filePath = 'config.json') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(source));
+async function parse(source: string, filePath = 'config.json') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(source));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -21,8 +21,8 @@ describe('JsonLanguagePlugin', () => {
   // ── Generic JSON ──
 
   describe('generic', () => {
-    it('extracts first-level keys as constants', () => {
-      const r = parse('{"host": "localhost", "port": 8080, "debug": true}');
+    it('extracts first-level keys as constants', async () => {
+      const r = await parse('{"host": "localhost", "port": 8080, "debug": true}');
       expect(r.symbols.some(s => s.name === 'host' && s.kind === 'constant')).toBe(true);
       expect(r.symbols.some(s => s.name === 'port' && s.kind === 'constant')).toBe(true);
       expect(r.symbols.some(s => s.name === 'debug' && s.kind === 'constant')).toBe(true);
@@ -30,13 +30,13 @@ describe('JsonLanguagePlugin', () => {
       expect(r.metadata?.jsonDialect).toBeUndefined();
     });
 
-    it('handles empty object', () => {
-      const r = parse('{}');
+    it('handles empty object', async () => {
+      const r = await parse('{}');
       expect(r.symbols).toHaveLength(0);
     });
 
-    it('handles array at top level', () => {
-      const r = parse('[1, 2, 3]');
+    it('handles array at top level', async () => {
+      const r = await parse('[1, 2, 3]');
       expect(r.symbols).toHaveLength(0);
     });
   });
@@ -44,8 +44,8 @@ describe('JsonLanguagePlugin', () => {
   // ── package.json ──
 
   describe('package-json', () => {
-    it('extracts name, scripts as functions, dependencies as import edges', () => {
-      const r = parse(
+    it('extracts name, scripts as functions, dependencies as import edges', async () => {
+      const r = await parse(
         JSON.stringify({
           name: 'my-package',
           version: '1.0.0',
@@ -69,8 +69,8 @@ describe('JsonLanguagePlugin', () => {
   // ── tsconfig.json ──
 
   describe('tsconfig', () => {
-    it('extracts compilerOptions keys and extends as import', () => {
-      const r = parse(
+    it('extracts compilerOptions keys and extends as import', async () => {
+      const r = await parse(
         JSON.stringify({
           extends: '@tsconfig/node18/tsconfig.json',
           compilerOptions: { strict: true, target: 'ES2022', outDir: './dist' },
@@ -88,8 +88,8 @@ describe('JsonLanguagePlugin', () => {
   // ── .eslintrc.json ──
 
   describe('eslint', () => {
-    it('extracts rules as constants, extends and plugins as imports', () => {
-      const r = parse(
+    it('extracts rules as constants, extends and plugins as imports', async () => {
+      const r = await parse(
         JSON.stringify({
           extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
           plugins: ['@typescript-eslint'],
@@ -112,8 +112,8 @@ describe('JsonLanguagePlugin', () => {
   // ── composer.json ──
 
   describe('composer', () => {
-    it('extracts name, require as imports, scripts as functions, autoload namespaces', () => {
-      const r = parse(
+    it('extracts name, require as imports, scripts as functions, autoload namespaces', async () => {
+      const r = await parse(
         JSON.stringify({
           name: 'vendor/my-package',
           require: { 'php': '>=8.1', 'laravel/framework': '^10.0' },
@@ -138,8 +138,8 @@ describe('JsonLanguagePlugin', () => {
   // ── angular.json ──
 
   describe('angular', () => {
-    it('extracts project names as namespace, architect targets as function', () => {
-      const r = parse(
+    it('extracts project names as namespace, architect targets as function', async () => {
+      const r = await parse(
         JSON.stringify({
           projects: {
             'my-app': {
@@ -164,8 +164,8 @@ describe('JsonLanguagePlugin', () => {
   // ── .vscode/settings.json ──
 
   describe('vscode-settings', () => {
-    it('extracts setting keys as constants', () => {
-      const r = parse(
+    it('extracts setting keys as constants', async () => {
+      const r = await parse(
         JSON.stringify({
           'editor.fontSize': 14,
           'editor.tabSize': 2,

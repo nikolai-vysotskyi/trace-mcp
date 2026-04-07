@@ -1,49 +1,328 @@
 /**
- * Emacs Lisp Language Plugin — regex-based symbol extraction.
+ * Emacs Lisp Language Plugin — tree-sitter-based symbol extraction.
  *
- * Extracts: defun, defmacro, defvar, defcustom, defconst, defgroup, defface,
- * define-minor-mode, define-derived-mode, provide/require edges.
+ * Extracts: defun, defmacro, defsubst (functions), defvar/defvar-local (variables),
+ * defcustom (custom vars), defconst (constants), defgroup/cl-defstruct (classes),
+ * defface (face vars), define-minor-mode/define-derived-mode/define-globalized-minor-mode
+ * (mode functions), require/provide edges.
+ *
+ * tree-sitter-elisp (Wilfred) AST node types:
+ *   - function_definition: defun, defsubst — name is 1st named child (symbol)
+ *   - macro_definition:    defmacro       — name is 1st named child (symbol)
+ *   - special_form:        defvar, defconst — name is 1st named child (symbol)
+ *   - list:                everything else (defvar-local, defcustom, defgroup,
+ *                          defface, define-*-mode, cl-defstruct, require, provide)
+ *                          — 1st named child is form keyword symbol, 2nd is name
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
-import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { ok, err } from 'neverthrow';
+import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { TraceMcpResult } from '../../../../errors.js';
+import { parseError } from '../../../../errors.js';
+import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
 
-const _plugin = createRegexLanguagePlugin({
-  name: 'elisp',
-  language: 'elisp',
-  extensions: ['.el', '.elc'],
-  symbolPatterns: [
-    // (defun name ...)
-    { kind: 'function', pattern: /\(\s*defun\s+([\w*+!\-<>=/.?]+)/gm },
-    // (defmacro name ...)
-    { kind: 'function', pattern: /\(\s*defmacro\s+([\w*+!\-<>=/.?]+)/gm, meta: { macro: true } },
-    // (defsubst name ...)
-    { kind: 'function', pattern: /\(\s*defsubst\s+([\w*+!\-<>=/.?]+)/gm, meta: { inline: true } },
-    // (defvar name / (defvar-local name
-    { kind: 'variable', pattern: /\(\s*defvar(?:-local)?\s+([\w*+!\-<>=/.?]+)/gm },
-    // (defcustom name
-    { kind: 'variable', pattern: /\(\s*defcustom\s+([\w*+!\-<>=/.?]+)/gm, meta: { custom: true } },
-    // (defconst name
-    { kind: 'constant', pattern: /\(\s*defconst\s+([\w*+!\-<>=/.?]+)/gm },
-    // (defgroup name
-    { kind: 'class', pattern: /\(\s*defgroup\s+([\w*+!\-<>=/.?]+)/gm },
-    // (defface name
-    { kind: 'variable', pattern: /\(\s*defface\s+([\w*+!\-<>=/.?]+)/gm, meta: { face: true } },
-    // (define-minor-mode name / (define-derived-mode name
-    { kind: 'function', pattern: /\(\s*define-(?:minor|derived|globalized-minor)-mode\s+([\w*+!\-<>=/.?]+)/gm, meta: { mode: true } },
-    // (cl-defstruct name
-    { kind: 'class', pattern: /\(\s*cl-defstruct\s+([\w*+!\-<>=/.?]+)/gm },
-  ],
-  importPatterns: [
-    // (require 'feature)
-    { pattern: /\(\s*require\s+'([\w\-]+)/gm },
-    // (provide 'feature)
-    { pattern: /\(\s*provide\s+'([\w\-]+)/gm },
-  ],
-});
+function makeSymbolId(filePath: string, name: string, kind: string): string {
+  return `${filePath}::${name}#${kind}`;
+}
 
-export const ElispLanguagePlugin = class implements LanguagePlugin {
-  manifest = _plugin.manifest;
-  supportedExtensions = _plugin.supportedExtensions;
-  supportedVersions = _plugin.supportedVersions;
-  extractSymbols = _plugin.extractSymbols;
+function extractSignature(node: TSNode): string {
+  return node.text.split('\n')[0].trim().slice(0, 120);
+}
+
+// ---------------------------------------------------------------------------
+// List-form dispatch tables
+// ---------------------------------------------------------------------------
+
+/** Forms handled as generic `list` nodes where 1st symbol child is the keyword. */
+const LIST_FORM_MAP: Record<string, { kind: SymbolKind; meta?: Record<string, unknown> }> = {
+  'defvar-local':                 { kind: 'variable' },
+  'defcustom':                    { kind: 'variable', meta: { custom: true } },
+  'defgroup':                     { kind: 'class' },
+  'defface':                      { kind: 'variable', meta: { face: true } },
+  'define-minor-mode':            { kind: 'function', meta: { mode: true } },
+  'define-derived-mode':          { kind: 'function', meta: { mode: true } },
+  'define-globalized-minor-mode': { kind: 'function', meta: { mode: true } },
+  'cl-defstruct':                 { kind: 'class' },
 };
+
+/** Forms that produce import/provide edges instead of symbols. */
+const EDGE_FORMS = new Set(['require', 'provide']);
+
+/** Wrapper forms that may contain nested definitions. */
+const WRAPPER_FORMS = new Set([
+  'progn', 'eval-when-compile', 'eval-and-compile',
+  'when', 'unless', 'with-eval-after-load',
+  'condition-case', 'save-excursion',
+]);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the first named child that is a `symbol` node.
+ */
+function firstSymbol(node: TSNode): string | null {
+  for (let i = 0; i < node.namedChildCount; i++) {
+    const child = node.namedChild(i);
+    if (child?.type === 'symbol') return child.text;
+  }
+  return null;
+}
+
+/**
+ * Get the second named `symbol` child (skipping the form keyword in `list` nodes).
+ */
+function secondSymbol(node: TSNode): string | null {
+  let count = 0;
+  for (let i = 0; i < node.namedChildCount; i++) {
+    const child = node.namedChild(i);
+    if (child?.type === 'symbol') {
+      count++;
+      if (count === 2) return child.text;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract the quoted symbol from require/provide: (require 'feature).
+ * The quote node wraps a symbol node.
+ */
+function getQuotedSymbol(listNode: TSNode): string | null {
+  for (let i = 0; i < listNode.namedChildCount; i++) {
+    const child = listNode.namedChild(i);
+    if (child?.type === 'quote') {
+      for (let j = 0; j < child.namedChildCount; j++) {
+        const inner = child.namedChild(j);
+        if (inner?.type === 'symbol') return inner.text;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Plugin
+// ---------------------------------------------------------------------------
+
+export class ElispLanguagePlugin implements LanguagePlugin {
+  manifest: PluginManifest = {
+    name: 'elisp-language',
+    version: '2.0.0',
+    priority: 5,
+  };
+
+  supportedExtensions = ['.el', '.elc'];
+
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+    try {
+      const parser = await getParser('elisp');
+      const sourceCode = content.toString('utf-8');
+      const tree = parser.parse(sourceCode);
+      const root: TSNode = tree.rootNode;
+
+      const hasError = root.hasError;
+      const symbols: RawSymbol[] = [];
+      const edges: RawEdge[] = [];
+      const warnings: string[] = [];
+      const seen = new Set<string>();
+
+      if (hasError) {
+        warnings.push('Source contains syntax errors; extraction may be incomplete');
+      }
+
+      this.walkNodes(root, filePath, symbols, edges, seen);
+
+      return ok({
+        language: 'elisp',
+        status: hasError ? 'partial' : 'ok',
+        symbols,
+        edges: edges.length > 0 ? edges : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return err(parseError(filePath, `Elisp parse failed: ${msg}`));
+    }
+  }
+
+  /**
+   * Walk named children of a node, dispatching by node type.
+   * Handles top-level source_file as well as wrapper form bodies.
+   */
+  private walkNodes(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    edges: RawEdge[],
+    seen: Set<string>,
+  ): void {
+    for (let i = 0; i < node.namedChildCount; i++) {
+      const child = node.namedChild(i);
+      if (!child) continue;
+
+      switch (child.type) {
+        case 'function_definition':
+          this.processStructuredDef(child, filePath, 'function', symbols, seen);
+          break;
+        case 'macro_definition':
+          this.processStructuredDef(child, filePath, 'function', symbols, seen, { macro: true });
+          break;
+        case 'special_form':
+          this.processSpecialForm(child, filePath, symbols, seen);
+          break;
+        case 'list':
+          this.processList(child, filePath, symbols, edges, seen);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  /**
+   * Handle `function_definition` and `macro_definition` nodes.
+   * Grammar structure: (defun NAME (ARGS) BODY...) or (defsubst NAME (ARGS) BODY...)
+   *   → node type `function_definition`, 1st named child = symbol with NAME
+   * Grammar structure: (defmacro NAME (ARGS) BODY...)
+   *   → node type `macro_definition`, 1st named child = symbol with NAME
+   */
+  private processStructuredDef(
+    node: TSNode,
+    filePath: string,
+    kind: SymbolKind,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+    meta?: Record<string, unknown>,
+  ): void {
+    // The grammar may parse defsubst as function_definition; detect via text
+    const nodeText = node.text;
+    let effectiveMeta = meta;
+    if (!effectiveMeta && nodeText.startsWith('(defsubst')) {
+      effectiveMeta = { inline: true };
+    }
+
+    const name = firstSymbol(node);
+    if (!name) return;
+
+    const symbolId = makeSymbolId(filePath, name, kind);
+    if (seen.has(symbolId)) return;
+    seen.add(symbolId);
+
+    const symbol: RawSymbol = {
+      symbolId,
+      name,
+      kind,
+      signature: extractSignature(node),
+      byteStart: node.startIndex,
+      byteEnd: node.endIndex,
+      lineStart: node.startPosition.row + 1,
+      lineEnd: node.endPosition.row + 1,
+    };
+    if (effectiveMeta) symbol.metadata = { ...effectiveMeta };
+    symbols.push(symbol);
+  }
+
+  /**
+   * Handle `special_form` nodes — defvar and defconst.
+   * Grammar: (defvar NAME VALUE) or (defconst NAME VALUE)
+   *   → node type `special_form`, 1st named child = symbol with NAME
+   * We distinguish defvar vs defconst by inspecting the raw text.
+   */
+  private processSpecialForm(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
+    const nodeText = node.text;
+    let kind: SymbolKind;
+    if (nodeText.startsWith('(defconst')) {
+      kind = 'constant';
+    } else if (nodeText.startsWith('(defvar')) {
+      kind = 'variable';
+    } else {
+      // Other special forms (let, if, etc.) — skip
+      return;
+    }
+
+    const name = firstSymbol(node);
+    if (!name) return;
+
+    const symbolId = makeSymbolId(filePath, name, kind);
+    if (seen.has(symbolId)) return;
+    seen.add(symbolId);
+
+    symbols.push({
+      symbolId,
+      name,
+      kind,
+      signature: extractSignature(node),
+      byteStart: node.startIndex,
+      byteEnd: node.endIndex,
+      lineStart: node.startPosition.row + 1,
+      lineEnd: node.endPosition.row + 1,
+    });
+  }
+
+  /**
+   * Handle generic `list` nodes — covers forms the grammar doesn't give
+   * dedicated node types: defvar-local, defcustom, defgroup, defface,
+   * define-*-mode, cl-defstruct, require, provide, and wrapper forms.
+   */
+  private processList(
+    listNode: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    edges: RawEdge[],
+    seen: Set<string>,
+  ): void {
+    const formName = firstSymbol(listNode);
+    if (!formName) return;
+
+    // --- Symbol-defining forms ---
+    const formDef = LIST_FORM_MAP[formName];
+    if (formDef) {
+      const name = secondSymbol(listNode);
+      if (!name) return;
+
+      const symbolId = makeSymbolId(filePath, name, formDef.kind);
+      if (seen.has(symbolId)) return;
+      seen.add(symbolId);
+
+      const symbol: RawSymbol = {
+        symbolId,
+        name,
+        kind: formDef.kind,
+        signature: extractSignature(listNode),
+        byteStart: listNode.startIndex,
+        byteEnd: listNode.endIndex,
+        lineStart: listNode.startPosition.row + 1,
+        lineEnd: listNode.endPosition.row + 1,
+      };
+      if (formDef.meta) symbol.metadata = { ...formDef.meta };
+      symbols.push(symbol);
+      return;
+    }
+
+    // --- require / provide edges ---
+    if (EDGE_FORMS.has(formName)) {
+      const target = getQuotedSymbol(listNode);
+      if (!target) return;
+
+      edges.push({
+        edgeType: formName === 'require' ? 'imports' : 'exports',
+        sourceSymbolId: filePath,
+        targetSymbolId: target,
+        metadata: { kind: formName },
+      });
+      return;
+    }
+
+    // --- Wrapper forms: recurse to find nested definitions ---
+    if (WRAPPER_FORMS.has(formName)) {
+      this.walkNodes(listNode, filePath, symbols, edges, seen);
+    }
+  }
+}
