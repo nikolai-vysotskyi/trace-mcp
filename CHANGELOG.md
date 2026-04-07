@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.8.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.7.0...v1.8.0) (2026-04-07)
+
+
+### Features
+
+* add JSONC-safe config read/write with migration support ([7ee246b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7ee246b7fbd8a8bba4078a3ccd4884561b626fc8))
+
+
+### Performance
+
+* optimize context bundle token efficiency ([53a5d38](https://github.com/nikolai-vysotskyi/trace-mcp/commit/53a5d385f0b5d5ed52c536bb982e10704635cd57))
+
 ## [1.7.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.6.1...v1.7.0) (2026-04-07)
 
 
