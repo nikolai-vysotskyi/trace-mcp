@@ -5,6 +5,7 @@
  */
 import type { InferenceService } from './interfaces.js';
 import type { Store } from '../db/store.js';
+import type { ProgressState } from '../progress.js';
 import { PROMPTS } from './prompts.js';
 import { logger } from '../logger.js';
 import fs from 'node:fs';
@@ -25,28 +26,45 @@ export class SummarizationPipeline {
     private inferenceService: InferenceService,
     private rootPath: string,
     private config: SummarizationConfig,
+    private progress?: ProgressState,
   ) {}
 
   async summarizeUnsummarized(): Promise<number> {
     let totalSummarized = 0;
     let batch: ReturnType<Store['getUnsummarizedSymbols']>;
 
-    do {
-      batch = this.store.getUnsummarizedSymbols(this.config.kinds, this.config.batchSize);
-      if (batch.length === 0) break;
+    const total = this.store.countUnsummarizedSymbols(this.config.kinds);
+    if (total === 0) return 0;
 
-      const results = await this.summarizeBatch(batch);
-      for (const { id, summary } of results) {
-        this.store.updateSymbolSummary(id, summary);
-        totalSummarized++;
-      }
+    this.progress?.update('summarization', {
+      phase: 'running', processed: 0, total, startedAt: Date.now(), completedAt: 0,
+    });
 
-      logger.debug({ batch: batch.length, total: totalSummarized }, 'Summarization batch complete');
-    } while (batch.length === this.config.batchSize);
+    try {
+      do {
+        batch = this.store.getUnsummarizedSymbols(this.config.kinds, this.config.batchSize);
+        if (batch.length === 0) break;
 
-    if (totalSummarized > 0) {
-      logger.info({ totalSummarized }, 'Symbol summarization complete');
+        const results = await this.summarizeBatch(batch);
+        for (const { id, summary } of results) {
+          this.store.updateSymbolSummary(id, summary);
+          totalSummarized++;
+        }
+
+        this.progress?.update('summarization', { processed: totalSummarized });
+        logger.debug({ batch: batch.length, total: totalSummarized }, 'Summarization batch complete');
+      } while (batch.length === this.config.batchSize);
+
+      this.progress?.update('summarization', {
+        phase: 'completed', processed: totalSummarized, completedAt: Date.now(),
+      });
+    } catch (e) {
+      this.progress?.update('summarization', {
+        phase: 'error', error: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
     }
+
     return totalSummarized;
   }
 

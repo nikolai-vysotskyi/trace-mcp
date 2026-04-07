@@ -152,6 +152,14 @@ export class Store {
     this.symbols.updateSymbolSummary(symbolId, summary);
   }
 
+  countUnsummarizedSymbols(kinds: string[]): number {
+    return this.symbols.countUnsummarizedSymbols(kinds);
+  }
+
+  countUnembeddedSymbols(): number {
+    return this.symbols.countUnembeddedSymbols();
+  }
+
   getUnsummarizedSymbols(kinds: string[], limit: number): {
     id: number;
     name: string;

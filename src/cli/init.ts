@@ -218,7 +218,16 @@ export const initCommand = new Command('init')
 
     // --- Optional project indexing ---
     if (indexProject) {
-      const indexStep = registerAndIndexProject(process.cwd(), { dryRun: opts.dryRun, force: opts.force });
+      const spin = !nonInteractive ? p.spinner() : null;
+      spin?.start('Registering and indexing current project...');
+      const indexStep = await registerAndIndexProject(process.cwd(), { dryRun: opts.dryRun, force: opts.force });
+      if (spin) {
+        if (indexStep.detail?.includes('Indexed')) {
+          spin.stop(indexStep.detail);
+        } else {
+          spin.stop(indexStep.detail ?? indexStep.action);
+        }
+      }
       steps.push(indexStep);
     }
 
@@ -312,7 +321,7 @@ export const initCommand = new Command('init')
       }
 
       p.outro(indexProject
-        ? 'Ready! Project registered and will be indexed when trace-mcp serve starts.'
+        ? 'Ready! Project registered and indexed.'
         : 'Ready! Run `trace-mcp add` in a project directory to register it for indexing.',
       );
     }
@@ -365,10 +374,38 @@ function executeSteps(
   }
 }
 
-function registerAndIndexProject(
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+async function runIndexingForProject(projectRoot: string): Promise<{ indexed: number; skipped: number; errors: number; durationMs: number } | null> {
+  const configResult = await loadConfig(projectRoot);
+  if (configResult.isErr()) return null;
+
+  const dbPath = getDbPath(projectRoot);
+  const db = initializeDatabase(dbPath);
+  const store = new Store(db);
+  const registry = new PluginRegistry();
+  for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
+  for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
+
+  const pipeline = new IndexingPipeline(store, registry, configResult.value, projectRoot);
+  try {
+    const result = await pipeline.indexAll(true);
+    updateLastIndexed(projectRoot);
+    return { indexed: result.indexed, skipped: result.skipped, errors: result.errors, durationMs: result.durationMs };
+  } catch {
+    return null;
+  } finally {
+    db.close();
+  }
+}
+
+async function registerAndIndexProject(
   dir: string,
   opts: { dryRun?: boolean; force?: boolean },
-): InitStepResult {
+): Promise<InitStepResult> {
   let projectRoot: string | null = null;
   try {
     projectRoot = findProjectRoot(dir);
@@ -382,7 +419,7 @@ function registerAndIndexProject(
     if (childRoots.length === 0) {
       return { target: dir, action: 'skipped', detail: 'Could not detect project root or child projects' };
     }
-    return registerMultiRootProject(dir, childRoots, opts);
+    return await registerMultiRootProject(dir, childRoots, opts);
   }
 
   if (opts.dryRun) {
@@ -410,18 +447,25 @@ function registerAndIndexProject(
   db.close();
 
   const entry = registerProject(projectRoot);
+
+  // Run indexing immediately
+  const indexResult = await runIndexingForProject(projectRoot);
+  const detail = indexResult
+    ? `Registered and indexed: ${entry.name} — ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)} (${indexResult.skipped} skipped, ${indexResult.errors} errors)`
+    : `Registered project: ${entry.name} (indexing failed)`;
+
   return {
     target: projectRoot,
     action: existing ? 'updated' : 'created',
-    detail: `Registered project: ${entry.name}`,
+    detail,
   };
 }
 
-function registerMultiRootProject(
+async function registerMultiRootProject(
   parentDir: string,
   childRoots: string[],
   opts: { dryRun?: boolean; force?: boolean },
-): InitStepResult {
+): Promise<InitStepResult> {
   if (opts.dryRun) {
     return {
       target: parentDir,
@@ -470,10 +514,17 @@ function registerMultiRootProject(
   db.close();
 
   const entry = registerProject(parentDir, { type: 'multi-root', children: childRoots });
+
+  // Run indexing immediately
+  const indexResult = await runIndexingForProject(parentDir);
+  const detail = indexResult
+    ? `Registered and indexed multi-root: ${entry.name} (${childRoots.length} children) — ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`
+    : `Registered multi-root (${childRoots.length} children): ${childRoots.map((r) => path.basename(r)).join(', ')} (indexing failed)`;
+
   return {
     target: parentDir,
     action: existing ? 'updated' : 'created',
-    detail: `Registered multi-root (${childRoots.length} children): ${childRoots.map((r) => path.basename(r)).join(', ')}`,
+    detail,
   };
 }
 

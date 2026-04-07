@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 16;
+const SCHEMA_VERSION = 17;
 
 const DDL = `
 -- ============================================================
@@ -911,6 +911,28 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       WHERE metadata IS NOT NULL
         AND (json_extract(metadata, '$.extends') IS NOT NULL
           OR json_extract(metadata, '$.implements') IS NOT NULL)
+    `);
+  },
+  17: (db) => {
+    // Progress tracking table for indexing, summarization, and embedding pipelines.
+    // Read by CLI `status` command and MCP `get_index_health` tool.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS indexing_progress (
+        pipeline TEXT PRIMARY KEY,
+        phase TEXT NOT NULL DEFAULT 'idle',
+        processed INTEGER NOT NULL DEFAULT 0,
+        total INTEGER NOT NULL DEFAULT 0,
+        started_at INTEGER NOT NULL DEFAULT 0,
+        completed_at INTEGER NOT NULL DEFAULT 0,
+        error TEXT,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    // Pre-seed rows for all three pipelines
+    db.exec(`
+      INSERT OR IGNORE INTO indexing_progress (pipeline) VALUES ('indexing');
+      INSERT OR IGNORE INTO indexing_progress (pipeline) VALUES ('summarization');
+      INSERT OR IGNORE INTO indexing_progress (pipeline) VALUES ('embedding');
     `);
   },
 };

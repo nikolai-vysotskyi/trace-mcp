@@ -5,6 +5,7 @@ import type { TraceMcpConfig } from '../config.js';
 import type { SessionTracker } from '../session/tracker.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { AIProvider, RerankerService, EmbeddingService, BlobVectorStore } from '../ai/index.js';
+import type { ProgressState } from '../progress.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 export interface ServerContext {
@@ -29,6 +30,8 @@ export interface ServerContext {
   jh: (toolName: string, value: unknown) => string;
   /** Mark a file as explored via trace-mcp (so guard hook allows subsequent Read) */
   markExplored: (filePath: string) => void;
+  /** Progress state for indexing pipelines (null if not wired) */
+  progress: ProgressState | null;
 }
 
 /** Extended context for meta tools that bypass preset gate */
