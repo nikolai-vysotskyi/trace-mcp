@@ -335,7 +335,17 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
           const text = response.content?.[0]?.text;
           if (text) {
             try {
-              results.push({ tool: call.tool, result: JSON.parse(text) });
+              const parsed = JSON.parse(text);
+              // Strip per-call metadata that adds overhead in batch context:
+              // _hints, _optimization_hint, _budget_warning, _budget_level are
+              // per-call suggestions irrelevant when batched together
+              if (parsed && typeof parsed === 'object') {
+                delete parsed._hints;
+                delete parsed._optimization_hint;
+                delete parsed._budget_warning;
+                delete parsed._budget_level;
+              }
+              results.push({ tool: call.tool, result: parsed });
             } catch {
               results.push({ tool: call.tool, result: text });
             }

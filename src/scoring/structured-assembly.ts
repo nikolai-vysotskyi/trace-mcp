@@ -29,10 +29,40 @@ export function assembleStructuredContext(request: StructuredContextRequest): St
   const weights = request.budgetWeights ?? DEFAULT_WEIGHTS;
   const budget = request.totalBudget;
 
-  const primaryResult = assembleContext(request.primary, Math.floor(budget * weights.primary));
-  const depsResult = assembleContext(request.dependencies, Math.floor(budget * weights.dependencies));
-  const callersResult = assembleContext(request.callers, Math.floor(budget * weights.callers));
-  const typeResult = assembleContext(request.typeContext, Math.floor(budget * weights.typeContext));
+  // Redistribute budget from empty categories to non-empty ones proportionally
+  type Category = 'primary' | 'dependencies' | 'callers' | 'typeContext';
+  const categories: Category[] = ['primary', 'dependencies', 'callers', 'typeContext'];
+  const itemCounts: Record<Category, number> = {
+    primary: request.primary.length,
+    dependencies: request.dependencies.length,
+    callers: request.callers.length,
+    typeContext: request.typeContext.length,
+  };
+
+  let surplusWeight = 0;
+  let activeWeight = 0;
+  for (const cat of categories) {
+    if (itemCounts[cat] === 0) {
+      surplusWeight += weights[cat];
+    } else {
+      activeWeight += weights[cat];
+    }
+  }
+
+  const effectiveWeights: Record<Category, number> = { primary: 0, dependencies: 0, callers: 0, typeContext: 0 };
+  for (const cat of categories) {
+    if (itemCounts[cat] === 0) {
+      effectiveWeights[cat] = 0;
+    } else if (activeWeight > 0) {
+      // Original weight + proportional share of surplus
+      effectiveWeights[cat] = weights[cat] + surplusWeight * (weights[cat] / activeWeight);
+    }
+  }
+
+  const primaryResult = assembleContext(request.primary, Math.floor(budget * effectiveWeights.primary));
+  const depsResult = assembleContext(request.dependencies, Math.floor(budget * effectiveWeights.dependencies));
+  const callersResult = assembleContext(request.callers, Math.floor(budget * effectiveWeights.callers));
+  const typeResult = assembleContext(request.typeContext, Math.floor(budget * effectiveWeights.typeContext));
 
   return {
     primary: primaryResult.items,

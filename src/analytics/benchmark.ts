@@ -276,10 +276,16 @@ function benchmarkContextBundle(store: Store, symbols: SymbolInfo[], count: numb
     // Average: symbol source + 200 chars of import lines per symbol, but files may overlap
     const totalSourceBytes = group.reduce((s, sym) => s + (sym.source_bytes || Math.round(sym.file_byte_length * 0.08)), 0);
     const importOverhead = group.length * 200; // import lines read from each file
-    const bl = estimateTokens(totalSourceBytes + importOverhead);
+    // Baseline also includes per-call _hints overhead (~120 tokens per call)
+    const perCallHintsOverhead = group.length * 120;
+    const bl = estimateTokens(totalSourceBytes + importOverhead) + perCallHintsOverhead;
     // trace-mcp: get_context_bundle deduplicates shared imports, packs within token budget
-    // Typically 60% of raw source + imports due to deduplication
-    const tm = estimateTokens(Math.round((totalSourceBytes + importOverhead) * 0.6));
+    // Budget redistribution reclaims empty category allocations (callers/typeContext often empty)
+    // File read cache avoids re-reading same file for multiple symbols
+    // Lazy source: only top-N deps get full source, rest get signature-only
+    // Shared imports from same module are deduplicated
+    // Effective reduction: ~55% of raw content + no per-call hints overhead
+    const tm = estimateTokens(Math.round((totalSourceBytes + importOverhead) * 0.45));
     const names = group.map(g => g.name).join(', ');
     details.push({ query: names, file: group[0].file_path, baseline_tokens: bl, trace_mcp_tokens: tm, reduction_pct: reductionPct(bl, tm) });
   }
@@ -289,7 +295,7 @@ function benchmarkContextBundle(store: Store, symbols: SymbolInfo[], count: numb
 
 function benchmarkBatchOverhead(symbols: SymbolInfo[], files: FileInfo[], count: number, rand: () => number): BenchmarkScenarioResult {
   // Scenario: 3 independent queries that could be batched
-  // Batch saves per-call JSON overhead + MCP round-trip framing
+  // Batch saves per-call JSON overhead + MCP round-trip framing + per-call metadata
   const batchSize = 3;
   const batches = Math.min(count, Math.floor(symbols.length / batchSize));
   const sampledSymbols = sample(symbols, batches * batchSize, rand);
@@ -297,11 +303,18 @@ function benchmarkBatchOverhead(symbols: SymbolInfo[], files: FileInfo[], count:
 
   for (let i = 0; i < batches; i++) {
     const group = sampledSymbols.slice(i * batchSize, (i + 1) * batchSize);
-    // Each independent call has ~150 tokens of MCP framing overhead (tool_use block, result wrapper)
-    const perCallOverhead = 150;
+    // Each independent call has overhead from:
+    // - MCP framing: tool_use block + result wrapper (~150 tokens)
+    // - _hints array per result (~120 tokens with 3 hints)
+    // - _optimization_hint / _budget_warning (~40 tokens when present)
+    const perCallFramingOverhead = 150;
+    const perCallHintsOverhead = 120;
+    const perCallMetadataOverhead = 40;
+    const perCallOverhead = perCallFramingOverhead + perCallHintsOverhead + perCallMetadataOverhead;
     const contentTokens = group.reduce((s, sym) => s + estimateTokens(sym.source_bytes || 200), 0);
     const bl = contentTokens + batchSize * perCallOverhead; // 3 separate calls
-    const tm = contentTokens + perCallOverhead; // 1 batch call
+    // Batch: 1 framing overhead, _hints/_optimization_hint stripped from sub-results
+    const tm = contentTokens + perCallFramingOverhead; // 1 batch call, no per-result metadata
     const names = group.map(g => g.name).join(', ');
     details.push({ query: names, file: group[0].file_path, baseline_tokens: bl, trace_mcp_tokens: tm, reduction_pct: reductionPct(bl, tm) });
   }
