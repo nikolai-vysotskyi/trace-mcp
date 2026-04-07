@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.10.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.9.0...v1.10.0) (2026-04-07)
+
+
+### Features
+
+* add CI project-aware reports with domain, ownership, and deployment analysis ([54a2efa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/54a2efafc26b55b58a0b28b5d5a4bd3be1b34ed7))
+
+
+### Refactoring
+
+* extract federation manager helper methods ([e3739a2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e3739a2b14ce9b2ec5c1628d4413b91b07d7c549))
+* extract indexer pipeline and file-persister helper methods ([e064db3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e064db3683a43271676c448c270cdcbd631a7dcd))
+
+
+### Tests
+
+* add topology DB and contract parser tests ([c791bcc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c791bccf683e3c4b527a6eb37e870e8eb2ffb34f))
+
 ## [1.9.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.8.0...v1.9.0) (2026-04-07)
 
 
