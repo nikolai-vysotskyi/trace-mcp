@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.8.0...v1.9.0) (2026-04-07)
+
+
+### Features
+
+* add advanced .traceignore ([2f2e5b5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2f2e5b531a8e777542a866aab1d65a7902785bba))
+* add federation schema diffing, contract versioning, and federated search ([e43e590](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e43e590a1d618977a411bd5065362d00175d746f))
+* add Junie, JetBrains AI Assistant, and Codex MCP client support ([c25aa38](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c25aa387e6833e161896fe205b46701b918012f4))
+* add server PID tracking, improved status output, and tweakcc integration ([a7ec015](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a7ec01519c107036dfc08e47f2b4a9c8b70a6eed))
+* migrate 16 language plugins from regex to tree-sitter ([3616b2d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3616b2db698947e488e637b24b5b461ec63147c6))
+
+
+### Refactoring
+
+* extract Laravel edge resolvers into sub-modules ([ca88696](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca886968ade4691d025151f2011eb2955c4d0f80))
+
+
+### Documentation
+
+* strengthen apply_codemod enforcement rule in CLAUDE.md ([bd4e571](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bd4e571218159fe42136171b68ad435ff67b01c2))
+* update benchmarks to 11 categories and refresh tool counts to 120+ ([e2aa5cb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e2aa5cb67d223c9faa3426c73c48961ba0e0c828))
+
+
+### Tests
+
+* add server tool-gate, explored-tracker, and consultation-markers tests ([703ef1b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/703ef1b007727e99739ec0a6057680dd04b06cc8))
+
 ## [1.8.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.7.0...v1.8.0) (2026-04-07)
 
 
