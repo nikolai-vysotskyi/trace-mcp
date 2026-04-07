@@ -3,12 +3,13 @@
  * Subcommands: sync, report, optimize, benchmark, coverage
  */
 
+import path from 'node:path';
 import { Command } from 'commander';
 import { AnalyticsStore } from '../analytics/analytics-store.js';
 import { syncAnalytics } from '../analytics/sync.js';
 import { getSessionAnalytics, getOptimizationReport } from '../analytics/session-analytics.js';
 import { runBenchmark, formatBenchmarkMarkdown } from '../analytics/benchmark.js';
-import { detectCoverage } from '../analytics/tech-detector.js';
+import { detectCoverage, detectCoverageRecursive } from '../analytics/tech-detector.js';
 import { analyzeRealSavings } from '../analytics/real-savings.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
@@ -20,6 +21,54 @@ function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);
   if (entry) return entry.dbPath;
   return getDbPath(projectRoot);
+}
+
+function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
+  console.log(`\n📦 Technology Coverage Report\n`);
+  console.log(`Manifests: ${result.manifests_analyzed.join(', ')}`);
+  console.log(`Coverage: ${result.coverage.covered}/${result.coverage.total_significant} significant deps (${result.coverage.coverage_pct}%)\n`);
+
+  if (result.covered.length > 0) {
+    console.log('✅ Covered:');
+    for (const d of result.covered) {
+      console.log(`  ${d.name} ${d.version} → plugin: ${d.plugin}`);
+    }
+  }
+
+  if (result.gaps.length > 0) {
+    console.log('\n⚠️  Gaps:');
+    for (const g of result.gaps) {
+      console.log(`  [${g.priority}] ${g.name} ${g.version} (${g.category})`);
+    }
+  }
+
+  if (result.unknown.length > 0) {
+    const likely = result.unknown.filter(u => u.needs_plugin === 'likely');
+    const maybe = result.unknown.filter(u => u.needs_plugin === 'maybe');
+    const no = result.unknown.filter(u => u.needs_plugin === 'no');
+
+    console.log(`\n📋 Not in catalog (${result.unknown.length} packages)`);
+    console.log(`   All have language-level fallback (source code is indexed by language plugin)`);
+
+    if (likely.length > 0) {
+      console.log(`\n   🔴 Likely need dedicated plugin (${likely.length}):`);
+      for (const u of likely) {
+        console.log(`      ${u.name} ${u.version} [${u.ecosystem}] — ${u.reason}`);
+      }
+    }
+    if (maybe.length > 0) {
+      console.log(`\n   🟡 May benefit from plugin (${maybe.length}):`);
+      for (const u of maybe) {
+        console.log(`      ${u.name} ${u.version} [${u.ecosystem}] — ${u.reason}`);
+      }
+    }
+    if (no.length > 0) {
+      console.log(`\n   🟢 Language fallback sufficient (${no.length}):`);
+      for (const u of no) {
+        console.log(`      ${u.name} [${u.ecosystem}]`);
+      }
+    }
+  }
 }
 
 export const analyticsCommand = new Command('analytics')
@@ -182,7 +231,8 @@ analyticsCommand
   .command('coverage')
   .description('Show technology coverage: detected deps vs trace-mcp plugin support')
   .option('--format <fmt>', 'Output: text | json', 'text')
-  .action(async (opts: { format: string }) => {
+  .option('--no-recursive', 'Only scan root project (skip child/federated projects)')
+  .action(async (opts: { format: string; recursive: boolean }) => {
     let projectRoot: string;
     try {
       projectRoot = findProjectRoot(process.cwd());
@@ -190,33 +240,54 @@ analyticsCommand
       projectRoot = process.cwd();
     }
 
-    const result = detectCoverage(projectRoot);
+    if (!opts.recursive) {
+      // Single-project mode (original behavior)
+      const result = detectCoverage(projectRoot);
+
+      if (opts.format === 'json') {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      printSingleReport(result);
+      return;
+    }
+
+    // Recursive multi-project mode (default)
+    const result = detectCoverageRecursive(projectRoot);
 
     if (opts.format === 'json') {
       console.log(JSON.stringify(result, null, 2));
       return;
     }
 
-    console.log(`\n📦 Technology Coverage Report\n`);
-    console.log(`Manifests: ${result.manifests_analyzed.join(', ')}`);
-    console.log(`Coverage: ${result.coverage.covered}/${result.coverage.total_significant} significant deps (${result.coverage.coverage_pct}%)\n`);
+    const { aggregate, projects } = result;
 
-    if (result.covered.length > 0) {
-      console.log('✅ Covered:');
-      for (const d of result.covered) {
-        console.log(`  ${d.name} ${d.version} → plugin: ${d.plugin}`);
+    if (projects.length <= 1) {
+      // Single project found — same output as before
+      if (projects.length === 1) {
+        printSingleReport(projects[0]);
+      } else {
+        console.log('\n📦 Technology Coverage Report\n');
+        console.log('No manifests found.');
       }
+      return;
     }
 
-    if (result.gaps.length > 0) {
-      console.log('\n⚠️  Gaps:');
-      for (const g of result.gaps) {
-        console.log(`  [${g.priority}] ${g.name} ${g.version} (${g.category})`);
-      }
-    }
+    // Multi-project summary
+    console.log(`\n📦 Technology Coverage Report (${aggregate.total_projects} projects)\n`);
+    console.log(`Aggregate: ${aggregate.covered}/${aggregate.total_significant} significant deps (${aggregate.coverage_pct}%)\n`);
 
-    if (result.unknown.length > 0) {
-      console.log(`\n❓ Unknown (${result.unknown.length} packages not in catalog)`);
+    for (const proj of projects) {
+      const relPath = path.relative(projectRoot, proj.project) || '.';
+      console.log(`── ${relPath}`);
+      console.log(`   Manifests: ${proj.manifests_analyzed.join(', ')}`);
+      console.log(`   Coverage: ${proj.coverage.covered}/${proj.coverage.total_significant} significant deps (${proj.coverage.coverage_pct}%)`);
+
+      if (proj.gaps.length > 0) {
+        console.log(`   Gaps: ${proj.gaps.map(g => g.name).join(', ')}`);
+      }
+      console.log('');
     }
   });
 

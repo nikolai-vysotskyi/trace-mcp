@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { KNOWN_PACKAGES, type PackageMeta } from './known-packages.js';
 import { logger } from '../logger.js';
+import { discoverChildProjectsRecursive } from '../project-root.js';
 
 interface DependencyInfo {
   name: string;
@@ -15,6 +16,7 @@ interface DependencyInfo {
   isDev: boolean;
   coveredByPlugin: string | null;
   priority: PackageMeta['priority'];
+  ecosystem: Ecosystem;
 }
 
 interface CoverageGap {
@@ -23,6 +25,17 @@ interface CoverageGap {
   category: string;
   priority: 'high' | 'medium' | 'low';
   reason?: string;
+}
+
+type Ecosystem = 'npm' | 'composer' | 'pip' | 'go' | 'gem' | 'maven';
+
+interface UnknownPackage {
+  name: string;
+  version: string;
+  ecosystem: Ecosystem;
+  language_fallback: boolean;   // true = language plugin indexes this code anyway
+  needs_plugin: 'likely' | 'maybe' | 'no';  // heuristic: should we add a dedicated plugin?
+  reason: string;               // human-readable explanation
 }
 
 interface CoverageReport {
@@ -36,7 +49,7 @@ interface CoverageReport {
   };
   covered: { name: string; version: string; plugin: string }[];
   gaps: CoverageGap[];
-  unknown: { name: string; version: string }[];
+  unknown: UnknownPackage[];
 }
 
 // --- Manifest parsers ---
@@ -157,14 +170,80 @@ function parseGemfile(filePath: string): RawDep[] {
 
 // --- Manifest detection ---
 
-const MANIFEST_PARSERS: { file: string; parser: (path: string) => RawDep[] }[] = [
-  { file: 'package.json', parser: parsePackageJson },
-  { file: 'composer.json', parser: parseComposerJson },
-  { file: 'requirements.txt', parser: parseRequirementsTxt },
-  { file: 'pyproject.toml', parser: parsePyprojectToml },
-  { file: 'go.mod', parser: parseGoMod },
-  { file: 'Gemfile', parser: parseGemfile },
+const MANIFEST_PARSERS: { file: string; ecosystem: Ecosystem; parser: (path: string) => RawDep[] }[] = [
+  { file: 'package.json', ecosystem: 'npm', parser: parsePackageJson },
+  { file: 'composer.json', ecosystem: 'composer', parser: parseComposerJson },
+  { file: 'requirements.txt', ecosystem: 'pip', parser: parseRequirementsTxt },
+  { file: 'pyproject.toml', ecosystem: 'pip', parser: parsePyprojectToml },
+  { file: 'go.mod', ecosystem: 'go', parser: parseGoMod },
+  { file: 'Gemfile', ecosystem: 'gem', parser: parseGemfile },
 ];
+
+// --- Unknown package heuristics ---
+
+/** All ecosystems have language-level indexing — trace-mcp always parses source code by language */
+const LANGUAGE_FALLBACK_LANGUAGES: Record<Ecosystem, string> = {
+  npm: 'TypeScript/JavaScript',
+  composer: 'PHP',
+  pip: 'Python',
+  go: 'Go',
+  gem: 'Ruby',
+  maven: 'Java/Kotlin',
+};
+
+/**
+ * Patterns that suggest a package provides framework-level semantics
+ * (routing, models, middleware, etc.) that benefit from a dedicated plugin.
+ */
+const FRAMEWORK_SIGNAL_PATTERNS: RegExp[] = [
+  /^@?\w+\/(framework|core|server|client|app)$/i,
+  /-(framework|engine|server|middleware|router|orm|queue|worker|sdk)$/i,
+  /^(django|flask|fastapi|rails|spring|express|nestjs|nuxt|next)-/i,
+];
+
+function assessNeedsPlugin(name: string, ecosystem: Ecosystem): { needs: UnknownPackage['needs_plugin']; reason: string } {
+  // Scoped org packages with known framework prefixes
+  const frameworkPrefixes: Record<Ecosystem, string[]> = {
+    npm: ['@nestjs/', '@angular/', '@vue/', '@nuxt/', '@trpc/', '@apollo/', '@prisma/', '@tanstack/', '@hono/'],
+    composer: ['laravel/', 'symfony/', 'livewire/', 'spatie/', 'filament/'],
+    pip: ['django-', 'flask-', 'fastapi-', 'celery-', 'starlette-'],
+    go: ['github.com/gin-', 'github.com/labstack/', 'github.com/gofiber/', 'gorm.io/'],
+    gem: ['rails-', 'devise-', 'pundit-', 'sidekiq-'],
+    maven: ['org.springframework'],
+  };
+
+  const prefixes = frameworkPrefixes[ecosystem] ?? [];
+  for (const prefix of prefixes) {
+    if (name.startsWith(prefix)) {
+      return { needs: 'likely', reason: `extends known framework (${prefix.replace(/[-/]$/, '')})` };
+    }
+  }
+
+  for (const pattern of FRAMEWORK_SIGNAL_PATTERNS) {
+    if (pattern.test(name)) {
+      return { needs: 'maybe', reason: 'name suggests framework-level semantics' };
+    }
+  }
+
+  // Type-definition packages, polyfills, linters etc — no plugin needed
+  const noPluginPatterns = [
+    /^@types\//,
+    /^eslint/,
+    /^prettier/,
+    /^stylelint/,
+    /-(types|typings|polyfill|shim|loader|preset|config)$/,
+    /^babel-/,
+    /^postcss-/,
+    /^autoprefixer$/,
+  ];
+  for (const pattern of noPluginPatterns) {
+    if (pattern.test(name)) {
+      return { needs: 'no', reason: 'tooling/types — language fallback sufficient' };
+    }
+  }
+
+  return { needs: 'maybe', reason: 'not in catalog — review needed' };
+}
 
 // --- Main ---
 
@@ -174,7 +253,7 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
   const manifestsFound: string[] = [];
   const allDeps: DependencyInfo[] = [];
 
-  for (const { file, parser } of MANIFEST_PARSERS) {
+  for (const { file, ecosystem, parser } of MANIFEST_PARSERS) {
     const filePath = path.join(projectRoot, file);
     if (!fs.existsSync(filePath)) continue;
     manifestsFound.push(file);
@@ -191,6 +270,7 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
         isDev: raw.isDev,
         coveredByPlugin: known?.plugin ?? null,
         priority: known?.priority ?? 'none',
+        ecosystem,
       });
     }
   }
@@ -208,7 +288,21 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
 
   const unknown = allDeps
     .filter(d => !KNOWN_PACKAGES[d.name] && d.priority === 'none')
-    .map(d => ({ name: d.name, version: d.version }));
+    .map(d => {
+      const assessment = assessNeedsPlugin(d.name, d.ecosystem);
+      return {
+        name: d.name,
+        version: d.version,
+        ecosystem: d.ecosystem,
+        language_fallback: true, // all ecosystems have language-level indexing
+        needs_plugin: assessment.needs,
+        reason: assessment.reason,
+      } satisfies UnknownPackage;
+    })
+    .sort((a, b) => {
+      const prio = { likely: 0, maybe: 1, no: 2 };
+      return (prio[a.needs_plugin] ?? 3) - (prio[b.needs_plugin] ?? 3);
+    });
 
   return {
     project: projectRoot,
@@ -222,5 +316,61 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
     covered: covered.map(d => ({ name: d.name, version: d.version, plugin: d.coveredByPlugin! })),
     gaps,
     unknown,
+  };
+}
+
+export interface MultiProjectCoverageReport {
+  root: string;
+  projects: CoverageReport[];
+  aggregate: {
+    total_projects: number;
+    total_significant: number;
+    covered: number;
+    coverage_pct: number;
+  };
+}
+
+/**
+ * Detect technology coverage across the root project and all recursively
+ * discovered child projects (monorepo / federation support).
+ */
+export function detectCoverageRecursive(
+  projectRoot: string,
+  opts: { includeDev?: boolean } = {},
+): MultiProjectCoverageReport {
+  const rootReport = detectCoverage(projectRoot, opts);
+  const childRoots = discoverChildProjectsRecursive(projectRoot);
+  const childReports = childRoots.map(child => detectCoverage(child, opts));
+
+  // Include root only if it has manifests (skip bare monorepo containers)
+  const allReports = rootReport.manifests_analyzed.length > 0
+    ? [rootReport, ...childReports]
+    : childReports;
+
+  // Deduplicate dependencies by name across all projects
+  const significantSet = new Map<string, DependencyInfo>();
+  for (const report of allReports) {
+    for (const dep of report.dependencies) {
+      if (dep.priority === 'none') continue;
+      // Keep the first occurrence (or upgrade if newly covered)
+      const existing = significantSet.get(dep.name);
+      if (!existing || (existing.coveredByPlugin === null && dep.coveredByPlugin !== null)) {
+        significantSet.set(dep.name, dep);
+      }
+    }
+  }
+
+  const totalSignificant = significantSet.size;
+  const coveredCount = [...significantSet.values()].filter(d => d.coveredByPlugin !== null).length;
+
+  return {
+    root: projectRoot,
+    projects: allReports,
+    aggregate: {
+      total_projects: allReports.length,
+      total_significant: totalSignificant,
+      covered: coveredCount,
+      coverage_pct: totalSignificant > 0 ? Math.round(coveredCount / totalSignificant * 100) : 100,
+    },
   };
 }
