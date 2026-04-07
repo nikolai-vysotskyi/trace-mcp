@@ -41,6 +41,30 @@ interface ContextBundleResult {
   content?: string; // markdown output when output_format = 'markdown'
 }
 
+/** Cache for batched file reads — avoids re-opening the same file for each symbol */
+class FileReadCache {
+  private cache = new Map<number, Buffer | null>();
+
+  constructor(private rootPath: string) {}
+
+  readSymbolSource(sym: SymbolRow, file: FileRow): string | undefined {
+    let buf = this.cache.get(file.id);
+    if (buf === undefined) {
+      try {
+        const absPath = path.resolve(this.rootPath, file.path);
+        const fs = require('node:fs') as typeof import('node:fs');
+        buf = fs.readFileSync(absPath);
+      } catch {
+        buf = null;
+      }
+      this.cache.set(file.id, buf);
+    }
+    if (!buf || sym.byte_start == null || sym.byte_end == null) return undefined;
+    if (file.gitignored) return '[gitignored]';
+    return buf.subarray(sym.byte_start, sym.byte_end).toString('utf-8');
+  }
+}
+
 function readSource(
   sym: SymbolRow,
   file: FileRow,
@@ -59,6 +83,16 @@ function toContextItem(sym: SymbolRow, file: FileRow, rootPath: string, score: n
     id: sym.symbol_id,
     score,
     source: readSource(sym, file, rootPath),
+    signature: sym.signature ?? undefined,
+    metadata: `[${sym.kind}] ${sym.fqn ?? sym.name} — ${file.path}`,
+  };
+}
+
+function toContextItemCached(sym: SymbolRow, file: FileRow, cache: FileReadCache, score: number, signatureOnly: boolean): ContextItem {
+  return {
+    id: sym.symbol_id,
+    score,
+    source: signatureOnly ? undefined : cache.readSymbolSource(sym, file),
     signature: sym.signature ?? undefined,
     metadata: `[${sym.kind}] ${sym.fqn ?? sym.name} — ${file.path}`,
   };
@@ -209,14 +243,21 @@ export function getContextBundle(
   }
 
   // Assemble within token budget using structured assembly
+  // Use file read cache to avoid re-reading the same file for multiple symbols
+  const fileCache = new FileReadCache(rootPath);
+
+  // Primary symbols always get full source
   const primaryItems: ContextItem[] = primarySymbols.map((p, i) =>
-    toContextItem(p.sym, p.file, rootPath, 1.0 - i * 0.01),
+    toContextItemCached(p.sym, p.file, fileCache, 1.0 - i * 0.01, false),
   );
+  // Dependencies: top N get full source, rest get signature-only (lazy loading)
+  // This avoids reading source for deps that will be truncated by the assembler anyway
+  const MAX_FULL_SOURCE_DEPS = 10;
   const depItems: ContextItem[] = depSymbols.map((d, i) =>
-    toContextItem(d.sym, d.file, rootPath, 0.8 - i * 0.005),
+    toContextItemCached(d.sym, d.file, fileCache, 0.8 - i * 0.005, i >= MAX_FULL_SOURCE_DEPS),
   );
   const callerItems: ContextItem[] = callerSymbols.map((c, i) =>
-    toContextItem(c.sym, c.file, rootPath, 0.6 - i * 0.005),
+    toContextItemCached(c.sym, c.file, fileCache, 0.6 - i * 0.005, i >= MAX_FULL_SOURCE_DEPS),
   );
 
   const assembled = assembleStructuredContext({
