@@ -78,6 +78,7 @@ Agent is ONLY acceptable for: writing code in parallel (background workers), run
 - **Grep**: ONLY for searching non-code file content (config, markdown, yaml)
 - **Glob**: ONLY for finding non-code files by name pattern
 - **Bash**: ONLY for running builds (`npm run build`), tests (`npm test`), git commands, or other CLI operations — NEVER for code exploration
+- **Edit**: ONLY for unique, one-off changes. If you are about to make the same kind of change (same pattern/intent) **2 or more times** — whether in one file or across files — STOP and use `apply_codemod` instead. This includes: adding async/await, updating function signatures, fixing import paths, adding/removing keywords, wrapping calls. **No exceptions. No "it's just a few edits". Use apply_codemod.**
 
 ### Read-before-Edit optimization (saves ~80K tokens/day)
 
@@ -122,7 +123,7 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 4. If >20 files affected, must add `confirm_large: true`
 5. Use `filter_content` to narrow scope (e.g. only files containing "extractNodes")
 6. Use `multiline: true` for patterns spanning multiple lines
-7. NEVER use 50× Edit calls for the same mechanical regex replacement — use apply_codemod instead
+7. NEVER use Edit for the same mechanical change 2+ times — use apply_codemod. This is a HARD RULE, not a guideline. Even "just 3 edits" is a violation.
 
 ### Deleting code
 1. `get_dead_code` { file_pattern } — verify code is actually dead (multi-signal detection)
