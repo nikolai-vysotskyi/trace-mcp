@@ -7,8 +7,8 @@ import { DartLanguagePlugin } from '../../src/indexer/plugins/language/dart/inde
 // ── Swift ───────────────────────────────────────────────────────────────────
 
 const swiftPlugin = new SwiftLanguagePlugin();
-function parseSwift(source: string, filePath = 'main.swift') {
-  const result = swiftPlugin.extractSymbols(filePath, Buffer.from(source));
+async function parseSwift(source: string, filePath = 'main.swift') {
+  const result = await swiftPlugin.extractSymbols(filePath, Buffer.from(source));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -19,49 +19,49 @@ describe('SwiftLanguagePlugin', () => {
     expect(swiftPlugin.supportedExtensions).toContain('.swift');
   });
 
-  it('extracts functions', () => {
-    const r = parseSwift('func greet(name: String) -> String {\n  return "Hello \\(name)"\n}');
+  it('extracts functions', async () => {
+    const r = await parseSwift('func greet(name: String) -> String {\n  return "Hello \\(name)"\n}');
     expect(r.symbols.some(s => s.name === 'greet' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts classes', () => {
-    const r = parseSwift('class Vehicle {\n  var speed: Int = 0\n}');
+  it('extracts classes', async () => {
+    const r = await parseSwift('class Vehicle {\n  var speed: Int = 0\n}');
     expect(r.symbols.some(s => s.name === 'Vehicle' && s.kind === 'class')).toBe(true);
   });
 
-  it('extracts structs', () => {
-    const r = parseSwift('struct Point {\n  var x: Double\n  var y: Double\n}');
+  it('extracts structs', async () => {
+    const r = await parseSwift('struct Point {\n  var x: Double\n  var y: Double\n}');
     expect(r.symbols.some(s => s.name === 'Point' && s.kind === 'class')).toBe(true);
   });
 
-  it('extracts protocols', () => {
-    const r = parseSwift('protocol Drawable {\n  func draw()\n}');
+  it('extracts protocols', async () => {
+    const r = await parseSwift('protocol Drawable {\n  func draw()\n}');
     expect(r.symbols.some(s => s.name === 'Drawable' && s.kind === 'interface')).toBe(true);
   });
 
-  it('extracts enums with cases', () => {
-    const r = parseSwift('enum Direction {\n  case north\n  case south\n}');
+  it('extracts enums with cases', async () => {
+    const r = await parseSwift('enum Direction {\n  case north\n  case south\n}');
     expect(r.symbols.some(s => s.name === 'Direction' && s.kind === 'enum')).toBe(true);
     expect(r.symbols.some(s => s.name === 'north' && s.kind === 'enum_case')).toBe(true);
   });
 
-  it('extracts constants (let)', () => {
-    const r = parseSwift('let maxRetries = 5');
+  it('extracts constants (let)', async () => {
+    const r = await parseSwift('let maxRetries = 5');
     expect(r.symbols.some(s => s.name === 'maxRetries' && s.kind === 'constant')).toBe(true);
   });
 
-  it('extracts variables (var)', () => {
-    const r = parseSwift('var currentCount = 0');
+  it('extracts variables (var)', async () => {
+    const r = await parseSwift('var currentCount = 0');
     expect(r.symbols.some(s => s.name === 'currentCount' && s.kind === 'variable')).toBe(true);
   });
 
-  it('extracts typealiases', () => {
-    const r = parseSwift('typealias Completion = (Bool) -> Void');
+  it('extracts typealiases', async () => {
+    const r = await parseSwift('typealias Completion = (Bool) -> Void');
     expect(r.symbols.some(s => s.name === 'Completion' && s.kind === 'type')).toBe(true);
   });
 
-  it('extracts import edges', () => {
-    const r = parseSwift('import Foundation\nimport UIKit');
+  it('extracts import edges', async () => {
+    const r = await parseSwift('import Foundation\nimport UIKit');
     expect(r.edges).toBeDefined();
     const imports = r.edges!.filter(e => e.edgeType === 'imports');
     expect(imports.length).toBeGreaterThanOrEqual(2);
@@ -74,8 +74,8 @@ describe('SwiftLanguagePlugin', () => {
 // ── Objective-C ─────────────────────────────────────────────────────────────
 
 const objcPlugin = new ObjCLanguagePlugin();
-function parseObjC(source: string, filePath = 'MyClass.m') {
-  const result = objcPlugin.extractSymbols(filePath, Buffer.from(source));
+async function parseObjC(source: string, filePath = 'MyClass.m') {
+  const result = await objcPlugin.extractSymbols(filePath, Buffer.from(source));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -86,51 +86,50 @@ describe('ObjCLanguagePlugin', () => {
     expect(objcPlugin.supportedExtensions).toContain('.m');
   });
 
-  it('extracts @interface declarations', () => {
-    const r = parseObjC('@interface MyClass : NSObject\n@end');
+  it('extracts @interface declarations', async () => {
+    const r = await parseObjC('@interface MyClass : NSObject\n@end');
     expect(r.symbols.some(s => s.name === 'MyClass' && s.kind === 'class')).toBe(true);
   });
 
-  it('extracts @implementation', () => {
-    const r = parseObjC('@implementation MyClass\n@end');
+  it('extracts @implementation', async () => {
+    const r = await parseObjC('@implementation MyClass\n@end');
     expect(r.symbols.some(s => s.name === 'MyClass' && s.kind === 'class')).toBe(true);
   });
 
-  it('extracts @protocol', () => {
-    const r = parseObjC('@protocol Serializable\n- (NSData *)serialize;\n@end');
+  it('extracts @protocol', async () => {
+    const r = await parseObjC('@protocol Serializable\n- (NSData *)serialize;\n@end');
     expect(r.symbols.some(s => s.name === 'Serializable' && s.kind === 'interface')).toBe(true);
   });
 
-  it('extracts simple instance method', () => {
-    const r = parseObjC('- (void)doSomething {\n}');
+  it('extracts simple instance method', async () => {
+    const r = await parseObjC('@implementation Foo\n- (void)doSomething {\n}\n@end');
     expect(r.symbols.some(s => s.name === 'doSomething' && s.kind === 'method')).toBe(true);
   });
 
-  it('extracts instance method with parameter', () => {
-    const r = parseObjC('- (void)doSomething:(NSString *)name {\n}');
-    // Regex captures selector parts from the matched line
+  it('extracts instance method with parameter', async () => {
+    const r = await parseObjC('@implementation Foo\n- (void)doSomething:(NSString *)name {\n}\n@end');
     expect(r.symbols.some(s => s.kind === 'method' && s.name.includes('doSomething'))).toBe(true);
   });
 
-  it('extracts class methods', () => {
-    const r = parseObjC('+ (instancetype)sharedInstance {\n  return nil;\n}');
+  it('extracts class methods', async () => {
+    const r = await parseObjC('@implementation Foo\n+ (instancetype)sharedInstance {\n  return nil;\n}\n@end');
     expect(r.symbols.some(s => s.name === 'sharedInstance' && s.kind === 'method')).toBe(true);
     const method = r.symbols.find(s => s.name === 'sharedInstance');
     expect(method!.metadata?.static).toBe(true);
   });
 
-  it('extracts @property', () => {
-    const r = parseObjC('@property (nonatomic, strong) NSString *name;');
+  it('extracts @property', async () => {
+    const r = await parseObjC('@interface Foo : NSObject\n@property (nonatomic, strong) NSString *name;\n@end');
     expect(r.symbols.some(s => s.name === 'name' && s.kind === 'property')).toBe(true);
   });
 
-  it('extracts #define constants', () => {
-    const r = parseObjC('#define APP_VERSION @"1.0.0"');
+  it('extracts #define constants', async () => {
+    const r = await parseObjC('#define APP_VERSION @"1.0.0"');
     expect(r.symbols.some(s => s.name === 'APP_VERSION' && s.kind === 'constant')).toBe(true);
   });
 
-  it('extracts import edges from #import', () => {
-    const r = parseObjC('#import <Foundation/Foundation.h>\n#import "MyHeader.h"');
+  it('extracts import edges from #import', async () => {
+    const r = await parseObjC('#import <Foundation/Foundation.h>\n#import "MyHeader.h"');
     expect(r.edges).toBeDefined();
     const imports = r.edges!.filter(e => e.edgeType === 'imports');
     expect(imports.length).toBe(2);
@@ -139,8 +138,8 @@ describe('ObjCLanguagePlugin', () => {
     expect(modules).toContain('MyHeader.h');
   });
 
-  it('extracts import edges from @import', () => {
-    const r = parseObjC('@import UIKit;');
+  it('extracts import edges from @import', async () => {
+    const r = await parseObjC('@import UIKit;');
     expect(r.edges).toBeDefined();
     const imports = r.edges!.filter(e => e.edgeType === 'imports');
     expect(imports.some(e => (e.metadata as any).module === 'UIKit')).toBe(true);
@@ -150,8 +149,8 @@ describe('ObjCLanguagePlugin', () => {
 // ── Dart ────────────────────────────────────────────────────────────────────
 
 const dartPlugin = new DartLanguagePlugin();
-function parseDart(source: string, filePath = 'main.dart') {
-  const result = dartPlugin.extractSymbols(filePath, Buffer.from(source));
+async function parseDart(source: string, filePath = 'main.dart') {
+  const result = await dartPlugin.extractSymbols(filePath, Buffer.from(source));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -162,53 +161,53 @@ describe('DartLanguagePlugin', () => {
     expect(dartPlugin.supportedExtensions).toContain('.dart');
   });
 
-  it('extracts classes', () => {
-    const r = parseDart('class UserRepository {\n  void save() {}\n}');
+  it('extracts classes', async () => {
+    const r = await parseDart('class UserRepository {\n  void save() {}\n}');
     expect(r.symbols.some(s => s.name === 'UserRepository' && s.kind === 'class')).toBe(true);
   });
 
-  it('extracts abstract classes', () => {
-    const r = parseDart('abstract class BaseService {\n  void init();\n}');
+  it('extracts abstract classes', async () => {
+    const r = await parseDart('abstract class BaseService {\n  void init();\n}');
     expect(r.symbols.some(s => s.name === 'BaseService' && s.kind === 'class')).toBe(true);
   });
 
-  it('extracts mixins', () => {
-    const r = parseDart('mixin Printable {\n  void printInfo() {}\n}');
+  it('extracts mixins', async () => {
+    const r = await parseDart('mixin Printable {\n  void printInfo() {}\n}');
     expect(r.symbols.some(s => s.name === 'Printable' && s.kind === 'trait')).toBe(true);
   });
 
-  it('extracts enums', () => {
-    const r = parseDart('enum Color { red, green, blue }');
+  it('extracts enums', async () => {
+    const r = await parseDart('enum Color { red, green, blue }');
     expect(r.symbols.some(s => s.name === 'Color' && s.kind === 'enum')).toBe(true);
   });
 
-  it('extracts functions with return types', () => {
-    const r = parseDart('void fetchData() async {\n  // fetch\n}');
+  it('extracts functions with return types', async () => {
+    const r = await parseDart('void fetchData() async {\n  // fetch\n}');
     expect(r.symbols.some(s => s.name === 'fetchData' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts Future-returning functions', () => {
-    const r = parseDart('Future<String> loadName() async {\n  return "";\n}');
+  it('extracts Future-returning functions', async () => {
+    const r = await parseDart('Future<String> loadName() async {\n  return "";\n}');
     expect(r.symbols.some(s => s.name === 'loadName' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts getters', () => {
-    const r = parseDart('String get name => _name;');
+  it('extracts getters', async () => {
+    const r = await parseDart('String get name => _name;');
     expect(r.symbols.some(s => s.name === 'name' && s.kind === 'property')).toBe(true);
   });
 
-  it('extracts constants', () => {
-    const r = parseDart('const maxItems = 100;');
+  it('extracts constants', async () => {
+    const r = await parseDart('const maxItems = 100;');
     expect(r.symbols.some(s => s.name === 'maxItems' && s.kind === 'constant')).toBe(true);
   });
 
-  it('extracts final variables', () => {
-    const r = parseDart('final String appName = "MyApp";');
+  it('extracts final variables', async () => {
+    const r = await parseDart('final String appName = "MyApp";');
     expect(r.symbols.some(s => s.name === 'appName' && s.kind === 'variable')).toBe(true);
   });
 
-  it('extracts import edges', () => {
-    const r = parseDart("import 'package:flutter/material.dart';\nimport 'dart:async';");
+  it('extracts import edges', async () => {
+    const r = await parseDart("import 'package:flutter/material.dart';\nimport 'dart:async';");
     expect(r.edges).toBeDefined();
     const imports = r.edges!.filter(e => e.edgeType === 'imports');
     expect(imports.length).toBeGreaterThanOrEqual(2);

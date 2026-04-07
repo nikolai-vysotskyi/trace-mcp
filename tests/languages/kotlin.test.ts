@@ -3,8 +3,8 @@ import { KotlinLanguagePlugin } from '../../src/indexer/plugins/language/kotlin/
 
 const plugin = new KotlinLanguagePlugin();
 
-function extract(code: string, filePath = 'com/example/App.kt') {
-  const result = plugin.extractSymbols(filePath, Buffer.from(code));
+async function extract(code: string, filePath = 'com/example/App.kt') {
+  const result = await plugin.extractSymbols(filePath, Buffer.from(code));
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -16,8 +16,8 @@ describe('KotlinLanguagePlugin', () => {
     expect(plugin.supportedExtensions).toContain('.kts');
   });
 
-  it('extracts class with package', () => {
-    const result = extract(`
+  it('extracts class with package', async () => {
+    const result = await extract(`
 package com.example
 
 class UserService {
@@ -30,8 +30,8 @@ class UserService {
     expect(cls!.fqn).toBe('com.example.UserService');
   });
 
-  it('extracts data class', () => {
-    const result = extract(`
+  it('extracts data class', async () => {
+    const result = await extract(`
 package com.example
 
 data class User(val name: String, val age: Int)
@@ -41,8 +41,8 @@ data class User(val name: String, val age: Int)
     expect(cls!.metadata?.data).toBe(true);
   });
 
-  it('extracts interface', () => {
-    const result = extract(`
+  it('extracts interface', async () => {
+    const result = await extract(`
 package com.example
 
 interface Repository {
@@ -54,8 +54,8 @@ interface Repository {
     expect(iface!.kind).toBe('interface');
   });
 
-  it('extracts functions', () => {
-    const result = extract(`package com.example
+  it('extracts functions', async () => {
+    const result = await extract(`package com.example
 
 fun greet(name: String): String {
   return "Hello"
@@ -67,8 +67,8 @@ fun greet(name: String): String {
     expect(fn!.signature).toContain('greet');
   });
 
-  it('extracts import edges', () => {
-    const result = extract(`
+  it('extracts import edges', async () => {
+    const result = await extract(`
 package com.example
 
 import java.util.List
@@ -78,8 +78,8 @@ import kotlinx.coroutines.launch as launchCoroutine
     expect(result.edges!.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('extracts inheritance', () => {
-    const result = extract(`
+  it('extracts inheritance', async () => {
+    const result = await extract(`
 package com.example
 
 class Dog : Animal(), Serializable {
