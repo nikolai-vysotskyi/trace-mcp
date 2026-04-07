@@ -184,7 +184,7 @@ export interface LanguagePlugin {
   manifest: PluginManifest;
   supportedExtensions: string[];
   supportedVersions?: string[];  // e.g. ['7.0', '7.1', ..., '8.4'] or ['3.9', ..., '3.14']
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult>;
+  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> | Promise<TraceMcpResult<FileParseResult>>;
 }
 
 // --- Framework Plugin ---
