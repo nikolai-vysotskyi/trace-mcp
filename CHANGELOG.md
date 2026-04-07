@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.11.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.10.0...v1.11.0) (2026-04-07)
+
+
+### Features
+
+* add recursive multi-project technology coverage detection ([606d753](https://github.com/nikolai-vysotskyi/trace-mcp/commit/606d753b02bc4e0bdec03517fd0886dbba64c1a6))
+
+
+### Refactoring
+
+* Improve project root detection logic ([38d31e6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/38d31e6e12cb392c123785ee04bc2471c3f7e38e))
+
 ## [1.10.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.9.0...v1.10.0) (2026-04-07)
 
 
