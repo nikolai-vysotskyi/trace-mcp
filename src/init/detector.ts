@@ -170,6 +170,54 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
     checkConfig('continue', path.join(projectRoot, '.continue', 'mcpServers', 'mcp.json'));
   }
 
+  // Junie: global ~/.junie/mcp/mcp.json, project .junie/mcp/mcp.json
+  checkConfig('junie', path.join(HOME, '.junie', 'mcp', 'mcp.json'));
+  if (projectRoot && !clients.some((c) => c.name === 'junie')) {
+    checkConfig('junie', path.join(projectRoot, '.junie', 'mcp', 'mcp.json'));
+  }
+
+  // JetBrains AI Assistant: detect via IDE mcpServer.xml in JetBrains config dirs
+  {
+    const jbConfigBase = platform === 'darwin'
+      ? path.join(HOME, 'Library', 'Application Support', 'JetBrains')
+      : platform === 'win32'
+        ? path.join(process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'), 'JetBrains')
+        : path.join(HOME, '.config', 'JetBrains');
+
+    if (fs.existsSync(jbConfigBase)) {
+      try {
+        const dirs = fs.readdirSync(jbConfigBase);
+        for (const dir of dirs) {
+          const mcpXml = path.join(jbConfigBase, dir, 'options', 'mcpServer.xml');
+          if (fs.existsSync(mcpXml)) {
+            // Found at least one JetBrains IDE with MCP support
+            clients.push({ name: 'jetbrains-ai', configPath: mcpXml, hasTraceMcp: false });
+            break;
+          }
+        }
+      } catch { /* can't read dir */ }
+    }
+  }
+
+  // Codex: global ~/.codex/config.toml, project .codex/config.toml
+  {
+    const checkToml = (name: DetectedMcpClient['name'], tomlPath: string) => {
+      if (!fs.existsSync(tomlPath)) return;
+      try {
+        const content = fs.readFileSync(tomlPath, 'utf-8');
+        const hasTraceMcp = /\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content);
+        clients.push({ name, configPath: tomlPath, hasTraceMcp });
+      } catch {
+        clients.push({ name, configPath: tomlPath, hasTraceMcp: false });
+      }
+    };
+
+    checkToml('codex', path.join(HOME, '.codex', 'config.toml'));
+    if (projectRoot && !clients.some((c) => c.name === 'codex')) {
+      checkToml('codex', path.join(projectRoot, '.codex', 'config.toml'));
+    }
+  }
+
   return clients;
 }
 

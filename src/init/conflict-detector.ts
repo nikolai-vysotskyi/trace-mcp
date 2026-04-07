@@ -291,6 +291,15 @@ function getMcpConfigPaths(projectRoot?: string): { clientName: string; configPa
   // Continue
   paths.push({ clientName: 'continue', configPath: path.join(HOME, '.continue', 'mcpServers', 'mcp.json') });
 
+  // Junie
+  paths.push({ clientName: 'junie', configPath: path.join(HOME, '.junie', 'mcp', 'mcp.json') });
+  if (projectRoot) {
+    paths.push({ clientName: 'junie', configPath: path.join(projectRoot, '.junie', 'mcp', 'mcp.json') });
+  }
+
+  // Codex (TOML format — conflict scanner only checks for competing server names in JSON configs,
+  // so we skip Codex here since its format differs)
+
   return paths;
 }
 

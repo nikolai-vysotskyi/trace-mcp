@@ -31,6 +31,54 @@ export function configureMcpClients(
   const results: InitStepResult[] = [];
 
   for (const name of clientNames) {
+    // JetBrains AI Assistant: config stored in IDE XML (llm.mcpServers.xml), not editable as JSON.
+    // If Claude Desktop is also selected, user can "Import from Claude" in the IDE.
+    if (name === 'jetbrains-ai') {
+      const hasClaudeDesktop = clientNames.includes('claude-desktop');
+      results.push({
+        target: 'JetBrains AI Assistant',
+        action: 'skipped',
+        detail: hasClaudeDesktop
+          ? 'Use "Import from Claude" in Settings → Tools → AI Assistant → MCP'
+          : 'Add via Settings → Tools → AI Assistant → MCP → Add → Command: trace-mcp, Args: serve',
+      });
+      continue;
+    }
+
+    // Codex: TOML format
+    if (name === 'codex') {
+      const configPath = getConfigPath(name, projectRoot, opts.scope);
+      if (!configPath) {
+        results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
+        continue;
+      }
+
+      // Check if already configured
+      if (fs.existsSync(configPath)) {
+        try {
+          const content = fs.readFileSync(configPath, 'utf-8');
+          if (/\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content)) {
+            results.push({ target: configPath, action: 'already_configured', detail: name });
+            continue;
+          }
+        } catch { /* malformed — will append */ }
+      }
+
+      if (opts.dryRun) {
+        results.push({ target: configPath, action: 'skipped', detail: `Would configure ${name} (${opts.scope})` });
+        continue;
+      }
+
+      try {
+        const action = writeCodexTomlEntry(configPath, { command: 'trace-mcp', args: ['serve'], cwd: projectRoot });
+        results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
+      } catch (err) {
+        results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
+      }
+      continue;
+    }
+
+    // All other clients: JSON format with mcpServers key
     const configPath = getConfigPath(name, projectRoot, opts.scope);
     if (!configPath) {
       results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
@@ -61,7 +109,7 @@ export function configureMcpClients(
     }
 
     try {
-      const action = writeTraceMcpEntry(configPath, entry);
+      const action = writeJsonEntry(configPath, entry);
       results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
     } catch (err) {
       results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
@@ -71,7 +119,11 @@ export function configureMcpClients(
   return results;
 }
 
-function writeTraceMcpEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
+// ---------------------------------------------------------------------------
+// JSON writers (Claude Code, Claw, Claude Desktop, Cursor, Windsurf, Continue, Junie)
+// ---------------------------------------------------------------------------
+
+function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
   const dir = path.dirname(configPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
@@ -92,6 +144,42 @@ function writeTraceMcpEntry(configPath: string, entry: McpServerEntry): 'created
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   return isNew ? 'created' : 'updated';
 }
+
+// ---------------------------------------------------------------------------
+// TOML writer (Codex)
+// ---------------------------------------------------------------------------
+
+function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  const argsToml = entry.args.map((a) => `"${a}"`).join(', ');
+  const section = [
+    '',
+    '[mcp_servers.trace-mcp]',
+    `command = "${entry.command}"`,
+    `args = [${argsToml}]`,
+  ];
+  if (entry.cwd) {
+    section.push(`cwd = "${entry.cwd}"`);
+  }
+  const block = section.join('\n') + '\n';
+
+  let isNew = true;
+  if (fs.existsSync(configPath)) {
+    const existing = fs.readFileSync(configPath, 'utf-8');
+    isNew = false;
+    fs.writeFileSync(configPath, existing.trimEnd() + '\n' + block);
+  } else {
+    fs.writeFileSync(configPath, block.trimStart());
+  }
+
+  return isNew ? 'created' : 'updated';
+}
+
+// ---------------------------------------------------------------------------
+// Config path resolution
+// ---------------------------------------------------------------------------
 
 /** Get config file path for a client, given scope. */
 function getConfigPath(name: DetectedMcpClient['name'], projectRoot: string, scope: McpScope): string | null {
@@ -121,6 +209,16 @@ function getConfigPath(name: DetectedMcpClient['name'], projectRoot: string, sco
       return scope === 'global'
         ? path.join(HOME, '.continue', 'mcpServers', 'mcp.json')
         : path.join(projectRoot, '.continue', 'mcpServers', 'mcp.json');
+    case 'junie':
+      return scope === 'global'
+        ? path.join(HOME, '.junie', 'mcp', 'mcp.json')
+        : path.join(projectRoot, '.junie', 'mcp', 'mcp.json');
+    case 'codex':
+      return scope === 'global'
+        ? path.join(HOME, '.codex', 'config.toml')
+        : path.join(projectRoot, '.codex', 'config.toml');
+    case 'jetbrains-ai':
+      return null; // Configured through IDE Settings UI, not a file we can write
     default:
       return null;
   }
