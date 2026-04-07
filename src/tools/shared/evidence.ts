@@ -13,9 +13,14 @@ interface SearchEvidence {
 }
 
 const TOOL_SUGGESTIONS: Record<string, string> = {
+  search: 'No symbols matched this query. Do not retry with similar terms. Try fuzzy=true or use search_text for raw content matching.',
   find_usages: 'This symbol has no incoming references in the dependency graph. It may be dead code or only used dynamically.',
   get_tests_for: 'No tests found for this symbol/file. Consider creating tests or check if tests use a different naming convention.',
   search_text: 'No text matches found in the indexed files. Check spelling or try a broader pattern.',
+  get_feature_context: 'No code matched this feature description. Try more specific technical terms or symbol names.',
+  query_by_intent: 'No symbols matched this intent query. Rephrase with concrete terms (function names, class names, patterns).',
+  get_dead_code: 'No dead code detected — all symbols have incoming references or are entry points.',
+  get_circular_imports: 'No circular import chains found in the analyzed scope.',
 };
 
 const DEFAULT_SUGGESTION = 'This pattern does not exist in the indexed codebase. Do not search again with similar terms.';

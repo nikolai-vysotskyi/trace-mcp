@@ -12,6 +12,7 @@ import { generateSbom, type SbomFormat } from '../project/sbom.js';
 import { getArtifacts, type ArtifactCategory } from '../project/artifacts.js';
 import { planBatchChange } from '../project/batch-changes.js';
 import { checkRenameSafe } from '../refactoring/rename-check.js';
+import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerGitTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j, jh } = ctx;
@@ -74,6 +75,10 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         threshold,
         limit,
       });
+      if (Array.isArray(result.items) && result.items.length === 0) {
+        const stats = store.getStats();
+        return { content: [{ type: 'text', text: jh('get_dead_code', { ...result, evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'get_dead_code') }) }] };
+      }
       return { content: [{ type: 'text', text: jh('get_dead_code', result) }] };
     },
   );

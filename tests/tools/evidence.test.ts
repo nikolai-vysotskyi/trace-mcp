@@ -21,9 +21,24 @@ describe('buildNegativeEvidence', () => {
     expect(ev.suggestion).toContain('No text matches');
   });
 
-  it('returns default suggestion for search', () => {
+  it('returns tool-specific suggestion for search', () => {
     const ev = buildNegativeEvidence(50, 200, false, 'search');
-    expect(ev.suggestion).toContain('does not exist in the indexed codebase');
+    expect(ev.suggestion).toContain('No symbols matched');
+  });
+
+  it('returns tool-specific suggestion for get_feature_context', () => {
+    const ev = buildNegativeEvidence(50, 200, false, 'get_feature_context');
+    expect(ev.suggestion).toContain('No code matched');
+  });
+
+  it('returns tool-specific suggestion for get_dead_code', () => {
+    const ev = buildNegativeEvidence(50, 200, false, 'get_dead_code');
+    expect(ev.suggestion).toContain('No dead code detected');
+  });
+
+  it('returns tool-specific suggestion for get_circular_imports', () => {
+    const ev = buildNegativeEvidence(50, 200, false, 'get_circular_imports');
+    expect(ev.suggestion).toContain('No circular import');
   });
 
   it('returns default suggestion for unknown tool', () => {
