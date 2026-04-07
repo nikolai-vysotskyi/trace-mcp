@@ -20,6 +20,8 @@ import { getProject } from '../registry.js';
 import { findProjectRoot } from '../project-root.js';
 import { generateReport } from '../ci/report-generator.js';
 import { formatMarkdown, formatJson } from '../ci/markdown-formatter.js';
+import { captureBaseline, compareWithBaseline } from '../ci/baseline.js';
+import { generateAnnotations, formatGitHubActions, formatAnnotationsJson } from '../ci/github-annotations.js';
 import { logger } from '../logger.js';
 
 function resolveDbPath(projectRoot: string): string {
@@ -36,6 +38,10 @@ export const ciReportCommand = new Command('ci-report')
   .option('--output <path>', 'Output file path (default: stdout, use - for stdout)', '-')
   .option('--fail-on <level>', 'Exit with code 1 if risk >= level: critical | high | medium', '')
   .option('--index', 'Index the project before generating the report', false)
+  .option('--no-project-aware', 'Disable domain/ownership/deployment analysis')
+  .option('--save-baseline', 'Save current scores as quality baseline', false)
+  .option('--fail-regression', 'Exit 1 if quality regressed vs baseline', false)
+  .option('--annotations <format>', 'Output annotations: github-actions | json')
   .action(async (opts: {
     base: string;
     head: string;
@@ -43,6 +49,10 @@ export const ciReportCommand = new Command('ci-report')
     output: string;
     failOn: string;
     index: boolean;
+    projectAware: boolean;
+    saveBaseline: boolean;
+    failRegression: boolean;
+    annotations?: string;
   }) => {
     // Find project root
     let projectRoot: string;
@@ -74,7 +84,9 @@ export const ciReportCommand = new Command('ci-report')
       include: ['**/*'],
       exclude: ['vendor/**', 'node_modules/**', '.git/**'],
       db: { path: '' },
-      plugins: [],
+      plugins: [] as string[],
+      ignore: { directories: [] as string[], patterns: [] as string[] },
+      watch: { enabled: false, debounceMs: 2000 },
     };
 
     const dbPath = resolveDbPath(projectRoot);
@@ -100,7 +112,26 @@ export const ciReportCommand = new Command('ci-report')
       changedFiles,
       store,
       rootPath: projectRoot,
+      enableProjectAware: opts.projectAware,
     });
+
+    // Compare with baseline (if exists)
+    const baseline = compareWithBaseline(store, report);
+    if (baseline) {
+      (report as any).baseline = baseline;
+    }
+
+    // Save baseline if requested
+    if (opts.saveBaseline) {
+      let commitHash = 'unknown';
+      try {
+        commitHash = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+          cwd: projectRoot, encoding: 'utf-8', timeout: 5000,
+        }).trim();
+      } catch { /* ignore */ }
+      captureBaseline(store, report, commitHash);
+      logger.info({ commit: commitHash }, 'CI report: baseline saved');
+    }
 
     // Format output
     const output = opts.format === 'json'
@@ -108,6 +139,17 @@ export const ciReportCommand = new Command('ci-report')
       : formatMarkdown(report);
 
     writeOutput(opts.output, output);
+
+    // Output annotations if requested
+    if (opts.annotations) {
+      const annotations = generateAnnotations(report);
+      if (annotations.length > 0) {
+        const annotationOutput = opts.annotations === 'json'
+          ? formatAnnotationsJson(annotations)
+          : formatGitHubActions(annotations);
+        writeOutput('-', annotationOutput);
+      }
+    }
 
     db.close();
 
@@ -121,6 +163,12 @@ export const ciReportCommand = new Command('ci-report')
         logger.warn({ level: report.summary.riskLevel, threshold: opts.failOn }, 'CI report: risk threshold exceeded');
         process.exit(1);
       }
+    }
+
+    // Exit with code 1 if regression detected
+    if (opts.failRegression && baseline?.regressionDetected) {
+      logger.warn({ riskDelta: baseline.riskDelta }, 'CI report: quality regression detected');
+      process.exit(1);
     }
   });
 

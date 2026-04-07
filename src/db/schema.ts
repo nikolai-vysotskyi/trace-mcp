@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 17;
+const SCHEMA_VERSION = 18;
 
 const DDL = `
 -- ============================================================

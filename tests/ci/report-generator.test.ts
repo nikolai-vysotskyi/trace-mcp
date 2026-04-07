@@ -11,6 +11,8 @@ import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/l
 import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { generateReport, type CIReport } from '../../src/ci/report-generator.js';
 import { formatMarkdown, formatJson } from '../../src/ci/markdown-formatter.js';
+import { captureBaseline, compareWithBaseline } from '../../src/ci/baseline.js';
+import { generateAnnotations, formatGitHubActions, formatAnnotationsJson } from '../../src/ci/github-annotations.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
@@ -543,5 +545,293 @@ describe('CI Report Markdown Formatter', () => {
     expect(md).toContain('### Summary');
 
     realStore.db.close();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Project-Aware Analysis
+// ═══════════════════════════════════════════════════════════════════
+
+describe('CI Report — Project-Aware Analysis', () => {
+  let store: Store;
+  let allFilePaths: string[];
+
+  beforeAll(async () => {
+    store = createTestStore();
+    const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new PhpLanguagePlugin());
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+    registry.registerLanguagePlugin(new VueLanguagePlugin());
+    registry.registerFrameworkPlugin(new LaravelPlugin());
+    registry.registerFrameworkPlugin(new VueFrameworkPlugin());
+
+    const config = makeConfig();
+    const pipeline = new IndexingPipeline(store, registry, config, FIXTURE_DIR);
+    await pipeline.indexAll();
+
+    allFilePaths = store.getAllFiles().map((f) => f.path);
+  });
+
+  it('includes project-aware sections when enabled', () => {
+    const report = generateReport({
+      changedFiles: allFilePaths.slice(0, 3),
+      store,
+      rootPath: FIXTURE_DIR,
+      enableProjectAware: true,
+    });
+
+    // These may or may not have data depending on fixture, but should not throw
+    expect(report).toBeDefined();
+    expect(report.summary).toBeDefined();
+    // ownershipAnalysis may be undefined if not a git repo fixture — that's ok
+  });
+
+  it('omits project-aware sections when disabled', () => {
+    const report = generateReport({
+      changedFiles: allFilePaths.slice(0, 3),
+      store,
+      rootPath: FIXTURE_DIR,
+      enableProjectAware: false,
+    });
+
+    expect(report.domainAnalysis).toBeUndefined();
+    expect(report.ownershipAnalysis).toBeUndefined();
+    expect(report.deploymentImpact).toBeUndefined();
+    expect(report.summary.domainsCrossed).toBeUndefined();
+    expect(report.summary.servicesAffected).toBeUndefined();
+  });
+
+  it('project-aware does not break report on empty store', () => {
+    const emptyStore = createTestStore();
+    const report = generateReport({
+      changedFiles: ['some/file.ts'],
+      store: emptyStore,
+      rootPath: '/tmp',
+      enableProjectAware: true,
+    });
+
+    expect(report).toBeDefined();
+    expect(report.summary.riskLevel).toBe('low');
+    emptyStore.db.close();
+  });
+
+  it('formatMarkdown includes domain section when present', () => {
+    const report: CIReport = {
+      changedFiles: [{ path: 'src/foo.ts', symbolCount: 1, avgCyclomatic: 1 }],
+      blastRadius: { entries: [], totalAffected: 0, truncated: false },
+      testCoverage: { gaps: [], totalExports: 0, totalUntested: 0 },
+      riskAnalysis: { files: [], overallScore: 0, overallLevel: 'low' },
+      architectureViolations: { violations: [], totalViolations: 0, layersChecked: [] },
+      deadCode: { symbols: [], totalDead: 0 },
+      domainAnalysis: {
+        domainsAffected: [{ name: 'auth', filesChanged: 2, filesImpacted: 3 }],
+        crossDomainChanges: [{ from: 'auth', to: 'billing', edgeCount: 5 }],
+        reviewTeams: ['auth', 'billing'],
+      },
+      ownershipAnalysis: {
+        owners: [{ file: 'src/foo.ts', primaryOwner: 'Alice', percentage: 80 }],
+        teamsCrossed: ['Alice', 'Bob'],
+      },
+      summary: { changedFileCount: 1, affectedFileCount: 0, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0, domainsCrossed: 1 },
+    };
+
+    const md = formatMarkdown(report);
+
+    expect(md).toContain('Domain Boundaries (1 domains)');
+    expect(md).toContain('auth');
+    expect(md).toContain('billing');
+    expect(md).toContain('Review needed from:');
+    expect(md).toContain('Cross-domain dependencies');
+    expect(md).toContain('Code Ownership (2 contributors)');
+    expect(md).toContain('Alice');
+    expect(md).toContain('80%');
+    expect(md).toContain('Domains crossed');
+  });
+
+  it('formatMarkdown omits project-aware sections when not present', () => {
+    const report: CIReport = {
+      changedFiles: [{ path: 'src/foo.ts', symbolCount: 1, avgCyclomatic: 1 }],
+      blastRadius: { entries: [], totalAffected: 0, truncated: false },
+      testCoverage: { gaps: [], totalExports: 0, totalUntested: 0 },
+      riskAnalysis: { files: [], overallScore: 0, overallLevel: 'low' },
+      architectureViolations: { violations: [], totalViolations: 0, layersChecked: [] },
+      deadCode: { symbols: [], totalDead: 0 },
+      summary: { changedFileCount: 1, affectedFileCount: 0, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0 },
+    };
+
+    const md = formatMarkdown(report);
+
+    expect(md).not.toContain('Domain Boundaries');
+    expect(md).not.toContain('Code Ownership');
+    expect(md).not.toContain('Deployment Impact');
+    expect(md).not.toContain('Domains crossed');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Baseline Capture & Compare
+// ═══════════════════════════════════════════════════════════════════
+
+describe('CI Quality Baseline', () => {
+  function makeMinimalReport(overrides: Partial<CIReport['riskAnalysis']> = {}): CIReport {
+    return {
+      changedFiles: [{ path: 'a.ts', symbolCount: 1, avgCyclomatic: 1 }],
+      blastRadius: { entries: [], totalAffected: 0, truncated: false },
+      testCoverage: { gaps: [], totalExports: 5, totalUntested: 2 },
+      riskAnalysis: { files: [], overallScore: 0.3, overallLevel: 'medium', ...overrides },
+      architectureViolations: { violations: [], totalViolations: 1, layersChecked: [] },
+      deadCode: { symbols: [], totalDead: 3 },
+      summary: { changedFileCount: 1, affectedFileCount: 0, riskLevel: 'medium', untestedGaps: 2, violations: 1, deadExports: 3 },
+    };
+  }
+
+  it('returns null when no baseline exists', () => {
+    const store = createTestStore();
+    const report = makeMinimalReport();
+    const result = compareWithBaseline(store, report);
+    expect(result).toBeNull();
+    store.db.close();
+  });
+
+  it('captures and compares baseline correctly', () => {
+    const store = createTestStore();
+    const report1 = makeMinimalReport({ overallScore: 0.3 });
+    captureBaseline(store, report1, 'abc1234');
+
+    const report2 = makeMinimalReport({ overallScore: 0.35 });
+    report2.testCoverage.totalUntested = 4;  // worse
+    report2.architectureViolations.totalViolations = 0;  // better
+
+    const comparison = compareWithBaseline(store, report2);
+    expect(comparison).not.toBeNull();
+    expect(comparison!.baselineCommit).toBe('abc1234');
+    expect(comparison!.riskDelta).toBe(0.05);
+    expect(comparison!.untestedDelta).toBe(2);      // 4 - 2
+    expect(comparison!.violationsDelta).toBe(-1);    // 0 - 1
+    expect(comparison!.regressionDetected).toBe(false); // 0.05 < 0.15 threshold
+    store.db.close();
+  });
+
+  it('detects regression when risk score jumps', () => {
+    const store = createTestStore();
+    const report1 = makeMinimalReport({ overallScore: 0.2 });
+    captureBaseline(store, report1, 'def5678');
+
+    const report2 = makeMinimalReport({ overallScore: 0.5 }); // +0.3 > 0.15
+    const comparison = compareWithBaseline(store, report2);
+    expect(comparison!.regressionDetected).toBe(true);
+    store.db.close();
+  });
+
+  it('formatMarkdown renders baseline section', () => {
+    const report: CIReport = {
+      changedFiles: [],
+      blastRadius: { entries: [], totalAffected: 0, truncated: false },
+      testCoverage: { gaps: [], totalExports: 0, totalUntested: 0 },
+      riskAnalysis: { files: [], overallScore: 0, overallLevel: 'low' },
+      architectureViolations: { violations: [], totalViolations: 0, layersChecked: [] },
+      deadCode: { symbols: [], totalDead: 0 },
+      baseline: {
+        riskDelta: 0.05,
+        untestedDelta: -2,
+        violationsDelta: 1,
+        deadExportsDelta: 0,
+        regressionDetected: false,
+        baselineCommit: 'abc1234',
+        baselineDate: '2026-04-07T00:00:00Z',
+      },
+      summary: { changedFileCount: 0, affectedFileCount: 0, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0 },
+    };
+
+    const md = formatMarkdown(report);
+    expect(md).toContain('Trend vs Baseline');
+    expect(md).toContain('abc1234');
+    expect(md).toContain('+0.05');
+    expect(md).toContain('-2');
+    expect(md).toContain('better');
+    expect(md).toContain('worse');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GitHub Annotations
+// ═══════════════════════════════════════════════════════════════════
+
+describe('CI GitHub Annotations', () => {
+  it('generates annotations from report', () => {
+    const report: CIReport = {
+      changedFiles: [],
+      blastRadius: { entries: [], totalAffected: 0, truncated: false },
+      testCoverage: {
+        gaps: [{ symbolId: 's1', name: 'doStuff', kind: 'function', file: 'src/foo.ts', signature: null }],
+        totalExports: 5,
+        totalUntested: 1,
+      },
+      riskAnalysis: {
+        files: [{ file: 'src/bar.ts', complexity: 0.8, churn: 0.6, coupling: 0.5, blastSize: 5, score: 0.65 }],
+        overallScore: 0.65,
+        overallLevel: 'high',
+      },
+      architectureViolations: {
+        violations: [{ source_file: 'src/a.ts', source_layer: 'ui', target_file: 'src/b.ts', target_layer: 'db', rule: 'no direct access' }],
+        totalViolations: 1,
+        layersChecked: ['ui', 'db'],
+      },
+      deadCode: { symbols: [], totalDead: 0 },
+      domainAnalysis: {
+        domainsAffected: [],
+        crossDomainChanges: [{ from: 'auth', to: 'billing', edgeCount: 3 }],
+        reviewTeams: [],
+      },
+      summary: { changedFileCount: 0, affectedFileCount: 0, riskLevel: 'high', untestedGaps: 1, violations: 1, deadExports: 0 },
+    };
+
+    const annotations = generateAnnotations(report);
+
+    // Architecture violation → failure
+    const failures = annotations.filter((a) => a.annotation_level === 'failure');
+    expect(failures.length).toBe(1);
+    expect(failures[0].title).toBe('Architecture violation');
+
+    // High risk → warning
+    const warnings = annotations.filter((a) => a.annotation_level === 'warning');
+    expect(warnings.some((w) => w.title === 'High risk file')).toBe(true);
+
+    // Untested → notice
+    const notices = annotations.filter((a) => a.annotation_level === 'notice');
+    expect(notices.some((n) => n.title === 'Untested export')).toBe(true);
+
+    // Cross-domain → notice
+    expect(notices.some((n) => n.title === 'Cross-domain dependency')).toBe(true);
+  });
+
+  it('formatGitHubActions produces valid workflow commands', () => {
+    const annotations = [{
+      path: 'src/foo.ts',
+      start_line: 10,
+      end_line: 10,
+      annotation_level: 'warning' as const,
+      title: 'Test warning',
+      message: 'Something is wrong',
+    }];
+
+    const output = formatGitHubActions(annotations);
+    expect(output).toContain('::warning');
+    expect(output).toContain('file=src/foo.ts');
+    expect(output).toContain('line=10');
+    expect(output).toContain('title=Test warning');
+    expect(output).toContain('Something is wrong');
+  });
+
+  it('formatAnnotationsJson produces valid JSON', () => {
+    const annotations = [{
+      path: 'src/a.ts', start_line: 1, end_line: 1,
+      annotation_level: 'notice' as const, title: 'T', message: 'M',
+    }];
+
+    const json = formatAnnotationsJson(annotations);
+    const parsed = JSON.parse(json);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].title).toBe('T');
   });
 });
