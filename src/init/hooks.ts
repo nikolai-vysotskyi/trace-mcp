@@ -164,8 +164,10 @@ function removeHookEntry(settings: Record<string, unknown>, desc: HookDescriptor
   if (!Array.isArray(entries)) return;
 
   hooks[desc.settingsKey] = entries.filter(
-    (h: { hooks?: { command?: string }[] }) =>
-      !h.hooks?.some((hh) => hh.command?.includes(desc.scriptName)),
+    (h) => {
+      const entry = h as { hooks?: { command?: string }[] };
+      return !entry.hooks?.some((hh) => hh.command?.includes(desc.scriptName));
+    },
   );
   if ((hooks[desc.settingsKey] as unknown[]).length === 0) delete hooks[desc.settingsKey];
   if (Object.keys(hooks).length === 0) delete settings.hooks;
