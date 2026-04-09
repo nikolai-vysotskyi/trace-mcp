@@ -6,6 +6,7 @@ import { logger } from '../../logger.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
 import { getServiceMap, getCrossServiceImpact, getApiContract, getServiceDependencies, getContractDrift } from '../project/topology.js';
 import { getFederationGraph, getFederationImpact, federationAddRepo, federationSync, getFederationClients, getContractVersions } from '../advanced/federation.js';
+import { discoverClaudeSessions, discoverAndFederate } from '../advanced/claude-sessions.js';
 import { RuntimeIntelligence } from '../../runtime/lifecycle.js';
 import { getRuntimeProfile, getRuntimeCallGraph, getEndpointAnalytics, getRuntimeDependencies } from '../advanced/runtime.js';
 import { queryByIntent, getDomainMap, getDomainContext, getCrossDomainDependencies } from '../advanced/intent.js';
@@ -171,6 +172,31 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       },
       async ({ service, limit }) => {
         const result = getContractVersions(topoStore, { service, limit });
+        if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'discover_claude_sessions',
+      'Scan ~/.claude/projects for projects Claude Code has touched on this machine, decode each directory name back to its absolute path, and report which ones still exist plus session-file count and last activity. With add_to_federation=true, every existing project is added to the topology federation in one call — useful for spinning up multi-repo intelligence after a fresh clone.',
+      {
+        scan_root: z.string().max(1024).optional().describe('Override the scan root (default: ~/.claude/projects)'),
+        exclude_current: z.boolean().optional().describe('Exclude the current project from results (default: true)'),
+        only_existing: z.boolean().optional().describe('Drop entries whose decoded path no longer exists on disk (default: true)'),
+        limit: z.number().int().min(1).max(500).optional().describe('Max sessions to return, most recently active first (default: 50)'),
+        add_to_federation: z.boolean().optional().describe('Add every discovered project to the federation in one shot (default: false)'),
+      },
+      async ({ scan_root, exclude_current, only_existing, limit, add_to_federation }) => {
+        const opts = {
+          scanRoot: scan_root,
+          excludePrefix: exclude_current === false ? undefined : projectRoot,
+          onlyExisting: only_existing !== false,
+          limit: limit ?? 50,
+        };
+        const result = add_to_federation
+          ? discoverAndFederate(topoStore, opts)
+          : discoverClaudeSessions(opts);
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
@@ -448,7 +474,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'predict_bugs',
-    'Predict which files are most likely to contain bugs. Multi-signal scoring: git churn, fix-commit ratio, complexity, coupling, PageRank importance, author count. Results are cached for 1 hour; use refresh=true to recompute.',
+    'Predict which files are most likely to contain bugs. Multi-signal scoring: git churn, fix-commit ratio, complexity, coupling, PageRank importance, author count. Each prediction includes a numeric score, risk bucket (low/medium/high/critical) AND a confidence_level (low/medium/high/multi_signal) counting how many independent signals actually fired. Result envelope includes _methodology disclosure. Cached for 1 hour; use refresh=true to recompute.',
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
       min_score: z.number().min(0).max(1).optional().describe('Min bug probability score to include (default: 0)'),
