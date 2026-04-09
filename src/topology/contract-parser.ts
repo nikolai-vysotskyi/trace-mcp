@@ -5,21 +5,22 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-interface ParsedContract {
-  type: 'openapi' | 'grpc' | 'graphql';
+export interface ParsedContract {
+  type: 'openapi' | 'grpc' | 'graphql' | 'framework_routes';
   specPath: string;
   version: string;
   endpoints: ParsedEndpoint[];
   events: ParsedEvent[];
 }
 
-interface ParsedEndpoint {
+export interface ParsedEndpoint {
   method: string | null;
   path: string;
   operationId?: string;
@@ -327,4 +328,46 @@ function findSpecFiles(root: string): Array<{ filePath: string; type: 'openapi' 
 
   walk(root, 0);
   return results;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// ROUTE EXTRACTION FROM TRACE-MCP INDEX DB
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Extract routes from an existing trace-mcp index DB as a synthetic contract.
+ * Used as fallback when no formal API spec files (OpenAPI/GraphQL/Proto) exist.
+ */
+export function extractRoutesFromDb(dbPath: string): ParsedContract | null {
+  if (!fs.existsSync(dbPath)) return null;
+  try {
+    const db = new Database(dbPath, { readonly: true });
+    try {
+      const rows = db.prepare(
+        'SELECT method, uri, name FROM routes ORDER BY uri',
+      ).all() as Array<{ method: string; uri: string; name: string | null }>;
+
+      if (rows.length === 0) return null;
+
+      const endpoints: ParsedEndpoint[] = rows.map((r) => ({
+        method: r.method === 'ANY' ? null : r.method,
+        path: r.uri.startsWith('/') ? r.uri : `/${r.uri}`,
+        operationId: r.name ?? undefined,
+      }));
+
+      logger.debug({ dbPath, count: endpoints.length }, 'Extracted routes from trace-mcp DB');
+      return {
+        type: 'framework_routes',
+        specPath: dbPath,
+        version: 'auto',
+        endpoints,
+        events: [],
+      };
+    } finally {
+      db.close();
+    }
+  } catch (e) {
+    logger.warn({ dbPath, error: (e as Error).message }, 'Failed to extract routes from DB');
+    return null;
+  }
 }
