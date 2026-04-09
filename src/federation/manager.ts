@@ -11,7 +11,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { TopologyStore, type FederatedRepoRow, type ClientCallRow } from '../topology/topology-db.js';
-import { parseContracts } from '../topology/contract-parser.js';
+import { parseContracts, extractRoutesFromDb } from '../topology/contract-parser.js';
 import { detectServices } from '../topology/service-detector.js';
 import { scanClientCalls } from './scanner.js';
 import { diffEndpoints, type EndpointSchemaDiff } from './schema-diff.js';
@@ -380,6 +380,15 @@ export class FederationManager {
       }
     }
 
+    // Fallback: if no formal contracts found, try to extract routes from the
+    // trace-mcp index DB (already indexed by the pipeline). This covers Laravel,
+    // Next.js, Express, etc. that don't ship OpenAPI/GraphQL/Proto specs.
+    if (contracts.length === 0) {
+      const dbPath = getDbPath(serviceRoot);
+      const fromDb = extractRoutesFromDb(dbPath);
+      if (fromDb) contracts.push(fromDb);
+    }
+
     for (const contract of contracts) {
       const contractId = this.topoStore.insertContract(serviceId, {
         contractType: contract.type,
@@ -515,8 +524,18 @@ export class FederationManager {
         const targetEndpoint = this.topoStore.getAllEndpoints().find((e) => e.id === call.matched_endpoint_id);
         if (!targetEndpoint) continue;
 
-        // Find source service
-        const sourceService = services.find((s) => s.repo_root === repo.repo_root);
+        // Find source service: exact match first, then longest prefix match (handles
+        // the case where a parent folder is registered as a repo but services live
+        // in subdirectories, e.g. repo_root="the/" but service.repo_root="the/fair-front/").
+        const repoRoot = repo.repo_root.endsWith('/') ? repo.repo_root : `${repo.repo_root}/`;
+        const callPath = call.file_path.startsWith('/') ? call.file_path : `/${call.file_path}`;
+        const candidates = services.filter((s) => {
+          if (s.repo_root === repo.repo_root) return true;
+          const svcRoot = s.repo_root.endsWith('/') ? s.repo_root : `${s.repo_root}/`;
+          return callPath.startsWith(svcRoot) || call.file_path.startsWith(svcRoot);
+        });
+        // Pick most specific (longest repo_root wins)
+        const sourceService = candidates.sort((a, b) => b.repo_root.length - a.repo_root.length)[0];
         if (!sourceService || sourceService.id === targetEndpoint.service_id) continue;
 
         this.topoStore.insertCrossServiceEdge({
