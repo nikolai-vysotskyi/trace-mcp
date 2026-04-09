@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.14.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.13.0...v1.14.0) (2026-04-09)
+
+
+### Features
+
+* add workspace/monorepo fallback with deep glob patterns when root has no direct source files ([c62d89c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c62d89c80a0666e3d809854904f3994b723985e6))
+
+
+### Bug Fixes
+
+* use result.isErr() instead of result.ok for neverthrow Result check ([62edec8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/62edec879463ca9d03dff1cc8f3e601a3406eb07))
+
 ## [1.13.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.12.0...v1.13.0) (2026-04-09)
 
 
