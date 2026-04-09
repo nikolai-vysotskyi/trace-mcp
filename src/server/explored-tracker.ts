@@ -13,7 +13,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 
-export interface ExploredTracker {
+interface ExploredTracker {
   /** Mark a file as explored via trace-mcp. Guard hook will allow Read on it. */
   markExplored(filePath: string): void;
 }

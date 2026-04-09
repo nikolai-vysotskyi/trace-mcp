@@ -22,6 +22,15 @@ function createMockServer() {
 function createMockSavings() {
   return {
     recordCall: vi.fn(),
+    getSessionStats: vi.fn().mockReturnValue({
+      total_calls: 0,
+      total_raw_tokens: 0,
+      total_tokens_saved: 0,
+      total_actual_tokens: 0,
+      reduction_pct: 0,
+      per_tool: {},
+      started_at: new Date().toISOString(),
+    }),
   } as any;
 }
 

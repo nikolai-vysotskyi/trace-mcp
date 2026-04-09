@@ -24,51 +24,54 @@ function resolveDbPath(projectRoot: string): string {
 }
 
 function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
-  console.log(`\n📦 Technology Coverage Report\n`);
-  console.log(`Manifests: ${result.manifests_analyzed.join(', ')}`);
-  console.log(`Coverage: ${result.coverage.covered}/${result.coverage.total_significant} significant deps (${result.coverage.coverage_pct}%)\n`);
+  const { coverage, covered, gaps, unknown } = result;
+  const pct = coverage.coverage_pct;
+  const pctIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️ ' : '❌';
 
-  if (result.covered.length > 0) {
-    console.log('✅ Covered:');
-    for (const d of result.covered) {
-      console.log(`  ${d.name} ${d.version} → plugin: ${d.plugin}`);
+  console.log(`\n📦 Technology Coverage  ${pctIcon} ${coverage.covered}/${coverage.total_significant} significant deps (${pct}%)`);
+  console.log(`   Manifests: ${result.manifests_analyzed.join(', ')}\n`);
+
+  // Covered — compact, just names
+  if (covered.length > 0) {
+    const names = covered.map(d => d.name).join('  ');
+    console.log(`✅ Covered (${covered.length}): ${names}`);
+  }
+
+  // Gaps — always verbose, these are actionable
+  if (gaps.length > 0) {
+    console.log(`\n⚠️  Gaps — no plugin (${gaps.length}):`);
+    for (const g of gaps) {
+      console.log(`   [${g.priority.padEnd(6)}] ${g.name} ${g.version}`);
     }
   }
 
-  if (result.gaps.length > 0) {
-    console.log('\n⚠️  Gaps:');
-    for (const g of result.gaps) {
-      console.log(`  [${g.priority}] ${g.name} ${g.version} (${g.category})`);
-    }
-  }
+  // Unknown — summary line, then only "likely" verbose
+  if (unknown.length > 0) {
+    const likely = unknown.filter(u => u.needs_plugin === 'likely');
+    const maybe  = unknown.filter(u => u.needs_plugin === 'maybe');
+    const no     = unknown.filter(u => u.needs_plugin === 'no');
 
-  if (result.unknown.length > 0) {
-    const likely = result.unknown.filter(u => u.needs_plugin === 'likely');
-    const maybe = result.unknown.filter(u => u.needs_plugin === 'maybe');
-    const no = result.unknown.filter(u => u.needs_plugin === 'no');
+    const parts = [
+      likely.length ? `🔴 needs plugin: ${likely.length}` : '',
+      maybe.length  ? `🟡 review: ${maybe.length}` : '',
+      no.length     ? `🟢 ok: ${no.length}` : '',
+    ].filter(Boolean).join('  ·  ');
 
-    console.log(`\n📋 Not in catalog (${result.unknown.length} packages)`);
-    console.log(`   All have language-level fallback (source code is indexed by language plugin)`);
+    console.log(`\n📋 Not in catalog (${unknown.length}, language fallback active)  ${parts}`);
 
     if (likely.length > 0) {
-      console.log(`\n   🔴 Likely need dedicated plugin (${likely.length}):`);
+      console.log(`   — should add to catalog:`);
       for (const u of likely) {
-        console.log(`      ${u.name} ${u.version} [${u.ecosystem}] — ${u.reason}`);
+        console.log(`   ${u.name} [${u.ecosystem}] — ${u.reason}`);
       }
     }
     if (maybe.length > 0) {
-      console.log(`\n   🟡 May benefit from plugin (${maybe.length}):`);
-      for (const u of maybe) {
-        console.log(`      ${u.name} ${u.version} [${u.ecosystem}] — ${u.reason}`);
-      }
-    }
-    if (no.length > 0) {
-      console.log(`\n   🟢 Language fallback sufficient (${no.length}):`);
-      for (const u of no) {
-        console.log(`      ${u.name} [${u.ecosystem}]`);
-      }
+      const names = maybe.map(u => u.name).join('  ');
+      console.log(`   — review: ${names}`);
     }
   }
+
+  console.log('');
 }
 
 export const analyticsCommand = new Command('analytics')
@@ -274,21 +277,51 @@ analyticsCommand
       return;
     }
 
-    // Multi-project summary
-    console.log(`\n📦 Technology Coverage Report (${aggregate.total_projects} projects)\n`);
-    console.log(`Aggregate: ${aggregate.covered}/${aggregate.total_significant} significant deps (${aggregate.coverage_pct}%)\n`);
+    // Multi-project summary — aggregate only, no per-project listing
+    const { covered: covCount, total_significant: totalSig, coverage_pct: pct, total_projects } = aggregate;
+    const pctIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️ ' : '❌';
 
+    // Deduplicate gaps and unknowns across all projects
+    const allGaps = new Map<string, (typeof projects[0]['gaps'][0])>();
+    const allUnknown = new Map<string, (typeof projects[0]['unknown'][0])>();
     for (const proj of projects) {
-      const relPath = path.relative(projectRoot, proj.project) || '.';
-      console.log(`── ${relPath}`);
-      console.log(`   Manifests: ${proj.manifests_analyzed.join(', ')}`);
-      console.log(`   Coverage: ${proj.coverage.covered}/${proj.coverage.total_significant} significant deps (${proj.coverage.coverage_pct}%)`);
-
-      if (proj.gaps.length > 0) {
-        console.log(`   Gaps: ${proj.gaps.map(g => g.name).join(', ')}`);
-      }
-      console.log('');
+      for (const g of proj.gaps) if (!allGaps.has(g.name)) allGaps.set(g.name, g);
+      for (const u of proj.unknown) if (!allUnknown.has(u.name)) allUnknown.set(u.name, u);
     }
+    const gaps = [...allGaps.values()].sort((a, b) => {
+      const prio = { high: 0, medium: 1, low: 2 };
+      return (prio[a.priority as keyof typeof prio] ?? 3) - (prio[b.priority as keyof typeof prio] ?? 3);
+    });
+    const unknown = [...allUnknown.values()];
+    const likely  = unknown.filter(u => u.needs_plugin === 'likely');
+    const maybe   = unknown.filter(u => u.needs_plugin === 'maybe');
+
+    console.log(`\n📦 Technology Coverage  ${pctIcon} ${covCount}/${totalSig} significant deps (${pct}%)  ·  ${total_projects} projects\n`);
+
+    if (gaps.length > 0) {
+      console.log(`⚠️  Gaps — no plugin (${gaps.length}):`);
+      for (const g of gaps) {
+        console.log(`   [${g.priority.padEnd(6)}] ${g.name}`);
+      }
+    }
+
+    if (unknown.length > 0) {
+      const parts = [
+        likely.length ? `🔴 needs plugin: ${likely.length}` : '',
+        maybe.length  ? `🟡 review: ${maybe.length}` : '',
+        (unknown.length - likely.length - maybe.length) ? `🟢 ok: ${unknown.length - likely.length - maybe.length}` : '',
+      ].filter(Boolean).join('  ·  ');
+      console.log(`\n📋 Not in catalog (${unknown.length})  ${parts}`);
+      if (likely.length > 0) {
+        console.log(`   — should add to catalog:`);
+        for (const u of likely) console.log(`   ${u.name} [${u.ecosystem}] — ${u.reason}`);
+      }
+      if (maybe.length > 0) {
+        console.log(`   — review: ${maybe.map(u => u.name).join('  ')}`);
+      }
+    }
+
+    console.log('');
   });
 
 // --- savings ---

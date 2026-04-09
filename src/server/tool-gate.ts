@@ -8,6 +8,7 @@ import type { SessionTracker } from '../session/tracker.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { ToolResponse } from './types.js';
 import { markToolConsultation } from './consultation-markers.js';
+import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
 
 interface ToolGateResult {
   _originalTool: McpServer['tool'];
@@ -138,6 +139,13 @@ export function installToolGate(
         savings.recordCall(name);
         const params = (cbArgs[0] && typeof cbArgs[0] === 'object') ? cbArgs[0] as Record<string, unknown> : {};
 
+        // Budget-driven auto-defaults: at warning/critical level, silently cap
+        // expensive parameters (graph depth, full project map, etc.) before the
+        // tool runs. The applied list is attached to the response below.
+        const stats = savings.getSessionStats();
+        const budgetLevel = computeBudgetLevel(stats.total_calls, stats.total_raw_tokens);
+        const appliedDefaults = applyBudgetDefaults(name, params, budgetLevel);
+
         // Mark files as consulted via trace-mcp (read by guard hook)
         if (projectRoot) markToolConsultation(projectRoot, name, params);
 
@@ -186,14 +194,20 @@ export function installToolGate(
           : undefined;
         journal.record(name, params, count, { compactResult, resultTokens });
 
-        // Optimization hint
+        // Optimization hint + budget auto-defaults metadata
         const optHint = journal.getOptimizationHint(name, params);
-        if (optHint && resultObj?.content?.[0]?.text && !resultObj.isError) {
+        if ((optHint || appliedDefaults.length > 0) && resultObj?.content?.[0]?.text && !resultObj.isError) {
           try {
             const parsed = JSON.parse(resultObj.content[0].text);
             const obj = (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed))
               ? parsed : { data: parsed };
-            obj._optimization_hint = optHint;
+            if (optHint) obj._optimization_hint = optHint;
+            if (appliedDefaults.length > 0) {
+              obj._meta = {
+                ...(obj._meta && typeof obj._meta === 'object' ? obj._meta as Record<string, unknown> : {}),
+                budget_defaults: appliedDefaults,
+              };
+            }
             stripMetaFields(obj);
             resultObj.content[0].text = JSON.stringify(obj);
           } catch { /* keep original response */ }
