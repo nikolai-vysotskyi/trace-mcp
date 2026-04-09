@@ -61,7 +61,7 @@ interface SessionSnapshotStructured {
 }
 
 /** Full snapshot result returned by getSnapshot() */
-export interface SessionSnapshot {
+interface SessionSnapshot {
   snapshot: string;   // compact markdown for context injection
   structured: SessionSnapshotStructured;
   estimated_tokens: number;
