@@ -8,7 +8,7 @@ import path from 'node:path';
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.svn', '__pycache__', '.tox']);
 
-const ROOT_MARKERS = [
+export const ROOT_MARKERS = [
   // VCS
   '.git',
   // JavaScript / TypeScript
@@ -146,6 +146,85 @@ export function discoverChildProjectsRecursive(parentDir: string, maxDepth = 10)
 
   walk(absParent, 0);
   return results.sort();
+}
+
+export interface WorktreeInfo {
+  /** Absolute path to the main worktree root (where the primary .git directory lives). */
+  mainRoot: string;
+}
+
+/**
+ * Detect whether `dir` (default: cwd) is inside a git linked worktree.
+ *
+ * In a linked worktree, `<project-root>/.git` is a FILE containing:
+ *   "gitdir: /path/to/main/.git/worktrees/<name>"
+ *
+ * That admin directory contains a `commondir` file whose content is a
+ * relative path pointing back to the shared `.git` directory of the main
+ * worktree.  The main repo root is simply the parent of that directory.
+ *
+ * Returns null when:
+ *  - not in a git repo
+ *  - `.git` is a directory (this IS the main worktree)
+ *  - any file is missing or unreadable
+ */
+export function detectGitWorktree(dir?: string): WorktreeInfo | null {
+  const absDir = path.resolve(dir ?? process.cwd());
+
+  let projectDir: string;
+  try {
+    projectDir = findProjectRoot(absDir);
+  } catch {
+    return null;
+  }
+
+  const gitEntry = path.join(projectDir, '.git');
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(gitEntry);
+  } catch {
+    return null;
+  }
+
+  // .git is a directory → this is the main worktree, not a linked one
+  if (!stat.isFile()) return null;
+
+  // .git file content: "gitdir: /abs/path/to/.git/worktrees/<name>"
+  let gitFileContent: string;
+  try {
+    gitFileContent = fs.readFileSync(gitEntry, 'utf8').trim();
+  } catch {
+    return null;
+  }
+
+  const match = gitFileContent.match(/^gitdir:\s*(.+)$/);
+  if (!match) return null;
+
+  const worktreeAdminDir = path.resolve(projectDir, match[1].trim());
+
+  // commondir is relative to the worktree admin directory and points to the
+  // main .git dir (e.g. "../.." or an absolute path)
+  let mainGitDir: string;
+  try {
+    const raw = fs.readFileSync(path.join(worktreeAdminDir, 'commondir'), 'utf8').trim();
+    mainGitDir = path.resolve(worktreeAdminDir, raw);
+  } catch {
+    // Fallback: the admin dir is .git/worktrees/<name>, so ../../ is .git
+    mainGitDir = path.resolve(worktreeAdminDir, '../..');
+  }
+
+  const mainRoot = path.dirname(mainGitDir);
+
+  // Sanity check: main root must have a real .git directory
+  try {
+    const mainGitStat = fs.statSync(path.join(mainRoot, '.git'));
+    if (!mainGitStat.isDirectory()) return null;
+  } catch {
+    return null;
+  }
+
+  return { mainRoot };
 }
 
 /**

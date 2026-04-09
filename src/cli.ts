@@ -11,7 +11,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { initializeDatabase } from './db/schema.js';
 import { Store } from './db/store.js';
 import { PluginRegistry } from './plugin-api/registry.js';
-import { loadConfig } from './config.js';
+import { loadConfig, loadGlobalConfigRaw } from './config.js';
+import { checkAndInstallUpdate } from './updater.js';
 import { createServer } from './server/server.js';
 import { logger, attachFileLogging } from './logger.js';
 import { createAllLanguagePlugins } from './indexer/plugins/language/all.js';
@@ -33,10 +34,11 @@ import { federationCommand } from './cli/federation.js';
 import { analyticsCommand } from './cli/analytics.js';
 import { removeCommand } from './cli/remove.js';
 import { statusCommand } from './cli/status.js';
+import { visualizeCommand } from './cli/visualize.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH } from './global.js';
 import { getProject, listProjects, registerProject } from './registry.js';
-import { findProjectRoot } from './project-root.js';
+import { findProjectRoot, detectGitWorktree } from './project-root.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { FederationManager } from './federation/manager.js';
 import type { TraceMcpConfig } from './config.js';
@@ -103,7 +105,7 @@ const program = new Command();
 program
   .name('trace-mcp')
   .description('Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt')
-  .version(PKG_VERSION);
+  .version(PKG_VERSION, '-v, --version');
 
 program
   .command('serve')
@@ -111,11 +113,37 @@ program
   .action(async () => {
     const projectRoot = process.cwd();
 
-    // Auto-register project if not in registry
-    const existing = getProject(projectRoot);
+    // Auto-update: check if a newer trace-mcp version is available and install it.
+    // Controlled by ~/.trace-mcp/.config.json: { "auto_update": true, "auto_update_check_interval_hours": 24 }
+    const globalRaw = loadGlobalConfigRaw();
+    if (globalRaw.auto_update !== false) {
+      const intervalHours =
+        typeof globalRaw.auto_update_check_interval_hours === 'number'
+          ? globalRaw.auto_update_check_interval_hours
+          : 12;
+      const updated = await checkAndInstallUpdate({ checkIntervalHours: intervalHours });
+      if (updated) {
+        // New version installed — exit cleanly. The MCP client will restart this
+        // process, which will now run the updated binary.
+        process.exit(0);
+      }
+    }
+
+    // Detect git linked worktrees so we share the main repo's index instead
+    // of building a redundant copy.  projectRoot stays as the worktree path
+    // (file watcher, path validation), but the DB comes from the main repo.
+    const worktreeInfo = detectGitWorktree(projectRoot);
+    const indexRoot = worktreeInfo?.mainRoot ?? projectRoot;
+
+    if (worktreeInfo) {
+      logger.info({ worktreeRoot: projectRoot, mainRoot: worktreeInfo.mainRoot }, 'Git worktree detected — sharing main repo index');
+    }
+
+    // Auto-register the index root (main repo if worktree, otherwise current project)
+    const existing = getProject(indexRoot);
     if (!existing) {
       try {
-        const root = findProjectRoot(projectRoot);
+        const root = findProjectRoot(indexRoot);
         ensureGlobalDirs();
         registerProject(root);
         logger.info({ root }, 'Auto-registered project');
@@ -136,7 +164,7 @@ program
       attachFileLogging(config.logging);
     }
 
-    const dbPath = resolveDbPath(projectRoot);
+    const dbPath = resolveDbPath(indexRoot);
     ensureGlobalDirs();
 
     const db = initializeDatabase(dbPath);
@@ -215,7 +243,7 @@ program
     const server = createServer(store, registry, config, projectRoot, progress);
     const transport = new StdioServerTransport();
 
-    logger.info({ projectRoot, dbPath }, 'Starting trace-mcp MCP server...');
+    logger.info({ projectRoot, indexRoot, dbPath }, 'Starting trace-mcp MCP server...');
     await server.connect(transport);
   });
 
@@ -226,6 +254,32 @@ program
   .option('--host <host>', 'Host to bind to', '127.0.0.1')
   .action(async (opts: { port: string; host: string }) => {
     const projectRoot = process.cwd();
+
+    // Auto-update (same logic as serve)
+    const globalRaw = loadGlobalConfigRaw();
+    if (globalRaw.auto_update !== false) {
+      const intervalHours =
+        typeof globalRaw.auto_update_check_interval_hours === 'number'
+          ? globalRaw.auto_update_check_interval_hours
+          : 12;
+      const updated = await checkAndInstallUpdate({ checkIntervalHours: intervalHours });
+      if (updated) process.exit(0);
+    }
+
+    const worktreeInfoHttp = detectGitWorktree(projectRoot);
+    const indexRootHttp = worktreeInfoHttp?.mainRoot ?? projectRoot;
+    if (worktreeInfoHttp) {
+      logger.info({ worktreeRoot: projectRoot, mainRoot: worktreeInfoHttp.mainRoot }, 'Git worktree detected — sharing main repo index');
+    }
+
+    const existing2 = getProject(indexRootHttp);
+    if (!existing2) {
+      try {
+        const root = findProjectRoot(indexRootHttp);
+        ensureGlobalDirs();
+        registerProject(root);
+      } catch { /* not a project dir */ }
+    }
 
     const configResult = await loadConfig(projectRoot);
     if (configResult.isErr()) {
@@ -239,7 +293,7 @@ program
       attachFileLogging(config.logging);
     }
 
-    const dbPath = resolveDbPath(projectRoot);
+    const dbPath = resolveDbPath(indexRootHttp);
     ensureGlobalDirs();
 
     const db = initializeDatabase(dbPath);
@@ -552,5 +606,6 @@ program.addCommand(bundlesCommand);
 program.addCommand(federationCommand);
 program.addCommand(analyticsCommand);
 program.addCommand(statusCommand);
+program.addCommand(visualizeCommand);
 
 program.parse();
