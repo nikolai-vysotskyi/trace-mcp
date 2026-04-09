@@ -189,11 +189,14 @@ export function extractAnnotations(node: TSNode): string[] {
 export function detectClassKind(node: TSNode): 'class' | 'interface' | 'enum' {
   const modifiers = extractModifiers(node);
 
-  // Check unnamed children for the keyword token
+  // Check all children (named and unnamed) for the keyword token.
+  // tree-sitter-kotlin represents `enum class` as: modifiers(class_modifier("enum")) + "class"
+  // but also emits an `enum_class_body` instead of `class_body` — check that too.
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
     if (child.text === 'interface') return 'interface';
+    if (child.type === 'enum_class_body') return 'enum';
   }
 
   if (modifiers.includes('enum')) return 'enum';

@@ -61,6 +61,16 @@ export class PythonLanguagePlugin implements LanguagePlugin {
 
       this.walkTopLevel(root, filePath, modulePath, symbols);
 
+      // Disambiguate duplicate symbolIds — valid in Python (function redefinition).
+      // Append `:L<lineStart>` to every member of each collision group.
+      const idCount = new Map<string, number>();
+      for (const s of symbols) idCount.set(s.symbolId, (idCount.get(s.symbolId) ?? 0) + 1);
+      for (const s of symbols) {
+        if ((idCount.get(s.symbolId) ?? 0) > 1) {
+          s.symbolId = `${s.symbolId}:L${s.lineStart ?? 0}`;
+        }
+      }
+
       const edges = extractImportEdges(root);
 
       return ok({

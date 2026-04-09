@@ -169,6 +169,57 @@ components:
       expect(r.symbols.some(s => s.name === 'User' && s.kind === 'type')).toBe(true);
       expect(r.symbols.some(s => s.name === 'Error' && s.kind === 'type')).toBe(true);
     });
+
+    it('extracts operationId, tags and $ref edges', async () => {
+      const r = await parse(
+        `openapi: "3.0.0"
+info:
+  title: My API
+paths:
+  /users/{id}:
+    get:
+      operationId: getUserById
+      summary: Fetch user
+      tags: [users, public]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        profile:
+          $ref: '#/components/schemas/Profile'
+    Profile:
+      type: object`,
+      );
+
+      // operationId is a separate, searchable symbol
+      const opSym = r.symbols.find(s => s.name === 'getUserById');
+      expect(opSym).toBeDefined();
+      expect(opSym?.kind).toBe('function');
+      expect(opSym?.metadata?.yamlKind).toBe('operationId');
+      expect(opSym?.metadata?.path).toBe('/users/{id}');
+
+      // endpoint label has tags + operationId in metadata
+      const endpoint = r.symbols.find(s => s.name === 'GET /users/{id}');
+      expect(endpoint?.metadata?.operationId).toBe('getUserById');
+      expect(endpoint?.metadata?.tags).toEqual(['users', 'public']);
+
+      // $ref → User in operation responses
+      expect(r.edges?.some(e =>
+        e.edgeType === 'imports' && (e.metadata as any)?.module === 'User' && (e.metadata as any)?.dialect === 'openapi'
+      )).toBe(true);
+
+      // schema-to-schema $ref: User → Profile
+      expect(r.edges?.some(e =>
+        e.edgeType === 'imports' && (e.metadata as any)?.module === 'Profile' && (e.metadata as any)?.from === 'User'
+      )).toBe(true);
+    });
   });
 
   // ── Ansible ──
