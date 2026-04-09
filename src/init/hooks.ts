@@ -47,6 +47,13 @@ interface HookDescriptor {
   dryRunLabel: string;
   /** If true, use plain command (no CLAUDE_TOOL_NAME env var) */
   plainCommand?: boolean;
+  /**
+   * Aux file basenames to copy alongside the main script into the same hooks dir.
+   * Used for platform-specific helpers like Windows .ps1 companions.
+   * Per entry: { file: 'trace-mcp-guard-read.ps1', platforms: ['win32'] }
+   * platforms=undefined means all platforms.
+   */
+  auxFiles?: Array<{ file: string; platforms?: NodeJS.Platform[] }>;
 }
 
 const GUARD_HOOK: HookDescriptor = {
@@ -55,6 +62,10 @@ const GUARD_HOOK: HookDescriptor = {
   matcher: 'Read|Grep|Glob|Bash|Agent',
   version: GUARD_HOOK_VERSION,
   dryRunLabel: 'Would install guard hook',
+  auxFiles: [
+    // Windows-only PowerShell helper for the Read-handler repeat-read dedup.
+    { file: 'trace-mcp-guard-read.ps1', platforms: ['win32'] },
+  ],
 };
 
 const REINDEX_HOOK: HookDescriptor = {
@@ -118,6 +129,20 @@ function findHookSource(scriptName: string): string {
     if (fs.existsSync(c)) return c;
   }
   throw new Error(`Could not find hooks/${filename} — trace-mcp installation may be corrupted.`);
+}
+
+/** Locate an aux hook file by basename (same search path as findHookSource). */
+function findAuxFile(basename: string): string | null {
+  const base = import.meta.dirname ?? '.';
+  const candidates = [
+    path.resolve(base, '..', '..', 'hooks', basename),
+    path.resolve(base, '..', 'hooks', basename),
+    path.resolve(process.cwd(), 'hooks', basename),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
 }
 
 function ensureDir(dir: string): void {
@@ -197,6 +222,18 @@ function installHook(
     fs.copyFileSync(hookSrc, dest);
     if (!IS_WINDOWS) fs.chmodSync(dest, 0o755);
 
+    // Copy aux files (e.g. Windows .ps1 helper) into the same hooks dir.
+    if (desc.auxFiles) {
+      for (const aux of desc.auxFiles) {
+        if (aux.platforms && !aux.platforms.includes(process.platform)) continue;
+        const auxSrc = findAuxFile(aux.file);
+        if (!auxSrc) continue; // soft-fail: main script still works, fallback path handles missing helper
+        const auxDest = path.join(path.dirname(dest), aux.file);
+        fs.copyFileSync(auxSrc, auxDest);
+        if (!IS_WINDOWS) fs.chmodSync(auxDest, 0o644);
+      }
+    }
+
     const sPath = settingsPath(client, !!opts.global);
     const settings = readSettings(sPath);
     addHookEntry(settings, desc, dest);
@@ -223,6 +260,15 @@ function uninstallHook(
     }
     const dest = hookDest(client, desc);
     if (fs.existsSync(dest)) fs.unlinkSync(dest);
+
+    // Remove aux files shipped alongside the main script.
+    if (desc.auxFiles) {
+      for (const aux of desc.auxFiles) {
+        if (aux.platforms && !aux.platforms.includes(process.platform)) continue;
+        const auxDest = path.join(path.dirname(dest), aux.file);
+        if (fs.existsSync(auxDest)) fs.unlinkSync(auxDest);
+      }
+    }
   }
 
   return { target: hookDest(CLIENTS[0], desc), action: 'updated', detail: 'Removed' };

@@ -65,6 +65,40 @@ describe('trace-mcp-precompact.sh', () => {
     expect(output.systemMessage).toContain('Files explored:** 10');
   });
 
+  it('GCs guard-hook state dirs older than 24h and leaves fresh ones', () => {
+    fs.mkdirSync(testProjectDir, { recursive: true });
+
+    // Create two stale dirs (older than 24h) and two fresh dirs.
+    const tmpBase = fs.realpathSync(os.tmpdir());
+    const stale1 = path.join(tmpBase, `trace-mcp-reads-stale-${Date.now()}-a`);
+    const stale2 = path.join(tmpBase, `trace-mcp-guard-stale-${Date.now()}-b`);
+    const fresh1 = path.join(tmpBase, `trace-mcp-reads-fresh-${Date.now()}-c`);
+    const fresh2 = path.join(tmpBase, `trace-mcp-guard-fresh-${Date.now()}-d`);
+    for (const d of [stale1, stale2, fresh1, fresh2]) fs.mkdirSync(d, { recursive: true });
+
+    // Backdate stale dirs to 48h ago.
+    const oldTime = new Date(Date.now() - 48 * 3600 * 1000);
+    fs.utimesSync(stale1, oldTime, oldTime);
+    fs.utimesSync(stale2, oldTime, oldTime);
+
+    try {
+      execSync(`bash ${HOOK_SCRIPT}`, {
+        cwd: testProjectDir,
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
+
+      expect(fs.existsSync(stale1)).toBe(false);
+      expect(fs.existsSync(stale2)).toBe(false);
+      expect(fs.existsSync(fresh1)).toBe(true);
+      expect(fs.existsSync(fresh2)).toBe(true);
+    } finally {
+      for (const d of [stale1, stale2, fresh1, fresh2]) {
+        if (fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true });
+      }
+    }
+  });
+
   it('skips stale snapshot files (older than 10 minutes)', () => {
     fs.mkdirSync(testProjectDir, { recursive: true });
     projectHash = getProjectHash(testProjectDir);

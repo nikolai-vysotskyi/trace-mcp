@@ -14,6 +14,49 @@ interface McpServerEntry {
   command: string;
   args: string[];
   cwd?: string;
+  env?: Record<string, string>;
+}
+
+/** Clients that launch as GUI apps and don't inherit the user's shell PATH */
+const GUI_CLIENTS: ReadonlySet<string> = new Set([
+  'claude-desktop', 'cursor', 'windsurf', 'continue', 'junie', 'codex', 'jetbrains-ai',
+]);
+
+/**
+ * Resolve absolute path to the trace-mcp binary + minimal PATH env
+ * so GUI apps (which don't source ~/.zshrc) can find both the binary and node.
+ *
+ * Returns bare 'trace-mcp' for terminal clients that inherit shell PATH.
+ */
+function resolveGuiCommand(): { command: string; env: Record<string, string> } {
+  const SYSTEM_PATH = '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+  const nodeBinDir = path.dirname(process.execPath);
+
+  // process.argv[1] is the trace-mcp script path — absolute for global installs
+  const scriptPath = process.argv[1];
+  if (scriptPath && path.isAbsolute(scriptPath) && fs.existsSync(scriptPath)) {
+    const scriptBinDir = path.dirname(scriptPath);
+    const dirs = new Set([scriptBinDir, nodeBinDir]);
+    return {
+      command: scriptPath,
+      env: { PATH: [...dirs].join(':') + ':' + SYSTEM_PATH },
+    };
+  }
+
+  // Fallback: check if trace-mcp lives next to node (common for npm -g)
+  const candidate = path.join(nodeBinDir, 'trace-mcp');
+  if (fs.existsSync(candidate)) {
+    return {
+      command: candidate,
+      env: { PATH: nodeBinDir + ':' + SYSTEM_PATH },
+    };
+  }
+
+  // Last resort: bare command with current PATH snapshot
+  return {
+    command: 'trace-mcp',
+    env: { PATH: process.env.PATH ?? SYSTEM_PATH },
+  };
 }
 
 type McpScope = 'global' | 'project';
@@ -70,7 +113,8 @@ export function configureMcpClients(
       }
 
       try {
-        const action = writeCodexTomlEntry(configPath, { command: 'trace-mcp', args: ['serve'], cwd: projectRoot });
+        const resolved = resolveGuiCommand();
+        const action = writeCodexTomlEntry(configPath, { ...resolved, args: ['serve'], cwd: projectRoot });
         results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
       } catch (err) {
         results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
@@ -101,9 +145,15 @@ export function configureMcpClients(
       continue;
     }
 
+    // GUI clients need absolute path + env.PATH because they don't inherit shell PATH.
+    // Terminal clients (claude-code, claw-code) work fine with bare 'trace-mcp'.
+    const isGui = GUI_CLIENTS.has(name);
+    const entry: McpServerEntry = isGui
+      ? { ...resolveGuiCommand(), args: ['serve'] }
+      : { command: 'trace-mcp', args: ['serve'] };
+
     // Global scope always needs cwd since server starts from anywhere.
     // Project scope for claude-code doesn't need cwd (.mcp.json is in project root).
-    const entry: McpServerEntry = { command: 'trace-mcp', args: ['serve'] };
     if (opts.scope === 'global' || (name !== 'claude-code' && name !== 'claw-code')) {
       entry.cwd = projectRoot;
     }
@@ -162,6 +212,12 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
   ];
   if (entry.cwd) {
     section.push(`cwd = "${entry.cwd}"`);
+  }
+  if (entry.env) {
+    section.push('[mcp_servers.trace-mcp.env]');
+    for (const [k, v] of Object.entries(entry.env)) {
+      section.push(`${k} = "${v}"`);
+    }
   }
   const block = section.join('\n') + '\n';
 
