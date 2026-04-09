@@ -4,7 +4,6 @@ const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_IN
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
 import { formatToolError } from '../errors.js';
 import { validatePath } from '../utils/security.js';
 import { logger } from '../logger.js';
@@ -16,7 +15,6 @@ import { SessionTracker } from '../session/tracker.js';
 import { SessionJournal } from '../session/journal.js';
 import { flushSessionSummary } from '../session/resume.js';
 import { getSnapshotPath, TOPOLOGY_DB_PATH, ensureGlobalDirs } from '../global.js';
-import { FileWatcher } from './file-watcher.js';
 import { createExploredTracker } from './explored-tracker.js';
 import type { ServerContext, MetaContext } from './types.js';
 import type { ProgressState } from '../progress.js';
@@ -255,24 +253,6 @@ export function createServer(
   const reranker: RerankerService | null = config.ai?.enabled
     ? new LLMReranker(aiProvider.fastInference())
     : null;
-
-  // Auto-reindex file watcher
-  if (config.watch?.enabled !== false) {
-    const knownExtensions = new Set(registry.getLanguagePlugins().flatMap(p => p.supportedExtensions));
-    const fileWatcher = new FileWatcher(
-      projectRoot,
-      async (files) => {
-        const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
-        await pipeline.indexFiles(files);
-      },
-      { debounceMs: config.watch?.debounceMs ?? 2000, extensions: knownExtensions, ignoreConfig: config.ignore },
-    );
-    fileWatcher.start();
-    const stopWatcher = () => fileWatcher.stop();
-    process.on('SIGINT', stopWatcher);
-    process.on('SIGTERM', stopWatcher);
-    process.on('exit', stopWatcher);
-  }
 
   function guardPath(filePath: string): { content: [{ type: 'text'; text: string }]; isError: true } | null {
     const check = validatePath(filePath, projectRoot);
