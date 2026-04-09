@@ -122,7 +122,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Repo Packing ---
   server.tool(
     'pack_context',
-    'Pack project context into a single document for external LLMs. Intelligent selection by graph importance, fits within token budget. Better than Repomix for focused context.',
+    'Pack project context into a single document for external LLMs. Intelligent selection by graph importance, fits within token budget. Better than Repomix for focused context. Strategies: most_relevant (default — feature/PageRank ranked), core_first (PageRank always wins, surfaces architecturally central code), compact (signatures only — drops source bodies, lets outlines cover much more of the repo per token).',
     {
       scope: z.enum(['project', 'module', 'feature']).describe('Scope: project (whole repo), module (subdirectory), feature (NL query)'),
       path: z.string().max(512).optional().describe('Subdirectory path (for module scope)'),
@@ -132,8 +132,12 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
       include: z.array(z.enum(['file_tree', 'outlines', 'source', 'dependencies', 'routes', 'models', 'tests'])).optional()
         .describe('Sections to include (default: outlines + source + routes)'),
       compress: z.boolean().optional().describe('Strip function bodies, keep signatures (default: true)'),
+      strategy: z.enum(['most_relevant', 'core_first', 'compact']).optional()
+        .describe('Packing strategy (default: most_relevant). core_first = PageRank always wins. compact = drops source bodies, allows much wider outline coverage.'),
+      include_budget_report: z.boolean().optional()
+        .describe('Include per-section token breakdown + headroom in result (default false)'),
     },
-    async ({ scope, path: scopePath, query, format: fmt, max_tokens, include: inc, compress }) => {
+    async ({ scope, path: scopePath, query, format: fmt, max_tokens, include: inc, compress, strategy, include_budget_report }) => {
       const result = packContext(store, registry, {
         scope,
         path: scopePath,
@@ -143,6 +147,8 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         include: inc ?? ['outlines', 'source', 'routes'],
         compress: compress ?? true,
         projectRoot,
+        strategy,
+        includeBudgetReport: include_budget_report,
       });
       return { content: [{ type: 'text', text: j(result) }] };
     },

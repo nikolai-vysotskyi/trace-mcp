@@ -16,6 +16,8 @@ import { buildProjectContext } from '../../indexer/project-context.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
+export type PackStrategy = 'most_relevant' | 'core_first' | 'compact';
+
 interface PackOptions {
   scope: 'project' | 'module' | 'feature';
   path?: string;
@@ -25,6 +27,31 @@ interface PackOptions {
   include: string[];
   compress: boolean;
   projectRoot: string;
+  /**
+   * Selection / packing strategy:
+   * - most_relevant: feature query rank → PageRank → insertion (default; current behavior)
+   * - core_first:   PageRank always wins; architecturally central files first regardless of scope
+   * - compact:      signatures only — drops the `source` section entirely, forces compress=true,
+   *                 letting outlines cover much more of the repo for the same budget
+   */
+  strategy?: PackStrategy;
+  /** Include a per-section budget breakdown in the result (default false) */
+  includeBudgetReport?: boolean;
+}
+
+interface SectionMeta {
+  tokens: number;
+  status: 'included' | 'dropped' | 'truncated';
+  items_included?: number;
+  items_dropped?: number;
+}
+
+interface BudgetReport {
+  strategy: PackStrategy;
+  total_used: number;
+  total_budget: number;
+  headroom: number;
+  per_section: Record<string, SectionMeta>;
 }
 
 interface PackResult {
@@ -34,6 +61,7 @@ interface PackResult {
   token_budget: number;
   files_included: number;
   sections: string[];
+  budget_report?: BudgetReport;
 }
 
 /** Rough token estimate: ~4 chars per token */
@@ -47,19 +75,43 @@ export function packContext(
   options: PackOptions,
 ): PackResult {
   const {
-    scope, path: scopePath, query, format, maxTokens, include, compress, projectRoot,
+    scope, path: scopePath, query, format, maxTokens, projectRoot,
   } = options;
+  const strategy: PackStrategy = options.strategy ?? 'most_relevant';
+  // compact strategy forces compression and drops the heavy `source` section
+  const compress = strategy === 'compact' ? true : options.compress;
+  const include = strategy === 'compact'
+    ? options.include.filter((s) => s !== 'source')
+    : options.include;
 
   const parts: string[] = [];
   const includedSections: string[] = [];
+  const sectionMeta: Record<string, SectionMeta> = {};
   let tokenCount = 0;
 
-  const addSection = (name: string, content: string): boolean => {
+  const addSection = (
+    name: string,
+    content: string,
+    extra?: { items_included?: number; items_dropped?: number; truncated?: boolean },
+  ): boolean => {
     const tokens = estimateTokens(content);
-    if (tokenCount + tokens > maxTokens) return false;
+    if (tokenCount + tokens > maxTokens) {
+      sectionMeta[name] = {
+        tokens: 0,
+        status: 'dropped',
+        ...(extra?.items_dropped !== undefined ? { items_dropped: extra.items_dropped } : {}),
+      };
+      return false;
+    }
     parts.push(content);
     tokenCount += tokens;
     includedSections.push(name);
+    sectionMeta[name] = {
+      tokens,
+      status: extra?.truncated ? 'truncated' : 'included',
+      ...(extra?.items_included !== undefined ? { items_included: extra.items_included } : {}),
+      ...(extra?.items_dropped ? { items_dropped: extra.items_dropped } : {}),
+    };
     return true;
   };
 
@@ -84,8 +136,13 @@ export function packContext(
 
   // --- Outlines (symbol signatures) ---
   if (include.includes('outlines')) {
-    const files = getScopeFiles(store, scope, scopePath, query, 30);
+    // compact mode: pull a much wider net since we're not spending budget on source bodies
+    const outlineLimit = strategy === 'compact' ? 200 : 30;
+    const files = getScopeFiles(store, scope, scopePath, query, outlineLimit, strategy);
     const outlineLines: string[] = [];
+    let outlineFilesIncluded = 0;
+    let outlineFilesDropped = 0;
+    let outlineTruncated = false;
     for (const f of files) {
       const symbols = store.getSymbolsByFile(f.id);
       if (symbols.length === 0) continue;
@@ -98,22 +155,33 @@ export function packContext(
         }
       }
       outlineLines.push('');
-      if (estimateTokens(outlineLines.join('\n')) + tokenCount > maxTokens * 0.8) break;
+      outlineFilesIncluded++;
+      if (estimateTokens(outlineLines.join('\n')) + tokenCount > maxTokens * 0.8) {
+        outlineTruncated = true;
+        outlineFilesDropped = files.length - outlineFilesIncluded;
+        break;
+      }
     }
     const section = format === 'markdown'
       ? `## Outlines\n${outlineLines.join('\n')}\n`
       : format === 'xml'
         ? `<outlines>\n${outlineLines.join('\n')}\n</outlines>\n`
         : outlineLines.join('\n');
-    addSection('outlines', section);
+    addSection('outlines', section, {
+      items_included: outlineFilesIncluded,
+      items_dropped: outlineFilesDropped,
+      truncated: outlineTruncated,
+    });
   }
 
   // --- Source Code (key files) ---
   if (include.includes('source')) {
-    const files = getScopeFiles(store, scope, scopePath, query, 20);
+    const files = getScopeFiles(store, scope, scopePath, query, 20, strategy);
     const sourceLines: string[] = [];
     const budgetForSource = Math.floor((maxTokens - tokenCount) * 0.9);
     let sourceTokens = 0;
+    let sourceFilesIncluded = 0;
+    let sourceTruncated = false;
 
     for (const f of files) {
       const absPath = path.join(projectRoot, f.path);
@@ -146,7 +214,9 @@ export function packContext(
           sourceLines.push('```');
           sourceLines.push(truncated);
           sourceLines.push('```\n');
+          sourceFilesIncluded++;
         }
+        sourceTruncated = true;
         break;
       }
 
@@ -155,6 +225,7 @@ export function packContext(
       sourceLines.push(content);
       sourceLines.push('```\n');
       sourceTokens += fileTokens;
+      sourceFilesIncluded++;
     }
 
     if (sourceLines.length > 0) {
@@ -163,7 +234,11 @@ export function packContext(
         : format === 'xml'
           ? `<source>\n${sourceLines.join('\n')}\n</source>\n`
           : sourceLines.join('\n');
-      addSection('source', section);
+      addSection('source', section, {
+        items_included: sourceFilesIncluded,
+        items_dropped: Math.max(0, files.length - sourceFilesIncluded),
+        truncated: sourceTruncated,
+      });
     }
   }
 
@@ -250,11 +325,12 @@ export function packContext(
     parts.push('</context>');
   }
 
-  const filesIncluded = includedSections.includes('source')
-    ? getScopeFiles(store, scope, scopePath, query, 20).length
-    : 0;
+  const filesIncluded = sectionMeta.source?.items_included
+    ?? (includedSections.includes('source')
+      ? getScopeFiles(store, scope, scopePath, query, 20, strategy).length
+      : 0);
 
-  return {
+  const result: PackResult = {
     format,
     content: parts.join('\n'),
     token_count: tokenCount,
@@ -262,6 +338,18 @@ export function packContext(
     files_included: filesIncluded,
     sections: includedSections,
   };
+
+  if (options.includeBudgetReport) {
+    result.budget_report = {
+      strategy,
+      total_used: tokenCount,
+      total_budget: maxTokens,
+      headroom: Math.max(0, maxTokens - tokenCount),
+      per_section: sectionMeta,
+    };
+  }
+
+  return result;
 }
 
 // --- Helpers ---
@@ -274,18 +362,40 @@ function getAllScopeFiles(store: Store, scope: string, scopePath?: string): { id
   return all;
 }
 
-/** Get ranked files for the given scope. Uses PageRank for project scope, path filter for module. */
+/**
+ * Get ranked files for the given scope.
+ *
+ * Strategy semantics:
+ * - most_relevant: feature query rank → PageRank → insertion (default)
+ * - core_first:    PageRank ALWAYS wins, regardless of scope. Module/feature scopes
+ *                  still narrow the candidate set, then re-rank by PageRank.
+ * - compact:       same selection as most_relevant (compact only changes section composition)
+ */
 function getScopeFiles(
   store: Store,
   scope: string,
   scopePath: string | undefined,
   query: string | undefined,
   limit: number,
+  strategy: PackStrategy = 'most_relevant',
 ): { id: number; path: string }[] {
   const all = store.getAllFiles() as { id: number; path: string }[];
 
+  // Helper: re-rank a candidate set by PageRank descending
+  const rerankByPageRank = (candidates: { id: number; path: string }[]) => {
+    try {
+      const ranks = getPageRank(store);
+      const rankMap = new Map(ranks.map((r: { file: string; score?: number }) => [r.file, r.score ?? 0]));
+      return [...candidates].sort((a, b) => (rankMap.get(b.path) ?? 0) - (rankMap.get(a.path) ?? 0));
+    } catch {
+      return candidates;
+    }
+  };
+
   if (scope === 'module' && scopePath) {
-    return all.filter((f) => f.path.startsWith(scopePath)).slice(0, limit);
+    const filtered = all.filter((f) => f.path.startsWith(scopePath));
+    const ordered = strategy === 'core_first' ? rerankByPageRank(filtered) : filtered;
+    return ordered.slice(0, limit);
   }
 
   if (scope === 'feature' && query) {
@@ -299,19 +409,12 @@ function getScopeFiles(
         files.push({ id: r.file.id, path: r.file.path });
       }
     }
-    return files;
+    // core_first overrides feature relevance with structural centrality
+    return strategy === 'core_first' ? rerankByPageRank(files).slice(0, limit) : files;
   }
 
-  // Project scope: rank by PageRank
-  try {
-    const ranks = getPageRank(store);
-    const rankMap = new Map(ranks.map((r: any) => [r.file, r]));
-    return all
-      .sort((a, b) => ((rankMap.get(b.path) as any)?.score ?? 0) - ((rankMap.get(a.path) as any)?.score ?? 0))
-      .slice(0, limit);
-  } catch {
-    return all.slice(0, limit);
-  }
+  // Project scope: PageRank for all strategies (it's the only sensible default here)
+  return rerankByPageRank(all).slice(0, limit);
 }
 
 function buildFileTree(paths: string[]): string {
