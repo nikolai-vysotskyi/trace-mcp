@@ -46,4 +46,70 @@ describe('buildNegativeEvidence', () => {
     expect(ev.suggestion).toContain('does not exist in the indexed codebase');
     expect(ev.query_expanded).toBe(true);
   });
+
+  // ─── Options-object overload + isolation verdict ─────────────
+
+  it('options form: defaults to not_found_in_project verdict', () => {
+    const ev = buildNegativeEvidence({
+      indexedFiles: 10,
+      indexedSymbols: 100,
+      toolName: 'search',
+    });
+    expect(ev.verdict).toBe('not_found_in_project');
+    expect(ev.indexed_files).toBe(10);
+    expect(ev.indexed_symbols).toBe(100);
+    expect(ev.query_expanded).toBe(false);
+  });
+
+  it('options form: emits symbol_indexed_but_isolated when verdict requested', () => {
+    const ev = buildNegativeEvidence({
+      indexedFiles: 10,
+      indexedSymbols: 100,
+      toolName: 'find_usages',
+      verdict: 'symbol_indexed_but_isolated',
+      symbol: 'src/foo.ts::bar#function',
+    });
+    expect(ev.verdict).toBe('symbol_indexed_but_isolated');
+    expect(ev.symbol).toBe('src/foo.ts::bar#function');
+    expect(ev.suggestion).toContain('no incoming references');
+  });
+
+  it('isolation verdict default suggestion for unknown tool', () => {
+    const ev = buildNegativeEvidence({
+      indexedFiles: 10,
+      indexedSymbols: 100,
+      toolName: 'unknown_relation_tool',
+      verdict: 'symbol_indexed_but_isolated',
+    });
+    expect(ev.verdict).toBe('symbol_indexed_but_isolated');
+    expect(ev.suggestion).toContain('absence is authoritative');
+  });
+
+  it('returns suggestion for get_call_graph', () => {
+    const ev = buildNegativeEvidence({
+      indexedFiles: 10,
+      indexedSymbols: 100,
+      toolName: 'get_call_graph',
+      verdict: 'symbol_indexed_but_isolated',
+    });
+    expect(ev.suggestion).toContain('leaf');
+  });
+
+  it('returns suggestion for get_type_hierarchy', () => {
+    const ev = buildNegativeEvidence({
+      indexedFiles: 10,
+      indexedSymbols: 100,
+      toolName: 'get_type_hierarchy',
+    });
+    expect(ev.suggestion).toContain('parents');
+  });
+
+  it('returns suggestion for get_implementations', () => {
+    const ev = buildNegativeEvidence({
+      indexedFiles: 10,
+      indexedSymbols: 100,
+      toolName: 'get_implementations',
+    });
+    expect(ev.suggestion).toContain('implement or extend');
+  });
 });

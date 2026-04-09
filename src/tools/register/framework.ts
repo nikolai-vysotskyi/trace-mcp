@@ -13,6 +13,7 @@ import { getSchema } from '../framework/schema.js';
 import { getEventGraph } from '../framework/events.js';
 import { findReferences } from '../framework/references.js';
 import { getCallGraph } from '../framework/call-graph.js';
+import { CALL_GRAPH_METHODOLOGY } from '../shared/confidence.js';
 import { getLivewireContext } from '../framework/livewire.js';
 import { getNovaResource } from '../framework/nova.js';
 import { getTestsFor } from '../framework/tests.js';
@@ -212,7 +213,16 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       }
       if (result.value.total === 0) {
         const stats = store.getStats();
-        const enriched = { ...result.value, evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'find_usages') };
+        const enriched = {
+          ...result.value,
+          evidence: buildNegativeEvidence({
+            indexedFiles: stats.totalFiles,
+            indexedSymbols: stats.totalSymbols,
+            toolName: 'find_usages',
+            verdict: 'symbol_indexed_but_isolated',
+            symbol: symbol_id ?? fqn ?? file_path,
+          }),
+        };
         return { content: [{ type: 'text', text: jh('find_usages', enriched) }] };
       }
       return { content: [{ type: 'text', text: jh('find_usages', result.value) }] };
@@ -232,7 +242,24 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: jh('get_call_graph', result.value) }] };
+      const root = result.value.root;
+      const isolated = (root.calls?.length ?? 0) === 0 && (root.called_by?.length ?? 0) === 0;
+      if (isolated) {
+        const stats = store.getStats();
+        const enriched = {
+          ...result.value,
+          _methodology: CALL_GRAPH_METHODOLOGY,
+          evidence: buildNegativeEvidence({
+            indexedFiles: stats.totalFiles,
+            indexedSymbols: stats.totalSymbols,
+            toolName: 'get_call_graph',
+            verdict: 'symbol_indexed_but_isolated',
+            symbol: root.symbol_id,
+          }),
+        };
+        return { content: [{ type: 'text', text: jh('get_call_graph', enriched) }] };
+      }
+      return { content: [{ type: 'text', text: jh('get_call_graph', { ...result.value, _methodology: CALL_GRAPH_METHODOLOGY }) }] };
     },
   );
 
@@ -255,7 +282,16 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       }
       if (result.value.total === 0) {
         const stats = store.getStats();
-        const enriched = { ...result.value, evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'get_tests_for') };
+        const enriched = {
+          ...result.value,
+          evidence: buildNegativeEvidence({
+            indexedFiles: stats.totalFiles,
+            indexedSymbols: stats.totalSymbols,
+            toolName: 'get_tests_for',
+            verdict: 'symbol_indexed_but_isolated',
+            symbol: symbol_id ?? fqn ?? file_path,
+          }),
+        };
         return { content: [{ type: 'text', text: jh('get_tests_for', enriched) }] };
       }
       return { content: [{ type: 'text', text: jh('get_tests_for', result.value) }] };
