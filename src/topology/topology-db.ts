@@ -17,6 +17,7 @@ export interface ServiceRow {
   db_path: string;
   service_type: string | null;
   detection_source: string | null;
+  project_group: string | null;
   metadata: string | null;
   indexed_at: string;
 }
@@ -114,6 +115,7 @@ CREATE TABLE IF NOT EXISTS services (
     db_path         TEXT NOT NULL,
     service_type    TEXT,
     detection_source TEXT,
+    project_group   TEXT,
     metadata        TEXT,
     indexed_at      TEXT NOT NULL
 );
@@ -283,7 +285,15 @@ export class TopologyStore {
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('busy_timeout = 5000');
     this.db.exec(TOPOLOGY_DDL);
+    this.migrate();
     logger.debug({ dbPath }, 'Topology database initialized');
+  }
+
+  private migrate(): void {
+    const cols = (this.db.pragma('table_info(services)') as Array<{ name: string }>).map((c) => c.name);
+    if (!cols.includes('project_group')) {
+      this.db.exec('ALTER TABLE services ADD COLUMN project_group TEXT');
+    }
   }
 
   close(): void {
@@ -298,25 +308,29 @@ export class TopologyStore {
     dbPath: string;
     serviceType?: string;
     detectionSource?: string;
+    projectGroup?: string;
     metadata?: Record<string, unknown>;
   }): number {
     const existing = this.db.prepare('SELECT id FROM services WHERE name = ?').get(input.name) as { id: number } | undefined;
     if (existing) {
       this.db.prepare(`
         UPDATE services SET repo_root = ?, db_path = ?, service_type = COALESCE(?, service_type),
-          detection_source = COALESCE(?, detection_source), metadata = COALESCE(?, metadata),
+          detection_source = COALESCE(?, detection_source),
+          project_group = COALESCE(?, project_group),
+          metadata = COALESCE(?, metadata),
           indexed_at = datetime('now')
         WHERE id = ?
       `).run(input.repoRoot, input.dbPath, input.serviceType ?? null, input.detectionSource ?? null,
-        input.metadata ? JSON.stringify(input.metadata) : null, existing.id);
+        input.projectGroup ?? null, input.metadata ? JSON.stringify(input.metadata) : null, existing.id);
       return existing.id;
     }
 
     return this.db.prepare(`
-      INSERT INTO services (name, repo_root, db_path, service_type, detection_source, metadata, indexed_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      INSERT INTO services (name, repo_root, db_path, service_type, detection_source, project_group, metadata, indexed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `).run(input.name, input.repoRoot, input.dbPath, input.serviceType ?? null,
-      input.detectionSource ?? null, input.metadata ? JSON.stringify(input.metadata) : null,
+      input.detectionSource ?? null, input.projectGroup ?? null,
+      input.metadata ? JSON.stringify(input.metadata) : null,
     ).lastInsertRowid as number;
   }
 
