@@ -309,6 +309,27 @@ export class IndexingPipeline {
       onlyFiles: true,
     });
 
+    // Workspace/monorepo fallback: if nothing matched, all code is nested deeper
+    // (e.g. root/project/service/src/**). Re-try with **/<pattern> prefixed globs.
+    if (entries.length === 0) {
+      const deepPatterns = this.config.include
+        .filter((p) => !p.startsWith('**/'))
+        .map((p) => `**/${p}`);
+
+      if (deepPatterns.length > 0) {
+        entries = await fg(deepPatterns, {
+          cwd: this.rootPath,
+          ignore,
+          dot: false,
+          absolute: false,
+          onlyFiles: true,
+        });
+        if (entries.length > 0) {
+          logger.info({ count: entries.length, root: this.rootPath }, 'Workspace root detected — using deep glob patterns');
+        }
+      }
+    }
+
     if (this._traceignore) {
       const ti = this._traceignore;
       entries = entries.filter((e) => !ti.isIgnored(e));
