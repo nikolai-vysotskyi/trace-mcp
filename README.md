@@ -39,20 +39,20 @@ _Last updated: April 2026. Based on public documentation and GitHub repos. If yo
 
 Tools that help AI agents read code with fewer tokens — AST parsing, outlines, context packing.
 
-| Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | — | 23K | 6.6K | 5.1K | 1.5K | 1.3K |
-| Tree-sitter AST parsing | ✅ 68 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ | ✅ ~40 languages | ✅ 66 languages |
-| Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output | ✅ | ✅ core focus | ✅ |
-| Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ knowledge graph | ✅ import graph | ✅ knowledge graph |
-| Framework-aware edges | ✅ 53 integrations (14 frameworks, 7 ORMs, 12 UI libs) | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) |
-| Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ❌ | ✅ blast radius + decorator filter | ✅ detect_changes |
-| Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ❌ | ✅ AST-based, bidirectional | ✅ trace_call_path |
-| Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ |
-| Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ |
-| Multi-repo federation | ✅ cross-repo API linking | ✅ remote repos | ❌ | ❌ | ✅ GitHub repos | ❌ |
-| Session memory | ✅ built-in | ❌ | ✅ SQLite journal | ❌ | ✅ index persistence | ✅ persistent graph |
-| Written in | TypeScript | TypeScript | TypeScript | Python | Python | C |
+| Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp | cymbal |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | 23K | 6.6K | 5.1K | 1.5K | 1.3K | 137 |
+| Tree-sitter AST parsing | ✅ 68 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ | ✅ ~40 languages | ✅ 66 languages | ✅ 22 languages |
+| Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output | ✅ | ✅ core focus | ✅ | ✅ outline/show/context |
+| Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
+| Framework-aware edges | ✅ 53 integrations (14 frameworks, 7 ORMs, 12 UI libs) | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
+| Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ❌ | ✅ blast radius + decorator filter | ✅ detect_changes | ✅ impact command |
+| Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ❌ | ✅ AST-based, bidirectional | ✅ trace_call_path | ✅ refs/importers |
+| Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ | ❌ |
+| Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Multi-repo federation | ✅ cross-repo API linking | ✅ remote repos | ❌ | ❌ | ✅ GitHub repos | ❌ | ❌ |
+| Session memory | ✅ built-in | ❌ | ✅ SQLite journal | ❌ | ✅ index persistence | ✅ persistent graph | ❌ |
+| Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
 
 ### vs. AI session memory
 
@@ -97,20 +97,21 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 
 ### vs. code graph MCP servers
 
-| Capability | trace-mcp | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| Languages | 68 | ~10 | 66 | ~15 | 32 | ~10 |
-| Framework integrations | 53 (14 fw + 7 ORM + 12 UI + 20 other) | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Cross-language edges | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| MCP tools | 120+ | ~15 | ~20 | ~25 | 90 | 139 |
-| Session memory | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| CI/PR reports | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Multi-repo federation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Security scanning | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| Refactoring tools | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Architecture governance | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Token savings tracking | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Written in | TypeScript | Python | C | TypeScript | Rust | Python |
+| Capability | trace-mcp | Serena | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | 22.6K | 5.1K | 1.3K | — | — | — |
+| Languages | 68 | ~20 (via LSP) | ~10 | 66 | ~15 | 32 | ~10 |
+| Framework integrations | 53 (14 fw + 7 ORM + 12 UI + 20 other) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Cross-language edges | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| MCP tools | 120+ | ~35 | ~15 | ~20 | ~25 | 90 | 139 |
+| Session memory | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| CI/PR reports | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Multi-repo federation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Security scanning | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Refactoring tools | ✅ | ✅ rename, symbol editing | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Architecture governance | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Token savings tracking | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Written in | TypeScript | Python | Python | C | TypeScript | Rust | Python |
 
 > **Why framework awareness matters:** A graph that knows `UserController` exists but doesn't know it renders `Users/Show.vue` via Inertia is missing the edges that matter most. Framework integrations turn a syntax graph into a **semantic** graph — the agent sees the same connections a developer sees.
 
@@ -120,7 +121,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 
 AI agents burn tokens reading files they don't need. trace-mcp returns **precision context** — only the symbols, edges, and signatures relevant to the query.
 
-**Benchmark: trace-mcp's own codebase** (653 files, 3,493 symbols):
+**Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols):
 
 ```
 Task                  Without trace-mcp    With trace-mcp    Reduction
@@ -145,6 +146,18 @@ Total                     572,444 tokens    49,997 tokens      91.3%
 **Savings scale with project size.** On a 650-file project, trace-mcp saves ~522K tokens. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
 
 **Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, with 90%+ token reduction.
+
+**Per-task breakdown** — what it actually costs to answer common questions:
+
+| Question | Naive approach | trace-mcp tool | Tokens (naive) | Tokens (trace-mcp) | Reduction |
+|---|---|---|---|---|---|
+| "Where is `registerTool` defined?" | Grep all .ts files | `search` | ~12,400 | ~800 | **93%** |
+| "What calls `getDeadCodeV2`?" | Grep + Read 8 files | `get_call_graph` | ~18,200 | ~1,100 | **94%** |
+| "What breaks if I rename `Store`?" | Manual trace across 40+ files | `get_change_impact` | ~62,000 | ~2,400 | **96%** |
+| "Find all tests for `extractOpenAPI`" | Glob + Read 12 test files | `get_tests_for` | ~14,800 | ~650 | **96%** |
+| "Understand the indexing pipeline" | Read 15 source files | `get_task_context` | ~89,000 | ~7,200 | **92%** |
+| "Unused exports in src/tools/" | Read + Grep all files | `get_dead_code` | ~38,000 | ~1,800 | **95%** |
+| "All OpenAPI endpoints in the project" | Find + Read all .yaml/.json | `search` (kind=function, yamlKind=endpoint) | ~22,000 | ~900 | **96%** |
 
 <details>
 <summary>Methodology</summary>
