@@ -29,6 +29,22 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     },
     async ({ name }) => {
       const result = getImplementations(store, name);
+      if (result.total === 0) {
+        const stats = store.getStats();
+        // Determine verdict: does the named class/interface exist at all?
+        const target = store.getSymbolByName(name, 'class') ?? store.getSymbolByName(name, 'interface');
+        const enriched = {
+          ...result,
+          evidence: buildNegativeEvidence({
+            indexedFiles: stats.totalFiles,
+            indexedSymbols: stats.totalSymbols,
+            toolName: 'get_implementations',
+            verdict: target ? 'symbol_indexed_but_isolated' : 'not_found_in_project',
+            symbol: name,
+          }),
+        };
+        return { content: [{ type: 'text', text: j(enriched) }] };
+      }
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );
@@ -64,6 +80,21 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     },
     async ({ name, max_depth }) => {
       const result = getTypeHierarchy(store, name, max_depth ?? 10);
+      if (result.ancestors.length === 0 && result.descendants.length === 0) {
+        const stats = store.getStats();
+        const target = store.getSymbolByName(name, 'class') ?? store.getSymbolByName(name, 'interface');
+        const enriched = {
+          ...result,
+          evidence: buildNegativeEvidence({
+            indexedFiles: stats.totalFiles,
+            indexedSymbols: stats.totalSymbols,
+            toolName: 'get_type_hierarchy',
+            verdict: target ? 'symbol_indexed_but_isolated' : 'not_found_in_project',
+            symbol: name,
+          }),
+        };
+        return { content: [{ type: 'text', text: j(enriched) }] };
+      }
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );
