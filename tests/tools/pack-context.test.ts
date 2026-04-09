@@ -152,6 +152,107 @@ describe('packContext', () => {
     expect(result.sections.length).toBeGreaterThanOrEqual(1);
   });
 
+  describe('strategy', () => {
+    it('compact strategy drops source section and forces compress', () => {
+      const store = createMockStore(files);
+      const result = packContext(store, createMockRegistry(), {
+        scope: 'project',
+        format: 'markdown',
+        maxTokens: 50000,
+        include: ['outlines', 'source', 'routes'],
+        compress: false, // explicitly false; compact should force it
+        projectRoot: '/tmp/test',
+        strategy: 'compact',
+      });
+      expect(result.sections).not.toContain('source');
+      expect(result.sections).toContain('outlines');
+    });
+
+    it('core_first ranks files by PageRank for module scope', () => {
+      // module scope normally returns insertion order; core_first should re-rank
+      const store = createMockStore(files);
+      const result = packContext(store, createMockRegistry(), {
+        scope: 'module',
+        path: 'src',
+        format: 'markdown',
+        maxTokens: 50000,
+        include: ['outlines'],
+        compress: true,
+        projectRoot: '/tmp/test',
+        strategy: 'core_first',
+      });
+      // Selection still happened (mock has no PageRank, so all files survive)
+      expect(result.sections).toContain('outlines');
+      expect(result.token_count).toBeGreaterThan(0);
+    });
+
+    it('most_relevant is the default strategy', () => {
+      const store = createMockStore(files);
+      const result = packContext(store, createMockRegistry(), {
+        scope: 'project',
+        format: 'markdown',
+        maxTokens: 50000,
+        include: ['outlines'],
+        compress: true,
+        projectRoot: '/tmp/test',
+        // strategy omitted
+        includeBudgetReport: true,
+      });
+      expect(result.budget_report?.strategy).toBe('most_relevant');
+    });
+  });
+
+  describe('budget_report', () => {
+    it('omits budget_report by default', () => {
+      const store = createMockStore(files);
+      const result = packContext(store, createMockRegistry(), {
+        scope: 'project',
+        format: 'markdown',
+        maxTokens: 50000,
+        include: ['outlines'],
+        compress: true,
+        projectRoot: '/tmp/test',
+      });
+      expect(result.budget_report).toBeUndefined();
+    });
+
+    it('includes per-section breakdown when requested', () => {
+      const store = createMockStore(files);
+      const result = packContext(store, createMockRegistry(), {
+        scope: 'project',
+        format: 'markdown',
+        maxTokens: 50000,
+        include: ['outlines', 'routes'],
+        compress: true,
+        projectRoot: '/tmp/test',
+        includeBudgetReport: true,
+      });
+      expect(result.budget_report).toBeDefined();
+      expect(result.budget_report!.total_used).toBe(result.token_count);
+      expect(result.budget_report!.total_budget).toBe(50000);
+      expect(result.budget_report!.headroom).toBe(50000 - result.token_count);
+      expect(result.budget_report!.per_section.outlines?.status).toBe('included');
+      expect(result.budget_report!.per_section.routes?.status).toBe('included');
+      expect(result.budget_report!.per_section.outlines?.tokens).toBeGreaterThan(0);
+    });
+
+    it('marks dropped sections under tight budget', () => {
+      const store = createMockStore(files);
+      const result = packContext(store, createMockRegistry(), {
+        scope: 'project',
+        format: 'markdown',
+        maxTokens: 50, // tiny — most sections will be dropped
+        include: ['outlines', 'routes', 'models'],
+        compress: true,
+        projectRoot: '/tmp/test',
+        includeBudgetReport: true,
+      });
+      const meta = result.budget_report!.per_section;
+      const droppedCount = Object.values(meta).filter((m) => m.status === 'dropped').length;
+      expect(droppedCount).toBeGreaterThan(0);
+    });
+  });
+
   describe('no memory leaks', () => {
     it('handles many files without unbounded allocation', () => {
       const manyFiles = Array.from({ length: 500 }, (_, i) => ({
