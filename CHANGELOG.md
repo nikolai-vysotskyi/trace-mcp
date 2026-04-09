@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.13.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.12.0...v1.13.0) (2026-04-09)
+
+
+### Features
+
+* add auto-updater with configurable check interval ([b26c851](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b26c8513a7b2fa761d639926d7fca11fbdd06f8a))
+* add budget defaults, improve analytics and tool-gate ([ea48038](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ea48038de4d77d7fc240f01cba7d20813766a81c))
+* add confidence levels and methodology disclosure to analytical tools ([dc6a9d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dc6a9d8122f6da0bff36d2d69acae8c1aca5eec4))
+* add discover_claude_sessions for multi-project federation ([4bde3fe](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4bde3fecf77d81b762f5eb195cf98fbe2c86d60b))
+* add git worktree support, visualize CLI command, and auto-update serve flow ([de755c3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/de755c336a92c2cbab4c4b9cc902d644f20288f0))
+* add pack-context strategies (core_first, compact) and budget reporting ([e539609](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e539609113c5ac426fa4282e04f2d46e41cebbfe))
+* add plan_turn opening-move router with insertion-point suggestions ([9ee62bf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9ee62bfca42d7fca92e445e27f441954d80be3b9))
+* add semantic search modes, LRU result cache, and embed_repo tool ([b4002c2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b4002c260752cb6e0b7593308c0c979b2b92a3ba))
+* add skills directory with trace-mcp usage guides ([ef37023](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ef37023f3a59b579b50d32d970720def964b198f))
+* enrich empty-result evidence with isolation verdict and relation tool suggestions ([726e6a8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/726e6a8939186c8c58e69e4e8b96886ab21b9bb6))
+* refactor Dart plugin and improve CSS/JSON/YAML/Python/Kotlin language plugins ([e19c338](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e19c3382c7a73b5870cc6ef7f0519041b4788f49))
+* refactor federation manager into focused modules ([1d29a02](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1d29a02739356a25a9722433c1e25661ce6c2999))
+* upgrade hooks to v0.6.0 with per-session repeat-read dedup ([8675b60](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8675b600698f77ec0d191570b3fb00f5aa98510b))
+
+
+### Bug Fixes
+
+* remove DENY_MARKER cycle from guard hook, write initial state on first deny ([1f96374](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1f96374753189c1cf4ba972a6fdd30b1e9eede0f))
+* swap stat order in file_mtime to prevent multi-line output on Linux ([c5f6416](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c5f64167e144a415ad60a2ee2cdcf71f5fcbb14d))
+
+
+### Refactoring
+
+* remove file-watcher module ([dfe1e0d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dfe1e0dc56cbd1f9c4f872f3577cea3e11ab03f8))
+
+
+### Documentation
+
+* update README with new tools and feature highlights ([7106537](https://github.com/nikolai-vysotskyi/trace-mcp/commit/71065378c6a66a0ed34172ba5d5b33fcd34a088e))
+
 ## [1.12.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.11.0...v1.12.0) (2026-04-07)
 
 
