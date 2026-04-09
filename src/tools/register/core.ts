@@ -6,9 +6,10 @@ import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
 import { checkFileForDuplicates } from '../analysis/duplication.js';
+import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
 
 export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
-  const { store, registry, config, projectRoot, guardPath, j, jh, journal } = ctx;
+  const { store, registry, config, projectRoot, guardPath, j, jh, journal, vectorStore, embeddingService, progress } = ctx;
 
   // --- Core Tools (always registered) ---
 
@@ -45,6 +46,62 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         : await pipeline.indexAll(force ?? false);
 
       return { content: [{ type: 'text', text: j({ status: 'completed', ...result }) }] };
+    },
+  );
+
+  server.tool(
+    'embed_repo',
+    'Precompute and cache symbol embeddings for semantic / hybrid search. Embeddings are also computed lazily on first semantic query, but calling this once after a fresh index avoids the first-query latency spike. Requires AI provider to be enabled in config (ollama/openai). Set force=true to drop and recompute all existing embeddings.',
+    {
+      batch_size: z.number().int().min(1).max(500).optional().describe('Symbols per embedding API batch (default 50)'),
+      force: z.boolean().optional().describe('Drop existing embeddings and re-embed everything (default false — incremental)'),
+    },
+    async ({ batch_size, force }) => {
+      if (!vectorStore || !embeddingService) {
+        return {
+          content: [{
+            type: 'text',
+            text: j({
+              status: 'disabled',
+              message: 'Semantic search disabled. Enable an AI provider in trace-mcp.config.json (ai.enabled=true, ai.provider=ollama|openai).',
+            }),
+          }],
+          isError: true,
+        };
+      }
+      logger.info({ force, batch_size }, 'embed_repo requested');
+      const pipeline = new EmbeddingPipeline(store, embeddingService, vectorStore, progress ?? undefined);
+      try {
+        const startedAt = Date.now();
+        const indexed = force ? await pipeline.reindexAll() : await pipeline.indexUnembedded(batch_size ?? 50);
+        const totalEmbedded = vectorStore.count();
+        const totalSymbols = store.getStats().totalSymbols;
+        return {
+          content: [{
+            type: 'text',
+            text: j({
+              status: 'completed',
+              indexed_this_run: indexed,
+              total_embedded: totalEmbedded,
+              total_symbols: totalSymbols,
+              coverage_pct: totalSymbols > 0 ? Math.round((totalEmbedded / totalSymbols) * 100) : 0,
+              duration_ms: Date.now() - startedAt,
+              force: !!force,
+            }),
+          }],
+        };
+      } catch (e) {
+        return {
+          content: [{
+            type: 'text',
+            text: j({
+              status: 'error',
+              error: e instanceof Error ? e.message : String(e),
+            }),
+          }],
+          isError: true,
+        };
+      }
     },
   );
 

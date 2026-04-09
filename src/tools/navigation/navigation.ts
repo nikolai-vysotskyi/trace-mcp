@@ -5,6 +5,7 @@ import { fuzzySearch, type FuzzyMatch } from '../../db/fuzzy.js';
 import { readByteRange } from '../../utils/source-reader.js';
 import { hybridScore, getTypeBonus, computeRecency } from '../../scoring/hybrid.js';
 import { computePageRank } from '../../scoring/pagerank.js';
+import { buildSearchCacheKey, getCachedSearch, putCachedSearch } from '../../scoring/search-cache.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
 import { hybridSearch as aiHybridSearch } from '../../ai/search.js';
@@ -100,6 +101,24 @@ interface SearchAIOptions {
   reranker?: RerankerService | null;
 }
 
+export interface SemanticOptions {
+  /**
+   * Semantic search mode:
+   * - 'auto' (default): use hybrid when AI is available, FTS otherwise
+   * - 'on':   force hybrid (still gracefully falls back to FTS if AI not configured)
+   * - 'off':  force lexical-only FTS, even when AI is available
+   * - 'only': pure semantic vector search, no FTS contribution
+   */
+  semantic?: 'auto' | 'on' | 'off' | 'only';
+  /**
+   * Weight of the semantic component in [0, 1]. Only meaningful in hybrid mode.
+   * - 0   → lexical only (BM25)
+   * - 0.5 → balanced (default)
+   * - 1   → semantic only
+   */
+  semanticWeight?: number;
+}
+
 interface FuzzyOptions {
   fuzzy?: boolean;
   fuzzyThreshold?: number;
@@ -120,13 +139,43 @@ export async function search(
   offset = 0,
   aiOptions?: SearchAIOptions,
   fuzzyOptions?: FuzzyOptions,
+  semanticOptions?: SemanticOptions,
 ): Promise<SearchResult> {
   const fetchLimit = limit + offset + 50;
-  const useAI = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
+  const semanticMode = semanticOptions?.semantic ?? 'auto';
+  const aiAvailable = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
+  // 'off' forces FTS regardless of AI availability; 'only'/'on' require AI configured.
+  const useAI = semanticMode === 'off'
+    ? false
+    : (semanticMode === 'on' || semanticMode === 'only' || semanticMode === 'auto') && aiAvailable;
+  // Effective semantic weight: 'only' pins to 1, otherwise honor explicit weight (default 0.5)
+  const effectiveSemanticWeight = semanticMode === 'only'
+    ? 1
+    : semanticOptions?.semanticWeight ?? 0.5;
 
-  // Explicit fuzzy mode — skip FTS/AI entirely
+  // Explicit fuzzy mode — skip FTS/AI entirely (and skip cache: results depend on
+  // fuzzy threshold/edit-distance which the cache key doesn't capture)
   if (fuzzyOptions?.fuzzy) {
     return runFuzzySearch(store, query, filters, limit, offset, fuzzyOptions);
+  }
+
+  // ─── LRU cache lookup ─────────────────────────────────────────
+  // Skip cache for AI mode: hybrid_ai results depend on the embedding/reranker
+  // service identity and may have non-deterministic ordering across runs.
+  const cacheable = !useAI;
+  let cacheKey: string | null = null;
+  let symbolCount = 0;
+  if (cacheable) {
+    symbolCount = store.getStats().totalSymbols;
+    cacheKey = buildSearchCacheKey({
+      query,
+      filters: filters as Record<string, unknown> | undefined,
+      limit,
+      offset,
+      mode: 'fts',
+    });
+    const cached = getCachedSearch(cacheKey, symbolCount);
+    if (cached) return cached;
   }
 
   // Build initial candidates: (symbolIdStr, relevance [0,1])
@@ -141,6 +190,7 @@ export async function search(
       aiOptions!.embeddingService!,
       fetchLimit,
       aiOptions?.reranker,
+      { semanticWeight: effectiveSemanticWeight },
     );
     if (hybridResults.length === 0) return { items: [], total: 0, search_mode: 'hybrid_ai' };
     // Normalize RRF scores (already positive, descending)
@@ -250,7 +300,9 @@ export async function search(
     if (fuzzyResult.items.length > 0) return fuzzyResult;
   }
 
-  return { items, total, search_mode: searchMode };
+  const result: SearchResult = { items, total, search_mode: searchMode };
+  if (cacheable && cacheKey) putCachedSearch(cacheKey, result, symbolCount);
+  return result;
 }
 
 /**

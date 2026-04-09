@@ -13,6 +13,7 @@ import { buildNegativeEvidence } from '../shared/evidence.js';
 import { searchText } from '../navigation/search-text.js';
 import { fallbackSearch, fallbackOutline } from '../navigation/zero-index.js';
 import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
+import { CHANGE_IMPACT_METHODOLOGY } from '../shared/confidence.js';
 import { FederationManager } from '../../federation/manager.js';
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
@@ -58,7 +59,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'search',
-    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). Auto-falls back to fuzzy if exact search returns 0 results.',
+    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once) — and tune semantic_weight in [0,1] to bias toward lexical (0) or vector (1) ranking.',
     {
       query: z.string().min(1).max(500).describe('Search query'),
       kind: z.string().max(64).optional().describe('Filter by symbol kind (class, method, function, etc.)'),
@@ -70,10 +71,14 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       fuzzy: z.boolean().optional().describe('Enable fuzzy search (trigram + Levenshtein). Auto-enabled when exact search returns 0 results.'),
       fuzzy_threshold: z.number().min(0).max(1).optional().describe('Minimum Jaccard trigram similarity (default 0.3)'),
       max_edit_distance: z.number().int().min(1).max(10).optional().describe('Maximum Levenshtein edit distance (default 3)'),
+      semantic: z.enum(['auto', 'on', 'off', 'only']).optional()
+        .describe('Semantic mode: auto (default — hybrid if AI available), on (force hybrid), off (lexical-only), only (pure vector). Requires AI provider + embed_repo for non-"off" modes.'),
+      semantic_weight: z.number().min(0).max(1).optional()
+        .describe('Hybrid fusion weight in [0,1]. 0 = lexical only, 0.5 = balanced (default), 1 = semantic only.'),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
       offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
     },
-    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext, decorator, fuzzy, fuzzy_threshold, max_edit_distance }) => {
+    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext, decorator, fuzzy, fuzzy_threshold, max_edit_distance, semantic, semantic_weight }) => {
       // Zero-index fallback: if index is empty, use ripgrep
       const stats = store.getStats();
       if (stats.totalFiles === 0) {
@@ -92,6 +97,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         offset ?? 0,
         { vectorStore, embeddingService, reranker },
         { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
+        { semantic, semanticWeight: semantic_weight },
       );
       // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
       const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => {
@@ -223,7 +229,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: jh('get_change_impact', result.value) }] };
+      return { content: [{ type: 'text', text: jh('get_change_impact', { ...result.value, _methodology: CHANGE_IMPACT_METHODOLOGY }) }] };
     },
   );
 
