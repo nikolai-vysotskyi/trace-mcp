@@ -6,6 +6,7 @@
 
 import { ok, type TraceMcpResult } from '../../errors.js';
 import type { Store, OrmModelRow, OrmAssociationRow, FileRow, MigrationRow } from '../../db/store.js';
+import { classifyNumericConfidence, type ConfidenceLevel, type Methodology } from '../shared/confidence.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,6 +48,8 @@ interface AntipatternFinding {
   related_symbols?: string[];
   fix: string;
   confidence: number;
+  /** Categorical level derived from `confidence`; populated by detectAntipatterns. */
+  confidence_level?: ConfidenceLevel;
 }
 
 interface AntipatternResult {
@@ -55,7 +58,30 @@ interface AntipatternResult {
   models_analyzed: number;
   files_analyzed: number;
   categories_checked: AntipatternCategory[];
+  _methodology: Methodology;
 }
+
+const ANTIPATTERN_METHODOLOGY: Methodology = {
+  algorithm: 'rule_based_static_graph_analysis',
+  signals: [
+    'n_plus_one_risk: to-many associations (hasMany/belongsToMany/OneToMany) without eager-load hints traced through ORM metadata',
+    'missing_eager_load: relations referenced in handlers but not declared in $with / eager / defaultScope',
+    'unbounded_query: ORM queries with no limit/take/paginate that hit collection endpoints',
+    'event_listener_leak: addEventListener calls without matching removeEventListener in the same scope',
+    'circular_dependency: import-graph cycles between ORM model files',
+    'missing_index: foreign-key columns in migrations without an accompanying index declaration',
+    'memory_leak: closure-captured collections in event handlers that grow unbounded',
+  ],
+  confidence_formula:
+    'Each rule emits a per-finding numeric confidence (0..1) based on how strong its static evidence is. confidence_level: <0.4=low, <0.75=medium, ≥0.75=high.',
+  limitations: [
+    'string-based / dynamic ORM calls are not traced',
+    'eager-load detection only checks documented hints; programmatic preloading is missed',
+    'event-listener detection is intra-procedural',
+    'rules are static heuristics — runtime behavior may differ (cached queries, lazy proxies)',
+    'requires the relevant ORM/framework plugin to be active for that file',
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -865,6 +891,11 @@ export function detectAntipatterns(
   if (categories.has('missing_index')) findings.push(...detectMissingIndex(store, data));
   if (categories.has('memory_leak')) findings.push(...detectMemoryLeak(store, data));
 
+  // Inject confidence_level derived from per-finding numeric confidence
+  for (const f of findings) {
+    f.confidence_level = classifyNumericConfidence(f.confidence);
+  }
+
   // Filter by severity threshold
   findings = findings.filter(f => SEVERITY_ORDER[f.severity] <= severityThreshold);
 
@@ -893,5 +924,6 @@ export function detectAntipatterns(
     models_analyzed: data.models.length,
     files_analyzed: analyzedFiles.size,
     categories_checked: [...categories],
+    _methodology: ANTIPATTERN_METHODOLOGY,
   });
 }

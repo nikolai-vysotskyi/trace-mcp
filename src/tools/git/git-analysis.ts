@@ -7,6 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
+import { classifyConfidence, type ConfidenceLevel, type Methodology } from '../shared/confidence.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -32,7 +33,35 @@ interface HotspotEntry {
   /** hotspot_score = max_cyclomatic × log(1 + commits) */
   score: number;
   assessment: 'low' | 'medium' | 'high';
+  /**
+   * Categorical confidence in the hotspot signal: counts how many of the two
+   * independent inputs (complexity, churn) actually fired strongly. Distinct
+   * from `assessment`, which buckets the raw score.
+   */
+  confidence_level: ConfidenceLevel;
+  /** Number of independent signals that fired (0..2). */
+  signals_fired: number;
 }
+
+/** A signal "fires" when its raw value crosses this threshold. */
+const HOTSPOT_COMPLEXITY_FIRE = 10; // matches the high-complexity boundary used by assessment
+const HOTSPOT_CHURN_FIRE = 5;       // > 5 commits in the analysis window
+
+export const HOTSPOT_METHODOLOGY: Methodology = {
+  algorithm: 'tornhill_complexity_churn_hotspots',
+  signals: [
+    'complexity: max cyclomatic complexity among symbols in the file',
+    'churn: number of git commits touching the file in the analysis window',
+  ],
+  confidence_formula:
+    'score = max_cyclomatic × log(1 + commits). assessment buckets the score (≤3=low, ≤10=medium, >10=high). confidence_level counts signals that fired strongly (complexity > 10, commits > 5): 0=low, 1=medium, 2=multi_signal.',
+  limitations: [
+    'requires git history; falls back to complexity-only ranking when git is unavailable',
+    'max-per-file complexity is dominated by the single hottest function',
+    'analysis window is fixed by sinceDays — files outside the window are ignored',
+    'rename detection follows git defaults; aggressive renames may split history',
+  ],
+};
 
 // ════════════════════════════════════════════════════════════════════════
 // GIT HELPERS
@@ -211,12 +240,18 @@ export function getHotspots(
     else if (score <= 10) assessment = 'medium';
     else assessment = 'high';
 
+    const signalsFired =
+      (maxCyclomatic > HOTSPOT_COMPLEXITY_FIRE ? 1 : 0) +
+      (commits > HOTSPOT_CHURN_FIRE ? 1 : 0);
+
     entries.push({
       file,
       max_cyclomatic: maxCyclomatic,
       commits,
       score,
       assessment,
+      confidence_level: classifyConfidence(signalsFired, 2),
+      signals_fired: signalsFired,
     });
   }
 
@@ -256,12 +291,15 @@ function getComplexityOnlyHotspots(
 
   for (const [file, maxCyclomatic] of fileComplexity) {
     if (maxCyclomatic < minCyclomatic) continue;
+    // Only one signal available (no git) — confidence is capped at low.
     entries.push({
       file,
       max_cyclomatic: maxCyclomatic,
       commits: 0,
       score: maxCyclomatic, // score = complexity alone
       assessment: maxCyclomatic <= 3 ? 'low' : maxCyclomatic <= 10 ? 'medium' : 'high',
+      confidence_level: 'low',
+      signals_fired: maxCyclomatic > HOTSPOT_COMPLEXITY_FIRE ? 1 : 0,
     });
   }
 

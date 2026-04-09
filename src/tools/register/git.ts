@@ -2,8 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
-import { getChurnRate, getHotspots } from '../git/git-analysis.js';
-import { getDeadCodeV2 } from '../refactoring/dead-code.js';
+import { getChurnRate, getHotspots, isGitRepo, HOTSPOT_METHODOLOGY } from '../git/git-analysis.js';
+import { getDeadCodeV2, getDeadCodeReachability } from '../refactoring/dead-code.js';
 import { scanSecurity, type RuleName, type Severity } from '../quality/security-scan.js';
 import { detectAntipatterns, type AntipatternCategory, type Severity as AntipatternSeverity } from '../quality/antipatterns.js';
 import { scanCodeSmells, type SmellCategory, type SmellPriority } from '../quality/code-smells.js';
@@ -13,9 +13,11 @@ import { getArtifacts, type ArtifactCategory } from '../project/artifacts.js';
 import { planBatchChange } from '../project/batch-changes.js';
 import { checkRenameSafe } from '../refactoring/rename-check.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
+import { GIT_CHURN_METHODOLOGY, COMPLEXITY_METHODOLOGY } from '../shared/confidence.js';
 
 export function registerGitTools(server: McpServer, ctx: ServerContext): void {
-  const { store, projectRoot, guardPath, j, jh } = ctx;
+  const { store, projectRoot, registry, guardPath, j, jh } = ctx;
+  const detectedFrameworks = registry.getAllFrameworkPlugins().map((p) => p.manifest.name);
 
   // --- Git Analysis Tools ---
 
@@ -34,15 +36,15 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         filePattern: file_pattern,
       });
       if (results.length === 0) {
-        return { content: [{ type: 'text', text: j({ message: 'No git history available or no matching files' }) }] };
+        return { content: [{ type: 'text', text: j({ message: 'No git history available or no matching files', _methodology: GIT_CHURN_METHODOLOGY }) }] };
       }
-      return { content: [{ type: 'text', text: j(results) }] };
+      return { content: [{ type: 'text', text: j({ results, total: results.length, _methodology: GIT_CHURN_METHODOLOGY }) }] };
     },
   );
 
   server.tool(
     'get_risk_hotspots',
-    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits)',
+    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). Each entry includes a confidence_level (low/medium/multi_signal) counting how many of the two independent signals fired strongly. Result envelope includes _methodology disclosure and _warnings when git is unavailable.',
     {
       since_days: z.number().int().min(1).optional().describe('Git churn window in days (default: 90)'),
       limit: z.number().int().min(1).max(100).optional().describe('Max results (default: 20)'),
@@ -54,28 +56,52 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         limit,
         minCyclomatic: min_cyclomatic,
       });
-      if (results.length === 0) {
-        return { content: [{ type: 'text', text: j({ message: 'No hotspots found (no complex files with git churn)' }) }] };
+      const warnings: string[] = [];
+      if (!isGitRepo(projectRoot)) {
+        warnings.push(
+          'Git history unavailable. Falling back to complexity-only ranking; ' +
+          'churn signal cannot fire, so all results are confidence_level=low.',
+        );
       }
-      return { content: [{ type: 'text', text: jh('get_hotspots', results) }] };
+      const envelope = {
+        hotspots: results,
+        total: results.length,
+        _methodology: HOTSPOT_METHODOLOGY,
+        ...(warnings.length > 0 ? { _warnings: warnings } : {}),
+      };
+      if (results.length === 0) {
+        return { content: [{ type: 'text', text: j({ message: 'No hotspots found (no complex files with git churn)', _methodology: HOTSPOT_METHODOLOGY, ...(warnings.length > 0 ? { _warnings: warnings } : {}) }) }] };
+      }
+      return { content: [{ type: 'text', text: jh('get_hotspots', envelope) }] };
     },
   );
 
   server.tool(
     'get_dead_code',
-    'Multi-signal dead code detection: combines import graph, call graph, and barrel export analysis. Confidence = signals_fired / 3. More accurate than get_dead_exports.',
+    'Dead code detection. Two modes: (1) "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores. (2) "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework-tagged controllers) — stricter but more accurate when entry points are enumerable. Pass entry_points to add custom roots. Both modes emit _methodology and _warnings.',
     {
       file_pattern: z.string().max(512).optional().describe('Filter by file glob pattern (e.g. "src/tools/%")'),
-      threshold: z.number().min(0).max(1).optional().describe('Min confidence to report (default: 0.5 = at least 2 of 3 signals)'),
+      threshold: z.number().min(0).max(1).optional().describe('[multi-signal mode] Min confidence to report (default: 0.5 = at least 2 of 3 signals)'),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default: 50)'),
+      mode: z.enum(['multi-signal', 'reachability']).optional().describe('Detection algorithm (default: multi-signal)'),
+      entry_points: z.array(z.string().max(512)).max(200).optional().describe('[reachability mode] Extra entry-point file paths (repo-relative)'),
     },
-    async ({ file_pattern, threshold, limit }) => {
-      const result = getDeadCodeV2(store, {
-        filePattern: file_pattern,
-        threshold,
-        limit,
-      });
-      if (Array.isArray(result.items) && result.items.length === 0) {
+    async ({ file_pattern, threshold, limit, mode, entry_points }) => {
+      const result = mode === 'reachability'
+        ? getDeadCodeReachability(store, {
+            filePattern: file_pattern,
+            limit,
+            detectedFrameworks,
+            projectRoot,
+            entryPoints: entry_points,
+          })
+        : getDeadCodeV2(store, {
+            filePattern: file_pattern,
+            threshold,
+            limit,
+            detectedFrameworks,
+          });
+      if (result.dead_symbols.length === 0) {
         const stats = store.getStats();
         return { content: [{ type: 'text', text: jh('get_dead_code', { ...result, evidence: buildNegativeEvidence(stats.totalFiles, stats.totalSymbols, false, 'get_dead_code') }) }] };
       }
@@ -308,7 +334,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         LIMIT ?
       `).all(...params);
 
-      return { content: [{ type: 'text', text: j(rows) }] };
+      return { content: [{ type: 'text', text: j({ symbols: rows, total: rows.length, _methodology: COMPLEXITY_METHODOLOGY }) }] };
     },
   );
 
