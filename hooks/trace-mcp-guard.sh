@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.5.0
+# trace-mcp-guard v0.6.0
 # trace-mcp PreToolUse guard
 # Blocks Read/Grep/Glob/Bash on source code files → redirects to trace-mcp tools.
 # Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
@@ -7,6 +7,10 @@
 # Consultation markers: trace-mcp server writes markers when tools access files
 # (get_outline, get_symbol, etc.). If a marker exists for a file, Read is allowed
 # immediately — the agent already consulted trace-mcp for this file.
+#
+# Repeat-read dedup (v0.6.0): tracks per-session allowed reads of each code file.
+# After 2 allowed reads of an unchanged file, subsequent reads are denied with a
+# redirect to get_symbol/get_outline. Edits (mtime change) reset the counter.
 #
 # Install: add to ~/.claude/settings.json or .claude/settings.local.json
 # See README.md for setup instructions.
@@ -67,6 +71,19 @@ else
 fi
 CONSULTED_DIR="${TMPDIR:-/tmp}/trace-mcp-consulted-${PROJECT_HASH}"
 
+# Repeat-read tracker dir (v0.6.0): per-session state of allowed reads per file.
+# Format: one file per read target, contents = "count:mtime"
+READS_DIR="${TMPDIR:-/tmp}/trace-mcp-reads-${SESSION_ID}"
+mkdir -p "$READS_DIR" 2>/dev/null || true
+
+# Max allowed reads of an unchanged code file before forcing get_symbol/get_outline.
+REPEAT_READ_LIMIT=2
+
+# Portable mtime (macOS / Linux).
+file_mtime() {
+  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
+}
+
 # --- Read ---
 if [[ "$TOOL_NAME" == "Read" ]]; then
   FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
@@ -92,6 +109,33 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
 
   # Block code file reads → redirect to trace-mcp
   if echo "$FILE_PATH" | grep -qiE "$CODE_EXT_RE"; then
+    # --- Repeat-read dedup (v0.6.0) ---
+    # Track allowed reads per file per session. Reset on mtime change (post-Edit).
+    FILE_HASH=$(file_sha256 "$FILE_PATH")
+    READ_STATE="$READS_DIR/$FILE_HASH"
+    PREV_COUNT=0
+    PREV_MTIME=""
+    HAD_STATE=0
+    if [[ -f "$READ_STATE" ]]; then
+      IFS=':' read -r PREV_COUNT PREV_MTIME < "$READ_STATE" || true
+      PREV_COUNT="${PREV_COUNT:-0}"
+      HAD_STATE=1
+    fi
+    CUR_MTIME=$(file_mtime "$FILE_PATH")
+    # Reset count if file was modified since last allowed read (Edit/Write happened).
+    # HAD_STATE stays 1 so we skip the first-time deny-marker friction below.
+    if [[ "$CUR_MTIME" != "$PREV_MTIME" ]]; then
+      PREV_COUNT=0
+    fi
+
+    # Already hit the limit on an unchanged file — force trace-mcp narrow lookups.
+    if (( PREV_COUNT >= REPEAT_READ_LIMIT )); then
+      REL_PATH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
+      deny \
+        "Already read ${REL_PATH} ${PREV_COUNT}x this session — use get_symbol/get_outline instead of re-reading." \
+        "trace-mcp alternatives for ${REL_PATH}:\\n- get_symbol { \\\"fqn\\\": \\\"SymbolName\\\" } — read ONE symbol instead of the whole file\\n- get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" } — signatures only (much cheaper than full reads)\\n- get_context_bundle { \\\"symbol_id\\\": \\\"...\\\" } — symbol + its imports in one call\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — NL query over the indexed codebase\\nThe counter resets automatically if you Edit/Write this file."
+    fi
+
     # Compute relative path for consultation marker check (server writes markers keyed by relative path)
     REL_PATH_FOR_HASH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
     CONSULTED_HASH=$(file_sha256 "$REL_PATH_FOR_HASH")
@@ -99,13 +143,24 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
     # Check if file was already consulted via trace-mcp (get_outline, get_symbol, etc.)
     if [[ -n "$PROJECT_HASH" && -f "$CONSULTED_DIR/$CONSULTED_HASH" ]]; then
       # File was consulted via trace-mcp → allow Read (agent needs full content for Edit)
+      echo "$((PREV_COUNT + 1)):${CUR_MTIME}" > "$READ_STATE"
       exit 0
     fi
 
-    # Allow on second attempt — agent needs full content for Edit
-    DENY_MARKER="$DENY_DIR/$(file_sha256 "$FILE_PATH")"
+    # If we already tracked this file this session (HAD_STATE=1), skip the
+    # first-time deny-marker cycle — the agent already "earned" the right to
+    # read it. This covers both: (a) mid-session re-reads, and (b) post-Edit
+    # re-reads where count was reset by mtime change.
+    if (( HAD_STATE == 1 )); then
+      echo "$((PREV_COUNT + 1)):${CUR_MTIME}" > "$READ_STATE"
+      exit 0
+    fi
+
+    # First-time read of this file: deny on attempt #1, allow on retry.
+    DENY_MARKER="$DENY_DIR/$FILE_HASH"
     if [[ -f "$DENY_MARKER" ]]; then
       rm -f "$DENY_MARKER"
+      echo "1:${CUR_MTIME}" > "$READ_STATE"
       exit 0
     fi
     touch "$DENY_MARKER"
@@ -172,7 +227,7 @@ if [[ "$TOOL_NAME" == "Glob" ]]; then
 
   deny \
     "Use trace-mcp for code file discovery — it knows your project structure." \
-    "trace-mcp alternatives:\\n- get_project_map { \\\"summary_only\\\": true } — project overview (frameworks, languages, structure)\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"src/tools/*\\\" } — find symbols in specific paths\\n- get_outline { \\\"path\\\": \\\"path/to/file\\\" } — see what\\'s in a file\\nUse Glob only for non-code file patterns."
+    "trace-mcp alternatives:\\n- get_project_map { \\\"summary_only\\\": true } — project overview (frameworks, languages, structure)\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"src/tools/*\\\" } — find symbols in specific paths\\n- get_outline { \\\"path\\\": \\\"path/to/file\\\" } — see what is in a file\\nUse Glob only for non-code file patterns."
 
 fi
 
@@ -219,7 +274,7 @@ if [[ "$TOOL_NAME" == "Agent" ]]; then
 
   # Block general-purpose agents doing code exploration (not coding/testing/research)
   if [[ "$SUBAGENT_TYPE" == "general-purpose" ]]; then
-    EXPLORE_RE='(explore|investigate|understand|analyze|analyse|audit|review|check .* (code|structure|architecture|implementation|pattern)|find .* (code|pattern|usage|definition)|study|deep dive|map .* (dependencies|imports)|catalog|inspect)'
+    EXPLORE_RE='(explore|investigate|understand|analyz|analys|audit|study|deep dive|catalog|inspect|trace|walk ?through|summari[sz]e|identify|discover|locate|document .* (code|module|function|class|registry|package|file|project|handler|service|component|plugin|api|middleware|hook|schema)|review .* (code|module|file|implementation)|check .* (code|structure|architecture|implementation|pattern)|find .* (code|pattern|usage|definition|references?|callers?)|map .* (dependencies|imports|structure|flow)|list .* (files|symbols|classes|functions|modules)|how .* (work|implemented)|where .* (defined|used|called))'
     if echo "$DESCRIPTION" | grep -qiE "$EXPLORE_RE"; then
       deny \
         "Agent(general-purpose) for code exploration wastes ~50K tokens. Use trace-mcp tools instead." \

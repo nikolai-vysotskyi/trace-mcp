@@ -1,11 +1,15 @@
 @echo off
-REM trace-mcp-guard v0.5.0
+REM trace-mcp-guard v0.6.0
 REM trace-mcp PreToolUse guard (Windows)
 REM Blocks Read/Grep/Glob/Bash on source code files + Agent(Explore) subagents - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
 REM
 REM Consultation markers: trace-mcp server writes markers when tools access files.
 REM If a marker exists, Read is allowed immediately.
+REM
+REM Repeat-read dedup (v0.6.0): tracks per-session allowed reads of each code file.
+REM After 2 allowed reads of an unchanged file, subsequent reads are denied with a
+REM redirect to get_symbol/get_outline. Edits (mtime change) reset the counter.
 REM
 REM Install: add to ~\.claude\settings.json or .claude\settings.local.json
 REM See README.md for setup instructions.
@@ -50,7 +54,40 @@ REM Block code file reads - redirect to trace-mcp
 echo "%FILE_PATH%" | findstr /i /r "\.ts$ \.tsx$ \.js$ \.jsx$ \.mjs$ \.cjs$ \.py$ \.pyi$ \.go$ \.rs$ \.java$ \.kt$ \.kts$ \.rb$ \.php$ \.cs$ \.cpp$ \.c$ \.h$ \.hpp$ \.swift$ \.scala$ \.vue$ \.svelte$ \.astro$" >nul 2>&1
 if not %errorlevel%==0 goto :allow
 
-REM Check consultation markers (trace-mcp server writes these when get_outline/get_symbol called)
+REM Extract session id for per-session state dirs
+set "SESSION_ID=default"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).session_id } catch { 'default' }"`) do set "SESSION_ID=%%i"
+
+REM Delegate repeat-read dedup + consultation marker + deny-marker cycle to PowerShell helper.
+REM The helper lives next to this .cmd and is installed by trace-mcp init/upgrade.
+set "TMG_SCRIPT=%~dp0trace-mcp-guard-read.ps1"
+if not exist "%TMG_SCRIPT%" goto :legacy_read_path
+
+set "TMG_FILE=%FILE_PATH%"
+set "TMG_SESSION=%SESSION_ID%"
+set "TMG_ROOT=%CD%"
+
+set "DECISION="
+for /f "usebackq delims=" %%d in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%TMG_SCRIPT%"`) do set "DECISION=%%d"
+
+if "%DECISION%"=="ALLOW" goto :allow
+
+if /i "%DECISION:~0,6%"=="LIMIT:" (
+    set "PREV_COUNT=%DECISION:~6%"
+    call :deny "Already read %FILE_PATH% !PREV_COUNT!x this session - use get_symbol/get_outline instead of re-reading." "trace-mcp alternatives: get_symbol, get_outline, get_context_bundle, get_feature_context. Counter resets automatically on Edit/Write."
+    goto :cleanup
+)
+
+if /i "%DECISION%"=="DENY_FIRST" (
+    call :deny "Use trace-mcp for code reading - it returns only what you need, saving tokens." "trace-mcp alternatives: get_outline, get_symbol, search, get_feature_context. If you need full file content before editing, retry Read - it will be allowed."
+    goto :cleanup
+)
+
+REM Unknown / empty decision → fall through to legacy path.
+
+:legacy_read_path
+REM Fallback: if the PowerShell helper is missing (corrupted install), use the
+REM pre-v0.6.0 logic (consultation marker + deny-marker cycle, no dedup).
 for /f "usebackq delims=" %%h in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('%CD%'))).Replace('-','').Substring(0,12).ToLower()"`) do set "PROJ_HASH=%%h"
 set "REL_FOR_HASH=%FILE_PATH%"
 set "REL_FOR_HASH=!REL_FOR_HASH:%CD%\=!"
@@ -58,13 +95,8 @@ set "REL_FOR_HASH=!REL_FOR_HASH:\=/!"
 for /f "usebackq delims=" %%h in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('!REL_FOR_HASH!'))).Replace('-','').ToLower()"`) do set "FILE_HASH=%%h"
 if exist "%TEMP%\trace-mcp-consulted-!PROJ_HASH!\!FILE_HASH!" goto :allow
 
-REM Allow on second attempt (agent needs full content for Edit)
-set "SESSION_ID=default"
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).session_id } catch { 'default' }"`) do set "SESSION_ID=%%i"
 set "DENY_DIR=%TEMP%\trace-mcp-guard-%SESSION_ID%"
 if not exist "%DENY_DIR%" mkdir "%DENY_DIR%" 2>nul
-
-REM Create a hash of the file path for the marker
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('%FILE_PATH%'))).Replace('-','').ToLower()"`) do set "MARKER_HASH=%%i"
 set "DENY_MARKER=%DENY_DIR%\%MARKER_HASH%"
 
@@ -155,7 +187,7 @@ if /i "%SUBAGENT_TYPE%"=="Explore" (
 
 REM Block general-purpose agents doing code exploration
 if /i "%SUBAGENT_TYPE%"=="general-purpose" (
-    echo "%DESCRIPTION%" | findstr /i /r "explore investigate understand analyze analyse audit review study inspect catalog" >nul 2>&1
+    echo "%DESCRIPTION%" | findstr /i /r "explore investigate understand analyz analys audit review study inspect catalog trace walkthrough summarize summarise identify discover locate document how.*work where.*defined where.*used list.*files list.*symbols list.*classes map.*depend map.*import find.*usage find.*reference find.*caller find.*definition" >nul 2>&1
     if !errorlevel!==0 (
         call :deny "Agent(general-purpose) for code exploration wastes ~50K tokens. Use trace-mcp tools instead." "trace-mcp alternatives: get_task_context, get_feature_context, find_usages, get_call_graph, batch. Agent is OK for: writing code, running tests, web research, Plan mode."
         goto :cleanup

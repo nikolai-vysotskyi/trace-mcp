@@ -114,6 +114,47 @@ describe('installGuardHook', () => {
     expect(settings.hooks.PreToolUse).toHaveLength(1); // not duplicated
   });
 
+  it('copies Windows aux .ps1 helper alongside .cmd on win32', async () => {
+    // IS_WINDOWS / HOOK_EXT are module-level constants, so we have to stub the
+    // platform BEFORE importing the module under test.
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      vi.resetModules();
+      mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+        const s = String(p);
+        if (s.includes('hooks') && s.includes('trace-mcp-guard.cmd') && !s.includes('.claude')) return true;
+        if (s.includes('hooks') && s.includes('trace-mcp-guard-read.ps1') && !s.includes('.claude')) return true;
+        if (s.includes('.claw')) return false;
+        return false;
+      });
+
+      const mod = await import('../../src/init/hooks.js');
+      mod.installGuardHook({ global: true });
+
+      const copies = mockFs.copyFileSync.mock.calls.map((c) => String(c[1]));
+      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard.cmd'))).toBe(true);
+      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(true);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
+    }
+  });
+
+  it('does NOT copy Windows aux .ps1 helper on non-win32 platforms', () => {
+    // Current platform is non-win32 (darwin/linux in CI); aux file should be skipped.
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const s = String(p);
+      if (s.includes('hooks') && s.includes('trace-mcp-guard') && !s.includes('.claude')) return true;
+      if (s.includes('.claw')) return false;
+      return false;
+    });
+
+    installGuardHook({ global: true });
+
+    const copies = mockFs.copyFileSync.mock.calls.map((c) => String(c[1]));
+    expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(false);
+  });
+
   it('also installs for Claw Code when .claw exists', () => {
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
       const s = String(p);
@@ -230,6 +271,6 @@ describe('isHookOutdated', () => {
 
   it('returns false for matching version', () => {
     // The current version is exported from types
-    expect(isHookOutdated('0.5.0')).toBe(false);
+    expect(isHookOutdated('0.6.0')).toBe(false);
   });
 });

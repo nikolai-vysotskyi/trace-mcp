@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
-# trace-mcp-precompact v0.1.0
+# trace-mcp-precompact v0.2.0
 # trace-mcp PreCompact hook
 # Injects session snapshot into compacted context to prevent "compaction amnesia".
 # Reads the live snapshot file written by the running trace-mcp MCP server and
 # returns it via the systemMessage field in Claude Code's hook output schema.
 #
+# Also acts as a GC point for guard-hook per-session state dirs
+# (trace-mcp-reads-*, trace-mcp-guard-*) older than 24h.
+#
 # Install: add to ~/.claude/settings.json or .claude/settings.local.json under PreCompact
 # See README.md for setup instructions.
 
 set -euo pipefail
+
+# --- Guard-hook state GC (trace-mcp-guard-* / trace-mcp-reads-*) ---
+# These are written by trace-mcp-guard.sh per-session. Current session's dir
+# has fresh mtime and is protected by the -mmin +1440 filter (>24h old).
+GUARD_TMP_BASE="${TMPDIR:-/tmp}"
+if [[ -d "$GUARD_TMP_BASE" ]]; then
+  find "$GUARD_TMP_BASE" -maxdepth 1 -type d \
+    \( -name 'trace-mcp-reads-*' -o -name 'trace-mcp-guard-*' \) \
+    -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+fi
 
 # Determine project root from working directory
 PROJECT_ROOT="$(pwd)"
