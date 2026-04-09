@@ -16,12 +16,25 @@ interface HybridSearchResult {
   score: number;
 }
 
+export interface HybridSearchOptions {
+  /**
+   * Weight of the semantic (vector) component in [0, 1].
+   * - 0   → FTS5 only (lexical / BM25). Equivalent to passing a null vectorStore.
+   * - 0.5 → Balanced RRF fusion (default).
+   * - 1   → Vector only (pure semantic).
+   * Intermediate values linearly interpolate the two RRF contributions.
+   */
+  semanticWeight?: number;
+}
+
 const RRF_K = 60;
 
 /**
  * Combine FTS5 + vector search using RRF (Reciprocal Rank Fusion).
  *
  * When vectorStore/embeddingService are null, falls back to FTS5-only.
+ * The relative contribution of each ranker is controlled by `options.semanticWeight`
+ * (default 0.5 — balanced).
  */
 export async function hybridSearch(
   db: Database.Database,
@@ -30,9 +43,17 @@ export async function hybridSearch(
   embeddingService: EmbeddingService | null,
   limit: number,
   reranker?: RerankerService | null,
+  options?: HybridSearchOptions,
 ): Promise<HybridSearchResult[]> {
-  // 1. FTS5 search
-  const ftsResults = searchFts(db, query, limit * 3);
+  // Clamp the weight; 0.5 = balanced (the historical default RRF behavior).
+  const semanticWeight = Math.min(1, Math.max(0, options?.semanticWeight ?? 0.5));
+  const lexicalWeight = 1 - semanticWeight;
+  // semantic_only: skip FTS entirely when weight is 1
+  const skipFts = semanticWeight >= 0.999;
+  // lexical_only: skip vector entirely when weight is 0
+  const skipVector = semanticWeight <= 0.001;
+  // 1. FTS5 search (skipped in pure-semantic mode)
+  const ftsResults = skipFts ? [] : searchFts(db, query, limit * 3);
 
   // Build FTS rank map: symbolId -> rank position (0-based)
   const ftsRanked = new Map<number, { rank: number; result: FtsResult }>();
@@ -40,10 +61,10 @@ export async function hybridSearch(
     ftsRanked.set(ftsResults[i].symbolId, { rank: i, result: ftsResults[i] });
   }
 
-  // 2. Vector search (if available)
+  // 2. Vector search (if available, and not running in pure-lexical mode)
   const vectorRanked = new Map<number, number>();
 
-  if (vectorStore && embeddingService) {
+  if (!skipVector && vectorStore && embeddingService) {
     try {
       const queryEmbedding = await embeddingService.embed(query);
       if (queryEmbedding.length > 0) {
@@ -57,7 +78,8 @@ export async function hybridSearch(
     }
   }
 
-  // 3. RRF fusion
+  // 3. Weighted RRF fusion. Each ranker contributes (weight × 1 / (k + rank)).
+  // weight=0.5 for both reproduces the historical balanced fusion exactly (up to a constant).
   const allIds = new Set([...ftsRanked.keys(), ...vectorRanked.keys()]);
   const fused: HybridSearchResult[] = [];
 
@@ -66,12 +88,12 @@ export async function hybridSearch(
 
     const ftsEntry = ftsRanked.get(id);
     if (ftsEntry !== undefined) {
-      score += 1 / (RRF_K + ftsEntry.rank);
+      score += lexicalWeight * (1 / (RRF_K + ftsEntry.rank));
     }
 
     const vecRank = vectorRanked.get(id);
     if (vecRank !== undefined) {
-      score += 1 / (RRF_K + vecRank);
+      score += semanticWeight * (1 / (RRF_K + vecRank));
     }
 
     // We need name/fqn/kind/fileId — get from FTS if available, else look up

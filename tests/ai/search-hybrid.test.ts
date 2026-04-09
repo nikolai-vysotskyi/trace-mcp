@@ -126,4 +126,50 @@ describe('Hybrid AI search', () => {
     // Vector search always finds nearest neighbors — we just verify it doesn't crash
     expect(hybrid.search_mode).toBe('hybrid_ai');
   });
+
+  it('semantic="off" forces FTS even when AI is configured', async () => {
+    const result = await search(
+      store, 'add', {}, 10, 0,
+      { vectorStore, embeddingService },
+      undefined,
+      { semantic: 'off' },
+    );
+    expect(result.search_mode).toBe('fts');
+  });
+
+  it('semantic="only" returns hybrid_ai mode and works on nonsense queries', async () => {
+    const result = await search(
+      store, 'zzzznonexistent999', {}, 10, 0,
+      { vectorStore, embeddingService },
+      undefined,
+      { semantic: 'only' },
+    );
+    // Vector-only mode finds nearest neighbors regardless of FTS hits
+    expect(result.search_mode).toBe('hybrid_ai');
+  });
+
+  it('semantic_weight=0 reproduces FTS-only ordering through the hybrid path', async () => {
+    const ftsOnly = await search(store, 'User', {}, 10, 0);
+    const weightedZero = await search(
+      store, 'User', {}, 10, 0,
+      { vectorStore, embeddingService },
+      undefined,
+      { semantic: 'on', semanticWeight: 0 },
+    );
+    // Same top result — the lexical signal dominates entirely
+    expect(weightedZero.items.length).toBeGreaterThan(0);
+    if (ftsOnly.items.length > 0 && weightedZero.items.length > 0) {
+      expect(weightedZero.items[0].symbol.symbol_id).toBe(ftsOnly.items[0].symbol.symbol_id);
+    }
+  });
+
+  it('semantic="auto" with no AI configured falls back to FTS', async () => {
+    const result = await search(
+      store, 'User', {}, 10, 0,
+      undefined,
+      undefined,
+      { semantic: 'auto' },
+    );
+    expect(result.search_mode).toBe('fts');
+  });
 });

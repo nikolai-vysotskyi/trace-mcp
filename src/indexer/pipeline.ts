@@ -13,6 +13,7 @@ import { validatePath } from '../utils/security.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
+import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
 import { FilePersister } from './file-persister.js';
@@ -151,6 +152,7 @@ export class IndexingPipeline {
       this._pendingImports.clear();
       this._changedFileIds.clear();
       invalidatePageRankCache();
+      invalidateSearchCache();
     }
 
     if (!this._isIncremental && result.indexed > 0) {
