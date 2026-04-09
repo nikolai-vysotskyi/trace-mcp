@@ -452,6 +452,64 @@ export class CssLanguagePlugin implements LanguagePlugin {
       }
     }
 
+    // --- SCSS/SASS @function definitions ---
+    if (ext === '.scss' || ext === '.sass') {
+      const funcRe = /@function\s+([a-zA-Z_][a-zA-Z0-9_-]*)\s*\(/gm;
+      while ((m = funcRe.exec(source)) !== null) {
+        const name = m[1];
+        symbols.push({
+          symbolId: `${filePath}::@function:${name}#function`,
+          name: `@function ${name}`,
+          kind: 'function',
+          byteStart: m.index,
+          byteEnd: m.index + m[0].length,
+          lineStart: lineAt(source, m.index),
+          lineEnd: lineAt(source, m.index),
+          metadata: { scssFunction: true },
+        });
+      }
+    }
+
+    // --- SCSS/SASS %placeholder selectors (extend targets) ---
+    if (ext === '.scss' || ext === '.sass') {
+      // Match both brace-style (.scss) and indented style (.sass) placeholders
+      const placeholderRe = /^[ \t]*(%[a-zA-Z_][a-zA-Z0-9_-]*)[ \t]*(?:\{|$)/gm;
+      const seenPlaceholders = new Set<string>();
+      while ((m = placeholderRe.exec(source)) !== null) {
+        const name = m[1];
+        if (seenPlaceholders.has(name)) continue;
+        seenPlaceholders.add(name);
+        symbols.push({
+          symbolId: `${filePath}::${name}#variable`,
+          name,
+          kind: 'variable',
+          byteStart: m.index,
+          byteEnd: m.index + m[0].length,
+          lineStart: lineAt(source, m.index),
+          lineEnd: lineAt(source, m.index),
+          metadata: { scssPlaceholder: true },
+        });
+      }
+
+      // @extend %placeholder / @extend .class → imports edges (enables find_usages)
+      const extendRe = /@extend\s+([%.]?[a-zA-Z_][a-zA-Z0-9_-]*)/gm;
+      while ((m = extendRe.exec(source)) !== null) {
+        edges.push({
+          edgeType: 'imports',
+          metadata: { module: m[1], kind: 'scss-extend' },
+        });
+      }
+
+      // @include mixin-name → calls edges (enables get_change_impact on mixins)
+      const includeRe = /@include\s+([a-zA-Z_][a-zA-Z0-9_-]*)/gm;
+      while ((m = includeRe.exec(source)) !== null) {
+        edges.push({
+          edgeType: 'calls',
+          metadata: { module: `@mixin ${m[1]}`, kind: 'scss-include' },
+        });
+      }
+    }
+
     // --- @keyframes ---
     const keyframesRe = /@keyframes\s+([a-zA-Z_][a-zA-Z0-9_-]*)/gm;
     while ((m = keyframesRe.exec(source)) !== null) {

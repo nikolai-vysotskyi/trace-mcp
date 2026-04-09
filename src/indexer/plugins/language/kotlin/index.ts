@@ -101,6 +101,7 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
     filePath: string,
     packageName: string | undefined,
     symbols: RawSymbol[],
+    parentName?: string,
   ): void {
     const name = getNodeName(node);
     if (!name) return;
@@ -108,7 +109,7 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
     const classKind = detectClassKind(node);
     const kind: SymbolKind = classKind;
     const fqnParts = packageName ? [packageName, name] : [name];
-    const symbolId = makeSymbolId(filePath, name, kind);
+    const symbolId = makeSymbolId(filePath, name, kind, parentName);
     const modifiers = extractModifiers(node);
     const annotations = extractAnnotations(node);
     const heritage = extractHeritage(node);
@@ -149,12 +150,14 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
         symbols.push(...extractEnumEntries(body, filePath, name, symbolId));
       }
 
-      // Nested classes/objects
+      // Nested classes/objects — pass parent name so symbolIds don't collide with
+      // same-named top-level declarations (e.g. both `class Outer { class Inner }`
+      // and `class Inner` at the top level must get distinct symbolIds).
       for (const inner of body.namedChildren) {
         if (inner.type === 'class_declaration') {
-          this.extractClassDeclaration(inner, filePath, packageName, symbols);
+          this.extractClassDeclaration(inner, filePath, packageName, symbols, name);
         } else if (inner.type === 'object_declaration') {
-          this.extractObjectDeclaration(inner, filePath, packageName, symbols);
+          this.extractObjectDeclaration(inner, filePath, packageName, symbols, name);
         }
       }
     }
@@ -165,12 +168,13 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
     filePath: string,
     packageName: string | undefined,
     symbols: RawSymbol[],
+    parentName?: string,
   ): void {
     const name = getNodeName(node);
     if (!name) return;
 
     const fqnParts = packageName ? [packageName, name] : [name];
-    const symbolId = makeSymbolId(filePath, name, 'class');
+    const symbolId = makeSymbolId(filePath, name, 'class', parentName);
     const modifiers = extractModifiers(node);
     const annotations = extractAnnotations(node);
     const heritage = extractHeritage(node);
@@ -203,9 +207,9 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
       // Nested classes/objects
       for (const inner of body.namedChildren) {
         if (inner.type === 'class_declaration') {
-          this.extractClassDeclaration(inner, filePath, packageName, symbols);
+          this.extractClassDeclaration(inner, filePath, packageName, symbols, name);
         } else if (inner.type === 'object_declaration') {
-          this.extractObjectDeclaration(inner, filePath, packageName, symbols);
+          this.extractObjectDeclaration(inner, filePath, packageName, symbols, name);
         }
       }
     }

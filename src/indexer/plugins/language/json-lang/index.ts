@@ -136,9 +136,10 @@ type JsonDialect =
   | 'nest-cli'
   | 'angular'
   | 'composer'
+  | 'openapi'
   | 'generic';
 
-function detectDialect(filePath: string): JsonDialect {
+function detectDialect(filePath: string, root?: TSNode): JsonDialect {
   const fn = filePath.toLowerCase().replace(/\\/g, '/');
   const baseName = fn.split('/').pop() ?? '';
 
@@ -154,6 +155,23 @@ function detectDialect(filePath: string): JsonDialect {
   if (baseName === 'nest-cli.json') return 'nest-cli';
   if (baseName === 'angular.json') return 'angular';
   if (baseName === 'composer.json') return 'composer';
+
+  // OpenAPI / Swagger — filename heuristics
+  if (
+    baseName === 'openapi.json' ||
+    baseName === 'swagger.json' ||
+    baseName.endsWith('.openapi.json') ||
+    baseName.endsWith('-openapi.json') ||
+    baseName.endsWith('.swagger.json')
+  ) {
+    return 'openapi';
+  }
+
+  // Content-based detection: top-level `openapi` or `swagger` key
+  if (root) {
+    const entries = getObjectEntries(root);
+    if (entries.has('openapi') || entries.has('swagger')) return 'openapi';
+  }
 
   return 'generic';
 }
@@ -455,6 +473,121 @@ function extractComposer(root: TSNode, add: AddFn, edges: RawEdge[]): void {
   }
 }
 
+function extractOpenApiJson(root: TSNode, add: AddFn, edges: RawEdge[]): void {
+  const entries = getObjectEntries(root);
+
+  // Paths → endpoints + operationIds
+  const pathsEntry = entries.get('paths');
+  if (pathsEntry && pathsEntry.valueNode.type === 'object') {
+    const methods = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head']);
+    for (const pathChild of pathsEntry.valueNode.namedChildren) {
+      if (pathChild.type !== 'pair') continue;
+      const pathName = getStringText(pathChild.childForFieldName('key'));
+      const pathValue = pathChild.childForFieldName('value');
+      if (!pathName || !pathValue || pathValue.type !== 'object') continue;
+
+      for (const opChild of pathValue.namedChildren) {
+        if (opChild.type !== 'pair') continue;
+        const method = getStringText(opChild.childForFieldName('key'))?.toLowerCase();
+        const opValue = opChild.childForFieldName('value');
+        if (!method || !methods.has(method) || !opValue || opValue.type !== 'object') continue;
+
+        const opEntries = getObjectEntries(opValue);
+        const opIdNode = opEntries.get('operationId');
+        const operationId = opIdNode?.valueNode.type === 'string' ? getStringText(opIdNode.valueNode) : undefined;
+        const summaryNode = opEntries.get('summary');
+        const summary = summaryNode?.valueNode.type === 'string' ? getStringText(summaryNode.valueNode) : undefined;
+        const tagsNode = opEntries.get('tags');
+        const tags = tagsNode?.valueNode.type === 'array' ? getArrayStrings(tagsNode.valueNode) : [];
+
+        const meta: Record<string, unknown> = {
+          jsonKind: 'endpoint',
+          method: method.toUpperCase(),
+          path: pathName,
+        };
+        if (operationId) meta.operationId = operationId;
+        if (summary) meta.summary = summary;
+        if (tags.length > 0) meta.tags = tags;
+
+        add(`${method.toUpperCase()} ${pathName}`, 'function', opChild, meta);
+
+        if (operationId) {
+          add(operationId, 'function', opChild, {
+            jsonKind: 'operationId',
+            method: method.toUpperCase(),
+            path: pathName,
+            tags: tags.length > 0 ? tags : undefined,
+          });
+        }
+
+        collectJsonRefs(opValue, edges);
+      }
+    }
+  }
+
+  // components.schemas / Swagger 2.0 definitions
+  const componentsEntry = entries.get('components');
+  if (componentsEntry && componentsEntry.valueNode.type === 'object') {
+    const compEntries = getObjectEntries(componentsEntry.valueNode);
+    const schemasEntry = compEntries.get('schemas');
+    if (schemasEntry && schemasEntry.valueNode.type === 'object') {
+      extractOpenApiSchemas(schemasEntry.valueNode, add, edges);
+    }
+  }
+  const definitionsEntry = entries.get('definitions');
+  if (definitionsEntry && definitionsEntry.valueNode.type === 'object') {
+    extractOpenApiSchemas(definitionsEntry.valueNode, add, edges);
+  }
+}
+
+function extractOpenApiSchemas(schemasObj: TSNode, add: AddFn, edges: RawEdge[]): void {
+  for (const child of schemasObj.namedChildren) {
+    if (child.type !== 'pair') continue;
+    const name = getStringText(child.childForFieldName('key'));
+    if (!name) continue;
+    add(name, 'type', child, { jsonKind: 'schema' });
+    const value = child.childForFieldName('value');
+    if (value && (value.type === 'object' || value.type === 'array')) {
+      collectJsonRefs(value, edges, name);
+    }
+  }
+}
+
+/**
+ * Walk a JSON value tree collecting `$ref` strings as `imports` edges.
+ * Mirrors the YAML implementation for OpenAPI JSON specs.
+ */
+function collectJsonRefs(node: TSNode, edges: RawEdge[], from?: string): void {
+  if (node.type === 'object') {
+    for (const child of node.namedChildren) {
+      if (child.type !== 'pair') continue;
+      const key = getStringText(child.childForFieldName('key'));
+      const value = child.childForFieldName('value');
+      if (!value) continue;
+      if (key === '$ref' && value.type === 'string') {
+        const ref = getStringText(value);
+        if (ref) {
+          const m = ref.match(/\/([^/]+)$/);
+          const target = m ? m[1] : ref;
+          const meta: Record<string, unknown> = { module: target, ref, dialect: 'openapi' };
+          if (from) meta.from = from;
+          edges.push({ edgeType: 'imports', metadata: meta });
+        }
+        continue;
+      }
+      if (value.type === 'object' || value.type === 'array') {
+        collectJsonRefs(value, edges, from);
+      }
+    }
+  } else if (node.type === 'array') {
+    for (const child of node.namedChildren) {
+      if (child.type === 'object' || child.type === 'array') {
+        collectJsonRefs(child, edges, from);
+      }
+    }
+  }
+}
+
 function extractGenericJson(root: TSNode, add: AddFn): void {
   const entries = getObjectEntries(root);
   for (const [key, entry] of entries) {
@@ -525,7 +658,7 @@ export class JsonLanguagePlugin implements LanguagePlugin {
         });
       };
 
-      const dialect = detectDialect(filePath);
+      const dialect = detectDialect(filePath, rootObject);
       const warnings: string[] = [];
 
       if (hasError) {
@@ -565,6 +698,9 @@ export class JsonLanguagePlugin implements LanguagePlugin {
           break;
         case 'composer':
           extractComposer(rootObject, add, edges);
+          break;
+        case 'openapi':
+          extractOpenApiJson(rootObject, add, edges);
           break;
         case 'generic':
         default:

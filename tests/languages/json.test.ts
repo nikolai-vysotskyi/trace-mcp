@@ -180,4 +180,72 @@ describe('JsonLanguagePlugin', () => {
       expect(r.symbols.some(s => s.name === 'files.autoSave' && s.kind === 'constant')).toBe(true);
     });
   });
+
+  // ── OpenAPI / Swagger ──
+
+  describe('openapi', () => {
+    it('detects via filename and extracts paths/operationIds/schemas/$refs', async () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'My API' },
+        paths: {
+          '/users/{id}': {
+            get: {
+              operationId: 'getUserById',
+              summary: 'Fetch user',
+              tags: ['users', 'public'],
+              responses: {
+                '200': {
+                  content: {
+                    'application/json': {
+                      schema: { $ref: '#/components/schemas/User' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            User: {
+              type: 'object',
+              properties: {
+                profile: { $ref: '#/components/schemas/Profile' },
+              },
+            },
+            Profile: { type: 'object' },
+          },
+        },
+      };
+      const r = await parse(JSON.stringify(spec), 'openapi.json');
+
+      expect(r.metadata?.jsonDialect).toBe('openapi');
+      expect(r.symbols.some(s => s.name === 'GET /users/{id}' && s.kind === 'function')).toBe(true);
+
+      const opSym = r.symbols.find(s => s.name === 'getUserById');
+      expect(opSym).toBeDefined();
+      expect(opSym?.metadata?.jsonKind).toBe('operationId');
+
+      const endpoint = r.symbols.find(s => s.name === 'GET /users/{id}');
+      expect(endpoint?.metadata?.operationId).toBe('getUserById');
+      expect(endpoint?.metadata?.tags).toEqual(['users', 'public']);
+
+      expect(r.symbols.some(s => s.name === 'User' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some(s => s.name === 'Profile' && s.kind === 'type')).toBe(true);
+
+      expect(r.edges?.some(e =>
+        e.edgeType === 'imports' && (e.metadata as any)?.module === 'User' && (e.metadata as any)?.dialect === 'openapi'
+      )).toBe(true);
+      expect(r.edges?.some(e =>
+        e.edgeType === 'imports' && (e.metadata as any)?.module === 'Profile' && (e.metadata as any)?.from === 'User'
+      )).toBe(true);
+    });
+
+    it('detects via top-level openapi key when filename is unrelated', async () => {
+      const spec = { openapi: '3.0.0', paths: {} };
+      const r = await parse(JSON.stringify(spec), 'api/spec.json');
+      expect(r.metadata?.jsonDialect).toBe('openapi');
+    });
+  });
 });

@@ -17,6 +17,13 @@ import type {
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import { extractClassMembers } from './dart-members.js';
+import {
+  extractImportEdge,
+  extractExportEdge,
+  extractPartEdge,
+  extractPartOfEdge,
+} from './dart-edges.js';
 
 /* ── Tree-sitter helpers ─────────────────────────────────────────────────── */
 
@@ -268,17 +275,17 @@ export class DartLanguagePlugin implements LanguagePlugin {
           break;
         case 'import_specification':
         case 'import_directive':
-          this.extractImportEdge(node, edges);
+          extractImportEdge(node, edges);
           break;
         case 'export_specification':
         case 'export_directive':
-          this.extractExportEdge(node, edges);
+          extractExportEdge(node, edges);
           break;
         case 'part_directive':
-          this.extractPartEdge(node, edges);
+          extractPartEdge(node, edges);
           break;
         case 'part_of_directive':
-          this.extractPartOfEdge(node, edges);
+          extractPartOfEdge(node, edges);
           break;
         case 'declaration':
           this.extractDeclarationNode(node, filePath, symbols);
@@ -336,14 +343,14 @@ export class DartLanguagePlugin implements LanguagePlugin {
           break;
         case 'import_specification':
         case 'import_directive':
-          this.extractImportEdge(child, edges);
+          extractImportEdge(child, edges);
           break;
         case 'export_specification':
         case 'export_directive':
-          this.extractExportEdge(child, edges);
+          extractExportEdge(child, edges);
           break;
         case 'part_directive':
-          this.extractPartEdge(child, edges);
+          extractPartEdge(child, edges);
           break;
         default:
           this.extractDeclarationNode(child, filePath, symbols);
@@ -438,7 +445,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
 
     const body = this.findChildByType(node, 'class_body');
     if (body) {
-      this.extractClassMembers(body, filePath, name, symbolId, symbols);
+      extractClassMembers(body, filePath, name, symbolId, symbols);
     }
   }
 
@@ -472,7 +479,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
 
     const body = this.findChildByType(node, 'class_body', 'mixin_body');
     if (body) {
-      this.extractClassMembers(body, filePath, name, symbolId, symbols);
+      extractClassMembers(body, filePath, name, symbolId, symbols);
     }
   }
 
@@ -504,7 +511,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
 
     const body = this.findChildByType(node, 'extension_body', 'class_body');
     if (body) {
-      this.extractClassMembers(body, filePath, name, symbolId, symbols);
+      extractClassMembers(body, filePath, name, symbolId, symbols);
     }
   }
 
@@ -531,7 +538,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
 
     const body = this.findChildByType(node, 'extension_type_body', 'class_body');
     if (body) {
-      this.extractClassMembers(body, filePath, name, symbolId, symbols);
+      extractClassMembers(body, filePath, name, symbolId, symbols);
     }
   }
 
@@ -573,7 +580,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
           }
         }
       }
-      this.extractClassMembers(body, filePath, name, symbolId, symbols);
+      extractClassMembers(body, filePath, name, symbolId, symbols);
     }
   }
 
@@ -712,338 +719,4 @@ export class DartLanguagePlugin implements LanguagePlugin {
     });
   }
 
-  /* ── Class / mixin / extension body members ──────────────────────────── */
-
-  private extractClassMembers(
-    body: TSNode,
-    filePath: string,
-    parentName: string,
-    parentSymbolId: string,
-    symbols: RawSymbol[],
-  ): void {
-    for (const child of body.namedChildren) {
-      switch (child.type) {
-        case 'method_signature':
-        case 'function_definition':
-        case 'function_signature':
-          this.extractMethod(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'getter_signature':
-          this.extractMemberGetter(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'setter_signature':
-          this.extractMemberSetter(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'constructor_signature':
-          this.extractConstructor(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'factory_constructor_signature':
-          this.extractFactoryConstructor(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'constant_declaration':
-        case 'initialized_variable_definition':
-          this.extractMemberVariable(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'declaration':
-          this.extractMemberDeclaration(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        default:
-          if (child.namedChildren.length > 0) {
-            this.extractMemberDeclaration(child, filePath, parentName, parentSymbolId, symbols);
-          }
-          break;
-      }
-    }
-  }
-
-  /** Handle wrapped declarations inside class bodies. */
-  private extractMemberDeclaration(
-    node: TSNode,
-    filePath: string,
-    parentName: string,
-    parentSymbolId: string,
-    symbols: RawSymbol[],
-  ): void {
-    const text = node.text.trimStart();
-
-    if (text.match(/^(?:(?:static|late|external|const|final|var|@\w+)\s+)/)) {
-      this.extractMemberVariable(node, filePath, parentName, parentSymbolId, symbols);
-      return;
-    }
-
-    for (const child of node.namedChildren) {
-      switch (child.type) {
-        case 'method_signature':
-        case 'function_definition':
-        case 'function_signature':
-          this.extractMethod(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'getter_signature':
-          this.extractMemberGetter(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'setter_signature':
-          this.extractMemberSetter(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'constructor_signature':
-          this.extractConstructor(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-        case 'factory_constructor_signature':
-          this.extractFactoryConstructor(child, filePath, parentName, parentSymbolId, symbols);
-          break;
-      }
-    }
-  }
-
-  private extractMethod(
-    node: TSNode,
-    filePath: string,
-    parentName: string,
-    parentSymbolId: string,
-    symbols: RawSymbol[],
-  ): void {
-    const name = getNodeName(node);
-    if (!name) return;
-
-    const meta: Record<string, unknown> = {};
-    const text = node.text.trimStart();
-    if (text.startsWith('static ') || text.includes(' static ')) meta.static = true;
-    if (text.startsWith('abstract ') || text.includes(' abstract ')) meta.abstract = true;
-    if (text.startsWith('override ') || text.includes('@override')) meta.override = true;
-
-    symbols.push({
-      symbolId: makeSymbolId(filePath, name, 'method', parentName),
-      name,
-      kind: 'method',
-      parentSymbolId,
-      signature: extractSignature(node),
-      byteStart: node.startIndex,
-      byteEnd: node.endIndex,
-      lineStart: node.startPosition.row + 1,
-      lineEnd: node.endPosition.row + 1,
-      metadata: Object.keys(meta).length > 0 ? meta : undefined,
-    });
-  }
-
-  private extractMemberGetter(
-    node: TSNode,
-    filePath: string,
-    parentName: string,
-    parentSymbolId: string,
-    symbols: RawSymbol[],
-  ): void {
-    const name = getNodeName(node) ?? this.extractGetterName(node);
-    if (!name) return;
-
-    symbols.push({
-      symbolId: makeSymbolId(filePath, name, 'property', parentName),
-      name,
-      kind: 'property',
-      parentSymbolId,
-      signature: extractSignature(node),
-      byteStart: node.startIndex,
-      byteEnd: node.endIndex,
-      lineStart: node.startPosition.row + 1,
-      lineEnd: node.endPosition.row + 1,
-      metadata: { dartKind: 'getter' },
-    });
-  }
-
-  private extractMemberSetter(
-    node: TSNode,
-    filePath: string,
-    parentName: string,
-    parentSymbolId: string,
-    symbols: RawSymbol[],
-  ): void {
-    const name = getNodeName(node) ?? this.extractSetterName(node);
-    if (!name) return;
-
-    symbols.push({
-      symbolId: makeSymbolId(filePath, name, 'property', parentName),
-      name,
-      kind: 'property',
-      parentSymbolId,
-      signature: extractSignature(node),
-      byteStart: node.startIndex,
-      byteEnd: node.endIndex,
-      lineStart: node.startPosition.row + 1,
-      lineEnd: node.endPosition.row + 1,
-      metadata: { dartKind: 'setter' },
-    });
-  }
-
-  private extractConstructor(
-    node: TSNode,
-    filePath: string,
-    parentName: string,
-    parentSymbolId: string,
-    symbols: RawSymbol[],
-  ): void {
-    const name = getNodeName(node) ?? parentName;
-
-    symbols.push({
-      symbolId: makeSymbolId(filePath, name, 'method', parentName),
-      name,
-      kind: 'method',
-      parentSymbolId,
-      signature: extractSignature(node),
-      byteStart: node.startIndex,
-      byteEnd: node.endIndex,
-      lineStart: node.startPosition.row + 1,
-      lineEnd: node.endPosition.row + 1,
-      metadata: { dartKind: 'constructor' },
-    });
-  }
-
-  private extractFactoryConstructor(
-    node: TSNode,
-    filePath: string,
-    parentName: string,
-    parentSymbolId: string,
-    symbols: RawSymbol[],
-  ): void {
-    const name = getNodeName(node) ?? parentName;
-
-    symbols.push({
-      symbolId: makeSymbolId(filePath, name, 'method', parentName),
-      name,
-      kind: 'method',
-      parentSymbolId,
-      signature: extractSignature(node),
-      byteStart: node.startIndex,
-      byteEnd: node.endIndex,
-      lineStart: node.startPosition.row + 1,
-      lineEnd: node.endPosition.row + 1,
-      metadata: { dartKind: 'factory' },
-    });
-  }
-
-  private extractMemberVariable(
-    node: TSNode,
-    filePath: string,
-    parentName: string,
-    parentSymbolId: string,
-    symbols: RawSymbol[],
-  ): void {
-    const text = node.text.trimStart();
-    const isConst = text.match(/^(?:static\s+)?const\s/) !== null;
-    const kind: SymbolKind = isConst ? 'constant' : 'property';
-
-    let name = getNodeName(node);
-    if (!name) {
-      const m = text.match(
-        /^(?:(?:static|late|external|const|final|var|@\w+)\s+)*(?:[\w<>,?\s]+\s+)?(\w+)\s*[=;]/,
-      );
-      name = m?.[1];
-    }
-    if (!name) {
-      for (const child of node.namedChildren) {
-        if (child.type === 'identifier') {
-          name = child.text;
-          break;
-        }
-      }
-    }
-    if (!name) return;
-
-    symbols.push({
-      symbolId: makeSymbolId(filePath, name, kind, parentName),
-      name,
-      kind,
-      parentSymbolId,
-      signature: text.split('\n')[0].trim().slice(0, 120),
-      byteStart: node.startIndex,
-      byteEnd: node.endIndex,
-      lineStart: node.startPosition.row + 1,
-      lineEnd: node.endPosition.row + 1,
-    });
-  }
-
-  /* ── Import / Export / Part edges ────────────────────────────────────── */
-
-  private extractImportEdge(node: TSNode, edges: RawEdge[]): void {
-    const uri = this.extractUri(node);
-    if (!uri) return;
-
-    edges.push({
-      edgeType: 'imports',
-      metadata: { module: uri },
-    });
-  }
-
-  private extractExportEdge(node: TSNode, edges: RawEdge[]): void {
-    const uri = this.extractUri(node);
-    if (!uri) return;
-
-    edges.push({
-      edgeType: 'imports',
-      metadata: { module: uri, reexport: true },
-    });
-  }
-
-  private extractPartEdge(node: TSNode, edges: RawEdge[]): void {
-    const uri = this.extractUri(node);
-    if (!uri) return;
-
-    edges.push({
-      edgeType: 'imports',
-      metadata: { module: uri, part: true },
-    });
-  }
-
-  private extractPartOfEdge(node: TSNode, edges: RawEdge[]): void {
-    const uri = this.extractUri(node);
-    if (!uri) return;
-
-    edges.push({
-      edgeType: 'imports',
-      metadata: { module: uri, partOf: true },
-    });
-  }
-
-  /** Extract a URI string from an import/export/part directive node. */
-  private extractUri(node: TSNode): string | undefined {
-    for (const child of node.namedChildren) {
-      if (child.type === 'configurable_uri' || child.type === 'uri') {
-        for (const inner of child.namedChildren) {
-          if (inner.type === 'string_literal' || inner.type === 'string') {
-            return inner.text.replace(/^['"]|['"]$/g, '');
-          }
-        }
-        const text = child.text.replace(/^['"]|['"]$/g, '');
-        if (text && text !== child.type) return text;
-      }
-      if (child.type === 'string_literal' || child.type === 'string') {
-        return child.text.replace(/^['"]|['"]$/g, '');
-      }
-    }
-    const m = node.text.match(/['"]([^'"]+)['"]/);
-    return m?.[1];
-  }
-
-  /* ── Utility ─────────────────────────────────────────────────────────── */
-
-  /** Find a direct child by type (tries multiple type names). */
-  private findChildByType(node: TSNode, ...types: string[]): TSNode | null {
-    for (const child of node.namedChildren) {
-      if (types.includes(child.type)) return child;
-    }
-    for (const type of types) {
-      const byField = node.childForFieldName(type);
-      if (byField) return byField;
-    }
-    return null;
-  }
-
-  /** Extract getter name from text when the AST doesn't have a 'name' field. */
-  private extractGetterName(node: TSNode): string | undefined {
-    const m = node.text.match(/get\s+(\w+)/);
-    return m?.[1];
-  }
-
-  /** Extract setter name from text when the AST doesn't have a 'name' field. */
-  private extractSetterName(node: TSNode): string | undefined {
-    const m = node.text.match(/set\s+(\w+)/);
-    return m?.[1];
-  }
 }

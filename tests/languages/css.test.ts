@@ -71,6 +71,35 @@ describe('CssLanguagePlugin', () => {
       expect(r.edges).toHaveLength(2);
     });
 
+    it('extracts @function definitions', async () => {
+      const r = await parse('@function rem($px) { @return $px / 16px * 1rem; }', 'funcs.scss');
+      const fn = r.symbols.find((s) => s.name === '@function rem');
+      expect(fn).toBeDefined();
+      expect(fn?.kind).toBe('function');
+      expect(fn?.metadata?.scssFunction).toBe(true);
+    });
+
+    it('extracts %placeholder selectors', async () => {
+      const r = await parse('%icon {\n  display: inline-block;\n}', 'placeholders.scss');
+      const ph = r.symbols.find((s) => s.name === '%icon');
+      expect(ph).toBeDefined();
+      expect(ph?.metadata?.scssPlaceholder).toBe(true);
+    });
+
+    it('emits imports edge for @extend', async () => {
+      const r = await parse('.btn { @extend %base-btn; }', 'button.scss');
+      expect(r.edges?.some((e) =>
+        e.edgeType === 'imports' && (e.metadata as any)?.module === '%base-btn' && (e.metadata as any)?.kind === 'scss-extend'
+      )).toBe(true);
+    });
+
+    it('emits calls edge for @include', async () => {
+      const r = await parse('.card { @include shadow(2px); }', 'card.scss');
+      expect(r.edges?.some((e) =>
+        e.edgeType === 'calls' && (e.metadata as any)?.module === '@mixin shadow'
+      )).toBe(true);
+    });
+
     it('returns language scss', async () => {
       expect((await parse('$x: 1;', 'a.scss')).language).toBe('scss');
     });
@@ -81,6 +110,12 @@ describe('CssLanguagePlugin', () => {
       const r = await parse('$bg-color: white', 'theme.sass');
       expect(r.symbols.some((s) => s.name === '$bg-color')).toBe(true);
       expect(r.language).toBe('sass');
+    });
+
+    it('extracts @function and %placeholder in indented SASS', async () => {
+      const r = await parse('@function scale($n)\n  @return $n * 1rem\n\n%center\n  display: flex\n', 'theme.sass');
+      expect(r.symbols.some((s) => s.name === '@function scale')).toBe(true);
+      expect(r.symbols.some((s) => s.name === '%center')).toBe(true);
     });
   });
 

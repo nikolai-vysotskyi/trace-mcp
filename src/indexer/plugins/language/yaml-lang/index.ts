@@ -613,10 +613,45 @@ function extractOpenAPI(
       for (const mPair of methodMap.items) {
         if (!isPair(mPair)) continue;
         const method = pairKey(mPair)?.toLowerCase();
-        if (method && methods.includes(method)) {
-          const label = `${method.toUpperCase()} ${pathName}`;
-          add(label, 'function', pairStart(mPair), pairEnd(mPair), { yamlKind: 'endpoint', method: method.toUpperCase(), path: pathName });
+        if (!method || !methods.includes(method)) continue;
+        if (!isMap(mPair.value)) continue;
+
+        const opMap = mPair.value as YAMLMap;
+        const operationId = getMapScalar(opMap, 'operationId');
+        const summary = getMapScalar(opMap, 'summary');
+        const tagsSeq = getMapSeq(opMap, 'tags');
+        const tags: string[] = [];
+        if (tagsSeq) {
+          for (const t of tagsSeq.items) {
+            const tv = scalarVal(t);
+            if (tv) tags.push(tv);
+          }
         }
+
+        const meta: Record<string, unknown> = {
+          yamlKind: 'endpoint',
+          method: method.toUpperCase(),
+          path: pathName,
+        };
+        if (operationId) meta.operationId = operationId;
+        if (summary) meta.summary = summary;
+        if (tags.length > 0) meta.tags = tags;
+
+        const label = `${method.toUpperCase()} ${pathName}`;
+        add(label, 'function', pairStart(mPair), pairEnd(mPair), meta);
+
+        // operationId is what handler code references — make it findable by find_usages.
+        if (operationId) {
+          add(operationId, 'function', pairStart(mPair), pairEnd(mPair), {
+            yamlKind: 'operationId',
+            method: method.toUpperCase(),
+            path: pathName,
+            tags: tags.length > 0 ? tags : undefined,
+          });
+        }
+
+        // $ref edges from this operation (request/response schemas)
+        collectRefs(opMap, edges);
       }
     }
   }
@@ -625,19 +660,59 @@ function extractOpenAPI(
   const componentsMap = getMapMap(rootMap, 'components');
   if (componentsMap) {
     const schemasMap = getMapMap(componentsMap, 'schemas');
-    if (schemasMap) extractSchemas(schemasMap, add);
+    if (schemasMap) extractSchemas(schemasMap, edges, add);
   }
 
   // Swagger 2.0 definitions
   const definitionsMap = getMapMap(rootMap, 'definitions');
-  if (definitionsMap) extractSchemas(definitionsMap, add);
+  if (definitionsMap) extractSchemas(definitionsMap, edges, add);
 }
 
-function extractSchemas(schemasMap: YAMLMap, add: AddFn): void {
+function extractSchemas(schemasMap: YAMLMap, edges: RawEdge[], add: AddFn): void {
   for (const pair of schemasMap.items) {
     if (!isPair(pair)) continue;
     const schemaName = pairKey(pair);
-    if (schemaName) add(schemaName, 'type', pairStart(pair), pairEnd(pair), { yamlKind: 'schema' });
+    if (!schemaName) continue;
+    add(schemaName, 'type', pairStart(pair), pairEnd(pair), { yamlKind: 'schema' });
+    // Walk schema body for $ref dependencies (Schema → Schema imports edges).
+    if (isMap(pair.value) || isSeq(pair.value)) {
+      collectRefs(pair.value as YAMLMap | YAMLSeq, edges, schemaName);
+    }
+  }
+}
+
+/**
+ * Walk a YAML node tree collecting `$ref` strings as `imports` edges.
+ * Resolves `#/components/schemas/Foo` → module=`Foo` so find_usages
+ * can connect schema references back to schema symbols.
+ */
+function collectRefs(node: YAMLMap | YAMLSeq | YNode, edges: RawEdge[], from?: string): void {
+  if (!node) return;
+  if (isMap(node)) {
+    for (const pair of (node as YAMLMap).items) {
+      if (!isPair(pair)) continue;
+      const key = pairKey(pair);
+      if (key === '$ref') {
+        const ref = pairVal(pair);
+        if (ref) {
+          const m = ref.match(/\/([^/]+)$/);
+          const target = m ? m[1] : ref;
+          const meta: Record<string, unknown> = { module: target, ref, dialect: 'openapi' };
+          if (from) meta.from = from;
+          edges.push({ edgeType: 'imports', metadata: meta });
+        }
+        continue;
+      }
+      if (isMap(pair.value) || isSeq(pair.value)) {
+        collectRefs(pair.value as YAMLMap | YAMLSeq, edges, from);
+      }
+    }
+  } else if (isSeq(node)) {
+    for (const item of (node as YAMLSeq).items) {
+      if (isMap(item) || isSeq(item)) {
+        collectRefs(item as YAMLMap | YAMLSeq, edges, from);
+      }
+    }
   }
 }
 
