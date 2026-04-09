@@ -53,10 +53,7 @@ EOF
   exit 0
 }
 
-# Track denied reads — allow on second attempt (agent needs it for Edit)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "default"')
-DENY_DIR="/tmp/trace-mcp-guard-${SESSION_ID}"
-mkdir -p "$DENY_DIR" 2>/dev/null
 
 # Consultation markers: trace-mcp server writes these when get_outline/get_symbol/etc. are called.
 # If a file was already consulted via trace-mcp, allow Read immediately (agent needs full content for Edit).
@@ -147,25 +144,18 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
       exit 0
     fi
 
-    # If we already tracked this file this session (HAD_STATE=1), skip the
-    # first-time deny-marker cycle — the agent already "earned" the right to
-    # read it. This covers both: (a) mid-session re-reads, and (b) post-Edit
-    # re-reads where count was reset by mtime change.
+    # If we already tracked this file this session (HAD_STATE=1), skip first-time
+    # friction — the agent already "earned" the right to read it. Covers both
+    # (a) mid-session re-reads and (b) post-Edit re-reads (count reset by mtime change).
     if (( HAD_STATE == 1 )); then
       echo "$((PREV_COUNT + 1)):${CUR_MTIME}" > "$READ_STATE"
       exit 0
     fi
 
-    # First-time read of this file: deny on attempt #1, allow on retry.
-    DENY_MARKER="$DENY_DIR/$FILE_HASH"
-    if [[ -f "$DENY_MARKER" ]]; then
-      rm -f "$DENY_MARKER"
-      echo "1:${CUR_MTIME}" > "$READ_STATE"
-      exit 0
-    fi
-    touch "$DENY_MARKER"
-
-    REL_PATH=$(echo "$FILE_PATH" | sed "s|^$(pwd)/||")
+    # First-time read: write initial state (count=0) so the retry attempt (HAD_STATE=1)
+    # can allow without a separate deny-marker file.  Then deny with redirect.
+    echo "0:${CUR_MTIME}" > "$READ_STATE"
+    REL_PATH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
     deny \
       "Use trace-mcp for code reading — it returns only what you need, saving tokens." \
       "trace-mcp alternatives for ${REL_PATH}:\\n- get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" } — see file structure (signatures only)\\n- get_symbol { \\\"fqn\\\": \\\"SymbolName\\\" } — read one specific symbol\\n- search { \\\"query\\\": \\\"keyword\\\" } — find symbols by name\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — relevant code for a task\\nIf you need full file content before editing, retry Read — it will be allowed."

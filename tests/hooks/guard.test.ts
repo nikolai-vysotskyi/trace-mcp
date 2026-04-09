@@ -65,10 +65,7 @@ describe('trace-mcp-guard.sh', () => {
   afterEach(() => {
     // Clean up session-scoped guard state dirs
     const readsDir = path.join(TMP_BASE, `trace-mcp-reads-${sessionId}`);
-    const denyDir = path.join(TMP_BASE, `trace-mcp-guard-${sessionId}`);
-    for (const d of [readsDir, denyDir]) {
-      if (fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true });
-    }
+    if (fs.existsSync(readsDir)) fs.rmSync(readsDir, { recursive: true, force: true });
     if (fs.existsSync(projectDir)) {
       fs.rmSync(projectDir, { recursive: true, force: true });
     }
