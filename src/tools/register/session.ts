@@ -14,11 +14,13 @@ import { detectCoverage } from '../../analytics/tech-detector.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
 import { syncAnalytics } from '../../analytics/sync.js';
 import { registerPrompts } from '../../prompts/index.js';
+import { planTurn } from '../navigation/plan-turn.js';
 
 export function registerSessionTools(server: McpServer, ctx: MetaContext): void {
   const {
     store, registry, config, projectRoot, savings, journal,
     aiProvider, vectorStore, embeddingService, reranker,
+    has,
     j, jh,
     _originalTool, registeredToolNames, toolHandlers, presetName,
   } = ctx;
@@ -307,6 +309,35 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     async ({ max_sessions }) => {
       const resume = getSessionResume(projectRoot, max_sessions ?? 5);
       return { content: [{ type: 'text', text: jh('get_session_resume', resume) }] };
+    },
+  );
+
+  // --- Opening-move router (plan_turn) ---
+  _originalTool(
+    'plan_turn',
+    'Opening-move router for new tasks. Combines BM25/PageRank search + session journal (negative evidence + focus signals) + framework-aware insertion-point suggestions + change-risk + turn-budget advisor into ONE call. Returns verdict (exists/partial/missing/ambiguous), confidence, ranked targets with provenance, scaffold hints when missing, and recommended next tool calls. Call this FIRST on a new task to break the empty-result hallucination chain.',
+    {
+      task: z.string().min(1).max(512).describe('Natural-language task description (e.g. "add a webhook endpoint for stripe payments")'),
+      intent: z.enum(['bugfix', 'new_feature', 'refactor', 'understand']).optional().describe('Optional intent hint; auto-classified from task if omitted'),
+      max_targets: z.number().int().min(1).max(20).optional().describe('Cap on returned targets (default 5)'),
+      skip_risk: z.boolean().optional().describe('Skip change-risk assessment for the top target (default false)'),
+    },
+    async ({ task, intent, max_targets, skip_risk }) => {
+      const result = await planTurn(
+        {
+          store,
+          projectRoot,
+          journal,
+          savings,
+          registry,
+          has,
+          ai: config.ai?.enabled
+            ? { vectorStore, embeddingService, reranker }
+            : undefined,
+        },
+        { task, intent, maxTargets: max_targets, skipRisk: skip_risk },
+      );
+      return { content: [{ type: 'text', text: jh('plan_turn', result) }] };
     },
   );
 
