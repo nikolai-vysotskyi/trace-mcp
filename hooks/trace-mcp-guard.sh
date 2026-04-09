@@ -76,9 +76,12 @@ mkdir -p "$READS_DIR" 2>/dev/null || true
 # Max allowed reads of an unchanged code file before forcing get_symbol/get_outline.
 REPEAT_READ_LIMIT=2
 
-# Portable mtime (macOS / Linux).
+# Portable mtime (Linux: stat -c %Y; macOS/BSD: stat -f %m).
+# Linux order first: on Linux, `stat -f %m file` misparses %m as a second file
+# argument, outputting filesystem info to stdout before failing — which pollutes
+# the captured value when used in $(file_mtime).  Trying -c %Y first avoids that.
 file_mtime() {
-  stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
 }
 
 # --- Read ---
