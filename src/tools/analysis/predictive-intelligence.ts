@@ -14,6 +14,7 @@ import { validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { buildFileGraph, getCouplingMetrics, getPageRank, type CouplingResult, type PageRankResult } from './graph-analysis.js';
+import { classifyConfidence, type ConfidenceLevel, type Methodology } from '../shared/confidence.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -32,6 +33,8 @@ interface BugPrediction {
   file: string;
   score: number;
   risk: 'low' | 'medium' | 'high' | 'critical';
+  confidence_level: ConfidenceLevel;
+  signals_fired: number;
   factors: Array<{
     signal: string;
     raw_value: number;
@@ -46,7 +49,36 @@ interface BugPredictionResult {
   total_files_analyzed: number;
   snapshot_id: number | null;
   cached: boolean;
+  _methodology: Methodology;
 }
+
+/**
+ * A bug-prediction signal "fires" if its normalized value clears this threshold.
+ * 0.5 = signal is in the upper half of its possible range across the project.
+ * The count of fired signals drives confidence_level (independent of weighted score).
+ */
+const BUG_SIGNAL_FIRE_THRESHOLD = 0.5;
+
+const BUG_PREDICTION_METHODOLOGY: Methodology = {
+  algorithm: 'multi_signal_weighted_bug_prediction',
+  signals: [
+    'churn: rank-percentile of weekly commit frequency over the analysis window',
+    'fix_ratio: share of commits whose message indicates a bug fix',
+    'complexity: max cyclomatic complexity in the file, clamp-normalized to 20',
+    'coupling: instability metric I = Ce / (Ca + Ce) from import graph',
+    'pagerank: rank-percentile of file PageRank in the import graph',
+    'authors: distinct author count over the analysis window, clamp-normalized to 10',
+  ],
+  confidence_formula:
+    'score = Σ(weight × normalized_signal). confidence_level counts signals with normalized > 0.5: 1=low, 2=medium, 3=high, ≥4=multi_signal. risk is bucketed from raw score (low<0.3, medium<0.5, high<0.75, critical≥0.75).',
+  limitations: [
+    'fix_ratio depends on commit message conventions ("fix:", "bug:", etc.)',
+    'rank-percentile means score is relative to the rest of the project, not absolute',
+    'newly added files have churn ≈ 0 and may be under-reported',
+    'requires git history for churn / fix_ratio / authors signals',
+    'complexity uses max-per-file, so a single hot function can dominate',
+  ],
+};
 
 interface CoChangeAnomaly {
   file_a: string;
@@ -434,10 +466,15 @@ export function predictBugs(
 
     if (score < minScore) continue;
 
+    const signalsFired = [sChurn, sFixRatio, sComplexity, sCoupling, sPagerank, sAuthors]
+      .filter((v) => v > BUG_SIGNAL_FIRE_THRESHOLD).length;
+
     predictions.push({
       file,
       score: Math.round(score * 1000) / 1000,
       risk: riskLevel(score),
+      confidence_level: classifyConfidence(signalsFired, 6),
+      signals_fired: signalsFired,
       factors: [
         { signal: 'churn', raw_value: round(git?.churnPerWeek ?? 0), normalized: round(sChurn), weight: w.churn, contribution: round(w.churn * sChurn) },
         { signal: 'fix_ratio', raw_value: round(git?.fixRatio ?? 0), normalized: round(sFixRatio), weight: w.fix_ratio, contribution: round(w.fix_ratio * sFixRatio) },
@@ -460,6 +497,7 @@ export function predictBugs(
     total_files_analyzed: fileSet.size,
     snapshot_id: snapshotId,
     cached: false,
+    _methodology: BUG_PREDICTION_METHODOLOGY,
   });
 }
 
@@ -1002,15 +1040,22 @@ function getCachedBugPredictions(
     }>;
 
     return {
-      predictions: rows.map((r) => ({
-        file: r.file_path,
-        score: r.score,
-        risk: riskLevel(r.score),
-        factors: JSON.parse(r.factors || '[]'),
-      })),
+      predictions: rows.map((r) => {
+        const factors = JSON.parse(r.factors || '[]') as BugPrediction['factors'];
+        const signalsFired = factors.filter((f) => f.normalized > BUG_SIGNAL_FIRE_THRESHOLD).length;
+        return {
+          file: r.file_path,
+          score: r.score,
+          risk: riskLevel(r.score),
+          confidence_level: classifyConfidence(signalsFired, 6),
+          signals_fired: signalsFired,
+          factors,
+        };
+      }),
       total_files_analyzed: snapshotFull?.file_count ?? rows.length,
       snapshot_id: snapshot.id,
       cached: true,
+      _methodology: BUG_PREDICTION_METHODOLOGY,
     };
   } catch {
     return null;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
-import { getDeadCodeV2 } from '../../src/tools/refactoring/dead-code.js';
+import { getDeadCodeV2, getDeadCodeReachability } from '../../src/tools/refactoring/dead-code.js';
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
   return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
@@ -261,5 +261,192 @@ describe('getDeadCodeV2', () => {
     const names = result.dead_symbols.map((s) => s.name);
     expect(names).not.toContain('testHelper');
     expect(names).not.toContain('specHelper');
+  });
+
+  it('includes _methodology block on result', () => {
+    const result = getDeadCodeV2(store);
+    expect(result._methodology).toBeDefined();
+    expect(result._methodology.algorithm).toBe('multi_signal_export_analysis');
+    expect(result._methodology.signals).toHaveLength(3);
+    expect(result._methodology.confidence_formula).toMatch(/signals_fired/);
+  });
+
+  it('assigns confidence_level=multi_signal when all 3 signals fire', () => {
+    const fA = insertFile(store, 'src/a.ts');
+    insertExportedSymbol(store, fA, 'fullyDead');
+
+    const result = getDeadCodeV2(store);
+    expect(result.dead_symbols[0].confidence_level).toBe('multi_signal');
+  });
+
+  it('assigns confidence_level=medium when 2 of 3 signals fire', () => {
+    const fA = insertFile(store, 'src/a.ts');
+    const fB = insertFile(store, 'src/b.ts');
+    insertExportedSymbol(store, fA, 'partialDead');
+
+    const nodeA = store.getNodeId('file', fA)!;
+    const nodeB = store.getNodeId('file', fB)!;
+    insertEdge(store, nodeB, nodeA, 'esm_imports', { specifiers: ['partialDead'] });
+
+    const result = getDeadCodeV2(store, { threshold: 0.5 });
+    const item = result.dead_symbols.find((s) => s.name === 'partialDead')!;
+    expect(item.confidence_level).toBe('medium');
+  });
+
+  it('emits _warnings when decorator-driven framework is detected', () => {
+    const result = getDeadCodeV2(store, { detectedFrameworks: ['nestjs'] });
+    expect(result._warnings).toBeDefined();
+    expect(result._warnings![0]).toMatch(/nestjs/i);
+    expect(result._warnings![0]).toMatch(/decorators/i);
+  });
+
+  it('emits zero-import-specifier warning when import index is empty', () => {
+    // Force a symbol to exist so warning triggers
+    const fA = insertFile(store, 'src/a.ts');
+    insertExportedSymbol(store, fA, 'func');
+
+    const result = getDeadCodeV2(store); // no edges → importedNames is empty
+    expect(result._warnings).toBeDefined();
+    expect(result._warnings!.some((w) => /zero import specifiers/i.test(w))).toBe(true);
+  });
+
+  it('emits import-gap warning for languages without specifier tracking', () => {
+    // Insert a Go file with an exported symbol
+    const fGo = store.insertFile('src/main.go', 'go', 'hash_go', 100);
+    store.insertSymbol(fGo, {
+      symbolId: 'sym:HandleRequest',
+      name: 'HandleRequest',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 100,
+      metadata: { exported: true },
+    });
+
+    const result = getDeadCodeV2(store);
+    const gapWarning = result._warnings?.find((w) => /go/i.test(w) && /import/i.test(w));
+    expect(gapWarning).toBeDefined();
+    expect(gapWarning).toMatch(/reachability/i); // recommends reachability mode
+  });
+});
+
+describe('getDeadCodeReachability', () => {
+  let store: Store;
+
+  beforeEach(() => {
+    store = createTestStore();
+  });
+
+  it('reports all exports as dead when no entry points exist', () => {
+    const fA = insertFile(store, 'src/lib.ts');
+    insertExportedSymbol(store, fA, 'orphan');
+
+    const result = getDeadCodeReachability(store);
+    expect(result.mode).toBe('reachability');
+    expect(result.entry_points.total).toBe(0);
+    expect(result.dead_symbols.map((s) => s.name)).toContain('orphan');
+    expect(result._warnings?.[0]).toMatch(/no entry points/i);
+  });
+
+  it('marks symbol reachable from a test file as live', () => {
+    const fLib = insertFile(store, 'src/lib.ts');
+    const fTest = insertFile(store, 'tests/lib.test.ts');
+
+    const libSymId = insertExportedSymbol(store, fLib, 'usedByTest');
+    const libNode = store.getNodeId('symbol', libSymId)!;
+
+    const testSymId = store.insertSymbol(fTest, {
+      symbolId: 'sym:testCase',
+      name: 'testCase',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 50,
+      metadata: { exported: true },
+    });
+    const testNode = store.getNodeId('symbol', testSymId)!;
+
+    // The test calls usedByTest
+    insertEdge(store, testNode, libNode, 'calls');
+
+    const result = getDeadCodeReachability(store);
+    expect(result.entry_points.total).toBeGreaterThan(0);
+    expect(result.dead_symbols.map((s) => s.name)).not.toContain('usedByTest');
+  });
+
+  it('reports unreached exports even when other exports are live', () => {
+    const fLib = insertFile(store, 'src/lib.ts');
+    const fTest = insertFile(store, 'tests/lib.test.ts');
+
+    const liveSymId = insertExportedSymbol(store, fLib, 'live');
+    insertExportedSymbol(store, fLib, 'orphan');
+
+    const liveNode = store.getNodeId('symbol', liveSymId)!;
+    const testSymId = store.insertSymbol(fTest, {
+      symbolId: 'sym:t',
+      name: 't',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 50,
+      metadata: { exported: true },
+    });
+    const testNode = store.getNodeId('symbol', testSymId)!;
+    insertEdge(store, testNode, liveNode, 'calls');
+
+    const result = getDeadCodeReachability(store);
+    const names = result.dead_symbols.map((s) => s.name);
+    expect(names).toContain('orphan');
+    expect(names).not.toContain('live');
+  });
+
+  it('propagates reachability via file imports (esm_imports)', () => {
+    const fLib = insertFile(store, 'src/lib.ts');
+    const fTest = insertFile(store, 'tests/lib.test.ts');
+
+    insertExportedSymbol(store, fLib, 'reachedViaImport');
+
+    const fLibFileNode = store.getNodeId('file', fLib)!;
+    const fTestFileNode = store.getNodeId('file', fTest)!;
+    insertEdge(store, fTestFileNode, fLibFileNode, 'esm_imports', { specifiers: ['reachedViaImport'] });
+
+    const result = getDeadCodeReachability(store);
+    expect(result.dead_symbols.map((s) => s.name)).not.toContain('reachedViaImport');
+  });
+
+  it('includes _methodology block on result', () => {
+    const result = getDeadCodeReachability(store);
+    expect(result._methodology).toBeDefined();
+    expect(result._methodology.algorithm).toBe('forward_reachability_bfs');
+    expect(result._methodology.confidence_formula).toMatch(/binary/i);
+  });
+
+  it('emits warning for decorator-driven framework', () => {
+    const result = getDeadCodeReachability(store, { detectedFrameworks: ['laravel'] });
+    const hasFrameworkWarning = result._warnings?.some((w) => /laravel/i.test(w));
+    expect(hasFrameworkWarning).toBe(true);
+  });
+
+  it('honors manually-supplied entry points', () => {
+    const fEntry = insertFile(store, 'src/custom-entry.ts');
+    const fLib = insertFile(store, 'src/lib.ts');
+
+    const libSymId = insertExportedSymbol(store, fLib, 'fromCustomEntry');
+    const entrySymId = store.insertSymbol(fEntry, {
+      symbolId: 'sym:entry',
+      name: 'entry',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 50,
+      metadata: { exported: true },
+    });
+    const libNode = store.getNodeId('symbol', libSymId)!;
+    const entryNode = store.getNodeId('symbol', entrySymId)!;
+    insertEdge(store, entryNode, libNode, 'calls');
+
+    // Without manual entry → both look dead (custom-entry isn't a known pattern)
+    const noEntries = getDeadCodeReachability(store);
+    expect(noEntries.dead_symbols.map((s) => s.name)).toContain('fromCustomEntry');
+
+    // With manual entry → fromCustomEntry should now be reached
+    const withEntry = getDeadCodeReachability(store, { entryPoints: ['src/custom-entry.ts'] });
+    expect(withEntry.dead_symbols.map((s) => s.name)).not.toContain('fromCustomEntry');
   });
 });
