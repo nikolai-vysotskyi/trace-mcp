@@ -214,7 +214,7 @@ export const TraceMcpConfigSchema = z.object({
 export type TraceMcpConfig = z.infer<typeof TraceMcpConfigSchema>;
 
 /** Load global config from ~/.trace-mcp/.config.json */
-function loadGlobalConfigRaw(): Record<string, unknown> {
+export function loadGlobalConfigRaw(): Record<string, unknown> {
   if (!fs.existsSync(GLOBAL_CONFIG_PATH)) return {};
   try {
     return JSON.parse(stripJsonComments(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')));
