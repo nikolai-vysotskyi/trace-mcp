@@ -8,7 +8,9 @@ import path from 'node:path';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProjectContext, FileParseResult, RawEdge } from '../plugin-api/types.js';
+import { ok } from '../errors.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes } from '../plugin-api/executor.js';
+import { buildProjectContext } from './project-context.js';
 import { hashContent } from '../utils/hasher.js';
 import { validatePath, validateFileSize, isSensitiveFile, isBinaryBuffer } from '../utils/security.js';
 import { logger } from '../logger.js';
@@ -200,8 +202,25 @@ export class FileExtractor {
     content: Buffer,
     language: string,
   ): Promise<FileParseResult[]> {
-    const ctx = this.ctx.buildProjectContext();
-    const activeResult = this.ctx.registry.getActiveFrameworkPlugins(ctx);
+    // Use per-workspace ProjectContext when the file belongs to a workspace.
+    // This allows framework detection (e.g. LaravelPlugin) to find the correct
+    // composer.json/package.json in the workspace root, not just the top-level root.
+    let ctx = this.ctx.buildProjectContext();
+    let activeResult = this.ctx.registry.getActiveFrameworkPlugins(ctx);
+
+    if (activeResult.isOk() && activeResult.value.length === 0 && this.ctx.workspaces.length > 0) {
+      const ws = this.resolveWorkspace(relPath);
+      if (ws) {
+        const wsRoot = path.join(this.ctx.rootPath, ws);
+        const wsCtx = buildProjectContext(wsRoot);
+        // Don't use the cache — get fresh plugins for this workspace context
+        const wsPlugins = this.ctx.registry.getAllFrameworkPlugins().filter((p) => p.detect(wsCtx));
+        if (wsPlugins.length > 0) {
+          activeResult = ok(wsPlugins);
+        }
+      }
+    }
+
     if (activeResult.isErr()) return [];
 
     const results: FileParseResult[] = [];

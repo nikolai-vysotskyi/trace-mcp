@@ -26,6 +26,21 @@ export function detectWorkspaces(rootPath: string): WorkspaceInfo[] {
   const composerResult = detectComposerWorkspaces(rootPath);
   if (composerResult.length > 0) return composerResult;
 
+  // 4. Implicit workspace detection: if root has no manifest files, scan 1-2
+  //    levels deep for directories with package.json or composer.json.
+  //    Covers the common "folder of projects" layout (e.g. ~/projects/the/).
+  const hasRootManifest = fs.existsSync(path.join(rootPath, 'package.json'))
+    || fs.existsSync(path.join(rootPath, 'composer.json'))
+    || fs.existsSync(path.join(rootPath, 'pnpm-workspace.yaml'));
+
+  if (!hasRootManifest) {
+    const implicitResult = detectImplicitWorkspaces(rootPath);
+    if (implicitResult.length > 0) {
+      logger.info({ count: implicitResult.length }, 'Detected implicit workspaces from nested manifest files');
+      return implicitResult;
+    }
+  }
+
   return [];
 }
 
@@ -122,6 +137,56 @@ function detectComposerWorkspaces(rootPath: string): WorkspaceInfo[] {
     logger.warn({ error: e }, 'Failed to parse composer.json repositories');
     return [];
   }
+}
+
+const SKIP_DIRS = new Set(['node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__', '.next', '.nuxt']);
+
+/**
+ * Fallback: scan 1-2 levels deep for directories with package.json or composer.json.
+ * For a "folder of projects" layout like:
+ *   the/
+ *     fair/
+ *       fair-laravel/  (composer.json)
+ *       fair-front/    (package.json)
+ *     thewed/
+ *       thewed-laravel/ (composer.json)
+ */
+function detectImplicitWorkspaces(rootPath: string): WorkspaceInfo[] {
+  const workspaces: WorkspaceInfo[] = [];
+  const seen = new Set<string>();
+
+  function scan(dir: string, relPrefix: string, depth: number): void {
+    if (depth > 2) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch { return; }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+
+      const absChild = path.join(dir, entry.name);
+      const relChild = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+
+      const hasPackageJson = fs.existsSync(path.join(absChild, 'package.json'));
+      const hasComposerJson = fs.existsSync(path.join(absChild, 'composer.json'));
+
+      if (hasPackageJson || hasComposerJson) {
+        if (!seen.has(relChild)) {
+          seen.add(relChild);
+          const name = resolveWorkspaceName(rootPath, relChild);
+          workspaces.push({ name, path: relChild });
+        }
+        // Don't recurse into detected workspaces (they're leaf projects)
+      } else {
+        // Not a workspace, recurse deeper
+        scan(absChild, relChild, depth + 1);
+      }
+    }
+  }
+
+  scan(rootPath, '', 0);
+  return workspaces;
 }
 
 function expandGlobPatterns(rootPath: string, patterns: string[]): WorkspaceInfo[] {
