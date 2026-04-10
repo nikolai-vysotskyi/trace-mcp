@@ -128,7 +128,7 @@ function buildGraphData(
   const depth = opts.depth ?? 2;
   const colorBy = opts.colorBy ?? 'community';
   const granularity = opts.granularity ?? 'file';
-  const hideIsolated = opts.hideIsolated !== false; // default true
+  const hideIsolated = opts.hideIsolated === true; // default false
 
   // 1. Determine seed files
   let seedFiles: FileRow[];
@@ -136,74 +136,79 @@ function buildGraphData(
     seedFiles = store.getAllFiles();
   } else {
     const allFiles = store.getAllFiles();
-    // Check if scope is a file or directory pattern
     if (scope.includes('*')) {
       const isMatch = picomatch(scope, { dot: true });
       seedFiles = allFiles.filter((f) => isMatch(f.path));
     } else if (scope.endsWith('/') || !scope.includes('.')) {
-      // Directory
       seedFiles = allFiles.filter((f) => f.path.startsWith(scope.replace(/\/$/, '')));
     } else {
-      // Single file
       seedFiles = allFiles.filter((f) => f.path === scope);
     }
   }
 
-  // Limit to prevent OOM on very large projects
   if (seedFiles.length > 500) seedFiles = seedFiles.slice(0, 500);
-
-  // 2. Build seed node IDs — either file nodes or symbol nodes depending on granularity
-  const seedNodeIds: number[] = [];
-
-  if (granularity === 'symbol') {
-    // Seed by symbols within the scoped files
-    const fileIds = seedFiles.map((f) => f.id);
-    const symbols = fileIds.length > 0 ? store.getSymbolsByFileIds(fileIds) : [];
-    const filtered = opts.symbolKinds
-      ? symbols.filter((s) => opts.symbolKinds!.includes(s.kind))
-      : symbols;
-    // Limit symbol seeds
-    const limitedSymbols = filtered.length > 1000 ? filtered.slice(0, 1000) : filtered;
-    for (const sym of limitedSymbols) {
-      const nodeId = store.getNodeId('symbol', sym.id);
-      if (nodeId) seedNodeIds.push(nodeId);
-    }
-  } else {
-    // Default: file-level seeds
-    for (const file of seedFiles) {
-      const nodeId = store.getNodeId('file', file.id);
-      if (nodeId) seedNodeIds.push(nodeId);
-    }
-  }
-
-  // Keep legacy maps for backwards-compat references below
-  const fileNodeIds = granularity === 'file' ? seedNodeIds : [];
-  const fileNodeMap = new Map<number, FileRow>();
-  const fileIdToNodeId = new Map<number, number>();
-  if (granularity === 'file') {
-    for (const file of seedFiles) {
-      const nodeId = store.getNodeId('file', file.id);
-      if (!nodeId) continue;
-      fileNodeMap.set(nodeId, file);
-      fileIdToNodeId.set(file.id, nodeId);
-    }
-  }
-
-  // 3. Batch fetch edges for all seed nodes (single query, no N+1)
-  const allEdges = seedNodeIds.length > 0
-    ? store.getEdgesForNodesBatch(seedNodeIds)
-    : [];
 
   // Filter by edge type if specified
   const edgeFilter = opts.includeEdges ? new Set(opts.includeEdges) : null;
-  const filteredEdges = edgeFilter
-    ? allEdges.filter((e) => edgeFilter.has(e.edge_type_name))
-    : allEdges;
 
-  // 4. Collect all referenced node IDs (for depth expansion)
-  const visitedNodes = new Set(seedNodeIds);
-  const edgesInGraph: VizEdge[] = [];
-  let frontier = new Set(seedNodeIds);
+  if (granularity === 'symbol') {
+    return buildSymbolGraph(store, seedFiles, depth, edgeFilter, hideIsolated, opts);
+  }
+  return buildFileGraph(store, seedFiles, depth, edgeFilter, hideIsolated, opts);
+}
+
+/**
+ * File-level graph: seed by SYMBOL nodes (where all edges live),
+ * then collapse symbol→symbol edges into file→file edges.
+ */
+function buildFileGraph(
+  store: Store,
+  seedFiles: FileRow[],
+  depth: number,
+  edgeFilter: Set<string> | null,
+  hideIsolated: boolean,
+  opts: VisualizeGraphOptions,
+): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } {
+  // 1. Collect ALL symbol node IDs for the seed files — this is where
+  //    edges actually live (symbol→symbol), not file→file.
+  const fileIdSet = new Set(seedFiles.map((f) => f.id));
+  const fileByIdMap = new Map(seedFiles.map((f) => [f.id, f]));
+
+  // Get symbol→nodeId mapping for seed files
+  const allSymbols = store.getSymbolsByFileIds([...fileIdSet]);
+  const symRefIds = allSymbols.map((s) => s.id);
+  const symNodeMap = store.getNodeIdsBatch('symbol', symRefIds); // refId → nodeId
+  const symbolNodeIds = [...symNodeMap.values()];
+
+  // Also get file node IDs (some edges might be file→file)
+  const fileRefIds = seedFiles.map((f) => f.id);
+  const fileNodeMap = store.getNodeIdsBatch('file', fileRefIds);
+  const fileNodeIds = [...fileNodeMap.values()];
+
+  // Build reverse: nodeId → fileId (for collapsing symbol edges to file level)
+  const nodeIdToFileId = new Map<number, number>();
+  for (const sym of allSymbols) {
+    const nodeId = symNodeMap.get(sym.id);
+    if (nodeId) nodeIdToFileId.set(nodeId, sym.file_id);
+  }
+  for (const file of seedFiles) {
+    const nodeId = fileNodeMap.get(file.id);
+    if (nodeId) nodeIdToFileId.set(nodeId, file.id);
+  }
+
+  // 2. Query edges for all seed nodes (symbols + files)
+  const allSeedNodeIds = [...new Set([...symbolNodeIds, ...fileNodeIds])];
+  const rawEdges = allSeedNodeIds.length > 0
+    ? store.getEdgesForNodesBatch(allSeedNodeIds)
+    : [];
+
+  const filteredEdges = edgeFilter
+    ? rawEdges.filter((e) => edgeFilter.has(e.edge_type_name))
+    : rawEdges;
+
+  // 3. Expand frontier by depth (at symbol/node level)
+  const visitedNodes = new Set(allSeedNodeIds);
+  let frontier = new Set(allSeedNodeIds);
 
   for (let d = 0; d < depth && frontier.size > 0; d++) {
     const nextFrontier = new Set<number>();
@@ -216,7 +221,7 @@ function buildGraphData(
         ? edge.target_node_id
         : edge.source_node_id;
 
-      if (!visitedNodes.has(otherNode) && visitedNodes.size < 500) {
+      if (!visitedNodes.has(otherNode) && visitedNodes.size < 5000) {
         visitedNodes.add(otherNode);
         nextFrontier.add(otherNode);
       }
@@ -224,95 +229,200 @@ function buildGraphData(
     frontier = nextFrontier;
   }
 
-  // 5. Resolve all node IDs to file info — batch lookup
+  // 4. Resolve all expanded nodes back to files
   const nodeRefs = store.getNodeRefsBatch([...visitedNodes]);
+  const expandedFileIds = new Set<number>();
+  const expandedSymbolIds = new Set<number>();
 
-  // Collect all file IDs and symbol IDs we need
-  const fileIds = new Set<number>();
-  const symbolIds = new Set<number>();
   for (const [, ref] of nodeRefs) {
-    if (ref.nodeType === 'file') fileIds.add(ref.refId);
-    else if (ref.nodeType === 'symbol') symbolIds.add(ref.refId);
+    if (ref.nodeType === 'file') expandedFileIds.add(ref.refId);
+    else if (ref.nodeType === 'symbol') expandedSymbolIds.add(ref.refId);
   }
 
-  const filesById = store.getFilesByIds([...fileIds]);
-  const symbolsById = symbolIds.size > 0 ? store.getSymbolsByIds([...symbolIds]) : new Map();
+  // Resolve symbols to their file_id
+  const expandedSymbolRows = expandedSymbolIds.size > 0
+    ? store.getSymbolsByIds([...expandedSymbolIds])
+    : new Map();
 
-  // 6. Build viz nodes
+  for (const [nodeId, ref] of nodeRefs) {
+    if (ref.nodeType === 'symbol') {
+      const sym = expandedSymbolRows.get(ref.refId);
+      if (sym) {
+        nodeIdToFileId.set(nodeId, sym.file_id);
+        expandedFileIds.add(sym.file_id);
+      }
+    } else if (ref.nodeType === 'file') {
+      nodeIdToFileId.set(nodeId, ref.refId);
+    }
+  }
+
+  // Load all file info
+  const allFilesById = store.getFilesByIds([...expandedFileIds]);
+
+  // 5. Build file-level viz nodes
+  const vizNodeMap = new Map<string, VizNode>();
+  for (const [, file] of allFilesById) {
+    if (vizNodeMap.has(file.path)) continue;
+    vizNodeMap.set(file.path, {
+      id: file.path,
+      label: path.basename(file.path),
+      type: 'file',
+      language: file.language,
+      framework_role: file.framework_role,
+      community: 0,
+      importance: 0,
+    });
+  }
+
+  // 6. Collapse symbol→symbol edges into file→file edges
+  const allEdgesForGraph = store.getEdgesForNodesBatch([...visitedNodes]);
+  const edgeMap = new Map<string, VizEdge>();
+
+  for (const edge of allEdgesForGraph) {
+    if (edgeFilter && !edgeFilter.has(edge.edge_type_name)) continue;
+
+    const srcFileId = nodeIdToFileId.get(edge.source_node_id);
+    const tgtFileId = nodeIdToFileId.get(edge.target_node_id);
+    if (srcFileId == null || tgtFileId == null || srcFileId === tgtFileId) continue;
+
+    const srcFile = allFilesById.get(srcFileId);
+    const tgtFile = allFilesById.get(tgtFileId);
+    if (!srcFile || !tgtFile) continue;
+
+    const key = `${srcFile.path}→${tgtFile.path}`;
+    const existing = edgeMap.get(key);
+    if (existing) {
+      existing.weight++;
+    } else {
+      edgeMap.set(key, {
+        source: srcFile.path,
+        target: tgtFile.path,
+        type: edge.edge_type_name,
+        weight: 1,
+      });
+    }
+  }
+
+  const dedupedEdges = [...edgeMap.values()];
+  let vizNodes = [...vizNodeMap.values()];
+
+  // 7. Communities, importance, optional isolation filter
+  return finalize(vizNodes, dedupedEdges, hideIsolated);
+}
+
+/**
+ * Symbol-level graph: show individual functions/classes/methods as nodes.
+ */
+function buildSymbolGraph(
+  store: Store,
+  seedFiles: FileRow[],
+  depth: number,
+  edgeFilter: Set<string> | null,
+  hideIsolated: boolean,
+  opts: VisualizeGraphOptions,
+): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } {
+  const fileIds = seedFiles.map((f) => f.id);
+  const symbols = fileIds.length > 0 ? store.getSymbolsByFileIds(fileIds) : [];
+  const filtered = opts.symbolKinds
+    ? symbols.filter((s) => opts.symbolKinds!.includes(s.kind))
+    : symbols;
+  const limitedSymbols = filtered.length > 1000 ? filtered.slice(0, 1000) : filtered;
+
+  const seedNodeIds: number[] = [];
+  for (const sym of limitedSymbols) {
+    const nodeId = store.getNodeId('symbol', sym.id);
+    if (nodeId) seedNodeIds.push(nodeId);
+  }
+
+  // Expand frontier
+  const visitedNodes = new Set(seedNodeIds);
+  let frontier = new Set(seedNodeIds);
+
+  const rawEdges = seedNodeIds.length > 0
+    ? store.getEdgesForNodesBatch(seedNodeIds)
+    : [];
+  const filteredEdges = edgeFilter
+    ? rawEdges.filter((e) => edgeFilter.has(e.edge_type_name))
+    : rawEdges;
+
+  for (let d = 0; d < depth && frontier.size > 0; d++) {
+    const nextFrontier = new Set<number>();
+    const batchEdges = d === 0
+      ? filteredEdges
+      : store.getEdgesForNodesBatch([...frontier]);
+
+    for (const edge of batchEdges) {
+      const otherNode = edge.pivot_node_id === edge.source_node_id
+        ? edge.target_node_id
+        : edge.source_node_id;
+
+      if (!visitedNodes.has(otherNode) && visitedNodes.size < 2000) {
+        visitedNodes.add(otherNode);
+        nextFrontier.add(otherNode);
+      }
+    }
+    frontier = nextFrontier;
+  }
+
+  // Resolve nodes to symbols
+  const nodeRefs = store.getNodeRefsBatch([...visitedNodes]);
+  const symIds = new Set<number>();
+  for (const [, ref] of nodeRefs) {
+    if (ref.nodeType === 'symbol') symIds.add(ref.refId);
+  }
+  const symbolsById = symIds.size > 0 ? store.getSymbolsByIds([...symIds]) : new Map();
+
   const vizNodes: VizNode[] = [];
   const nodeIdToVizId = new Map<number, string>();
 
   for (const nodeId of visitedNodes) {
     const ref = nodeRefs.get(nodeId);
-    if (!ref) continue;
-
-    if (ref.nodeType === 'file') {
-      const file = filesById.get(ref.refId);
-      if (!file) continue;
-      nodeIdToVizId.set(nodeId, file.path);
-      vizNodes.push({
-        id: file.path,
-        label: path.basename(file.path),
-        type: 'file',
-        language: file.language,
-        framework_role: file.framework_role,
-        community: 0,
-        importance: 0,
-      });
-    } else if (ref.nodeType === 'symbol') {
-      const sym = symbolsById.get(ref.refId);
-      if (!sym) continue;
-      const file = store.getFileById(sym.file_id);
-      nodeIdToVizId.set(nodeId, sym.symbol_id);
-      vizNodes.push({
-        id: sym.symbol_id,
-        label: sym.name,
-        type: 'symbol',
-        language: file?.language ?? null,
-        framework_role: file?.framework_role ?? null,
-        community: 0,
-        importance: 0,
-      });
-    }
+    if (!ref || ref.nodeType !== 'symbol') continue;
+    const sym = symbolsById.get(ref.refId);
+    if (!sym) continue;
+    const file = store.getFileById(sym.file_id);
+    nodeIdToVizId.set(nodeId, sym.symbol_id);
+    vizNodes.push({
+      id: sym.symbol_id,
+      label: sym.name,
+      type: 'symbol',
+      language: file?.language ?? null,
+      framework_role: file?.framework_role ?? null,
+      community: 0,
+      importance: 0,
+    });
   }
 
-  // 7. Build viz edges from all edges between visited nodes
+  // Build edges
   const allEdgesForGraph = store.getEdgesForNodesBatch([...visitedNodes]);
-  const edgeSeen = new Set<string>();
+  const edgeMap = new Map<string, VizEdge>();
   for (const edge of allEdgesForGraph) {
-    if (!visitedNodes.has(edge.source_node_id) || !visitedNodes.has(edge.target_node_id)) continue;
     if (edgeFilter && !edgeFilter.has(edge.edge_type_name)) continue;
-
     const sourceViz = nodeIdToVizId.get(edge.source_node_id);
     const targetViz = nodeIdToVizId.get(edge.target_node_id);
     if (!sourceViz || !targetViz || sourceViz === targetViz) continue;
 
-    const edgeKey = `${sourceViz}→${targetViz}→${edge.edge_type_name}`;
-    if (edgeSeen.has(edgeKey)) continue;
-    edgeSeen.add(edgeKey);
-
-    edgesInGraph.push({
-      source: sourceViz,
-      target: targetViz,
-      type: edge.edge_type_name,
-      weight: 1,
-    });
-  }
-
-  // Deduplicate and sum weights
-  const edgeMap = new Map<string, VizEdge>();
-  for (const e of edgesInGraph) {
-    const key = `${e.source}→${e.target}`;
+    const key = `${sourceViz}→${targetViz}`;
     const existing = edgeMap.get(key);
     if (existing) {
       existing.weight++;
     } else {
-      edgeMap.set(key, { ...e });
+      edgeMap.set(key, { source: sourceViz, target: targetViz, type: edge.edge_type_name, weight: 1 });
     }
   }
-  const dedupedEdges = [...edgeMap.values()];
 
-  // 8. Detect communities
+  return finalize(vizNodes, [...edgeMap.values()], hideIsolated);
+}
+
+/**
+ * Common finalization: communities, importance, optional isolation filter.
+ */
+function finalize(
+  vizNodes: VizNode[],
+  dedupedEdges: VizEdge[],
+  hideIsolated: boolean,
+): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } {
+  // Detect communities
   const nodeVizIds = vizNodes.map((n) => n.id);
   const communityLabels = detectCommunities(nodeVizIds, dedupedEdges);
   for (const node of vizNodes) {
@@ -330,16 +440,14 @@ function buildGraphData(
     node.importance = Math.round(((degree.get(node.id) ?? 0) / maxDegree) * 100) / 100;
   }
 
-  // 9. Hide isolated nodes (degree 0) — default on to avoid the "ring of orphans"
-  const connectedIds = hideIsolated
-    ? new Set(dedupedEdges.flatMap((e) => [e.source, e.target]))
-    : null;
-  const finalNodes = connectedIds
-    ? vizNodes.filter((n) => connectedIds.has(n.id))
-    : vizNodes;
+  // Optional: hide isolated nodes
+  if (hideIsolated) {
+    const connectedIds = new Set(dedupedEdges.flatMap((e) => [e.source, e.target]));
+    vizNodes = vizNodes.filter((n) => connectedIds.has(n.id));
+  }
 
   // Build community list
-  const communitySet = new Set(finalNodes.map((n) => n.community));
+  const communitySet = new Set(vizNodes.map((n) => n.community));
   const COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'];
   const communities: VizCommunity[] = [...communitySet].map((id) => ({
     id,
@@ -347,7 +455,7 @@ function buildGraphData(
     color: COLORS[id % COLORS.length],
   }));
 
-  return { nodes: finalNodes, edges: dedupedEdges, communities };
+  return { nodes: vizNodes, edges: dedupedEdges, communities };
 }
 
 // ── HTML Template ──────────────────────────────────────────────────────
