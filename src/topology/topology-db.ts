@@ -572,6 +572,36 @@ export class TopologyStore {
     this.db.prepare('DELETE FROM federated_repos WHERE id = ?').run(id);
   }
 
+  /**
+   * Remove all topology data associated with a repo root:
+   * federated_repos (+ cascading client_calls), services (+ cascading contracts,
+   * endpoints, events, edges, snapshots).
+   * Returns counts of deleted rows for logging.
+   */
+  removeByRepoRoot(repoRoot: string): { federatedRepos: number; services: number } {
+    const result = { federatedRepos: 0, services: 0 };
+
+    // Delete federated repo entry (cascades to client_calls)
+    const fedRepo = this.getFederatedRepo(repoRoot);
+    if (fedRepo) {
+      this.deleteFederatedRepo(fedRepo.id);
+      result.federatedRepos = 1;
+    }
+
+    // Delete all services rooted in this path (cascades to contracts, endpoints, events, edges, snapshots)
+    const services = this.db.prepare('SELECT id FROM services WHERE repo_root = ?').all(repoRoot) as Array<{ id: number }>;
+    if (services.length > 0) {
+      this.db.transaction(() => {
+        for (const svc of services) {
+          this.deleteService(svc.id);
+        }
+      })();
+      result.services = services.length;
+    }
+
+    return result;
+  }
+
   updateFederatedRepoSyncTime(id: number): void {
     this.db.prepare("UPDATE federated_repos SET last_synced = datetime('now') WHERE id = ?").run(id);
   }
