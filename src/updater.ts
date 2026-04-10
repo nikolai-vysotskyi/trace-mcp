@@ -2,7 +2,7 @@ import https from 'node:https';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import { TRACE_MCP_HOME } from './global.js';
+import { TRACE_MCP_HOME, ensureGlobalDirs, getDbPath } from './global.js';
 import { logger } from './logger.js';
 
 declare const PKG_VERSION_INJECTED: string;
@@ -14,6 +14,8 @@ const UPDATE_CACHE_PATH = path.join(TRACE_MCP_HOME, 'update-check.json');
 interface UpdateCache {
   lastChecked: number;
   latestVersion: string;
+  /** The version that was last running — used to detect post-update restarts. */
+  installedVersion?: string;
 }
 
 function readCache(): UpdateCache | null {
@@ -134,6 +136,145 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     return false;
   }
 
+  // Record the version we just installed so the restarted process can detect
+  // the upgrade and run post-update migrations.
+  writeCache({ lastChecked: now, latestVersion, installedVersion: latestVersion });
+
   logger.info({ version: latestVersion }, 'Auto-update: installed successfully, restarting...');
   return true;
+}
+
+/**
+ * Detect whether we're running for the first time after an auto-update and,
+ * if so, perform post-update migrations:
+ *
+ *  1. Migrate global config (add new keys, remove stale ones)
+ *  2. Re-install hooks (guard, reindex, precompact, worktree) — picks up new
+ *     script versions shipped with the update
+ *  3. Update global CLAUDE.md block
+ *  4. Force-reindex every registered project so index schema changes and new
+ *     parser/plugin improvements take effect
+ *
+ * Safe to call on every startup — it's a no-op when no version change is detected.
+ */
+export async function runPostUpdateMigrations(): Promise<void> {
+  if (CURRENT_VERSION === '0.0.0-dev') return;
+
+  const cache = readCache();
+  if (!cache) return;
+
+  // Compare what we recorded as the last-running version with what we are now.
+  // On a fresh install `installedVersion` won't exist yet — stamp it and exit.
+  if (!cache.installedVersion) {
+    writeCache({ ...cache, installedVersion: CURRENT_VERSION });
+    return;
+  }
+
+  if (cache.installedVersion === CURRENT_VERSION) return;
+
+  // --- Version changed — run migrations ---
+  const previousVersion = cache.installedVersion;
+  logger.info(
+    { from: previousVersion, to: CURRENT_VERSION },
+    'Post-update: version change detected, running migrations...',
+  );
+
+  // Dynamic imports — only needed during post-update, avoid loading at every startup
+  const [
+    { migrateGlobalConfig },
+    { detectGuardHook },
+    { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook },
+    { updateClaudeMd },
+    { listProjects, updateLastIndexed },
+  ] = await Promise.all([
+    import('./config-jsonc.js'),
+    import('./init/detector.js'),
+    import('./init/hooks.js'),
+    import('./init/claude-md.js'),
+    import('./registry.js'),
+  ]);
+
+  // 1. Migrate global config
+  ensureGlobalDirs();
+  const migration = migrateGlobalConfig();
+  if (migration.changed) {
+    logger.info({ added: migration.added }, 'Post-update: global config migrated');
+  }
+
+  // 2. Re-install hooks (idempotent — overwrites scripts + patches settings.json)
+  const { hasGuardHook } = detectGuardHook();
+  if (hasGuardHook) {
+    try {
+      installGuardHook({ global: true });
+      installReindexHook({ global: true });
+      installPrecompactHook({ global: true });
+      installWorktreeHook({ global: true });
+      logger.info('Post-update: hooks upgraded');
+    } catch (err) {
+      logger.warn({ error: err }, 'Post-update: hook upgrade failed (non-fatal)');
+    }
+  }
+
+  // 3. Update global CLAUDE.md block
+  try {
+    updateClaudeMd(process.cwd(), { scope: 'global' });
+    logger.info('Post-update: CLAUDE.md updated');
+  } catch (err) {
+    logger.warn({ error: err }, 'Post-update: CLAUDE.md update failed (non-fatal)');
+  }
+
+  // 4. Reindex all registered projects
+  const projects = listProjects();
+  if (projects.length > 0) {
+    logger.info({ count: projects.length }, 'Post-update: reindexing registered projects...');
+
+    const [{ initializeDatabase }, { Store }, { PluginRegistry }, { createAllLanguagePlugins }, { createAllIntegrationPlugins }, { IndexingPipeline }, { loadConfig }] = await Promise.all([
+      import('./db/schema.js'),
+      import('./db/store.js'),
+      import('./plugin-api/registry.js'),
+      import('./indexer/plugins/language/all.js'),
+      import('./indexer/plugins/integration/all.js'),
+      import('./indexer/pipeline.js'),
+      import('./config.js'),
+    ]);
+
+    for (const proj of projects) {
+      if (!fs.existsSync(proj.root)) {
+        logger.debug({ root: proj.root }, 'Post-update: skipping stale project (directory missing)');
+        continue;
+      }
+
+      try {
+        const configResult = await loadConfig(proj.root);
+        if (configResult.isErr()) {
+          logger.warn({ root: proj.root, error: configResult.error }, 'Post-update: config load failed, skipping');
+          continue;
+        }
+
+        const dbPath = getDbPath(proj.root);
+        const db = initializeDatabase(dbPath);
+        const store = new Store(db);
+
+        const registry = new PluginRegistry();
+        for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
+        for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
+
+        const pipeline = new IndexingPipeline(store, registry, configResult.value, proj.root);
+        const result = await pipeline.indexAll(true); // force = true
+        updateLastIndexed(proj.root);
+        db.close();
+
+        logger.info(
+          { root: proj.root, indexed: result.indexed, skipped: result.skipped, errors: result.errors },
+          'Post-update: project reindexed',
+        );
+      } catch (err) {
+        logger.warn({ root: proj.root, error: err }, 'Post-update: project reindex failed (non-fatal)');
+      }
+    }
+  }
+
+  // Stamp the current version so we don't re-run on next startup
+  writeCache({ ...cache, installedVersion: CURRENT_VERSION });
+  logger.info({ version: CURRENT_VERSION }, 'Post-update: migrations complete');
 }
