@@ -43,12 +43,15 @@ function snapOne(p: PipelineProgress): PipelineProgressSnapshot {
   };
 }
 
+export type ProgressListener = (name: PipelineName, progress: PipelineProgress) => void;
+
 export class ProgressState {
   indexing: PipelineProgress = idleProgress();
   summarization: PipelineProgress = idleProgress();
   embedding: PipelineProgress = idleProgress();
 
   private db: Database.Database | null;
+  private listeners: ProgressListener[] = [];
 
   constructor(db?: Database.Database) {
     this.db = db ?? null;
@@ -57,10 +60,24 @@ export class ProgressState {
     }
   }
 
+  /** Register a callback for progress updates. Returns unsubscribe function. */
+  onUpdate(listener: ProgressListener): () => void {
+    this.listeners.push(listener);
+    return () => {
+      const idx = this.listeners.indexOf(listener);
+      if (idx >= 0) this.listeners.splice(idx, 1);
+    };
+  }
+
   update(name: PipelineName, partial: Partial<PipelineProgress>): void {
     const current = this[name];
     Object.assign(current, partial);
     this.persist(name);
+
+    // Notify listeners
+    for (const listener of this.listeners) {
+      try { listener(name, { ...current }); } catch { /* ignore */ }
+    }
 
     // Log progress on phase changes and periodically during running
     if (partial.phase === 'running' && partial.total !== undefined) {
