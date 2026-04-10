@@ -39,12 +39,34 @@ function openInBrowser(filePath: string): void {
 
 export const visualizeCommand = new Command('visualize')
   .alias('viz')
-  .description('Open an interactive dependency graph in the browser')
-  .argument('[scope]', 'file path, directory, or "project" (default: project)', 'project')
-  .option('-l, --layout <type>', 'graph layout: force | hierarchical | radial', 'force')
-  .option('-c, --color-by <mode>', 'coloring: community | language | framework_role', 'community')
-  .option('-d, --depth <n>', 'max hops from scope', '2')
-  .option('-o, --output <path>', 'output HTML file path')
+  .description('Generate an interactive dependency graph and open it in the browser')
+  .argument('[scope]', `what to visualize
+
+  Scope can be:
+    project            whole project graph
+    src/server.ts      single file and its dependencies
+    src/indexer/        all files under a directory`, 'project')
+  .option('-l, --layout <type>', `graph layout algorithm
+
+  Layouts:
+    force          physics-based force-directed (best for exploration)
+    hierarchical   top-down layered DAG (best for dependency chains)
+    radial         concentric circles from the scope center`, 'force')
+  .option('-c, --color-by <mode>', `node coloring strategy
+
+  Modes:
+    community        color by detected module community
+    language         color by programming language
+    framework_role   color by framework role (controller, model, etc.)`, 'community')
+  .option('-d, --depth <n>', 'max dependency hops from scope', '2')
+  .option('-g, --granularity <mode>', `node granularity
+
+  Modes:
+    file     each node = one file (default)
+    symbol   each node = function/class/method`, 'file')
+  .option('-k, --symbol-kinds <kinds>', 'comma-separated symbol kinds when granularity=symbol (e.g. function,class,method)')
+  .option('--hide-isolated', 'hide nodes with no edges')
+  .option('-o, --output <path>', 'write HTML to this path instead of a temp file')
   .option('--no-open', 'write HTML but do not open the browser')
   .option('--dir <dir>', 'project directory (default: cwd)')
   .action((scope: string, opts) => {
@@ -78,6 +100,9 @@ export const visualizeCommand = new Command('visualize')
       colorBy: opts.colorBy,
       depth: parseInt(opts.depth, 10),
       output: outputPath,
+      granularity: opts.granularity,
+      symbolKinds: opts.symbolKinds ? opts.symbolKinds.split(',') : undefined,
+      hideIsolated: opts.hideIsolated ?? false,
     });
 
     db.close();
