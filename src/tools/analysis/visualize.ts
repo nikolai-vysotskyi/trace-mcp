@@ -15,7 +15,7 @@ import picomatch from 'picomatch';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface VisualizeGraphOptions {
+export interface VisualizeGraphOptions {
   scope: string;            // file path, directory, or "project"
   depth?: number;           // max hops from scope (default: 2)
   layout?: 'force' | 'hierarchical' | 'radial';
@@ -120,7 +120,7 @@ function detectCommunities(
 
 // ── Graph Data Builder ─────────────────────────────────────────────────
 
-function buildGraphData(
+export function buildGraphData(
   store: Store,
   opts: VisualizeGraphOptions,
 ): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } {
@@ -460,7 +460,7 @@ function finalize(
 
 // ── HTML Template ──────────────────────────────────────────────────────
 
-function generateHtml(
+export function generateHtml(
   nodes: VizNode[],
   edges: VizEdge[],
   communities: VizCommunity[],

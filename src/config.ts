@@ -213,6 +213,69 @@ export const TraceMcpConfigSchema = z.object({
 
 export type TraceMcpConfig = z.infer<typeof TraceMcpConfigSchema>;
 
+/** Validate an incoming config update against known section schemas.
+ *  Returns an array of error strings (empty = valid). */
+export function validateConfigUpdate(incoming: Record<string, unknown>): string[] {
+  const sectionSchemas: Record<string, z.ZodTypeAny> = {
+    ai: AiConfigSchema,
+    security: SecurityConfigSchema,
+    predictive: PredictiveConfigSchema,
+    intent: IntentConfigSchema,
+    runtime: RuntimeConfigSchema,
+    topology: TopologyConfigSchema,
+    quality_gates: QualityGatesConfigSchema,
+    tools: ToolsConfigSchema,
+    ignore: IgnoreConfigSchema,
+    frameworks: FrameworkConfigSchema,
+    logging: z.object({
+      file: z.boolean().optional(),
+      path: z.string().optional(),
+      level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
+      max_size_mb: z.number().positive().max(500).optional(),
+    }),
+    watch: z.object({
+      enabled: z.boolean().optional(),
+      debounceMs: z.number().int().min(100).max(30000).optional(),
+    }),
+  };
+
+  const rootSchema = z.object({
+    auto_update: z.boolean().optional(),
+    auto_update_check_interval_hours: z.number().positive().optional(),
+    logLevel: z.enum(['debug', 'info', 'warn', 'error']).optional(),
+  });
+
+  const errors: string[] = [];
+
+  // Validate known sections
+  for (const [key, schema] of Object.entries(sectionSchemas)) {
+    if (key in incoming && incoming[key] != null) {
+      const result = (schema as z.ZodTypeAny).safeParse(incoming[key]);
+      if (!result.success) {
+        for (const issue of result.error.issues) {
+          errors.push(`${key}.${issue.path.join('.')}: ${issue.message}`);
+        }
+      }
+    }
+  }
+
+  // Validate root-level keys
+  const rootPick: Record<string, unknown> = {};
+  for (const key of ['auto_update', 'auto_update_check_interval_hours', 'logLevel']) {
+    if (key in incoming) rootPick[key] = incoming[key];
+  }
+  if (Object.keys(rootPick).length > 0) {
+    const result = rootSchema.safeParse(rootPick);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        errors.push(`${issue.path.join('.')}: ${issue.message}`);
+      }
+    }
+  }
+
+  return errors;
+}
+
 /** Load global config from ~/.trace-mcp/.config.json */
 export function loadGlobalConfigRaw(): Record<string, unknown> {
   if (!fs.existsSync(GLOBAL_CONFIG_PATH)) return {};

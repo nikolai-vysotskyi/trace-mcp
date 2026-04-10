@@ -27,6 +27,15 @@ export const REGISTRY_PATH = path.join(TRACE_MCP_HOME, 'registry.json');
 /** Topology database (cross-service graph). */
 export const TOPOLOGY_DB_PATH = path.join(TRACE_MCP_HOME, 'topology.db');
 
+/** Default port the daemon listens on. */
+export const DEFAULT_DAEMON_PORT = 3741;
+
+/** Daemon log file path. */
+export const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');
+
+/** launchd plist path for auto-start on macOS. */
+export const LAUNCHD_PLIST_PATH = path.join(os.homedir(), 'Library', 'LaunchAgents', 'com.trace-mcp.server.plist');
+
 /**
  * Default global config template with all supported parameters.
  * Written to ~/.trace-mcp/.config.json on first run so users can edit values
