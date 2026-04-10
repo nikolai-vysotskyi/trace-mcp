@@ -1,0 +1,53 @@
+{
+  "name": "trace-mcp-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "trace-mcp menu bar app",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "tsc -p tsconfig.main.json && unset ELECTRON_RUN_AS_NODE && electron .",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build": "npm run build:renderer && npm run build:main",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "generate-icons": "node scripts/generate-icons.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "com.trace-mcp.app",
+    "productName": "trace-mcp",
+    "directories": {
+      "buildResources": "build"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "icon": "build"
+    },
+    "win": {
+      "icon": "build/icon.png"
+    }
+  },
+  "dependencies": {
+    "menubar": "^9.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.4",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.4.21",
+    "electron": "^34.3.0",
+    "electron-builder": "^26.0.12",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.1.4",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.2"
+  }
+}

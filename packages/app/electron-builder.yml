@@ -1,0 +1,22 @@
+appId: com.trace-mcp.app
+productName: trace-mcp
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/**/*
+  - assets/**/*
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: zip
+      arch:
+        - arm64
+        - x64
+
+linux:
+  target: []
+
+win:
+  target: []

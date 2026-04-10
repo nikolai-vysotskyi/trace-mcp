@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: rgba(246, 246, 246, 0.85);
+  --bg-secondary: rgba(232, 232, 232, 0.6);
+  --bg-tertiary: rgba(210, 210, 210, 0.5);
+  --bg-grouped: #fff;
+  --bg-inset: rgba(0, 0, 0, 0.04);
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #aeaeb2;
+  --border: rgba(0, 0, 0, 0.12);
+  --border-row: rgba(0, 0, 0, 0.08);
+  --bg-active: rgba(0, 0, 0, 0.06);
+  --accent: #007aff;
+  --accent-hover: #0062d1;
+  --destructive: #ff3b30;
+  --success: #34c759;
+  --warning: #ff9500;
+  --fill-toggle-off: rgba(120, 120, 128, 0.16);
+  --fill-control: rgba(0, 0, 0, 0.04);
+  --shadow-control: 0 0.5px 1px rgba(0,0,0,.1), 0 0 0 0.5px rgba(0,0,0,.05);
+  --shadow-grouped: 0 0.5px 2px rgba(0,0,0,.06), 0 0 0 0.5px rgba(0,0,0,.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: rgba(30, 30, 30, 0.85);
+    --bg-secondary: rgba(44, 44, 46, 0.6);
+    --bg-tertiary: rgba(58, 58, 60, 0.5);
+    --bg-grouped: rgba(44, 44, 46, 0.95);
+    --bg-inset: rgba(255, 255, 255, 0.05);
+    --text-primary: #f5f5f7;
+    --text-secondary: #98989d;
+    --text-tertiary: #636366;
+    --border: rgba(255, 255, 255, 0.12);
+    --border-row: rgba(255, 255, 255, 0.06);
+    --bg-active: rgba(255, 255, 255, 0.1);
+    --accent: #0a84ff;
+    --accent-hover: #409cff;
+    --destructive: #ff453a;
+    --success: #30d158;
+    --warning: #ff9f0a;
+    --fill-toggle-off: rgba(120, 120, 128, 0.32);
+    --fill-control: rgba(255, 255, 255, 0.06);
+    --shadow-control: 0 0.5px 1px rgba(0,0,0,.3), 0 0 0 0.5px rgba(255,255,255,.06);
+    --shadow-grouped: 0 0.5px 2px rgba(0,0,0,.2), 0 0 0 0.5px rgba(255,255,255,.08);
+  }
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  overflow: hidden;
+}
+
+/* Remove ugly focus rings, use subtle outline only on keyboard focus */
+*:focus { outline: none; }
+*:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
