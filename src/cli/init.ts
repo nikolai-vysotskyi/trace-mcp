@@ -30,6 +30,7 @@ import { PluginRegistry } from '../plugin-api/registry.js';
 import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
 import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
+import { installGuiApp, isAppInstalled } from './install-app.js';
 
 export const initCommand = new Command('init')
   .description('One-time global setup: configure MCP clients, install hooks, set up CLAUDE.md')
@@ -80,6 +81,7 @@ export const initCommand = new Command('init')
     let installTweakcc = false;
     let indexProject = opts.index ?? false;
     let fixConflicts = false;
+    let installApp = false;
 
     if (!nonInteractive) {
       p.intro('trace-mcp init');
@@ -186,6 +188,16 @@ export const initCommand = new Command('init')
           if (p.isCancel(fixResult)) { p.cancel('Cancelled.'); process.exit(0); }
           fixConflicts = fixResult;
         }
+      }
+
+      // Q6: Install menu bar app (macOS only)
+      if (process.platform === 'darwin' && !isAppInstalled()) {
+        const appResult = await p.confirm({
+          message: 'Install trace-mcp menu bar app?',
+          initialValue: false,
+        });
+        if (p.isCancel(appResult)) { p.cancel('Cancelled.'); process.exit(0); }
+        installApp = appResult;
       }
     } else {
       // Non-interactive defaults
@@ -326,6 +338,21 @@ export const initCommand = new Command('init')
         }
 
         spin?.stop('Upgrade complete');
+      }
+    }
+
+    // --- Install menu bar app ---
+    if (installApp && !opts.dryRun) {
+      const spin = p.spinner();
+      spin.start('Downloading trace-mcp menu bar app…');
+      const appResult = await installGuiApp();
+      if (appResult.installed) {
+        spin.stop(`Installed → ${appResult.path}`);
+        steps.push({ target: appResult.path!, action: 'created', detail: 'Menu bar app installed' });
+      } else {
+        spin.stop('App installation failed');
+        p.log.warn(`Could not install app: ${appResult.error}`);
+        steps.push({ target: '~/Applications/trace-mcp.app', action: 'skipped', detail: appResult.error ?? 'Installation failed' });
       }
     }
 
