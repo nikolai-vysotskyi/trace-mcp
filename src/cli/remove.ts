@@ -11,7 +11,8 @@ import * as p from '@clack/prompts';
 import { findProjectRoot } from '../project-root.js';
 import { getProject, unregisterProject, listProjects, findParentProject } from '../registry.js';
 import { removeProjectConfig } from '../config.js';
-import { getDbPath } from '../global.js';
+import { getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
+import { TopologyStore } from '../topology/topology-db.js';
 
 export const removeCommand = new Command('remove')
   .description('Unregister a project and delete its index')
@@ -85,6 +86,9 @@ export const removeCommand = new Command('remove')
       dbDeleted = true;
     }
 
+    // Clean topology data (federation, services, endpoints, etc.)
+    const topoCleaned = cleanTopology(entry.root);
+
     // Remove config
     removeProjectConfig(entry.root);
 
@@ -98,6 +102,7 @@ export const removeCommand = new Command('remove')
         project: entry.name,
         root: entry.root,
         dbDeleted,
+        topologyCleaned: topoCleaned.federatedRepos > 0 || topoCleaned.services > 0,
       }, null, 2));
     } else {
       const lines: string[] = [];
@@ -106,6 +111,9 @@ export const removeCommand = new Command('remove')
         lines.push(`Database deleted: ${shortPath(entry.dbPath)}`);
       } else if (opts.keepDb) {
         lines.push(`Database kept: ${shortPath(entry.dbPath)}`);
+      }
+      if (topoCleaned.federatedRepos > 0 || topoCleaned.services > 0) {
+        lines.push(`Topology cleaned: ${topoCleaned.services} service(s), ${topoCleaned.federatedRepos} federation entry`);
       }
       lines.push('Config removed');
       p.note(lines.join('\n'), 'Removed');
@@ -158,6 +166,7 @@ async function handleRemoveFromMultiRoot(
     if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
       fs.unlinkSync(parent.dbPath);
     }
+    cleanTopology(parent.root);
     removeProjectConfig(parent.root);
     unregisterProject(parent.root);
 
@@ -182,6 +191,7 @@ async function handleRemoveFromMultiRoot(
     if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
       fs.unlinkSync(parent.dbPath);
     }
+    cleanTopology(parent.root);
     removeProjectConfig(parent.root);
     unregisterProject(parent.root);
 
@@ -210,6 +220,7 @@ async function handleRemoveFromMultiRoot(
   if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
     fs.unlinkSync(parent.dbPath);
   }
+  cleanTopology(parent.root);
   removeProjectConfig(parent.root);
   unregisterProject(parent.root);
 
@@ -228,6 +239,18 @@ async function handleRemoveFromMultiRoot(
       'Excluded',
     );
     p.outro('Child excluded. Re-add the parent to rebuild the index.');
+  }
+}
+
+function cleanTopology(repoRoot: string): { federatedRepos: number; services: number } {
+  try {
+    if (!fs.existsSync(TOPOLOGY_DB_PATH)) return { federatedRepos: 0, services: 0 };
+    const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    const result = topoStore.removeByRepoRoot(repoRoot);
+    topoStore.close();
+    return result;
+  } catch {
+    return { federatedRepos: 0, services: 0 };
   }
 }
 
