@@ -112,6 +112,15 @@ export class Store {
     return this.symbols.getSymbolsByFile(fileId);
   }
 
+  getSymbolsByFileIds(fileIds: number[]): SymbolRow[] {
+    if (fileIds.length === 0) return [];
+    const results: SymbolRow[] = [];
+    for (const fid of fileIds) {
+      results.push(...this.symbols.getSymbolsByFile(fid));
+    }
+    return results;
+  }
+
   getSymbolBySymbolId(symbolId: string): SymbolRow | undefined {
     return this.symbols.getSymbolBySymbolId(symbolId);
   }

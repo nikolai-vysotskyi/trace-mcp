@@ -22,6 +22,9 @@ interface VisualizeGraphOptions {
   colorBy?: 'community' | 'language' | 'framework_role';
   includeEdges?: string[];  // filter edge types
   output?: string;          // output path
+  hideIsolated?: boolean;   // hide nodes with no edges (default: true)
+  granularity?: 'file' | 'symbol'; // node granularity (default: file)
+  symbolKinds?: string[];   // filter symbol kinds when granularity=symbol
 }
 
 interface VizNode {
@@ -124,6 +127,8 @@ function buildGraphData(
   const scope = opts.scope;
   const depth = opts.depth ?? 2;
   const colorBy = opts.colorBy ?? 'community';
+  const granularity = opts.granularity ?? 'file';
+  const hideIsolated = opts.hideIsolated !== false; // default true
 
   // 1. Determine seed files
   let seedFiles: FileRow[];
@@ -147,22 +152,46 @@ function buildGraphData(
   // Limit to prevent OOM on very large projects
   if (seedFiles.length > 500) seedFiles = seedFiles.slice(0, 500);
 
-  // 2. Build file node map + collect node IDs for batch edge query
-  const fileNodeIds: number[] = [];
-  const fileNodeMap = new Map<number, FileRow>(); // nodeId → file
-  const fileIdToNodeId = new Map<number, number>();
+  // 2. Build seed node IDs — either file nodes or symbol nodes depending on granularity
+  const seedNodeIds: number[] = [];
 
-  for (const file of seedFiles) {
-    const nodeId = store.getNodeId('file', file.id);
-    if (!nodeId) continue;
-    fileNodeIds.push(nodeId);
-    fileNodeMap.set(nodeId, file);
-    fileIdToNodeId.set(file.id, nodeId);
+  if (granularity === 'symbol') {
+    // Seed by symbols within the scoped files
+    const fileIds = seedFiles.map((f) => f.id);
+    const symbols = fileIds.length > 0 ? store.getSymbolsByFileIds(fileIds) : [];
+    const filtered = opts.symbolKinds
+      ? symbols.filter((s) => opts.symbolKinds!.includes(s.kind))
+      : symbols;
+    // Limit symbol seeds
+    const limitedSymbols = filtered.length > 1000 ? filtered.slice(0, 1000) : filtered;
+    for (const sym of limitedSymbols) {
+      const nodeId = store.getNodeId('symbol', sym.id);
+      if (nodeId) seedNodeIds.push(nodeId);
+    }
+  } else {
+    // Default: file-level seeds
+    for (const file of seedFiles) {
+      const nodeId = store.getNodeId('file', file.id);
+      if (nodeId) seedNodeIds.push(nodeId);
+    }
+  }
+
+  // Keep legacy maps for backwards-compat references below
+  const fileNodeIds = granularity === 'file' ? seedNodeIds : [];
+  const fileNodeMap = new Map<number, FileRow>();
+  const fileIdToNodeId = new Map<number, number>();
+  if (granularity === 'file') {
+    for (const file of seedFiles) {
+      const nodeId = store.getNodeId('file', file.id);
+      if (!nodeId) continue;
+      fileNodeMap.set(nodeId, file);
+      fileIdToNodeId.set(file.id, nodeId);
+    }
   }
 
   // 3. Batch fetch edges for all seed nodes (single query, no N+1)
-  const allEdges = fileNodeIds.length > 0
-    ? store.getEdgesForNodesBatch(fileNodeIds)
+  const allEdges = seedNodeIds.length > 0
+    ? store.getEdgesForNodesBatch(seedNodeIds)
     : [];
 
   // Filter by edge type if specified
@@ -172,9 +201,9 @@ function buildGraphData(
     : allEdges;
 
   // 4. Collect all referenced node IDs (for depth expansion)
-  const visitedNodes = new Set(fileNodeIds);
+  const visitedNodes = new Set(seedNodeIds);
   const edgesInGraph: VizEdge[] = [];
-  let frontier = new Set(fileNodeIds);
+  let frontier = new Set(seedNodeIds);
 
   for (let d = 0; d < depth && frontier.size > 0; d++) {
     const nextFrontier = new Set<number>();
@@ -301,8 +330,16 @@ function buildGraphData(
     node.importance = Math.round(((degree.get(node.id) ?? 0) / maxDegree) * 100) / 100;
   }
 
+  // 9. Hide isolated nodes (degree 0) — default on to avoid the "ring of orphans"
+  const connectedIds = hideIsolated
+    ? new Set(dedupedEdges.flatMap((e) => [e.source, e.target]))
+    : null;
+  const finalNodes = connectedIds
+    ? vizNodes.filter((n) => connectedIds.has(n.id))
+    : vizNodes;
+
   // Build community list
-  const communitySet = new Set(vizNodes.map((n) => n.community));
+  const communitySet = new Set(finalNodes.map((n) => n.community));
   const COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'];
   const communities: VizCommunity[] = [...communitySet].map((id) => ({
     id,
@@ -310,7 +347,7 @@ function buildGraphData(
     color: COLORS[id % COLORS.length],
   }));
 
-  return { nodes: vizNodes, edges: dedupedEdges, communities };
+  return { nodes: finalNodes, edges: dedupedEdges, communities };
 }
 
 // ── HTML Template ──────────────────────────────────────────────────────

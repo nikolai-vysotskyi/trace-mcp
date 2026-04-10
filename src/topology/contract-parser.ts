@@ -337,15 +337,34 @@ function findSpecFiles(root: string): Array<{ filePath: string; type: 'openapi' 
 /**
  * Extract routes from an existing trace-mcp index DB as a synthetic contract.
  * Used as fallback when no formal API spec files (OpenAPI/GraphQL/Proto) exist.
+ *
+ * @param dbPath      Path to the trace-mcp SQLite index DB.
+ * @param pathPrefix  Optional absolute path prefix — when set, only routes whose
+ *                    source file path starts with this prefix are included.
+ *                    Enables filtering sub-service routes from a monorepo DB.
  */
-export function extractRoutesFromDb(dbPath: string): ParsedContract | null {
+export function extractRoutesFromDb(dbPath: string, pathPrefix?: string): ParsedContract | null {
   if (!fs.existsSync(dbPath)) return null;
   try {
     const db = new Database(dbPath, { readonly: true });
     try {
-      const rows = db.prepare(
-        'SELECT method, uri, name FROM routes ORDER BY uri',
-      ).all() as Array<{ method: string; uri: string; name: string | null }>;
+      let rows: Array<{ method: string; uri: string; name: string | null }>;
+
+      if (pathPrefix) {
+        // Normalise: ensure trailing slash so "fair-laravel" doesn't match "fair-laravel-admin"
+        const prefix = pathPrefix.endsWith('/') ? pathPrefix : `${pathPrefix}/`;
+        rows = db.prepare(`
+          SELECT r.method, r.uri, r.name
+          FROM routes r
+          JOIN files f ON r.file_id = f.id
+          WHERE f.path LIKE ? OR f.path LIKE ?
+          ORDER BY r.uri
+        `).all(`${prefix}%`, `${pathPrefix}`) as Array<{ method: string; uri: string; name: string | null }>;
+      } else {
+        rows = db.prepare(
+          'SELECT method, uri, name FROM routes ORDER BY uri',
+        ).all() as Array<{ method: string; uri: string; name: string | null }>;
+      }
 
       if (rows.length === 0) return null;
 
@@ -355,7 +374,7 @@ export function extractRoutesFromDb(dbPath: string): ParsedContract | null {
         operationId: r.name ?? undefined,
       }));
 
-      logger.debug({ dbPath, count: endpoints.length }, 'Extracted routes from trace-mcp DB');
+      logger.debug({ dbPath, pathPrefix, count: endpoints.length }, 'Extracted routes from trace-mcp DB');
       return {
         type: 'framework_routes',
         specPath: dbPath,
