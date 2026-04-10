@@ -405,6 +405,18 @@ const ENTRY_FRAMEWORK_ROLES = new Set([
   'listener',
   'cli_command',
   'mcp_tool',
+  // Next.js file conventions (auto-loaded by framework, never imported by user code)
+  'next_middleware',
+  'next_forbidden',
+  'next_unauthorized',
+  'next_global_error',
+  'next_metadata',
+  'next_instrumentation',
+  'next_loading',
+  'next_error',
+  'next_template',
+  'next_default',
+  'next_server_action',
 ]);
 
 const ENTRY_FILE_PATTERNS: Array<{ re: RegExp; source: string }> = [
