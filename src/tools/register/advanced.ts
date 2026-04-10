@@ -397,7 +397,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'visualize_graph',
-    'Open interactive HTML graph in browser showing file/symbol dependencies. Supports force/hierarchical/radial layouts, community coloring.',
+    'Open interactive HTML graph in browser showing file/symbol dependencies. Supports force/hierarchical/radial layouts, community coloring. Use granularity=symbol to see individual functions/classes/methods as nodes instead of files.',
     {
       scope: z.string().min(1).max(512).describe('Scope: file path, directory (e.g. "src/"), or "project"'),
       depth: z.number().int().min(1).max(5).optional().describe('Max hops from scope (default 2)'),
@@ -405,8 +405,11 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       color_by: z.enum(['community', 'language', 'framework_role']).optional().describe('Node coloring strategy (default community)'),
       include_edges: z.array(z.string()).optional().describe('Filter edge types (default: all)'),
       output: z.string().max(512).optional().describe('Output file path (default: /tmp/trace-mcp-graph.html)'),
+      hide_isolated: z.boolean().optional().describe('Hide nodes with no edges (default: true — removes disconnected ring)'),
+      granularity: z.enum(['file', 'symbol']).optional().describe('Node granularity: file (default) or symbol (functions/classes/methods)'),
+      symbol_kinds: z.array(z.string()).optional().describe('Filter symbol kinds when granularity=symbol (e.g. ["function","class","method"])'),
     },
-    async ({ scope, depth, layout, color_by, include_edges, output }) => {
+    async ({ scope, depth, layout, color_by, include_edges, output, hide_isolated, granularity, symbol_kinds }) => {
       const result = visualizeGraph(store, {
         scope,
         depth,
@@ -414,6 +417,9 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         colorBy: color_by,
         includeEdges: include_edges,
         output,
+        hideIsolated: hide_isolated,
+        granularity,
+        symbolKinds: symbol_kinds,
       });
       if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       return { content: [{ type: 'text', text: j(result.value) }] };

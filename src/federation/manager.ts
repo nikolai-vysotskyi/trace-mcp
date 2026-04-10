@@ -384,8 +384,18 @@ export class FederationManager {
     // trace-mcp index DB (already indexed by the pipeline). This covers Laravel,
     // Next.js, Express, etc. that don't ship OpenAPI/GraphQL/Proto specs.
     if (contracts.length === 0) {
-      const dbPath = getDbPath(serviceRoot);
-      const fromDb = extractRoutesFromDb(dbPath);
+      // 1. Try the service's own DB (if it was indexed standalone)
+      const serviceDbPath = getDbPath(serviceRoot);
+      let fromDb = extractRoutesFromDb(serviceDbPath);
+
+      // 2. If service was indexed as part of a parent monorepo (common case when
+      //    the user runs `trace-mcp index the/`), the DB lives at the parent root.
+      //    Filter routes to this service's subdirectory using pathPrefix.
+      if (!fromDb && repoRoot && repoRoot !== serviceRoot) {
+        const parentDbPath = getDbPath(repoRoot);
+        fromDb = extractRoutesFromDb(parentDbPath, serviceRoot);
+      }
+
       if (fromDb) contracts.push(fromDb);
     }
 
