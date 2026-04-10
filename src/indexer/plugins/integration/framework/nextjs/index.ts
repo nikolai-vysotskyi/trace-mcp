@@ -16,7 +16,10 @@ import type {
 } from '../../../../../plugin-api/types.js';
 
 const PAGE_EXTENSIONS = /\.(tsx|ts|jsx|js)$/;
-const APP_ROUTER_FILES = ['page', 'layout', 'loading', 'error', 'not-found', 'route', 'template', 'default'] as const;
+const APP_ROUTER_FILES = ['page', 'layout', 'loading', 'error', 'not-found', 'route', 'template', 'default', 'forbidden', 'unauthorized', 'global-error'] as const;
+
+// Metadata file conventions — automatically served by Next.js, not imported by user code
+const METADATA_FILES = ['sitemap', 'robots', 'opengraph-image', 'twitter-image', 'icon', 'apple-icon', 'manifest'] as const;
 const API_ROUTE_EXPORTS_RE = /export\s+(?:async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/g;
 const USE_SERVER_RE = /['"]use server['"]/;
 const DATA_FETCHING_RE = /export\s+async\s+function\s+(getStaticProps|getServerSideProps|getStaticPaths)\b/g;
@@ -146,6 +149,11 @@ function extractInterceptingInfo(filePath: string): { pattern: string; intercept
   return null;
 }
 
+/** Strip src/ prefix for Next.js path normalization. */
+function normalizeSrcPath(filePath: string): string {
+  return filePath.startsWith('src/') ? filePath.slice(4) : filePath;
+}
+
 /** Extract Pages Router data fetching function names from source. */
 function extractDataFetchingFunctions(source: string): string[] {
   const fns: string[] = [];
@@ -199,6 +207,11 @@ export class NextJSPlugin implements FrameworkPlugin {
         { name: 'next_intercepting', category: 'nextjs', description: 'Intercepting route' },
         { name: 'next_data_fetching', category: 'nextjs', description: 'Pages Router data fetching function' },
         { name: 'next_template', category: 'nextjs', description: 'Template component for route segment' },
+        { name: 'next_forbidden', category: 'nextjs', description: 'Forbidden (403) error page' },
+        { name: 'next_unauthorized', category: 'nextjs', description: 'Unauthorized (401) error page' },
+        { name: 'next_global_error', category: 'nextjs', description: 'Global error boundary' },
+        { name: 'next_metadata', category: 'nextjs', description: 'Metadata file convention (sitemap, robots, opengraph-image, etc.)' },
+        { name: 'next_instrumentation', category: 'nextjs', description: 'Instrumentation hook (register, onRequestError)' },
       ],
     };
   }
@@ -215,14 +228,17 @@ export class NextJSPlugin implements FrameworkPlugin {
     const source = content.toString('utf-8');
     const result: FileParseResult = { status: 'ok', symbols: [], routes: [], edges: [] };
 
+    // Normalize src/ prefix — Next.js supports app/ and pages/ inside src/ directory
+    const normalizedPath = normalizeSrcPath(filePath);
+
     // App Router
-    if (filePath.startsWith('app/')) {
-      const fileType = getAppRouterFileType(filePath);
-      const parallelSlot = extractParallelSlot(filePath);
-      const interceptingInfo = extractInterceptingInfo(filePath);
+    if (normalizedPath.startsWith('app/')) {
+      const fileType = getAppRouterFileType(normalizedPath);
+      const parallelSlot = extractParallelSlot(normalizedPath);
+      const interceptingInfo = extractInterceptingInfo(normalizedPath);
 
       if (fileType === 'page') {
-        const uri = appRouterPathToRoute(filePath);
+        const uri = appRouterPathToRoute(normalizedPath);
         result.routes!.push({ method: 'GET', uri });
         result.frameworkRole = 'next_page';
 
@@ -262,18 +278,32 @@ export class NextJSPlugin implements FrameworkPlugin {
       } else if (fileType === 'route') {
         // API route handler — extract exported HTTP methods
         const methods = this.extractApiMethods(source);
-        const uri = appRouterPathToRoute(filePath);
+        const uri = appRouterPathToRoute(normalizedPath);
         for (const method of methods) {
           result.routes!.push({ method, uri });
         }
         result.frameworkRole = 'next_api_route';
+      } else if (fileType === 'forbidden') {
+        result.frameworkRole = 'next_forbidden';
+      } else if (fileType === 'unauthorized') {
+        result.frameworkRole = 'next_unauthorized';
+      } else if (fileType === 'global-error') {
+        result.frameworkRole = 'next_global_error';
+      }
+
+      // Metadata file conventions (sitemap.js, robots.js, opengraph-image.js, etc.)
+      if (!result.frameworkRole) {
+        const metaBasename = path.basename(normalizedPath).replace(PAGE_EXTENSIONS, '');
+        if (METADATA_FILES.includes(metaBasename as (typeof METADATA_FILES)[number])) {
+          result.frameworkRole = 'next_metadata';
+        }
       }
     }
 
     // Pages Router
-    if (filePath.startsWith('pages/') && PAGE_EXTENSIONS.test(filePath)) {
-      const uri = pagesRouterPathToRoute(filePath);
-      if (filePath.startsWith('pages/api/')) {
+    if (normalizedPath.startsWith('pages/') && PAGE_EXTENSIONS.test(normalizedPath)) {
+      const uri = pagesRouterPathToRoute(normalizedPath);
+      if (normalizedPath.startsWith('pages/api/')) {
         result.routes!.push({ method: 'ALL', uri });
         result.frameworkRole = 'next_api_page';
       } else {
@@ -296,9 +326,16 @@ export class NextJSPlugin implements FrameworkPlugin {
       result.frameworkRole = result.frameworkRole ?? 'next_server_action';
     }
 
-    // Detect middleware
-    if (filePath === 'middleware.ts' || filePath === 'middleware.js') {
+    // Detect middleware / proxy / instrumentation — root-level or src/ conventions
+    // middleware.js → proxy.js (Next.js 16 rename)
+    if (normalizedPath === 'middleware.ts' || normalizedPath === 'middleware.js' ||
+        normalizedPath === 'proxy.ts' || normalizedPath === 'proxy.js') {
       result.frameworkRole = 'next_middleware';
+    }
+
+    // instrumentation.js — Next.js instrumentation hook (register/onRequestError)
+    if (normalizedPath === 'instrumentation.ts' || normalizedPath === 'instrumentation.js') {
+      result.frameworkRole = 'next_instrumentation';
     }
 
     return ok(result);
@@ -308,15 +345,17 @@ export class NextJSPlugin implements FrameworkPlugin {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
 
-    // Find layout files and their nested pages
+    // Find layout files and their nested pages (supports both app/ and src/app/)
     const layouts = allFiles.filter((f) => {
-      const basename = path.basename(f.path).replace(PAGE_EXTENSIONS, '');
-      return f.path.startsWith('app/') && basename === 'layout';
+      const np = normalizeSrcPath(f.path);
+      const basename = path.basename(np).replace(PAGE_EXTENSIONS, '');
+      return np.startsWith('app/') && basename === 'layout';
     });
 
     const pages = allFiles.filter((f) => {
-      const basename = path.basename(f.path).replace(PAGE_EXTENSIONS, '');
-      return f.path.startsWith('app/') && basename === 'page';
+      const np = normalizeSrcPath(f.path);
+      const basename = path.basename(np).replace(PAGE_EXTENSIONS, '');
+      return np.startsWith('app/') && basename === 'page';
     });
 
     for (const layout of layouts) {
@@ -345,7 +384,8 @@ export class NextJSPlugin implements FrameworkPlugin {
 
     // Parallel route slot edges
     const parallelPages = allFiles.filter((f) => {
-      return f.path.startsWith('app/') && extractParallelSlot(f.path) !== null;
+      const np = normalizeSrcPath(f.path);
+      return np.startsWith('app/') && extractParallelSlot(np) !== null;
     });
 
     for (const file of parallelPages) {
@@ -385,8 +425,9 @@ export class NextJSPlugin implements FrameworkPlugin {
 
     // Intercepting route edges
     const interceptingFiles = allFiles.filter((f) => {
-      if (!f.path.startsWith('app/')) return false;
-      return extractInterceptingInfo(f.path) !== null;
+      const np = normalizeSrcPath(f.path);
+      if (!np.startsWith('app/')) return false;
+      return extractInterceptingInfo(np) !== null;
     });
 
     for (const file of interceptingFiles) {
@@ -424,8 +465,9 @@ export class NextJSPlugin implements FrameworkPlugin {
 
     // Template edges
     const templates = allFiles.filter((f) => {
-      const basename = path.basename(f.path).replace(PAGE_EXTENSIONS, '');
-      return f.path.startsWith('app/') && basename === 'template';
+      const np = normalizeSrcPath(f.path);
+      const basename = path.basename(np).replace(PAGE_EXTENSIONS, '');
+      return np.startsWith('app/') && basename === 'template';
     });
 
     for (const template of templates) {
@@ -453,11 +495,12 @@ export class NextJSPlugin implements FrameworkPlugin {
     }
 
     // Pages Router data fetching edges
-    const pagesRouterFiles = allFiles.filter((f) =>
-      f.path.startsWith('pages/') &&
-      !f.path.startsWith('pages/api/') &&
-      PAGE_EXTENSIONS.test(f.path),
-    );
+    const pagesRouterFiles = allFiles.filter((f) => {
+      const np = normalizeSrcPath(f.path);
+      return np.startsWith('pages/') &&
+        !np.startsWith('pages/api/') &&
+        PAGE_EXTENSIONS.test(np);
+    });
 
     for (const file of pagesRouterFiles) {
       let source: string;
