@@ -30,7 +30,7 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | Tool | What it does | When available |
 |---|---|---|
 | `get_component_tree` | Build component render tree from a root file | Vue, Nuxt, Inertia |
-| `get_change_impact` | Reverse dependency graph — what depends on this file or symbol | Always |
+| `get_change_impact` | Reverse dependency graph — what depends on this file or symbol. Each dependent symbol includes `hasTestReach` (whether any test that covers the file also references that specific symbol) | Always |
 | `get_task_context` | **Graph-aware context engine** — describe a dev task, get the optimal code subgraph (execution paths, tests, types) adapted to task type (bugfix/feature/refactor) | Always |
 | `get_feature_context` | NLP-driven context assembly — describe a feature, get relevant code within a token budget | Always |
 | `get_request_flow` | Trace request flow for a URL+method: route → middleware → controller → service | Express, NestJS, Laravel, FastAPI, Flask, DRF, Spring, Rails, Fastify, Hono, tRPC |
@@ -68,6 +68,7 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_api_surface` | List all exported symbols (public API) of a file or matching files |
 | `get_dead_exports` | Find exported symbols never imported by any other file (dead code candidates) |
 | `get_untested_exports` | Find exported public symbols with no matching test file (test coverage gaps) |
+| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). More thorough than `get_untested_exports` |
 | `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
 
 ## Topology & federation
@@ -157,7 +158,7 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "What's the DB schema?" | `get_schema` — reconstructed from migrations, no DB needed |
 | "Trace a request end-to-end" | `get_request_flow("/api/users", "GET")` — full chain |
 | "What NestJS modules does this depend on?" | `get_module_graph` — full dependency tree |
-| "Find untested code" | `get_untested_exports` + `self_audit` — flag coverage gaps |
+| "Find untested code" | `get_untested_symbols` — deep analysis with "unreached"/"imported_not_called" classification. Or lighter: `get_untested_exports` + `self_audit` |
 | "Explain this complex service" | `explain_symbol` — AI-generated explanation with context |
 | "What repos call this endpoint?" | `get_federation_clients("/api/users")` — all client calls across repos |
 | "Will this API change break anything?" | `get_federation_impact` — cross-repo impact with symbol resolution |

@@ -30,9 +30,8 @@ All trace-mcp state lives in `~/.trace-mcp/`:
 {
   // Global defaults (apply to all projects)
   "ai": {
-    "enabled": true,
-    "provider": "ollama",
-    "base_url": "http://localhost:11434"
+    "enabled": true
+    // provider defaults to "onnx" — local embeddings, no API keys
   },
   "security": {
     "max_file_size_bytes": 524288
@@ -147,7 +146,32 @@ You can add more via `.traceignore` or the `ignore.directories` config key.
 
 ## AI configuration
 
-When `ai.enabled` is `true`, trace-mcp runs background summarization and embedding pipelines after indexing and unlocks 5 additional AI-powered tools (`explain_symbol`, `suggest_tests`, `review_change`, `find_similar`, `explain_architecture`).
+AI features enable semantic search (vector embeddings) and optional LLM-powered summarization. trace-mcp supports three embedding providers, with a **zero-config local option** as the default.
+
+### Provider overview
+
+| Provider | Embeddings | LLM (summarization) | Requires | Setup |
+|---|---|---|---|---|
+| **`onnx`** (default) | ✅ local, offline | ❌ | `@huggingface/transformers` (optional dep) | Zero-config — model auto-downloads (~23 MB) on first use |
+| **`ollama`** | ✅ via Ollama | ✅ via Ollama | Running Ollama instance | Install Ollama + pull models |
+| **`openai`** | ✅ via OpenAI API | ✅ via OpenAI API | API key | Set `api_key` or `OPENAI_API_KEY` env |
+
+### Minimal setup — local embeddings (no API keys)
+
+```jsonc
+{
+  "ai": {
+    "enabled": true
+    // provider defaults to "onnx"
+    // model defaults to Xenova/all-MiniLM-L6-v2 (384 dims, Apache 2.0)
+    // auto-downloads ~23 MB on first embed_repo or semantic search
+  }
+}
+```
+
+This enables semantic/hybrid `search` and `query_by_intent` with zero configuration. No API keys, no external services, works fully offline after first model download.
+
+### Full setup — Ollama (embeddings + LLM summarization)
 
 ```jsonc
 {
@@ -156,6 +180,7 @@ When `ai.enabled` is `true`, trace-mcp runs background summarization and embeddi
     "provider": "ollama",
     "base_url": "http://localhost:11434",
     "inference_model": "gemma4-e4b",
+    "fast_model": "gemma4-e4b",
     "embedding_model": "qwen3-embedding:0.6b",
     "summarize_on_index": true,
     "summarize_batch_size": 20,
@@ -165,21 +190,41 @@ When `ai.enabled` is `true`, trace-mcp runs background summarization and embeddi
 }
 ```
 
+### Full setup — OpenAI
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "openai",
+    "api_key": "sk-...",
+    "inference_model": "gpt-4o-mini",
+    "embedding_model": "text-embedding-3-small",
+    "embedding_dimensions": 1536,
+    "summarize_on_index": true
+  }
+}
+```
+
+### All options
+
 | Option | Default | Description |
 |---|---|---|
 | `ai.enabled` | `false` | Enable AI features |
-| `ai.provider` | `"ollama"` | `"ollama"` or `"openai"` |
-| `ai.base_url` | — | Custom API endpoint |
-| `ai.api_key` | — | API key (required for OpenAI) |
-| `ai.inference_model` | `"gemma4-e4b"` (ollama) | Model for explanations and reviews |
-| `ai.fast_model` | `"gemma4-e4b"` (ollama) | Faster model for lightweight tasks |
-| `ai.embedding_model` | `"qwen3-embedding:0.6b"` (ollama) | Model for vector embeddings |
-| `ai.embedding_dimensions` | — | Embedding vector dimensions |
-| `ai.summarize_on_index` | `true` | Auto-summarize symbols after indexing |
+| `ai.provider` | `"onnx"` | `"onnx"` (local, zero-config), `"ollama"`, or `"openai"` |
+| `ai.base_url` | — | Custom API endpoint (ollama/openai only) |
+| `ai.api_key` | — | API key (required for openai; or set `OPENAI_API_KEY` env) |
+| `ai.inference_model` | — | LLM for explanations and reviews (ollama/openai only) |
+| `ai.fast_model` | — | Faster LLM for lightweight tasks (ollama/openai only) |
+| `ai.embedding_model` | auto per provider | `"Xenova/all-MiniLM-L6-v2"` (onnx), `"qwen3-embedding:0.6b"` (ollama), `"text-embedding-3-small"` (openai) |
+| `ai.embedding_dimensions` | auto per provider | `384` (onnx), `768` (ollama), `1536` (openai) |
+| `ai.summarize_on_index` | `false` | Auto-summarize symbols after indexing (requires ollama/openai with LLM model) |
 | `ai.summarize_batch_size` | `20` | Symbols per summarization batch |
 | `ai.summarize_kinds` | `["class", "function", ...]` | Symbol kinds to summarize |
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
-| `ai.reranker_model` | — | Model for search result reranking |
+| `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
+
+> **ONNX provider details:** Uses `@huggingface/transformers` (installed as optional dependency). The default model `Xenova/all-MiniLM-L6-v2` is Apache 2.0 licensed, produces 384-dimensional L2-normalized mean-pooled vectors, and weighs ~23 MB. The model is cached locally after first download. You can use any ONNX-compatible model from HuggingFace by setting `embedding_model`.
 
 > **Ollama parallelism:** When setting `concurrency` > 1, you must also configure Ollama to handle parallel requests. The desktop app UI does not expose this setting — use one of these methods:
 >
@@ -201,6 +246,69 @@ When `ai.enabled` is `true`, trace-mcp runs background summarization and embeddi
 > Then `source ~/.zshrc` and restart Ollama.
 >
 > Set `OLLAMA_NUM_PARALLEL` to match your `ai.concurrency` value. Higher parallelism uses more VRAM/RAM — start with 2–4 and increase if your hardware allows.
+
+---
+
+## LSP enrichment
+
+trace-mcp can optionally use Language Server Protocol (LSP) servers to enrich call graph edges with **compiler-grade type resolution**. This resolves dynamic dispatch, interface polymorphism, generics, and other cases that tree-sitter AST analysis alone cannot handle.
+
+**Disabled by default** — opt-in via configuration. When enabled, LSP runs as a post-indexing enrichment pass (Pass 3) after the standard tree-sitter indexing completes. If an LSP server is not installed or fails to start, indexing continues normally without LSP edges.
+
+```jsonc
+{
+  "lsp": {
+    "enabled": true,              // default: false — must opt-in
+    "auto_detect": true,          // default: true — auto-detect available LSP servers
+    "max_concurrent_servers": 2,  // default: 2 — limit parallel LSP processes
+    "enrichment_timeout_ms": 120000, // default: 120000 — overall enrichment timeout
+    "batch_size": 100,            // default: 100 — symbols per batch
+    "servers": {                  // optional: override auto-detected server commands
+      "typescript": {
+        "command": "npx",
+        "args": ["typescript-language-server", "--stdio"],
+        "timeout_ms": 30000
+      }
+    }
+  }
+}
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `lsp.enabled` | `false` | Enable LSP enrichment pass |
+| `lsp.auto_detect` | `true` | Auto-detect available LSP servers based on project files |
+| `lsp.max_concurrent_servers` | `2` | Maximum number of LSP servers running simultaneously |
+| `lsp.enrichment_timeout_ms` | `120000` | Overall timeout for the entire LSP enrichment pass |
+| `lsp.batch_size` | `100` | Number of symbols to process per batch |
+| `lsp.servers.<lang>.command` | — | Override the LSP server command for a language |
+| `lsp.servers.<lang>.args` | `[]` | Arguments for the LSP server command |
+| `lsp.servers.<lang>.timeout_ms` | `30000` | Per-request timeout for this server |
+| `lsp.servers.<lang>.initializationOptions` | — | Custom LSP initialization options |
+
+### Auto-detected servers
+
+| Language | Server | Detection |
+|---|---|---|
+| TypeScript/JavaScript | `typescript-language-server` | `tsconfig.json` or `package.json` exists |
+| Python | `pyright-langserver` | `pyproject.toml`, `requirements.txt`, or `setup.py` exists |
+| Go | `gopls` | `go.mod` exists |
+| Rust | `rust-analyzer` | `Cargo.toml` exists |
+
+Servers are only started if the corresponding language has files in the index AND the server binary is available on PATH.
+
+### 4-tier resolution system
+
+Every edge in the call graph carries a `resolution_tier` indicating how it was resolved:
+
+| Tier | Source | Confidence |
+|---|---|---|
+| `lsp_resolved` | LSP call hierarchy | Compiler-grade (highest) |
+| `ast_resolved` | Tree-sitter + module resolution | Static AST (default) |
+| `ast_inferred` | Heuristic inference from imports | Medium |
+| `text_matched` | Name/text similarity matching | Lowest |
+
+The `get_call_graph` tool reports a `resolution_tiers` summary showing the distribution across all edges, so you can see how much of the graph has compiler-grade confidence.
 
 ---
 

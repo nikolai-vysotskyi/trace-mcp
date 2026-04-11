@@ -30,6 +30,7 @@ Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp
 | Find all usages of a symbol | `find_usages` | ~~Grep~~ |
 | Get context for a task | `get_feature_context` | ~~reading 15 files with Read~~ |
 | Find tests for a symbol | `get_tests_for` | ~~Glob + Grep~~ |
+| Find untested symbols (deep) | `get_untested_symbols` (classifies "unreached" vs "imported_not_called") | ~~manual audit~~ |
 | Project overview | `get_project_map` (summary_only=true) | ~~Bash ls~~ |
 | List files in a directory | `get_outline` or `search` | ~~Bash ls/find~~ ~~Glob~~ |
 | Find where something is defined | `search` | ~~Grep~~ |
@@ -95,6 +96,22 @@ When you need to Edit a file, minimize what you Read:
 - Integration plugins: `src/indexer/plugins/integration/` — framework-specific (api/, framework/, orm/, etc.)
 - Each plugin implements `LanguagePlugin` or `FrameworkPlugin` interface from `src/plugin-api/types.ts`
 - Plugin registry: `src/plugin-api/registry.ts`
+
+### LSP enrichment subsystem
+
+- `src/lsp/` — separate subsystem (not a plugin) for compiler-grade call graph enrichment
+- **Opt-in** via `lsp.enabled: true` in config. Disabled by default, zero overhead when off.
+- Pipeline integration: Pass 3 (after tree-sitter indexing + edge resolution, before env indexing)
+- Key files:
+  - `src/lsp/bridge.ts` — orchestrator (entry point)
+  - `src/lsp/client.ts` — JSON-RPC client over stdio (Content-Length framing)
+  - `src/lsp/lifecycle.ts` — LSP server process management (lazy start, concurrent limits, shutdown)
+  - `src/lsp/enrichment.ts` — core algorithm: callHierarchy/prepare → outgoingCalls → edge upgrade/insert
+  - `src/lsp/mappers.ts` — symbol ↔ LSP position mapping
+  - `src/lsp/config.ts` — auto-detection of available servers (tsserver, pyright, gopls, rust-analyzer)
+  - `src/lsp/protocol.ts` — hand-written LSP type definitions (zero external deps)
+- Edges have a `resolution_tier` column: `lsp_resolved` > `ast_resolved` > `ast_inferred` > `text_matched`
+- Config schema: `lsp` section in `TraceMcpConfigSchema` (`src/config.ts`)
 
 ## Workflow Checklists — MANDATORY
 

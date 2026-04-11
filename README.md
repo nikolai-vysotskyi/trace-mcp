@@ -1,6 +1,12 @@
-# trace-mcp
+<p align="center">
+  <img src="packages/app/build/icon-256.png" alt="trace-mcp logo" width="128" />
+</p>
 
-**Framework-aware code intelligence MCP server — 14 frameworks, 7 ORMs, 12 UI libraries, 20+ other integrations (53 total) across 68 languages. Up to 99% token reduction.**
+<h1 align="center">trace-mcp</h1>
+
+<p align="center">
+  <strong>Framework-aware code intelligence MCP server — 14 frameworks, 7 ORMs, 12 UI libraries, 20+ other integrations (53 total) across 68 languages. Up to 99% token reduction.</strong>
+</p>
 
 > Your AI agent reads `UserController.php` and sees a class.
 > trace-mcp reads it and sees a route → controller → FormRequest → Eloquent model → Inertia render → Vue page → child components — **in one graph.**
@@ -87,7 +93,7 @@ Tools that generate docs from code or provide embedding-based code search for AI
 | Framework-aware context | ✅ routes, models, components | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Task-focused context | ✅ `get_task_context` — code subgraph | ❌ packs everything | ❌ | ❌ | ❌ | ❌ |
 | No doc maintenance needed | ✅ derived from code | ✅ repacks on demand | ❌ manual reindex | partial (auto on startup) | ❌ manual ingest | partial (auto-reindex) |
-| Works offline, no embeddings | ✅ graph + FTS5 | ✅ | ❌ requires cloud API | ❌ requires local embeddings | ❌ requires local embeddings | ❌ requires local embeddings |
+| Works offline, no API keys | ✅ graph + FTS5 + bundled ONNX embeddings | ✅ | ❌ requires cloud API | ❌ requires local embeddings | ❌ requires local embeddings | ❌ requires local embeddings |
 | Incremental updates | ✅ file watcher, content hash | ❌ full repack | ✅ SHA-256 hashing | ✅ file hash + opt-in watcher | ❌ | ✅ mtime + dedup |
 | Written in | TypeScript | TypeScript | TypeScript | JavaScript | TypeScript | Python |
 
@@ -185,11 +191,11 @@ trace-mcp benchmark /path/to/project
 - **Change impact analysis** — reverse dependency traversal across languages
 - **Graph-aware task context** — describe a dev task → get the optimal code subgraph (execution paths, tests, types), adapted to bugfix/feature/refactor intent
 - **CI/PR change impact reports** — automated blast radius, risk scoring, test gap detection, architecture violation checks on every PR
-- **Call graph & DI tree** — bidirectional call graphs, NestJS dependency injection
+- **Call graph & DI tree** — bidirectional call graphs with 4-tier resolution confidence, optional LSP enrichment for compiler-grade accuracy, NestJS dependency injection
 - **ORM model context** — relationships, schema, metadata for 7 ORMs
-- **Dead code & test gap detection** — find untested exports, dead code, coverage gaps
+- **Dead code & test gap detection** — find untested exports/symbols (with "unreached" vs "imported_not_called" classification), dead code, per-symbol test reach in impact analysis
 - **Multi-repo federation** — link graphs across separate repos via API contracts; cross-repo impact analysis
-- **AI-powered analysis** — symbol explanation, test suggestions, change review, semantic search (optional)
+- **AI-powered analysis** — semantic search with zero-config local ONNX embeddings (no API keys needed), plus optional LLM summarization via Ollama/OpenAI
 
 ### Supported stack
 
@@ -262,6 +268,19 @@ If you prefer manual control, see [Configuration](docs/configuration.md) for all
 ```bash
 trace-mcp init --skip-hooks --skip-claude-md --skip-mcp-client
 ```
+
+### Enabling semantic search
+
+Semantic search works out of the box — just enable AI in your config:
+
+```jsonc
+// ~/.trace-mcp/.config.json or project/.trace-mcp/.config.json
+{ "ai": { "enabled": true } }
+```
+
+The default provider (`onnx`) uses a bundled local model (`Xenova/all-MiniLM-L6-v2`, ~23 MB) — no API keys, no external services, fully offline after first model download. Run `embed_repo` once or just use `search` with `semantic: "on"` and embeddings will be computed on demand.
+
+For LLM-powered summarization, switch to `ollama` or `openai` provider — see [AI configuration](docs/configuration.md#ai-configuration).
 
 ### Indexing details
 
@@ -401,9 +420,18 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
 ┌──────────────────────────────────────────┐
+│  Pass 3 — LSP enrichment (opt-in)       │
+│  tsserver · pyright · gopls ·           │
+│  rust-analyzer → compiler-grade         │
+│  call resolution, 4-tier confidence     │
+└────────────────────┬─────────────────────┘
+                     │
+                     ▼
+┌──────────────────────────────────────────┐
 │  SQLite (WAL mode) + FTS5               │
 │  nodes · edges · symbols · routes       │
-│  + optional: embeddings · summaries     │
+│  + embeddings (local ONNX by default)   │
+│  + optional: LLM summaries              │
 └────────────────────┬─────────────────────┘
                      │
                      ▼
@@ -543,7 +571,7 @@ The full workflow is in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) �
 |---|---|
 | **Summary** | Changed files, affected files count, risk level, gap counts |
 | **Blast Radius** | Files transitively affected by changes (depth-2 reverse dependency traversal) |
-| **Test Coverage Gaps** | Affected symbols with no matching test file |
+| **Test Coverage Gaps** | Affected symbols with no matching test file. Per-symbol `hasTestReach` shows whether tests actually reference each specific symbol |
 | **Risk Analysis** | Per-file composite score: 30% complexity + 25% churn + 25% coupling + 20% blast radius |
 | **Architecture Violations** | Layer rule violations involving changed files (auto-detects clean architecture / hexagonal presets) |
 | **Dead Code** | New exports in changed files that nothing imports |
