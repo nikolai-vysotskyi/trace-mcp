@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServerContext } from '../../server/types.js';
-import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, selfAudit } from '../analysis/introspect.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, getUntestedSymbols, selfAudit } from '../analysis/introspect.js';
 import { getCouplingMetrics, getDependencyCycles, getPageRank, getExtractionCandidates, getRepoHealth } from '../analysis/graph-analysis.js';
 import { getHotspots } from '../git/git-analysis.js';
 import { getLayerViolations, detectLayerPreset, type LayerDefinition } from '../analysis/layer-violations.js';
@@ -137,6 +137,18 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     },
   );
 
+  server.tool(
+    'get_untested_symbols',
+    'Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test file imports the source) or "imported_not_called" (test imports file but never references this symbol). Use for thorough coverage gap analysis.',
+    {
+      file_pattern: z.string().max(512).optional().describe('Filter by file glob pattern (e.g. "src/tools/%")'),
+      max_results: z.number().int().min(1).max(500).optional().describe('Cap on returned items (default: all)'),
+    },
+    async ({ file_pattern, max_results }) => {
+      const result = getUntestedSymbols(store, file_pattern, max_results);
+      return { content: [{ type: 'text', text: jh('get_untested_symbols', result) }] };
+    },
+  );
 
   server.tool('self_audit', 'Dead code & coverage audit: dead exports, untested public symbols, heritage debt. Use for cleanup and coverage tasks.', {}, async () => {
     return { content: [{ type: 'text', text: j(selfAudit(store)) }] };

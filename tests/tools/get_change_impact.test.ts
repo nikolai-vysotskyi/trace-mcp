@@ -190,6 +190,20 @@ describe('get_change_impact', () => {
     const i = impact(getChangeImpact(store, { filePath: 'src/App.vue' }));
     expect(i.breakingChanges).toBeUndefined();
   });
+
+  // ── Per-symbol test reach ──
+
+  it('symbols in dependents may have hasTestReach boolean', () => {
+    const i = impact(getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }));
+    const withSymbols = i.dependents.filter((d) => d.symbols && d.symbols.length > 0);
+    for (const dep of withSymbols) {
+      for (const sym of dep.symbols!) {
+        if (sym.hasTestReach !== undefined) {
+          expect(typeof sym.hasTestReach).toBe('boolean');
+        }
+      }
+    }
+  });
 });
 
 // Helper to unwrap results
