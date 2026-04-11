@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --bg-primary: rgba(246, 246, 246, 0.85);
+  --bg-primary: rgba(246, 246, 246, 0.92);
   --bg-secondary: rgba(232, 232, 232, 0.6);
   --bg-tertiary: rgba(210, 210, 210, 0.5);
   --bg-grouped: #fff;
@@ -12,6 +12,8 @@
   --border: rgba(0, 0, 0, 0.12);
   --border-row: rgba(0, 0, 0, 0.08);
   --bg-active: rgba(0, 0, 0, 0.06);
+  --sidebar-border: rgba(0, 0, 0, 0.12);
+  --sidebar-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.18) 100%);
   --accent: #007aff;
   --accent-hover: #0062d1;
   --destructive: #ff3b30;
@@ -25,7 +27,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-primary: rgba(30, 30, 30, 0.85);
+    --bg-primary: rgba(30, 30, 30, 0.92);
     --bg-secondary: rgba(44, 44, 46, 0.6);
     --bg-tertiary: rgba(58, 58, 60, 0.5);
     --bg-grouped: rgba(44, 44, 46, 0.95);
@@ -36,6 +38,8 @@
     --border: rgba(255, 255, 255, 0.12);
     --border-row: rgba(255, 255, 255, 0.06);
     --bg-active: rgba(255, 255, 255, 0.1);
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --sidebar-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.04) 100%);
     --accent: #0a84ff;
     --accent-hover: #409cff;
     --destructive: #ff453a;

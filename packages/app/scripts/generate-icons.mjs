@@ -98,6 +98,11 @@ function appIconSVG(size) {
   // Single subtle ring around the hub
   const hubRing = `<circle cx="256" cy="265" r="76" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>`;
 
+  // macOS expects ~18% padding around the icon artwork
+  const pad = 46; // padding on each side in viewBox units
+  const inner = 512 - pad * 2; // 420
+  const scale = (inner / 512).toFixed(4); // ~0.8203
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -119,6 +124,8 @@ function appIconSVG(size) {
         <rect width="512" height="512" fill="url(#gridFadeGrad)"/>
       </mask>
     </defs>
+    <!-- Scale down with padding so macOS dock sizes it correctly -->
+    <g transform="translate(${pad}, ${pad}) scale(${scale})">
     <!-- Background -->
     <rect width="512" height="512" rx="110" ry="110" fill="url(#bg)"/>
     <rect width="512" height="512" rx="110" ry="110" fill="url(#shine)"/>
@@ -136,6 +143,7 @@ function appIconSVG(size) {
     </g>
     <!-- "T" in center hub -->
     <text x="256" y="265" text-anchor="middle" dominant-baseline="central" font-family="SF Pro Display, Helvetica Neue, Arial, sans-serif" font-weight="800" font-size="62" fill="rgba(79,70,229,0.9)">T</text>
+    </g>
   </svg>`;
 }
 

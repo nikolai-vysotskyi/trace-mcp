@@ -1,71 +1,191 @@
 import path from 'path';
-import { Tray, nativeImage, Menu, BrowserWindow, app, shell, ipcMain, dialog } from 'electron';
+import { Tray, nativeImage, Menu, BrowserWindow, app, shell, ipcMain, dialog, nativeTheme } from 'electron';
 import { DaemonClient } from './api-client';
 
 const ICON_ACTIVE = path.join(__dirname, '..', '..', 'assets', 'tray-iconTemplate.png');
 const ICON_INACTIVE = path.join(__dirname, '..', '..', 'assets', 'tray-icon-dimTemplate.png');
 const APP_ICON = path.join(__dirname, '..', '..', 'build', 'icon.png');
 
+const TABBING_ID = 'trace-mcp-tabs';
+
 let tray: Tray;
-let mainWindow: BrowserWindow | null = null;
+let menuWindow: BrowserWindow | null = null;
+const projectWindows = new Map<string, BrowserWindow>(); // root → window
 let healthInterval: ReturnType<typeof setInterval>;
 let daemonReachable = false;
 
 const daemon = new DaemonClient();
 
-function getRendererUrl(tab?: string): string {
+function getRendererUrl(params?: Record<string, string>): string {
   const base = `file://${path.join(__dirname, '..', 'renderer', 'index.html')}`;
-  return tab ? `${base}?tab=${tab}` : base;
+  if (!params || Object.keys(params).length === 0) return base;
+  const qs = new URLSearchParams(params).toString();
+  return `${base}?${qs}`;
 }
 
-function showWindow(tab?: string): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (tab) {
-      mainWindow.loadURL(getRendererUrl(tab));
-    }
-    app.dock?.setIcon(nativeImage.createFromPath(APP_ICON));
-    app.dock?.show();
-    mainWindow.show();
-    mainWindow.focus();
-    return;
-  }
+function getTitleBarColor(): string {
+  return nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#f6f6f6';
+}
 
-  mainWindow = new BrowserWindow({
-    width: 480,
-    height: 560,
+function createWindowOptions(extraOpts?: Partial<Electron.BrowserWindowConstructorOptions>): Electron.BrowserWindowConstructorOptions {
+  return {
+    width: 960,
+    height: 700,
     show: false,
     icon: APP_ICON,
-    frame: false,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 12, y: 12 },
+    tabbingIdentifier: TABBING_ID,
     resizable: true,
     minimizable: true,
-    maximizable: false,
-    fullscreenable: false,
+    maximizable: true,
+    fullscreenable: true,
     skipTaskbar: false,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    transparent: true,
+    backgroundColor: getTitleBarColor(),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
+    ...extraOpts,
+  };
+}
+
+function setupWindowEvents(win: BrowserWindow): void {
+  win.on('enter-full-screen', () => {
+    if (!win.isDestroyed()) win.webContents.send('fullscreen-changed', true);
   });
-
-  mainWindow.loadURL(getRendererUrl(tab));
-
-  mainWindow.once('ready-to-show', () => {
-    app.dock?.setIcon(nativeImage.createFromPath(APP_ICON));
-    app.dock?.show();
-    mainWindow?.show();
-    mainWindow?.focus();
+  win.on('leave-full-screen', () => {
+    if (!win.isDestroyed()) win.webContents.send('fullscreen-changed', false);
   });
+}
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+function ensureDockVisible(): void {
+  app.dock?.show();
+  app.dock?.setIcon(nativeImage.createFromPath(APP_ICON));
+}
+
+/** Notify ALL windows whether the native tab bar is visible */
+function broadcastTabBar(visible: boolean): void {
+  const allWindows = [menuWindow, ...projectWindows.values()];
+  for (const win of allWindows) {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('tabbar-changed', visible);
+    }
+  }
+}
+
+function hideDockIfNoWindows(): void {
+  if (!menuWindow && projectWindows.size === 0) {
     app.dock?.hide();
+  }
+}
+
+function showMenuWindow(tab?: string): void {
+  if (menuWindow && !menuWindow.isDestroyed()) {
+    if (tab) {
+      menuWindow.loadURL(getRendererUrl({ view: 'menu', tab }));
+    }
+    ensureDockVisible();
+    menuWindow.show();
+    menuWindow.focus();
+    return;
+  }
+
+  menuWindow = new BrowserWindow(createWindowOptions());
+  menuWindow.loadURL(getRendererUrl({ view: 'menu', ...(tab ? { tab } : {}) }));
+
+  menuWindow.webContents.on('did-finish-load', () => {
+    menuWindow?.setTitle('Menu');
   });
+
+  menuWindow.once('ready-to-show', () => {
+    ensureDockVisible();
+    menuWindow?.show();
+    menuWindow?.focus();
+  });
+
+  setupWindowEvents(menuWindow);
+
+  menuWindow.on('closed', () => {
+    menuWindow = null;
+    hideDockIfNoWindows();
+  });
+}
+
+function openProjectTab(root: string): void {
+  // If project already open, focus its tab
+  const existing = projectWindows.get(root);
+  if (existing && !existing.isDestroyed()) {
+    existing.focus();
+    return;
+  }
+
+  // Ensure menu window exists first (it becomes the first tab)
+  if (!menuWindow || menuWindow.isDestroyed()) {
+    showMenuWindow();
+  }
+
+  const win = new BrowserWindow(createWindowOptions());
+  projectWindows.set(root, win);
+
+  win.loadURL(getRendererUrl({ view: 'project', root }));
+
+  // Attach as a native macOS tab to the menu window
+  if (menuWindow && !menuWindow.isDestroyed()) {
+    menuWindow.addTabbedWindow(win);
+  }
+
+  win.once('ready-to-show', () => {
+    ensureDockVisible();
+    win.show();
+    win.focus();
+    // First project tab opened → tab bar is now visible
+    broadcastTabBar(true);
+  });
+
+  setupWindowEvents(win);
+
+  // Set tab title to project name (after page load so HTML <title> doesn't override)
+  const projectName = root.split('/').filter(Boolean).pop() || root;
+  win.webContents.on('did-finish-load', () => {
+    win.setTitle(projectName);
+  });
+
+  win.on('closed', () => {
+    projectWindows.delete(root);
+    // If no more project tabs, tab bar disappears (only menu window left)
+    if (projectWindows.size === 0) {
+      broadcastTabBar(false);
+    }
+    hideDockIfNoWindows();
+  });
+}
+
+// IPC: open a project as a native tab
+ipcMain.handle('open-project-tab', (_event, root: string) => {
+  openProjectTab(root);
+  return { ok: true };
+});
+
+// IPC: close the current tab/window
+ipcMain.handle('close-current-tab', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.close();
+  return { ok: true };
+});
+
+// IPC: sync sidebar width across all tabbed windows
+ipcMain.on('sync-sidebar-width', (event, width: number) => {
+  const sender = event.sender;
+  const allWindows = [menuWindow, ...projectWindows.values()];
+  for (const win of allWindows) {
+    if (win && !win.isDestroyed() && win.webContents !== sender) {
+      win.webContents.send('sidebar-width-changed', width);
+    }
+  }
+});
+
+function showWindow(tab?: string): void {
+  showMenuWindow(tab);
 }
 
 function createDotIcon(hex: string, glow: boolean): Electron.NativeImage {
@@ -114,8 +234,8 @@ function buildContextMenu(): Menu {
   return Menu.buildFromTemplate([
     { label: statusLabel, enabled: false, icon: dotIcon },
     { type: 'separator' },
-    { label: 'Indexes', click: () => showWindow('indexes') },
-    { label: 'Clients', click: () => showWindow('clients') },
+    { label: 'Projects', click: () => showWindow('projects') },
+    { label: 'MCP Clients', click: () => showWindow('clients') },
     { label: 'Settings', click: () => showWindow('settings') },
     { type: 'separator' },
     { label: 'Quit trace-mcp', click: () => { cleanup(); app.quit(); } },
@@ -143,6 +263,15 @@ async function checkHealth(): Promise<void> {
   tray.setContextMenu(buildContextMenu());
 }
 
+// Handle native "+" button in tab bar — focus Menu tab
+app.on('new-window-for-tab', () => {
+  if (menuWindow && !menuWindow.isDestroyed()) {
+    menuWindow.focus();
+  } else {
+    showMenuWindow();
+  }
+});
+
 export function createTray(): Tray {
   const icon = nativeImage.createFromPath(ICON_INACTIVE);
   icon.setTemplateImage(true);
@@ -153,6 +282,17 @@ export function createTray(): Tray {
   // Initial health check + periodic polling
   checkHealth();
   healthInterval = setInterval(checkHealth, 5_000);
+
+  // Update title bar color when system theme changes
+  nativeTheme.on('updated', () => {
+    const color = getTitleBarColor();
+    const allWindows = [menuWindow, ...projectWindows.values()];
+    for (const win of allWindows) {
+      if (win && !win.isDestroyed()) {
+        win.setBackgroundColor(color);
+      }
+    }
+  });
 
   return tray;
 }

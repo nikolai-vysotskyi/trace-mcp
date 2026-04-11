@@ -20,6 +20,7 @@ export interface ProjectInfo {
 
 export interface ClientInfo {
   id: string;
+  name?: string;
   transport: string;
   project?: string;
   connectedAt: string;
@@ -46,7 +47,8 @@ export type SSEEvent =
   | { type: 'project_status'; project: string; status: string; error?: string; progress?: ProgressSnapshot }
   | { type: 'indexing_progress'; project: string; phase: string; current: number; total: number }
   | { type: 'indexing_done'; project: string }
-  | { type: 'client_connect'; clientId: string; transport: string; project?: string }
+  | { type: 'client_connect'; clientId: string; transport: string; project?: string; name?: string }
+  | { type: 'client_update'; clientId: string; project?: string; name?: string }
   | { type: 'client_disconnect'; clientId: string; project?: string };
 
 export interface ProgressSnapshot {

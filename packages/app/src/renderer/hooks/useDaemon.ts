@@ -21,6 +21,7 @@ export interface ProjectState extends ProjectInfo {
 
 export interface ClientInfo {
   id: string;
+  name?: string;
   transport: string;
   project?: string;
   connectedAt: string;
@@ -50,7 +51,8 @@ type SSEEvent =
   | { type: 'project_status'; project: string; status: string; error?: string; progress?: ProgressSnapshot }
   | { type: 'indexing_progress'; project: string; phase: string; current?: number; processed?: number; total: number }
   | { type: 'indexing_done'; project: string }
-  | { type: 'client_connect'; clientId: string; transport: string; project?: string }
+  | { type: 'client_connect'; clientId: string; transport: string; project?: string; name?: string }
+  | { type: 'client_update'; clientId: string; project?: string; name?: string }
   | { type: 'client_disconnect'; clientId: string; project?: string };
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -169,6 +171,7 @@ export function useDaemon() {
             ...prev,
             {
               id: event.clientId,
+              name: event.name,
               transport: event.transport,
               project: event.project,
               connectedAt: now,
@@ -176,6 +179,14 @@ export function useDaemon() {
             },
           ];
         });
+      } else if (event.type === 'client_update') {
+        setClients((prev) =>
+          prev.map((c) =>
+            c.id === event.clientId
+              ? { ...c, name: event.name ?? c.name, lastSeen: new Date().toISOString() }
+              : c,
+          ),
+        );
       } else if (event.type === 'client_disconnect') {
         setClients((prev) => prev.filter((c) => c.id !== event.clientId));
       }
@@ -226,17 +237,24 @@ export function useDaemon() {
     }
   }, []);
 
+  const [restarting, setRestarting] = useState(false);
+
   const restartDaemon = useCallback(async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.restartDaemon) return;
+
+    setRestarting(true);
     try {
-      await (window as any).electronAPI.restartDaemon();
+      await api.restartDaemon();
       // Give daemon a moment to boot, then re-fetch
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 2000));
       await fetchProjects();
       await fetchClients();
       await fetchSettings();
     } catch {
-      // If plist not found, still set disconnected
       setConnected(false);
+    } finally {
+      setRestarting(false);
     }
   }, [fetchProjects, fetchClients, fetchSettings]);
 
@@ -254,7 +272,7 @@ export function useDaemon() {
   }, [fetchSettings]);
 
   return {
-    projects, clients, settings, loading, connected,
-    addProject, removeProject, reindexProject, restartDaemon, updateSettings, fetchSettings,
+    projects, clients, settings, loading, connected, restarting,
+    addProject, removeProject, reindexProject, restartDaemon, updateSettings, fetchSettings, fetchClients,
   };
 }
