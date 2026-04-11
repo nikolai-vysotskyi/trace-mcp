@@ -22,7 +22,7 @@ export interface CachedSearchItem {
 export interface CachedSearchResult {
   items: CachedSearchItem[];
   total: number;
-  search_mode?: 'hybrid_ai' | 'fts' | 'fuzzy';
+  search_mode?: 'hybrid_ai' | 'fts' | 'fuzzy' | 'fusion';
 }
 
 const MAX_ENTRIES = 128;

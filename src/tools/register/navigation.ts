@@ -59,7 +59,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'search',
-    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once) — and tune semantic_weight in [0,1] to bias toward lexical (0) or vector (1) ranking.',
+    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once). Set fusion=true for Signal Fusion — multi-channel ranking (BM25 + PageRank + embeddings + identity match) via Weighted Reciprocal Rank fusion.',
     {
       query: z.string().min(1).max(500).describe('Search query'),
       kind: z.string().max(64).optional().describe('Filter by symbol kind (class, method, function, etc.)'),
@@ -75,10 +75,18 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         .describe('Semantic mode: auto (default — hybrid if AI available), on (force hybrid), off (lexical-only), only (pure vector). Requires AI provider + embed_repo for non-"off" modes.'),
       semantic_weight: z.number().min(0).max(1).optional()
         .describe('Hybrid fusion weight in [0,1]. 0 = lexical only, 0.5 = balanced (default), 1 = semantic only.'),
+      fusion: z.boolean().optional().describe('Enable Signal Fusion Pipeline — multi-channel WRR ranking across lexical (BM25), structural (PageRank), similarity (embeddings), and identity (exact/prefix/segment match). Produces better results than single-channel search.'),
+      fusion_weights: z.object({
+        lexical: z.number().min(0).max(1).optional(),
+        structural: z.number().min(0).max(1).optional(),
+        similarity: z.number().min(0).max(1).optional(),
+        identity: z.number().min(0).max(1).optional(),
+      }).optional().describe('Per-channel weights for fusion (auto-normalized). Defaults: lexical=0.4, structural=0.25, similarity=0.2, identity=0.15.'),
+      fusion_debug: z.boolean().optional().describe('Include per-channel rank contributions in fusion results.'),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
       offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
     },
-    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext, decorator, fuzzy, fuzzy_threshold, max_edit_distance, semantic, semantic_weight }) => {
+    async ({ query, kind, language, file_pattern, limit, offset, implements: impl, extends: ext, decorator, fuzzy, fuzzy_threshold, max_edit_distance, semantic, semantic_weight, fusion, fusion_weights, fusion_debug }) => {
       // Zero-index fallback: if index is empty, use ripgrep
       const stats = store.getStats();
       if (stats.totalFiles === 0) {
@@ -98,6 +106,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         { vectorStore, embeddingService, reranker },
         { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
         { semantic, semanticWeight: semantic_weight },
+        fusion ? { fusion: true, weights: fusion_weights, debug: fusion_debug } : undefined,
       );
       // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
       const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => {
@@ -127,6 +136,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         return item;
       });
       const response: Record<string, unknown> = { items, total: result.total, search_mode: result.search_mode };
+      if (result.fusion_debug) response.fusion_debug = result.fusion_debug;
       if (items.length === 0) {
         // Auto-fallback: try text search when symbol search finds nothing
         const textResult = searchText(store, projectRoot, {

@@ -152,6 +152,14 @@ export function suggestQueries(store: Store): SuggestQueriesResult {
     params: { description: 'authentication flow', token_budget: 8000 },
   });
 
+  if (top_symbols.length > 0) {
+    example_queries.push({
+      tool: 'search',
+      description: 'Signal Fusion search — best ranking via multi-channel WRR (BM25 + PageRank + identity)',
+      params: { query: top_symbols[0].name, fusion: true },
+    });
+  }
+
   if (stats.totalSymbols > 50) {
     example_queries.push({
       tool: 'get_project_health',
