@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 18;
+const SCHEMA_VERSION = 19;
 
 const DDL = `
 -- ============================================================
@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS edges (
     resolved        INTEGER NOT NULL DEFAULT 1,
     metadata        TEXT,
     is_cross_ws     INTEGER NOT NULL DEFAULT 0,
+    resolution_tier TEXT NOT NULL DEFAULT 'ast_resolved',
     UNIQUE(source_node_id, target_node_id, edge_type_id)
 );
 
@@ -180,6 +181,7 @@ CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_node_id);
 CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_node_id);
 CREATE INDEX IF NOT EXISTS idx_edges_type   ON edges(edge_type_id);
 CREATE INDEX IF NOT EXISTS idx_edges_src_tgt_type ON edges(source_node_id, target_node_id, edge_type_id);
+CREATE INDEX IF NOT EXISTS idx_edges_resolution_tier ON edges(resolution_tier);
 CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
 CREATE INDEX IF NOT EXISTS idx_symbols_fqn  ON symbols(fqn);
@@ -428,6 +430,9 @@ const SEED_EDGE_TYPES = [
   { name: 'nest_event_pattern', category: 'nestjs', description: 'Microservice @EventPattern handler' },
   // Next.js edges
   { name: 'next_renders_page', category: 'nextjs', description: 'Layout renders page' },
+  { name: 'next_renders_loading', category: 'nextjs', description: 'Layout renders loading boundary' },
+  { name: 'next_renders_error', category: 'nextjs', description: 'Layout renders error boundary' },
+  { name: 'next_renders_not_found', category: 'nextjs', description: 'Layout renders not-found boundary' },
   { name: 'next_server_action', category: 'nextjs', description: 'Server action reference' },
   { name: 'next_middleware', category: 'nextjs', description: 'Middleware applies to routes' },
   { name: 'next_parallel_slot', category: 'nextjs', description: 'Parallel route slot' },
@@ -963,6 +968,14 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
         value TEXT NOT NULL
       )
     `);
+  },
+  19: (db) => {
+    // LSP enrichment — 4-tier resolution confidence on edges.
+    const cols = (db.pragma('table_info(edges)') as Array<{ name: string }>).map((c) => c.name);
+    if (!cols.includes('resolution_tier')) {
+      db.exec(`ALTER TABLE edges ADD COLUMN resolution_tier TEXT NOT NULL DEFAULT 'ast_resolved'`);
+    }
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_resolution_tier ON edges(resolution_tier)`);
   },
 };
 

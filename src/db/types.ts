@@ -41,6 +41,7 @@ export interface EdgeRow {
   resolved: number;
   metadata: string | null;
   is_cross_ws: number;
+  resolution_tier: string;
 }
 
 export interface RouteRow {

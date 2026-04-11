@@ -123,8 +123,8 @@ export class EdgeResolver {
 
     // Batch insert
     const insertStmt = store.db.prepare(
-      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
 
     const insertBatch = store.db.transaction(() => {
@@ -143,11 +143,14 @@ export class EdgeResolver {
           isCrossWs = srcWs != null && tgtWs != null && srcWs !== tgtWs;
         }
 
+        const resolutionTier = edge.resolution ?? 'ast_resolved';
+
         insertStmt.run(
           sourceNodeId, targetNodeId, edgeTypeId,
           (edge.resolved ?? true) ? 1 : 0,
           edge.metadata ? JSON.stringify(edge.metadata) : null,
           isCrossWs ? 1 : 0,
+          resolutionTier,
         );
       }
     });

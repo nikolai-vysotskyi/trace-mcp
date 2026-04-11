@@ -26,14 +26,14 @@ const FrameworkConfigSchema = z.object({
 
 const AiConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  provider: z.enum(['ollama', 'openai']).default('ollama'),
+  provider: z.enum(['onnx', 'ollama', 'openai']).default('onnx'),
   base_url: z.string().optional(),
   api_key: z.string().optional(),
   inference_model: z.string().optional(),
   fast_model: z.string().optional(),
   embedding_model: z.string().optional(),
   embedding_dimensions: z.number().optional(),
-  summarize_on_index: z.boolean().default(true),
+  summarize_on_index: z.boolean().default(false),
   summarize_batch_size: z.number().positive().default(20),
   summarize_kinds: z.array(z.string()).default([
     'class', 'function', 'method', 'interface', 'trait', 'enum', 'type',
@@ -157,6 +157,23 @@ const IgnoreConfigSchema = z.object({
   patterns: z.array(z.string()).default([]),
 }).default({});
 
+const LspServerConfigSchema = z.object({
+  command: z.string(),
+  args: z.array(z.string()).default([]),
+  initializationOptions: z.record(z.string(), z.unknown()).optional(),
+  rootUri: z.string().optional(),
+  timeout_ms: z.number().int().min(1000).max(120000).default(30000),
+});
+
+const LspConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  servers: z.record(z.string(), LspServerConfigSchema).default({}),
+  auto_detect: z.boolean().default(true),
+  max_concurrent_servers: z.number().int().min(1).max(4).default(2),
+  enrichment_timeout_ms: z.number().int().min(5000).max(600000).default(120000),
+  batch_size: z.number().int().min(10).max(1000).default(100),
+}).optional();
+
 const TopologyConfigSchema = z.object({
   enabled: z.boolean().default(true),
   repos: z.array(z.string()).default([]),
@@ -195,6 +212,7 @@ export const TraceMcpConfigSchema = z.object({
   predictive: PredictiveConfigSchema,
   intent: IntentConfigSchema,
   runtime: RuntimeConfigSchema,
+  lsp: LspConfigSchema,
   topology: TopologyConfigSchema,
   quality_gates: QualityGatesConfigSchema,
   tools: ToolsConfigSchema,
@@ -222,6 +240,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
     predictive: PredictiveConfigSchema,
     intent: IntentConfigSchema,
     runtime: RuntimeConfigSchema,
+    lsp: LspConfigSchema,
     topology: TopologyConfigSchema,
     quality_gates: QualityGatesConfigSchema,
     tools: ToolsConfigSchema,

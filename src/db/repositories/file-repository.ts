@@ -109,11 +109,15 @@ export class FileRepository {
   getFilesByIds(ids: number[]): Map<number, FileRow> {
     const map = new Map<number, FileRow>();
     if (ids.length === 0) return map;
-    const placeholders = ids.map(() => '?').join(',');
-    const rows = this.db.prepare(
-      `SELECT * FROM files WHERE id IN (${placeholders})`,
-    ).all(...ids) as FileRow[];
-    for (const row of rows) map.set(row.id, row);
+    const CHUNK = 900;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT * FROM files WHERE id IN (${placeholders})`,
+      ).all(...chunk) as FileRow[];
+      for (const row of rows) map.set(row.id, row);
+    }
     return map;
   }
 }

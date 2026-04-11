@@ -28,10 +28,10 @@ export class GraphRepository {
       getNodeRef: db.prepare('SELECT node_type AS nodeType, ref_id AS refId FROM nodes WHERE id = ?'),
       getEdgeType: db.prepare('SELECT id FROM edge_types WHERE name = ?'),
       insertEdge: db.prepare(
-        `INSERT INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(source_node_id, target_node_id, edge_type_id)
-         DO UPDATE SET metadata = excluded.metadata, resolved = excluded.resolved`,
+         DO UPDATE SET metadata = excluded.metadata, resolved = excluded.resolved, resolution_tier = excluded.resolution_tier`,
       ),
     };
   }
@@ -52,6 +52,7 @@ export class GraphRepository {
     resolved = true,
     metadata?: Record<string, unknown>,
     isCrossWs = false,
+    resolutionTier: string = 'ast_resolved',
   ): TraceMcpResult<number> {
     const edgeType = this._stmts.getEdgeType.get(edgeTypeName) as { id: number } | undefined;
     if (!edgeType) {
@@ -62,6 +63,7 @@ export class GraphRepository {
       const result = this._stmts.insertEdge.run(
         sourceNodeId, targetNodeId, edgeType.id,
         resolved ? 1 : 0, metadata ? JSON.stringify(metadata) : null, isCrossWs ? 1 : 0,
+        resolutionTier,
       );
       return ok(Number(result.lastInsertRowid));
     } catch (e) {
@@ -173,22 +175,30 @@ export class GraphRepository {
   getNodeIdsBatch(nodeType: string, refIds: number[]): Map<number, number> {
     const map = new Map<number, number>();
     if (refIds.length === 0) return map;
-    const placeholders = refIds.map(() => '?').join(',');
-    const rows = this.db.prepare(
-      `SELECT ref_id, id FROM nodes WHERE node_type = ? AND ref_id IN (${placeholders})`,
-    ).all(nodeType, ...refIds) as { ref_id: number; id: number }[];
-    for (const row of rows) map.set(row.ref_id, row.id);
+    const CHUNK = 900;
+    for (let i = 0; i < refIds.length; i += CHUNK) {
+      const chunk = refIds.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT ref_id, id FROM nodes WHERE node_type = ? AND ref_id IN (${placeholders})`,
+      ).all(nodeType, ...chunk) as { ref_id: number; id: number }[];
+      for (const row of rows) map.set(row.ref_id, row.id);
+    }
     return map;
   }
 
   getNodeRefsBatch(nodeIds: number[]): Map<number, { nodeType: string; refId: number }> {
     const map = new Map<number, { nodeType: string; refId: number }>();
     if (nodeIds.length === 0) return map;
-    const placeholders = nodeIds.map(() => '?').join(',');
-    const rows = this.db.prepare(
-      `SELECT id, node_type, ref_id FROM nodes WHERE id IN (${placeholders})`,
-    ).all(...nodeIds) as { id: number; node_type: string; ref_id: number }[];
-    for (const row of rows) map.set(row.id, { nodeType: row.node_type, refId: row.ref_id });
+    const CHUNK = 900;
+    for (let i = 0; i < nodeIds.length; i += CHUNK) {
+      const chunk = nodeIds.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT id, node_type, ref_id FROM nodes WHERE id IN (${placeholders})`,
+      ).all(...chunk) as { id: number; node_type: string; ref_id: number }[];
+      for (const row of rows) map.set(row.id, { nodeType: row.node_type, refId: row.ref_id });
+    }
     return map;
   }
 
@@ -196,20 +206,29 @@ export class GraphRepository {
     nodeIds: number[],
   ): Array<EdgeRow & { edge_type_name: string; pivot_node_id: number }> {
     if (nodeIds.length === 0) return [];
-    const placeholders = nodeIds.map(() => '?').join(',');
-    const rows = this.db.prepare(
-      `SELECT e.*, et.name AS edge_type_name
-         FROM edges e
-         JOIN edge_types et ON e.edge_type_id = et.id
-        WHERE e.source_node_id IN (${placeholders})
-           OR e.target_node_id IN (${placeholders})`,
-    ).all(...nodeIds, ...nodeIds) as (EdgeRow & { edge_type_name: string })[];
-
     const nodeSet = new Set(nodeIds);
-    return rows.map((row) => ({
-      ...row,
-      pivot_node_id: nodeSet.has(row.source_node_id) ? row.source_node_id : row.target_node_id,
-    }));
+    const results: Array<EdgeRow & { edge_type_name: string; pivot_node_id: number }> = [];
+    // Each chunk uses 2× placeholders (source IN + target IN), so use 450 per chunk
+    const CHUNK = 450;
+    for (let i = 0; i < nodeIds.length; i += CHUNK) {
+      const chunk = nodeIds.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT e.*, et.name AS edge_type_name
+           FROM edges e
+           JOIN edge_types et ON e.edge_type_id = et.id
+          WHERE e.source_node_id IN (${placeholders})
+             OR e.target_node_id IN (${placeholders})`,
+      ).all(...chunk, ...chunk) as (EdgeRow & { edge_type_name: string })[];
+
+      for (const row of rows) {
+        results.push({
+          ...row,
+          pivot_node_id: nodeSet.has(row.source_node_id) ? row.source_node_id : row.target_node_id,
+        });
+      }
+    }
+    return results;
   }
 
   getEdgeTypes(): EdgeTypeRow[] {
