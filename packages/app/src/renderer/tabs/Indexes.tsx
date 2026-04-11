@@ -15,7 +15,7 @@ interface IndexesProps {
 }
 
 export function Indexes({ onOpenProject }: IndexesProps) {
-  const { projects, loading, connected, addProject, removeProject, reindexProject, restartDaemon } = useDaemon();
+  const { projects, loading, connected, restarting, addProject, removeProject, reindexProject, restartDaemon } = useDaemon();
   const [showAddInput, setShowAddInput] = useState(false);
   const [addPath, setAddPath] = useState('');
 
@@ -46,10 +46,20 @@ export function Indexes({ onOpenProject }: IndexesProps) {
         </div>
         <button
           onClick={() => restartDaemon()}
-          className="text-[10px] px-3 py-1 rounded-md font-medium transition-colors"
-          style={{ background: 'var(--accent)', color: '#fff' }}
+          disabled={restarting}
+          className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
+          style={{
+            background: 'var(--fill-control)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            color: 'var(--accent)',
+            border: '0.5px solid var(--border)',
+            boxShadow: 'var(--shadow-control)',
+            cursor: restarting ? 'default' : 'pointer',
+            opacity: restarting ? 0.6 : 1,
+          }}
         >
-          Restart Daemon
+          {restarting ? 'Starting…' : 'Restart Daemon'}
         </button>
       </div>
     );

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -16,6 +16,7 @@ export function GraphExplorer({ root }: { root: string }) {
   const [depth, setDepth] = useState(2);
   const [hideIsolated, setHideIsolated] = useState(true);
   const [symbolKinds, setSymbolKinds] = useState('');
+  const [maxNodes, setMaxNodes] = useState('');
 
   const loadGraph = useCallback(async () => {
     setLoading(true);
@@ -30,6 +31,7 @@ export function GraphExplorer({ root }: { root: string }) {
       hideIsolated: String(hideIsolated),
     });
     if (symbolKinds.trim()) params.set('symbolKinds', symbolKinds.trim());
+    if (maxNodes.trim()) params.set(granularity === 'symbol' ? 'maxNodes' : 'maxFiles', maxNodes.trim());
 
     // First fetch JSON to get stats
     try {
@@ -49,10 +51,29 @@ export function GraphExplorer({ root }: { root: string }) {
     params.set('theme', theme);
     setGraphUrl(`${BASE}/api/projects/graph/html?${params}`);
     setLoading(false);
-  }, [root, scope, depth, granularity, layout, hideIsolated, symbolKinds]);
+  }, [root, scope, depth, granularity, layout, hideIsolated, symbolKinds, maxNodes]);
 
-  // Auto-load on mount
-  useState(() => { loadGraph(); });
+  // Auto-reload: immediate for dropdowns/checkboxes, debounced for text inputs
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [debouncedScope, setDebouncedScope] = useState(scope);
+  const [debouncedSymbolKinds, setDebouncedSymbolKinds] = useState(symbolKinds);
+  const [debouncedMaxNodes, setDebouncedMaxNodes] = useState(maxNodes);
+
+  // Debounce text inputs (500ms)
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedScope(scope);
+      setDebouncedSymbolKinds(symbolKinds);
+      setDebouncedMaxNodes(maxNodes);
+    }, 500);
+    return () => clearTimeout(debounceRef.current);
+  }, [scope, symbolKinds, maxNodes]);
+
+  // Auto-reload on any parameter change
+  useEffect(() => {
+    loadGraph();
+  }, [depth, granularity, layout, hideIsolated, debouncedScope, debouncedSymbolKinds, debouncedMaxNodes]);
 
   return (
     <div className="flex flex-col h-full gap-2" style={{ minHeight: 0 }}>
@@ -86,14 +107,12 @@ export function GraphExplorer({ root }: { root: string }) {
           Hide isolated
         </label>
 
-        <button onClick={loadGraph} disabled={loading}
-          className="text-[11px] px-2.5 py-1 rounded-md font-medium disabled:opacity-40"
-          style={{ background: 'var(--accent)', color: '#fff' }}>
-          {loading ? 'Loading…' : 'Render'}
-        </button>
+        {loading && (
+          <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Loading…</span>
+        )}
       </div>
 
-      {/* Toolbar row 2: scope + symbol kinds */}
+      {/* Toolbar row 2: scope + symbol kinds + max nodes */}
       <div className="flex items-center gap-1.5 shrink-0">
         <input type="text" value={scope} onChange={(e) => setScope(e.target.value)}
           placeholder="Scope: project, src/, src/server.ts, *.ts"
@@ -109,6 +128,12 @@ export function GraphExplorer({ root }: { root: string }) {
             onKeyDown={(e) => { if (e.key === 'Enter') loadGraph(); }}
           />
         )}
+        <input type="text" value={maxNodes} onChange={(e) => setMaxNodes(e.target.value)}
+          placeholder={granularity === 'symbol' ? 'Max nodes' : 'Max files'}
+          className="text-[11px] px-1.5 py-1 rounded-md w-[90px]"
+          style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+          onKeyDown={(e) => { if (e.key === 'Enter') loadGraph(); }}
+        />
       </div>
 
       {error && (
@@ -137,7 +162,7 @@ export function GraphExplorer({ root }: { root: string }) {
         ) : (
           <div className="flex items-center justify-center h-full text-xs rounded-lg"
             style={{ color: 'var(--text-tertiary)', background: 'var(--bg-secondary)' }}>
-            {loading ? 'Building graph…' : 'Configure and click "Render"'}
+            {loading ? 'Building graph…' : 'Loading…'}
           </div>
         )}
       </div>
