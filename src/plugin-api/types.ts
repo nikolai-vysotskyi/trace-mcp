@@ -37,6 +37,9 @@ export type SymbolKind =
 
 // --- Raw edges from FrameworkPlugin ---
 
+/** How an edge was resolved during indexing — tiers from highest to lowest confidence */
+export type EdgeResolution = 'lsp_resolved' | 'ast_resolved' | 'ast_inferred' | 'text_matched';
+
 export interface RawEdge {
   sourceSymbolId?: string;
   sourceNodeType?: string;
@@ -46,6 +49,8 @@ export interface RawEdge {
   targetRefId?: number;
   edgeType: string;
   resolved?: boolean;
+  /** How this edge was resolved: ast_resolved (direct AST), ast_inferred (import graph), text_matched (heuristic) */
+  resolution?: EdgeResolution;
   metadata?: Record<string, unknown>;
 }
 

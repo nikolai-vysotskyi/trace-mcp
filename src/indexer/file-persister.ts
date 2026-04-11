@@ -6,6 +6,7 @@ import type { PipelineState } from './pipeline-state.js';
 import type { FileExtraction } from './pipeline-state.js';
 import type { RawEdge } from '../plugin-api/types.js';
 import { indexTrigramsBatch, deleteTrigramsByFile } from '../db/fuzzy.js';
+import { logger } from '../logger.js';
 
 /**
  * Callback for storing raw edges — injected from the pipeline so that
@@ -113,16 +114,28 @@ export class FilePersister {
   ): void {
     const store = this.state.store;
 
-    if (symbols.length > 0) {
-      const insertedIds = store.insertSymbols(fileId, symbols);
+    // Auto-fill missing symbolId/byteStart/byteEnd — framework plugins often
+    // produce metadata-only symbols without these required fields.
+    const filePath = (store.db.prepare('SELECT path FROM files WHERE id = ?').get(fileId) as { path: string } | undefined)?.path;
+    const validSymbols = symbols.map((s) => {
+      if (s.symbolId && s.byteStart != null) return s;
+      return {
+        ...s,
+        symbolId: s.symbolId || `${filePath ?? `file:${fileId}`}::${s.name}#${s.kind}`,
+        byteStart: s.byteStart ?? 0,
+        byteEnd: s.byteEnd ?? 0,
+      };
+    });
+    if (validSymbols.length > 0) {
+      const insertedIds = store.insertSymbols(fileId, validSymbols);
       // Deduplicate by symbolId: INSERT OR REPLACE invalidates earlier IDs when
       // duplicate symbol_ids appear in the same batch — only the last ID survives.
       const trigramBySymbolId = new Map<string, { id: number; name: string; fqn: string | null }>();
-      for (let i = 0; i < symbols.length; i++) {
-        trigramBySymbolId.set(symbols[i].symbolId, {
+      for (let i = 0; i < validSymbols.length; i++) {
+        trigramBySymbolId.set(validSymbols[i].symbolId, {
           id: insertedIds[i],
-          name: symbols[i].name,
-          fqn: symbols[i].fqn ?? null,
+          name: validSymbols[i].name,
+          fqn: validSymbols[i].fqn ?? null,
         });
       }
       indexTrigramsBatch(store.db, [...trigramBySymbolId.values()]);

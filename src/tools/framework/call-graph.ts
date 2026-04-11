@@ -1,6 +1,14 @@
 import type { Store } from '../../db/store.js';
+import type { EdgeResolution } from '../../plugin-api/types.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
+
+interface CallGraphEdgeInfo {
+  /** How this edge was resolved */
+  resolution: EdgeResolution;
+  /** Edge type name */
+  edge_type: string;
+}
 
 interface CallGraphNode {
   symbol_id: string;
@@ -8,8 +16,18 @@ interface CallGraphNode {
   kind: string;
   file: string;
   line: number | null;
+  /** Resolution info for the edge connecting to this node */
+  edge?: CallGraphEdgeInfo;
   calls?: CallGraphNode[];
   called_by?: CallGraphNode[];
+}
+
+/** Summary of resolution tier distribution */
+interface ResolutionTiers {
+  lsp_resolved: number;
+  ast_resolved: number;
+  ast_inferred: number;
+  text_matched: number;
 }
 
 interface CallGraphResult {
@@ -17,6 +35,19 @@ interface CallGraphResult {
   /** Edge types that were treated as calls */
   edge_types_used: string[];
   max_depth: number;
+  /** Distribution of resolution tiers across all edges */
+  resolution_tiers: ResolutionTiers;
+}
+
+/** Read resolution tier from edge column, with fallback inference for legacy data */
+function inferResolution(edge: { resolved: number; resolution_tier?: string; edge_type_name: string }): EdgeResolution {
+  const tier = edge.resolution_tier;
+  if (tier === 'lsp_resolved' || tier === 'ast_resolved' || tier === 'ast_inferred' || tier === 'text_matched') return tier;
+
+  // Fallback for edges indexed before the resolution_tier column existed
+  if (!edge.resolved) return 'text_matched';
+  if (edge.edge_type_name === 'imports' || edge.edge_type_name === 'esm_imports') return 'ast_inferred';
+  return 'ast_resolved';
 }
 
 const CALL_EDGE_TYPES = new Set([
@@ -54,18 +85,20 @@ export function getCallGraph(
       root: makeNode(symbol, file?.path ?? '', null, [], []),
       edge_types_used: [],
       max_depth: depth,
+      resolution_tiers: { lsp_resolved: 0, ast_resolved: 0, ast_inferred: 0, text_matched: 0 },
     });
   }
 
   const edgeTypesUsed = new Set<string>();
   const visited = new Set<number>();
 
-  const rootNode = buildCallNode(store, symbol.id, nodeId, depth, visited, edgeTypesUsed);
+  const { node: rootNode, tiers } = buildCallNode(store, symbol.id, nodeId, depth, visited, edgeTypesUsed);
 
   return ok({
     root: rootNode,
     edge_types_used: [...edgeTypesUsed],
     max_depth: depth,
+    resolution_tiers: tiers,
   });
 }
 
@@ -80,14 +113,20 @@ function buildCallNode(
   maxDepth: number,
   _visited: Set<number>,
   edgeTypesUsed: Set<string>,
-): CallGraphNode {
+): { node: CallGraphNode; tiers: ResolutionTiers } {
   // Phase 1: BFS to collect all reachable node IDs + edges
+  interface EdgeRef {
+    nodeId: number;
+    edgeType: string;
+    resolution: EdgeResolution;
+  }
   interface NodeInfo {
     nodeId: number;
     symbolRefId: number;
-    outgoing: Array<{ targetNodeId: number; edgeType: string }>;
-    incoming: Array<{ sourceNodeId: number; edgeType: string }>;
+    outgoing: Array<EdgeRef & { nodeId: number }>;
+    incoming: Array<EdgeRef & { nodeId: number }>;
   }
+  const tiers: ResolutionTiers = { lsp_resolved: 0, ast_resolved: 0, ast_inferred: 0, text_matched: 0 };
 
   const nodeInfoMap = new Map<number, NodeInfo>();
   const visited = new Set<number>();
@@ -110,15 +149,18 @@ function buildCallNode(
       const pivotInfo = nodeInfoMap.get(edge.pivot_node_id);
       if (!pivotInfo) continue;
 
+      const resolution = inferResolution(edge);
+      tiers[resolution]++;
+
       // Outgoing: pivot is source, target is the callee
       if (edge.source_node_id === edge.pivot_node_id && !visited.has(edge.target_node_id)) {
-        pivotInfo.outgoing.push({ targetNodeId: edge.target_node_id, edgeType: edge.edge_type_name });
+        pivotInfo.outgoing.push({ nodeId: edge.target_node_id, edgeType: edge.edge_type_name, resolution });
         newNeighbors.add(edge.target_node_id);
       }
 
       // Incoming: pivot is target, source is the caller
       if (edge.target_node_id === edge.pivot_node_id && !visited.has(edge.source_node_id)) {
-        pivotInfo.incoming.push({ sourceNodeId: edge.source_node_id, edgeType: edge.edge_type_name });
+        pivotInfo.incoming.push({ nodeId: edge.source_node_id, edgeType: edge.edge_type_name, resolution });
         newNeighbors.add(edge.source_node_id);
       }
     }
@@ -165,16 +207,20 @@ function buildCallNode(
       return node;
     }
 
-    for (const { targetNodeId } of info.outgoing) {
+    for (const { nodeId: targetNodeId, edgeType, resolution } of info.outgoing) {
       if (buildVisited.has(targetNodeId)) continue;
       if (!nodeInfoMap.has(targetNodeId)) continue;
-      node.calls!.push(buildFromInfo(targetNodeId, depth - 1, new Set(buildVisited)));
+      const child = buildFromInfo(targetNodeId, depth - 1, new Set(buildVisited));
+      child.edge = { resolution, edge_type: edgeType };
+      node.calls!.push(child);
     }
 
-    for (const { sourceNodeId } of info.incoming) {
+    for (const { nodeId: sourceNodeId, edgeType, resolution } of info.incoming) {
       if (buildVisited.has(sourceNodeId)) continue;
       if (!nodeInfoMap.has(sourceNodeId)) continue;
-      node.called_by!.push(buildFromInfo(sourceNodeId, depth - 1, new Set(buildVisited)));
+      const child = buildFromInfo(sourceNodeId, depth - 1, new Set(buildVisited));
+      child.edge = { resolution, edge_type: edgeType };
+      node.called_by!.push(child);
     }
 
     if (node.calls!.length === 0) delete node.calls;
@@ -182,7 +228,7 @@ function buildCallNode(
     return node;
   }
 
-  return buildFromInfo(rootNodeId, maxDepth, new Set());
+  return { node: buildFromInfo(rootNodeId, maxDepth, new Set()), tiers };
 }
 
 function makeNode(

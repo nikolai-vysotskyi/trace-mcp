@@ -153,6 +153,7 @@ export function exportBundle(
       edge_type_id    INTEGER NOT NULL REFERENCES edge_types(id),
       resolved        INTEGER DEFAULT 0,
       metadata        TEXT,
+      resolution_tier TEXT NOT NULL DEFAULT 'ast_resolved',
       UNIQUE(source_node_id, target_node_id, edge_type_id)
     );
 
@@ -216,11 +217,17 @@ export function exportBundle(
     insertNode.run(n.id, n.node_type, n.ref_id);
   }
 
-  // Edges
-  const srcEdges = src.prepare('SELECT id, source_node_id, target_node_id, edge_type_id, resolved, metadata FROM edges').all() as Array<Record<string, unknown>>;
-  const insertEdge = dst.prepare('INSERT INTO edges (id, source_node_id, target_node_id, edge_type_id, resolved, metadata) VALUES (?, ?, ?, ?, ?, ?)');
+  // Edges — handle source DBs that predate the resolution_tier column
+  const hasResolutionTier = src.prepare(
+    "SELECT COUNT(*) AS cnt FROM pragma_table_info('edges') WHERE name = 'resolution_tier'",
+  ).get() as { cnt: number };
+  const edgeSelect = hasResolutionTier.cnt > 0
+    ? 'SELECT id, source_node_id, target_node_id, edge_type_id, resolved, metadata, resolution_tier FROM edges'
+    : 'SELECT id, source_node_id, target_node_id, edge_type_id, resolved, metadata FROM edges';
+  const srcEdges = src.prepare(edgeSelect).all() as Array<Record<string, unknown>>;
+  const insertEdge = dst.prepare('INSERT INTO edges (id, source_node_id, target_node_id, edge_type_id, resolved, metadata, resolution_tier) VALUES (?, ?, ?, ?, ?, ?, ?)');
   for (const e of srcEdges) {
-    insertEdge.run(e.id, e.source_node_id, e.target_node_id, e.edge_type_id, e.resolved, e.metadata);
+    insertEdge.run(e.id, e.source_node_id, e.target_node_id, e.edge_type_id, e.resolved, e.metadata, e.resolution_tier ?? 'ast_resolved');
   }
 
   // Meta

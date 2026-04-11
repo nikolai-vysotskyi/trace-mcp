@@ -47,16 +47,19 @@ export class SymbolRepository {
     const maxNesting = (sym.metadata as Record<string, unknown> | undefined)?.['max_nesting'] as number | undefined ?? null;
     const paramCount = (sym.metadata as Record<string, unknown> | undefined)?.['param_count'] as number | undefined ?? null;
 
+    // Guard: auto-generate symbolId if missing (framework plugins may omit it)
+    const symbolIdStr = sym.symbolId || `file:${fileId}::${sym.name}#${sym.kind}`;
+
     const result = this._stmts.insertSymbol.run(
       fileId,
-      sym.symbolId,
+      symbolIdStr,
       sym.name,
       sym.kind,
       sym.fqn ?? null,
       parentId,
       sym.signature ?? null,
-      sym.byteStart,
-      sym.byteEnd,
+      sym.byteStart ?? 0,
+      sym.byteEnd ?? 0,
       sym.lineStart ?? null,
       sym.lineEnd ?? null,
       sym.metadata ? JSON.stringify(sym.metadata) : null,
@@ -191,11 +194,15 @@ export class SymbolRepository {
   getSymbolsByIds(ids: number[]): Map<number, SymbolRow> {
     const map = new Map<number, SymbolRow>();
     if (ids.length === 0) return map;
-    const placeholders = ids.map(() => '?').join(',');
-    const rows = this.db.prepare(
-      `SELECT * FROM symbols WHERE id IN (${placeholders})`,
-    ).all(...ids) as SymbolRow[];
-    for (const row of rows) map.set(row.id, row);
+    const CHUNK = 900;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT * FROM symbols WHERE id IN (${placeholders})`,
+      ).all(...chunk) as SymbolRow[];
+      for (const row of rows) map.set(row.id, row);
+    }
     return map;
   }
 

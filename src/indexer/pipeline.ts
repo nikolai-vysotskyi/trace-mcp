@@ -146,6 +146,7 @@ export class IndexingPipeline {
     try {
       await this.extractAndPersist(relPaths, force, result);
       await this.resolveAllEdges();
+      await this.runLspEnrichment();
       await this.indexEnvFiles(force);
     } finally {
       this._fileContentCache.clear();
@@ -238,7 +239,24 @@ export class IndexingPipeline {
     edgeResolver.resolveTestCoversEdges();
   }
 
-  /** Pass 3: index .env files for environment variable tracking. */
+  /** Pass 3: LSP enrichment — upgrade call graph edges with compiler-grade resolution. */
+  private async runLspEnrichment(): Promise<void> {
+    if (!this.config.lsp?.enabled) return;
+
+    try {
+      const { LspBridge } = await import('../lsp/bridge.js');
+      const bridge = new LspBridge(this.store, this.config, this.rootPath);
+      try {
+        await bridge.enrich();
+      } finally {
+        await bridge.shutdown();
+      }
+    } catch (e) {
+      logger.warn({ error: e }, 'LSP enrichment failed — continuing without LSP edges');
+    }
+  }
+
+  /** Pass 4: index .env files for environment variable tracking. */
   private async indexEnvFiles(force: boolean): Promise<void> {
     const envIndexer = new EnvIndexer(this.store, this.config, this.rootPath, this._traceignore);
     await envIndexer.indexEnvFiles(force);

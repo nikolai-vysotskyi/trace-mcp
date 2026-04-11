@@ -199,8 +199,9 @@ export class Store {
     resolved?: boolean,
     metadata?: Record<string, unknown>,
     isCrossWs?: boolean,
+    resolutionTier?: string,
   ): TraceMcpResult<number> {
-    return this.graph.insertEdge(sourceNodeId, targetNodeId, edgeTypeName, resolved, metadata, isCrossWs);
+    return this.graph.insertEdge(sourceNodeId, targetNodeId, edgeTypeName, resolved, metadata, isCrossWs, resolutionTier);
   }
 
   deleteEdgesForFileNodes(fileId: number): void {
