@@ -590,6 +590,200 @@ function toKebab(name: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// get_untested_symbols
+// ---------------------------------------------------------------------------
+
+type TestReachLevel = 'unreached' | 'imported_not_called';
+
+interface UntestedSymbolItem {
+  symbol_id: string;
+  name: string;
+  kind: string;
+  file: string;
+  line: number | null;
+  signature: string | null;
+  level: TestReachLevel;
+}
+
+interface GetUntestedSymbolsResult {
+  file_pattern: string | null;
+  untested: UntestedSymbolItem[];
+  total_symbols: number;
+  total_untested: number;
+  by_level: { unreached: number; imported_not_called: number };
+}
+
+/** Kinds worth analyzing — skip trivial structural kinds */
+const TESTABLE_KINDS = new Set([
+  'function', 'class', 'interface', 'type', 'enum', 'method',
+]);
+
+/**
+ * Find ALL symbols (not just exports) that lack test coverage.
+ * Two-level classification:
+ *   - "unreached"          — no test file imports or references the source file at all
+ *   - "imported_not_called" — a test file imports the source file but never references
+ *                             this specific symbol (by name)
+ *
+ * Uses import-graph test_covers edges + test file name matching + symbol name matching.
+ */
+export function getUntestedSymbols(
+  store: Store,
+  filePattern?: string,
+  maxResults?: number,
+): GetUntestedSymbolsResult {
+  // ── 1. Query all symbols with file paths ──────────────────────────────────
+  const likeClause = filePattern
+    ? `AND f.path LIKE '${filePattern.replace(/\*/g, '%').replace(/\?/g, '_')}'`
+    : '';
+
+  const allSymbols = store.db.prepare(`
+    SELECT s.*, f.path as file_path
+    FROM symbols s
+    JOIN files f ON s.file_id = f.id
+    WHERE 1=1 ${likeClause}
+  `).all() as SymbolWithFilePath[];
+
+  // ── 2. Filter to testable symbols ─────────────────────────────────────────
+  const candidates = allSymbols
+    .filter((s) => TESTABLE_KINDS.has(s.kind))
+    .filter((s) => s.kind !== 'method') // methods inherit coverage from their class
+    .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
+    .filter((s) => !TEST_FILE_RE.test(s.file_path));
+
+  // ── 3. Build file-level test reach via test_covers edges ──────────────────
+  const testedFileIds = new Set<number>();
+  const testCoverRows = store.db.prepare(`
+    SELECT DISTINCT
+      CASE
+        WHEN n.node_type = 'file' THEN n.ref_id
+        WHEN n.node_type = 'symbol' THEN (SELECT file_id FROM symbols WHERE id = n.ref_id)
+      END AS fid
+    FROM edges e
+    JOIN edge_types et ON e.edge_type_id = et.id
+    JOIN nodes n ON e.target_node_id = n.id
+    WHERE et.name = 'test_covers'
+  `).all() as Array<{ fid: number | null }>;
+  for (const r of testCoverRows) if (r.fid != null) testedFileIds.add(r.fid);
+
+  // ── 4. Build name-based test file matching (same heuristic as getUntestedExports)
+  const allFiles = store.getAllFiles();
+  const testFiles = allFiles
+    .filter((f) => /\.(test|spec)\.(ts|js|tsx|jsx)$/.test(f.path) || TEST_FILE_RE.test(f.path))
+    .map((f) => f.path.toLowerCase());
+
+  // ── 5. For files with test coverage, collect referenced symbol names ──────
+  // Get test file contents via their symbols (symbol names that appear in test files)
+  const testFileSymbolNames = new Map<string, Set<string>>(); // source file base → symbol names referenced in tests
+  const testFileMap = new Map<string, number[]>(); // source base name → test file IDs
+  for (const tf of allFiles.filter((f) => TEST_FILE_RE.test(f.path))) {
+    const testSymbols = store.getSymbolsByFile(tf.id);
+    // Extract symbol names referenced via imports in this test file
+    const fileNode = store.getNodeId('file', tf.id);
+    if (fileNode == null) continue;
+
+    const outgoing = store.getOutgoingEdges(fileNode);
+    for (const edge of outgoing) {
+      if (edge.edge_type_name !== 'imports' && edge.edge_type_name !== 'test_covers') continue;
+      const targetRef = store.getNodeRef(edge.target_node_id);
+      if (!targetRef) continue;
+
+      let sourceBaseName: string | undefined;
+      if (targetRef.nodeType === 'file') {
+        const f = store.getFileById(targetRef.refId);
+        if (f) sourceBaseName = f.path.replace(/\.[^.]+$/, '').split('/').pop()!.toLowerCase();
+      }
+      if (sourceBaseName) {
+        if (!testFileSymbolNames.has(sourceBaseName)) testFileSymbolNames.set(sourceBaseName, new Set());
+        // Add all symbol names from this test file as potential references
+        for (const ts of testSymbols) {
+          testFileSymbolNames.get(sourceBaseName)!.add(ts.name.toLowerCase());
+        }
+        if (!testFileMap.has(sourceBaseName)) testFileMap.set(sourceBaseName, []);
+        testFileMap.get(sourceBaseName)!.push(tf.id);
+      }
+    }
+  }
+
+  // ── 6. Classify each symbol ───────────────────────────────────────────────
+  const untested: UntestedSymbolItem[] = [];
+
+  for (const sym of candidates) {
+    const baseName = sym.file_path
+      .replace(/\.[^.]+$/, '')
+      .split('/').pop()!
+      .toLowerCase();
+
+    // Check file-level coverage: graph edges OR name-based matching
+    const hasFileCoverage = testedFileIds.has(sym.file_id) ||
+      testFiles.some((tp) => {
+        const testBase = tp.split('/').pop()!;
+        return testBase.includes(baseName);
+      });
+
+    if (!hasFileCoverage) {
+      // No test file imports or matches this source file at all
+      untested.push({
+        symbol_id: sym.symbol_id,
+        name: sym.name,
+        kind: sym.kind,
+        file: sym.file_path,
+        line: sym.line_start,
+        signature: sym.signature,
+        level: 'unreached',
+      });
+      continue;
+    }
+
+    // File has test coverage — check if THIS specific symbol is referenced
+    const symNameLower = sym.name.toLowerCase();
+    const symKebab = toKebab(sym.name);
+
+    // Check via test file symbol names (imports + references)
+    const referencedNames = testFileSymbolNames.get(baseName);
+    const hasSymbolReference = referencedNames?.has(symNameLower) ?? false;
+
+    // Also check via direct name matching in test file paths
+    const hasNameMatch = testFiles.some((tp) => {
+      const testBase = tp.split('/').pop()!;
+      return testBase.includes(symKebab) || testBase.includes(symNameLower);
+    });
+
+    if (!hasSymbolReference && !hasNameMatch) {
+      untested.push({
+        symbol_id: sym.symbol_id,
+        name: sym.name,
+        kind: sym.kind,
+        file: sym.file_path,
+        line: sym.line_start,
+        signature: sym.signature,
+        level: 'imported_not_called',
+      });
+    }
+  }
+
+  // Sort: unreached first, then by file
+  untested.sort((a, b) => {
+    if (a.level !== b.level) return a.level === 'unreached' ? -1 : 1;
+    return a.file.localeCompare(b.file) || a.name.localeCompare(b.name);
+  });
+
+  const limited = maxResults ? untested.slice(0, maxResults) : untested;
+  const unreachedCount = untested.filter((u) => u.level === 'unreached').length;
+
+  return {
+    file_pattern: filePattern ?? null,
+    untested: limited,
+    total_symbols: candidates.length,
+    total_untested: untested.length,
+    by_level: {
+      unreached: unreachedCount,
+      imported_not_called: untested.length - unreachedCount,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // self_audit
 // ---------------------------------------------------------------------------
 

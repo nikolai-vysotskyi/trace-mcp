@@ -5,7 +5,7 @@ import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, selfAudit } from '../../src/tools/analysis/introspect.js';
+import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, getUntestedSymbols, selfAudit } from '../../src/tools/analysis/introspect.js';
 import { search } from '../../src/tools/navigation/navigation.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
@@ -365,6 +365,58 @@ describe('getUntestedExports', () => {
       expect(typeof item.name).toBe('string');
       expect(typeof item.kind).toBe('string');
       expect(typeof item.file).toBe('string');
+    }
+  });
+});
+
+// ─── get_untested_symbols ─────────────────────────────────────
+
+describe('getUntestedSymbols', () => {
+  it('returns untested symbol analysis with level classification', () => {
+    const result = getUntestedSymbols(store);
+    expect(result.total_symbols).toBeGreaterThan(0);
+    expect(typeof result.total_untested).toBe('number');
+    expect(Array.isArray(result.untested)).toBe(true);
+    expect(result.by_level).toBeDefined();
+    expect(typeof result.by_level.unreached).toBe('number');
+    expect(typeof result.by_level.imported_not_called).toBe('number');
+    expect(result.by_level.unreached + result.by_level.imported_not_called).toBe(result.total_untested);
+  });
+
+  it('covers more symbols than get_untested_exports (includes non-exported)', () => {
+    const exportsResult = getUntestedExports(store);
+    const symbolsResult = getUntestedSymbols(store);
+    // Total analyzed symbols should be >= exported symbols
+    expect(symbolsResult.total_symbols).toBeGreaterThanOrEqual(exportsResult.total_exports);
+  });
+
+  it('each item has required fields including level', () => {
+    const result = getUntestedSymbols(store);
+    for (const item of result.untested) {
+      expect(typeof item.symbol_id).toBe('string');
+      expect(typeof item.name).toBe('string');
+      expect(typeof item.kind).toBe('string');
+      expect(typeof item.file).toBe('string');
+      expect(['unreached', 'imported_not_called']).toContain(item.level);
+    }
+  });
+
+  it('respects max_results parameter', () => {
+    const full = getUntestedSymbols(store);
+    if (full.total_untested > 2) {
+      const limited = getUntestedSymbols(store, undefined, 2);
+      expect(limited.untested.length).toBe(2);
+      expect(limited.total_untested).toBe(full.total_untested); // total stays accurate
+    }
+  });
+
+  it('sorts unreached before imported_not_called', () => {
+    const result = getUntestedSymbols(store);
+    const levels = result.untested.map((u) => u.level);
+    const firstImported = levels.indexOf('imported_not_called');
+    const lastUnreached = levels.lastIndexOf('unreached');
+    if (firstImported >= 0 && lastUnreached >= 0) {
+      expect(lastUnreached).toBeLessThan(firstImported);
     }
   });
 });

@@ -27,6 +27,8 @@ interface DependentSymbol {
   symbolKind: string;
   complexity?: number;
   isExported?: boolean;
+  /** Whether any test file both covers this file AND references this specific symbol */
+  hasTestReach?: boolean;
 }
 
 interface EnrichedDependent {
@@ -95,6 +97,7 @@ interface RawDependent {
   depth: number;
   complexity?: number;
   hasTests?: boolean;
+  hasTestReach?: boolean;
   isExported?: boolean;
   fileId?: number;
   decorators?: string[];
@@ -160,6 +163,54 @@ function getTestedFileIds(store: Store): Set<number> {
   const set = new Set<number>();
   for (const r of rows) if (r.fid != null) set.add(r.fid);
   return set;
+}
+
+/**
+ * Build a map: source_file_id → Set<symbol_name> that are referenced in test files.
+ * Used to determine per-symbol test reach: does a test file both import the source
+ * file AND reference this specific symbol?
+ */
+function getTestedSymbolNames(store: Store): Map<number, Set<string>> {
+  const result = new Map<number, Set<string>>();
+
+  // Find all test files via test_covers edges
+  const testCoverEdges = store.db.prepare(`
+    SELECT
+      src_n.ref_id AS test_file_id,
+      CASE
+        WHEN tgt_n.node_type = 'file' THEN tgt_n.ref_id
+        WHEN tgt_n.node_type = 'symbol' THEN (SELECT file_id FROM symbols WHERE id = tgt_n.ref_id)
+      END AS source_file_id
+    FROM edges e
+    JOIN edge_types et ON e.edge_type_id = et.id
+    JOIN nodes src_n ON e.source_node_id = src_n.id
+    JOIN nodes tgt_n ON e.target_node_id = tgt_n.id
+    WHERE et.name = 'test_covers'
+    AND src_n.node_type = 'file'
+  `).all() as Array<{ test_file_id: number; source_file_id: number | null }>;
+
+  // Collect all test file IDs and their covered source file IDs
+  const testToSources = new Map<number, number[]>();
+  for (const row of testCoverEdges) {
+    if (row.source_file_id == null) continue;
+    if (!testToSources.has(row.test_file_id)) testToSources.set(row.test_file_id, []);
+    testToSources.get(row.test_file_id)!.push(row.source_file_id);
+  }
+
+  // For each test file, get its symbols (which represent references/calls in the test)
+  for (const [testFileId, sourceFileIds] of testToSources) {
+    const testSymbols = store.getSymbolsByFile(testFileId);
+    const testSymbolNames = new Set(testSymbols.map((s) => s.name.toLowerCase()));
+
+    for (const srcFileId of sourceFileIds) {
+      if (!result.has(srcFileId)) result.set(srcFileId, new Set());
+      for (const name of testSymbolNames) {
+        result.get(srcFileId)!.add(name);
+      }
+    }
+  }
+
+  return result;
 }
 
 // ─── Co-change lookup ────────────────────────────────────────────────────────
@@ -372,7 +423,8 @@ export function getChangeImpact(
   const visited = new Set<number>();
   for (const nid of startNodeIds) visited.add(nid);
 
-  traverseIncoming(store, startNodeIds, maxDependents, depth, visited, rawDeps, testedFileIds);
+  const testedSymNames = getTestedSymbolNames(store);
+  traverseIncoming(store, startNodeIds, maxDependents, depth, visited, rawDeps, testedFileIds, testedSymNames);
 
   const truncated = rawDeps.length >= maxDependents;
 
@@ -589,6 +641,7 @@ function deduplicateByFile(rawDeps: RawDependent[]): EnrichedDependent[] {
         };
         if (raw.complexity != null) sym.complexity = raw.complexity;
         if (raw.isExported != null) sym.isExported = raw.isExported;
+        if (raw.hasTestReach != null) sym.hasTestReach = raw.hasTestReach;
         entry.symbols.push(sym);
       }
     }
@@ -623,6 +676,7 @@ function traverseIncoming(
   visited: Set<number>,
   rawDeps: RawDependent[],
   testedFileIds: Set<number>,
+  testedSymNames: Map<number, Set<string>>,
 ): void {
   let frontier = startNodeIds;
 
@@ -722,6 +776,13 @@ function traverseIncoming(
       }
 
       if (filePath) {
+        // Per-symbol test reach: does any test that covers this file reference this symbol?
+        let hasTestReach: boolean | undefined;
+        if (fileId != null && symbolName && testedFileIds.has(fileId)) {
+          const coveredNames = testedSymNames.get(fileId);
+          hasTestReach = coveredNames?.has(symbolName.toLowerCase()) ?? false;
+        }
+
         rawDeps.push({
           path: filePath,
           edgeType: edgeBySource.get(srcId) ?? 'unknown',
@@ -731,6 +792,7 @@ function traverseIncoming(
           symbolKind,
           complexity,
           hasTests: fileId != null ? testedFileIds.has(fileId) : undefined,
+          hasTestReach,
           isExported,
           decorators,
           fileId,
