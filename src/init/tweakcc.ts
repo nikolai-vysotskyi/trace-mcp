@@ -101,6 +101,7 @@ editing with Edit/Write. Never use cat, head, tail, or sed to read any file.`,
     description: 'Patched Grep tool description that routes code search through trace-mcp',
     content: `To search code by symbol name (function, class, method, variable), use trace-mcp
 search — narrow with kind=, language=, file_pattern=, implements=, extends=.
+Set fusion=true for best ranking (combines BM25, PageRank, embeddings, identity).
 To search for strings, comments, TODOs, or patterns in source code, use trace-mcp
 search_text (supports regex, context_lines for surrounding code). For semantic
 usages (imports, calls, renders, dispatches), use find_usages. Use Grep only for
@@ -138,7 +139,10 @@ exists, default to the dedicated tool.`,
     content: `For directed codebase searches (finding a specific function, class, or method),
 use trace-mcp search directly — it is faster and more precise than text search.
 Narrow results with kind= (function, class, method, interface, type, variable),
-language=, file_pattern=, implements=, extends=. For text pattern searches in
+language=, file_pattern=, implements=, extends=. For best ranking quality, set
+fusion=true to enable Signal Fusion — multi-channel ranking that combines BM25
+(lexical), PageRank (structural), embeddings (similarity), and exact/prefix match
+(identity) via Weighted Reciprocal Rank fusion. For text pattern searches in
 code, use trace-mcp search_text. Use native search tools only for non-code files.`,
   },
   {

@@ -32,6 +32,7 @@ IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVE
 | Dead code / dead exports | \`get_dead_code\` / \`get_dead_exports\` | Grep for unused |
 | Context for a task | \`get_feature_context\` | reading 15 files |
 | Tests for a symbol | \`get_tests_for\` | Glob + Grep |
+| Untested symbols (deep) | \`get_untested_symbols\` (classifies "unreached" vs "imported_not_called") | manual audit |
 | HTTP request flow | \`get_request_flow\` | reading route files |
 | DB model relationships | \`get_model_context\` | reading model + migrations |
 | Component tree | \`get_component_tree\` | reading component files |
