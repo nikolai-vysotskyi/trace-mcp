@@ -12,9 +12,10 @@ import { LLMReranker } from '../ai/reranker.js';
 import { resolvePreset } from '../tools/project/presets.js';
 import { withHints } from '../tools/shared/hints.js';
 import { SessionTracker } from '../session/tracker.js';
-import { SessionJournal } from '../session/journal.js';
+import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { flushSessionSummary } from '../session/resume.js';
 import { getSnapshotPath, TOPOLOGY_DB_PATH, ensureGlobalDirs } from '../global.js';
+import { computePageRank } from '../scoring/pagerank.js';
 import { createExploredTracker } from './explored-tracker.js';
 import type { ServerContext, MetaContext } from './types.js';
 import type { ProgressState } from '../progress.js';
@@ -152,6 +153,78 @@ export function createServer(
   const sessionStartedAt = new Date().toISOString();
   const snapshotPath = getSnapshotPath(projectRoot);
   journal.enablePeriodicSnapshot(snapshotPath);
+
+  // Structural landmarks provider: PageRank top-20 symbols + recently edited symbols
+  journal.setLandmarkProvider(() => {
+    const landmarks: StructuralLandmark[] = [];
+    const pagerankMap = computePageRank(store.db);
+    if (pagerankMap.size === 0) return landmarks;
+
+    // Top-20 by PageRank
+    const sorted = [...pagerankMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20);
+    const nodeIds = sorted.map(([nid]) => nid);
+    const refs = store.getNodeRefsBatch(nodeIds);
+
+    const symbolRefIds: number[] = [];
+    const nodeScores = new Map<number, number>();
+    for (const [nid, score] of sorted) {
+      const ref = refs.get(nid);
+      if (ref?.nodeType === 'symbol') {
+        symbolRefIds.push(ref.refId);
+        nodeScores.set(ref.refId, score);
+      }
+    }
+
+    if (symbolRefIds.length > 0) {
+      const symbolMap = store.getSymbolsByIds(symbolRefIds);
+      const fileIds = [...new Set([...symbolMap.values()].map((s) => s.file_id))];
+      const fileMap = store.getFilesByIds(fileIds);
+
+      for (const symId of symbolRefIds) {
+        const sym = symbolMap.get(symId);
+        if (!sym) continue;
+        const file = fileMap.get(sym.file_id);
+        if (!file) continue;
+        landmarks.push({
+          symbol_id: sym.symbol_id,
+          name: sym.name,
+          kind: sym.kind,
+          file: file.path,
+          line: sym.line_start,
+          reason: 'pagerank',
+          score: nodeScores.get(symId),
+        });
+      }
+    }
+
+    // Recently edited symbols (from register_edit calls in the journal)
+    const editedFiles = new Set<string>();
+    for (const entry of journal.getEntries()) {
+      if (entry.tool === 'register_edit') {
+        const fp = entry.params_summary.replace(/^register_edit\s+/, '');
+        if (fp) editedFiles.add(fp);
+      }
+    }
+
+    for (const fp of editedFiles) {
+      const file = store.getFile(fp);
+      if (!file) continue;
+      const syms = store.getSymbolsByFile(file.id);
+      for (const sym of syms.slice(0, 3)) { // top 3 symbols per edited file
+        if (landmarks.some((l) => l.symbol_id === sym.symbol_id)) continue;
+        landmarks.push({
+          symbol_id: sym.symbol_id,
+          name: sym.name,
+          kind: sym.kind,
+          file: fp,
+          line: sym.line_start,
+          reason: 'recently_edited',
+        });
+      }
+    }
+
+    return landmarks;
+  });
 
   let sessionFlushed = false;
   const flushAll = () => {

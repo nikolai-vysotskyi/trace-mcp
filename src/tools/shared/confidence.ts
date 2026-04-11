@@ -67,13 +67,16 @@ export const CALL_GRAPH_METHODOLOGY: Methodology = {
   signals: [
     'import edges extracted from AST by language plugins',
     'explicit call references tracked during symbol indexing',
+    'LSP call hierarchy resolution (when lsp.enabled, for supported languages)',
   ],
   confidence_formula:
-    'medium — edges are derived from static AST analysis at index time; ' +
-    'dynamic dispatch, higher-order functions, and runtime-only paths are not traced.',
+    'Tier-based: lsp_resolved (compiler-grade) > ast_resolved (static AST) > ' +
+    'ast_inferred (heuristic) > text_matched (name similarity). ' +
+    'Dynamic dispatch resolved when LSP enabled; otherwise limited to static AST.',
   limitations: [
-    'dynamic dispatch and interface polymorphism not resolved',
-    'higher-order function calls (callbacks, injected fns) may be missing',
+    'LSP resolution requires lsp.enabled and language server installed',
+    'dynamic dispatch resolved only with LSP; AST-only misses polymorphism',
+    'higher-order function calls may be missing without LSP',
     'accuracy depends on language plugin AST pass completeness',
     'stale if index has not been refreshed since last edit',
   ],

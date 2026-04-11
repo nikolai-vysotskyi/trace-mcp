@@ -147,14 +147,21 @@ program
       logger.info({ worktreeRoot: projectRoot, mainRoot: worktreeInfo.mainRoot }, 'Git worktree detected — sharing main repo index');
     }
 
-    // Auto-register the index root (main repo if worktree, otherwise current project)
+    // Auto-register the index root (main repo if worktree, otherwise current project).
+    // Only register if findProjectRoot resolves to indexRoot itself — never climb
+    // above CWD, which would accidentally register a parent directory
+    // (e.g. ~/PhpstormProjects when CWD is ~/PhpstormProjects/some-project).
     const existing = getProject(indexRoot);
     if (!existing) {
       try {
         const root = findProjectRoot(indexRoot);
-        ensureGlobalDirs();
-        registerProject(root);
-        logger.info({ root }, 'Auto-registered project');
+        if (root === path.resolve(indexRoot)) {
+          ensureGlobalDirs();
+          registerProject(root);
+          logger.info({ root }, 'Auto-registered project');
+        } else {
+          logger.debug({ cwd: indexRoot, resolvedRoot: root }, 'Skipped auto-register: project root is above CWD');
+        }
       } catch {
         // Not a project dir — will still try to serve with defaults
       }
@@ -271,6 +278,21 @@ program
     const server = createServer(store, registry, config, projectRoot, progress);
     const transport = new StdioServerTransport();
 
+    // After MCP initialize handshake, report client name to daemon
+    if (daemonActive && daemonClientId) {
+      const cid = daemonClientId;
+      server.server.oninitialized = () => {
+        const clientVersion = server.server.getClientVersion();
+        if (clientVersion?.name) {
+          fetch(`http://127.0.0.1:${DEFAULT_DAEMON_PORT}/api/clients`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: cid, name: clientVersion.name }),
+          }).catch(() => { /* best-effort */ });
+        }
+      };
+    }
+
     logger.info({ projectRoot, indexRoot, dbPath, daemonActive }, 'Starting trace-mcp MCP server...');
     await server.connect(transport);
   });
@@ -313,6 +335,7 @@ program
     // ── Client tracking ─────────────────────────────────────────
     interface TrackedClient {
       id: string;
+      name?: string;
       project: string;
       transport: string;
       connectedAt: string;
@@ -324,7 +347,8 @@ program
     type DaemonEvent =
       | { type: 'indexing_progress'; project: string; pipeline: string; phase: string; processed: number; total: number }
       | { type: 'project_status'; project: string; status: string; error?: string }
-      | { type: 'client_connect'; clientId: string; project: string; transport?: string }
+      | { type: 'client_connect'; clientId: string; project: string; transport?: string; name?: string }
+      | { type: 'client_update'; clientId: string; project?: string; name?: string }
       | { type: 'client_disconnect'; clientId: string; project?: string };
 
     const sseConnections = new Set<http.ServerResponse>();
@@ -649,13 +673,25 @@ program
           const layout = (url.searchParams.get('layout') ?? 'force') as 'force' | 'hierarchical' | 'radial';
           const hideIsolated = url.searchParams.get('hideIsolated') !== 'false';
           const symbolKinds = url.searchParams.get('symbolKinds')?.split(',').filter(Boolean);
+          const maxFiles = url.searchParams.has('maxFiles') ? parseInt(url.searchParams.get('maxFiles')!, 10) : undefined;
+          const maxNodes = url.searchParams.has('maxNodes') ? parseInt(url.searchParams.get('maxNodes')!, 10) : undefined;
 
-          const { nodes, edges, communities } = buildGraphData(managed.store, {
-            scope, depth, granularity, layout, hideIsolated, symbolKinds,
-          });
+          // Open topoStore for federation support (best-effort)
+          let topoStore: InstanceType<typeof TopologyStore> | undefined;
+          try {
+            if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+          } catch { /* federation is optional */ }
 
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ nodes, edges, communities }));
+          try {
+            const { nodes, edges, communities } = buildGraphData(managed.store, {
+              scope, depth, granularity, layout, hideIsolated, symbolKinds, maxFiles, maxNodes, topoStore, projectRoot,
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ nodes, edges, communities }));
+          } finally {
+            topoStore?.close();
+          }
         } catch (e: any) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e?.message ?? 'Graph build failed' }));
@@ -684,29 +720,41 @@ program
           const layout = (url.searchParams.get('layout') ?? 'force') as 'force' | 'hierarchical' | 'radial';
           const hideIsolated = url.searchParams.get('hideIsolated') !== 'false';
           const symbolKinds = url.searchParams.get('symbolKinds')?.split(',').filter(Boolean);
+          const maxFiles = url.searchParams.has('maxFiles') ? parseInt(url.searchParams.get('maxFiles')!, 10) : undefined;
+          const maxNodes = url.searchParams.has('maxNodes') ? parseInt(url.searchParams.get('maxNodes')!, 10) : undefined;
 
-          const { nodes, edges, communities } = buildGraphData(managed.store, {
-            scope, depth, granularity, layout, hideIsolated, symbolKinds,
-          });
-          let html = generateHtml(nodes, edges, communities, layout);
+          // Open topoStore for federation support (best-effort)
+          let topoStore: InstanceType<typeof TopologyStore> | undefined;
+          try {
+            if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+          } catch { /* federation is optional */ }
 
-          // Embedded mode: adapt styling for iframe in the menu bar app
-          const embedded = url.searchParams.get('embedded') === 'true';
-          const theme = url.searchParams.get('theme') ?? 'dark';
-          if (embedded) {
-            const bg = theme === 'light' ? '#f0f0f0' : '#1c1c1e';
-            const textColor = theme === 'light' ? '#333' : '#ccc';
-            const embeddedCSS = `<style>
-              body { background: ${bg} !important; }
-              #controls { display: none !important; }
-              #stats { display: none !important; }
-              .node text { fill: ${textColor} !important; }
-            </style>`;
-            html = html.replace('</head>', embeddedCSS + '</head>');
+          try {
+            const { nodes, edges, communities } = buildGraphData(managed.store, {
+              scope, depth, granularity, layout, hideIsolated, symbolKinds, maxFiles, maxNodes, topoStore, projectRoot,
+            });
+            let html = generateHtml(nodes, edges, communities, layout);
+
+            // Embedded mode: adapt styling for iframe in the menu bar app
+            const embedded = url.searchParams.get('embedded') === 'true';
+            const theme = url.searchParams.get('theme') ?? 'dark';
+            if (embedded) {
+              const bg = theme === 'light' ? '#f0f0f0' : '#1c1c1e';
+              const textColor = theme === 'light' ? '#333' : '#ccc';
+              const embeddedCSS = `<style>
+                body { background: ${bg} !important; }
+                #controls { display: none !important; }
+                #stats { display: none !important; }
+                .node text { fill: ${textColor} !important; }
+              </style>`;
+              html = html.replace('</head>', embeddedCSS + '</head>');
+            }
+
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(html);
+          } finally {
+            topoStore?.close();
           }
-
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(html);
         } catch (e: any) {
           res.writeHead(500, { 'Content-Type': 'text/plain' });
           res.end(e?.message ?? 'Graph build failed');
@@ -878,12 +926,32 @@ program
       if (req.method === 'POST' && url.pathname === '/api/clients') {
         try {
           const body = await collectBody(req);
-          const { id, project, transport: t } = JSON.parse(body.toString()) as { id: string; project: string; transport: string };
+          const { id, project, transport: t, name } = JSON.parse(body.toString()) as { id: string; project: string; transport: string; name?: string };
           const now = new Date().toISOString();
-          clients.set(id, { id, project, transport: t || 'stdio', connectedAt: now, lastSeen: now });
-          broadcastEvent({ type: 'client_connect', clientId: id, transport: t || 'stdio', project });
+          clients.set(id, { id, name, project, transport: t || 'stdio', connectedAt: now, lastSeen: now });
+          broadcastEvent({ type: 'client_connect', clientId: id, transport: t || 'stdio', project, name });
           res.writeHead(201, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'registered' }));
+        } catch (e: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e?.message ?? 'Bad request' }));
+        }
+        return;
+      }
+
+      // REST API: update client info (e.g. name after MCP initialize)
+      if (req.method === 'PATCH' && url.pathname === '/api/clients') {
+        try {
+          const body = await collectBody(req);
+          const { id, name } = JSON.parse(body.toString()) as { id: string; name?: string };
+          const existing = clients.get(id);
+          if (existing) {
+            if (name) existing.name = name;
+            existing.lastSeen = new Date().toISOString();
+            broadcastEvent({ type: 'client_update' as any, clientId: id, name, project: existing.project });
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'updated' }));
         } catch (e: any) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e?.message ?? 'Bad request' }));

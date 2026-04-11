@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
-import { visualizeGraph, getDependencyDiagram } from '../../src/tools/analysis/visualize.js';
+import { visualizeGraph, getDependencyDiagram, buildGraphData } from '../../src/tools/analysis/visualize.js';
+import { TopologyStore } from '../../src/topology/topology-db.js';
 
 describe('visualizeGraph', () => {
   let store: Store;
@@ -221,5 +222,108 @@ describe('getDependencyDiagram', () => {
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
     expect(data.nodes).toBeLessThanOrEqual(5);
+  });
+});
+
+describe('buildGraphData federation filtering', () => {
+  let store: Store;
+  let tmpDir: string;
+  let topoDbPath: string;
+  let topoStore: TopologyStore;
+
+  beforeEach(() => {
+    store = createTestStore();
+    tmpDir = createTmpDir('viz-fed-');
+
+    // Populate the main project store with some files
+    const f1 = store.insertFile('src/index.ts', 'typescript', 'h1', 100);
+    const f2 = store.insertFile('src/util.ts', 'typescript', 'h2', 50);
+    const n1 = store.getNodeId('file', f1)!;
+    const n2 = store.getNodeId('file', f2)!;
+    store.insertEdge(n1, n2, 'imports');
+
+    // Create a topology store with unrelated federated repos
+    topoDbPath = path.join(tmpDir, 'topology.db');
+    topoStore = new TopologyStore(topoDbPath);
+
+    // Register two unrelated repos — NOT linked to our projectRoot
+    topoStore.upsertFederatedRepo({
+      name: 'unrelated-project-a',
+      repoRoot: '/some/other/path/a',
+      dbPath: undefined,
+    });
+    topoStore.upsertFederatedRepo({
+      name: 'unrelated-project-b',
+      repoRoot: '/some/other/path/b',
+      dbPath: undefined,
+    });
+  });
+
+  afterEach(() => {
+    topoStore.close();
+    removeTmpDir(tmpDir);
+  });
+
+  it('does not include unrelated federated repos when project is not in federation', () => {
+    // projectRoot is NOT registered in the federation — should skip federation entirely
+    const result = buildGraphData(store, {
+      scope: 'project',
+      topoStore,
+      projectRoot: '/my/project/trace-mcp',
+    });
+
+    // Should only contain nodes from the main store, not from federation
+    expect(result.nodes.length).toBe(2); // just our two files
+    expect(result.nodes.every((n) => !n.repo)).toBe(true); // no repo tag = single project mode
+  });
+
+  it('does not include unrelated federated repos even when project is registered', () => {
+    // Register the current project in federation, but no cross-service edges to others
+    topoStore.upsertFederatedRepo({
+      name: 'my-project',
+      repoRoot: '/my/project/trace-mcp',
+      dbPath: undefined,
+    });
+
+    const result = buildGraphData(store, {
+      scope: 'project',
+      topoStore,
+      projectRoot: '/my/project/trace-mcp',
+    });
+
+    // No sub-directory repos → should fall back to single project
+    expect(result.nodes.length).toBe(2);
+    expect(result.nodes.every((n) => !n.repo)).toBe(true);
+  });
+
+  it('only federates sub-directory repos, not siblings', () => {
+    // Simulate: /projects/the has sub-projects, but /projects/trace-mcp is a sibling
+    topoStore.upsertFederatedRepo({
+      name: 'the',
+      repoRoot: '/projects/the',
+      dbPath: undefined,
+    });
+    // Sub-project of /projects/the — should be included
+    topoStore.upsertFederatedRepo({
+      name: 'fair-front',
+      repoRoot: '/projects/the/fair/fair-front',
+      dbPath: undefined,
+    });
+    // Sibling — should NOT be included
+    topoStore.upsertFederatedRepo({
+      name: 'trace-mcp',
+      repoRoot: '/projects/trace-mcp',
+      dbPath: undefined,
+    });
+
+    const result = buildGraphData(store, {
+      scope: 'project',
+      topoStore,
+      projectRoot: '/projects/the',
+    });
+
+    // fair-front is a sub-dir but has no DB, so federation returns null → single project
+    // The important thing: trace-mcp (sibling) must NOT appear
+    expect(result.nodes.every((n) => n.repo !== 'trace-mcp')).toBe(true);
   });
 });

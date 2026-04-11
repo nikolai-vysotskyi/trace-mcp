@@ -408,8 +408,10 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       hide_isolated: z.boolean().optional().describe('Hide nodes with no edges (default: true — removes disconnected ring)'),
       granularity: z.enum(['file', 'symbol']).optional().describe('Node granularity: file (default) or symbol (functions/classes/methods)'),
       symbol_kinds: z.array(z.string()).optional().describe('Filter symbol kinds when granularity=symbol (e.g. ["function","class","method"])'),
+      max_files: z.number().int().min(1).max(100000).optional().describe('Max seed files for file-level graph (default 10000)'),
+      max_nodes: z.number().int().min(1).max(100000).optional().describe('Max viz nodes for symbol-level graph (default 100000)'),
     },
-    async ({ scope, depth, layout, color_by, include_edges, output, hide_isolated, granularity, symbol_kinds }) => {
+    async ({ scope, depth, layout, color_by, include_edges, output, hide_isolated, granularity, symbol_kinds, max_files, max_nodes }) => {
       const result = visualizeGraph(store, {
         scope,
         depth,
@@ -420,6 +422,10 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         hideIsolated: hide_isolated,
         granularity,
         symbolKinds: symbol_kinds,
+        maxFiles: max_files,
+        maxNodes: max_nodes,
+        topoStore: ctx.topoStore,
+        projectRoot,
       });
       if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       return { content: [{ type: 'text', text: j(result.value) }] };

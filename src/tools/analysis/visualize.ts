@@ -7,9 +7,13 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import { ok, err, type TraceMcpResult } from '../../errors.js';
 import { validationError } from '../../errors.js';
-import type { Store, FileRow, SymbolRow, EdgeRow } from '../../db/store.js';
+import { Store, type FileRow, type SymbolRow, type EdgeRow } from '../../db/store.js';
+import { initializeDatabase } from '../../db/schema.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
+import { logger } from '../../logger.js';
 // @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
 
@@ -25,6 +29,10 @@ export interface VisualizeGraphOptions {
   hideIsolated?: boolean;   // hide nodes with no edges (default: true)
   granularity?: 'file' | 'symbol'; // node granularity (default: file)
   symbolKinds?: string[];   // filter symbol kinds when granularity=symbol
+  maxFiles?: number;        // max seed files for file-level graph (default: 10000)
+  maxNodes?: number;        // max viz nodes for symbol-level graph (default: 100000)
+  topoStore?: TopologyStore; // federation topology store — when set, merges connected federated repos
+  projectRoot?: string;      // current project root — used to scope federation to connected repos only
 }
 
 interface VizNode {
@@ -36,6 +44,7 @@ interface VizNode {
   community: number;
   symbolCount?: number;
   importance: number;
+  repo?: string;  // set when merging federated repos
 }
 
 interface VizEdge {
@@ -130,6 +139,27 @@ export function buildGraphData(
   const granularity = opts.granularity ?? 'file';
   const hideIsolated = opts.hideIsolated === true; // default false
 
+  // Federation: when scope='project' and topoStore is available, merge all federated repos
+  if (scope === 'project' && opts.topoStore) {
+    try {
+      const fedResult = buildFederatedGraph(store, opts);
+      if (fedResult) return fedResult;
+    } catch (e) {
+      logger.warn({ error: e }, 'Federation graph merge failed, falling back to single-project');
+    }
+  }
+
+  return buildSingleProjectGraph(store, opts, scope, depth, granularity, hideIsolated);
+}
+
+function buildSingleProjectGraph(
+  store: Store,
+  opts: VisualizeGraphOptions,
+  scope: string,
+  depth: number,
+  granularity: string,
+  hideIsolated: boolean,
+): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } {
   // 1. Determine seed files
   let seedFiles: FileRow[];
   if (scope === 'project') {
@@ -146,15 +176,123 @@ export function buildGraphData(
     }
   }
 
-  if (seedFiles.length > 500) seedFiles = seedFiles.slice(0, 500);
-
   // Filter by edge type if specified
   const edgeFilter = opts.includeEdges ? new Set(opts.includeEdges) : null;
 
   if (granularity === 'symbol') {
     return buildSymbolGraph(store, seedFiles, depth, edgeFilter, hideIsolated, opts);
   }
+
+  // File-level: only cap seed files when explicitly requested
+  const maxFiles = opts.maxFiles;
+  if (maxFiles && seedFiles.length > maxFiles) seedFiles = seedFiles.slice(0, maxFiles);
   return buildFileGraph(store, seedFiles, depth, edgeFilter, hideIsolated, opts);
+}
+
+/**
+ * Federation-aware graph: only include repos that are directly connected
+ * to the current project via cross-service edges in topology.
+ */
+function buildFederatedGraph(
+  mainStore: Store,
+  opts: VisualizeGraphOptions,
+): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } | null {
+  const topoStore = opts.topoStore!;
+  const projectRoot = opts.projectRoot;
+  if (!projectRoot) return null;
+
+  const allRepos = topoStore.getAllFederatedRepos();
+  if (allRepos.length === 0) return null;
+
+  // Auto-federation: only include repos whose root is a strict sub-directory
+  // of the current project. Sibling/unrelated projects are never auto-included.
+  // To federate unrelated repos, the user must explicitly configure it.
+  const normalizedRoot = projectRoot.endsWith('/') ? projectRoot : projectRoot + '/';
+  const repos = allRepos.filter((r) => r.repo_root.startsWith(normalizedRoot));
+
+  if (repos.length === 0) return null; // no connected repos — skip federation
+
+  const allNodes: VizNode[] = [];
+  const allEdges: VizEdge[] = [];
+
+  // Build graph for main project
+  const mainResult = buildSingleProjectGraph(
+    mainStore, opts, 'project', opts.depth ?? 2,
+    opts.granularity ?? 'file', opts.hideIsolated === true,
+  );
+
+  const mainPrefix = currentRepo?.name ?? 'main';
+
+  for (const n of mainResult.nodes) {
+    n.repo = mainPrefix;
+    allNodes.push(n);
+  }
+  allEdges.push(...mainResult.edges);
+
+  // Build graph for each connected federated repo
+  for (const repo of repos) {
+    if (!repo.db_path || !fs.existsSync(repo.db_path)) continue;
+
+    let db: InstanceType<typeof Database> | null = null;
+    try {
+      db = initializeDatabase(repo.db_path);
+      const fedStore = new Store(db);
+      const repoPrefix = repo.name;
+
+      const fedOpts: VisualizeGraphOptions = {
+        ...opts,
+        topoStore: undefined, // prevent recursion
+      };
+
+      const fedResult = buildSingleProjectGraph(
+        fedStore, fedOpts, 'project', opts.depth ?? 2,
+        opts.granularity ?? 'file', opts.hideIsolated === true,
+      );
+
+      for (const n of fedResult.nodes) {
+        n.id = `${repoPrefix}:${n.id}`;
+        n.repo = repoPrefix;
+        allNodes.push(n);
+      }
+      for (const e of fedResult.edges) {
+        allEdges.push({
+          source: `${repoPrefix}:${e.source}`,
+          target: `${repoPrefix}:${e.target}`,
+          type: e.type,
+          weight: e.weight,
+        });
+      }
+    } catch (e) {
+      logger.warn({ repo: repo.name, error: e }, 'Failed to load federated repo for graph');
+    } finally {
+      db?.close();
+    }
+  }
+
+  // Add cross-service edges from topology
+  try {
+    const crossEdges = topoStore.getAllCrossServiceEdges();
+    for (const ce of crossEdges) {
+      const srcPrefix = allRepos.find((r) => r.name === ce.source_name)?.name ?? mainPrefix;
+      const tgtPrefix = allRepos.find((r) => r.name === ce.target_name)?.name ?? mainPrefix;
+      if (srcPrefix === tgtPrefix) continue;
+
+      const srcNodes = allNodes.filter((n) => n.repo === srcPrefix);
+      const tgtNodes = allNodes.filter((n) => n.repo === tgtPrefix);
+      if (srcNodes.length > 0 && tgtNodes.length > 0) {
+        allEdges.push({
+          source: srcNodes[0].id,
+          target: tgtNodes[0].id,
+          type: ce.edge_type ?? 'cross_service',
+          weight: 1,
+        });
+      }
+    }
+  } catch { /* cross-service edges are best-effort */ }
+
+  if (allNodes.length === 0) return null;
+
+  return finalize(allNodes, allEdges, opts.hideIsolated === true);
 }
 
 /**
@@ -312,6 +450,12 @@ function buildFileGraph(
 
 /**
  * Symbol-level graph: show individual functions/classes/methods as nodes.
+ *
+ * Import edges live on file nodes (file→file), while heritage edges live on
+ * symbol nodes (symbol→symbol).  We query BOTH node types so that import
+ * relationships show up at symbol granularity.  File-level edges are "fanned
+ * out" to representative symbols via import-specifier metadata when available,
+ * otherwise a single proxy edge per file pair is created.
  */
 function buildSymbolGraph(
   store: Store,
@@ -321,29 +465,34 @@ function buildSymbolGraph(
   hideIsolated: boolean,
   opts: VisualizeGraphOptions,
 ): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } {
-  const fileIds = seedFiles.map((f) => f.id);
-  const symbols = fileIds.length > 0 ? store.getSymbolsByFileIds(fileIds) : [];
-  const filtered = opts.symbolKinds
-    ? symbols.filter((s) => opts.symbolKinds!.includes(s.kind))
-    : symbols;
-  const limitedSymbols = filtered.length > 1000 ? filtered.slice(0, 1000) : filtered;
+  const MAX_VIZ_NODES = opts.maxNodes ?? 100_000;
 
-  const seedNodeIds: number[] = [];
-  for (const sym of limitedSymbols) {
-    const nodeId = store.getNodeId('symbol', sym.id);
-    if (nodeId) seedNodeIds.push(nodeId);
+  const fileIds = seedFiles.map((f) => f.id);
+
+  // -- Collect seed file node IDs (import edges are file→file) --
+  const fileNodeMap = store.getNodeIdsBatch('file', fileIds);
+  const seedFileNodeIds = [...fileNodeMap.values()];
+
+  // -- Reverse map: nodeId → fileId --
+  const nodeIdToFileId = new Map<number, number>();
+  for (const file of seedFiles) {
+    const nodeId = fileNodeMap.get(file.id);
+    if (nodeId) nodeIdToFileId.set(nodeId, file.id);
   }
 
-  // Expand frontier
-  const visitedNodes = new Set(seedNodeIds);
-  let frontier = new Set(seedNodeIds);
+  // -- Expand frontier using file node edges --
+  const visitedFileNodes = new Set(seedFileNodeIds);
+  let frontier = new Set(seedFileNodeIds);
 
-  const rawEdges = seedNodeIds.length > 0
-    ? store.getEdgesForNodesBatch(seedNodeIds)
+  const rawEdges = seedFileNodeIds.length > 0
+    ? store.getEdgesForNodesBatch(seedFileNodeIds)
     : [];
   const filteredEdges = edgeFilter
     ? rawEdges.filter((e) => edgeFilter.has(e.edge_type_name))
     : rawEdges;
+
+  // Collect ALL edges we encounter during traversal
+  const collectedEdges: typeof filteredEdges = [...filteredEdges];
 
   for (let d = 0; d < depth && frontier.size > 0; d++) {
     const nextFrontier = new Set<number>();
@@ -351,37 +500,120 @@ function buildSymbolGraph(
       ? filteredEdges
       : store.getEdgesForNodesBatch([...frontier]);
 
+    if (d > 0) collectedEdges.push(...batchEdges);
+
     for (const edge of batchEdges) {
       const otherNode = edge.pivot_node_id === edge.source_node_id
         ? edge.target_node_id
         : edge.source_node_id;
 
-      if (!visitedNodes.has(otherNode) && visitedNodes.size < 2000) {
-        visitedNodes.add(otherNode);
+      if (!visitedFileNodes.has(otherNode) && visitedFileNodes.size < 5000) {
+        visitedFileNodes.add(otherNode);
         nextFrontier.add(otherNode);
       }
     }
     frontier = nextFrontier;
   }
 
-  // Resolve nodes to symbols
-  const nodeRefs = store.getNodeRefsBatch([...visitedNodes]);
-  const symIds = new Set<number>();
-  for (const [, ref] of nodeRefs) {
-    if (ref.nodeType === 'symbol') symIds.add(ref.refId);
+  // -- Resolve all visited file nodes to file IDs --
+  const fileNodeRefs = store.getNodeRefsBatch([...visitedFileNodes]);
+  const connectedFileIds = new Set<number>();
+  for (const [nodeId, ref] of fileNodeRefs) {
+    if (ref.nodeType === 'file') {
+      nodeIdToFileId.set(nodeId, ref.refId);
+      connectedFileIds.add(ref.refId);
+    }
   }
-  const symbolsById = symIds.size > 0 ? store.getSymbolsByIds([...symIds]) : new Map();
 
+  // -- Determine which files have edges (prioritize their symbols) --
+  const edgeConnectedFileIds = new Set<number>();
+  for (const edge of collectedEdges) {
+    const srcFid = nodeIdToFileId.get(edge.source_node_id);
+    const tgtFid = nodeIdToFileId.get(edge.target_node_id);
+    if (srcFid != null) edgeConnectedFileIds.add(srcFid);
+    if (tgtFid != null) edgeConnectedFileIds.add(tgtFid);
+  }
+
+  // -- Load symbols: prioritize files with edges --
+  const connectedFileIdArr = [...connectedFileIds];
+  const allSymbols = connectedFileIdArr.length > 0
+    ? store.getSymbolsByFileIds(connectedFileIdArr)
+    : [];
+
+  // Apply kind filter
+  const filteredSymbols = opts.symbolKinds
+    ? allSymbols.filter((s) => opts.symbolKinds!.includes(s.kind))
+    : allSymbols;
+
+  // Cap total symbols: prioritize symbols from files that have edges
+  let cappedSymbols: typeof filteredSymbols;
+  if (filteredSymbols.length > MAX_VIZ_NODES) {
+    const withEdges = filteredSymbols.filter((s) => edgeConnectedFileIds.has(s.file_id));
+    const withoutEdges = filteredSymbols.filter((s) => !edgeConnectedFileIds.has(s.file_id));
+    const remaining = MAX_VIZ_NODES - withEdges.length;
+    cappedSymbols = remaining > 0
+      ? [...withEdges, ...withoutEdges.slice(0, remaining)]
+      : withEdges.slice(0, MAX_VIZ_NODES);
+  } else {
+    cappedSymbols = filteredSymbols;
+  }
+
+  const symbolsById = new Map<number, (typeof cappedSymbols)[0]>();
+  for (const sym of cappedSymbols) {
+    symbolsById.set(sym.id, sym);
+  }
+
+  // -- Collect symbol-level edges (heritage, etc.) for capped symbols only --
+  const cappedSymRefIds = cappedSymbols.map((s) => s.id);
+  const cappedSymNodeMap = store.getNodeIdsBatch('symbol', cappedSymRefIds);
+  const cappedSymNodeIds = [...cappedSymNodeMap.values()];
+
+  const symEdges = cappedSymNodeIds.length > 0
+    ? store.getEdgesForNodesBatch(cappedSymNodeIds)
+    : [];
+  const filteredSymEdges = edgeFilter
+    ? symEdges.filter((e) => edgeFilter.has(e.edge_type_name))
+    : symEdges;
+  collectedEdges.push(...filteredSymEdges);
+
+  // Resolve heritage-connected symbols from OUTSIDE the capped set
+  const symNodeToSymId = new Map<number, number>();
+  const cappedSymNodeIdSet = new Set(cappedSymNodeIds);
+  // Map capped symbol nodes first
+  for (const [refId, nodeId] of cappedSymNodeMap) {
+    symNodeToSymId.set(nodeId, refId);
+  }
+  const heritageExternalNodeIds: number[] = [];
+  for (const edge of filteredSymEdges) {
+    for (const nid of [edge.source_node_id, edge.target_node_id]) {
+      if (!cappedSymNodeIdSet.has(nid) && !symNodeToSymId.has(nid)) {
+        heritageExternalNodeIds.push(nid);
+      }
+    }
+  }
+  // Resolve external heritage symbol nodes
+  if (heritageExternalNodeIds.length > 0) {
+    const extRefs = store.getNodeRefsBatch(heritageExternalNodeIds);
+    const extSymIds: number[] = [];
+    for (const [nodeId, ref] of extRefs) {
+      if (ref.nodeType === 'symbol') {
+        symNodeToSymId.set(nodeId, ref.refId);
+        extSymIds.push(ref.refId);
+      }
+    }
+    if (extSymIds.length > 0) {
+      const extSyms = store.getSymbolsByIds(extSymIds);
+      for (const [id, sym] of extSyms) symbolsById.set(id, sym);
+    }
+  }
+
+  // -- Build viz nodes --
   const vizNodes: VizNode[] = [];
-  const nodeIdToVizId = new Map<number, string>();
+  const fileIdToVizIds = new Map<number, string[]>();
+  const symbolIdToVizId = new Map<number, string>(); // symbol DB id → symbol_id string
 
-  for (const nodeId of visitedNodes) {
-    const ref = nodeRefs.get(nodeId);
-    if (!ref || ref.nodeType !== 'symbol') continue;
-    const sym = symbolsById.get(ref.refId);
-    if (!sym) continue;
+  for (const sym of symbolsById.values()) {
     const file = store.getFileById(sym.file_id);
-    nodeIdToVizId.set(nodeId, sym.symbol_id);
     vizNodes.push({
       id: sym.symbol_id,
       label: sym.name,
@@ -391,23 +623,88 @@ function buildSymbolGraph(
       community: 0,
       importance: 0,
     });
+    const list = fileIdToVizIds.get(sym.file_id) ?? [];
+    list.push(sym.symbol_id);
+    fileIdToVizIds.set(sym.file_id, list);
+    symbolIdToVizId.set(sym.id, sym.symbol_id);
   }
 
-  // Build edges
-  const allEdgesForGraph = store.getEdgesForNodesBatch([...visitedNodes]);
+  // Map symbol node IDs to viz IDs for heritage edges
+  const nodeIdToVizId = new Map<number, string>();
+  for (const [nodeId, symId] of symNodeToSymId) {
+    const vizId = symbolIdToVizId.get(symId);
+    if (vizId) nodeIdToVizId.set(nodeId, vizId);
+  }
+
+  // -- Build symbol name lookup per file (for specifier matching) --
+  const fileSymbolByName = new Map<number, Map<string, string>>();
+  for (const sym of symbolsById.values()) {
+    let nameMap = fileSymbolByName.get(sym.file_id);
+    if (!nameMap) { nameMap = new Map(); fileSymbolByName.set(sym.file_id, nameMap); }
+    nameMap.set(sym.name, sym.symbol_id);
+  }
+
+  // -- Build edges --
   const edgeMap = new Map<string, VizEdge>();
-  for (const edge of allEdgesForGraph) {
+
+  const addVizEdge = (source: string, target: string, type: string) => {
+    if (source === target) return;
+    const key = `${source}→${target}`;
+    const existing = edgeMap.get(key);
+    if (existing) { existing.weight++; }
+    else { edgeMap.set(key, { source, target, type, weight: 1 }); }
+  };
+
+  // Deduplicate collected edges
+  const seenEdges = new Set<string>();
+  for (const edge of collectedEdges) {
+    const edgeKey = `${edge.source_node_id}-${edge.target_node_id}-${edge.edge_type_id}`;
+    if (seenEdges.has(edgeKey)) continue;
+    seenEdges.add(edgeKey);
+
     if (edgeFilter && !edgeFilter.has(edge.edge_type_name)) continue;
+
+    // Check if it's a symbol→symbol edge (heritage)
     const sourceViz = nodeIdToVizId.get(edge.source_node_id);
     const targetViz = nodeIdToVizId.get(edge.target_node_id);
-    if (!sourceViz || !targetViz || sourceViz === targetViz) continue;
 
-    const key = `${sourceViz}→${targetViz}`;
-    const existing = edgeMap.get(key);
-    if (existing) {
-      existing.weight++;
-    } else {
-      edgeMap.set(key, { source: sourceViz, target: targetViz, type: edge.edge_type_name, weight: 1 });
+    if (sourceViz && targetViz) {
+      addVizEdge(sourceViz, targetViz, edge.edge_type_name);
+      continue;
+    }
+
+    // file→file edge: fan out to symbols using import specifiers
+    const srcFileId = nodeIdToFileId.get(edge.source_node_id);
+    const tgtFileId = nodeIdToFileId.get(edge.target_node_id);
+    if (srcFileId == null || tgtFileId == null || srcFileId === tgtFileId) continue;
+
+    const srcSymbols = fileIdToVizIds.get(srcFileId);
+    const tgtSymbols = fileIdToVizIds.get(tgtFileId);
+    if (!srcSymbols?.length || !tgtSymbols?.length) continue;
+
+    // Try to match via import specifiers in edge metadata
+    let matched = false;
+    if (edge.metadata) {
+      try {
+        const meta = JSON.parse(edge.metadata) as { specifiers?: string[] };
+        if (meta.specifiers?.length) {
+          const tgtNameMap = fileSymbolByName.get(tgtFileId);
+          if (tgtNameMap) {
+            for (const spec of meta.specifiers) {
+              const tgtViz = tgtNameMap.get(spec);
+              if (tgtViz) {
+                addVizEdge(srcSymbols[0], tgtViz, edge.edge_type_name);
+                matched = true;
+              }
+            }
+          }
+        }
+      } catch { /* ignore malformed metadata */ }
+    }
+
+    // Fallback: create one proxy edge between first symbols of each file
+    if (!matched) {
+      addVizEdge(srcSymbols[0], tgtSymbols[0], edge.edge_type_name);
     }
   }
 
@@ -477,6 +774,7 @@ export function generateHtml(
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; overflow: hidden; }
+  canvas { display: block; }
   #controls { position: fixed; top: 12px; left: 12px; z-index: 10; display: flex; gap: 8px; align-items: center; }
   #controls select, #controls input, #controls button {
     background: #16213e; border: 1px solid #0f3460; color: #eee; padding: 6px 10px; border-radius: 4px; font-size: 13px;
@@ -485,20 +783,11 @@ export function generateHtml(
   #controls button:hover { background: #0f3460; cursor: pointer; }
   #stats { position: fixed; bottom: 12px; left: 12px; z-index: 10; font-size: 12px; color: #888; }
   .tooltip {
-    position: absolute; background: #16213e; color: #eee; padding: 10px 14px; border-radius: 6px;
+    position: fixed; background: #16213e; color: #eee; padding: 10px 14px; border-radius: 6px;
     font-size: 12px; pointer-events: none; border: 1px solid #0f3460; max-width: 300px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4); display: none; z-index: 20;
   }
   .tooltip strong { color: #e94560; }
-  svg { width: 100vw; height: 100vh; }
-  .link { stroke-opacity: 0.4; }
-  .link:hover { stroke-opacity: 1; }
-  .node text { font-size: 10px; fill: #ccc; pointer-events: none; }
-  .node circle { stroke: #fff; stroke-width: 1px; cursor: pointer; }
-  .node circle:hover { stroke-width: 2.5px; }
-  .node.dimmed circle { opacity: 0.15; }
-  .node.dimmed text { opacity: 0.15; }
-  .link.dimmed { stroke-opacity: 0.05; }
 </style>
 </head>
 <body>
@@ -509,123 +798,374 @@ export function generateHtml(
     <option value="framework_role">Color: Role</option>
   </select>
   <input id="search" type="text" placeholder="Filter nodes\u2026">
-  <button id="export-svg">Export SVG</button>
   <button id="export-mermaid">Export Mermaid</button>
 </div>
 <div id="stats"></div>
-<div id="tooltip" class="tooltip" style="display:none"></div>
-<svg id="graph"></svg>
+<div id="tooltip" class="tooltip"></div>
+<canvas id="graph"></canvas>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
 const DATA = ${data};
 const LAYOUT = ${JSON.stringify(layout)};
-const width = window.innerWidth, height = window.innerHeight;
-const svg = d3.select('#graph').attr('viewBox', [0, 0, width, height]);
-const g = svg.append('g');
+const N = DATA.nodes.length;
+const canvas = document.getElementById('graph');
+const ctx = canvas.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+let W = window.innerWidth, H = window.innerHeight;
 
-// Zoom
-const zoom = d3.zoom().scaleExtent([0.1, 8]).on('zoom', (e) => g.attr('transform', e.transform));
-svg.call(zoom);
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  scheduleFrame();
+}
+window.addEventListener('resize', resize);
 
-// Color scales
-const communityColor = d3.scaleOrdinal(DATA.communities.map(c=>c.color)).domain(DATA.communities.map(c=>c.id));
-const langColors = d3.scaleOrdinal(d3.schemeTableau10);
-const roleColors = d3.scaleOrdinal(d3.schemePastel1);
+// --- Color ---
+const comColors = new Map(); DATA.communities.forEach(c => comColors.set(c.id, c.color));
+const langScale = d3.scaleOrdinal(d3.schemeTableau10);
+const roleScale = d3.scaleOrdinal(d3.schemePastel1);
+let colorMode = 'community';
 
-function getColor(d) {
-  const mode = document.getElementById('colorBy').value;
-  if (mode === 'language') return langColors(d.language || 'unknown');
-  if (mode === 'framework_role') return roleColors(d.framework_role || 'none');
-  return communityColor(d.community);
+function nodeColor(d) {
+  if (colorMode === 'language') return langScale(d.language || 'unknown');
+  if (colorMode === 'framework_role') return roleScale(d.framework_role || 'none');
+  return comColors.get(d.community) || '#4e79a7';
 }
 
-// Force simulation
-const simulation = d3.forceSimulation(DATA.nodes)
-  .force('link', d3.forceLink(DATA.edges).id(d => d.id).distance(80).strength(0.3))
-  .force('charge', d3.forceManyBody().strength(-200))
-  .force('center', d3.forceCenter(width/2, height/2))
-  .force('collision', d3.forceCollide().radius(d => 6 + d.importance * 14));
+// Parse hex to rgb for alpha blending
+function hexToRgb(hex) {
+  const c = parseInt(hex.slice(1), 16);
+  return [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+}
 
-const link = g.append('g').selectAll('line')
-  .data(DATA.edges).join('line')
-  .attr('class', 'link')
-  .attr('stroke', '#555')
-  .attr('stroke-width', d => Math.sqrt(d.weight));
-
-const node = g.append('g').selectAll('g')
-  .data(DATA.nodes).join('g')
-  .attr('class', 'node')
-  .call(d3.drag().on('start', dragStarted).on('drag', dragged).on('end', dragEnded));
-
-node.append('circle')
-  .attr('r', d => 4 + d.importance * 12)
-  .attr('fill', d => getColor(d));
-
-node.append('text')
-  .attr('dx', d => 6 + d.importance * 12)
-  .attr('dy', 3)
-  .text(d => d.label);
-
-// Tooltip
-const tooltip = document.getElementById('tooltip');
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-node.on('mouseover', (e, d) => {
-  tooltip.style.display = 'block';
-  tooltip.innerHTML = '<strong>' + esc(d.label) + '</strong><br>'
-    + 'Type: ' + esc(d.type) + '<br>'
-    + (d.language ? 'Lang: ' + esc(d.language) + '<br>' : '')
-    + (d.framework_role ? 'Role: ' + esc(d.framework_role) + '<br>' : '')
-    + 'Community: ' + esc(String(d.community)) + '<br>'
-    + 'Importance: ' + esc(String(d.importance));
-}).on('mousemove', (e) => {
-  tooltip.style.left = (e.pageX + 12) + 'px';
-  tooltip.style.top = (e.pageY - 12) + 'px';
-}).on('mouseout', () => { tooltip.style.display = 'none'; });
-
-// Click: highlight connected
-node.on('click', (e, d) => {
-  const connected = new Set([d.id]);
-  DATA.edges.forEach(l => {
-    const s = typeof l.source === 'object' ? l.source.id : l.source;
-    const t = typeof l.target === 'object' ? l.target.id : l.target;
-    if (s === d.id) connected.add(t);
-    if (t === d.id) connected.add(s);
-  });
-  node.classed('dimmed', n => !connected.has(n.id));
-  link.classed('dimmed', l => {
-    const s = typeof l.source === 'object' ? l.source.id : l.source;
-    const t = typeof l.target === 'object' ? l.target.id : l.target;
-    return !connected.has(s) || !connected.has(t);
-  });
+// Pre-compute
+DATA.nodes.forEach(d => {
+  d._r = 3 + d.importance * 10;
+  d._alpha = 1;        // animated alpha (current)
+  d._targetAlpha = 1;  // target alpha
 });
 
-svg.on('click', (e) => {
-  if (e.target === svg.node()) {
-    node.classed('dimmed', false);
-    link.classed('dimmed', false);
+// --- Build adjacency ---
+const adjSet = new Map();
+DATA.nodes.forEach(d => adjSet.set(d.id, new Set()));
+DATA.edges.forEach(e => {
+  const si = typeof e.source === 'object' ? e.source.id : e.source;
+  const ti = typeof e.target === 'object' ? e.target.id : e.target;
+  adjSet.get(si)?.add(ti); adjSet.get(ti)?.add(si);
+});
+
+// --- Force simulation ---
+const sim = d3.forceSimulation(DATA.nodes)
+  .force('link', d3.forceLink(DATA.edges).id(d => d.id).distance(N > 5000 ? 30 : 60).strength(N > 5000 ? 0.1 : 0.3))
+  .force('charge', d3.forceManyBody().strength(N > 5000 ? -30 : N > 1000 ? -80 : -200).theta(N > 5000 ? 1.5 : 0.9))
+  .force('center', d3.forceCenter(W / 2, H / 2))
+  .alphaDecay(N > 5000 ? 0.05 : 0.0228)
+  .velocityDecay(N > 5000 ? 0.6 : 0.4)
+  .stop();
+
+// Pre-settle: compute layout synchronously so there's no initial "explosion"
+const preTicks = Math.min(300, Math.max(50, Math.ceil(Math.log(N + 1) * 40)));
+for (let i = 0; i < preTicks; i++) sim.tick();
+
+// Now enable live ticks only for drag interactions
+sim.on('tick', scheduleFrame);
+
+// --- Transform ---
+let tx = 0, ty = 0, tk = 1;
+
+// --- Quadtree ---
+let qtree = null;
+function rebuildQuadtree() {
+  qtree = d3.quadtree(DATA.nodes, d => d.x, d => d.y);
+}
+
+// --- Animation ---
+let highlightId = null;
+let highlightSet = null;
+let hoveredNode = null;
+let searchQ = '';
+let animating = false;
+let frameRequested = false;
+
+function scheduleFrame() {
+  if (!frameRequested) { frameRequested = true; requestAnimationFrame(frame); }
+}
+
+function frame() {
+  frameRequested = false;
+  updateAlphas();
+  draw();
+  if (animating || sim.alpha() > sim.alphaMin()) scheduleFrame();
+}
+
+function updateAlphas() {
+  const dimSearch = searchQ.length > 0;
+  animating = false;
+  const speed = 0.15; // lerp speed
+  for (const d of DATA.nodes) {
+    let target = 1;
+    if (highlightId) {
+      target = (d.id === highlightId || highlightSet?.has(d.id)) ? 1 : 0.06;
+    } else if (dimSearch) {
+      target = (d.label.toLowerCase().includes(searchQ) || d.id.toLowerCase().includes(searchQ)) ? 1 : 0.06;
+    }
+    d._targetAlpha = target;
+    if (Math.abs(d._alpha - target) > 0.01) {
+      d._alpha += (target - d._alpha) * speed;
+      animating = true;
+    } else {
+      d._alpha = target;
+    }
+  }
+}
+
+function draw() {
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.translate(tx, ty);
+  ctx.scale(tk, tk);
+
+  const vx0 = -tx / tk, vy0 = -ty / tk;
+  const vx1 = (W - tx) / tk, vy1 = (H - ty) / tk;
+  const pad = 60 / tk;
+  const isHigh = N > 3000;
+
+  // ── Edges ──
+  // Background edges (dim)
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = highlightId ? 0.03 : 0.18;
+  ctx.strokeStyle = '#556';
+  ctx.lineWidth = (isHigh ? 0.4 : 0.8) / tk;
+  ctx.beginPath();
+  for (const e of DATA.edges) {
+    const s = e.source, t = e.target;
+    if (s.x == null || t.x == null) continue;
+    if (Math.max(s.x, t.x) < vx0 - pad || Math.min(s.x, t.x) > vx1 + pad ||
+        Math.max(s.y, t.y) < vy0 - pad || Math.min(s.y, t.y) > vy1 + pad) continue;
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(t.x, t.y);
+  }
+  ctx.stroke();
+
+  // Highlighted edges with glow
+  if (highlightId && highlightSet) {
+    // Glow layer
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = '#e94560';
+    ctx.lineWidth = 4 / tk;
+    ctx.beginPath();
+    for (const e of DATA.edges) {
+      const si = e.source.id ?? e.source, ti = e.target.id ?? e.target;
+      if ((si === highlightId && highlightSet.has(ti)) || (ti === highlightId && highlightSet.has(si))) {
+        ctx.moveTo(e.source.x, e.source.y);
+        ctx.lineTo(e.target.x, e.target.y);
+      }
+    }
+    ctx.stroke();
+    // Core line
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 1.5 / tk;
+    ctx.stroke();
+  }
+
+  // ── Nodes ──
+  const showLabels = tk > (isHigh ? 1.5 : N > 500 ? 0.6 : 0.3);
+  const labelFontSize = Math.max(8, Math.min(12, 10 / tk));
+  ctx.textAlign = 'center';
+
+  for (const d of DATA.nodes) {
+    if (d.x == null) continue;
+    if (d.x < vx0 - pad || d.x > vx1 + pad || d.y < vy0 - pad || d.y > vy1 + pad) continue;
+
+    const r = d._r;
+    const a = d._alpha;
+    const isHovered = d === hoveredNode;
+    const isHighlighted = highlightId && d.id === highlightId;
+    const color = nodeColor(d);
+    const [cr, cg, cb] = hexToRgb(color);
+
+    // Outer glow for hovered/highlighted
+    if ((isHovered || isHighlighted) && a > 0.5) {
+      ctx.globalAlpha = 0.35 * a;
+      ctx.shadowColor = 'rgba(' + cr + ',' + cg + ',' + cb + ',0.9)';
+      ctx.shadowBlur = 16 / tk;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r + 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // Node body — radial gradient for 3D look
+    ctx.globalAlpha = a;
+    if (!isHigh || a > 0.5) {
+      const grad = ctx.createRadialGradient(d.x - r * 0.3, d.y - r * 0.3, r * 0.1, d.x, d.y, r);
+      grad.addColorStop(0, 'rgba(' + Math.min(255, cr + 80) + ',' + Math.min(255, cg + 80) + ',' + Math.min(255, cb + 80) + ',' + a + ')');
+      grad.addColorStop(0.7, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + a + ')');
+      grad.addColorStop(1, 'rgba(' + Math.max(0, cr - 30) + ',' + Math.max(0, cg - 30) + ',' + Math.max(0, cb - 30) + ',' + a + ')');
+      ctx.fillStyle = grad;
+    } else {
+      ctx.fillStyle = color;
+    }
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border — white stroke
+    ctx.strokeStyle = isHovered
+      ? 'rgba(255,255,255,' + (0.95 * a) + ')'
+      : 'rgba(255,255,255,' + (0.4 * a) + ')';
+    ctx.lineWidth = (isHovered ? 2 : 1) / tk;
+    ctx.stroke();
+
+    // Label — centered below node
+    if ((showLabels || isHovered || isHighlighted) && a > 0.3) {
+      const fontSize = (isHovered ? labelFontSize + 2 : labelFontSize) / tk;
+      ctx.font = '500 ' + fontSize + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+      const labelY = d.y + r + fontSize + 2 / tk;
+      // Shadow for readability
+      ctx.globalAlpha = a * 0.6;
+      ctx.fillStyle = '#0d0d1a';
+      ctx.fillText(d.label, d.x + 0.7 / tk, labelY + 0.7 / tk);
+      // Text
+      ctx.globalAlpha = a * (isHovered ? 1 : 0.9);
+      ctx.fillStyle = isHovered ? '#fff' : '#dde';
+      ctx.fillText(d.label, d.x, labelY);
+    }
+  }
+  ctx.textAlign = 'start';
+
+  ctx.restore();
+  rebuildQuadtree();
+}
+
+// --- Zoom & Pan ---
+const zoomBehavior = d3.zoom()
+  .scaleExtent([0.02, 20])
+  .on('zoom', (e) => {
+    tx = e.transform.x; ty = e.transform.y; tk = e.transform.k;
+    scheduleFrame();
+  });
+d3.select(canvas).call(zoomBehavior);
+
+// --- Mouse ---
+const tooltip = document.getElementById('tooltip');
+let dragNode = null;
+let wasDragged = false;
+
+function worldCoords(e) {
+  return [(e.offsetX - tx) / tk, (e.offsetY - ty) / tk];
+}
+
+function findNode(wx, wy) {
+  if (!qtree) return null;
+  let found = null, bestD = Infinity;
+  qtree.visit((node, x0, y0, x1, y1) => {
+    if (!node.length) {
+      let d = node.data;
+      do {
+        const dx = wx - d.x, dy = wy - d.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < d._r + 5 && dist < bestD) { bestD = dist; found = d; }
+      } while (d = d.next);
+    }
+    return x0 > wx + 25 || x1 < wx - 25 || y0 > wy + 25 || y1 < wy - 25;
+  });
+  return found;
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  if (dragNode) {
+    const [wx, wy] = worldCoords(e);
+    dragNode.fx = wx; dragNode.fy = wy;
+    wasDragged = true;
+    sim.alpha(0.1).restart();
+    return;
+  }
+  const [wx, wy] = worldCoords(e);
+  const n = findNode(wx, wy);
+  if (n !== hoveredNode) {
+    hoveredNode = n;
+    canvas.style.cursor = n ? 'pointer' : 'default';
+    if (n) {
+      tooltip.style.display = 'block';
+      tooltip.innerHTML = '<strong>' + esc(n.label) + '</strong><br>'
+        + '<span style="color:#888">' + esc(n.id) + '</span><br>'
+        + (n.repo ? '<span style="color:#76b7b2">Repo: ' + esc(n.repo) + '</span><br>' : '')
+        + esc(n.type) + (n.language ? ' \u00b7 ' + esc(n.language) : '')
+        + (n.framework_role ? ' \u00b7 ' + esc(n.framework_role) : '') + '<br>'
+        + 'Community ' + n.community + ' \u00b7 Importance ' + n.importance;
+    } else {
+      tooltip.style.display = 'none';
+    }
+    scheduleFrame();
+  }
+  if (n) {
+    tooltip.style.left = Math.min(e.clientX + 14, W - 280) + 'px';
+    tooltip.style.top = Math.max(4, e.clientY - 14) + 'px';
   }
 });
 
-// Search
+canvas.addEventListener('mousedown', (e) => {
+  const [wx, wy] = worldCoords(e);
+  const n = findNode(wx, wy);
+  if (n) {
+    e.stopPropagation();
+    dragNode = n;
+    wasDragged = false;
+    n.fx = wx; n.fy = wy;
+    sim.alphaTarget(0.3).restart();
+    d3.select(canvas).on('.zoom', null);
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (dragNode) {
+    dragNode.fx = null; dragNode.fy = null;
+    const wasDrag = wasDragged;
+    dragNode = null;
+    sim.alphaTarget(0);
+    d3.select(canvas).call(zoomBehavior);
+    if (wasDrag) return; // don't trigger click after drag
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  if (wasDragged) { wasDragged = false; return; }
+  const [wx, wy] = worldCoords(e);
+  const n = findNode(wx, wy);
+  if (n) {
+    highlightId = n.id;
+    highlightSet = adjSet.get(n.id) || new Set();
+  } else {
+    highlightId = null;
+    highlightSet = null;
+  }
+  scheduleFrame();
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hoveredNode = null;
+  tooltip.style.display = 'none';
+  scheduleFrame();
+});
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// --- Controls ---
 document.getElementById('search').addEventListener('input', (e) => {
-  const q = e.target.value.toLowerCase();
-  node.classed('dimmed', d => q && !d.label.toLowerCase().includes(q) && !d.id.toLowerCase().includes(q));
+  searchQ = e.target.value.toLowerCase();
+  scheduleFrame();
 });
 
-// Color switch
-document.getElementById('colorBy').addEventListener('change', () => {
-  node.select('circle').attr('fill', d => getColor(d));
+document.getElementById('colorBy').addEventListener('change', (e) => {
+  colorMode = e.target.value;
+  scheduleFrame();
 });
 
-// Export SVG
-document.getElementById('export-svg').addEventListener('click', () => {
-  const svgData = new XMLSerializer().serializeToString(document.getElementById('graph'));
-  const blob = new Blob([svgData], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'graph.svg'; a.click();
-});
-
-// Export Mermaid
 document.getElementById('export-mermaid').addEventListener('click', () => {
   let md = 'graph LR\\n';
   const safe = (s) => s.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 40);
@@ -637,17 +1177,9 @@ document.getElementById('export-mermaid').addEventListener('click', () => {
   navigator.clipboard.writeText(md).then(() => alert('Mermaid copied to clipboard'));
 });
 
-simulation.on('tick', () => {
-  link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-  node.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
-});
+document.getElementById('stats').textContent = N + ' nodes, ' + DATA.edges.length + ' edges, ' + DATA.communities.length + ' communities';
 
-function dragStarted(e, d) { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
-function dragged(e, d) { d.fx = e.x; d.fy = e.y; }
-function dragEnded(e, d) { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
-
-document.getElementById('stats').textContent = DATA.nodes.length + ' nodes, ' + DATA.edges.length + ' edges, ' + DATA.communities.length + ' communities';
+resize();
 </script>
 </body>
 </html>`;
