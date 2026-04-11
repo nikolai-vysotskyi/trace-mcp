@@ -66,6 +66,8 @@ export const visualizeCommand = new Command('visualize')
     symbol   each node = function/class/method`, 'file')
   .option('-k, --symbol-kinds <kinds>', 'comma-separated symbol kinds when granularity=symbol (e.g. function,class,method)')
   .option('--hide-isolated', 'hide nodes with no edges')
+  .option('--max-files <n>', 'max seed files for file-level graph (default: 10000)')
+  .option('--max-nodes <n>', 'max viz nodes for symbol-level graph (default: 100000)')
   .option('-o, --output <path>', 'write HTML to this path instead of a temp file')
   .option('--no-open', 'write HTML but do not open the browser')
   .option('--dir <dir>', 'project directory (default: cwd)')
@@ -94,6 +96,12 @@ export const visualizeCommand = new Command('visualize')
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
 
+    // Open topology store for federation support (best-effort)
+    let topoStore: InstanceType<typeof TopologyStore> | undefined;
+    try {
+      if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    } catch { /* federation is optional */ }
+
     const result = visualizeGraph(store, {
       scope,
       layout: opts.layout,
@@ -103,8 +111,13 @@ export const visualizeCommand = new Command('visualize')
       granularity: opts.granularity,
       symbolKinds: opts.symbolKinds ? opts.symbolKinds.split(',') : undefined,
       hideIsolated: opts.hideIsolated ?? false,
+      maxFiles: opts.maxFiles ? parseInt(opts.maxFiles, 10) : undefined,
+      maxNodes: opts.maxNodes ? parseInt(opts.maxNodes, 10) : undefined,
+      topoStore,
+      projectRoot,
     });
 
+    topoStore?.close();
     db.close();
 
     if (result.isErr()) {

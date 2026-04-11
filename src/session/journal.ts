@@ -49,6 +49,22 @@ interface PrefetchBoost {
   frequency: number;
 }
 
+/** Structural landmark — a central symbol that should survive context compaction */
+export interface StructuralLandmark {
+  symbol_id: string;
+  name: string;
+  kind: string;
+  file: string;
+  line: number | null;
+  /** Why this symbol is a landmark */
+  reason: 'pagerank' | 'recently_edited';
+  /** PageRank score (only for pagerank landmarks) */
+  score?: number;
+}
+
+/** Provider callback that returns landmarks from the index */
+export type LandmarkProvider = () => StructuralLandmark[];
+
 /** Structured snapshot for programmatic consumption */
 interface SessionSnapshotStructured {
   duration_seconds: number;
@@ -58,6 +74,8 @@ interface SessionSnapshotStructured {
   edited_files: string[];
   key_searches: Array<{ query: string; results: number }>;
   dead_ends: Array<{ query: string; reason: string }>;
+  /** Structural landmarks: central + recently changed symbols */
+  landmarks?: StructuralLandmark[];
 }
 
 /** Full snapshot result returned by getSnapshot() */
@@ -78,6 +96,8 @@ export class SessionJournal {
   /** Path for periodic snapshot flushing (set via enablePeriodicSnapshot) */
   private snapshotPath: string | null = null;
   private snapshotFlushInterval = 5;
+  /** Optional provider for structural landmarks (PageRank + recently edited symbols) */
+  private landmarkProvider: LandmarkProvider | null = null;
 
   /** Tools whose results are content-heavy and safe to dedup (deterministic for same params) */
   private static readonly DEDUP_TOOLS = new Set([
@@ -187,6 +207,14 @@ export class SessionJournal {
   enablePeriodicSnapshot(snapshotPath: string, interval = 5): void {
     this.snapshotPath = snapshotPath;
     this.snapshotFlushInterval = interval;
+  }
+
+  /**
+   * Set a provider for structural landmarks (PageRank top symbols + recently edited).
+   * Called during snapshot generation to inject landmarks that survive context compaction.
+   */
+  setLandmarkProvider(provider: LandmarkProvider): void {
+    this.landmarkProvider = provider;
   }
 
   /** Record tokens saved by deduplication */
@@ -402,6 +430,14 @@ export class SessionJournal {
       }
     }
 
+    // Collect structural landmarks if provider is set
+    let landmarks: StructuralLandmark[] | undefined;
+    if (this.landmarkProvider) {
+      try {
+        landmarks = this.landmarkProvider();
+      } catch { /* best-effort — don't break snapshot on landmark failure */ }
+    }
+
     const structured: SessionSnapshotStructured = {
       duration_seconds: durationSec,
       total_calls: this.entries.length,
@@ -410,6 +446,7 @@ export class SessionJournal {
       edited_files: editedFiles,
       key_searches: keySearches,
       dead_ends: deadEnds,
+      landmarks,
     };
 
     // Build compact markdown
@@ -449,6 +486,25 @@ export class SessionJournal {
       lines.push("### Dead ends (don't re-search)");
       for (const d of deadEnds) {
         lines.push(`- ${d.query} → ${d.reason}`);
+      }
+    }
+
+    if (landmarks && landmarks.length > 0) {
+      lines.push('');
+      lines.push('### Structural landmarks (survive compaction)');
+      const pagerankLandmarks = landmarks.filter((l) => l.reason === 'pagerank');
+      const editedLandmarks = landmarks.filter((l) => l.reason === 'recently_edited');
+      if (pagerankLandmarks.length > 0) {
+        lines.push('**Central symbols (PageRank top-20):**');
+        for (const l of pagerankLandmarks) {
+          lines.push(`- \`${l.name}\` (${l.kind}) — ${l.file}:${l.line}`);
+        }
+      }
+      if (editedLandmarks.length > 0) {
+        lines.push('**Recently changed:**');
+        for (const l of editedLandmarks) {
+          lines.push(`- \`${l.name}\` (${l.kind}) — ${l.file}:${l.line}`);
+        }
       }
     }
 
