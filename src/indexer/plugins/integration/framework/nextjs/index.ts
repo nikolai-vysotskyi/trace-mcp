@@ -16,13 +16,42 @@ import type {
 } from '../../../../../plugin-api/types.js';
 
 const PAGE_EXTENSIONS = /\.(tsx|ts|jsx|js)$/;
-const APP_ROUTER_FILES = ['page', 'layout', 'loading', 'error', 'not-found', 'route', 'template', 'default', 'forbidden', 'unauthorized', 'global-error'] as const;
+const APP_ROUTER_FILES = ['page', 'layout', 'loading', 'error', 'not-found', 'route', 'template', 'default', 'forbidden', 'unauthorized', 'global-error', 'global-not-found'] as const;
 
 // Metadata file conventions — automatically served by Next.js, not imported by user code
 const METADATA_FILES = ['sitemap', 'robots', 'opengraph-image', 'twitter-image', 'icon', 'apple-icon', 'manifest'] as const;
 const API_ROUTE_EXPORTS_RE = /export\s+(?:async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/g;
 const USE_SERVER_RE = /['"]use server['"]/;
+const USE_CLIENT_RE = /['"]use client['"]/;
+const USE_CACHE_RE = /['"]use cache(?::\s*(remote|private))?['"]/;
 const DATA_FETCHING_RE = /export\s+async\s+function\s+(getStaticProps|getServerSideProps|getStaticPaths)\b/g;
+
+// App Router export conventions
+const GENERATE_STATIC_PARAMS_RE = /export\s+(?:async\s+)?function\s+generateStaticParams\b/;
+const GENERATE_METADATA_RE = /export\s+(?:async\s+)?function\s+generateMetadata\b/;
+const STATIC_METADATA_RE = /export\s+const\s+metadata\b/;
+const GENERATE_VIEWPORT_RE = /export\s+(?:async\s+)?function\s+generateViewport\b/;
+const STATIC_VIEWPORT_RE = /export\s+const\s+viewport\b/;
+const GENERATE_SITEMAPS_RE = /export\s+(?:async\s+)?function\s+generateSitemaps\b/;
+const GENERATE_IMAGE_METADATA_RE = /export\s+(?:async\s+)?function\s+generateImageMetadata\b/;
+
+// Route Segment Config exports
+const ROUTE_SEGMENT_CONFIG_RE = /export\s+const\s+(dynamic|dynamicParams|revalidate|fetchCache|runtime|preferredRegion|maxDuration)\s*=\s*([^\n;]+)/g;
+
+// Pages Router legacy
+const GET_INITIAL_PROPS_RE = /\.getInitialProps\s*=/;
+
+// Middleware/Proxy config matcher
+const CONFIG_MATCHER_RE = /export\s+const\s+config\s*=\s*\{[^}]*matcher\s*:\s*(\[[^\]]*\]|['"][^'"]*['"])/s;
+
+// Pages Router special files that are NOT regular pages
+const PAGES_SPECIAL_FILES: Record<string, string> = {
+  '_app': 'next_custom_app',
+  '_document': 'next_custom_document',
+  '_error': 'next_custom_error',
+  '404': 'next_404_page',
+  '500': 'next_500_page',
+};
 
 /**
  * Convert an App Router file path to a route URI.
@@ -82,9 +111,15 @@ export function pagesRouterPathToRoute(filePath: string): string {
 
   const segments = route.split('/').filter(Boolean);
   const routeSegments = segments.map((seg) => {
+    // Optional catch-all: [[...slug]] -> :slug*
+    const optCatchAll = seg.match(/^\[\[\.\.\.(\w+)\]\]$/);
+    if (optCatchAll) return `:${optCatchAll[1]}*`;
+
+    // Catch-all: [...slug] -> :slug*
     const catchAll = seg.match(/^\[\.\.\.(\w+)\]$/);
     if (catchAll) return `:${catchAll[1]}*`;
 
+    // Dynamic: [id] -> :id
     const dynamic = seg.match(/^\[(\w+)\]$/);
     if (dynamic) return `:${dynamic[1]}`;
 
@@ -124,6 +159,24 @@ function extractInterceptingInfo(filePath: string): { pattern: string; intercept
   segments.pop(); // remove filename
 
   for (let i = 0; i < segments.length; i++) {
+    // Handle (..)(..)segment — two levels up (Next.js convention for 2-level intercept)
+    const twoLevelMatch = segments[i].match(/^\(\.{2}\)\(\.{2}\)(.+)$/);
+    if (twoLevelMatch) {
+      const routeName = twoLevelMatch[1];
+      const remaining = [routeName, ...segments.slice(i + 1)];
+      const routeSegments = remaining.map((seg) => {
+        const catchAll = seg.match(/^\[\.\.\.(\w+)\]$/);
+        if (catchAll) return `:${catchAll[1]}*`;
+        const dynamic = seg.match(/^\[(\w+)\]$/);
+        if (dynamic) return `:${dynamic[1]}`;
+        return seg;
+      });
+      return {
+        pattern: '(..)(..)',
+        interceptedRoute: '/' + routeSegments.join('/'),
+      };
+    }
+
     // Matches both formats: (.)detail, (..)photos, (...)photos  AND  (.detail), (..photos), (...photos)
     const match = segments[i].match(/^\((\.{1,3})\)(.+)$/) || segments[i].match(/^\((\.{1,3})([^)]+)\)$/);
     if (match) {
@@ -201,6 +254,9 @@ export class NextJSPlugin implements FrameworkPlugin {
     return {
       edgeTypes: [
         { name: 'next_renders_page', category: 'nextjs', description: 'Layout renders page' },
+        { name: 'next_renders_loading', category: 'nextjs', description: 'Layout renders loading boundary' },
+        { name: 'next_renders_error', category: 'nextjs', description: 'Layout renders error boundary' },
+        { name: 'next_renders_not_found', category: 'nextjs', description: 'Layout renders not-found boundary' },
         { name: 'next_server_action', category: 'nextjs', description: 'Server action reference' },
         { name: 'next_middleware', category: 'nextjs', description: 'Middleware applies to routes' },
         { name: 'next_parallel_slot', category: 'nextjs', description: 'Parallel route slot' },
@@ -210,8 +266,17 @@ export class NextJSPlugin implements FrameworkPlugin {
         { name: 'next_forbidden', category: 'nextjs', description: 'Forbidden (403) error page' },
         { name: 'next_unauthorized', category: 'nextjs', description: 'Unauthorized (401) error page' },
         { name: 'next_global_error', category: 'nextjs', description: 'Global error boundary' },
+        { name: 'next_global_not_found', category: 'nextjs', description: 'Global not-found page (v15.2+)' },
         { name: 'next_metadata', category: 'nextjs', description: 'Metadata file convention (sitemap, robots, opengraph-image, etc.)' },
         { name: 'next_instrumentation', category: 'nextjs', description: 'Instrumentation hook (register, onRequestError)' },
+        { name: 'next_instrumentation_client', category: 'nextjs', description: 'Client instrumentation hook (v15+)' },
+        { name: 'next_mdx_components', category: 'nextjs', description: 'MDX component overrides' },
+        { name: 'next_config', category: 'nextjs', description: 'Next.js project configuration' },
+        { name: 'next_custom_app', category: 'nextjs', description: 'Pages Router custom _app' },
+        { name: 'next_custom_document', category: 'nextjs', description: 'Pages Router custom _document' },
+        { name: 'next_custom_error', category: 'nextjs', description: 'Pages Router custom _error' },
+        { name: 'next_404_page', category: 'nextjs', description: 'Pages Router custom 404 page' },
+        { name: 'next_500_page', category: 'nextjs', description: 'Pages Router custom 500 page' },
       ],
     };
   }
@@ -221,15 +286,28 @@ export class NextJSPlugin implements FrameworkPlugin {
     content: Buffer,
     language: string,
   ): TraceMcpResult<FileParseResult> {
+    // Static metadata files in app/ directory (non-code: .ico, .png, .jpg, .xml, .txt, .webmanifest)
+    const normalizedPath = normalizeSrcPath(filePath);
+    if (normalizedPath.startsWith('app/')) {
+      const staticMetaMatch = path.basename(normalizedPath).match(
+        /^(favicon\.ico|icon\.(ico|png|jpg|jpeg|svg)|apple-icon\.(png|jpg|jpeg)|opengraph-image\.(png|jpg|jpeg|gif)|twitter-image\.(png|jpg|jpeg|gif)|sitemap\.xml|robots\.txt|manifest\.(json|webmanifest))$/,
+      );
+      if (staticMetaMatch) {
+        return ok({
+          status: 'ok',
+          symbols: [],
+          frameworkRole: 'next_static_metadata',
+          metadata: { staticMetadataFile: staticMetaMatch[0] },
+        });
+      }
+    }
+
     if (!['typescript', 'typescriptreact', 'javascript', 'javascriptreact'].includes(language)) {
       return ok({ status: 'ok', symbols: [] });
     }
 
     const source = content.toString('utf-8');
     const result: FileParseResult = { status: 'ok', symbols: [], routes: [], edges: [] };
-
-    // Normalize src/ prefix — Next.js supports app/ and pages/ inside src/ directory
-    const normalizedPath = normalizeSrcPath(filePath);
 
     // App Router
     if (normalizedPath.startsWith('app/')) {
@@ -289,6 +367,8 @@ export class NextJSPlugin implements FrameworkPlugin {
         result.frameworkRole = 'next_unauthorized';
       } else if (fileType === 'global-error') {
         result.frameworkRole = 'next_global_error';
+      } else if (fileType === 'global-not-found') {
+        result.frameworkRole = 'next_global_not_found';
       }
 
       // Metadata file conventions (sitemap.js, robots.js, opengraph-image.js, etc.)
@@ -302,11 +382,21 @@ export class NextJSPlugin implements FrameworkPlugin {
 
     // Pages Router
     if (normalizedPath.startsWith('pages/') && PAGE_EXTENSIONS.test(normalizedPath)) {
-      const uri = pagesRouterPathToRoute(normalizedPath);
-      if (normalizedPath.startsWith('pages/api/')) {
+      // Check for Pages Router special files (_app, _document, _error, 404, 500)
+      const pagesBasename = path.basename(normalizedPath).replace(PAGE_EXTENSIONS, '');
+      const pagesDir = path.dirname(normalizedPath);
+      const isTopLevelPage = pagesDir === 'pages';
+      const specialRole = isTopLevelPage ? PAGES_SPECIAL_FILES[pagesBasename] : undefined;
+
+      if (specialRole) {
+        result.frameworkRole = specialRole;
+        // _app and _document don't have routes; 404/500/_error are error pages
+      } else if (normalizedPath.startsWith('pages/api/')) {
+        const uri = pagesRouterPathToRoute(normalizedPath);
         result.routes!.push({ method: 'ALL', uri });
         result.frameworkRole = 'next_api_page';
       } else {
+        const uri = pagesRouterPathToRoute(normalizedPath);
         result.routes!.push({ method: 'GET', uri });
         result.frameworkRole = 'next_page';
 
@@ -319,23 +409,123 @@ export class NextJSPlugin implements FrameworkPlugin {
           };
         }
       }
+
+      // Detect getInitialProps (legacy pattern)
+      if (GET_INITIAL_PROPS_RE.test(source)) {
+        result.metadata = {
+          ...result.metadata,
+          dataFetching: [...((result.metadata?.dataFetching as string[]) ?? []), 'getInitialProps'],
+        };
+      }
     }
 
-    // Detect server actions
+    // --- Directives ---
+
+    // Detect 'use server' (server actions) — file-level vs inline
     if (USE_SERVER_RE.test(source)) {
+      // File-level: directive appears at the very top (possibly after comments/whitespace)
+      const trimmed = source.replace(/^(\s*\/\/[^\n]*\n|\s*\/\*[\s\S]*?\*\/\s*\n|\s*\n)*/m, '');
+      const isFileLevel = /^['"]use server['"]/.test(trimmed);
       result.frameworkRole = result.frameworkRole ?? 'next_server_action';
+      result.metadata = {
+        ...result.metadata,
+        directive: 'use server',
+        serverActionScope: isFileLevel ? 'file' : 'inline',
+      };
     }
 
-    // Detect middleware / proxy / instrumentation — root-level or src/ conventions
+    // Detect 'use client' (client component boundary)
+    if (USE_CLIENT_RE.test(source)) {
+      result.metadata = { ...result.metadata, directive: 'use client', clientComponent: true };
+    }
+
+    // Detect 'use cache' (v16 caching directive)
+    const cacheMatch = source.match(USE_CACHE_RE);
+    if (cacheMatch) {
+      result.metadata = {
+        ...result.metadata,
+        directive: cacheMatch[1] ? `use cache: ${cacheMatch[1]}` : 'use cache',
+        cacheType: cacheMatch[1] ?? 'default',
+      };
+    }
+
+    // --- Root-level conventions ---
+
     // middleware.js → proxy.js (Next.js 16 rename)
     if (normalizedPath === 'middleware.ts' || normalizedPath === 'middleware.js' ||
         normalizedPath === 'proxy.ts' || normalizedPath === 'proxy.js') {
       result.frameworkRole = 'next_middleware';
+
+      // Extract config.matcher if present
+      const matcherMatch = source.match(CONFIG_MATCHER_RE);
+      if (matcherMatch) {
+        result.metadata = { ...result.metadata, matcher: matcherMatch[1] };
+      }
     }
 
     // instrumentation.js — Next.js instrumentation hook (register/onRequestError)
     if (normalizedPath === 'instrumentation.ts' || normalizedPath === 'instrumentation.js') {
       result.frameworkRole = 'next_instrumentation';
+    }
+
+    // instrumentation-client.js — client-side instrumentation (v15+)
+    if (normalizedPath === 'instrumentation-client.ts' || normalizedPath === 'instrumentation-client.js') {
+      result.frameworkRole = 'next_instrumentation_client';
+    }
+
+    // mdx-components.tsx — MDX component overrides (v13+)
+    if (normalizedPath === 'mdx-components.tsx' || normalizedPath === 'mdx-components.ts' ||
+        normalizedPath === 'mdx-components.jsx' || normalizedPath === 'mdx-components.js') {
+      result.frameworkRole = 'next_mdx_components';
+    }
+
+    // next.config.js/mjs/ts — project configuration
+    if (/^next\.config\.(js|mjs|ts)$/.test(normalizedPath)) {
+      result.frameworkRole = 'next_config';
+    }
+
+    // --- App Router export conventions ---
+    if (normalizedPath.startsWith('app/') || result.frameworkRole?.startsWith('next_')) {
+      // generateStaticParams
+      if (GENERATE_STATIC_PARAMS_RE.test(source)) {
+        result.metadata = {
+          ...result.metadata,
+          dataFetching: [...((result.metadata?.dataFetching as string[]) ?? []), 'generateStaticParams'],
+        };
+      }
+
+      // Metadata: generateMetadata / export const metadata
+      if (GENERATE_METADATA_RE.test(source)) {
+        result.metadata = { ...result.metadata, hasMetadata: true, metadataType: 'dynamic' };
+      } else if (STATIC_METADATA_RE.test(source)) {
+        result.metadata = { ...result.metadata, hasMetadata: true, metadataType: 'static' };
+      }
+
+      // Viewport: generateViewport / export const viewport (v14+)
+      if (GENERATE_VIEWPORT_RE.test(source)) {
+        result.metadata = { ...result.metadata, hasViewport: true, viewportType: 'dynamic' };
+      } else if (STATIC_VIEWPORT_RE.test(source)) {
+        result.metadata = { ...result.metadata, hasViewport: true, viewportType: 'static' };
+      }
+
+      // generateSitemaps / generateImageMetadata
+      if (GENERATE_SITEMAPS_RE.test(source)) {
+        result.metadata = { ...result.metadata, generatesSitemaps: true };
+      }
+      if (GENERATE_IMAGE_METADATA_RE.test(source)) {
+        result.metadata = { ...result.metadata, generatesImageMetadata: true };
+      }
+
+      // Route Segment Config exports (dynamic, revalidate, runtime, etc.)
+      const segmentConfig: Record<string, string> = {};
+      const configRe = new RegExp(ROUTE_SEGMENT_CONFIG_RE.source, 'g');
+      let configMatch: RegExpExecArray | null;
+      while ((configMatch = configRe.exec(source)) !== null) {
+        segmentConfig[configMatch[1]] = configMatch[2].trim().replace(/['"]/g, '');
+      }
+      if (Object.keys(segmentConfig).length > 0) {
+        result.metadata = { ...result.metadata, routeSegmentConfig: segmentConfig };
+      }
     }
 
     return ok(result);
@@ -358,6 +548,22 @@ export class NextJSPlugin implements FrameworkPlugin {
       return np.startsWith('app/') && basename === 'page';
     });
 
+    // Collect loading, error, not-found files for layout → boundary edges
+    const boundaryTypes: { basename: string; edgeType: string }[] = [
+      { basename: 'loading', edgeType: 'next_renders_loading' },
+      { basename: 'error', edgeType: 'next_renders_error' },
+      { basename: 'not-found', edgeType: 'next_renders_not_found' },
+    ];
+
+    const boundaryFiles = new Map<string, typeof allFiles>();
+    for (const bt of boundaryTypes) {
+      boundaryFiles.set(bt.basename, allFiles.filter((f) => {
+        const np = normalizeSrcPath(f.path);
+        const bn = path.basename(np).replace(PAGE_EXTENSIONS, '');
+        return np.startsWith('app/') && bn === bt.basename;
+      }));
+    }
+
     for (const layout of layouts) {
       const layoutDir = path.dirname(layout.path);
       const layoutSymbols = ctx.getSymbolsByFile(layout.id);
@@ -378,6 +584,27 @@ export class NextJSPlugin implements FrameworkPlugin {
             targetRefId: pageSym.id,
             edgeType: 'next_renders_page',
           });
+        }
+      }
+
+      // Layout → loading/error/not-found boundary edges
+      for (const bt of boundaryTypes) {
+        const files = boundaryFiles.get(bt.basename) ?? [];
+        for (const file of files) {
+          if (path.dirname(file.path) === layoutDir ||
+              (file.path.startsWith(layoutDir + '/') && layoutDir === 'app')) {
+            const fileSymbols = ctx.getSymbolsByFile(file.id);
+            const fileSym = fileSymbols.find((s) => s.kind === 'function' || s.kind === 'class');
+            if (!fileSym) continue;
+
+            edges.push({
+              sourceNodeType: 'symbol',
+              sourceRefId: layoutSym.id,
+              targetNodeType: 'symbol',
+              targetRefId: fileSym.id,
+              edgeType: bt.edgeType,
+            });
+          }
         }
       }
     }
@@ -540,6 +767,6 @@ export class NextJSPlugin implements FrameworkPlugin {
     while ((match = re.exec(source)) !== null) {
       methods.push(match[1]);
     }
-    return methods.length > 0 ? methods : ['GET'];
+    return methods;
   }
 }
