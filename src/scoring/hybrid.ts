@@ -1,3 +1,6 @@
+// Re-export computeIdentityScore from signal-fusion (canonical location)
+export { computeIdentityScore } from './signal-fusion.js';
+
 interface HybridScoreParams {
   /** FTS5 BM25 rank, normalized 0-1 */
   relevance: number;
@@ -7,14 +10,28 @@ interface HybridScoreParams {
   recency: number;
   /** Bonus based on symbol kind 0-1 */
   typeBonus: number;
+  /** Identity match bonus 0-1 (exact/prefix/segment) */
+  identity?: number;
 }
 
 /**
  * Weighted hybrid score combining multiple signals.
  *
- * Weights: relevance 50%, pagerank 25%, recency 15%, typeBonus 10%.
+ * When identity bonus is present (exact/prefix/segment name match),
+ * it dominates: identity 40%, relevance 30%, pagerank 15%, recency 10%, typeBonus 5%.
+ * Otherwise: relevance 50%, pagerank 25%, recency 15%, typeBonus 10%.
  */
 export function hybridScore(params: HybridScoreParams): number {
+  const id = params.identity ?? 0;
+  if (id > 0) {
+    return (
+      0.40 * id +
+      0.30 * params.relevance +
+      0.15 * params.pagerank +
+      0.10 * params.recency +
+      0.05 * params.typeBonus
+    );
+  }
   return (
     0.50 * params.relevance +
     0.25 * params.pagerank +

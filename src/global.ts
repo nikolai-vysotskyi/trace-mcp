@@ -78,14 +78,14 @@ export const DEFAULT_CONFIG_JSONC = `{
   // ── AI / Embeddings ──────────────────────────────────────────────
   "ai": {
     "enabled": false,
-    "provider": "ollama",                       // "ollama" | "openai"
-    // "base_url": "http://localhost:11434",     // custom endpoint
+    "provider": "onnx",                          // "onnx" (local, zero-config) | "ollama" | "openai"
+    // "base_url": "http://localhost:11434",     // custom endpoint (ollama/openai)
     // "api_key": "",                            // required for openai; or set OPENAI_API_KEY env
-    "inference_model": "gemma4-e4b",             // ollama: "gemma4-e4b", openai: "gpt-4o-mini"
-    "fast_model": "gemma4-e4b",                  // ollama: "gemma4-e4b", openai: "gpt-4o-mini"
-    "embedding_model": "qwen3-embedding:0.6b",   // ollama: "qwen3-embedding:0.6b", openai: "text-embedding-3-small"
-    // "embedding_dimensions": 1536,             // provider-specific
-    "summarize_on_index": true,
+    // "inference_model": "gemma4-e4b",          // ollama: "gemma4-e4b", openai: "gpt-4o-mini"
+    // "fast_model": "gemma4-e4b",               // ollama: "gemma4-e4b", openai: "gpt-4o-mini"
+    // "embedding_model": "",                    // onnx: "Xenova/all-MiniLM-L6-v2", ollama: "qwen3-embedding:0.6b", openai: "text-embedding-3-small"
+    // "embedding_dimensions": 384,              // onnx: 384, openai: 1536
+    "summarize_on_index": false,
     "summarize_batch_size": 20,
     "summarize_kinds": ["class", "function", "method", "interface", "trait", "enum", "type"],
     "concurrency": 1                            // match OLLAMA_NUM_PARALLEL for ollama

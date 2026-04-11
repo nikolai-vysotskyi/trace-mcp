@@ -7,11 +7,19 @@ import type { AIProvider } from './interfaces.js';
 import { FallbackProvider } from './fallback.js';
 import { OllamaProvider } from './ollama.js';
 import { OpenAIProvider } from './openai.js';
+import { OnnxProvider } from './onnx.js';
 import { logger } from '../logger.js';
 
 export function createAIProvider(config: TraceMcpConfig): AIProvider {
   if (!config.ai?.enabled) {
     return new FallbackProvider();
+  }
+
+  if (config.ai.provider === 'onnx') {
+    return new OnnxProvider({
+      model: config.ai.embedding_model,
+      dimensions: config.ai.embedding_dimensions,
+    });
   }
 
   if (config.ai.provider === 'openai') {
@@ -47,6 +55,7 @@ export type { AIProvider, EmbeddingService, InferenceService, VectorStore, Reran
 export { FallbackProvider } from './fallback.js';
 export { OllamaProvider } from './ollama.js';
 export { OpenAIProvider } from './openai.js';
+export { OnnxProvider, isOnnxAvailable } from './onnx.js';
 export { BlobVectorStore } from './vector-store.js';
 export { hybridSearch } from './search.js';
 export { EmbeddingPipeline } from './embedding-pipeline.js';

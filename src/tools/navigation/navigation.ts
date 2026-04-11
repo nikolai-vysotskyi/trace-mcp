@@ -3,9 +3,13 @@ import type { Store, SymbolRow, FileRow } from '../../db/store.js';
 import { searchFts, type FtsResult, type FtsFilters } from '../../db/fts.js';
 import { fuzzySearch, type FuzzyMatch } from '../../db/fuzzy.js';
 import { readByteRange } from '../../utils/source-reader.js';
-import { hybridScore, getTypeBonus, computeRecency } from '../../scoring/hybrid.js';
+import { hybridScore, getTypeBonus, computeRecency, computeIdentityScore } from '../../scoring/hybrid.js';
 import { computePageRank } from '../../scoring/pagerank.js';
 import { buildSearchCacheKey, getCachedSearch, putCachedSearch } from '../../scoring/search-cache.js';
+import {
+  signalFusion, buildIdentityChannel,
+  type FusionChannels, type FusionWeights, type FusionDebugInfo,
+} from '../../scoring/signal-fusion.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
 import { hybridSearch as aiHybridSearch } from '../../ai/search.js';
@@ -125,10 +129,20 @@ interface FuzzyOptions {
   maxEditDistance?: number;
 }
 
+export interface FusionSearchOptions {
+  /** Enable Signal Fusion Pipeline (WRR across lexical/structural/similarity/identity). */
+  fusion?: boolean;
+  /** Per-channel weights. Auto-normalized to sum to 1. */
+  weights?: Partial<FusionWeights>;
+  /** Return per-channel debug info in each result. */
+  debug?: boolean;
+}
+
 interface SearchResult {
   items: SearchResultItem[];
   total: number;
-  search_mode?: 'hybrid_ai' | 'fts' | 'fuzzy';
+  search_mode?: 'hybrid_ai' | 'fts' | 'fuzzy' | 'fusion';
+  fusion_debug?: FusionDebugInfo[];
 }
 
 export async function search(
@@ -140,7 +154,13 @@ export async function search(
   aiOptions?: SearchAIOptions,
   fuzzyOptions?: FuzzyOptions,
   semanticOptions?: SemanticOptions,
+  fusionOptions?: FusionSearchOptions,
 ): Promise<SearchResult> {
+  // ─── Signal Fusion mode ───────────────────────────────────────
+  if (fusionOptions?.fusion) {
+    return runFusionSearch(store, query, filters, limit, offset, aiOptions, semanticOptions, fusionOptions);
+  }
+
   const fetchLimit = limit + offset + 50;
   const semanticMode = semanticOptions?.semantic ?? 'auto';
   const aiAvailable = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
@@ -282,8 +302,9 @@ export async function search(
     const pr = nodeId ? (pagerankMap.get(nodeId) ?? 0) / maxPr : 0;
     const recency = computeRecency(file.indexed_at, now);
     const typeBonus = getTypeBonus(symbol.kind);
+    const identity = computeIdentityScore(query, symbol.name, symbol.fqn);
 
-    const score = hybridScore({ relevance: candidate.relevance, pagerank: pr, recency, typeBonus });
+    const score = hybridScore({ relevance: candidate.relevance, pagerank: pr, recency, typeBonus, identity });
     scored.push({ symbol, file, score });
   }
 
@@ -302,6 +323,204 @@ export async function search(
 
   const result: SearchResult = { items, total, search_mode: searchMode };
   if (cacheable && cacheKey) putCachedSearch(cacheKey, result, symbolCount);
+  return result;
+}
+
+/**
+ * Signal Fusion search: build all 4 channels in parallel and fuse with WRR.
+ *
+ * Channels:
+ *   1. lexical  — BM25 FTS results
+ *   2. structural — PageRank (graph centrality)
+ *   3. similarity — embedding cosine similarity (when AI available)
+ *   4. identity — exact/prefix/segment match
+ */
+async function runFusionSearch(
+  store: Store,
+  query: string,
+  filters: SearchFilters | undefined,
+  limit: number,
+  offset: number,
+  aiOptions?: SearchAIOptions,
+  semanticOptions?: SemanticOptions,
+  fusionOptions?: FusionSearchOptions,
+): Promise<SearchResult> {
+  const fetchLimit = limit + offset + 100; // fetch more candidates for better fusion
+  const ftsFilters: FtsFilters = {
+    kind: filters?.kind,
+    language: filters?.language,
+    filePattern: filters?.filePattern,
+  };
+
+  // ── Channel 1: Lexical (BM25) ──────────────────────────────
+  const ftsResults = searchFts(store.db, query, fetchLimit, 0, ftsFilters);
+
+  // ── Channel 2: Structural (PageRank) ───────────────────────
+  const pagerankMap = computePageRank(store.db);
+
+  // ── Channel 3: Similarity (embeddings) — async if available ─
+  const aiAvailable = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
+  const semanticMode = semanticOptions?.semantic ?? 'auto';
+  const useAI = semanticMode !== 'off' && aiAvailable;
+
+  let similarityResults: Array<{ id: number; score: number }> = [];
+  if (useAI) {
+    try {
+      const queryEmbedding = await aiOptions!.embeddingService!.embed(query);
+      if (queryEmbedding.length > 0) {
+        similarityResults = aiOptions!.vectorStore!.search(queryEmbedding, fetchLimit);
+      }
+    } catch { /* vector search failed, continue without */ }
+  }
+
+  // Collect all candidate symbol IDs from FTS + similarity
+  const candidateIdStrs = new Set<string>();
+  const candidateNumIds = new Set<number>();
+
+  for (const r of ftsResults) {
+    candidateIdStrs.add(r.symbolIdStr);
+    candidateNumIds.add(r.symbolId);
+  }
+  for (const r of similarityResults) {
+    candidateNumIds.add(r.id);
+  }
+
+  // Batch-fetch all symbols
+  const allSymbolIds = [...candidateNumIds];
+  const allSymbols = allSymbolIds.length > 0
+    ? store.db.prepare(
+        `SELECT * FROM symbols WHERE id IN (${allSymbolIds.map(() => '?').join(',')})`,
+      ).all(...allSymbolIds) as SymbolRow[]
+    : [];
+  const symbolById = new Map(allSymbols.map((s) => [s.id, s]));
+  const symbolByIdStr = new Map(allSymbols.map((s) => [s.symbol_id, s]));
+
+  // Also add symbols from similarity that weren't in FTS
+  for (const s of allSymbols) {
+    candidateIdStrs.add(s.symbol_id);
+  }
+
+  // Batch-fetch files and node IDs
+  const fileIds = [...new Set(allSymbols.map((s) => s.file_id))];
+  const fileMap = store.getFilesByIds(fileIds);
+  const symIds = allSymbols.map((s) => s.id);
+  const nodeMap = store.getNodeIdsBatch('symbol', symIds);
+
+  // Apply metadata filters (implements / extends / decorator)
+  const heritageFilter = filters?.implements || filters?.extends;
+  const decoratorFilter = filters?.decorator;
+  const passesFilter = (symbol: SymbolRow): boolean => {
+    if (!heritageFilter && !decoratorFilter) return true;
+    if (!symbol.metadata) return false;
+    const meta = typeof symbol.metadata === 'string'
+      ? JSON.parse(symbol.metadata) as Record<string, unknown>
+      : symbol.metadata as Record<string, unknown>;
+    if (filters?.implements) {
+      const impl = meta['implements'];
+      if (!Array.isArray(impl) || !(impl as string[]).includes(filters.implements)) return false;
+    }
+    if (filters?.extends) {
+      const ext = meta['extends'];
+      const extArr = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
+      if (!extArr.includes(filters.extends)) return false;
+    }
+    if (decoratorFilter) {
+      const decorators = (meta['decorators'] as string[] | undefined)
+        ?? (meta['annotations'] as string[] | undefined)
+        ?? (meta['attributes'] as string[] | undefined);
+      if (!Array.isArray(decorators) || !decorators.some((d) =>
+        d === decoratorFilter || d.endsWith(`.${decoratorFilter}`) || d.startsWith(`${decoratorFilter}(`),
+      )) return false;
+    }
+    return true;
+  };
+
+  // Filter symbols and build candidate list
+  const validCandidates: Array<{ id: string; symbol: SymbolRow; file: FileRow; nodeId?: number }> = [];
+  for (const idStr of candidateIdStrs) {
+    const symbol = symbolByIdStr.get(idStr);
+    if (!symbol || !passesFilter(symbol)) continue;
+    const file = fileMap.get(symbol.file_id);
+    if (!file) continue;
+    validCandidates.push({ id: idStr, symbol, file, nodeId: nodeMap.get(symbol.id) });
+  }
+
+  if (validCandidates.length === 0) return { items: [], total: 0, search_mode: 'fusion' };
+
+  // ── Build channel inputs ───────────────────────────────────
+
+  // Lexical channel: FTS rank order (already sorted by BM25)
+  const lexicalItems: Array<{ id: string; rawScore?: number }> = [];
+  for (const r of ftsResults) {
+    if (symbolByIdStr.has(r.symbolIdStr)) {
+      lexicalItems.push({ id: r.symbolIdStr, rawScore: r.rank });
+    }
+  }
+
+  // Structural channel: sort all valid candidates by PageRank descending
+  const maxPr = Math.max(...pagerankMap.values(), 0.001);
+  const structuralItems = validCandidates
+    .map((c) => ({
+      id: c.id,
+      rawScore: c.nodeId ? (pagerankMap.get(c.nodeId) ?? 0) / maxPr : 0,
+    }))
+    .filter((c) => c.rawScore > 0)
+    .sort((a, b) => b.rawScore - a.rawScore);
+
+  // Similarity channel: vector search results by score
+  const similarityItems: Array<{ id: string; rawScore?: number }> = [];
+  if (similarityResults.length > 0) {
+    for (const r of similarityResults) {
+      const symbol = symbolById.get(r.id);
+      if (symbol && symbolByIdStr.has(symbol.symbol_id)) {
+        similarityItems.push({ id: symbol.symbol_id, rawScore: r.score });
+      }
+    }
+  }
+
+  // Identity channel: score each candidate by name/FQN match quality
+  const identityChannel = buildIdentityChannel(
+    query,
+    validCandidates.map((c) => ({ id: c.id, name: c.symbol.name, fqn: c.symbol.fqn })),
+  );
+
+  // ── Fuse ────────────────────────────────────────────────────
+  const channels: FusionChannels = {
+    lexical: { items: lexicalItems },
+    structural: { items: structuralItems },
+    ...(similarityItems.length > 0 ? { similarity: { items: similarityItems } } : {}),
+    identity: identityChannel,
+  };
+
+  const fusionResults = signalFusion(channels, {
+    weights: fusionOptions?.weights,
+    debug: fusionOptions?.debug,
+  });
+
+  // Map back to SearchResultItem
+  const candidateMap = new Map(validCandidates.map((c) => [c.id, c]));
+  const scored: SearchResultItem[] = [];
+  const debugInfos: FusionDebugInfo[] = [];
+
+  for (const fr of fusionResults) {
+    const c = candidateMap.get(fr.id);
+    if (!c) continue;
+    scored.push({ symbol: c.symbol, file: c.file, score: fr.score });
+    if (fr.debug) debugInfos.push(fr.debug);
+  }
+
+  const total = scored.length;
+  const items = scored.slice(offset, offset + limit);
+
+  const result: SearchResult = {
+    items,
+    total,
+    search_mode: 'fusion',
+    ...(fusionOptions?.debug && debugInfos.length > 0
+      ? { fusion_debug: debugInfos.slice(offset, offset + limit) }
+      : {}),
+  };
+
   return result;
 }
 
