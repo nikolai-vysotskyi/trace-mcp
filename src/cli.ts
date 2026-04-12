@@ -471,6 +471,17 @@ program
     const httpServer = http.createServer(async (req, res) => {
       const clientIp = req.socket.remoteAddress ?? 'unknown';
 
+      // CORS: allow Electron renderer (and local dev) to read custom headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Expose-Headers', 'X-Graph-Nodes, X-Graph-Edges, X-Graph-Communities');
+      if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       if (isRateLimited(clientIp)) {
         res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': '60' });
         res.end(JSON.stringify({ error: 'Too many requests' }));
