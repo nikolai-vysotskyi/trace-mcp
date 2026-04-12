@@ -5,6 +5,11 @@ import path from 'path';
 import fs from 'fs';
 import { createTray } from './tray';
 
+// GPU stability — use software fallback if GPU process keeps crashing
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
+app.commandLine.appendSwitch('disable-features', 'UseSkiaRenderer');
+
 // Prevent multiple instances
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -213,6 +218,77 @@ ipcMain.handle('configure-mcp-client', async (_event, clientName: string, level:
   });
 });
 
+// IPC: check for CLI update (compares installed npm version vs latest GitHub release)
+ipcMain.handle('check-for-update', async () => {
+  try {
+    // Get currently installed CLI version
+    let currentVersion: string;
+    try {
+      currentVersion = execSync('trace-mcp --version', { encoding: 'utf-8', timeout: 5000 }).trim();
+      // Strip leading 'v' if present
+      currentVersion = currentVersion.replace(/^v/, '');
+    } catch {
+      return { available: false, error: 'Could not determine current version' };
+    }
+
+    // Fetch latest release from GitHub
+    const body = await new Promise<string>((resolve, reject) => {
+      const https = require('https');
+      https.get('https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest', {
+        timeout: 10000,
+        headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' },
+      }, (res: any) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          const loc = res.headers.location;
+          if (!loc) { reject(new Error('Redirect without location')); return; }
+          https.get(loc, { timeout: 10000, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' } }, (res2: any) => {
+            let d = ''; res2.on('data', (c: string) => { d += c; }); res2.on('end', () => resolve(d));
+          }).on('error', reject);
+          return;
+        }
+        let data = '';
+        res.on('data', (chunk: string) => { data += chunk; });
+        res.on('end', () => resolve(data));
+      }).on('error', reject);
+    });
+
+    const release = JSON.parse(body);
+    if (!release.tag_name) return { available: false };
+
+    const latestVersion = release.tag_name.replace(/^v/, '');
+    if (latestVersion === currentVersion) return { available: false, current: currentVersion, latest: latestVersion };
+
+    // Simple semver comparison: split, compare numerically
+    const cur = currentVersion.split('.').map(Number);
+    const lat = latestVersion.split('.').map(Number);
+    let isNewer = false;
+    for (let i = 0; i < 3; i++) {
+      if ((lat[i] || 0) > (cur[i] || 0)) { isNewer = true; break; }
+      if ((lat[i] || 0) < (cur[i] || 0)) break;
+    }
+
+    return { available: isNewer, current: currentVersion, latest: latestVersion };
+  } catch (err) {
+    return { available: false, error: (err as Error).message };
+  }
+});
+
+// IPC: apply update (runs npm update -g trace-mcp, which triggers postinstall → app update)
+ipcMain.handle('apply-update', async () => {
+  try {
+    execSync('npm update -g trace-mcp', { encoding: 'utf-8', timeout: 120000, stdio: 'pipe' });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+});
+
+// IPC: restart the app after update
+ipcMain.handle('restart-app', () => {
+  app.relaunch();
+  app.exit(0);
+});
+
 app.whenReady().then(() => {
   // Set custom dock icon BEFORE hiding — macOS caches it for later show()
   if (fs.existsSync(dockIconPath)) {
@@ -220,6 +296,19 @@ app.whenReady().then(() => {
   }
   app.dock?.hide();
   createTray();
+});
+
+// GPU process crash recovery — log and continue (Chromium auto-restarts GPU process)
+app.on('child-process-gone', (_event, details) => {
+  console.error(`[trace-mcp] child process gone: type=${details.type} reason=${details.reason} exitCode=${details.exitCode}`);
+  // GPU process crashes are recoverable — Chromium restarts it automatically.
+  // Only quit if it's a repeated crash (reason=crashed means it was killed, not clean exit).
+  // For utility/network service crashes, Chromium also handles restart internally.
+});
+
+app.on('render-process-gone', (_event, _webContents, details) => {
+  console.error(`[trace-mcp] renderer gone: reason=${details.reason} exitCode=${details.exitCode}`);
+  // Don't quit — windows handle their own recovery via webContents.reload()
 });
 
 app.on('window-all-closed', () => {
