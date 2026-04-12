@@ -477,6 +477,9 @@ const SEED_EDGE_TYPES = [
   { name: 'py_return_type', category: 'python', description: 'Function return type annotation' },
   { name: 'py_inherits', category: 'python', description: 'Class inheritance' },
   { name: 'py_uses_decorator', category: 'python', description: 'Function/class uses decorator' },
+  // pytest edges
+  { name: 'pytest_fixture_used', category: 'pytest', description: 'Test function uses a pytest fixture' },
+  { name: 'pytest_parametrize', category: 'pytest', description: 'Test parametrized with @pytest.mark.parametrize' },
   // Django edges
   { name: 'django_url_routes_to', category: 'django', description: 'URL pattern routes to view' },
   { name: 'django_includes_urls', category: 'django', description: 'include() sub-URL config' },
@@ -509,6 +512,12 @@ const SEED_EDGE_TYPES = [
   // Pydantic edges
   { name: 'pydantic_field_type', category: 'pydantic', description: 'BaseModel field type reference' },
   { name: 'pydantic_from_orm', category: 'pydantic', description: 'Model with from_attributes → ORM model' },
+  // Async DB edges (asyncpg, databases, aiosqlite, psycopg, tortoise-orm)
+  { name: 'async_db_query', category: 'async-db', description: 'Async DB query (SELECT/fetch)' },
+  { name: 'async_db_mutation', category: 'async-db', description: 'Async DB mutation (INSERT/UPDATE/DELETE)' },
+  { name: 'async_db_schema', category: 'async-db', description: 'Async DB DDL (CREATE/ALTER/DROP)' },
+  { name: 'async_db_pool', category: 'async-db', description: 'Connection pool creation' },
+  { name: 'tortoise_model_op', category: 'async-db', description: 'Tortoise ORM model operation' },
   // Celery edges
   { name: 'celery_task_registered', category: 'celery', description: '@app.task / @shared_task registration' },
   { name: 'celery_beat_schedule', category: 'celery', description: 'Beat schedule task entry' },
