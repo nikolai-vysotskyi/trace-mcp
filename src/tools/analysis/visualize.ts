@@ -29,10 +29,11 @@ export interface VisualizeGraphOptions {
   hideIsolated?: boolean;   // hide nodes with no edges (default: true)
   granularity?: 'file' | 'symbol'; // node granularity (default: file)
   symbolKinds?: string[];   // filter symbol kinds when granularity=symbol
-  maxFiles?: number;        // max seed files for file-level graph (default: 10000)
+  maxFiles?: number;        // max seed files for file-level graph
   maxNodes?: number;        // max viz nodes for symbol-level graph (default: 100000)
   topoStore?: TopologyStore; // federation topology store — when set, merges connected federated repos
   projectRoot?: string;      // current project root — used to scope federation to connected repos only
+  highlightDepth?: number;   // BFS depth for click-highlight (default: 1)
 }
 
 interface VizNode {
@@ -762,6 +763,7 @@ export function generateHtml(
   edges: VizEdge[],
   communities: VizCommunity[],
   layout: string,
+  opts?: { highlightDepth?: number },
 ): string {
   const data = JSON.stringify({ nodes, edges, communities });
 
@@ -773,7 +775,7 @@ export function generateHtml(
 <title>trace-mcp Graph</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; overflow: hidden; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--graph-bg, #1a1a2e); color: #eee; overflow: hidden; }
   canvas { display: block; }
   #controls { position: fixed; top: 12px; left: 12px; z-index: 10; display: flex; gap: 8px; align-items: center; }
   #controls select, #controls input, #controls button {
@@ -788,11 +790,18 @@ export function generateHtml(
     box-shadow: 0 4px 12px rgba(0,0,0,0.4); display: none; z-index: 20;
   }
   .tooltip strong { color: #e94560; }
+  #minimap {
+    position: fixed; bottom: 12px; right: 12px; z-index: 10;
+    border: 1px solid #0f3460; border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
 </style>
 </head>
 <body>
 <div id="controls">
   <select id="colorBy">
+    <option value="neutral">Color: Neutral</option>
     <option value="community">Color: Community</option>
     <option value="language">Color: Language</option>
     <option value="framework_role">Color: Role</option>
@@ -803,15 +812,56 @@ export function generateHtml(
 <div id="stats"></div>
 <div id="tooltip" class="tooltip"></div>
 <canvas id="graph"></canvas>
+<canvas id="minimap" width="200" height="140"></canvas>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script>
 const DATA = ${data};
 const LAYOUT = ${JSON.stringify(layout)};
 const N = DATA.nodes.length;
+let THEME = new URLSearchParams(window.location.search).get('theme') || 'dark';
+let IS_LIGHT = THEME === 'light';
+
+function applyTheme(t) {
+  THEME = t; IS_LIGHT = t === 'light';
+  TH.bg = IS_LIGHT ? '#f0f0f0' : '#1a1a2e';
+  TH.text = IS_LIGHT ? '#222' : '#dde';
+  TH.labelShadow = IS_LIGHT ? 'rgba(255,255,255,0.8)' : '#0d0d1a';
+  TH.edge = IS_LIGHT ? '#999' : '#556';
+  TH.edgeAlpha = IS_LIGHT ? 0.25 : 0.18;
+  TH.hullAlpha = IS_LIGHT ? 0.08 : 0.06;
+  TH.groupLabel = IS_LIGHT ? '#333' : '#eee';
+  TH.groupLabelShadow = IS_LIGHT ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.7)';
+  TH.groupLabelAlpha = IS_LIGHT ? 0.6 : 0.5;
+  TH.nodeBorder = IS_LIGHT ? 'rgba(0,0,0,' : 'rgba(255,255,255,';
+  TH.nodeBorderHover = IS_LIGHT ? 0.7 : 0.95;
+  TH.nodeBorderNormal = IS_LIGHT ? 0.25 : 0.4;
+  document.body.style.background = TH.bg;
+  if (typeof scheduleFrame === 'function') scheduleFrame();
+}
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  applyTheme(e.matches ? 'dark' : 'light');
+});
+// Theme-aware palette
+let TH = {
+  bg: IS_LIGHT ? '#f0f0f0' : '#1a1a2e',
+  text: IS_LIGHT ? '#222' : '#dde',
+  textDim: IS_LIGHT ? '#666' : '#888',
+  labelShadow: IS_LIGHT ? 'rgba(255,255,255,0.8)' : '#0d0d1a',
+  edge: IS_LIGHT ? '#999' : '#556',
+  edgeAlpha: IS_LIGHT ? 0.25 : 0.18,
+  hullAlpha: IS_LIGHT ? 0.08 : 0.06,
+  groupLabel: IS_LIGHT ? '#333' : '#eee',
+  groupLabelShadow: IS_LIGHT ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.7)',
+  groupLabelAlpha: IS_LIGHT ? 0.6 : 0.5,
+  nodeBorder: IS_LIGHT ? 'rgba(0,0,0,' : 'rgba(255,255,255,',
+  nodeBorderHover: IS_LIGHT ? 0.7 : 0.95,
+  nodeBorderNormal: IS_LIGHT ? 0.25 : 0.4,
+};
 const canvas = document.getElementById('graph');
 const ctx = canvas.getContext('2d');
 const dpr = window.devicePixelRatio || 1;
 let W = window.innerWidth, H = window.innerHeight;
+if (IS_LIGHT) document.body.style.background = '#f0f0f0';
 
 function resize() {
   W = window.innerWidth; H = window.innerHeight;
@@ -826,23 +876,39 @@ window.addEventListener('resize', resize);
 const comColors = new Map(); DATA.communities.forEach(c => comColors.set(c.id, c.color));
 const langScale = d3.scaleOrdinal(d3.schemeTableau10);
 const roleScale = d3.scaleOrdinal(d3.schemePastel1);
-let colorMode = 'community';
+let colorMode = 'neutral';
+
+// Viewport-relative importance — recomputed each frame
+let visMinImp = 0, visMaxImp = 1;
+
+function lerpColor(a, b, t) {
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t),
+  ];
+}
 
 function nodeColor(d) {
   if (colorMode === 'language') return langScale(d.language || 'unknown');
   if (colorMode === 'framework_role') return roleScale(d.framework_role || 'none');
-  return comColors.get(d.community) || '#4e79a7';
+  if (colorMode === 'community') return comColors.get(d.community) || '#4e79a7';
+  return IS_LIGHT ? '#7C7C85' : '#A0A0AB';
 }
 
-// Parse hex to rgb for alpha blending
-function hexToRgb(hex) {
-  const c = parseInt(hex.slice(1), 16);
+// Parse color string to [r,g,b]
+function hexToRgb(color) {
+  if (color.startsWith('rgb')) {
+    const m = color.match(/\\d+/g);
+    return m ? [+m[0], +m[1], +m[2]] : [128, 128, 128];
+  }
+  const c = parseInt(color.slice(1), 16);
   return [(c >> 16) & 255, (c >> 8) & 255, c & 255];
 }
 
 // Pre-compute
 DATA.nodes.forEach(d => {
-  d._r = 3 + d.importance * 10;
+  d._r = 3 + d.importance * 10; // base radius, overridden per-frame by viewport importance
   d._alpha = 1;        // animated alpha (current)
   d._targetAlpha = 1;  // target alpha
 });
@@ -856,29 +922,221 @@ DATA.edges.forEach(e => {
   adjSet.get(si)?.add(ti); adjSet.get(ti)?.add(si);
 });
 
+// BFS to collect neighbors at N levels deep — returns Map<nodeId, depthLevel>
+let highlightDepth = ${opts.highlightDepth ?? 1};
+function getNeighborsAtDepth(startId, maxDepth) {
+  const depthMap = new Map(); // nodeId → depth level (1-based)
+  let frontier = new Set([startId]);
+  for (let d = 1; d <= maxDepth && frontier.size > 0; d++) {
+    const next = new Set();
+    for (const id of frontier) {
+      const neighbors = adjSet.get(id);
+      if (!neighbors) continue;
+      for (const n of neighbors) {
+        if (!depthMap.has(n) && n !== startId) {
+          depthMap.set(n, d);
+          next.add(n);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return depthMap;
+}
+
+// ═══ Directory spatial clustering ═══
+function getDirGroup(id) {
+  const parts = id.split('/');
+  if (parts.length <= 2) return parts[0] || '.';
+  return parts.slice(0, 2).join('/');
+}
+const dirGroupMap = new Map();
+const dirGroupNodes = new Map();
+DATA.nodes.forEach(n => {
+  const key = getDirGroup(n.id);
+  dirGroupMap.set(n.id, key);
+  if (!dirGroupNodes.has(key)) dirGroupNodes.set(key, []);
+  dirGroupNodes.get(key).push(n);
+});
+
+// Assign a color to each dir group
+const dirGroupColors = new Map();
+const DG_PALETTE = ['#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f','#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac','#86bcb6','#8cd17d'];
+let dgi = 0;
+for (const key of dirGroupNodes.keys()) {
+  dirGroupColors.set(key, DG_PALETTE[dgi % DG_PALETTE.length]);
+  dgi++;
+}
+
+// Custom clustering force — attracts same-dir nodes toward their centroid
+function forceCluster(strength) {
+  let nodes;
+  function force(alpha) {
+    const centroids = new Map();
+    for (const [key, members] of dirGroupNodes) {
+      let cx = 0, cy = 0;
+      for (const n of members) { cx += n.x; cy += n.y; }
+      centroids.set(key, { x: cx / members.length, y: cy / members.length });
+    }
+    for (const n of nodes) {
+      const c = centroids.get(dirGroupMap.get(n.id));
+      if (c) {
+        n.vx += (c.x - n.x) * alpha * strength;
+        n.vy += (c.y - n.y) * alpha * strength;
+      }
+    }
+  }
+  force.initialize = (_) => { nodes = _; };
+  return force;
+}
+
 // --- Force simulation ---
 const sim = d3.forceSimulation(DATA.nodes)
   .force('link', d3.forceLink(DATA.edges).id(d => d.id).distance(N > 5000 ? 30 : 60).strength(N > 5000 ? 0.1 : 0.3))
   .force('charge', d3.forceManyBody().strength(N > 5000 ? -30 : N > 1000 ? -80 : -200).theta(N > 5000 ? 1.5 : 0.9))
   .force('center', d3.forceCenter(W / 2, H / 2))
+  .force('cluster', forceCluster(0.35))
   .alphaDecay(N > 5000 ? 0.05 : 0.0228)
   .velocityDecay(N > 5000 ? 0.6 : 0.4)
   .stop();
 
-// Pre-settle: compute layout synchronously so there's no initial "explosion"
 const preTicks = Math.min(300, Math.max(50, Math.ceil(Math.log(N + 1) * 40)));
-for (let i = 0; i < preTicks; i++) sim.tick();
-
-// Now enable live ticks only for drag interactions
-sim.on('tick', scheduleFrame);
+let ticksDone = 0;
+const TICK_BATCH = N > 5000 ? 5 : 15;
+let layoutDone = false;
+(function tickBatch() {
+  const t0 = performance.now();
+  while (ticksDone < preTicks && performance.now() - t0 < 12) { sim.tick(); ticksDone++; }
+  scheduleFrame();
+  if (ticksDone < preTicks) {
+    document.getElementById('stats').textContent = 'Laying out… ' + Math.round(ticksDone / preTicks * 100) + '%';
+    setTimeout(tickBatch, 0);
+  } else {
+    layoutDone = true;
+    sim.on('tick', scheduleFrame);
+    document.getElementById('stats').textContent = N + ' nodes, ' + DATA.edges.length + ' edges, '
+      + DATA.communities.length + ' communities, ' + dirGroupNodes.size + ' groups';
+  }
+})();
 
 // --- Transform ---
 let tx = 0, ty = 0, tk = 1;
 
-// --- Quadtree ---
+// --- Quadtree + spatial structures ---
 let qtree = null;
+let positionsDirty = true;
+
+// Spatial hash grid for viewport culling — O(visible) instead of O(all)
+const CELL_SIZE = 200;
+let spatialGrid = new Map();
+function rebuildSpatialGrid() {
+  spatialGrid = new Map();
+  for (const d of DATA.nodes) {
+    if (d.x == null) continue;
+    const key = (Math.floor(d.x / CELL_SIZE)) + ',' + (Math.floor(d.y / CELL_SIZE));
+    let cell = spatialGrid.get(key);
+    if (!cell) { cell = []; spatialGrid.set(key, cell); }
+    cell.push(d);
+  }
+}
+function getVisibleNodes(vx0, vy0, vx1, vy1, pad) {
+  const cx0 = Math.floor((vx0 - pad) / CELL_SIZE);
+  const cy0 = Math.floor((vy0 - pad) / CELL_SIZE);
+  const cx1 = Math.floor((vx1 + pad) / CELL_SIZE);
+  const cy1 = Math.floor((vy1 + pad) / CELL_SIZE);
+  const result = [];
+  for (let cx = cx0; cx <= cx1; cx++) {
+    for (let cy = cy0; cy <= cy1; cy++) {
+      const cell = spatialGrid.get(cx + ',' + cy);
+      if (cell) for (let i = 0; i < cell.length; i++) result.push(cell[i]);
+    }
+  }
+  return result;
+}
+
+// Edge spatial index — bucket edges by source cell for fast viewport culling
+let edgeBuckets = new Map();
+function rebuildEdgeBuckets() {
+  edgeBuckets = new Map();
+  for (const e of DATA.edges) {
+    const s = e.source, t = e.target;
+    if (s.x == null || t.x == null) continue;
+    const mx = (s.x + t.x) / 2, my = (s.y + t.y) / 2;
+    const key = (Math.floor(mx / CELL_SIZE)) + ',' + (Math.floor(my / CELL_SIZE));
+    let bucket = edgeBuckets.get(key);
+    if (!bucket) { bucket = []; edgeBuckets.set(key, bucket); }
+    bucket.push(e);
+  }
+}
+function getVisibleEdges(vx0, vy0, vx1, vy1, pad) {
+  const cx0 = Math.floor((vx0 - pad) / CELL_SIZE) - 1;
+  const cy0 = Math.floor((vy0 - pad) / CELL_SIZE) - 1;
+  const cx1 = Math.floor((vx1 + pad) / CELL_SIZE) + 1;
+  const cy1 = Math.floor((vy1 + pad) / CELL_SIZE) + 1;
+  const result = [];
+  for (let cx = cx0; cx <= cx1; cx++) {
+    for (let cy = cy0; cy <= cy1; cy++) {
+      const bucket = edgeBuckets.get(cx + ',' + cy);
+      if (bucket) for (let i = 0; i < bucket.length; i++) result.push(bucket[i]);
+    }
+  }
+  return result;
+}
+
+// Hull cache — only recompute when positions change
+let cachedHulls = new Map();
+function rebuildHullCache() {
+  cachedHulls = new Map();
+  for (const [key, members] of dirGroupNodes) {
+    if (members.length < 3) continue;
+    const mainHull = computeHull(members, 25);
+    const miniHull = computeHull(members, 15);
+    if (mainHull) cachedHulls.set(key, { main: mainHull, mini: miniHull });
+  }
+}
+
+// LOD: community aggregates for zoomed-out rendering
+const LOD_THRESHOLD = N > 5000 ? 0.25 : 0.12;
+const communityAgg = new Map();
+for (const c of DATA.communities) {
+  communityAgg.set(c.id, { id: c.id, color: c.color, label: c.label, nodes: [], cx: 0, cy: 0, r: 0 });
+}
+for (const d of DATA.nodes) {
+  const agg = communityAgg.get(d.community);
+  if (agg) agg.nodes.push(d);
+}
+function updateCommunityAgg() {
+  for (const [, agg] of communityAgg) {
+    if (agg.nodes.length === 0) continue;
+    let cx = 0, cy = 0;
+    for (const n of agg.nodes) { cx += n.x || 0; cy += n.y || 0; }
+    agg.cx = cx / agg.nodes.length;
+    agg.cy = cy / agg.nodes.length;
+    agg.r = Math.sqrt(agg.nodes.length) * 3 + 5;
+  }
+}
+
+// Aggregated inter-community edges for LOD
+let communityEdges = null;
+function buildCommunityEdges() {
+  const map = new Map();
+  for (const e of DATA.edges) {
+    const sc = (e.source.community ?? e.source), tc = (e.target.community ?? e.target);
+    if (typeof sc !== 'number' || typeof tc !== 'number' || sc === tc) continue;
+    const key = Math.min(sc, tc) + ':' + Math.max(sc, tc);
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  communityEdges = [];
+  for (const [key, weight] of map) {
+    const [a, b] = key.split(':').map(Number);
+    const aggA = communityAgg.get(a), aggB = communityAgg.get(b);
+    if (aggA && aggB) communityEdges.push({ a: aggA, b: aggB, weight });
+  }
+}
+
 function rebuildQuadtree() {
   qtree = d3.quadtree(DATA.nodes, d => d.x, d => d.y);
+  positionsDirty = true;
 }
 
 // --- Animation ---
@@ -893,21 +1151,39 @@ function scheduleFrame() {
   if (!frameRequested) { frameRequested = true; requestAnimationFrame(frame); }
 }
 
+let mmCounter = 0;
 function frame() {
   frameRequested = false;
+  // Rebuild spatial structures only when positions changed
+  if (positionsDirty) {
+    rebuildSpatialGrid();
+    rebuildEdgeBuckets();
+    rebuildHullCache();
+    updateCommunityAgg();
+    if (layoutDone && !communityEdges) buildCommunityEdges();
+    positionsDirty = false;
+  }
   updateAlphas();
   draw();
+  // Minimap: every 5th frame during simulation, always when idle
+  if (++mmCounter % 5 === 0 || sim.alpha() <= sim.alphaMin()) drawMinimap();
   if (animating || sim.alpha() > sim.alphaMin()) scheduleFrame();
 }
 
 function updateAlphas() {
   const dimSearch = searchQ.length > 0;
+  // Fast path: nothing to dim — skip entire iteration
+  if (!highlightId && !dimSearch && !animating) return;
   animating = false;
-  const speed = 0.15; // lerp speed
+  const speed = 0.15;
   for (const d of DATA.nodes) {
     let target = 1;
     if (highlightId) {
-      target = (d.id === highlightId || highlightSet?.has(d.id)) ? 1 : 0.06;
+      if (d.id === highlightId) target = 1;
+      else if (highlightSet?.has(d.id)) {
+        const nd = highlightSet.get(d.id) ?? 1;
+        target = Math.max(0.3, 1 - nd * 0.1);
+      } else target = 0.06;
     } else if (dimSearch) {
       target = (d.label.toLowerCase().includes(searchQ) || d.id.toLowerCase().includes(searchQ)) ? 1 : 0.06;
     }
@@ -919,6 +1195,46 @@ function updateAlphas() {
       d._alpha = target;
     }
   }
+}
+
+// --- Hull computation ---
+function computeHull(nodes, padding) {
+  if (nodes.length < 3) return null;
+  const pts = nodes.filter(n => n.x != null).map(n => [n.x, n.y]);
+  if (pts.length < 3) return null;
+  const hull = d3.polygonHull(pts);
+  if (!hull) return null;
+  // Expand outward from centroid
+  let cx = 0, cy = 0;
+  for (const [hx, hy] of hull) { cx += hx; cy += hy; }
+  cx /= hull.length; cy /= hull.length;
+  return hull.map(([hx, hy]) => {
+    const dx = hx - cx, dy = hy - cy;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    return [hx + dx / len * padding, hy + dy / len * padding];
+  });
+}
+
+function drawSmoothHull(hull, fillColor, alpha) {
+  if (!hull || hull.length < 3) return;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = fillColor;
+  ctx.beginPath();
+  const n = hull.length;
+  const mx = (a, b) => (a[0] + b[0]) / 2;
+  const my = (a, b) => (a[1] + b[1]) / 2;
+  ctx.moveTo(mx(hull[n - 1], hull[0]), my(hull[n - 1], hull[0]));
+  for (let i = 0; i < n; i++) {
+    const next = [(hull[i][0] + hull[(i + 1) % n][0]) / 2, (hull[i][1] + hull[(i + 1) % n][1]) / 2];
+    ctx.quadraticCurveTo(hull[i][0], hull[i][1], next[0], next[1]);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // Subtle border
+  ctx.globalAlpha = alpha * 0.6;
+  ctx.strokeStyle = fillColor;
+  ctx.lineWidth = 1.5 / tk;
+  ctx.stroke();
 }
 
 function draw() {
@@ -933,123 +1249,366 @@ function draw() {
   const pad = 60 / tk;
   const isHigh = N > 3000;
 
-  // ── Edges ──
-  // Background edges (dim)
+  // ── LOD: at low zoom, draw community aggregates instead of individual nodes ──
+  const useLOD = tk < LOD_THRESHOLD && !highlightId && N > 2000;
+
+  if (useLOD) {
+    // Draw community hulls from cache
+    for (const [key, cached] of cachedHulls) {
+      const color = dirGroupColors.get(key) || '#4e79a7';
+      drawSmoothHull(cached.main, color, TH.hullAlpha);
+    }
+    // Draw aggregated inter-community edges
+    if (communityEdges) {
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = TH.edge;
+      ctx.beginPath();
+      for (const ce of communityEdges) {
+        const a = ce.a, b = ce.b;
+        if (a.cx < vx0 - 200 && b.cx < vx0 - 200) continue;
+        if (a.cx > vx1 + 200 && b.cx > vx1 + 200) continue;
+        ctx.globalAlpha = Math.min(0.5, TH.edgeAlpha + ce.weight * 0.01);
+        ctx.lineWidth = Math.min(4, 0.5 + ce.weight * 0.15) / tk;
+        ctx.moveTo(a.cx, a.cy);
+        ctx.lineTo(b.cx, b.cy);
+      }
+      ctx.stroke();
+    }
+    // Draw community aggregates as circles
+    for (const [, agg] of communityAgg) {
+      if (agg.nodes.length === 0) continue;
+      if (agg.cx < vx0 - agg.r || agg.cx > vx1 + agg.r || agg.cy < vy0 - agg.r || agg.cy > vy1 + agg.r) continue;
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = agg.color;
+      ctx.beginPath();
+      ctx.arc(agg.cx, agg.cy, agg.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = IS_LIGHT ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1 / tk;
+      ctx.stroke();
+      // Label
+      const fs = Math.max(6, Math.min(14, agg.r * 0.6)) / tk;
+      ctx.font = '600 ' + fs + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = TH.text;
+      ctx.textAlign = 'center';
+      ctx.fillText(agg.nodes.length + '', agg.cx, agg.cy + fs * 0.35);
+    }
+    ctx.textAlign = 'start';
+    ctx.restore();
+    rebuildQuadtree();
+    return;
+  }
+
+  // ── Normal rendering (zoomed in enough) ──
+  // Use spatial grid for visible nodes — O(visible) not O(all)
+  const visible = getVisibleNodes(vx0, vy0, vx1, vy1, pad);
+
+  // Viewport-relative importance from visible nodes only
+  visMinImp = 1; visMaxImp = 0;
+  for (let i = 0; i < visible.length; i++) {
+    const d = visible[i];
+    if (d.importance < visMinImp) visMinImp = d.importance;
+    if (d.importance > visMaxImp) visMaxImp = d.importance;
+  }
+
+  // ── Directory hulls (from cache) ──
+  for (const [key, cached] of cachedHulls) {
+    const color = dirGroupColors.get(key) || '#4e79a7';
+    drawSmoothHull(cached.main, color, TH.hullAlpha);
+  }
+
+  // ── Directory labels (zoom-dependent, readable) ──
+  ctx.textAlign = 'center';
+  for (const [key, members] of dirGroupNodes) {
+    if (members.length < 2) continue;
+    const minZoom = members.length > 20 ? 0.1 : members.length > 8 ? 0.3 : 0.6;
+    const maxZoom = members.length > 20 ? 1.5 : members.length > 8 ? 2.5 : 3.5;
+    if (tk < minZoom || tk > maxZoom) continue;
+    let cx = 0, cy = 0;
+    for (const n of members) { cx += n.x; cy += n.y; }
+    cx /= members.length; cy /= members.length;
+    if (cx < vx0 - 100 || cx > vx1 + 100 || cy < vy0 - 100 || cy > vy1 + 100) continue;
+    const dirLabel = key.replace(/\\//g, ' / ') + ' (' + members.length + ')';
+    const fontSize = Math.max(8, Math.min(13, 10 / tk));
+    const fs = fontSize / tk;
+    ctx.font = '600 ' + fs + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+    const ly = cy - 20 / tk;
+    ctx.globalAlpha = TH.groupLabelAlpha * 0.7;
+    ctx.fillStyle = TH.groupLabelShadow;
+    ctx.fillText(dirLabel, cx + 1.2 / tk, ly + 1.2 / tk);
+    ctx.globalAlpha = TH.groupLabelAlpha;
+    ctx.fillStyle = TH.groupLabel;
+    ctx.fillText(dirLabel, cx, ly);
+  }
+
+  // ── Edges — use spatial buckets ──
   ctx.lineCap = 'round';
-  ctx.globalAlpha = highlightId ? 0.03 : 0.18;
-  ctx.strokeStyle = '#556';
+  ctx.globalAlpha = highlightId ? 0.03 : TH.edgeAlpha;
+  ctx.strokeStyle = TH.edge;
   ctx.lineWidth = (isHigh ? 0.4 : 0.8) / tk;
   ctx.beginPath();
-  for (const e of DATA.edges) {
+  const visibleEdges = getVisibleEdges(vx0, vy0, vx1, vy1, pad);
+  for (let i = 0; i < visibleEdges.length; i++) {
+    const e = visibleEdges[i];
     const s = e.source, t = e.target;
-    if (s.x == null || t.x == null) continue;
-    if (Math.max(s.x, t.x) < vx0 - pad || Math.min(s.x, t.x) > vx1 + pad ||
-        Math.max(s.y, t.y) < vy0 - pad || Math.min(s.y, t.y) > vy1 + pad) continue;
     ctx.moveTo(s.x, s.y);
     ctx.lineTo(t.x, t.y);
   }
   ctx.stroke();
 
-  // Highlighted edges with glow
+  // Highlighted edges — draw all edges in the highlight subgraph, colored by depth
   if (highlightId && highlightSet) {
-    // Glow layer
-    ctx.globalAlpha = 0.3;
-    ctx.strokeStyle = '#e94560';
-    ctx.lineWidth = 4 / tk;
-    ctx.beginPath();
+    const depthColors = ['#ff2050', '#ff8c00', '#ffe000', '#00e050', '#00c8ff', '#6060ff', '#c040ff', '#ff40a0', '#ff6060', '#aaaaaa'];
+    // Group edges by max depth of their endpoints
+    const edgesByDepth = new Map();
     for (const e of DATA.edges) {
       const si = e.source.id ?? e.source, ti = e.target.id ?? e.target;
-      if ((si === highlightId && highlightSet.has(ti)) || (ti === highlightId && highlightSet.has(si))) {
+      // Both ends must be in highlight set or be the root
+      const sInSet = si === highlightId || highlightSet.has(si);
+      const tInSet = ti === highlightId || highlightSet.has(ti);
+      if (!sInSet || !tInSet) continue;
+      const sDepth = si === highlightId ? 0 : (highlightSet.get(si) ?? 99);
+      const tDepth = ti === highlightId ? 0 : (highlightSet.get(ti) ?? 99);
+      const edgeDepth = Math.max(sDepth, tDepth);
+      if (!edgesByDepth.has(edgeDepth)) edgesByDepth.set(edgeDepth, []);
+      edgesByDepth.get(edgeDepth).push(e);
+    }
+    // Draw deeper edges first (behind), closer edges on top
+    const depths = [...edgesByDepth.keys()].sort((a, b) => b - a);
+    for (const d of depths) {
+      const color = depthColors[Math.min(d, depthColors.length - 1)];
+      const alpha = Math.max(0.15, 0.9 - d * 0.12);
+      const width = Math.max(0.8, 3.5 - d * 0.4);
+      // Glow pass
+      ctx.globalAlpha = alpha * 0.35;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = (width + 2.5) / tk;
+      ctx.beginPath();
+      for (const e of edgesByDepth.get(d)) {
         ctx.moveTo(e.source.x, e.source.y);
         ctx.lineTo(e.target.x, e.target.y);
       }
+      ctx.stroke();
+      // Core pass
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = width / tk;
+      ctx.stroke();
     }
-    ctx.stroke();
-    // Core line
-    ctx.globalAlpha = 0.9;
-    ctx.lineWidth = 1.5 / tk;
-    ctx.stroke();
   }
 
   // ── Nodes ──
-  const showLabels = tk > (isHigh ? 1.5 : N > 500 ? 0.6 : 0.3);
   const labelFontSize = Math.max(8, Math.min(12, 10 / tk));
+  const labelCandidates = [];
   ctx.textAlign = 'center';
 
-  for (const d of DATA.nodes) {
+  for (let vi = 0; vi < visible.length; vi++) {
+    const d = visible[vi];
     if (d.x == null) continue;
-    if (d.x < vx0 - pad || d.x > vx1 + pad || d.y < vy0 - pad || d.y > vy1 + pad) continue;
 
-    const r = d._r;
+    // Absolute importance → radius (stable, no viewport distortion)
+    const r = 3 + d.importance * 8;
+    d._r = r;
+    // Viewport-relative normImp for labels only
+    const visRange = visMaxImp - visMinImp || 0.01;
+    const normImp = Math.max(0, Math.min(1, (d.importance - visMinImp) / visRange));
     const a = d._alpha;
     const isHovered = d === hoveredNode;
     const isHighlighted = highlightId && d.id === highlightId;
     const color = nodeColor(d);
     const [cr, cg, cb] = hexToRgb(color);
 
-    // Outer glow for hovered/highlighted
+    // Hover/highlight — macOS accent ring
     if ((isHovered || isHighlighted) && a > 0.5) {
-      ctx.globalAlpha = 0.35 * a;
-      ctx.shadowColor = 'rgba(' + cr + ',' + cg + ',' + cb + ',0.9)';
-      ctx.shadowBlur = 16 / tk;
-      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.6 * a;
+      ctx.strokeStyle = IS_LIGHT ? '#007AFF' : '#0A84FF';
+      ctx.lineWidth = 2 / tk;
       ctx.beginPath();
-      ctx.arc(d.x, d.y, r + 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      ctx.arc(d.x, d.y, r + 2.5 / tk, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
-    // Node body — radial gradient for 3D look
+    // Solid flat fill
     ctx.globalAlpha = a;
-    if (!isHigh || a > 0.5) {
-      const grad = ctx.createRadialGradient(d.x - r * 0.3, d.y - r * 0.3, r * 0.1, d.x, d.y, r);
-      grad.addColorStop(0, 'rgba(' + Math.min(255, cr + 80) + ',' + Math.min(255, cg + 80) + ',' + Math.min(255, cb + 80) + ',' + a + ')');
-      grad.addColorStop(0.7, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + a + ')');
-      grad.addColorStop(1, 'rgba(' + Math.max(0, cr - 30) + ',' + Math.max(0, cg - 30) + ',' + Math.max(0, cb - 30) + ',' + a + ')');
-      ctx.fillStyle = grad;
-    } else {
-      ctx.fillStyle = color;
-    }
+    ctx.fillStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',' + a + ')';
     ctx.beginPath();
     ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
     ctx.fill();
 
-    // Border — white stroke
-    ctx.strokeStyle = isHovered
-      ? 'rgba(255,255,255,' + (0.95 * a) + ')'
-      : 'rgba(255,255,255,' + (0.4 * a) + ')';
-    ctx.lineWidth = (isHovered ? 2 : 1) / tk;
+    // 0.5px border — slightly lighter/darker for definition
+    ctx.globalAlpha = 0.3 * a;
+    ctx.strokeStyle = IS_LIGHT ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 0.5 / tk;
     ctx.stroke();
 
-    // Label — centered below node
-    if ((showLabels || isHovered || isHighlighted) && a > 0.3) {
+    // Collect label candidates (drawn in second pass)
+    const labelZoomThreshold = 0.15 + (1 - normImp) * 1.8;
+    const showThisLabel = tk > labelZoomThreshold || isHovered || isHighlighted;
+    if (showThisLabel && a > 0.3) {
       const fontSize = (isHovered ? labelFontSize + 2 : labelFontSize) / tk;
       ctx.font = '500 ' + fontSize + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+      const tw = ctx.measureText(d.label).width;
       const labelY = d.y + r + fontSize + 2 / tk;
-      // Shadow for readability
-      ctx.globalAlpha = a * 0.6;
-      ctx.fillStyle = '#0d0d1a';
-      ctx.fillText(d.label, d.x + 0.7 / tk, labelY + 0.7 / tk);
-      // Text
-      ctx.globalAlpha = a * (isHovered ? 1 : 0.9);
-      ctx.fillStyle = isHovered ? '#fff' : '#dde';
-      ctx.fillText(d.label, d.x, labelY);
+      labelCandidates.push({
+        d, label: d.label, x: d.x, y: labelY, w: tw, h: fontSize,
+        importance: d.importance, isHovered, isHighlighted, a, fontSize,
+      });
     }
   }
-  ctx.textAlign = 'start';
 
+  // ── Label collision avoidance ──
+  // Sort: hovered/highlighted first, then by importance desc
+  labelCandidates.sort((a, b) => {
+    if (a.isHovered || a.isHighlighted) return -1;
+    if (b.isHovered || b.isHighlighted) return 1;
+    return b.importance - a.importance;
+  });
+  const placedBoxes = [];
+  const PAD_X = 4 / tk, PAD_Y = 2 / tk;
+  for (const lc of labelCandidates) {
+    const bx = lc.x - lc.w / 2 - PAD_X;
+    const by = lc.y - lc.h - PAD_Y;
+    const bw = lc.w + PAD_X * 2;
+    const bh = lc.h + PAD_Y * 2;
+    // Check overlap with already placed labels
+    let overlaps = false;
+    for (const pb of placedBoxes) {
+      if (bx < pb.x + pb.w && bx + bw > pb.x && by < pb.y + pb.h && by + bh > pb.y) {
+        overlaps = true; break;
+      }
+    }
+    if (overlaps && !lc.isHovered && !lc.isHighlighted) continue;
+    placedBoxes.push({ x: bx, y: by, w: bw, h: bh });
+    // Draw label
+    ctx.font = '500 ' + lc.fontSize + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.globalAlpha = lc.a * 0.6;
+    ctx.fillStyle = TH.labelShadow;
+    ctx.fillText(lc.label, lc.x + 0.7 / tk, lc.y + 0.7 / tk);
+    ctx.globalAlpha = lc.a * (lc.isHovered ? 1 : 0.85);
+    ctx.fillStyle = lc.isHovered ? (IS_LIGHT ? '#000' : '#fff') : TH.text;
+    ctx.fillText(lc.label, lc.x, lc.y);
+  }
+
+  ctx.textAlign = 'start';
   ctx.restore();
   rebuildQuadtree();
 }
 
-// --- Zoom & Pan ---
+// ── Minimap ──
+const mmCanvas = document.getElementById('minimap');
+const mmCtx = mmCanvas.getContext('2d');
+const MM_W = 200, MM_H = 140;
+let mmBounds = { minX: 0, maxX: 1, minY: 0, maxY: 1, scale: 1, offX: 0, offY: 0 };
+
+function drawMinimap() {
+  mmCtx.fillStyle = IS_LIGHT ? 'rgba(240,240,240,0.9)' : 'rgba(26,26,46,0.9)';
+  mmCtx.fillRect(0, 0, MM_W, MM_H);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of DATA.nodes) {
+    if (n.x != null) {
+      if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
+      if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y;
+    }
+  }
+  const p = 40;
+  minX -= p; minY -= p; maxX += p; maxY += p;
+  const ww = maxX - minX || 1, wh = maxY - minY || 1;
+  const sc = Math.min(MM_W / ww, MM_H / wh);
+  const ox = (MM_W - ww * sc) / 2, oy = (MM_H - wh * sc) / 2;
+  mmBounds = { minX, maxX, minY, maxY, scale: sc, offX: ox, offY: oy };
+
+  // Hull backgrounds on minimap (from cache)
+  for (const [key, cached] of cachedHulls) {
+    const hull = cached.mini;
+    if (!hull) continue;
+    mmCtx.globalAlpha = 0.15;
+    mmCtx.fillStyle = dirGroupColors.get(key) || '#4e79a7';
+    mmCtx.beginPath();
+    for (let i = 0; i < hull.length; i++) {
+      const sx = (hull[i][0] - minX) * sc + ox;
+      const sy = (hull[i][1] - minY) * sc + oy;
+      if (i === 0) mmCtx.moveTo(sx, sy); else mmCtx.lineTo(sx, sy);
+    }
+    mmCtx.closePath();
+    mmCtx.fill();
+  }
+
+  // Nodes as dots
+  for (const n of DATA.nodes) {
+    if (n.x == null) continue;
+    const sx = (n.x - minX) * sc + ox;
+    const sy = (n.y - minY) * sc + oy;
+    mmCtx.fillStyle = nodeColor(n);
+    mmCtx.globalAlpha = 0.7;
+    mmCtx.fillRect(sx - 0.8, sy - 0.8, 1.6, 1.6);
+  }
+
+  // Viewport rectangle
+  const vx = (-tx / tk - minX) * sc + ox;
+  const vy = (-ty / tk - minY) * sc + oy;
+  const vw = (W / tk) * sc;
+  const vh = (H / tk) * sc;
+  mmCtx.globalAlpha = 0.15;
+  mmCtx.fillStyle = '#fff';
+  mmCtx.fillRect(vx, vy, vw, vh);
+  mmCtx.globalAlpha = 0.8;
+  mmCtx.strokeStyle = '#e94560';
+  mmCtx.lineWidth = 1.5;
+  mmCtx.strokeRect(vx, vy, vw, vh);
+}
+
+// Minimap click → navigate
+mmCanvas.addEventListener('click', (e) => {
+  const rect = mmCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const b = mmBounds;
+  const wx = (mx - b.offX) / b.scale + b.minX;
+  const wy = (my - b.offY) / b.scale + b.minY;
+  const nt = d3.zoomIdentity.translate(W / 2 - wx * tk, H / 2 - wy * tk).scale(tk);
+  d3.select(canvas).transition().duration(300).call(zoomBehavior.transform, nt);
+});
+
+// --- Zoom & Pan (native macOS trackpad gestures) ---
 const zoomBehavior = d3.zoom()
   .scaleExtent([0.02, 20])
+  .filter((e) => {
+    // Block wheel events from D3 — we handle them manually below
+    // to separate two-finger scroll (pan) from pinch (zoom)
+    if (e.type === 'wheel') return false;
+    // Allow everything else (drag, dblclick, etc.) with default filter logic
+    return !e.ctrlKey && !e.button;
+  })
   .on('zoom', (e) => {
     tx = e.transform.x; ty = e.transform.y; tk = e.transform.k;
     scheduleFrame();
   });
 d3.select(canvas).call(zoomBehavior);
+
+// Custom wheel: pinch (ctrlKey) → zoom, two-finger scroll → pan
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const sel = d3.select(canvas);
+  const t = d3.zoomTransform(canvas);
+  if (e.ctrlKey) {
+    // Pinch-to-zoom: browsers set ctrlKey for trackpad pinch gestures
+    const factor = Math.pow(2, -e.deltaY * 0.01);
+    const newK = Math.max(0.02, Math.min(20, t.k * factor));
+    const r = newK / t.k;
+    const px = e.offsetX, py = e.offsetY;
+    const nt = d3.zoomIdentity
+      .translate(px - r * (px - t.x), py - r * (py - t.y))
+      .scale(newK);
+    sel.call(zoomBehavior.transform, nt);
+  } else {
+    // Two-finger swipe → pan
+    const nt = d3.zoomIdentity
+      .translate(t.x - e.deltaX, t.y - e.deltaY)
+      .scale(t.k);
+    sel.call(zoomBehavior.transform, nt);
+  }
+}, { passive: false });
 
 // --- Mouse ---
 const tooltip = document.getElementById('tooltip');
@@ -1092,11 +1651,13 @@ canvas.addEventListener('mousemove', (e) => {
     canvas.style.cursor = n ? 'pointer' : 'default';
     if (n) {
       tooltip.style.display = 'block';
+      const dirKey = dirGroupMap.get(n.id);
       tooltip.innerHTML = '<strong>' + esc(n.label) + '</strong><br>'
         + '<span style="color:#888">' + esc(n.id) + '</span><br>'
         + (n.repo ? '<span style="color:#76b7b2">Repo: ' + esc(n.repo) + '</span><br>' : '')
         + esc(n.type) + (n.language ? ' \u00b7 ' + esc(n.language) : '')
         + (n.framework_role ? ' \u00b7 ' + esc(n.framework_role) : '') + '<br>'
+        + (dirKey ? '<span style="color:#76b7b2">' + esc(dirKey) + '</span> \u00b7 ' : '')
         + 'Community ' + n.community + ' \u00b7 Importance ' + n.importance;
     } else {
       tooltip.style.display = 'none';
@@ -1129,7 +1690,7 @@ canvas.addEventListener('mouseup', () => {
     dragNode = null;
     sim.alphaTarget(0);
     d3.select(canvas).call(zoomBehavior);
-    if (wasDrag) return; // don't trigger click after drag
+    if (wasDrag) return;
   }
 });
 
@@ -1139,7 +1700,7 @@ canvas.addEventListener('click', (e) => {
   const n = findNode(wx, wy);
   if (n) {
     highlightId = n.id;
-    highlightSet = adjSet.get(n.id) || new Set();
+    highlightSet = getNeighborsAtDepth(n.id, highlightDepth);
   } else {
     highlightId = null;
     highlightSet = null;
@@ -1177,9 +1738,35 @@ document.getElementById('export-mermaid').addEventListener('click', () => {
   navigator.clipboard.writeText(md).then(() => alert('Mermaid copied to clipboard'));
 });
 
-document.getElementById('stats').textContent = N + ' nodes, ' + DATA.edges.length + ' edges, ' + DATA.communities.length + ' communities';
-
 resize();
+
+// --- postMessage API for parent iframe communication ---
+window.addEventListener('message', (evt) => {
+  if (!evt.data) return;
+  if (evt.data.type === 'setHighlightDepth') {
+    highlightDepth = evt.data.depth || 1;
+    // Re-highlight current node with new depth
+    if (highlightId) {
+      highlightSet = getNeighborsAtDepth(highlightId, highlightDepth);
+      scheduleFrame();
+    }
+    return;
+  }
+  if (evt.data.type !== 'focusNode') return;
+  const fileId = evt.data.id;
+  if (!fileId) return;
+  // Find the node by id (exact or suffix match for file paths)
+  const node = DATA.nodes.find(n => n.id === fileId)
+    || DATA.nodes.find(n => n.id.endsWith('/' + fileId) || n.id.endsWith(fileId));
+  if (!node || node.x == null) return;
+  // Select it
+  highlightId = node.id;
+  highlightSet = getNeighborsAtDepth(node.id, highlightDepth);
+  // Zoom to it
+  const zoomK = 2.5;
+  const nt = d3.zoomIdentity.translate(W / 2 - node.x * zoomK, H / 2 - node.y * zoomK).scale(zoomK);
+  d3.select(canvas).transition().duration(600).call(zoomBehavior.transform, nt);
+});
 </script>
 </body>
 </html>`;
@@ -1198,7 +1785,7 @@ export function visualizeGraph(
   }
 
   const layout = opts.layout ?? 'force';
-  const html = generateHtml(nodes, edges, communities, layout);
+  const html = generateHtml(nodes, edges, communities, layout, { highlightDepth: opts.highlightDepth });
   const outputPath = opts.output ?? path.join(process.env.TMPDIR ?? '/tmp', 'trace-mcp-graph.html');
 
   fs.writeFileSync(outputPath, html, 'utf-8');
