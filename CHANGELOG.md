@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.16.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.16.0...v1.16.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* package.json ([4497e51](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4497e5160de456eb59fe599117e3c67f0273c878))
+* resolve TypeScript errors in visualize modules ([10f846f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/10f846f75f53aa3c2422a30aae23a14c2bc31519))
+
 ## [1.16.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.15.2...v1.16.0) (2026-04-12)
 
 
