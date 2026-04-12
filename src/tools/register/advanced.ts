@@ -424,7 +424,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         symbolKinds: symbol_kinds,
         maxFiles: max_files,
         maxNodes: max_nodes,
-        topoStore: ctx.topoStore,
+        topoStore: ctx.topoStore ?? undefined,
         projectRoot,
       });
       if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
