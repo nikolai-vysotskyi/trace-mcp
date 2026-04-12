@@ -121,7 +121,7 @@ export const visualizeCommand = new Command('visualize')
     db.close();
 
     if (result.isErr()) {
-      console.error('Error:', result.error.message);
+      console.error('Error:', 'message' in result.error ? result.error.message : result.error.code);
       process.exit(1);
     }
 
@@ -155,7 +155,7 @@ visualizeCommand
     topoStore.close();
 
     if (result.isErr()) {
-      console.error('Error:', result.error.message);
+      console.error('Error:', 'message' in result.error ? result.error.message : result.error.code);
       process.exit(1);
     }
 
