@@ -55,6 +55,11 @@ function addRecentProject(root: string): void {
   localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
+export function removeRecentProject(root: string): void {
+  const recent = getRecentProjects().filter((r) => r !== root);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+}
+
 function RecentProjects() {
   const [recent, setRecent] = useState<string[]>(getRecentProjects);
 
@@ -88,15 +93,33 @@ function RecentProjects() {
         Recent
       </div>
       {recent.map((root) => (
-        <button
+        <div
           key={root}
-          onClick={() => openProject(root)}
-          className="text-left px-2.5 py-1 text-[11px] rounded-md truncate transition-colors hover:bg-[var(--bg-active)]"
-          style={{ color: 'var(--text-secondary)' }}
-          title={root}
+          className="group flex items-center rounded-md transition-colors hover:bg-[var(--bg-active)]"
         >
-          {root.split('/').filter(Boolean).pop()}
-        </button>
+          <button
+            onClick={() => openProject(root)}
+            className="text-left flex-1 min-w-0 px-2.5 py-1 text-[11px] truncate"
+            style={{ color: 'var(--text-secondary)' }}
+            title={root}
+          >
+            {root.split('/').filter(Boolean).pop()}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              removeRecentProject(root);
+              setRecent(getRecentProjects());
+            }}
+            className="shrink-0 mr-1.5 w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--bg-secondary)]"
+            style={{ color: 'var(--text-tertiary)' }}
+            title="Remove from recent"
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <path d="M1 1l6 6M7 1l-6 6" />
+            </svg>
+          </button>
+        </div>
       ))}
     </div>
   );
@@ -163,11 +186,18 @@ function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       {/* Sort picker */}
-      <div className="px-1.5 mb-0.5">
+      <div className="px-1.5 mb-0.5 relative">
+        <svg
+          width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+          className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          <path d="M2 4h12M4 8h8M6 12h4" />
+        </svg>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as FileSort)}
-          className="w-full text-[10px] px-1.5 py-1 rounded-md appearance-none"
+          className="w-full text-[10px] pl-5 pr-1.5 py-1 rounded-md appearance-none"
           style={{
             background: 'var(--bg-secondary)',
             color: 'var(--text-secondary)',
@@ -325,17 +355,18 @@ function MenuContent({ tab }: { tab: GlobalTab }) {
 }
 
 // ── Project content ───────────────────────────────────────────
-function ProjectContent({ root, tab, graphRef, graphSettings, onGraphSettingsChange }: {
+function ProjectContent({ root, tab, graphRef, graphSettings, onGraphSettingsChange, onNavigateToService }: {
   root: string;
   tab: ProjectTab;
   graphRef: React.RefObject<GraphExplorerHandle | null>;
   graphSettings: GraphSettings;
   onGraphSettingsChange: (patch: Partial<GraphSettings>) => void;
+  onNavigateToService: (serviceName: string) => void;
 }) {
   return (
     <>
       {/* Overview — mount/unmount normally */}
-      {tab === 'overview' && <ProjectOverview root={root} />}
+      {tab === 'overview' && <ProjectOverview root={root} onNavigateToService={onNavigateToService} />}
       {/* Graph — always mounted, hidden when inactive (preserves iframe + state) */}
       <div className={tab === 'graph' ? 'flex-1 min-h-0 flex flex-col' : 'hidden'}>
         <GraphExplorer ref={graphRef} root={root} settings={graphSettings} onSettingsChange={onGraphSettingsChange} />
@@ -371,6 +402,12 @@ export function App() {
     // GraphExplorer is always mounted — focusFile will queue if iframe is loading
     graphRef.current?.focusFile(filePath);
   }, [projectTab]);
+
+  // Navigate to graph tab with a service scope
+  const navigateToService = useCallback((serviceName: string) => {
+    onGraphSettingsChange({ scope: `federation:${serviceName}` });
+    setProjectTab('graph');
+  }, [onGraphSettingsChange]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -514,7 +551,7 @@ export function App() {
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {isProject ? (
-            <ProjectContent root={root!} tab={projectTab} graphRef={graphRef} graphSettings={graphSettings} onGraphSettingsChange={onGraphSettingsChange} />
+            <ProjectContent root={root!} tab={projectTab} graphRef={graphRef} graphSettings={graphSettings} onGraphSettingsChange={onGraphSettingsChange} onNavigateToService={navigateToService} />
           ) : (
             <MenuContent tab={globalTab} />
           )}

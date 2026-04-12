@@ -98,20 +98,19 @@ export function ProjectRow({ root, status, error, progress, onReindex, onRemove,
           ) : (
             <>
               <button
-                onClick={() => { onRemove(); setConfirmRemove(false); }}
-                className="text-[11px] px-2 py-1 rounded-lg font-medium"
-                style={{ color: '#ff3b30' }}
+                onClick={() => setConfirmRemove(false)}
+                className="text-[11px] px-1.5 py-0.5 rounded-md font-medium transition-colors hover:bg-[var(--bg-active)]"
+                style={{ color: 'var(--text-secondary)', background: 'var(--bg-tertiary, var(--bg-secondary))', border: '1px solid var(--border)' }}
               >
-                Remove?
+                Cancel
               </button>
               <button
-                onClick={() => setConfirmRemove(false)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--bg-active)]"
-                style={{ color: 'var(--text-tertiary)' }}
+                onClick={() => { onRemove(); setConfirmRemove(false); }}
+                className="text-[11px] px-1.5 py-0.5 rounded-md font-medium transition-colors"
+                style={{ background: '#ff3b3018', color: '#ff3b30', border: '1px solid #ff3b3040' }}
+                title="Confirm removal"
               >
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4l8 8M12 4l-8 8" />
-                </svg>
+                Remove
               </button>
             </>
           )}

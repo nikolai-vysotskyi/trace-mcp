@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ProjectRow } from '../components/ProjectRow';
 import { useDaemon } from '../hooks/useDaemon';
+import { removeRecentProject } from '../App';
 
 interface IndexesProps {
   onOpenProject: (root: string) => void;
@@ -134,7 +135,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
               error={p.error}
               progress={p.progress}
               onReindex={() => reindexProject(p.root)}
-              onRemove={() => removeProject(p.root)}
+              onRemove={() => { removeProject(p.root); removeRecentProject(p.root); }}
               onClick={() => onOpenProject(p.root)}
             />
           ))}
