@@ -13,6 +13,29 @@
 
 ---
 
+## What trace-mcp does for you
+
+| You ask | trace-mcp answers | How |
+|---|---|---|
+| "What breaks if I change this model?" | Blast radius across languages + risk score + linked architectural decisions | `get_change_impact` — reverse dependency graph + decision memory |
+| "Why was auth implemented this way?" | The actual decision record with reasoning and tradeoffs | `query_decisions` — searches the decision knowledge graph linked to code |
+| "I'm starting a new task" | Optimal code subgraph + relevant past decisions + dead-end warnings | `plan_turn` — opening-move router with decision enrichment |
+| "What did we discuss about GraphQL last month?" | Verbatim conversation fragments with file references | `search_sessions` — FTS5 search across all past session content |
+| "Show me the request flow from URL to rendered page" | Route → Middleware → Controller → Service → View with prop mapping | `get_request_flow` — framework-aware edge traversal |
+| "Find all untested code in this module" | Symbols classified as "unreached" or "imported but never called in tests" | `get_untested_symbols` — test-to-source mapping |
+| "What's the impact of this API change on other services?" | Cross-federation client calls with confidence scores | `get_federation_impact` — topology graph traversal |
+| "Orient me — I just opened this project" | Project identity + active decisions + memory stats in ~300 tokens | `get_wake_up` — layered context assembly |
+
+**Three things no other tool does:**
+
+1. **Framework-aware edges** — trace-mcp understands that `Inertia::render('Users/Show')` connects PHP to Vue, that `@Injectable()` creates a DI dependency, that `$user->posts()` means a `posts` table from migrations. 53 integrations across 14 frameworks, 7 ORMs, 12 UI libraries.
+
+2. **Code-linked decision memory** — when you record "chose PostgreSQL for JSONB support", it's linked to `src/db/connection.ts::Pool#class`. When someone runs `get_change_impact` on that symbol, they see the decision. MemPalace stores decisions as text; trace-mcp ties them to the dependency graph.
+
+3. **Cross-session intelligence** — past sessions are mined for decisions and indexed for search. When you start a new session, `get_wake_up` gives you orientation in ~300 tokens; `plan_turn` shows relevant past decisions for your task; `get_session_resume` carries over structural context from previous sessions.
+
+---
+
 ## The problem
 
 AI coding agents are language-aware but **framework-blind**.
@@ -39,7 +62,7 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 
 trace-mcp is not just a code intelligence server — it combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Other projects solve one of these; trace-mcp unifies all three.
 
-_Last updated: April 2026. Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nicovs-ai/trace-mcp/issues)._
+_Last updated: April 2026. Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues)._
 
 ### vs. token-efficient code exploration
 
@@ -64,21 +87,23 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 
 Tools that persist context across AI agent sessions — activity logs, knowledge graphs, memory compression.
 
-| Capability | trace-mcp | claude-mem | OpenMemory | engram | ConPort | memory-bank-mcp |
+| Capability | trace-mcp | MemPalace | claude-mem | OpenMemory | engram | ConPort |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | — | 45.7K | 3.9K | 2.3K | 761 | 892 |
-| Cross-session context carryover | ✅ `get_session_resume` | ✅ core focus | ✅ | ✅ | ✅ | ✅ |
-| Session journal (what was explored) | ✅ tool calls, files, dead ends | ✅ tool call capture | ❌ | partial | ❌ | ❌ |
-| Context compaction snapshot | ✅ ~200 tokens | ✅ AI-compressed | ✅ decay engine | unverified | ❌ | ❌ |
-| Code-graph-aware memory | ✅ tied to symbols & deps | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only |
-| Token usage analytics | ✅ per-tool cost breakdown | partial | ❌ | ❌ | ❌ | ❌ |
-| Optimization recommendations | ✅ waste detection, A/B savings | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Code intelligence included | ✅ 120+ tools | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Knowledge graph | ✅ code dependency graph | ❌ | ✅ temporal | ❌ | ✅ project-level | ❌ |
-| Works as standalone memory | ❌ code-focused | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped | ✅ general-purpose |
-| Written in | TypeScript | TypeScript | TS + Python | Go | Python | TypeScript |
+| **GitHub stars** | — | 43K | 45.7K | 3.9K | 2.3K | 761 |
+| Cross-session context carryover | ✅ `get_session_resume` + decisions | ✅ wings/rooms | ✅ core focus | ✅ | ✅ | ✅ |
+| Cross-session content search | ✅ `search_sessions` FTS5 | ✅ ChromaDB semantic | ❌ | ✅ | ❌ | ❌ |
+| Decision knowledge graph | ✅ temporal, code-linked | ✅ temporal (text-only) | ❌ | ✅ temporal | ❌ | ✅ project-level |
+| Code-graph-aware memory | ✅ decisions → symbols & files | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only |
+| Auto-extraction from sessions | ✅ pattern-based (0 LLM calls) | ✅ via hooks | ✅ AI-compressed | ❌ | ❌ | ❌ |
+| Wake-up context | ✅ ~300 tok (code-linked decisions) | ✅ ~170 tok (AAAK) | ❌ | ❌ | ❌ | ❌ |
+| Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
+| Service/federation scoping | ✅ decisions per service | ✅ wings per project | ❌ | ❌ | ❌ | ❌ |
+| Token usage analytics | ✅ per-tool cost breakdown | ❌ | partial | ❌ | ❌ | ❌ |
+| Code intelligence included | ✅ 130+ tools | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Works as standalone memory | ❌ code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
+| Written in | TypeScript | Python | TypeScript | TS + Python | Go | Python |
 
-> **Key difference:** General-purpose memory tools remember *what you said*. trace-mcp remembers *what you explored in the codebase* — which symbols you read, what searches found nothing, which files you edited — and ties it to the dependency graph. When you resume, the agent gets structural context, not just conversation history.
+> **Key difference:** MemPalace stores "decided to use PostgreSQL" as text in ChromaDB. trace-mcp stores the same decision **linked to `src/db/connection.ts::Pool#class`** — and when you run `get_change_impact` on that symbol, the decision shows up in `linked_decisions`. General-purpose memory tools remember *what you said*. trace-mcp remembers *what you said* AND *which code it's about*.
 
 ### vs. documentation generation & RAG
 
@@ -188,13 +213,15 @@ trace-mcp benchmark /path/to/project
 - **Component trees** — render hierarchy with props / emits / slots (Vue, React, Blade)
 - **Schema from migrations** — no DB connection needed
 - **Event chains** — Event → Listener → Job fan-out (Laravel, Django, NestJS, Celery, Socket.io)
-- **Change impact analysis** — reverse dependency traversal across languages
-- **Graph-aware task context** — describe a dev task → get the optimal code subgraph (execution paths, tests, types), adapted to bugfix/feature/refactor intent
+- **Change impact analysis** — reverse dependency traversal across languages, enriched with linked architectural decisions
+- **Decision memory** — mine sessions for decisions, link them to code symbols/files, query with temporal validity. Decisions auto-surface in `get_change_impact`, `plan_turn`, and `get_session_resume`
+- **Cross-session search** — "what did we discuss about auth?" — FTS5 search across all past session content
+- **Graph-aware task context** — describe a dev task → get the optimal code subgraph (execution paths, tests, types) + relevant past decisions, adapted to bugfix/feature/refactor intent
 - **CI/PR change impact reports** — automated blast radius, risk scoring, test gap detection, architecture violation checks on every PR
 - **Call graph & DI tree** — bidirectional call graphs with 4-tier resolution confidence, optional LSP enrichment for compiler-grade accuracy, NestJS dependency injection
 - **ORM model context** — relationships, schema, metadata for 7 ORMs
 - **Dead code & test gap detection** — find untested exports/symbols (with "unreached" vs "imported_not_called" classification), dead code, per-symbol test reach in impact analysis
-- **Multi-repo federation** — link graphs across separate repos via API contracts; cross-repo impact analysis
+- **Multi-service federation** — link graphs across services via API contracts; cross-service impact analysis; service-scoped decisions
 - **AI-powered analysis** — semantic search with zero-config local ONNX embeddings (no API keys needed), plus optional LLM summarization via Ollama/OpenAI
 
 ### Supported stack
@@ -303,6 +330,7 @@ All trace-mcp state is centralized:
   .config.json              # global config + per-project settings
   registry.json             # registered projects
   topology.db               # cross-service topology + federation graph
+  decisions.db              # decision memory + session content (cross-session knowledge graph)
   index/
     my-app-a1b2c3d4e5f6.db  # per-project databases (named by project + hash)
 ```
@@ -435,8 +463,16 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 └────────────────────┬─────────────────────┘
                      │
                      ▼
+┌──────────────────────────────────────────┐
+│  Decision Memory (decisions.db)         │
+│  decisions · session chunks · FTS5      │
+│  temporal validity · code linkage       │
+│  auto-mined from session logs           │
+└────────────────────┬─────────────────────┘
+                     │
+                     ▼
          MCP server (stdio or HTTP/SSE)
-         120+ tools · 2 resources
+         130+ tools · 2 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -452,54 +488,129 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 | Document | Description |
 |---|---|
 | [Supported frameworks](docs/supported-frameworks.md) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](docs/tools-reference.md) | All 120+ MCP tools with descriptions and usage examples |
+| [Tools reference](docs/tools-reference.md) | All 130+ MCP tools with descriptions and usage examples |
 | [Configuration](docs/configuration.md) | Config options, AI setup, environment variables, security settings |
 | [Architecture](docs/architecture.md) | How indexing works, plugin system, project structure, tech stack |
+| [Decision memory](docs/decision-memory.md) | Decision knowledge graph, session mining, cross-session search, wake-up context |
 | [Analytics](docs/analytics.md) | Session analytics, token savings tracking, optimization reports, benchmarks |
 | [System prompt routing](docs/tweakcc.md) | Optional tweakcc integration for maximum tool routing enforcement |
 | [Development](docs/development.md) | Building, testing, contributing, adding new plugins |
 
 ---
 
-## Multi-repo federation
+## Decision memory
 
-Real projects are not a single repository. trace-mcp can **link dependency graphs across separate repos** — if microservice A calls an API endpoint in microservice B, trace-mcp knows that changing that endpoint in B breaks clients in A.
+Every conversation with an AI agent produces decisions, discoveries, and preferences that disappear when the session ends. trace-mcp's **decision memory** captures them and links them to the code they're about.
+
+### How it works
+
+1. **Mine** — `mine_sessions` scans Claude Code / Claw Code JSONL logs and extracts decisions using pattern matching (no LLM calls). Detects architecture decisions, tech choices, bug root causes, preferences, tradeoffs, discoveries, and conventions.
+
+2. **Link** — each decision can be linked to a code symbol (`src/auth/provider.ts::AuthProvider#class`) or file. When you run `get_change_impact` on that symbol, the decision shows up automatically.
+
+3. **Search** — `query_decisions` supports FTS5 full-text search, filtering by type/service/symbol/file/tag, and temporal queries ("what was true in January?"). `search_sessions` searches raw conversation content across all past sessions.
+
+4. **Surface** — decisions auto-enrich code intelligence tools:
+   - `get_change_impact` → `linked_decisions` on the target + affected files
+   - `plan_turn` → `related_decisions` matched by task description + target files
+   - `get_session_resume` → `active_decisions` for project orientation
+
+### Decision memory MCP tools
+
+| Tool | What it does |
+|---|---|
+| `mine_sessions` | Extract decisions from session logs (pattern-based, 0 LLM calls) |
+| `add_decision` | Manually record a decision with code linkage + service scoping |
+| `query_decisions` | Query by type/service/symbol/file/tag + FTS5 search |
+| `invalidate_decision` | Mark a decision as superseded (preserved for history) |
+| `get_decision_timeline` | Chronological history of decisions for a symbol/file |
+| `get_decision_stats` | Knowledge graph overview |
+| `index_sessions` | Index session content for cross-session search |
+| `search_sessions` | FTS5 search: "what did we discuss about auth?" |
+| `get_wake_up` | Compact orientation (~300 tokens): project + decisions + stats |
+
+### Decision memory CLI
+
+```bash
+trace-mcp memory mine                           # mine sessions for decisions
+trace-mcp memory index                          # index session content for search
+trace-mcp memory search "GraphQL migration"     # search past conversations
+trace-mcp memory decisions --type tech_choice   # list decisions
+trace-mcp memory stats                          # knowledge graph overview
+trace-mcp memory timeline --file src/auth.ts    # decision history for a file
+```
+
+### Temporal validity
+
+Decisions have `valid_from` / `valid_until` timestamps. When a decision is superseded, `invalidate_decision` preserves it for historical queries while excluding it from active results:
+
+```
+query_decisions()                              → only active decisions
+query_decisions(as_of="2025-01-15")            → what was true on Jan 15
+query_decisions(include_invalidated=true)       → full history
+```
+
+### Service scoping
+
+In projects with multiple services (federations), decisions can be scoped:
+
+```
+add_decision(title="Use JWT", service_name="auth-api")
+query_decisions(service_name="auth-api")       → only auth-api decisions
+query_decisions()                              → all project decisions
+```
+
+> Details: [Decision memory](docs/decision-memory.md)
+
+---
+
+## Federation
+
+A **federation** (= service) is an individual microservice or service root within a project — frontend, backend, parser, etc. Each directory with its own root marker (`package.json`, `composer.json`, `go.mod`, etc.) is a federation. A project contains one or more federations; the project itself is not a federation.
+
+trace-mcp **links dependency graphs across federations** — if federation A calls an API endpoint in federation B, trace-mcp knows that changing that endpoint in B breaks clients in A. Federations can live inside the project directory or be added from outside.
 
 ### How it works
 
 Federation is **automatic by default**. Every time a project is indexed (`serve`, `serve-http`, or `index`), trace-mcp:
 
-1. **Registers** the project in the global federation (`~/.trace-mcp/topology.db`)
-2. **Discovers** services (Docker Compose, workspace detection)
+1. **Detects federations** within the project root:
+   - **Docker Compose** — parses `docker-compose.yml` / `compose.yml`
+   - **Flat workspace** — first-level subdirs with root markers (e.g. `project/frontend/` + `project/backend/`)
+   - **Grouped workspace** — two-level structure (e.g. `project/org/service-a/`)
+   - **Monolith fallback** — treats root as a single federation
+2. **Registers** each federation bound to the project in `~/.trace-mcp/topology.db`
 3. **Parses** API contracts — OpenAPI/Swagger, GraphQL SDL, Protobuf/gRPC
 4. **Scans** code for HTTP client calls (fetch, axios, Http::, requests, http.Get, gRPC stubs, GraphQL operations)
-5. **Links** discovered calls to known endpoints from previously indexed repos
-6. **Creates** cross-repo dependency edges
+5. **Links** discovered calls to known endpoints from other federations
+6. **Creates** cross-federation dependency edges
 
 ### Example
 
 ```bash
-# Index two separate repos
-cd ~/projects/user-service && trace-mcp add
-cd ~/projects/order-service && trace-mcp add
+# Index a project — federations are auto-detected
+cd ~/projects/my-app && trace-mcp add
+# → auto-detects: my-app/user-service (has openapi.yaml)
+# →               my-app/order-service (has axios.get('/api/users/{id}'))
+# → links order-service → user-service via /api/users/{id}
 
-# order-service has: axios.get('/api/users/{id}')
-# user-service has: openapi.yaml with GET /api/users/{id}
-# → trace-mcp automatically links them
+# Or add an external federation manually
+trace-mcp federation add --repo=~/projects/external-auth --project=~/projects/my-app
 
-# Check cross-repo impact
+# Check cross-federation impact
 trace-mcp federation impact --endpoint=/api/users
-# → "GET /api/users/{id} is called by 2 client(s) in 1 repo(s)"
+# → "GET /api/users/{id} is called by 2 client(s) in 1 federation(s)"
 #   [order-service] src/services/user-client.ts:42 (axios, confidence: 85%)
 ```
 
 ### Federation CLI
 
 ```bash
-trace-mcp federation add --repo=../service-b [--contract=openapi.yaml]
+# Add a federation (inside or outside project dir)
+trace-mcp federation add --repo=../service-b --project=. [--contract=openapi.yaml] [--name=my-service]
 trace-mcp federation remove <name-or-path>
-trace-mcp federation list [--json]
-trace-mcp federation sync           # re-scan all repos
+trace-mcp federation list [--project=.] [--json]
+trace-mcp federation sync           # re-scan all federations
 trace-mcp federation impact --endpoint=/api/users [--method=GET] [--service=user-svc]
 ```
 
@@ -507,11 +618,11 @@ trace-mcp federation impact --endpoint=/api/users [--method=GET] [--service=user
 
 | Tool | What it does |
 |---|---|
-| `get_federation_graph` | All federated repos, their connections, and stats |
-| `get_federation_impact` | Cross-repo impact: what breaks if endpoint X changes (resolves to symbol level) |
-| `get_federation_clients` | Find all client calls across repos that call a specific endpoint |
-| `federation_add_repo` | Add a repo to the federation via MCP |
-| `federation_sync` | Re-scan all federated repos |
+| `get_federation_graph` | All federations, their connections, and stats |
+| `get_federation_impact` | Cross-federation impact: what breaks if endpoint X changes (resolves to symbol level) |
+| `get_federation_clients` | Find all client calls across federations that call a specific endpoint |
+| `federation_add_repo` | Add a federation via MCP (bound to current project, or specify `project`) |
+| `federation_sync` | Re-scan all federations |
 
 > Federation builds on top of the topology system. See [Configuration](docs/configuration.md#topology--federation) for options.
 

@@ -35,6 +35,10 @@ Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp
 | List files in a directory | `get_outline` or `search` | ~~Bash ls/find~~ ~~Glob~~ |
 | Find where something is defined | `search` | ~~Grep~~ |
 | Understand project structure | `get_project_map` | ~~Bash find~~ |
+| Move a symbol between files | `apply_move` { symbol_id, target_file } | ~~manual cut/paste + Edit~~ |
+| Move/rename a file | `apply_move` { source_file, new_path } | ~~manual mv + Edit imports~~ |
+| Change function signature | `change_signature` { symbol_id, changes } | ~~manual Edit across files~~ |
+| Preview any refactoring | `plan_refactoring` { type, ... } | ~~guessing~~ |
 
 ### Token optimization — MANDATORY
 
@@ -130,8 +134,27 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 
 ### Renaming a symbol
 1. `check_rename` { symbol_id, target_name } — collision detection FIRST
-2. `apply_rename` { symbol_id, new_name } — renames across ALL files (definition + imports)
-3. NEVER rename manually via Edit with replace_all — it misses import sites and cross-file references
+2. `apply_rename` { symbol_id, new_name } — renames across ALL files (definition + imports). Also scans non-code files (YAML/JSON/env) for mentions.
+3. Review `non_code_suggestions` in the result — apply manually if relevant
+4. NEVER rename manually via Edit with replace_all — it misses import sites and cross-file references
+
+### Moving a symbol or file
+1. `plan_refactoring` { type: "move", symbol_id, target_file } — preview all edits FIRST
+2. Review the edit plan: import rewrites, barrel updates, sibling dependency imports
+3. `apply_move` { symbol_id, target_file, dry_run: false } — apply the move
+4. Or for file moves: `apply_move` { source_file, new_path, dry_run: false } — moves file + rewrites all import paths
+5. `register_edit` for all modified files after the move
+
+### Changing a function signature
+1. `plan_refactoring` { type: "signature", symbol_id, changes } — preview all edits FIRST
+2. Review: definition changes + all call site updates
+3. `change_signature` { symbol_id, changes, dry_run: false } — apply changes
+4. Changes: `add_param`, `remove_param`, `rename_param`, `reorder_params`
+5. Params with `default_value` don't require call site changes; params without get `undefined` placeholder
+
+### Previewing any refactoring
+- `plan_refactoring` { type: "rename"|"move"|"extract"|"signature", ... } — returns all {old_text, new_text} pairs without applying
+- Always use this before destructive refactoring to review the blast radius
 
 ### Bulk mechanical changes (add async/await, update patterns, fix imports across many files)
 1. `apply_codemod` { pattern, replacement, file_pattern, dry_run: true } — preview changes first (dry_run is default)

@@ -314,16 +314,18 @@ The `get_call_graph` tool reports a `resolution_tiers` summary showing the distr
 
 ## Topology & federation
 
-trace-mcp includes a **topology layer** for cross-service analysis and a **federation layer** for linking dependency graphs across separate repositories.
+trace-mcp includes a **topology layer** for cross-service analysis and a **federation layer** for linking dependency graphs across federations within a project.
 
-Both are **enabled by default** — every indexed project is automatically registered in the federation, its contracts parsed, and client calls scanned.
+A **federation** (= service) is an individual microservice or service root within a project — frontend, backend, parser, etc. Each directory with its own root marker (`package.json`, `composer.json`, `go.mod`, etc.) is a federation. A project contains one or more federations; the project itself is not a federation. Federations can live inside the project directory (e.g. `project/frontend/`) or outside it (added manually via `federation add`).
+
+Both topology and federation are **enabled by default** — every indexed project auto-detects its federations.
 
 ```jsonc
 {
   "topology": {
     "enabled": true,           // default: true — enable topology + federation tools
-    "auto_federation": true,   // default: true — auto-register projects on indexing
-    "auto_detect": true,       // default: true — auto-detect services from Docker Compose
+    "auto_federation": true,   // default: true — auto-detect and register federations on indexing
+    "auto_detect": true,       // default: true — auto-detect from Docker Compose
     "repos": [],               // additional repo paths to include in topology
     "contract_globs": []       // explicit contract file patterns (e.g. ["api/openapi.yaml"])
   }
@@ -333,8 +335,8 @@ Both are **enabled by default** — every indexed project is automatically regis
 | Option | Default | Description |
 |---|---|---|
 | `topology.enabled` | `true` | Enable topology and federation tools |
-| `topology.auto_federation` | `true` | Auto-register project in federation on every index |
-| `topology.auto_detect` | `true` | Auto-detect services from Docker Compose / workspace manifests |
+| `topology.auto_federation` | `true` | Auto-detect and register federations on every index |
+| `topology.auto_detect` | `true` | Auto-detect federations from Docker Compose / workspace structure |
 | `topology.repos` | `[]` | Additional repo paths to include in the topology graph |
 | `topology.contract_globs` | — | Explicit paths to API contract files (relative to project root) |
 
@@ -342,12 +344,16 @@ Both are **enabled by default** — every indexed project is automatically regis
 
 When a project is indexed (via `serve`, `serve-http`, or `index`):
 
-1. Project is registered in `~/.trace-mcp/topology.db`
-2. Services are detected (Docker Compose, workspace fallback)
-3. API contracts are parsed (OpenAPI, GraphQL SDL, Protobuf)
-4. Code is scanned for HTTP/gRPC client calls (fetch, axios, Http::, requests, etc.)
-5. Client calls are matched to known endpoints from other federated repos
-6. Cross-service edges are created
+1. **Federations are detected** within the project root using these strategies (in order):
+   - **Docker Compose** — parses `docker-compose.yml` / `compose.yml` for service definitions
+   - **Flat workspace** — scans first-level subdirectories for root markers (`package.json`, `composer.json`, `go.mod`, etc.). Requires ≥2 found (e.g. `project/frontend/` + `project/backend/`)
+   - **Grouped workspace** — scans two levels deep (`root/group/service/`). Requires ≥2 found (e.g. `project/org/service-a/` + `project/org/service-b/`)
+   - **Monolith fallback** — treats the project root as a single federation
+2. Each detected federation is **registered** and bound to the project in `~/.trace-mcp/topology.db`
+3. **API contracts** are parsed (OpenAPI, GraphQL SDL, Protobuf) for each federation
+4. Code is **scanned** for HTTP/gRPC client calls (fetch, axios, Http::, requests, etc.)
+5. Client calls are **matched** to known endpoints from other federations
+6. **Cross-federation edges** are created
 
 This is non-blocking — the server starts immediately, and federation syncs in the background.
 
@@ -366,9 +372,10 @@ To disable everything:
 ### Federation CLI
 
 ```bash
-trace-mcp federation add --repo=../service-b [--contract=openapi.yaml] [--name=my-service]
+# Add a federation (can be inside or outside project dir)
+trace-mcp federation add --repo=../service-b --project=. [--contract=openapi.yaml] [--name=my-service]
 trace-mcp federation remove <name-or-path>
-trace-mcp federation list [--json]
+trace-mcp federation list [--project=.] [--json]
 trace-mcp federation sync
 trace-mcp federation impact --endpoint=/api/users [--method=GET] [--service=user-svc]
 ```
@@ -425,15 +432,18 @@ trace-mcp serve-http           # Start HTTP/SSE server (default: 127.0.0.1:3741)
 trace-mcp index <dir>          # Index a project directory
   -f, --force                  # Force reindex all files
 
-# Federation
-trace-mcp federation add       # Add a repo to the federation
-  --repo <path>                # Repository path (required)
+# Federation (= services bound to projects)
+trace-mcp federation add       # Add a federation to a project
+  --repo <path>                # Federation/service path (required)
+  --project <path>             # Project this federation belongs to (required)
   --contract <paths...>        # Explicit contract file paths
   --name <name>                # Display name
-trace-mcp federation remove <name-or-path>   # Remove from federation
-trace-mcp federation list [--json]           # List all federated repos
-trace-mcp federation sync                    # Re-scan all repos
-trace-mcp federation impact                  # Cross-repo impact analysis
+trace-mcp federation remove <name-or-path>   # Remove a federation
+trace-mcp federation list                    # List federations
+  --project <path>             # Filter to a specific project
+  --json                       # Output as JSON
+trace-mcp federation sync                    # Re-scan all federations
+trace-mcp federation impact                  # Cross-federation impact analysis
   --endpoint <path>            # Endpoint path pattern
   --method <method>            # HTTP method filter
   --service <name>             # Service name filter

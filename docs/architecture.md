@@ -42,9 +42,9 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 ┌──────────────────────────────────────────┐
 │  Federation (auto, post-index)          │
 │  Topology DB (~/.trace-mcp/topology.db) │
-│  Services · Contracts · Endpoints       │
-│  Client calls → endpoint matching       │
-│  Cross-repo impact edges                │
+│  Auto-detect services per project       │
+│  Contracts · Endpoints · Client calls   │
+│  Cross-service impact edges             │
 └──────────────────────────────────────────┘
 ```
 
@@ -71,12 +71,20 @@ All state is centralized in `~/.trace-mcp/`:
 Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself.
 
 The **topology database** (`topology.db`) is shared across all projects. It stores:
-- **Services** — detected from Docker Compose or registered manually
+- **Federations** (= services) — bound to projects, auto-detected or manually added
 - **API contracts** — parsed OpenAPI, GraphQL SDL, Protobuf specs
 - **Endpoints** — normalized API endpoints extracted from contracts
 - **Client calls** — HTTP/gRPC/GraphQL calls discovered in code
-- **Cross-service edges** — links between client calls and endpoints
-- **Federated repos** — repos registered for cross-repo analysis
+- **Cross-federation edges** — links between client calls and endpoints
+
+Each federation is bound to a project via `project_root`. A project can have multiple federations (frontend, backend, etc.), and the same federation can belong to multiple projects.
+
+The **decision memory database** (`decisions.db`) is also shared across all projects. It stores:
+- **Decisions** — architectural decisions, tech choices, bug root causes, preferences, etc., each with temporal validity (`valid_from`/`valid_until`) and optional code linkage (`symbol_id`, `file_path`, `service_name`)
+- **Session chunks** — chunked conversation content from AI session logs, FTS5-indexed for cross-session search
+- **Mined sessions tracker** — prevents re-processing already-mined session files
+
+Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_session_resume`) via the enrichment layer in `src/memory/enrichment.ts`.
 
 ---
 
@@ -171,13 +179,13 @@ Three module resolvers handle cross-file imports:
 src/
 ├── ai/                     # Embeddings, reranker, summarization, vector store, inference caching
 ├── db/                     # SQLite schema, store, FTS5
-├── federation/             # Multi-repo graph federation
-│   ├── manager.ts          #   Add/remove/sync repos, cross-repo impact analysis
+├── federation/             # Federation layer (federations = services, bound to projects)
+│   ├── manager.ts          #   Add/remove/sync federations, auto-federate projects, cross-federation impact
 │   └── scanner.ts          #   HTTP/gRPC/GraphQL client call scanner
 ├── topology/               # Cross-service topology layer
-│   ├── topology-db.ts      #   Topology + federation SQLite store
+│   ├── topology-db.ts      #   Topology + federation SQLite store (federations bound to projects via project_root)
 │   ├── contract-parser.ts  #   OpenAPI, GraphQL SDL, Protobuf parsers
-│   └── service-detector.ts #   Service discovery (Docker Compose, workspace)
+│   └── service-detector.ts #   Federation discovery (Docker Compose, flat/grouped workspace, monolith fallback)
 ├── indexer/
 │   ├── plugins/
 │   │   ├── language/       # 68 languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
@@ -199,6 +207,13 @@ src/
 │   ├── pipeline.ts         # Two-pass indexing engine
 │   ├── watcher.ts          # File change watcher
 │   └── monorepo.ts         # Monorepo workspace detection
+├── memory/                 # Decision memory (cross-session knowledge graph)
+│   ├── decision-store.ts   #   SQLite store: decisions + session chunks + FTS5
+│   ├── conversation-miner.ts # Pattern-based decision extraction from JSONL logs
+│   ├── session-indexer.ts  #   Chunked session content indexer for search
+│   ├── wake-up.ts          #   L0/L1/L2 wake-up context assembler
+│   ├── enrichment.ts       #   Decision injection into code intelligence results
+│   └── index.ts            #   Barrel export
 ├── analytics/              # Session analytics engine
 │   ├── log-parser.ts       #   JSONL parser (Claude Code + Claw Code)
 │   ├── analytics-store.ts  #   SQLite storage for parsed sessions
@@ -220,5 +235,5 @@ src/
 ├── logger.ts               # Pino logger setup
 ├── cli.ts                  # Commander CLI (serve, serve-http, index, federation, analytics)
 ├── cli-analytics.ts        # Analytics CLI subcommands (sync, report, optimize, benchmark, coverage, savings, trends)
-└── cli-federation.ts       # Federation CLI subcommands
+└── cli-federation.ts       # Federation CLI subcommands (add --project, list --project, etc.)
 ```
