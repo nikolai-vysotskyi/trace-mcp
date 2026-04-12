@@ -22,6 +22,7 @@ import { FileWatcher } from './indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from './ai/index.js';
 import { SummarizationPipeline } from './ai/summarization-pipeline.js';
 import { ProgressState, writeServerPid, clearServerPid } from './progress.js';
+import { detectCoverage } from './analytics/tech-detector.js';
 import http from 'node:http';
 import { initCommand } from './cli/init.js';
 import { upgradeCommand } from './cli/upgrade.js';
@@ -31,6 +32,7 @@ import { ciReportCommand } from './cli/ci.js';
 import { checkCommand } from './cli/check.js';
 import { bundlesCommand } from './cli/bundles.js';
 import { federationCommand } from './cli/federation.js';
+import { memoryCommand } from './cli/memory.js';
 import { analyticsCommand } from './cli/analytics.js';
 import { removeCommand } from './cli/remove.js';
 import { statusCommand } from './cli/status.js';
@@ -67,8 +69,9 @@ function resolveDbPath(projectRoot: string): string {
 }
 
 /**
- * Auto-federation: after indexing, register the project in federation,
- * scan for contracts and client calls, and link to known endpoints.
+ * Auto-federation: after indexing, detect services within the project
+ * and register each as a federation member bound to this project.
+ * The project itself is NOT a federation — federations are its services.
  * Runs when topology is enabled (default: true) and auto_federation is true (default: true).
  */
 function runFederationAutoSync(projectRoot: string, config: TraceMcpConfig): void {
@@ -80,11 +83,11 @@ function runFederationAutoSync(projectRoot: string, config: TraceMcpConfig): voi
     const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
     const manager = new FederationManager(topoStore);
 
-    const result = manager.add(projectRoot, {
+    const { services } = manager.autoFederateProject(projectRoot, {
       contractPaths: config.topology?.contract_globs,
     });
 
-    // Also sync any other previously federated repos to re-link
+    // Also re-link any other previously federated repos
     const fedRepos = topoStore.getAllFederatedRepos();
     if (fedRepos.length > 1) {
       const linked = topoStore.linkClientCallsToEndpoints();
@@ -93,12 +96,14 @@ function runFederationAutoSync(projectRoot: string, config: TraceMcpConfig): voi
       }
     }
 
+    const totalEndpoints = services.reduce((sum, s) => sum + s.endpoints, 0);
+    const totalClientCalls = services.reduce((sum, s) => sum + s.clientCalls, 0);
     logger.info({
-      repo: result.name,
-      services: result.services,
-      endpoints: result.endpoints,
-      clientCalls: result.clientCalls,
-      linkedCalls: result.linkedCalls,
+      project: projectRoot,
+      federations: services.length,
+      serviceNames: services.map((s) => s.name),
+      endpoints: totalEndpoints,
+      clientCalls: totalClientCalls,
     }, 'Federation auto-sync completed');
 
     topoStore.close();
@@ -856,6 +861,25 @@ program
         return;
       }
 
+      // REST API: technology coverage analysis for a project
+      if (req.method === 'GET' && url.pathname === '/api/projects/coverage') {
+        const projectRoot = url.searchParams.get('project');
+        if (!projectRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
+          return;
+        }
+        try {
+          const report = detectCoverage(projectRoot);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(report));
+        } catch (e: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e?.message ?? 'Failed to detect coverage' }));
+        }
+        return;
+      }
+
       // REST API: list files with sort options (for app sidebar)
       if (req.method === 'GET' && url.pathname === '/api/projects/files') {
         const projectRoot = url.searchParams.get('project');
@@ -995,7 +1019,8 @@ program
 
           try {
             const manager = new FederationManager(topoStore);
-            const result = manager.list();
+            const projectRoot = url.searchParams.get('project') ?? undefined;
+            const result = manager.list(projectRoot);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ repos: result.repos }));
           } finally {
@@ -1004,6 +1029,89 @@ program
         } catch (e: any) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e?.message ?? 'Federation query failed' }));
+        }
+        return;
+      }
+
+      // REST API: add a federation to a project
+      if (req.method === 'POST' && url.pathname === '/api/projects/federation') {
+        let body = '';
+        req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+        req.on('end', () => {
+          try {
+            const { repoPath, project } = JSON.parse(body) as { repoPath: string; project: string };
+            if (!repoPath || !project) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'repoPath and project are required' }));
+              return;
+            }
+
+            let topoStore: InstanceType<typeof TopologyStore> | undefined;
+            try {
+              ensureGlobalDirs();
+              topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+            } catch (e: any) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: e?.message ?? 'Failed to open topology DB' }));
+              return;
+            }
+
+            try {
+              const manager = new FederationManager(topoStore);
+              const result = manager.add(repoPath, project);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(result));
+            } catch (e: any) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: e?.message ?? 'Failed to add federation' }));
+            } finally {
+              topoStore?.close();
+            }
+          } catch (e: any) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+          }
+        });
+        return;
+      }
+
+      // REST API: remove a federation
+      if (req.method === 'DELETE' && url.pathname === '/api/projects/federation') {
+        const name = url.searchParams.get('name');
+        if (!name) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'name parameter is required' }));
+          return;
+        }
+
+        try {
+          let topoStore: InstanceType<typeof TopologyStore> | undefined;
+          try {
+            if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+          } catch { /* federation is optional */ }
+
+          if (!topoStore) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'No federation data' }));
+            return;
+          }
+
+          try {
+            const manager = new FederationManager(topoStore);
+            const removed = manager.remove(name);
+            if (removed) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: true }));
+            } else {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: `Federation '${name}' not found` }));
+            }
+          } finally {
+            topoStore.close();
+          }
+        } catch (e: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e?.message ?? 'Federation delete failed' }));
         }
         return;
       }
@@ -1370,6 +1478,7 @@ program.addCommand(ciReportCommand);
 program.addCommand(checkCommand);
 program.addCommand(bundlesCommand);
 program.addCommand(federationCommand);
+program.addCommand(memoryCommand);
 program.addCommand(analyticsCommand);
 program.addCommand(statusCommand);
 program.addCommand(visualizeCommand);

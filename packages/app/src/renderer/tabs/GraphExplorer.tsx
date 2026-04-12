@@ -22,7 +22,7 @@ export const DEFAULT_GRAPH_SETTINGS: GraphSettings = {
   granularity: 'file',
   layout: 'force',
   depth: 2,
-  highlightDepth: 2,
+  highlightDepth: 1,
   hideIsolated: true,
   symbolKinds: '',
   maxNodes: '',
@@ -53,14 +53,15 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
   const setMaxNodes = (v: string) => onSettingsChange({ maxNodes: v });
   const isScopedView = scope.trim() !== '' && scope.trim() !== 'project';
 
-  // Federation repos for quick scope switching
+  // Federation repos for quick scope switching — filtered to this project
   const [fedRepos, setFedRepos] = useState<Array<{ name: string; repoRoot: string; services: number; endpoints: number }>>([]);
   useEffect(() => {
-    fetch(`${BASE}/api/projects/federation`)
+    const params = new URLSearchParams({ project: root });
+    fetch(`${BASE}/api/projects/federation?${params}`)
       .then((r) => r.ok ? r.json() : { repos: [] })
       .then((data) => setFedRepos(data.repos ?? []))
       .catch(() => {});
-  }, []);
+  }, [root]);
 
   // Refs for debounced values — loadGraph reads these instead of raw state
   // so it doesn't re-create on every keystroke
@@ -181,6 +182,8 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
     // Small delay so the graph JS initializes (d3 simulation, event listeners)
     setTimeout(() => {
       iframeReady.current = true;
+      // Sync highlight depth — the baked-in value may differ from current state
+      iframeRef.current?.contentWindow?.postMessage({ type: 'setHighlightDepth', depth: highlightDepthRef.current }, '*');
       if (pendingFocus.current) {
         sendFocusToIframe(pendingFocus.current);
         pendingFocus.current = null;
@@ -261,14 +264,24 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
         />
       </div>
 
-      {/* Federation quick-scope chips */}
+      {/* Service quick-scope chips */}
       {fedRepos.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap shrink-0">
-          <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Federation:</span>
+          <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Services:</span>
+          <button
+            onClick={() => setScope('project')}
+            className="text-[10px] px-1.5 py-0.5 rounded-full cursor-pointer transition-colors"
+            style={{
+              background: scope === 'project' || scope === '' ? 'var(--accent, #007aff)' : 'var(--bg-secondary)',
+              color: scope === 'project' || scope === '' ? '#fff' : 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+            }}>
+            All
+          </button>
           {fedRepos.map((repo) => (
             <button key={repo.name}
               onClick={() => setScope(`federation:${repo.name}`)}
-              title={`${repo.repoRoot}\n${repo.services} services, ${repo.endpoints} endpoints`}
+              title={`${repo.repoRoot}\n${repo.endpoints} endpoints`}
               className="text-[10px] px-1.5 py-0.5 rounded-full cursor-pointer transition-colors"
               style={{
                 background: scope === `federation:${repo.name}` ? 'var(--accent, #007aff)' : 'var(--bg-secondary)',
