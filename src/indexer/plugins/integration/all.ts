@@ -24,6 +24,7 @@ import { MongoosePlugin } from './orm/mongoose/index.js';
 import { SQLAlchemyPlugin } from './orm/sqlalchemy/index.js';
 import { DrizzlePlugin } from './orm/drizzle/index.js';
 import { RawSqlPlugin } from './orm/raw-sql/index.js';
+import { AsyncDbPlugin } from './orm/async-db/index.js';
 
 // --- view ---
 import { ReactPlugin } from './view/react/index.js';
@@ -58,6 +59,7 @@ import { SocketIoPlugin } from './realtime/socketio/index.js';
 
 // --- testing ---
 import { TestingPlugin } from './testing/index.js';
+import { PytestPlugin } from './testing/pytest/index.js';
 
 // --- tooling ---
 import { CeleryPlugin } from './tooling/celery/index.js';
@@ -97,6 +99,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new SQLAlchemyPlugin(),
     new DrizzlePlugin(),
     new RawSqlPlugin(),
+    new AsyncDbPlugin(),
     // view
     new ReactPlugin(),
     new VueFrameworkPlugin(),
@@ -125,6 +128,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new SocketIoPlugin(),
     // testing
     new TestingPlugin(),
+    new PytestPlugin(),
     // tooling
     new CeleryPlugin(),
     new N8nPlugin(),
