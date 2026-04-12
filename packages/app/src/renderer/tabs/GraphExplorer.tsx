@@ -94,24 +94,32 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
     if (curSymbolKinds.trim()) params.set('symbolKinds', curSymbolKinds.trim());
     if (curMaxNodes.trim()) params.set(granularity === 'symbol' ? 'maxNodes' : 'maxFiles', curMaxNodes.trim());
 
-    // First fetch JSON to get stats
-    try {
-      const jsonRes = await fetch(`${BASE}/api/projects/graph?${params}`);
-      if (!jsonRes.ok) throw new Error((await jsonRes.json()).error || jsonRes.statusText);
-      const data = await jsonRes.json();
-      setStats({ nodes: data.nodes.length, edges: data.edges.length, communities: data.communities.length });
-    } catch (e: any) {
-      setError(e.message);
-      setLoading(false);
-      return;
-    }
-
-    // Load HTML in iframe — embedded mode hides internal controls
+    // Single request: fetch HTML and extract stats from response headers
+    // (avoids running buildGraphData twice — was the #1 server-side bottleneck)
     const theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     params.set('embedded', 'true');
     params.set('theme', theme);
-    iframeReady.current = false;  // mark not ready until new page loads
-    setGraphUrl(`${BASE}/api/projects/graph/html?${params}`);
+
+    try {
+      const htmlRes = await fetch(`${BASE}/api/projects/graph/html?${params}`);
+      if (!htmlRes.ok) {
+        const errText = await htmlRes.text();
+        throw new Error(errText || htmlRes.statusText);
+      }
+      // Extract stats from headers
+      const nNodes = parseInt(htmlRes.headers.get('X-Graph-Nodes') || '0', 10);
+      const nEdges = parseInt(htmlRes.headers.get('X-Graph-Edges') || '0', 10);
+      const nCommunities = parseInt(htmlRes.headers.get('X-Graph-Communities') || '0', 10);
+      setStats({ nodes: nNodes, edges: nEdges, communities: nCommunities });
+
+      // Create blob URL from HTML response to load into iframe
+      const blob = new Blob([await htmlRes.arrayBuffer()], { type: 'text/html' });
+      const blobUrl = URL.createObjectURL(blob);
+      iframeReady.current = false;
+      setGraphUrl(blobUrl);
+    } catch (e: any) {
+      setError(e.message);
+    }
     setLoading(false);
   }, [root, depth, granularity, layout, hideIsolated]);
 

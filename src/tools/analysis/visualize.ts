@@ -346,14 +346,18 @@ function buildFileGraph(
     : rawEdges;
 
   // 3. Expand frontier by depth (at symbol/node level)
+  //    Collect ALL edges during expansion so we don't re-query them in step 6
   const visitedNodes = new Set(allSeedNodeIds);
   let frontier = new Set(allSeedNodeIds);
+  const allCollectedEdges: typeof filteredEdges = [...filteredEdges];
 
   for (let d = 0; d < depth && frontier.size > 0; d++) {
     const nextFrontier = new Set<number>();
     const batchEdges = d === 0
       ? filteredEdges
       : store.getEdgesForNodesBatch([...frontier]);
+
+    if (d > 0) allCollectedEdges.push(...batchEdges);
 
     for (const edge of batchEdges) {
       const otherNode = edge.pivot_node_id === edge.source_node_id
@@ -366,6 +370,13 @@ function buildFileGraph(
       }
     }
     frontier = nextFrontier;
+  }
+
+  // Fetch edges for nodes discovered during expansion (not yet covered)
+  const uncoveredNodes = [...visitedNodes].filter((n) => !allSeedNodeIds.includes(n));
+  if (uncoveredNodes.length > 0) {
+    const extraEdges = store.getEdgesForNodesBatch(uncoveredNodes);
+    allCollectedEdges.push(...extraEdges);
   }
 
   // 4. Resolve all expanded nodes back to files
@@ -414,10 +425,10 @@ function buildFileGraph(
   }
 
   // 6. Collapse symbol→symbol edges into file→file edges
-  const allEdgesForGraph = store.getEdgesForNodesBatch([...visitedNodes]);
+  //    Reuse edges collected during expansion — no duplicate query
   const edgeMap = new Map<string, VizEdge>();
 
-  for (const edge of allEdgesForGraph) {
+  for (const edge of allCollectedEdges) {
     if (edgeFilter && !edgeFilter.has(edge.edge_type_name)) continue;
 
     const srcFileId = nodeIdToFileId.get(edge.source_node_id);
@@ -609,12 +620,17 @@ function buildSymbolGraph(
   }
 
   // -- Build viz nodes --
+  // Batch-load all files at once instead of N+1 getFileById() calls
+  const allFileIds = new Set<number>();
+  for (const sym of symbolsById.values()) allFileIds.add(sym.file_id);
+  const filesById = store.getFilesByIds([...allFileIds]);
+
   const vizNodes: VizNode[] = [];
   const fileIdToVizIds = new Map<number, string[]>();
   const symbolIdToVizId = new Map<number, string>(); // symbol DB id → symbol_id string
 
   for (const sym of symbolsById.values()) {
-    const file = store.getFileById(sym.file_id);
+    const file = filesById.get(sym.file_id);
     vizNodes.push({
       id: sym.symbol_id,
       label: sym.name,
