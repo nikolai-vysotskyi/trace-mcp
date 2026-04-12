@@ -41,6 +41,7 @@
   "files": [
     "dist",
     "hooks",
+    "scripts",
     "LICENSE",
     "README.md"
   ],
