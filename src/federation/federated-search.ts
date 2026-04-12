@@ -35,13 +35,19 @@ export function federatedSearch(
   query: string,
   filters?: { kind?: string; language?: string; filePattern?: string },
   limit = 20,
+  excludeRoot?: string,
 ): FederatedSearchResult {
   const repos = topoStore.getAllFederatedRepos();
   const allItems: FederatedSearchItem[] = [];
   let reposSearched = 0;
 
+  // Normalize excludeRoot for comparison (strip trailing slash)
+  const normalizedExclude = excludeRoot?.replace(/\/+$/, '');
+
   for (const repo of repos) {
     if (!repo.db_path || !fs.existsSync(repo.db_path)) continue;
+    // Skip the local repo — its results are already in the primary search
+    if (normalizedExclude && repo.repo_root.replace(/\/+$/, '') === normalizedExclude) continue;
 
     let db: Database.Database | null = null;
     try {

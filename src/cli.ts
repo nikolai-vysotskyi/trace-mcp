@@ -39,7 +39,8 @@ import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { daemonCommand } from './cli/daemon.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH, GLOBAL_CONFIG_PATH, stripJsonComments, DAEMON_LOG_PATH } from './global.js';
-import { getProject, listProjects, registerProject } from './registry.js';
+import { getProject, listProjects } from './registry.js';
+import { setupProject } from './project-setup.js';
 import { findProjectRoot, detectGitWorktree } from './project-root.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { FederationManager } from './federation/manager.js';
@@ -156,8 +157,7 @@ program
       try {
         const root = findProjectRoot(indexRoot);
         if (root === path.resolve(indexRoot)) {
-          ensureGlobalDirs();
-          registerProject(root);
+          setupProject(root);
           logger.info({ root }, 'Auto-registered project');
         } else {
           logger.debug({ cwd: indexRoot, resolvedRoot: root }, 'Skipped auto-register: project root is above CWD');
@@ -722,6 +722,7 @@ program
           const symbolKinds = url.searchParams.get('symbolKinds')?.split(',').filter(Boolean);
           const maxFiles = url.searchParams.has('maxFiles') ? parseInt(url.searchParams.get('maxFiles')!, 10) : undefined;
           const maxNodes = url.searchParams.has('maxNodes') ? parseInt(url.searchParams.get('maxNodes')!, 10) : undefined;
+          const highlightDepth = url.searchParams.has('highlightDepth') ? parseInt(url.searchParams.get('highlightDepth')!, 10) : undefined;
 
           // Open topoStore for federation support (best-effort)
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
@@ -731,9 +732,9 @@ program
 
           try {
             const { nodes, edges, communities } = buildGraphData(managed.store, {
-              scope, depth, granularity, layout, hideIsolated, symbolKinds, maxFiles, maxNodes, topoStore, projectRoot,
+              scope, depth, granularity, layout, hideIsolated, symbolKinds, maxFiles, maxNodes, topoStore, projectRoot, highlightDepth,
             });
-            let html = generateHtml(nodes, edges, communities, layout);
+            let html = generateHtml(nodes, edges, communities, layout, { highlightDepth });
 
             // Embedded mode: adapt styling for iframe in the menu bar app
             const embedded = url.searchParams.get('embedded') === 'true';
@@ -833,6 +834,158 @@ program
         } catch (e: any) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e?.message ?? 'Failed to get stats' }));
+        }
+        return;
+      }
+
+      // REST API: list files with sort options (for app sidebar)
+      if (req.method === 'GET' && url.pathname === '/api/projects/files') {
+        const projectRoot = url.searchParams.get('project');
+        const sortBy = url.searchParams.get('sort') ?? 'symbols';
+        const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '30', 10), 100);
+        const scope = url.searchParams.get('scope')?.trim() || '';
+        if (!projectRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
+          return;
+        }
+        const managed = projectManager.getProject(projectRoot);
+        if (!managed) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+          return;
+        }
+        try {
+          const db = managed.store.db;
+          let sql: string;
+
+          // Scope filter: match files by path prefix or glob-like pattern
+          let SCOPE_FILTER = '';
+          const scopeParams: string[] = [];
+          if (scope) {
+            if (scope.includes('*')) {
+              // Convert glob to LIKE: src/*.ts → src/%.ts
+              SCOPE_FILTER = `AND f.path LIKE ?`;
+              scopeParams.push(scope.replace(/\*/g, '%'));
+            } else if (scope.endsWith('/')) {
+              SCOPE_FILTER = `AND f.path LIKE ?`;
+              scopeParams.push(`%${scope}%`);
+            } else {
+              // Could be a directory prefix or exact file
+              SCOPE_FILTER = `AND (f.path LIKE ? OR f.path LIKE ?)`;
+              scopeParams.push(`%/${scope}%`, `%${scope}/%`);
+            }
+          }
+
+          // Exclude non-code files from all queries
+          const CODE_FILTER = `
+              AND f.path NOT LIKE '%.md'
+              AND f.path NOT LIKE '%.json'
+              AND f.path NOT LIKE '%.yaml'
+              AND f.path NOT LIKE '%.yml'
+              AND f.path NOT LIKE '%.toml'
+              AND f.path NOT LIKE '%.txt'
+              AND f.path NOT LIKE '%.css'
+              AND f.path NOT LIKE '%.html'
+              AND f.path NOT LIKE '%.svg'
+              AND f.path NOT LIKE '%.lock'
+              AND f.path NOT LIKE '%.env%'
+              AND f.path NOT LIKE '%package.json'
+              AND f.path NOT LIKE '%tsconfig%'
+          `;
+
+          if (sortBy === 'isolated') {
+            sql = `
+              SELECT f.path,
+                     COUNT(DISTINCT s.id) as symbols,
+                     0 as edges
+              FROM files f
+              JOIN symbols s ON s.file_id = f.id
+              LEFT JOIN nodes n ON n.ref_id = s.id AND n.node_type = 'symbol'
+              LEFT JOIN edges e_out ON e_out.source_node_id = n.id
+              LEFT JOIN edges e_in ON e_in.target_node_id = n.id
+              WHERE e_out.id IS NULL AND e_in.id IS NULL
+              ${CODE_FILTER} ${SCOPE_FILTER}
+              GROUP BY f.id
+              HAVING symbols > 0
+              ORDER BY symbols DESC
+              LIMIT ?
+            `;
+          } else if (sortBy === 'edges') {
+            sql = `
+              SELECT f.path,
+                     COUNT(DISTINCT s.id) as symbols,
+                     COUNT(DISTINCT e.id) as edges
+              FROM files f
+              JOIN symbols s ON s.file_id = f.id
+              LEFT JOIN nodes n ON n.ref_id = s.id AND n.node_type = 'symbol'
+              LEFT JOIN edges e ON e.source_node_id = n.id OR e.target_node_id = n.id
+              WHERE 1=1 ${CODE_FILTER} ${SCOPE_FILTER}
+              GROUP BY f.id
+              ORDER BY edges DESC
+              LIMIT ?
+            `;
+          } else if (sortBy === 'recent') {
+            sql = `
+              SELECT f.path,
+                     COUNT(DISTINCT s.id) as symbols,
+                     0 as edges
+              FROM files f
+              LEFT JOIN symbols s ON s.file_id = f.id
+              WHERE 1=1 ${CODE_FILTER} ${SCOPE_FILTER}
+              GROUP BY f.id
+              ORDER BY f.indexed_at DESC
+              LIMIT ?
+            `;
+          } else {
+            sql = `
+              SELECT f.path,
+                     COUNT(DISTINCT s.id) as symbols,
+                     0 as edges
+              FROM files f
+              LEFT JOIN symbols s ON s.file_id = f.id
+              WHERE 1=1 ${CODE_FILTER} ${SCOPE_FILTER}
+              GROUP BY f.id
+              ORDER BY symbols DESC
+              LIMIT ?
+            `;
+          }
+
+          const files = db.prepare(sql).all(...scopeParams, limit) as { path: string; symbols: number; edges: number }[];
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ files, sort: sortBy }));
+        } catch (e: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+        }
+        return;
+      }
+
+      // REST API: list federation repos for a project
+      if (req.method === 'GET' && url.pathname === '/api/projects/federation') {
+        try {
+          let topoStore: InstanceType<typeof TopologyStore> | undefined;
+          try {
+            if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+          } catch { /* federation is optional */ }
+
+          if (!topoStore) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ repos: [] }));
+            return;
+          }
+
+          try {
+            const manager = new FederationManager(topoStore);
+            const result = manager.list();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ repos: result.repos }));
+          } finally {
+            topoStore.close();
+          }
+        } catch (e: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e?.message ?? 'Federation query failed' }));
         }
         return;
       }

@@ -20,6 +20,7 @@ import { createExploredTracker } from './explored-tracker.js';
 import type { ServerContext, MetaContext } from './types.js';
 import type { ProgressState } from '../progress.js';
 import { buildInstructions } from './instructions.js';
+import { buildProjectContext } from '../indexer/project-context.js';
 import { installToolGate } from './tool-gate.js';
 
 import { registerCoreTools } from '../tools/register/core.js';
@@ -133,9 +134,12 @@ export function createServer(
 ): McpServer {
   const projectRoot = rootPath ?? process.cwd();
 
-  // Framework detection
+  // Framework detection — filter to actually-detected frameworks, not the full catalog
+  const projectContext = buildProjectContext(projectRoot);
+  const activeResult = registry.getActiveFrameworkPlugins(projectContext);
+  const activePlugins = activeResult.isErr() ? [] : activeResult.value;
   const frameworkNames = new Set(
-    registry.getAllFrameworkPlugins().map((p) => p.manifest.name),
+    activePlugins.map((p) => p.manifest.name),
   );
   const has = (...names: string[]) => names.some((n) => frameworkNames.has(n));
   const detectedFrameworks = [...frameworkNames].join(', ') || 'none';
@@ -255,7 +259,7 @@ export function createServer(
 
   // Meta-field filtering
   const metaFieldsConfig = config.tools?.meta_fields ?? true;
-  const META_KEYS = ['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta', '_duplication_warnings'] as const;
+  const META_KEYS = ['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta', '_duplication_warnings', '_methodology'] as const;
 
   function stripMetaFields(obj: Record<string, unknown>): void {
     if (metaFieldsConfig === true) return;

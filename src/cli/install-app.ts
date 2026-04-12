@@ -145,7 +145,10 @@ export async function installGuiApp(): Promise<InstallAppResult> {
     // 6. Unzip
     execSync(`unzip -q -o "${zipPath}" -d "${INSTALL_DIR}"`, { stdio: 'pipe' });
 
-    // 7. Clean up temp
+    // 7. Write version marker (used by postinstall to skip re-download)
+    fs.writeFileSync(path.join(INSTALL_DIR, '.trace-mcp-version'), release.tag, 'utf-8');
+
+    // 8. Clean up temp
     fs.rmSync(tmpDir, { recursive: true, force: true });
 
     return { installed: true, path: appPath };

@@ -514,8 +514,9 @@ export class FederationManager {
     query: string,
     filters?: { kind?: string; language?: string; filePattern?: string },
     limit = 20,
+    excludeRoot?: string,
   ): FederatedSearchResult {
-    return _federatedSearch(this.topoStore, query, filters, limit);
+    return _federatedSearch(this.topoStore, query, filters, limit, excludeRoot);
   }
 
   /**

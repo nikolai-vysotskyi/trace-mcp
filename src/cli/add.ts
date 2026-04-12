@@ -14,6 +14,7 @@ import { ensureGlobalDirs, getDbPath } from '../global.js';
 import { registerProject, getProject, unregisterProject, listProjects, findParentProject, updateLastIndexed } from '../registry.js';
 import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
+import { setupProject } from '../project-setup.js';
 import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
@@ -144,8 +145,11 @@ export const addCommand = new Command('add')
       return;
     }
 
-    // 3. Detect project (frameworks, languages, etc.)
-    const detection = detectProject(projectRoot);
+    // 3–8. Standard project setup: detect → config → DB → register
+    const { entry, detection, dbPath, migrated } = setupProject(projectRoot, {
+      force: opts.force,
+      migrateOldDb: true,
+    });
 
     if (isInteractive) {
       const detectedLines: string[] = [];
@@ -162,38 +166,6 @@ export const addCommand = new Command('add')
         p.note(detectedLines.join('\n'), 'Detected');
       }
     }
-
-    // 4. Generate config for this project
-    const config = generateConfig(detection);
-    const configForSave = {
-      root: config.root,
-      include: config.include,
-      exclude: config.exclude,
-    };
-
-    // 5. Ensure global dirs
-    ensureGlobalDirs();
-
-    // 6. Save per-project config in global config file
-    saveProjectConfig(projectRoot, configForSave);
-
-    // 7. Create DB at global location
-    const dbPath = getDbPath(projectRoot);
-
-    // Migrate old local DB if exists and global doesn't
-    const oldDbPath = path.join(projectRoot, '.trace-mcp', 'index.db');
-    let migrated = false;
-    if (fs.existsSync(oldDbPath) && !fs.existsSync(dbPath)) {
-      fs.copyFileSync(oldDbPath, dbPath);
-      migrated = true;
-    }
-
-    // Initialize (creates if new, runs migrations if migrated)
-    const db = initializeDatabase(dbPath);
-    db.close();
-
-    // 8. Register in registry
-    const entry = registerProject(projectRoot);
 
     // 9. Index immediately (unless --no-index)
     let indexResult: Awaited<ReturnType<typeof runIndexing>> = null;

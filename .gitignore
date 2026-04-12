@@ -10,3 +10,5 @@ dist/
 coverage/
 .idea/
 plans/
+issues/
+.obsidian/
