@@ -233,7 +233,7 @@ function buildFederatedGraph(
     opts.granularity ?? 'file', opts.hideIsolated === true,
   );
 
-  const mainPrefix = currentRepo?.name ?? 'main';
+  const mainPrefix = allRepos.find((r) => r.repo_root === projectRoot)?.name ?? path.basename(projectRoot);
 
   for (const n of mainResult.nodes) {
     n.repo = mainPrefix;
@@ -960,7 +960,7 @@ DATA.edges.forEach(e => {
 });
 
 // BFS to collect neighbors at N levels deep — returns Map<nodeId, depthLevel>
-let highlightDepth = ${opts.highlightDepth ?? 1};
+let highlightDepth = ${opts?.highlightDepth ?? 1};
 function getNeighborsAtDepth(startId, maxDepth) {
   const depthMap = new Map(); // nodeId → depth level (1-based)
   let frontier = new Set([startId]);
