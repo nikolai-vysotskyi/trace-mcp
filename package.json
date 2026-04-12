@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "serve": "tsx src/cli.ts serve",
+    "postinstall": "node scripts/postinstall-app.mjs",
     "prepublishOnly": "npm run build"
   },
   "engines": {

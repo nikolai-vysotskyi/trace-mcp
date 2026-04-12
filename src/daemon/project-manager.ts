@@ -13,8 +13,9 @@ import { ProgressState, writeServerPid, clearServerPid } from '../progress.js';
 import { createServer } from '../server/server.js';
 import { logger } from '../logger.js';
 import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { listProjects, getProject, registerProject } from '../registry.js';
-import { findProjectRoot, detectGitWorktree } from '../project-root.js';
+import { listProjects, getProject } from '../registry.js';
+import { setupProject } from '../project-setup.js';
+import { detectGitWorktree } from '../project-root.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { FederationManager } from '../federation/manager.js';
 import { TOPOLOGY_DB_PATH } from '../global.js';
@@ -72,14 +73,8 @@ export class ProjectManager {
       logger.info({ worktreeRoot: projectRoot, mainRoot: worktreeInfo.mainRoot }, 'Git worktree detected — sharing main repo index');
     }
 
-    // Auto-register if not already registered
-    if (!getProject(indexRoot)) {
-      try {
-        const root = findProjectRoot(indexRoot);
-        ensureGlobalDirs();
-        registerProject(root);
-      } catch { /* not a project dir */ }
-    }
+    // Standard registration: detect, config, DB, registry
+    setupProject(projectRoot);
 
     const configResult = await loadConfig(projectRoot);
     if (configResult.isErr()) {

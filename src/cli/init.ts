@@ -25,6 +25,7 @@ import { generateConfig } from '../init/config-generator.js';
 import { registerProject, getProject, listProjects, updateLastIndexed, unregisterProject } from '../registry.js';
 import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
+import { setupProject } from '../project-setup.js';
 import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
@@ -194,7 +195,7 @@ export const initCommand = new Command('init')
       if (process.platform === 'darwin' && !isAppInstalled()) {
         const appResult = await p.confirm({
           message: 'Install trace-mcp menu bar app?',
-          initialValue: false,
+          initialValue: true,
         });
         if (p.isCancel(appResult)) { p.cancel('Cancelled.'); process.exit(0); }
         installApp = appResult;
@@ -509,22 +510,7 @@ async function registerAndIndexProject(
     return { target: projectRoot, action: 'already_configured', detail: `Project already registered: ${existing.name}` };
   }
 
-  const detection = detectProject(projectRoot);
-  const config = generateConfig(detection);
-  saveProjectConfig(projectRoot, { root: config.root, include: config.include, exclude: config.exclude });
-
-  const dbPath = getDbPath(projectRoot);
-
-  // Migrate old local DB if it exists
-  const oldDbPath = path.join(projectRoot, '.trace-mcp', 'index.db');
-  if (fs.existsSync(oldDbPath) && !fs.existsSync(dbPath)) {
-    fs.copyFileSync(oldDbPath, dbPath);
-  }
-
-  const db = initializeDatabase(dbPath);
-  db.close();
-
-  const entry = registerProject(projectRoot);
+  const { entry } = setupProject(projectRoot, { force: opts.force, migrateOldDb: true });
 
   // Run indexing immediately
   const indexResult = await runIndexingForProject(projectRoot);
