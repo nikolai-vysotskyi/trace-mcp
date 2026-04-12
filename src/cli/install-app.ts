@@ -1,6 +1,6 @@
 /**
  * Download and install the trace-mcp menu bar app from GitHub Releases.
- * macOS only — called from `trace-mcp init`.
+ * macOS only — called from `trace-mcp init` or standalone via `trace-mcp install-app`.
  */
 
 import fs from 'node:fs';
@@ -8,10 +8,15 @@ import path from 'node:path';
 import os from 'node:os';
 import https from 'node:https';
 import { execSync } from 'node:child_process';
+import { Command } from 'commander';
 
 const GITHUB_REPO = 'nikolai-vysotskyi/trace-mcp';
 const APP_NAME = 'trace-mcp.app';
 const INSTALL_DIR = path.join(os.homedir(), 'Applications');
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export interface InstallAppResult {
   installed: boolean;
@@ -110,45 +115,77 @@ function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<voi
  * 3. Download the matching zip
  * 4. Unzip to ~/Applications/trace-mcp.app
  */
-export async function installGuiApp(): Promise<InstallAppResult> {
+export interface InstallGuiAppOptions {
+  /** Max retries when the release exists but the arch zip hasn't been uploaded yet */
+  retries?: number;
+  /** Delay between retries in ms (default 15 000) */
+  retryDelayMs?: number;
+  /** Called before each retry with attempt number and total */
+  onRetry?: (attempt: number, total: number) => void;
+}
+
+export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<InstallAppResult> {
   if (process.platform !== 'darwin') {
     return { installed: false, error: 'Menu bar app is macOS only' };
   }
 
+  const { retries = 3, retryDelayMs = 15_000, onRetry } = opts;
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  const zipPattern = new RegExp(`trace-mcp.*${arch}\\.zip$`, 'i');
+  // electron-builder names: trace-mcp-{ver}-arm64-mac.zip / trace-mcp-{ver}-mac.zip (x64)
+  const findAsset = (assets: { name: string }[]) => {
+    const zips = assets.filter((a) => /trace-mcp.*\.zip$/i.test(a.name));
+    if (arch === 'arm64') {
+      return zips.find((a) => /arm64/i.test(a.name));
+    }
+    // x64: pick the zip that does NOT contain arm64
+    return zips.find((a) => !/arm64/i.test(a.name));
+  };
 
   try {
-    // 1. Fetch latest release
-    const release = await fetchLatestRelease();
+    // 1. Fetch latest release — retry if the arch asset isn't uploaded yet
+    //    (race condition: npm publish finishes before electron-builder uploads the zip)
+    let release: Awaited<ReturnType<typeof fetchLatestRelease>>;
+    let asset: { name: string; url: string } | undefined;
 
-    // 2. Find matching asset
-    const asset = release.assets.find((a) => zipPattern.test(a.name));
-    if (!asset) {
-      return { installed: false, error: `No ${arch} zip found in release ${release.tag}` };
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      release = await fetchLatestRelease();
+      asset = findAsset(release.assets);
+      if (asset) break;
+
+      if (attempt < retries) {
+        onRetry?.(attempt + 1, retries);
+        await sleep(retryDelayMs);
+      }
     }
 
-    // 3. Download to temp
+    if (!asset) {
+      return {
+        installed: false,
+        error: `No ${arch} zip found in release ${release!.tag} (${release!.assets.length} assets available: ${release!.assets.map((a) => a.name).join(', ') || 'none'}). The build may still be in progress — try again in a few minutes with: trace-mcp install-app`,
+      };
+    }
+
+    // 2. Download to temp
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-app-'));
     const zipPath = path.join(tmpDir, asset.name);
     await downloadFile(asset.url, zipPath);
 
-    // 4. Ensure ~/Applications exists
+    // 3. Ensure ~/Applications exists
     fs.mkdirSync(INSTALL_DIR, { recursive: true });
 
-    // 5. Remove old installation if present
+    // 4. Remove old installation if present
     const appPath = path.join(INSTALL_DIR, APP_NAME);
     if (fs.existsSync(appPath)) {
       fs.rmSync(appPath, { recursive: true, force: true });
     }
 
-    // 6. Unzip
+    // 5. Unzip
     execSync(`unzip -q -o "${zipPath}" -d "${INSTALL_DIR}"`, { stdio: 'pipe' });
 
-    // 7. Write version marker (used by postinstall to skip re-download)
-    fs.writeFileSync(path.join(INSTALL_DIR, '.trace-mcp-version'), release.tag, 'utf-8');
+    // 6. Write version marker (used by postinstall to skip re-download)
+    fs.writeFileSync(path.join(INSTALL_DIR, '.trace-mcp-version'), release!.tag, 'utf-8');
 
-    // 8. Clean up temp
+    // 7. Clean up temp
     fs.rmSync(tmpDir, { recursive: true, force: true });
 
     return { installed: true, path: appPath };
@@ -161,3 +198,36 @@ export async function installGuiApp(): Promise<InstallAppResult> {
 export function isAppInstalled(): boolean {
   return fs.existsSync(path.join(INSTALL_DIR, APP_NAME));
 }
+
+/** Standalone CLI command: `trace-mcp install-app` */
+export const installAppCommand = new Command('install-app')
+  .description('Download and install (or update) the trace-mcp menu bar app (macOS)')
+  .option('--retries <n>', 'Number of retries if asset not yet uploaded', '3')
+  .option('--retry-delay <ms>', 'Delay between retries in ms', '15000')
+  .action(async (opts: { retries: string; retryDelay: string }) => {
+    if (process.platform !== 'darwin') {
+      console.error('Error: Menu bar app is macOS only.');
+      process.exit(1);
+    }
+
+    const retries = parseInt(opts.retries, 10);
+    const retryDelayMs = parseInt(opts.retryDelay, 10);
+
+    const already = isAppInstalled();
+    console.log(already ? 'Updating trace-mcp menu bar app…' : 'Installing trace-mcp menu bar app…');
+
+    const result = await installGuiApp({
+      retries,
+      retryDelayMs,
+      onRetry: (attempt, total) => {
+        console.log(`  Asset not yet available, retrying (${attempt}/${total})…`);
+      },
+    });
+
+    if (result.installed) {
+      console.log(`✓ ${already ? 'Updated' : 'Installed'} → ${result.path}`);
+    } else {
+      console.error(`✗ ${result.error}`);
+      process.exit(1);
+    }
+  });

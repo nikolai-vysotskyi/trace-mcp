@@ -2,14 +2,6 @@ import { useState } from 'react';
 import { ProjectRow } from '../components/ProjectRow';
 import { useDaemon } from '../hooks/useDaemon';
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      selectFolder: () => Promise<string | null>;
-    };
-  }
-}
-
 interface IndexesProps {
   onOpenProject: (root: string) => void;
 }

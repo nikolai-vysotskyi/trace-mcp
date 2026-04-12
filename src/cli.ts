@@ -37,6 +37,7 @@ import { statusCommand } from './cli/status.js';
 import { visualizeCommand } from './cli/visualize.js';
 import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { daemonCommand } from './cli/daemon.js';
+import { installAppCommand } from './cli/install-app.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH, GLOBAL_CONFIG_PATH, stripJsonComments, DAEMON_LOG_PATH } from './global.js';
 import { getProject, listProjects } from './registry.js';
@@ -1373,5 +1374,6 @@ program.addCommand(analyticsCommand);
 program.addCommand(statusCommand);
 program.addCommand(visualizeCommand);
 program.addCommand(daemonCommand);
+program.addCommand(installAppCommand);
 
 program.parse();
