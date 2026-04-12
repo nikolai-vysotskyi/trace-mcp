@@ -751,7 +751,13 @@ program
               html = html.replace('</head>', embeddedCSS + '</head>');
             }
 
-            res.writeHead(200, { 'Content-Type': 'text/html' });
+            // Send stats via headers so the client can skip the separate JSON fetch
+            res.writeHead(200, {
+              'Content-Type': 'text/html',
+              'X-Graph-Nodes': String(nodes.length),
+              'X-Graph-Edges': String(edges.length),
+              'X-Graph-Communities': String(communities.length),
+            });
             res.end(html);
           } finally {
             topoStore?.close();
