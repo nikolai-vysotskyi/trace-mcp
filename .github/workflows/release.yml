@@ -147,5 +147,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ needs.release-please.outputs.tag_name }}" \
-            packages/app/release/trace-mcp-*-${{ matrix.arch }}-mac.zip \
+            packages/app/release/*.zip \
             --clobber
