@@ -58,31 +58,59 @@ export function detectServices(repoRoots: string[]): DetectedService[] {
 }
 
 /**
- * Detect services from a multi-level workspace structure:
- *   root/
- *     <group>/         ← project group (e.g. "fair", "thewed")
- *       <service>/     ← service with ROOT_MARKER (e.g. "frontend", "backend")
+ * Detect services from workspace structure. Scans two patterns:
  *
- * Returns services only when at least 2 groups or 2 services are found,
- * to avoid false-positives on flat projects.
+ * Pattern 1 — flat monorepo (services as direct children):
+ *   root/
+ *     frontend/     ← has root marker (package.json, composer.json, etc.)
+ *     backend/      ← has root marker
+ *
+ * Pattern 2 — grouped monorepo (group/service hierarchy):
+ *   root/
+ *     org-a/
+ *       service-1/  ← has root marker
+ *       service-2/  ← has root marker
+ *
+ * Returns services only when at least 2 are found, to avoid false-positives.
  */
 function detectFromWorkspaceStructure(root: string): DetectedService[] {
-  let groupEntries: fs.Dirent[];
+  let entries: fs.Dirent[];
   try {
-    groupEntries = fs.readdirSync(root, { withFileTypes: true });
+    entries = fs.readdirSync(root, { withFileTypes: true });
   } catch {
     return [];
   }
 
-  const services: DetectedService[] = [];
+  // ── Pattern 1: check first-level subdirs for root markers ──
+  const flatServices: DetectedService[] = [];
+  const dirsWithoutMarker: Array<{ name: string; dir: string }> = [];
 
-  for (const groupEntry of groupEntries) {
-    if (!groupEntry.isDirectory()) continue;
-    if (groupEntry.name.startsWith('.') || SKIP_DIRS.has(groupEntry.name)) continue;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
 
-    const groupDir = path.join(root, groupEntry.name);
-    const groupName = groupEntry.name;
+    const childDir = path.join(root, entry.name);
+    if (hasRootMarker(childDir)) {
+      flatServices.push({
+        name: entry.name,
+        repoRoot: childDir,
+        serviceType: 'monolith',
+        detectionSource: 'workspace',
+      });
+    } else {
+      dirsWithoutMarker.push({ name: entry.name, dir: childDir });
+    }
+  }
 
+  if (flatServices.length >= 2) {
+    logger.debug({ count: flatServices.length, root }, 'Detected services from flat workspace structure');
+    return flatServices;
+  }
+
+  // ── Pattern 2: check two-level deep (group/service) ──
+  const groupedServices: DetectedService[] = [];
+
+  for (const { name: groupName, dir: groupDir } of dirsWithoutMarker) {
     let childEntries: fs.Dirent[];
     try {
       childEntries = fs.readdirSync(groupDir, { withFileTypes: true });
@@ -96,7 +124,7 @@ function detectFromWorkspaceStructure(root: string): DetectedService[] {
 
       const childDir = path.join(groupDir, childEntry.name);
       if (hasRootMarker(childDir)) {
-        services.push({
+        groupedServices.push({
           name: `${groupName}/${childEntry.name}`,
           repoRoot: childDir,
           serviceType: 'monolith',
@@ -107,11 +135,10 @@ function detectFromWorkspaceStructure(root: string): DetectedService[] {
     }
   }
 
-  // Only use this strategy if we found a genuine multi-service structure
-  const groupsFound = new Set(services.map((s) => s.projectGroup)).size;
-  if (groupsFound >= 2 || services.length >= 3) {
-    logger.debug({ count: services.length, groups: groupsFound, root }, 'Detected services from workspace structure');
-    return services;
+  if (groupedServices.length >= 2) {
+    const groupsFound = new Set(groupedServices.map((s) => s.projectGroup)).size;
+    logger.debug({ count: groupedServices.length, groups: groupsFound, root }, 'Detected services from grouped workspace structure');
+    return groupedServices;
   }
 
   return [];

@@ -70,6 +70,7 @@ export interface FederatedRepoRow {
   id: number;
   name: string;
   repo_root: string;
+  project_root: string;
   db_path: string | null;
   contract_paths: string | null;
   added_at: string;
@@ -183,14 +184,17 @@ CREATE TABLE IF NOT EXISTS topology_meta (
 
 CREATE TABLE IF NOT EXISTS federated_repos (
     id              INTEGER PRIMARY KEY,
-    name            TEXT NOT NULL UNIQUE,
-    repo_root       TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL,
+    repo_root       TEXT NOT NULL,
+    project_root    TEXT NOT NULL,
     db_path         TEXT,
     contract_paths  TEXT,
     added_at        TEXT NOT NULL,
     last_synced     TEXT,
-    metadata        TEXT
+    metadata        TEXT,
+    UNIQUE(repo_root, project_root)
 );
+CREATE INDEX IF NOT EXISTS idx_federated_repos_project ON federated_repos(project_root);
 
 CREATE TABLE IF NOT EXISTS client_calls (
     id              INTEGER PRIMARY KEY,
@@ -293,6 +297,31 @@ export class TopologyStore {
     const cols = (this.db.pragma('table_info(services)') as Array<{ name: string }>).map((c) => c.name);
     if (!cols.includes('project_group')) {
       this.db.exec('ALTER TABLE services ADD COLUMN project_group TEXT');
+    }
+
+    // Migration: federated_repos now requires project_root column.
+    // Drop all old federation data and let auto-sync rebuild it correctly.
+    const fedCols = (this.db.pragma('table_info(federated_repos)') as Array<{ name: string }>).map((c) => c.name);
+    if (!fedCols.includes('project_root')) {
+      this.db.exec(`
+        DELETE FROM client_calls;
+        DELETE FROM federated_repos;
+        DROP TABLE IF EXISTS federated_repos;
+        CREATE TABLE IF NOT EXISTS federated_repos (
+          id              INTEGER PRIMARY KEY,
+          name            TEXT NOT NULL,
+          repo_root       TEXT NOT NULL,
+          project_root    TEXT NOT NULL,
+          db_path         TEXT,
+          contract_paths  TEXT,
+          added_at        TEXT NOT NULL,
+          last_synced     TEXT,
+          metadata        TEXT,
+          UNIQUE(repo_root, project_root)
+        );
+        CREATE INDEX IF NOT EXISTS idx_federated_repos_project ON federated_repos(project_root);
+      `);
+      logger.info('Migration: rebuilt federated_repos with project_root column, old federation data cleared');
     }
   }
 
@@ -533,11 +562,14 @@ export class TopologyStore {
   upsertFederatedRepo(input: {
     name: string;
     repoRoot: string;
+    projectRoot: string;
     dbPath?: string;
     contractPaths?: string[];
     metadata?: Record<string, unknown>;
   }): number {
-    const existing = this.db.prepare('SELECT id FROM federated_repos WHERE repo_root = ?').get(input.repoRoot) as { id: number } | undefined;
+    const existing = this.db.prepare(
+      'SELECT id FROM federated_repos WHERE repo_root = ? AND project_root = ?',
+    ).get(input.repoRoot, input.projectRoot) as { id: number } | undefined;
     if (existing) {
       this.db.prepare(`
         UPDATE federated_repos SET name = ?, db_path = COALESCE(?, db_path),
@@ -551,17 +583,25 @@ export class TopologyStore {
     }
 
     return this.db.prepare(`
-      INSERT INTO federated_repos (name, repo_root, db_path, contract_paths, metadata, added_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now'))
-    `).run(input.name, input.repoRoot, input.dbPath ?? null,
+      INSERT INTO federated_repos (name, repo_root, project_root, db_path, contract_paths, metadata, added_at)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `).run(input.name, input.repoRoot, input.projectRoot, input.dbPath ?? null,
       input.contractPaths ? JSON.stringify(input.contractPaths) : null,
       input.metadata ? JSON.stringify(input.metadata) : null,
     ).lastInsertRowid as number;
   }
 
-  getFederatedRepo(nameOrRoot: string): FederatedRepoRow | undefined {
+  getFederatedRepo(nameOrRoot: string, projectRoot?: string): FederatedRepoRow | undefined {
+    if (projectRoot) {
+      return (this.db.prepare('SELECT * FROM federated_repos WHERE (name = ? OR repo_root = ?) AND project_root = ?')
+        .get(nameOrRoot, nameOrRoot, projectRoot) as FederatedRepoRow | undefined);
+    }
     return (this.db.prepare('SELECT * FROM federated_repos WHERE name = ? OR repo_root = ?')
       .get(nameOrRoot, nameOrRoot) as FederatedRepoRow | undefined);
+  }
+
+  getFederatedReposByProject(projectRoot: string): FederatedRepoRow[] {
+    return this.db.prepare('SELECT * FROM federated_repos WHERE project_root = ? ORDER BY name').all(projectRoot) as FederatedRepoRow[];
   }
 
   getAllFederatedRepos(): FederatedRepoRow[] {
