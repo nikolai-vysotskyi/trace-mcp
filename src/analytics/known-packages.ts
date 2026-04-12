@@ -25,6 +25,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'spatie/laravel-permission':      { category: 'framework', priority: 'medium', plugin: null },
   'spatie/laravel-medialibrary':    { category: 'orm',       priority: 'medium', plugin: null },
   'spatie/laravel-data':            { category: 'framework', priority: 'medium', plugin: 'laravel' },
+  'filament/filament':              { category: 'framework', priority: 'high',   plugin: 'filament' },
   'spatie/laravel-activitylog':     { category: 'infra',     priority: 'low',    plugin: null },
   'spatie/laravel-backup':          { category: 'infra',     priority: 'none',   plugin: null },
   'barryvdh/laravel-debugbar':      { category: 'infra',     priority: 'none',   plugin: null },
@@ -51,6 +52,10 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   '@angular/core':                  { category: 'ui',        priority: 'high',   plugin: 'angular' },
   'react-native':                   { category: 'ui',        priority: 'high',   plugin: 'react-native' },
   'expo':                           { category: 'ui',        priority: 'high',   plugin: 'react-native' },
+  'expo-router':                    { category: 'ui',        priority: 'medium', plugin: 'react-native' },
+  '@react-navigation/native':      { category: 'ui',        priority: 'medium', plugin: 'react-native' },
+  '@react-navigation/native-stack': { category: 'ui',       priority: 'low',    plugin: 'react-native' },
+  '@react-navigation/bottom-tabs':  { category: 'ui',       priority: 'low',    plugin: 'react-native' },
   '@nuxt/ui':                       { category: 'ui',        priority: 'high',   plugin: 'nuxt-ui' },
   '@nuxt/ui-pro':                   { category: 'ui',        priority: 'high',   plugin: 'nuxt-ui' },
   '@inertiajs/react':               { category: 'ui',        priority: 'high',   plugin: 'inertia' },
@@ -143,7 +148,13 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'tree-sitter':                    { category: 'infra',     priority: 'medium', plugin: 'tree-sitter' },
   'web-tree-sitter':                { category: 'infra',     priority: 'medium', plugin: 'tree-sitter' },
   'tree-sitter-wasms':              { category: 'infra',     priority: 'low',    plugin: 'tree-sitter' },
+  'tree-sitter-typescript':         { category: 'infra',     priority: 'low',    plugin: 'tree-sitter' },
   'n8n-workflow':                   { category: 'infra',     priority: 'high',   plugin: 'n8n' },
+
+  // --- JavaScript / npm: Electron ---
+  'electron':                       { category: 'infra',     priority: 'high',   plugin: 'electron' },
+  'electron-builder':               { category: 'infra',     priority: 'low',    plugin: 'electron' },
+  'menubar':                        { category: 'infra',     priority: 'low',    plugin: 'electron' },
 
   // --- JavaScript / npm: Build tools (with plugin) ---
   'tsup':                           { category: 'infra',     priority: 'low',    plugin: 'build-tools' },
@@ -177,6 +188,12 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'uuid':                           { category: 'utility',   priority: 'none',   plugin: null },
   'dotenv':                         { category: 'utility',   priority: 'none',   plugin: null },
   'typescript':                     { category: 'utility',   priority: 'none',   plugin: null },
+  '@parcel/watcher':                { category: 'utility',   priority: 'none',   plugin: null },
+  'fast-glob':                      { category: 'utility',   priority: 'none',   plugin: null },
+  'fastest-levenshtein':            { category: 'utility',   priority: 'none',   plugin: null },
+  'jsonc-parser':                   { category: 'utility',   priority: 'none',   plugin: null },
+  'oxc-resolver':                   { category: 'utility',   priority: 'none',   plugin: null },
+  'yaml':                           { category: 'utility',   priority: 'none',   plugin: null },
 
   // --- Python / pip ---
   'django':                         { category: 'framework', priority: 'high',   plugin: 'django' },
