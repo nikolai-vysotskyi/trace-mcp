@@ -6,6 +6,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.15.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.14.1...v1.15.0) (2026-04-12)
+
+
+### Features
+
+* add --granularity, --symbol-kinds, --hide-isolated flags to CLI visualize ([ec71946](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ec719460b9ebf80da050e7e23bf06925e28776ae))
+* async DB + pytest integration plugins ([48e0ab9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/48e0ab916b54aede6f1b6c39fcbb6c0c25f8f347))
+* clean topology data (federation, services) on project removal ([9fffa26](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9fffa2687bed9bc28ca83246fb8806d87a544b15))
+* daemon mode — multi-project serve-http with REST API, SSE events, and stdio daemon awareness ([9900500](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9900500f25850270159f6cdff35a2f8589b8959a))
+* Electron app — auto-updater, GPU crash recovery, file browser, federation panel ([95b6c79](https://github.com/nikolai-vysotskyi/trace-mcp/commit/95b6c798ff1f16184af95c283df27f5cef18c3d2))
+* Electron app — redesigned icons, settings UI overhaul, clients tab, graph explorer improvements ([9232066](https://github.com/nikolai-vysotskyi/trace-mcp/commit/92320665764b96c1f62cf0ce536481cfa0e5fff5))
+* federated graph visualization, session landmarks, daemon client naming ([c88a257](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c88a257e68bf3a8cc38380f5255c0ce21ead62aa))
+* get_untested_symbols tool + per-symbol test reach in change impact ([7cb554c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7cb554ce62ec69c6419135ab62d62aae3bf369b5))
+* graph visualization — light/dark theming, minimap, BFS highlight depth ([2f3bbc0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2f3bbc07ee9da2f7835e3145f6065201d5e26874))
+* implicit workspace detection + per-workspace framework plugin activation ([6129f59](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6129f59bd5ac3401d9068cb56a487fa2f643bddb))
+* LSP enrichment — 4-tier edge resolution confidence, schema v19, SQLite batch chunking ([acf0ec4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/acf0ec45152976f745ba912f61f9133922467785))
+* menu bar app — Electron tray app, installer, init wizard integration, CI release workflow ([63bda06](https://github.com/nikolai-vysotskyi/trace-mcp/commit/63bda0679fa924156bfb0d9a52b0ebcd9cdcd428))
+* Next.js plugin — optional catch-all routes, 2-level intercepting routes, route segment config, use client/cache directives ([8b39280](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b392808acbcafb478a7f8c4bc5627b75f1815b5))
+* Next.js plugin — src/ prefix support, new file conventions (forbidden, unauthorized, metadata, instrumentation, proxy) ([e623fd1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e623fd1ae9fcd96d512b2232fa551ef44f0a23a5))
+* ONNX local embeddings + Signal Fusion search — zero-config semantic search with multi-channel WRR ranking ([b0ce8e3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b0ce8e38b1815237f3bd95246a987b0eb25744a0))
+* post-update migrations — auto-migrate hooks, config, CLAUDE.md, and reindex after version change ([aba1f9c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aba1f9cc5292ff432d5b9ad8d3228fa2dabddd3d))
+* Python language support — edge resolvers, CFG patterns, visibility, docstrings ([23953ed](https://github.com/nikolai-vysotskyi/trace-mcp/commit/23953ed892a5256d3de1f6bf44c87b0bb476e04c))
+* symbol-level graph, isolated-node filter, monorepo federation fix ([8f3e55b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8f3e55ba8cd3ea44fe5a7ee3191c583df2d3d04a))
+* workspace-aware module resolution + config exclude normalization ([0376ae1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0376ae19aaa816670fb2830aeede03565988716f))
+
+
+### Bug Fixes
+
+* replace dynamic await import() with static http import in postinstall-app.mjs ([67330b9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/67330b9d23bbb475dbfc0d01ba3caa3eddf9cfc8))
+* set renders_component edge type category to 'nuxt' in NuxtPlugin ([967c613](https://github.com/nikolai-vysotskyi/trace-mcp/commit/967c61345014087ce418458fadfe210498048b65))
+* visualize_graph file mode now seeds by symbol nodes, collapses to file edges ([e36e321](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e36e321d3805b36360866e23cbaf9bcd9e6f56bd))
+
+
+### Performance
+
+* eliminate redundant queries in graph visualization ([b4d7dfa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b4d7dfa05260f40ee1fe9ca1825d420f3d28cf01))
+
+
+### Refactoring
+
+* extract setupProject, add REST API endpoints, consolidate CI ([3b6c23f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3b6c23fc26d5da8e483f62248360120078a6c8cf))
+* extract shared resolveSymbolInput utility, improve tool robustness ([3fa2e0c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3fa2e0c228c13a83a92523a580c79662a65eafd3))
+
+
+### Documentation
+
+* update README, CLAUDE.md, configuration, and MCP instructions for LSP, ONNX, Signal Fusion, untested symbols ([5ed61af](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5ed61afc8f0f9e6bbb166fce4a660705eabec7a8))
+
 ## [1.14.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.14.0...v1.14.1) (2026-04-09)
 
 
