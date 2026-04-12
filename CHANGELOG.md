@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.18.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.17.0...v1.18.0) (2026-04-12)
+
+
+### Features
+
+* pin app to macOS Dock after install ([85b2b63](https://github.com/nikolai-vysotskyi/trace-mcp/commit/85b2b633fe3aa2b5674281a09c17fd3cc2953afb))
+
+
+### Bug Fixes
+
+* include assets and icon in electron-builder package files ([ace9a85](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ace9a8577cf84f941a0219f5423594a05da13507))
+
 ## [1.17.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.16.1...v1.17.0) (2026-04-12)
 
 
