@@ -15,6 +15,7 @@ import { analyzeRealSavings } from '../../analytics/real-savings.js';
 import { syncAnalytics } from '../../analytics/sync.js';
 import { registerPrompts } from '../../prompts/index.js';
 import { planTurn } from '../navigation/plan-turn.js';
+import { decisionsForTask, decisionsForResume } from '../../memory/enrichment.js';
 
 export function registerSessionTools(server: McpServer, ctx: MetaContext): void {
   const {
@@ -308,7 +309,16 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     },
     async ({ max_sessions }) => {
       const resume = getSessionResume(projectRoot, max_sessions ?? 5);
-      return { content: [{ type: 'text', text: jh('get_session_resume', resume) }] };
+      // Enrich with top active decisions (code-aware memory)
+      const payload: Record<string, unknown> = { ...resume };
+      const ds = ctx.decisionStore;
+      if (ds) {
+        const topDecisions = decisionsForResume(ds, projectRoot, 5);
+        if (topDecisions.length > 0) {
+          payload.active_decisions = topDecisions;
+        }
+      }
+      return { content: [{ type: 'text', text: jh('get_session_resume', payload) }] };
     },
   );
 
@@ -337,7 +347,17 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         },
         { task, intent, maxTargets: max_targets, skipRisk: skip_risk },
       );
-      return { content: [{ type: 'text', text: jh('plan_turn', result) }] };
+      // Enrich with relevant past decisions (code-aware memory)
+      const payload: Record<string, unknown> = { ...result };
+      const ds = ctx.decisionStore;
+      if (ds) {
+        const targetFiles = result.targets?.map(t => t.file).filter(Boolean);
+        const linked = decisionsForTask(ds, projectRoot, task, targetFiles);
+        if (linked.length > 0) {
+          payload.related_decisions = linked;
+        }
+      }
+      return { content: [{ type: 'text', text: jh('plan_turn', payload) }] };
     },
   );
 

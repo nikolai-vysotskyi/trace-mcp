@@ -41,7 +41,7 @@ export function getFederationImpact(
 
 export function federationAddRepo(
   topoStore: TopologyStore,
-  opts: { repoPath: string; name?: string; contractPaths?: string[] },
+  opts: { repoPath: string; projectRoot: string; name?: string; contractPaths?: string[] },
 ): TraceMcpResult<{
   repo: string;
   name: string;
@@ -52,7 +52,7 @@ export function federationAddRepo(
 }> {
   try {
     const manager = new FederationManager(topoStore);
-    const result = manager.add(opts.repoPath, {
+    const result = manager.add(opts.repoPath, opts.projectRoot, {
       name: opts.name,
       contractPaths: opts.contractPaths,
     });

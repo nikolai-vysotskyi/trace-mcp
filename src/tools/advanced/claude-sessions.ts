@@ -203,12 +203,13 @@ export function discoverAndFederate(
   const manager = new FederationManager(topoStore);
   for (const session of result.sessions) {
     try {
-      const r = manager.add(session.projectPath, { name: path.basename(session.projectPath) });
+      const { services } = manager.autoFederateProject(session.projectPath);
+      const totalEndpoints = services.reduce((sum, s) => sum + s.endpoints, 0);
       added.push({
         repo: session.projectPath,
         name: path.basename(session.projectPath),
-        services: r.services,
-        endpoints: r.endpoints,
+        services: services.length,
+        endpoints: totalEndpoints,
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
