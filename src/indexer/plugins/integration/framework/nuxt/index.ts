@@ -216,6 +216,7 @@ export class NuxtPlugin implements FrameworkPlugin {
         { name: 'nuxt_auto_imports', category: 'nuxt', description: 'Auto-imported composable' },
         { name: 'api_calls', category: 'nuxt', description: 'fetch/useFetch API call' },
         { name: 'nuxt_shared_import', category: 'nuxt', description: 'Auto-imported shared utility or type' },
+        { name: 'renders_component', category: 'vue', description: 'Vue template renders component' },
       ],
     };
   }
@@ -296,6 +297,7 @@ export class NuxtPlugin implements FrameworkPlugin {
 
     const srcDir = this.srcDir;
     const composablesPrefix = srcDir === '.' ? 'composables/' : `${srcDir}/composables/`;
+    const componentsPrefix = srcDir === '.' ? 'components/' : `${srcDir}/components/`;
 
     // Find composable files
     const composableFiles = allFiles.filter(
@@ -331,43 +333,92 @@ export class NuxtPlugin implements FrameworkPlugin {
       }
     }
 
-    // For each Vue file, detect auto-imported composable and shared usage
+    // Build component name → symbol map for Nuxt auto-imported components.
+    // Nuxt registers components by filename: `components/AppBaseCard.vue` → `<AppBaseCard>`.
+    // For nested dirs, both the basename and the path-prefixed name are registered:
+    //   `components/guides/MediaBlock.vue` → `<GuidesMediaBlock>` and `<MediaBlock>`.
+    const componentMap = new Map<string, { id: number; symbolId: string }>();
+    const componentFiles = allFiles.filter(
+      (f) => f.path.startsWith(componentsPrefix) && f.path.endsWith('.vue'),
+    );
+    for (const file of componentFiles) {
+      const symbols = ctx.getSymbolsByFile(file.id);
+      const compSym = symbols.find((s) => s.kind === 'class');
+      if (!compSym) continue;
+
+      // Register by filename (basename without extension)
+      const baseName = path.basename(file.path, '.vue');
+      componentMap.set(baseName, { id: compSym.id, symbolId: compSym.symbolId });
+
+      // Also register path-prefixed name: components/foo/Bar.vue → FooBar
+      const relToComponents = file.path.slice(componentsPrefix.length, -'.vue'.length);
+      const segments = relToComponents.split('/');
+      if (segments.length > 1) {
+        const prefixed = segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+        componentMap.set(prefixed, { id: compSym.id, symbolId: compSym.symbolId });
+      }
+    }
+
+    // For each Vue file, detect auto-imported composable, shared, and component usage
     const vueFiles = allFiles.filter((f) => f.path.endsWith('.vue'));
     for (const file of vueFiles) {
-      let source: string;
-      try {
-        source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
-      } catch { continue; }
-
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSymbol = symbols.find((s) => s.kind === 'class');
       if (!compSymbol) continue;
 
-      // Check for composable usage
-      for (const [name, target] of composableMap) {
-        if (source.includes(name)) {
+      // Extract templateComponents from metadata (already parsed by Vue plugin)
+      const meta = compSymbol.metadata as Record<string, unknown> | null;
+      const templateComponents = (meta?.templateComponents as string[]) ?? [];
+
+      // Resolve template component references → edges
+      for (const tagName of templateComponents) {
+        const target = componentMap.get(tagName);
+        if (target && target.id !== compSymbol.id) {
           edges.push({
             sourceNodeType: 'symbol',
             sourceRefId: compSymbol.id,
             targetNodeType: 'symbol',
             targetRefId: target.id,
-            edgeType: 'nuxt_auto_imports',
-            metadata: { composable: name },
+            edgeType: 'renders_component',
+            metadata: { component: tagName },
           });
         }
       }
 
-      // Check for shared utility/type usage
-      for (const [name, target] of sharedMap) {
-        if (source.includes(name)) {
-          edges.push({
-            sourceNodeType: 'symbol',
-            sourceRefId: compSymbol.id,
-            targetNodeType: 'symbol',
-            targetRefId: target.id,
-            edgeType: 'nuxt_shared_import',
-            metadata: { shared: name },
-          });
+      // Check for composable usage (needs source text)
+      if (composableMap.size > 0 || sharedMap.size > 0) {
+        let source: string | undefined;
+        try {
+          source = ctx.readFile(file.path);
+        } catch { /* ignore */ }
+        if (!source) continue;
+
+        // Check for composable usage
+        for (const [name, target] of composableMap) {
+          if (source.includes(name)) {
+            edges.push({
+              sourceNodeType: 'symbol',
+              sourceRefId: compSymbol.id,
+              targetNodeType: 'symbol',
+              targetRefId: target.id,
+              edgeType: 'nuxt_auto_imports',
+              metadata: { composable: name },
+            });
+          }
+        }
+
+        // Check for shared utility/type usage
+        for (const [name, target] of sharedMap) {
+          if (source.includes(name)) {
+            edges.push({
+              sourceNodeType: 'symbol',
+              sourceRefId: compSymbol.id,
+              targetNodeType: 'symbol',
+              targetRefId: target.id,
+              edgeType: 'nuxt_shared_import',
+              metadata: { shared: name },
+            });
+          }
         }
       }
     }
