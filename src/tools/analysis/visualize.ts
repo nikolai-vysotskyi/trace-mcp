@@ -153,6 +153,17 @@ export function buildGraphData(
   return buildSingleProjectGraph(store, opts, scope, depth, granularity, hideIsolated);
 }
 
+/** Directories that should never appear in graph visualizations (safety net for stale indexes). */
+const GRAPH_EXCLUDE_DIRS = new Set([
+  'node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__',
+  '.venv', '.next', '.nuxt', 'coverage', '.turbo', '.cache',
+]);
+
+function isExcludedPath(filePath: string): boolean {
+  const segments = filePath.split('/');
+  return segments.some((seg) => GRAPH_EXCLUDE_DIRS.has(seg));
+}
+
 function buildSingleProjectGraph(
   store: Store,
   opts: VisualizeGraphOptions,
@@ -164,9 +175,9 @@ function buildSingleProjectGraph(
   // 1. Determine seed files
   let seedFiles: FileRow[];
   if (scope === 'project') {
-    seedFiles = store.getAllFiles();
+    seedFiles = store.getAllFiles().filter((f) => !isExcludedPath(f.path));
   } else {
-    const allFiles = store.getAllFiles();
+    const allFiles = store.getAllFiles().filter((f) => !isExcludedPath(f.path));
     if (scope.includes('*')) {
       const isMatch = picomatch(scope, { dot: true });
       seedFiles = allFiles.filter((f) => isMatch(f.path));
@@ -409,10 +420,11 @@ function buildFileGraph(
   // Load all file info
   const allFilesById = store.getFilesByIds([...expandedFileIds]);
 
-  // 5. Build file-level viz nodes
+  // 5. Build file-level viz nodes (exclude vendor/node_modules even if reached via edges)
   const vizNodeMap = new Map<string, VizNode>();
   for (const [, file] of allFilesById) {
     if (vizNodeMap.has(file.path)) continue;
+    if (isExcludedPath(file.path)) continue;
     vizNodeMap.set(file.path, {
       id: file.path,
       label: path.basename(file.path),
@@ -530,8 +542,16 @@ function buildSymbolGraph(
   // -- Resolve all visited file nodes to file IDs --
   const fileNodeRefs = store.getNodeRefsBatch([...visitedFileNodes]);
   const connectedFileIds = new Set<number>();
+  // Pre-load file paths for exclusion check
+  const candidateFileRefIds: number[] = [];
+  for (const [, ref] of fileNodeRefs) {
+    if (ref.nodeType === 'file') candidateFileRefIds.push(ref.refId);
+  }
+  const candidateFilesMap = candidateFileRefIds.length > 0 ? store.getFilesByIds(candidateFileRefIds) : new Map();
   for (const [nodeId, ref] of fileNodeRefs) {
     if (ref.nodeType === 'file') {
+      const file = candidateFilesMap.get(ref.refId);
+      if (file && isExcludedPath(file.path)) continue;
       nodeIdToFileId.set(nodeId, ref.refId);
       connectedFileIds.add(ref.refId);
     }
@@ -631,6 +651,7 @@ function buildSymbolGraph(
 
   for (const sym of symbolsById.values()) {
     const file = filesById.get(sym.file_id);
+    if (file && isExcludedPath(file.path)) continue;
     vizNodes.push({
       id: sym.symbol_id,
       label: sym.name,
