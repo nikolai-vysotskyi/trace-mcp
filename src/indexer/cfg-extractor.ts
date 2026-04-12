@@ -40,8 +40,9 @@ export interface CFGResult {
   max_nesting: number;
 }
 
-/** Patterns for control flow statements */
+/** Patterns for control flow statements (JS/TS + Python) */
 const PATTERNS: { kind: CFGNodeKind; regex: RegExp; condGroup?: number }[] = [
+  // --- JS/TS patterns ---
   { kind: 'else_if', regex: /^\s*}\s*else\s+if\s*\((.+?)\)\s*\{?/, condGroup: 1 },
   { kind: 'else', regex: /^\s*}\s*else\s*\{?/ },
   { kind: 'if', regex: /^\s*(?:}\s*)?if\s*\((.+?)\)\s*\{?/, condGroup: 1 },
@@ -62,6 +63,36 @@ const PATTERNS: { kind: CFGNodeKind; regex: RegExp; condGroup?: number }[] = [
   { kind: 'continue', regex: /^\s*continue\b/ },
   { kind: 'await', regex: /^\s*(?:const|let|var)?\s*\w*\s*=?\s*await\b/ },
   { kind: 'yield', regex: /^\s*(?:const|let|var)?\s*\w*\s*=?\s*yield\b/ },
+
+  // --- Python patterns ---
+  // Python: elif condition:
+  { kind: 'else_if', regex: /^\s*elif\s+(.+?)\s*:/, condGroup: 1 },
+  // Python: else: (no brace, colon-terminated)
+  { kind: 'else', regex: /^\s*else\s*:/ },
+  // Python: if condition:
+  { kind: 'if', regex: /^\s*if\s+(.+?)\s*:/, condGroup: 1 },
+  // Python: for x in iterable:
+  { kind: 'for_in', regex: /^\s*(?:async\s+)?for\s+\w+(?:\s*,\s*\w+)*\s+in\s+(.+?)\s*:/, condGroup: 1 },
+  // Python: while condition:
+  { kind: 'while', regex: /^\s*while\s+(.+?)\s*:/, condGroup: 1 },
+  // Python: match subject:  (3.10+)
+  { kind: 'switch', regex: /^\s*match\s+(.+?)\s*:/, condGroup: 1 },
+  // Python: case pattern:
+  { kind: 'case', regex: /^\s*case\s+(.+?)\s*:/, condGroup: 1 },
+  // Python: try:
+  { kind: 'try', regex: /^\s*try\s*:/ },
+  // Python: except ExceptionType as e:
+  { kind: 'catch', regex: /^\s*except\s*(.+?)?\s*:/, condGroup: 1 },
+  // Python: finally:
+  { kind: 'finally', regex: /^\s*finally\s*:/ },
+  // Python: raise
+  { kind: 'throw', regex: /^\s*raise\b/ },
+  // Python: with ... as ...: (context manager = resource acquisition)
+  { kind: 'try', regex: /^\s*(?:async\s+)?with\s+(.+?)\s*:/, condGroup: 1 },
+  // Python: yield / yield from
+  { kind: 'yield', regex: /^\s*yield\b/ },
+  // Python: await
+  { kind: 'await', regex: /^\s*\w+\s*=\s*await\b/ },
 ];
 
 export function extractCFG(source: string, startLine = 1): CFGResult {
