@@ -6,6 +6,8 @@ directories:
 files:
   - dist/**
   - package.json
+  - assets/**
+  - build/icon.png
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.png
