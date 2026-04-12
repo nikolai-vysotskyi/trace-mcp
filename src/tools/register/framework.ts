@@ -259,7 +259,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
         };
         return { content: [{ type: 'text', text: jh('get_call_graph', enriched) }] };
       }
-      return { content: [{ type: 'text', text: jh('get_call_graph', { ...result.value, _methodology: CALL_GRAPH_METHODOLOGY }) }] };
+      return { content: [{ type: 'text', text: jh('get_call_graph', result.value) }] };
     },
   );
 

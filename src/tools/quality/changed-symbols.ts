@@ -31,10 +31,11 @@ interface ChangedSymbolsResult {
 }
 
 interface ChangedSymbolsOptions {
-  since: string;
+  since?: string;
   until?: string;
   includeBlastRadius?: boolean;
   maxBlastDepth?: number;
+  defaultBaseBranch?: string;
 }
 
 interface DiffHunk {
@@ -42,6 +43,34 @@ interface DiffHunk {
   newStart: number;
   newCount: number;
   filter: string; // A, M, D, R
+}
+
+/**
+ * Auto-detect the base branch and return merge-base with the target ref.
+ * Priority: configured defaultBaseBranch → main → master → err.
+ */
+function detectBaseBranch(rootPath: string, until: string, defaultBaseBranch?: string): TraceMcpResult<string> {
+  const candidates = defaultBaseBranch
+    ? [defaultBaseBranch]
+    : ['main', 'master'];
+
+  for (const candidate of candidates) {
+    try {
+      const mergeBase = execSync(
+        `git merge-base ${candidate} ${until}`,
+        { cwd: rootPath, encoding: 'utf-8', timeout: 10_000 },
+      ).trim();
+      return ok(mergeBase);
+    } catch {
+      // try next candidate
+    }
+  }
+
+  const tried = candidates.map((c) => `"${c}"`).join(', ');
+  return err({
+    code: 'VALIDATION_ERROR',
+    message: `Cannot auto-detect base branch (tried ${tried}). Please provide an explicit "since" ref or set git.defaultBaseBranch in config.`,
+  });
 }
 
 /**
@@ -55,11 +84,21 @@ export function getChangedSymbols(
 ): TraceMcpResult<ChangedSymbolsResult> {
   const until = opts.until ?? 'HEAD';
 
+  // Auto-detect base branch when `since` is omitted
+  let since: string;
+  if (opts.since) {
+    since = opts.since;
+  } else {
+    const detected = detectBaseBranch(rootPath, until, opts.defaultBaseBranch);
+    if (detected.isErr()) return detected as any;
+    since = detected.value;
+  }
+
   // Get list of changed files with their status
   let diffNameStatus: string;
   try {
     diffNameStatus = execSync(
-      `git diff --name-status --diff-filter=AMRD ${opts.since}..${until}`,
+      `git diff --name-status --diff-filter=AMRD ${since}..${until}`,
       { cwd: rootPath, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: 15_000 },
     ).trim();
   } catch (e) {
@@ -68,7 +107,7 @@ export function getChangedSymbols(
 
   if (!diffNameStatus) {
     return ok({
-      since: opts.since,
+      since,
       until,
       changedFiles: 0,
       changedSymbols: [],
@@ -90,7 +129,7 @@ export function getChangedSymbols(
   let diffUnified = '';
   try {
     diffUnified = execSync(
-      `git diff --unified=0 ${opts.since}..${until}`,
+      `git diff --unified=0 ${since}..${until}`,
       { cwd: rootPath, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024, timeout: 30_000 },
     );
   } catch {
@@ -208,7 +247,7 @@ export function getChangedSymbols(
   };
 
   return ok({
-    since: opts.since,
+    since,
     until,
     changedFiles: fileStatuses.size,
     changedSymbols,
@@ -233,6 +272,7 @@ interface BranchComparisonOptions {
   includeBlastRadius?: boolean;
   maxBlastDepth?: number;
   groupBy?: 'file' | 'category' | 'risk';
+  defaultBaseBranch?: string;
 }
 
 interface BranchComparisonResult extends ChangedSymbolsResult {
@@ -253,30 +293,26 @@ export function compareBranches(
   rootPath: string,
   opts: BranchComparisonOptions,
 ): TraceMcpResult<BranchComparisonResult> {
-  const base = opts.base ?? 'main';
   const branch = opts.branch;
 
-  // Find merge base between the two branches
+  // Resolve base branch: explicit > config > auto-detect main/master
+  let base: string;
   let mergeBase: string;
-  try {
-    mergeBase = execSync(
-      `git merge-base ${base} ${branch}`,
-      { cwd: rootPath, encoding: 'utf-8', timeout: 10_000 },
-    ).trim();
-  } catch (e) {
-    // Try 'master' if 'main' doesn't exist
-    if (base === 'main') {
-      try {
-        mergeBase = execSync(
-          `git merge-base master ${branch}`,
-          { cwd: rootPath, encoding: 'utf-8', timeout: 10_000 },
-        ).trim();
-      } catch {
-        return err({ code: 'VALIDATION_ERROR', message: `Cannot find merge base between ${base} and ${branch}: ${e instanceof Error ? e.message : String(e)}` });
-      }
-    } else {
+  if (opts.base) {
+    base = opts.base;
+    try {
+      mergeBase = execSync(
+        `git merge-base ${base} ${branch}`,
+        { cwd: rootPath, encoding: 'utf-8', timeout: 10_000 },
+      ).trim();
+    } catch (e) {
       return err({ code: 'VALIDATION_ERROR', message: `Cannot find merge base between ${base} and ${branch}: ${e instanceof Error ? e.message : String(e)}` });
     }
+  } else {
+    const detected = detectBaseBranch(rootPath, branch, opts.defaultBaseBranch);
+    if (detected.isErr()) return detected as any;
+    mergeBase = detected.value;
+    base = opts.defaultBaseBranch ?? 'main';
   }
 
   // Count commits in range

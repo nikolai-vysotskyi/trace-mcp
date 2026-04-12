@@ -3,6 +3,7 @@ import { ok, err, type TraceMcpResult } from '../../errors.js';
 import { notFound } from '../../errors.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { execSync } from 'node:child_process';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 // ─── Pennant (feature-flag) types ────────────────────────────────────────────
 
@@ -320,7 +321,7 @@ function getFileChurn(cwd: string, filePath: string, days: number): number {
 
 export function getChangeImpact(
   store: Store,
-  opts: { filePath?: string; symbolId?: string; symbolIds?: string[]; decoratorFilter?: string },
+  opts: { filePath?: string; symbolId?: string; fqn?: string; symbolIds?: string[]; decoratorFilter?: string },
   depth = 3,
   maxDependents = 200,
   cwd?: string,
@@ -352,16 +353,16 @@ export function getChangeImpact(
     targetSymbolName = firstSym.name;
     targetKind = firstSym.kind;
     startNodeIds = [...new Set(startNodeIds)];
-  } else if (opts.symbolId) {
-    const sym = store.getSymbolBySymbolId(opts.symbolId);
-    if (!sym) {
-      return err(notFound(opts.symbolId));
+  } else if (opts.symbolId || opts.fqn) {
+    const resolved = resolveSymbolInput(store, { symbolId: opts.symbolId, fqn: opts.fqn });
+    if (!resolved) {
+      return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
     }
+    const sym = resolved.symbol;
     const nodeId = store.getNodeId('symbol', sym.id);
     if (nodeId != null) startNodeIds.push(nodeId);
-    const file = store.getFileById(sym.file_id);
-    targetPath = file?.path ?? 'unknown';
-    targetSymbolId = opts.symbolId;
+    targetPath = resolved.file.path;
+    targetSymbolId = sym.symbol_id;
     targetSymbolName = sym.name;
     targetKind = sym.kind;
   } else if (opts.filePath) {

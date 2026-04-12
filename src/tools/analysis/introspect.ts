@@ -364,6 +364,7 @@ interface GetDeadExportsResult {
   dead_exports: DeadExportItem[];
   total_exports: number;
   total_dead: number;
+  unsupported_languages?: string[];
 }
 
 /**
@@ -418,11 +419,23 @@ export function getDeadExports(
     }
   }
 
+  // Detect languages present in the project that lack export semantics.
+  // Warn explicitly so agents don't mistake "0 exports" for "no dead code".
+  const LANGUAGES_WITH_EXPORT_SUPPORT = new Set([
+    'typescript', 'javascript', 'tsx', 'jsx',
+    'python', 'go', 'rust', 'zig',
+    'bash', 'makefile', 'assembly', 'erlang',
+  ]);
+  const allFiles = store.getAllFiles();
+  const projectLanguages = new Set(allFiles.map((f) => f.language).filter(Boolean));
+  const unsupported = [...projectLanguages].filter((l) => !LANGUAGES_WITH_EXPORT_SUPPORT.has(l));
+
   return {
     file_pattern: filePattern ?? null,
     dead_exports: dead,
     total_exports: exported.filter((s) => s.kind !== 'method').length,
     total_dead: dead.length,
+    ...(unsupported.length > 0 ? { unsupported_languages: unsupported } : {}),
   };
 }
 

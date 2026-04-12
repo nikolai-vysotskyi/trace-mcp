@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface TestReference {
   test_file: string;
@@ -37,13 +38,11 @@ export function getTestsFor(
   let nodeId: number | undefined;
 
   if (opts.symbolId || opts.fqn) {
-    const symbol = opts.symbolId
-      ? store.getSymbolBySymbolId(opts.symbolId)
-      : store.getSymbolByFqn(opts.fqn!);
-    if (!symbol) return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
+    const resolved = resolveSymbolInput(store, opts);
+    if (!resolved) return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
+    const symbol = resolved.symbol;
     targetSymbolId = symbol.symbol_id;
-    const f = store.getFileById(symbol.file_id);
-    if (f) targetFile = f.path;
+    targetFile = resolved.file.path;
     nodeId = store.getNodeId('symbol', symbol.id);
   } else if (opts.filePath) {
     const f = store.getFile(opts.filePath);
