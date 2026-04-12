@@ -27,6 +27,9 @@ export const REGISTRY_PATH = path.join(TRACE_MCP_HOME, 'registry.json');
 /** Topology database (cross-service graph). */
 export const TOPOLOGY_DB_PATH = path.join(TRACE_MCP_HOME, 'topology.db');
 
+/** Decision memory database (cross-session knowledge graph). */
+export const DECISIONS_DB_PATH = path.join(TRACE_MCP_HOME, 'decisions.db');
+
 /** Default port the daemon listens on. */
 export const DEFAULT_DAEMON_PORT = 3741;
 
