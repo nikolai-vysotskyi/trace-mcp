@@ -216,7 +216,7 @@ export class NuxtPlugin implements FrameworkPlugin {
         { name: 'nuxt_auto_imports', category: 'nuxt', description: 'Auto-imported composable' },
         { name: 'api_calls', category: 'nuxt', description: 'fetch/useFetch API call' },
         { name: 'nuxt_shared_import', category: 'nuxt', description: 'Auto-imported shared utility or type' },
-        { name: 'renders_component', category: 'vue', description: 'Vue template renders component' },
+        { name: 'renders_component', category: 'nuxt', description: 'Vue template renders component' },
       ],
     };
   }
