@@ -131,36 +131,54 @@ describe('TopologyStore', () => {
   });
 
   describe('federated repos', () => {
+    const PROJECT = '/projects/my-app';
+
     it('upserts and retrieves repos', () => {
-      const id = store.upsertFederatedRepo({ name: 'frontend', repoRoot: '/repos/frontend' });
+      const id = store.upsertFederatedRepo({ name: 'frontend', repoRoot: '/repos/frontend', projectRoot: PROJECT });
       expect(id).toBeGreaterThan(0);
 
       const repo = store.getFederatedRepo('frontend');
       expect(repo).toBeDefined();
       expect(repo!.repo_root).toBe('/repos/frontend');
+      expect(repo!.project_root).toBe(PROJECT);
     });
 
     it('retrieves by root path', () => {
-      store.upsertFederatedRepo({ name: 'backend', repoRoot: '/repos/backend' });
+      store.upsertFederatedRepo({ name: 'backend', repoRoot: '/repos/backend', projectRoot: PROJECT });
       const repo = store.getFederatedRepo('/repos/backend');
       expect(repo).toBeDefined();
       expect(repo!.name).toBe('backend');
     });
 
+    it('filters by project root', () => {
+      store.upsertFederatedRepo({ name: 'a', repoRoot: '/a', projectRoot: '/project-1' });
+      store.upsertFederatedRepo({ name: 'b', repoRoot: '/b', projectRoot: '/project-1' });
+      store.upsertFederatedRepo({ name: 'c', repoRoot: '/c', projectRoot: '/project-2' });
+      expect(store.getAllFederatedRepos()).toHaveLength(3);
+      expect(store.getFederatedReposByProject('/project-1')).toHaveLength(2);
+      expect(store.getFederatedReposByProject('/project-2')).toHaveLength(1);
+    });
+
+    it('same repo can belong to different projects', () => {
+      store.upsertFederatedRepo({ name: 'shared-lib', repoRoot: '/shared', projectRoot: '/project-1' });
+      store.upsertFederatedRepo({ name: 'shared-lib', repoRoot: '/shared', projectRoot: '/project-2' });
+      expect(store.getAllFederatedRepos()).toHaveLength(2);
+    });
+
     it('lists all repos', () => {
-      store.upsertFederatedRepo({ name: 'a', repoRoot: '/a' });
-      store.upsertFederatedRepo({ name: 'b', repoRoot: '/b' });
+      store.upsertFederatedRepo({ name: 'a', repoRoot: '/a', projectRoot: PROJECT });
+      store.upsertFederatedRepo({ name: 'b', repoRoot: '/b', projectRoot: PROJECT });
       expect(store.getAllFederatedRepos()).toHaveLength(2);
     });
 
     it('deletes a repo', () => {
-      const id = store.upsertFederatedRepo({ name: 'del', repoRoot: '/del' });
+      const id = store.upsertFederatedRepo({ name: 'del', repoRoot: '/del', projectRoot: PROJECT });
       store.deleteFederatedRepo(id);
       expect(store.getFederatedRepo('del')).toBeUndefined();
     });
 
     it('updates sync time', () => {
-      const id = store.upsertFederatedRepo({ name: 'synced', repoRoot: '/synced' });
+      const id = store.upsertFederatedRepo({ name: 'synced', repoRoot: '/synced', projectRoot: PROJECT });
       store.updateFederatedRepoSyncTime(id);
       const repo = store.getFederatedRepo('synced');
       expect(repo!.last_synced).not.toBeNull();
@@ -171,7 +189,7 @@ describe('TopologyStore', () => {
     let repoId: number;
 
     beforeEach(() => {
-      repoId = store.upsertFederatedRepo({ name: 'client-repo', repoRoot: '/client' });
+      repoId = store.upsertFederatedRepo({ name: 'client-repo', repoRoot: '/client', projectRoot: '/project' });
     });
 
     it('inserts and retrieves client calls', () => {

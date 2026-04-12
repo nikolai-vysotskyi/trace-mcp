@@ -30,15 +30,16 @@ export const federationCommand = new Command('federation')
 
 federationCommand
   .command('add')
-  .description('Add a repository to the federation')
-  .requiredOption('--repo <path>', 'Path to the repository')
+  .description('Add a repository/service to the federation, bound to a project')
+  .requiredOption('--repo <path>', 'Path to the repository/service')
+  .requiredOption('--project <path>', 'Project root this federation belongs to')
   .option('--contract <paths...>', 'Explicit contract file paths (relative to repo root)')
   .option('--name <name>', 'Name for this repo (default: directory basename)')
-  .action((opts: { repo: string; contract?: string[]; name?: string }) => {
+  .action((opts: { repo: string; project: string; contract?: string[]; name?: string }) => {
     const { manager, topoStore } = createManager();
     try {
-      console.log(`Adding repo to federation: ${opts.repo}`);
-      const result = manager.add(opts.repo, {
+      console.log(`Adding repo to federation: ${opts.repo} (project: ${opts.project})`);
+      const result = manager.add(opts.repo, opts.project, {
         name: opts.name,
         contractPaths: opts.contract,
       });
@@ -84,12 +85,13 @@ federationCommand
 
 federationCommand
   .command('list')
-  .description('List all federated repositories and their connections')
+  .description('List federated repositories and their connections')
   .option('--json', 'Output as JSON')
-  .action((opts: { json?: boolean }) => {
+  .option('--project <path>', 'Filter to federations of a specific project')
+  .action((opts: { json?: boolean; project?: string }) => {
     const { manager, topoStore } = createManager();
     try {
-      const graph = manager.list();
+      const graph = manager.list(opts.project);
 
       if (opts.json) {
         console.log(JSON.stringify(graph, null, 2));

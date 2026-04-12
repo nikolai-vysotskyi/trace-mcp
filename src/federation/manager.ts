@@ -108,14 +108,19 @@ export class FederationManager {
   constructor(private topoStore: TopologyStore) {}
 
   /**
-   * Add a repo to the federation. Discovers services, parses contracts,
-   * scans for client calls, and links them to known endpoints.
+   * Add a repo to the federation bound to a specific project.
+   * Discovers services, parses contracts, scans for client calls, and links to known endpoints.
+   *
+   * @param repoRoot - path to the repo/service being added as a federation member
+   * @param projectRoot - the project this federation belongs to
+   * @param opts - optional name, contract paths
    */
-  add(repoRoot: string, opts?: {
+  add(repoRoot: string, projectRoot: string, opts?: {
     name?: string;
     contractPaths?: string[];
   }): FederationAddResult {
     const absRoot = path.resolve(repoRoot);
+    const absProjectRoot = path.resolve(projectRoot);
     if (!fs.existsSync(absRoot)) {
       throw new Error(`Repository path does not exist: ${absRoot}`);
     }
@@ -126,6 +131,7 @@ export class FederationManager {
     const repoId = this.topoStore.upsertFederatedRepo({
       name: repoName,
       repoRoot: absRoot,
+      projectRoot: absProjectRoot,
       dbPath: fs.existsSync(dbPath) ? dbPath : undefined,
       contractPaths: opts?.contractPaths,
     });
@@ -161,6 +167,64 @@ export class FederationManager {
   }
 
   /**
+   * Auto-federate a project: detect services within the project root
+   * and register each as a federation member bound to this project.
+   * Unlike add(), this doesn't add the project itself — it discovers
+   * sub-services (from docker-compose, workspace structure, or root markers).
+   */
+  autoFederateProject(projectRoot: string, opts?: {
+    contractPaths?: string[];
+  }): { services: FederationAddResult[] } {
+    const absProjectRoot = path.resolve(projectRoot);
+    if (!fs.existsSync(absProjectRoot)) {
+      throw new Error(`Project path does not exist: ${absProjectRoot}`);
+    }
+
+    const detected = detectServices([absProjectRoot]);
+    const results: FederationAddResult[] = [];
+
+    for (const svc of detected) {
+      const repoName = svc.name;
+      const dbPath = getDbPath(svc.repoRoot);
+
+      const repoId = this.topoStore.upsertFederatedRepo({
+        name: repoName,
+        repoRoot: svc.repoRoot,
+        projectRoot: absProjectRoot,
+        dbPath: fs.existsSync(dbPath) ? dbPath : undefined,
+        contractPaths: opts?.contractPaths,
+      });
+
+      const serviceId = this.topoStore.upsertService({
+        name: svc.name,
+        repoRoot: svc.repoRoot,
+        dbPath,
+        serviceType: svc.serviceType,
+        detectionSource: svc.detectionSource,
+        projectGroup: svc.projectGroup,
+        metadata: svc.metadata,
+      });
+      this.registerContracts(serviceId, svc.repoRoot, svc.repoRoot, opts?.contractPaths);
+
+      const clientCalls = this.scanAndLinkClientCalls(repoId, svc.repoRoot);
+      this.topoStore.updateFederatedRepoSyncTime(repoId);
+
+      const stats = this.topoStore.getTopologyStats();
+      results.push({
+        repo: svc.repoRoot,
+        name: repoName,
+        services: 1,
+        contracts: stats.contracts,
+        endpoints: stats.endpoints,
+        clientCalls: clientCalls.scanned,
+        linkedCalls: clientCalls.linked,
+      });
+    }
+
+    return { services: results };
+  }
+
+  /**
    * Remove a repo from the federation.
    */
   remove(nameOrRoot: string): boolean {
@@ -184,10 +248,12 @@ export class FederationManager {
   }
 
   /**
-   * List all federated repos with stats.
+   * List federated repos with stats, optionally filtered by project.
    */
-  list(): FederationGraphResult {
-    const repos = this.topoStore.getAllFederatedRepos();
+  list(projectRoot?: string): FederationGraphResult {
+    const repos = projectRoot
+      ? this.topoStore.getFederatedReposByProject(projectRoot)
+      : this.topoStore.getAllFederatedRepos();
     const allServices = this.topoStore.getAllServices();
     const allEndpoints = this.topoStore.getAllEndpoints();
     const fedStats = this.topoStore.getFederationStats();
