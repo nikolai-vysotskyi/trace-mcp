@@ -213,15 +213,7 @@ function buildFederatedGraph(
   const projectRoot = opts.projectRoot;
   if (!projectRoot) return null;
 
-  const allRepos = topoStore.getAllFederatedRepos();
-  if (allRepos.length === 0) return null;
-
-  // Auto-federation: only include repos whose root is a strict sub-directory
-  // of the current project. Sibling/unrelated projects are never auto-included.
-  // To federate unrelated repos, the user must explicitly configure it.
-  const normalizedRoot = projectRoot.endsWith('/') ? projectRoot : projectRoot + '/';
-  const repos = allRepos.filter((r) => r.repo_root.startsWith(normalizedRoot));
-
+  const repos = topoStore.getFederatedReposByProject(projectRoot);
   if (repos.length === 0) return null; // no connected repos — skip federation
 
   const allNodes: VizNode[] = [];

@@ -125,14 +125,16 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'federation_add_repo',
-      'Add a repository to the federation. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints.',
+      'Add a repository as a federation member (service) of the current project. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints. The federation is bound to the current project — use `project` to override.',
       {
-        repo_path: z.string().min(1).max(1024).describe('Absolute or relative path to the repository'),
+        repo_path: z.string().min(1).max(1024).describe('Absolute or relative path to the repository/service'),
         name: z.string().max(256).optional().describe('Display name for the repo (default: directory basename)'),
+        project: z.string().max(1024).optional().describe('Project root this federation belongs to (default: current project)'),
         contract_paths: z.array(z.string().max(512)).optional().describe('Explicit contract file paths relative to repo root'),
       },
-      async ({ repo_path, name, contract_paths }) => {
-        const result = federationAddRepo(topoStore, { repoPath: repo_path, name, contractPaths: contract_paths });
+      async ({ repo_path, name, project, contract_paths }) => {
+        const targetProject = project ?? projectRoot;
+        const result = federationAddRepo(topoStore, { repoPath: repo_path, projectRoot: targetProject, name, contractPaths: contract_paths });
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },

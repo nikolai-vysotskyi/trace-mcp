@@ -246,16 +246,16 @@ describe('buildGraphData federation filtering', () => {
     topoDbPath = path.join(tmpDir, 'topology.db');
     topoStore = new TopologyStore(topoDbPath);
 
-    // Register two unrelated repos — NOT linked to our projectRoot
+    // Register two unrelated repos — bound to a different project
     topoStore.upsertFederatedRepo({
       name: 'unrelated-project-a',
       repoRoot: '/some/other/path/a',
-      dbPath: undefined,
+      projectRoot: '/some/other/project',
     });
     topoStore.upsertFederatedRepo({
       name: 'unrelated-project-b',
       repoRoot: '/some/other/path/b',
-      dbPath: undefined,
+      projectRoot: '/some/other/project',
     });
   });
 
@@ -277,12 +277,12 @@ describe('buildGraphData federation filtering', () => {
     expect(result.nodes.every((n) => !n.repo)).toBe(true); // no repo tag = single project mode
   });
 
-  it('does not include unrelated federated repos even when project is registered', () => {
-    // Register the current project in federation, but no cross-service edges to others
+  it('does not include unrelated federated repos even when project has a federation', () => {
+    // Register a federation for this project, but it has no DB — should fall back
     topoStore.upsertFederatedRepo({
-      name: 'my-project',
-      repoRoot: '/my/project/trace-mcp',
-      dbPath: undefined,
+      name: 'my-service',
+      repoRoot: '/my/project/trace-mcp/services/api',
+      projectRoot: '/my/project/trace-mcp',
     });
 
     const result = buildGraphData(store, {
@@ -296,24 +296,18 @@ describe('buildGraphData federation filtering', () => {
     expect(result.nodes.every((n) => !n.repo)).toBe(true);
   });
 
-  it('only federates sub-directory repos, not siblings', () => {
-    // Simulate: /projects/the has sub-projects, but /projects/trace-mcp is a sibling
-    topoStore.upsertFederatedRepo({
-      name: 'the',
-      repoRoot: '/projects/the',
-      dbPath: undefined,
-    });
-    // Sub-project of /projects/the — should be included
+  it('only shows federations belonging to the project, not other projects', () => {
+    // fair-front belongs to /projects/the
     topoStore.upsertFederatedRepo({
       name: 'fair-front',
       repoRoot: '/projects/the/fair/fair-front',
-      dbPath: undefined,
+      projectRoot: '/projects/the',
     });
-    // Sibling — should NOT be included
+    // trace-mcp belongs to a different project — should NOT appear
     topoStore.upsertFederatedRepo({
       name: 'trace-mcp',
       repoRoot: '/projects/trace-mcp',
-      dbPath: undefined,
+      projectRoot: '/projects/trace-mcp',
     });
 
     const result = buildGraphData(store, {

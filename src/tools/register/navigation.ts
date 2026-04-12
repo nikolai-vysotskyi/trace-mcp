@@ -15,9 +15,10 @@ import { fallbackSearch, fallbackOutline } from '../navigation/zero-index.js';
 import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../shared/confidence.js';
 import { FederationManager } from '../../federation/manager.js';
+import { decisionsForImpact, decisionsForTask } from '../../memory/enrichment.js';
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
-  const { store, projectRoot, guardPath, j, jh, savings, vectorStore, embeddingService, reranker, markExplored } = ctx;
+  const { store, projectRoot, guardPath, j, jh, savings, vectorStore, embeddingService, reranker, markExplored, decisionStore } = ctx;
 
   // --- Level 1 Navigation Tools ---
 
@@ -242,7 +243,18 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
       const includeMethodology = result.value.totalAffected === 0 || result.value.risk?.level === 'high' || result.value.risk?.level === 'critical';
-      const payload = includeMethodology ? { ...result.value, _methodology: CHANGE_IMPACT_METHODOLOGY } : result.value;
+      const payload: Record<string, unknown> = includeMethodology ? { ...result.value, _methodology: CHANGE_IMPACT_METHODOLOGY } : { ...result.value };
+      // Enrich with linked decisions (code-aware memory)
+      if (decisionStore) {
+        const linkedDecisions = decisionsForImpact(
+          decisionStore, projectRoot,
+          { symbolId: symbol_id ?? fqn, filePath: file_path },
+          result.value.dependents?.map(d => d.path),
+        );
+        if (linkedDecisions.length > 0) {
+          payload.linked_decisions = linkedDecisions;
+        }
+      }
       return { content: [{ type: 'text', text: jh('get_change_impact', payload) }] };
     },
   );
