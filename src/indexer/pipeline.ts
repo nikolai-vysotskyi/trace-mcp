@@ -5,7 +5,7 @@ import fg from 'fast-glob';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { ResolveContext, ProjectContext } from '../plugin-api/types.js';
+import type { ResolveContext, ProjectContext, FrameworkPlugin } from '../plugin-api/types.js';
 import { buildProjectContext } from './project-context.js';
 import { logger } from '../logger.js';
 import { detectWorkspaces, buildMultiRootWorkspaces, type WorkspaceInfo } from './monorepo.js';
@@ -236,6 +236,9 @@ export class IndexingPipeline {
     edgeResolver.resolveOrmAssociationEdges();
     edgeResolver.resolveTypeScriptHeritageEdges();
     edgeResolver.resolveEsmImportEdges();
+    edgeResolver.resolvePythonImportEdges();
+    edgeResolver.resolvePythonHeritageEdges();
+    edgeResolver.resolvePythonCallEdges();
     edgeResolver.resolveTestCoversEdges();
   }
 
@@ -270,17 +273,28 @@ export class IndexingPipeline {
   }
 
   private registerFrameworkEdgeTypes(): void {
-    const ctx = this.buildProjectContext();
-    const activeResult = this.registry.getActiveFrameworkPlugins(ctx);
-    if (activeResult.isErr()) return;
-
-    for (const plugin of activeResult.value) {
-      const schema = plugin.registerSchema();
-      if (schema.edgeTypes) {
-        for (const et of schema.edgeTypes) {
-          this.store.ensureEdgeType(et.name, et.category, et.description ?? '');
+    const registerSchema = (plugins: FrameworkPlugin[]) => {
+      for (const plugin of plugins) {
+        const schema = plugin.registerSchema();
+        if (schema.edgeTypes) {
+          for (const et of schema.edgeTypes) {
+            this.store.ensureEdgeType(et.name, et.category, et.description ?? '');
+          }
         }
       }
+    };
+
+    // Root-level plugins
+    const ctx = this.buildProjectContext();
+    const activeResult = this.registry.getActiveFrameworkPlugins(ctx);
+    if (activeResult.isOk()) registerSchema(activeResult.value);
+
+    // Workspace-level plugins (may detect frameworks not visible at root)
+    for (const ws of this.workspaces) {
+      const wsRoot = path.join(this.rootPath, ws.path);
+      const wsCtx = buildProjectContext(wsRoot);
+      const wsPlugins = this.registry.getAllFrameworkPlugins().filter((p) => p.detect(wsCtx));
+      registerSchema(wsPlugins);
     }
   }
 

@@ -3,26 +3,68 @@
  * Orchestrates edge resolution passes and provides shared storeRawEdges.
  * Domain-specific resolvers live in ./edge-resolvers/.
  */
+import path from 'node:path';
 import type { ResolveContext, RawEdge, ProjectContext } from '../plugin-api/types.js';
 import { executeFrameworkResolveEdges } from '../plugin-api/executor.js';
+import { buildProjectContext } from './project-context.js';
 import type { PipelineState } from './pipeline-state.js';
 import { resolveOrmAssociationEdges as _resolveOrm } from './edge-resolvers/orm.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
 import { resolveEsmImportEdges as _resolveImports } from './edge-resolvers/imports.js';
+import { resolvePythonImportEdges as _resolvePyImports } from './edge-resolvers/python-imports.js';
+import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolvers/python-heritage.js';
+import { resolvePythonCallEdges as _resolvePyCalls } from './edge-resolvers/python-calls.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
 
 export class EdgeResolver {
   constructor(private state: PipelineState) {}
 
-  /** Pass 2: resolve framework plugin edges. */
+  /** Pass 2: resolve framework plugin edges (root + per-workspace). */
   async resolveEdges(projectContext: ProjectContext, resolveContext: ResolveContext): Promise<void> {
+    // Root-level plugins
     const activeResult = this.state.registry.getActiveFrameworkPlugins(projectContext);
-    if (activeResult.isErr()) return;
+    if (activeResult.isOk()) {
+      for (const plugin of activeResult.value) {
+        const result = await executeFrameworkResolveEdges(plugin, resolveContext);
+        if (result.isErr()) continue;
+        this.storeRawEdges(result.value);
+      }
+    }
 
-    for (const plugin of activeResult.value) {
-      const result = await executeFrameworkResolveEdges(plugin, resolveContext);
-      if (result.isErr()) continue;
-      this.storeRawEdges(result.value);
+    // Workspace-level plugins — each workspace may have its own frameworks.
+    // We create a scoped ResolveContext that translates paths to workspace-relative.
+    const seen = new Set<string>(); // avoid running the same plugin twice
+    if (activeResult.isOk()) {
+      for (const p of activeResult.value) seen.add(p.manifest.name);
+    }
+
+    for (const ws of this.state.workspaces) {
+      const wsRoot = path.join(this.state.rootPath, ws.path);
+      const wsCtx = buildProjectContext(wsRoot);
+      const wsPlugins = this.state.registry.getAllFrameworkPlugins()
+        .filter((p) => !seen.has(p.manifest.name) && p.detect(wsCtx));
+      if (wsPlugins.length === 0) continue;
+
+      // Create a scoped resolve context: paths are workspace-relative,
+      // rootPath points to the workspace root.
+      const wsPrefix = ws.path + '/';
+      const scopedCtx: ResolveContext = {
+        rootPath: wsRoot,
+        getAllFiles: () => resolveContext.getAllFiles()
+          .filter((f) => f.path.startsWith(wsPrefix))
+          .map((f) => ({ ...f, path: f.path.slice(wsPrefix.length) })),
+        getSymbolsByFile: resolveContext.getSymbolsByFile,
+        getSymbolByFqn: resolveContext.getSymbolByFqn,
+        getNodeId: resolveContext.getNodeId,
+        createNodeIfNeeded: resolveContext.createNodeIfNeeded,
+        readFile: (relPath: string) => resolveContext.readFile(wsPrefix + relPath),
+      };
+
+      for (const plugin of wsPlugins) {
+        const result = await executeFrameworkResolveEdges(plugin, scopedCtx);
+        if (result.isErr()) continue;
+        this.storeRawEdges(result.value);
+      }
     }
   }
 
@@ -35,7 +77,16 @@ export class EdgeResolver {
   /** Pass 2d: ES module import edges. */
   resolveEsmImportEdges(): void { _resolveImports(this.state); }
 
-  /** Pass 2e: test_covers edges. */
+  /** Pass 2e: Python import edges (dotted paths, relative imports). */
+  resolvePythonImportEdges(): void { _resolvePyImports(this.state); }
+
+  /** Pass 2f: Python heritage edges (class inheritance). */
+  resolvePythonHeritageEdges(): void { _resolvePyHeritage(this.state); }
+
+  /** Pass 2g: Python call edges (function/method calls → definitions). */
+  resolvePythonCallEdges(): void { _resolvePyCalls(this.state); }
+
+  /** Pass 2h: test_covers edges. */
   resolveTestCoversEdges(): void { _resolveTests(this.state); }
 
   /** Store raw edges from framework/language plugins into the graph. */

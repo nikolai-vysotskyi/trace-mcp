@@ -2,7 +2,9 @@
 import type { PipelineState } from '../pipeline-state.js';
 import { logger } from '../../logger.js';
 
-const TEST_PATH_RE = /\.(test|spec)\.[jt]sx?$|__tests__\//;
+// JS/TS: *.test.ts, *.spec.ts, __tests__/
+// Python: test_*.py, *_test.py, conftest.py, tests/test_*.py
+const TEST_PATH_RE = /\.(test|spec)\.[jt]sx?$|__tests__\/|(?:^|[/\\])test_[^/\\]+\.py$|(?:^|[/\\])[^/\\]+_test\.py$|conftest\.py$/;
 
 export function resolveTestCoversEdges(state: PipelineState): void {
   const { store } = state;

@@ -7,8 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
-import type { ProjectContext, FileParseResult, RawEdge } from '../plugin-api/types.js';
-import { ok } from '../errors.js';
+import type { ProjectContext, FileParseResult, RawEdge, FrameworkPlugin } from '../plugin-api/types.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes } from '../plugin-api/executor.js';
 import { buildProjectContext } from './project-context.js';
 import { hashContent } from '../utils/hasher.js';
@@ -119,7 +118,7 @@ export class FileExtractor {
 
     const parsed = parseResult.value;
     const language = parsed.language ?? this.detectLanguage(relPath);
-    const workspace = this.resolveWorkspace(relPath);
+    const workspace = this.resolveWorkspacePath(relPath);
 
     // Compute complexity metrics and attach to symbol metadata.
     this.computeSymbolMetrics(parsed.symbols, contentStr, language);
@@ -129,7 +128,10 @@ export class FileExtractor {
     const importEdges: { from: string; specifiers: string[]; relPath: string }[] = [];
     if (parsed.edges?.length) {
       for (const edge of parsed.edges) {
-        if (edge.edgeType === 'imports' && !edge.sourceNodeType && !edge.sourceSymbolId) {
+        // Capture both JS/TS imports and Python imports for file-level resolution
+        const isImportEdge = (edge.edgeType === 'imports' || edge.edgeType === 'py_imports')
+          && !edge.sourceNodeType && !edge.sourceSymbolId;
+        if (isImportEdge) {
           importEdges.push({
             from: (edge.metadata as Record<string, unknown>)?.['from'] as string ?? '',
             specifiers: ((edge.metadata as Record<string, unknown>)?.['specifiers'] as string[]) ?? [],
@@ -197,46 +199,66 @@ export class FileExtractor {
     }
   }
 
+  /** Cache: workspace path → detected framework plugins */
+  private wsPluginCache = new Map<string, FrameworkPlugin[]>();
+
   private async collectFrameworkExtracts(
     relPath: string,
     content: Buffer,
     language: string,
   ): Promise<FileParseResult[]> {
-    // Use per-workspace ProjectContext when the file belongs to a workspace.
-    // This allows framework detection (e.g. LaravelPlugin) to find the correct
-    // composer.json/package.json in the workspace root, not just the top-level root.
-    let ctx = this.ctx.buildProjectContext();
-    let activeResult = this.ctx.registry.getActiveFrameworkPlugins(ctx);
+    // Determine which plugins to run and what path to pass.
+    // In a monorepo, each workspace may have its own framework (e.g. fair-front = Nuxt,
+    // fair-laravel = Laravel).  We need to:
+    // 1. Detect frameworks per-workspace (not just root)
+    // 2. Pass workspace-relative paths to extractNodes so path prefixes match
 
-    if (activeResult.isOk() && activeResult.value.length === 0 && this.ctx.workspaces.length > 0) {
-      const ws = this.resolveWorkspace(relPath);
-      if (ws) {
-        const wsRoot = path.join(this.ctx.rootPath, ws);
+    let plugins: FrameworkPlugin[] = [];
+    let extractPath = relPath; // path passed to extractNodes
+
+    // Try workspace-level detection first
+    const wsPath = this.resolveWorkspacePath(relPath);
+    if (wsPath) {
+      let cached = this.wsPluginCache.get(wsPath);
+      if (cached === undefined) {
+        const wsRoot = path.join(this.ctx.rootPath, wsPath);
         const wsCtx = buildProjectContext(wsRoot);
-        // Don't use the cache — get fresh plugins for this workspace context
-        const wsPlugins = this.ctx.registry.getAllFrameworkPlugins().filter((p) => p.detect(wsCtx));
-        if (wsPlugins.length > 0) {
-          activeResult = ok(wsPlugins);
-        }
+        cached = this.ctx.registry.getAllFrameworkPlugins().filter((p) => p.detect(wsCtx));
+        this.wsPluginCache.set(wsPath, cached);
+      }
+      if (cached.length > 0) {
+        plugins = cached;
+        // Strip workspace prefix so NuxtPlugin sees "app/pages/index.vue" not "fair/fair-front/app/pages/index.vue"
+        extractPath = relPath.slice(wsPath.length + 1);
       }
     }
 
-    if (activeResult.isErr()) return [];
+    // Fallback to root-level plugins
+    if (plugins.length === 0) {
+      const ctx = this.ctx.buildProjectContext();
+      const activeResult = this.ctx.registry.getActiveFrameworkPlugins(ctx);
+      if (activeResult.isOk()) {
+        plugins = activeResult.value;
+      }
+    }
+
+    if (plugins.length === 0) return [];
 
     const results: FileParseResult[] = [];
-    for (const plugin of activeResult.value) {
+    for (const plugin of plugins) {
       if (!plugin.extractNodes) continue;
-      const result = await executeFrameworkExtractNodes(plugin, relPath, content, language);
+      const result = await executeFrameworkExtractNodes(plugin, extractPath, content, language);
       if (result.isErr() || !result.value) continue;
       results.push(result.value);
     }
     return results;
   }
 
-  private resolveWorkspace(relPath: string): string | null {
+  /** Returns the workspace path (relative to root) that contains `relPath`, or null. */
+  private resolveWorkspacePath(relPath: string): string | null {
     for (const ws of this.ctx.workspaces) {
       if (relPath.startsWith(ws.path + '/') || relPath === ws.path) {
-        return ws.name;
+        return ws.path;
       }
     }
     return null;
