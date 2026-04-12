@@ -119,6 +119,8 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
       setGraphUrl(blobUrl);
     } catch (e: any) {
       setError(e.message);
+      setGraphUrl(null);
+      setStats(null);
     }
     setLoading(false);
   }, [root, depth, granularity, layout, hideIsolated]);
