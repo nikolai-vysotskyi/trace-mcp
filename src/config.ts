@@ -124,7 +124,7 @@ const ToolsConfigSchema = z.object({
   /** Control which meta fields appear in responses. true = all (default), false = none, or list specific fields to include */
   meta_fields: z.union([
     z.boolean(),
-    z.array(z.enum(['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta', '_duplication_warnings'])),
+    z.array(z.enum(['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta', '_duplication_warnings', '_methodology'])),
   ]).default(true),
 }).optional();
 
@@ -199,9 +199,9 @@ export const TraceMcpConfigSchema = z.object({
     'resources/views/**/*.blade.php',
   ]),
   exclude: z.array(z.string()).default([
-    'vendor/**', 'node_modules/**', '.git/**',
-    'dist/**', 'build/**', 'out/**',
-    'storage/**', 'bootstrap/cache/**', '.nuxt/**', '.next/**',
+    '**/vendor/**', '**/node_modules/**', '**/.git/**',
+    '**/dist/**', '**/build/**', '**/out/**',
+    '**/storage/**', '**/bootstrap/cache/**', '**/.nuxt/**', '**/.next/**',
     '**/.env', '**/.env.*',
   ]),
   ignore: IgnoreConfigSchema,
@@ -225,6 +225,9 @@ export const TraceMcpConfigSchema = z.object({
     path: z.string().default('~/.trace-mcp/run.log'),
     level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
     max_size_mb: z.number().positive().max(500).default(10),
+  }).default({}),
+  git: z.object({
+    defaultBaseBranch: z.string().max(256).optional().describe('Default base branch for diff tools (e.g. "develop"). Auto-detects main/master if omitted.'),
   }).default({}),
   children: z.array(z.string()).optional(),
 });
@@ -375,6 +378,24 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
     if (!parsed.success) {
       const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
       return err(configError(`Config validation failed: ${issues}`));
+    }
+
+    // Normalize exclude patterns and ensure essential directories are always excluded.
+    const essentialExcludes = ['**/vendor/**', '**/node_modules/**', '**/.git/**'];
+    const deepExcludeDirs = ['vendor', 'node_modules', '.git', 'dist', 'build', 'out', 'storage', 'bootstrap/cache', '.nuxt', '.next'];
+    parsed.data.exclude = parsed.data.exclude.map((pattern) => {
+      for (const dir of deepExcludeDirs) {
+        if (pattern === `${dir}/**` || pattern === `${dir}`) {
+          return `**/${dir}/**`;
+        }
+      }
+      return pattern;
+    });
+    // Ensure essential excludes are present even if user config overrides defaults
+    for (const essential of essentialExcludes) {
+      if (!parsed.data.exclude.includes(essential)) {
+        parsed.data.exclude.push(essential);
+      }
     }
 
     logger.debug({ searchFrom: searchFrom ?? 'defaults' }, 'Config loaded');

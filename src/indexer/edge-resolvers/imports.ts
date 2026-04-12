@@ -1,5 +1,4 @@
 /** Pass 2d: Resolve ES module import specifiers to file→file graph edges. */
-import fs from 'node:fs';
 import path from 'node:path';
 import type { PipelineState } from '../pipeline-state.js';
 import { EsModuleResolver } from '../resolvers/es-modules.js';
@@ -11,10 +10,8 @@ export function resolveEsmImportEdges(state: PipelineState): void {
 
   let resolver: EsModuleResolver;
   try {
-    const tsconfigPath = fs.existsSync(path.join(state.rootPath, 'tsconfig.json'))
-      ? path.join(state.rootPath, 'tsconfig.json')
-      : undefined;
-    resolver = new EsModuleResolver(state.rootPath, tsconfigPath);
+    const workspacePaths = state.workspaces?.map((ws) => ws.path) ?? [];
+    resolver = new EsModuleResolver(state.rootPath, workspacePaths);
   } catch {
     logger.warn('EsModuleResolver init failed — skipping import edge resolution');
     return;
