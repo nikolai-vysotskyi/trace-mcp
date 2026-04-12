@@ -126,17 +126,17 @@ export const initCommand = new Command('init')
             {
               value: 'standard' as const,
               label: 'Standard — CLAUDE.md + hooks',
-              hint: 'guard hooks intercept tool calls at runtime (recommended)',
+              hint: 'guard hooks intercept tool calls at runtime',
             },
             {
               value: 'max' as const,
               label: 'Max — CLAUDE.md + hooks + tweakcc',
               hint: tweakccState.installed
-                ? 'patches Claude\'s system prompts (strongest)'
-                : 'requires tweakcc — install with `npx tweakcc` first',
+                ? 'patches Claude\'s system prompts (recommended)'
+                : 'requires tweakcc — install with `npx tweakcc` first (recommended)',
             },
           ],
-          initialValue: 'standard' as const,
+          initialValue: 'max' as const,
         });
         if (p.isCancel(levelResult)) { p.cancel('Cancelled.'); process.exit(0); }
 
@@ -169,7 +169,7 @@ export const initCommand = new Command('init')
         const fixable = conflictReport.conflicts.filter((c) => {
           if (!c.fixable) return false;
           if (c.category === 'mcp_server') {
-            const clientName = c.id.split(':')[2];
+            const clientName = c.id.split(':')[2] as DetectedMcpClient['name'];
             return clientSet.has(clientName);
           }
           return true;
@@ -241,7 +241,7 @@ export const initCommand = new Command('init')
           if (!c.fixable) return false;
           // Only fix MCP server conflicts for clients the user selected
           if (c.category === 'mcp_server') {
-            const clientName = c.id.split(':')[2]; // id format: "mcp:<server>:<client>:<path>"
+            const clientName = c.id.split(':')[2] as DetectedMcpClient['name']; // id format: "mcp:<server>:<client>:<path>"
             return clientSet.has(clientName);
           }
           return true;
@@ -346,7 +346,13 @@ export const initCommand = new Command('init')
     if (installApp && !opts.dryRun) {
       const spin = p.spinner();
       spin.start('Downloading trace-mcp menu bar app…');
-      const appResult = await installGuiApp();
+      const appResult = await installGuiApp({
+        retries: 3,
+        retryDelayMs: 15_000,
+        onRetry: (attempt, total) => {
+          spin.message(`App asset not uploaded yet, retrying (${attempt}/${total})…`);
+        },
+      });
       if (appResult.installed) {
         spin.stop(`Installed → ${appResult.path}`);
         steps.push({ target: appResult.path!, action: 'created', detail: 'Menu bar app installed' });

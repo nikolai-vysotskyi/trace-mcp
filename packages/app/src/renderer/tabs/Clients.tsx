@@ -2,15 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { StatusDot } from '../components/StatusDot';
 import { useDaemon, ClientInfo } from '../hooks/useDaemon';
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
-      configureMcpClient: (clientName: string, level: string) => Promise<{ ok: boolean; error?: string }>;
-    };
-  }
-}
-
 // ── All supported MCP clients (same order as CLI init) ────────────
 type ClientName = 'claude-code' | 'claw-code' | 'claude-desktop' | 'cursor' | 'windsurf' | 'continue' | 'junie' | 'jetbrains-ai' | 'codex';
 
@@ -47,8 +38,8 @@ type EnforcementLevel = 'base' | 'standard' | 'max';
 
 const LEVELS: { value: EnforcementLevel; label: string; hint: string }[] = [
   { value: 'base', label: 'Base', hint: 'CLAUDE.md only — soft routing rules' },
-  { value: 'standard', label: 'Standard', hint: 'CLAUDE.md + hooks (recommended)' },
-  { value: 'max', label: 'Max', hint: 'CLAUDE.md + hooks + tweakcc' },
+  { value: 'standard', label: 'Standard', hint: 'CLAUDE.md + hooks' },
+  { value: 'max', label: 'Max', hint: 'CLAUDE.md + hooks + tweakcc (recommended)' },
 ];
 
 function LevelPopover({
@@ -87,7 +78,7 @@ function LevelPopover({
           onClick={() => onSelect(l.value)}
           className="w-full text-left px-3 py-2 transition-colors hover:brightness-110"
           style={{
-            background: l.value === 'standard' ? 'var(--bg-active)' : 'transparent',
+            background: l.value === 'max' ? 'var(--bg-active)' : 'transparent',
             borderBottom: i < LEVELS.length - 1 ? '0.5px solid var(--border)' : 'none',
           }}
         >
@@ -304,7 +295,7 @@ export function Clients() {
     detectClients();
   }, [detectClients]);
 
-  const handleConnect = async (clientName: string, level: EnforcementLevel = 'base') => {
+  const handleConnect = async (clientName: string, level: EnforcementLevel = 'max') => {
     setConfiguringClient(clientName);
     try {
       const result = await window.electronAPI?.configureMcpClient(clientName, level);
