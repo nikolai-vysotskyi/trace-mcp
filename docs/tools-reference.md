@@ -85,15 +85,35 @@ Enabled by default (`topology.enabled: true`). See [Configuration](configuration
 | `get_service_deps` | External service dependencies: outgoing and incoming |
 | `get_contract_drift` | Mismatches between API spec and implementation |
 
-### Multi-repo federation
+### Federation
+
+A federation (= service) is an individual microservice or service root within a project. A project auto-detects its federations on indexing, or you can add external ones manually.
 
 | Tool | What it does |
 |---|---|
-| `get_federation_graph` | All federated repos, cross-repo connections, and stats |
-| `get_federation_impact` | Cross-repo impact: find all client code across repos that would break if an endpoint changes. Resolves to symbol level when per-repo indexes exist |
-| `get_federation_clients` | Find all client calls across federated repos that call a specific endpoint |
-| `federation_add_repo` | Add a repository to the federation (discovers services, parses contracts, scans for client calls) |
-| `federation_sync` | Re-scan all federated repos: contracts, client calls, and re-link |
+| `get_federation_graph` | All federations, cross-federation connections, and stats |
+| `get_federation_impact` | Cross-federation impact: find all client code that would break if an endpoint changes. Resolves to symbol level when per-federation indexes exist |
+| `get_federation_clients` | Find all client calls across federations that call a specific endpoint |
+| `federation_add_repo` | Add a federation, bound to the current project (or specify `project` param for external federations) |
+| `federation_sync` | Re-scan all federations: contracts, client calls, and re-link |
+
+## Decision memory
+
+See [Decision memory](decision-memory.md) for full documentation.
+
+| Tool | What it does |
+|---|---|
+| `mine_sessions` | Extract decisions from Claude Code / Claw Code session logs (pattern-based, 0 LLM calls) |
+| `add_decision` | Manually record a decision with code linkage + service scoping |
+| `query_decisions` | Query by type/service/symbol/file/tag + FTS5 search + temporal filtering |
+| `invalidate_decision` | Mark a decision as superseded (preserved for historical queries) |
+| `get_decision_timeline` | Chronological history of decisions for a project/symbol/file |
+| `get_decision_stats` | Knowledge graph overview: counts by type, source, sessions mined/indexed |
+| `index_sessions` | Index conversation content for cross-session search |
+| `search_sessions` | FTS5 search across all past session conversations |
+| `get_wake_up` | Compact orientation (~300 tokens): project + active decisions + stats. Auto-mines on first call |
+
+Decisions auto-enrich code intelligence: `get_change_impact` shows `linked_decisions`, `plan_turn` shows `related_decisions`, `get_session_resume` shows `active_decisions`.
 
 ## Session Analytics
 

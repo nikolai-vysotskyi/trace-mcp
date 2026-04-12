@@ -230,6 +230,48 @@ const hintGenerators: Record<string, HintGenerator> = {
     return hints;
   },
 
+  apply_rename(r) {
+    const hints: Hint[] = [];
+    const suggestions = arr(dig(r, 'non_code_suggestions'));
+    if (suggestions.length > 0) {
+      hints.push({ tool: 'apply_codemod', why: 'Apply non-code file suggestions via codemod if desired' });
+    }
+    return hints;
+  },
+
+  apply_move(r) {
+    const hints: Hint[] = [];
+    const warnings = arr(dig(r, 'warnings'));
+    if (warnings.some((w) => str(w).includes('re-export'))) {
+      hints.push({ tool: 'get_dead_exports', why: 'Check if old file has orphaned exports after the move' });
+    }
+    hints.push({ tool: 'register_edit', args: { file_path: '<modified_file>' }, why: 'Reindex modified files after move' });
+    return hints;
+  },
+
+  change_signature(r) {
+    const hints: Hint[] = [];
+    const warnings = arr(dig(r, 'warnings'));
+    if (warnings.some((w) => str(w).includes('skipped'))) {
+      hints.push({ tool: 'get_symbol', args: { symbol_id: '<symbol>' }, why: 'Review symbol to check skipped parameters' });
+    }
+    hints.push({ tool: 'register_edit', args: { file_path: '<modified_file>' }, why: 'Reindex modified files after signature change' });
+    return hints;
+  },
+
+  plan_refactoring(r) {
+    const hints: Hint[] = [];
+    const edits = arr(dig(r, 'edits'));
+    if (edits.length > 0) {
+      const tool = str(dig(r, 'tool'));
+      if (tool === 'apply_rename') hints.push({ tool: 'apply_rename', why: 'Apply the previewed rename' });
+      else if (tool === 'apply_move') hints.push({ tool: 'apply_move', why: 'Apply the previewed move' });
+      else if (tool === 'extract_function') hints.push({ tool: 'extract_function', why: 'Apply the previewed extraction' });
+      else if (tool === 'change_signature') hints.push({ tool: 'change_signature', why: 'Apply the previewed signature change' });
+    }
+    return hints;
+  },
+
   get_repo_health(r) {
     const hints: Hint[] = [];
     hints.push({ tool: 'get_hotspots', why: 'Find files with highest churn + complexity' });
