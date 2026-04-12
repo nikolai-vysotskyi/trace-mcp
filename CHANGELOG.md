@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.15.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.15.0...v1.15.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* consolidate electron-builder config to prevent asar packaging failure ([02dfb8f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/02dfb8f6f3fc9625074dda98b7e4c327f751feb3))
+
 ## [1.15.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.14.1...v1.15.0) (2026-04-12)
 
 
