@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import https from 'node:https';
+import http from 'node:http';
 import { execSync } from 'node:child_process';
 
 const APP_NAME = 'trace-mcp.app';
@@ -29,8 +30,8 @@ function httpGet(url, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const doGet = (target, redirects = 0) => {
       if (redirects > 5) { reject(new Error('Too many redirects')); return; }
-      const mod = target.startsWith('https') ? https : (await import('node:http')).default;
-      https.get(target, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' } }, (res) => {
+      const mod = target.startsWith('https') ? https : http;
+      mod.get(target, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' } }, (res) => {
         if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
           doGet(res.headers.location, redirects + 1);
           return;
