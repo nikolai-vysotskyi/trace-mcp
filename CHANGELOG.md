@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.16.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.15.2...v1.16.0) (2026-04-12)
+
+
+### Features
+
+* add CORS headers to HTTP server for Electron renderer ([9a39031](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9a3903122c45b7eb7a8d0fb241858de84a8c964e))
+
+
+### Bug Fixes
+
+* exclude vendor dirs from graph visualization and clear state on error ([73e46ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/73e46efd4223e907a6e9e0d65446801dff0ae428))
+* simplify artifact upload glob and remove redundant arch from yml ([01a2660](https://github.com/nikolai-vysotskyi/trace-mcp/commit/01a266067841d40a56beaf3a9d8f1aeabc3fdaf0))
+
 ## [1.15.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.15.1...v1.15.2) (2026-04-12)
 
 
