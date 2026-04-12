@@ -2,6 +2,7 @@ import type { FrameworkPlugin } from '../../../plugin-api/types.js';
 
 // --- framework ---
 import { LaravelPlugin } from './framework/laravel/index.js';
+import { FilamentPlugin } from './framework/filament/index.js';
 import { DjangoPlugin } from './framework/django/index.js';
 import { RailsPlugin } from './framework/rails/index.js';
 import { SpringPlugin } from './framework/spring/index.js';
@@ -73,11 +74,13 @@ import { PinoPlugin } from './tooling/pino/index.js';
 import { CosmiconfigPlugin } from './tooling/cosmiconfig/index.js';
 import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
 import { ClackPlugin } from './tooling/clack/index.js';
+import { ElectronPlugin } from './tooling/electron/index.js';
 
 export function createAllIntegrationPlugins(): FrameworkPlugin[] {
   return [
     // framework
     new LaravelPlugin(),
+    new FilamentPlugin(),
     new DjangoPlugin(),
     new RailsPlugin(),
     new SpringPlugin(),
@@ -141,5 +144,6 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new CosmiconfigPlugin(),
     new NeverthrowPlugin(),
     new ClackPlugin(),
+    new ElectronPlugin(),
   ];
 }
