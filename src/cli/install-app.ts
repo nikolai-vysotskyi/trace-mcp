@@ -108,6 +108,28 @@ function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<voi
   });
 }
 
+/** Pin the app to the macOS Dock (persistent-apps) if not already present. */
+function pinToDock(appPath: string): void {
+  try {
+    // Check if already in Dock
+    const dockPlist = execSync('defaults read com.apple.dock persistent-apps', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    if (dockPlist.includes(appPath)) return;
+
+    // Add to Dock
+    const entry = `<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>${appPath}</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>`;
+    execSync(
+      `defaults write com.apple.dock persistent-apps -array-add '${entry}'`,
+      { stdio: 'pipe' },
+    );
+    execSync('killall Dock', { stdio: 'pipe' });
+  } catch {
+    // Non-critical — don't fail the install if Dock pinning doesn't work
+  }
+}
+
 /**
  * Install the trace-mcp menu bar app.
  * 1. Detect arch (arm64 / x64)
@@ -187,6 +209,9 @@ export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<In
 
     // 7. Clean up temp
     fs.rmSync(tmpDir, { recursive: true, force: true });
+
+    // 8. Pin to Dock (if not already there)
+    pinToDock(appPath);
 
     return { installed: true, path: appPath };
   } catch (err) {
