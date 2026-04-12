@@ -56,6 +56,23 @@ function setupWindowEvents(win: BrowserWindow): void {
   win.on('leave-full-screen', () => {
     if (!win.isDestroyed()) win.webContents.send('fullscreen-changed', false);
   });
+
+  // Auto-reload on renderer crash (GPU crash, OOM, etc.)
+  win.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[trace-mcp] renderer crashed in window: reason=${details.reason}`);
+    if (!win.isDestroyed() && details.reason !== 'clean-exit') {
+      // Delay slightly to let GPU process restart
+      setTimeout(() => {
+        if (!win.isDestroyed()) win.webContents.reload();
+      }, 1000);
+    }
+  });
+
+  // Handle unresponsive renderer
+  win.on('unresponsive', () => {
+    console.warn('[trace-mcp] window became unresponsive, reloading...');
+    if (!win.isDestroyed()) win.webContents.reload();
+  });
 }
 
 function ensureDockVisible(): void {
@@ -92,6 +109,12 @@ function showMenuWindow(tab?: string): void {
 
   menuWindow = new BrowserWindow(createWindowOptions());
   menuWindow.loadURL(getRendererUrl({ view: 'menu', ...(tab ? { tab } : {}) }));
+
+  // Attach to existing tab group if project windows are open
+  const existingTab = [...projectWindows.values()].find(w => !w.isDestroyed());
+  if (existingTab) {
+    existingTab.addTabbedWindow(menuWindow);
+  }
 
   menuWindow.webContents.on('did-finish-load', () => {
     menuWindow?.setTitle('Menu');

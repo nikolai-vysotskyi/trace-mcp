@@ -3,7 +3,7 @@ import { Indexes } from './tabs/Indexes';
 import { Clients } from './tabs/Clients';
 import { Settings } from './tabs/Settings';
 import { ProjectOverview } from './tabs/ProjectOverview';
-import { GraphExplorer } from './tabs/GraphExplorer';
+import { GraphExplorer, GraphExplorerHandle, GraphSettings, DEFAULT_GRAPH_SETTINGS } from './tabs/GraphExplorer';
 
 // ── URL params determine window type ──────────────────────────
 // ?view=menu&tab=projects  → Menu window (sidebar + Projects/Clients/Settings)
@@ -35,9 +35,282 @@ const SIDEBAR_MIN = 100;
 const SIDEBAR_MAX = 360;
 const SIDEBAR_DEFAULT = 180;
 
+const BASE = 'http://127.0.0.1:3741';
+
+// ── Recent projects (localStorage) ──────────────────────────
+const RECENT_KEY = 'trace-mcp:recent-projects';
+const MAX_RECENT = 8;
+
+function getRecentProjects(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function addRecentProject(root: string): void {
+  const recent = getRecentProjects().filter((r) => r !== root);
+  recent.unshift(root);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
+}
+
+function RecentProjects() {
+  const [recent, setRecent] = useState<string[]>(getRecentProjects);
+
+  // Re-read on focus (other tab might have opened a project)
+  useEffect(() => {
+    const onFocus = () => setRecent(getRecentProjects());
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
+  if (recent.length === 0) {
+    return (
+      <div className="px-2.5 py-1 text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+        No recent projects
+      </div>
+    );
+  }
+
+  const openProject = (root: string) => {
+    addRecentProject(root);
+    const api = (window as any).electronAPI;
+    api?.openProjectTab(root);
+  };
+
+  return (
+    <div className="flex flex-col gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div
+        className="px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+        style={{ color: 'var(--text-tertiary)' }}
+      >
+        Recent
+      </div>
+      {recent.map((root) => (
+        <button
+          key={root}
+          onClick={() => openProject(root)}
+          className="text-left px-2.5 py-1 text-[11px] rounded-md truncate transition-colors hover:bg-[var(--bg-active)]"
+          style={{ color: 'var(--text-secondary)' }}
+          title={root}
+        >
+          {root.split('/').filter(Boolean).pop()}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Project file explorer (sidebar) ─────────────────────────
+
+type FileSort = 'symbols' | 'edges' | 'isolated' | 'recent';
+
+const FILE_SORT_OPTIONS: { id: FileSort; label: string }[] = [
+  { id: 'symbols', label: 'Most Symbols' },
+  { id: 'edges', label: 'Most Connected' },
+  { id: 'isolated', label: 'Dead Code' },
+  { id: 'recent', label: 'Recently Changed' },
+];
+
+interface FileEntry {
+  path: string;
+  symbols: number;
+  edges: number;
+}
+
+function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope?: string; onFileClick: (filePath: string) => void }) {
+  const [sort, setSort] = useState<FileSort>('symbols');
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const LIMIT = 30;
+
+  // Debounce scope to avoid fetching on every keystroke
+  const [debouncedScope, setDebouncedScope] = useState(scope);
+  const scopeTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    clearTimeout(scopeTimerRef.current);
+    scopeTimerRef.current = setTimeout(() => setDebouncedScope(scope), 400);
+    return () => clearTimeout(scopeTimerRef.current);
+  }, [scope]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const params = new URLSearchParams({ project: root, sort, limit: String(LIMIT) });
+    // Pass scope to API if it's a custom path filter (not 'project' or empty)
+    const effectiveScope = debouncedScope?.trim();
+    if (effectiveScope && effectiveScope !== 'project') {
+      params.set('scope', effectiveScope);
+    }
+    fetch(`${BASE}/api/projects/files?${params}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => { if (!cancelled) setFiles(data.files ?? []); })
+      .catch(() => { if (!cancelled) setFiles([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [root, sort, debouncedScope]);
+
+  // Short display path: strip project root prefix
+  const shortPath = (p: string) => {
+    if (p.startsWith(root)) return p.slice(root.length).replace(/^\//, '');
+    return p;
+  };
+
+  return (
+    <div
+      className="flex flex-col gap-0.5 min-h-0 flex-1"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+    >
+      {/* Sort picker */}
+      <div className="px-1.5 mb-0.5">
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as FileSort)}
+          className="w-full text-[10px] px-1.5 py-1 rounded-md appearance-none"
+          style={{
+            background: 'var(--bg-secondary)',
+            color: 'var(--text-secondary)',
+            border: '0.5px solid var(--border)',
+            outline: 'none',
+          }}
+        >
+          {FILE_SORT_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* File list */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        {loading ? (
+          <div className="px-2.5 py-2 text-[10px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+            Loading…
+          </div>
+        ) : files.length === 0 ? (
+          <div className="px-2.5 py-2 text-[10px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+            No files
+          </div>
+        ) : (
+          files.map((f) => (
+            <button
+              key={f.path}
+              onClick={() => onFileClick(f.path)}
+              className="w-full text-left px-2.5 py-1 text-[10px] truncate rounded-md transition-colors hover:bg-[var(--bg-active)] flex items-center gap-1"
+              style={{ color: 'var(--text-secondary)' }}
+              title={`${shortPath(f.path)} — ${f.symbols} symbols, ${f.edges} edges`}
+            >
+              <span className="truncate flex-1">{shortPath(f.path)}</span>
+              <span
+                className="shrink-0 text-[9px] tabular-nums"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                {sort === 'edges' ? f.edges : f.symbols}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Update banner ────────────────────────────────────────────
+function UpdateBanner() {
+  const [update, setUpdate] = useState<{ available: boolean; latest?: string } | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.checkForUpdate) return;
+
+    const check = () => api.checkForUpdate().then((r: any) => { if (r?.available) setUpdate(r); });
+    // Check on mount + every 4 hours
+    check();
+    const timer = setInterval(check, 4 * 60 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (!update?.available) return null;
+
+  const handleUpdate = async () => {
+    const api = (window as any).electronAPI;
+    if (!api) return;
+    setUpdating(true);
+    const result = await api.applyUpdate();
+    if (result?.ok) {
+      setDone(true);
+    } else {
+      setUpdating(false);
+    }
+  };
+
+  const handleRestart = () => {
+    const api = (window as any).electronAPI;
+    api?.restartApp();
+  };
+
+  return (
+    <div
+      style={{
+        padding: '8px 10px',
+        borderTop: '1px solid var(--border-row)',
+        fontSize: 11,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        WebkitAppRegion: 'no-drag',
+      } as React.CSSProperties}
+    >
+      <div style={{ color: 'var(--text-secondary)', lineHeight: 1.3 }}>
+        v{update.latest} available
+      </div>
+      {done ? (
+        <button
+          onClick={handleRestart}
+          style={{
+            background: 'var(--success)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 6,
+            padding: '4px 0',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+            width: '100%',
+          }}
+        >
+          Restart
+        </button>
+      ) : (
+        <button
+          onClick={handleUpdate}
+          disabled={updating}
+          style={{
+            background: 'var(--accent)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 6,
+            padding: '4px 0',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: updating ? 'wait' : 'pointer',
+            opacity: updating ? 0.7 : 1,
+            width: '100%',
+          }}
+        >
+          {updating ? 'Updating...' : 'Update'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Menu content ──────────────────────────────────────────────
 function MenuContent({ tab }: { tab: GlobalTab }) {
   const openProject = (root: string) => {
+    addRecentProject(root);
     const api = (window as any).electronAPI;
     api?.openProjectTab(root);
   };
@@ -52,11 +325,21 @@ function MenuContent({ tab }: { tab: GlobalTab }) {
 }
 
 // ── Project content ───────────────────────────────────────────
-function ProjectContent({ root, tab }: { root: string; tab: ProjectTab }) {
+function ProjectContent({ root, tab, graphRef, graphSettings, onGraphSettingsChange }: {
+  root: string;
+  tab: ProjectTab;
+  graphRef: React.RefObject<GraphExplorerHandle | null>;
+  graphSettings: GraphSettings;
+  onGraphSettingsChange: (patch: Partial<GraphSettings>) => void;
+}) {
   return (
     <>
+      {/* Overview — mount/unmount normally */}
       {tab === 'overview' && <ProjectOverview root={root} />}
-      {tab === 'graph' && <GraphExplorer root={root} />}
+      {/* Graph — always mounted, hidden when inactive (preserves iframe + state) */}
+      <div className={tab === 'graph' ? 'flex-1 min-h-0 flex flex-col' : 'hidden'}>
+        <GraphExplorer ref={graphRef} root={root} settings={graphSettings} onSettingsChange={onGraphSettingsChange} />
+      </div>
     </>
   );
 }
@@ -73,6 +356,21 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const dragging = useRef(false);
+  const graphRef = useRef<GraphExplorerHandle | null>(null);
+  const [graphSettings, setGraphSettings] = useState<GraphSettings>(DEFAULT_GRAPH_SETTINGS);
+
+  const onGraphSettingsChange = useCallback((patch: Partial<GraphSettings>) => {
+    setGraphSettings((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  // focusFile queues internally if iframe isn't ready, so no manual timeout needed
+  const openFileInGraph = useCallback((filePath: string) => {
+    if (projectTab !== 'graph') {
+      setProjectTab('graph');
+    }
+    // GraphExplorer is always mounted — focusFile will queue if iframe is loading
+    graphRef.current?.focusFile(filePath);
+  }, [projectTab]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -143,14 +441,6 @@ export function App() {
         >
           {isProject ? (
             <>
-              {/* Project name */}
-              <div
-                className="px-2.5 py-1 text-[10px] font-semibold truncate mb-1"
-                style={{ color: 'var(--text-primary)' }}
-                title={root!}
-              >
-                {root!.split('/').filter(Boolean).pop()}
-              </div>
               {PROJECT_TABS.map((t) => (
                 <button
                   key={t.id}
@@ -165,23 +455,37 @@ export function App() {
                   {t.label}
                 </button>
               ))}
+
+              {/* Divider + File explorer */}
+              <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
+              <ProjectFileExplorer root={root!} scope={graphSettings.scope} onFileClick={openFileInGraph} />
             </>
           ) : (
-            GLOBAL_TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setGlobalTab(t.id)}
-                className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
-                style={{
-                  color: globalTab === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  background: globalTab === t.id ? 'var(--bg-active)' : 'transparent',
-                  WebkitAppRegion: 'no-drag',
-                } as React.CSSProperties}
-              >
-                {t.label}
-              </button>
-            ))
+            <>
+              {GLOBAL_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setGlobalTab(t.id)}
+                  className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
+                  style={{
+                    color: globalTab === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    background: globalTab === t.id ? 'var(--bg-active)' : 'transparent',
+                    WebkitAppRegion: 'no-drag',
+                  } as React.CSSProperties}
+                >
+                  {t.label}
+                </button>
+              ))}
+
+              {/* Divider + Recent projects */}
+              <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
+              <RecentProjects />
+            </>
           )}
+
+          {/* Spacer to push update banner to bottom */}
+          <div style={{ flex: 1 }} />
+          <UpdateBanner />
         </aside>
 
         {/* Resize handle */}
@@ -210,7 +514,7 @@ export function App() {
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {isProject ? (
-            <ProjectContent root={root!} tab={projectTab} />
+            <ProjectContent root={root!} tab={projectTab} graphRef={graphRef} graphSettings={graphSettings} onGraphSettingsChange={onGraphSettingsChange} />
           ) : (
             <MenuContent tab={globalTab} />
           )}
