@@ -1,6 +1,7 @@
 import type { Store, SymbolRow, FileRow } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface ReferenceItem {
   /** Edge type describing the relationship (e.g. 'imports', 'calls', 'renders_component') */
@@ -39,17 +40,12 @@ export function findReferences(
   let targetMeta: FindReferencesResult['target'] = {};
 
   if (opts.symbolId || opts.fqn) {
-    let symbol: SymbolRow | undefined;
-    if (opts.symbolId) {
-      symbol = store.getSymbolBySymbolId(opts.symbolId);
-      targetMeta.symbol_id = opts.symbolId;
-    } else {
-      symbol = store.getSymbolByFqn(opts.fqn!);
-      targetMeta.fqn = opts.fqn;
-    }
-    if (!symbol) return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
-    const file = store.getFileById(symbol.file_id);
-    if (file) targetMeta.file = file.path;
+    const resolved = resolveSymbolInput(store, opts);
+    if (!resolved) return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
+    const symbol = resolved.symbol;
+    targetMeta.symbol_id = symbol.symbol_id;
+    targetMeta.fqn = symbol.fqn;
+    if (resolved.file) targetMeta.file = resolved.file.path;
     nodeId = store.getNodeId('symbol', symbol.id);
   } else if (opts.filePath) {
     const file = store.getFile(opts.filePath);

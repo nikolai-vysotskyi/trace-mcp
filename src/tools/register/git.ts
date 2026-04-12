@@ -38,7 +38,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
       if (results.length === 0) {
         return { content: [{ type: 'text', text: j({ message: 'No git history available or no matching files', _methodology: GIT_CHURN_METHODOLOGY }) }] };
       }
-      return { content: [{ type: 'text', text: j({ results, total: results.length, _methodology: GIT_CHURN_METHODOLOGY }) }] };
+      return { content: [{ type: 'text', text: j({ results, total: results.length }) }] };
     },
   );
 
@@ -63,15 +63,14 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
           'churn signal cannot fire, so all results are confidence_level=low.',
         );
       }
-      const envelope = {
-        hotspots: results,
-        total: results.length,
-        _methodology: HOTSPOT_METHODOLOGY,
-        ...(warnings.length > 0 ? { _warnings: warnings } : {}),
-      };
       if (results.length === 0) {
         return { content: [{ type: 'text', text: j({ message: 'No hotspots found (no complex files with git churn)', _methodology: HOTSPOT_METHODOLOGY, ...(warnings.length > 0 ? { _warnings: warnings } : {}) }) }] };
       }
+      const envelope = {
+        hotspots: results,
+        total: results.length,
+        ...(warnings.length > 0 ? { _warnings: warnings } : {}),
+      };
       return { content: [{ type: 'text', text: jh('get_hotspots', envelope) }] };
     },
   );
@@ -334,7 +333,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         LIMIT ?
       `).all(...params);
 
-      return { content: [{ type: 'text', text: j({ symbols: rows, total: rows.length, _methodology: COMPLEXITY_METHODOLOGY }) }] };
+      return { content: [{ type: 'text', text: j({ symbols: rows, total: rows.length }) }] };
     },
   );
 

@@ -170,6 +170,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
               query,
               { kind, language, filePattern: file_pattern },
               limit ?? 20,
+              projectRoot,
             );
             if (fedResult.items.length > 0) {
               response.federated_results = fedResult.items;
@@ -219,19 +220,20 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
     {
       file_path: z.string().max(512).optional().describe('Relative file path to analyze'),
       symbol_id: z.string().max(512).optional().describe('Symbol ID to analyze'),
+      fqn: z.string().max(512).optional().describe('Fully qualified name to analyze (alternative to symbol_id)'),
       symbol_ids: z.array(z.string().max(512)).max(50).optional().describe('Diff-aware: only analyze impact of these specific symbols (e.g. from get_changed_symbols)'),
       decorator_filter: z.string().max(256).optional().describe('Filter dependents to only those with this decorator/annotation/attribute (e.g. "Route", "Transactional", "csrf_protect")'),
       depth: z.number().int().min(1).max(20).optional().describe('Max traversal depth (default 3)'),
       max_dependents: z.number().int().min(1).max(5000).optional().describe('Cap on returned dependents (default 200)'),
     },
-    async ({ file_path, symbol_id, symbol_ids, decorator_filter, depth, max_dependents }) => {
+    async ({ file_path, symbol_id, fqn, symbol_ids, decorator_filter, depth, max_dependents }) => {
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
       }
       const result = getChangeImpact(
         store,
-        { filePath: file_path, symbolId: symbol_id, symbolIds: symbol_ids, decoratorFilter: decorator_filter },
+        { filePath: file_path, symbolId: symbol_id, fqn, symbolIds: symbol_ids, decoratorFilter: decorator_filter },
         depth ?? 3,
         max_dependents ?? 200,
         projectRoot,
@@ -239,7 +241,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       if (result.isErr()) {
         return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       }
-      return { content: [{ type: 'text', text: jh('get_change_impact', { ...result.value, _methodology: CHANGE_IMPACT_METHODOLOGY }) }] };
+      const includeMethodology = result.value.totalAffected === 0 || result.value.risk?.level === 'high' || result.value.risk?.level === 'critical';
+      const payload = includeMethodology ? { ...result.value, _methodology: CHANGE_IMPACT_METHODOLOGY } : result.value;
+      return { content: [{ type: 'text', text: jh('get_change_impact', payload) }] };
     },
   );
 

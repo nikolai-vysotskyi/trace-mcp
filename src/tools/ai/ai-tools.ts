@@ -5,6 +5,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { Store, SymbolRow, FileRow } from '../../db/store.js';
+import { resolveSymbolInput } from '../shared/resolve.js';
 import type { InferenceService, EmbeddingService, VectorStore, RerankerService } from '../../ai/interfaces.js';
 import { PROMPTS } from '../../ai/prompts.js';
 import { readByteRange } from '../../utils/source-reader.js';
@@ -48,16 +49,9 @@ function readSourceSafe(filePath: string, byteStart: number, byteEnd: number, pr
 }
 
 function resolveSymbol(store: Store, opts: { symbolId?: string; fqn?: string }): { sym: SymbolRow; file: FileRow } | null {
-  let sym: SymbolRow | undefined;
-  if (opts.symbolId) {
-    sym = store.getSymbolBySymbolId(opts.symbolId);
-  } else if (opts.fqn) {
-    sym = store.getSymbolByFqn(opts.fqn);
-  }
-  if (!sym) return null;
-  const file = store.getFileById(sym.file_id);
-  if (!file) return null;
-  return { sym, file };
+  const resolved = resolveSymbolInput(store, opts);
+  if (!resolved) return null;
+  return { sym: resolved.symbol, file: resolved.file };
 }
 
 function gatherRelatedSymbols(

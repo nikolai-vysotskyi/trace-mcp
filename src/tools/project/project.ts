@@ -33,6 +33,23 @@ export function getIndexHealth(
     if (stats.errorFiles > 0) warnings.push(`${stats.errorFiles} files failed to parse`);
   }
 
+  // Detect linker failures: symbols exist but no edges were linked
+  if (stats.totalSymbols > 0 && stats.totalEdges === 0) {
+    if (status === 'ok') status = 'degraded';
+    warnings.push(
+      `${stats.totalSymbols} symbols indexed but 0 edges linked. ` +
+      `Call graph queries (get_call_graph, find_usages, get_change_impact) will return empty results. ` +
+      `This usually indicates edge resolution failed — check language plugin support and re-run reindex.`,
+    );
+  } else if (stats.totalSymbols > 50 && stats.totalEdges > 0 && stats.totalEdges < stats.totalSymbols * 0.1) {
+    // Very low edge-to-symbol ratio suggests partial linker failure
+    warnings.push(
+      `Low edge density: ${stats.totalEdges} edges for ${stats.totalSymbols} symbols ` +
+      `(${Math.round((stats.totalEdges / stats.totalSymbols) * 100)}% ratio). ` +
+      `Some call graph queries may return incomplete results.`,
+    );
+  }
+
   const versionRow = store.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
 
   return {
@@ -71,7 +88,13 @@ export function getProjectMap(
   projectContext?: ProjectContext,
 ): ProjectMapResult | ProjectMapSummary {
   const stats = store.getStats();
-  const frameworks = registry.getAllFrameworkPlugins().map((p) => p.manifest.name);
+  let frameworks: string[];
+  if (projectContext) {
+    const active = registry.getActiveFrameworkPlugins(projectContext);
+    frameworks = active.isOk() ? active.value.map((p) => p.manifest.name) : [];
+  } else {
+    frameworks = registry.getAllFrameworkPlugins().map((p) => p.manifest.name);
+  }
 
   const detectedVersions = projectContext?.detectedVersions;
 

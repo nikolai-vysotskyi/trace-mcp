@@ -2,6 +2,7 @@ import type { Store } from '../../db/store.js';
 import type { EdgeResolution } from '../../plugin-api/types.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface CallGraphEdgeInfo {
   /** How this edge was resolved */
@@ -72,11 +73,9 @@ export function getCallGraph(
   depth = 2,
 ): TraceMcpResult<CallGraphResult> {
   depth = Math.min(depth, MAX_DEPTH);
-  let symbol = opts.symbolId
-    ? store.getSymbolBySymbolId(opts.symbolId)
-    : opts.fqn ? store.getSymbolByFqn(opts.fqn) : undefined;
-
-  if (!symbol) return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
+  const resolved = resolveSymbolInput(store, opts);
+  if (!resolved) return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
+  const symbol = resolved.symbol;
 
   const file = store.getFileById(symbol.file_id);
   const nodeId = store.getNodeId('symbol', symbol.id);

@@ -59,9 +59,22 @@ export function getRequestFlow(
     const ref = String(effectiveControllerRef);
     const [controllerFqn, actionName] = splitControllerRef(ref);
 
-    const controllerSymbol = store.getSymbolByFqn(controllerFqn);
+    let controllerSymbol = store.getSymbolByFqn(controllerFqn);
     const methodFqn = actionName ? `${controllerFqn}::${actionName}` : undefined;
-    const methodSymbol = methodFqn ? store.getSymbolByFqn(methodFqn) : undefined;
+    let methodSymbol = methodFqn ? store.getSymbolByFqn(methodFqn) : undefined;
+
+    // Fallback: Python frameworks store just the function name (e.g. "get_user"),
+    // not the full FQN. Try name-based lookup from the route's file.
+    if (!controllerSymbol && !methodSymbol && !controllerFqn.includes('.') && !controllerFqn.includes('\\')) {
+      const routeFileId = route.file_id;
+      if (routeFileId) {
+        const fileSymbols = store.getSymbolsByFile(routeFileId);
+        const match = fileSymbols.find((s) => s.name === controllerFqn && (s.kind === 'function' || s.kind === 'method'));
+        if (match) {
+          controllerSymbol = match;
+        }
+      }
+    }
 
     steps.push({
       type: 'controller',
