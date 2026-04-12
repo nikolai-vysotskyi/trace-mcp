@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.15.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.15.1...v1.15.2) (2026-04-12)
+
+
+### Bug Fixes
+
+* correct electron-builder artifact glob for macOS zip upload ([1c92616](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1c92616c40847d0d6c2a2e128a493277debc3aa8))
+
 ## [1.15.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.15.0...v1.15.1) (2026-04-12)
 
 
