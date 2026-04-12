@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.19.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.18.0...v1.19.0) (2026-04-12)
+
+
+### Features
+
+* add decision memory system for cross-session knowledge ([292a824](https://github.com/nikolai-vysotskyi/trace-mcp/commit/292a8246b415a11d2ba4fa9e411c67295d382e01))
+* add Filament and Electron framework plugins ([dbf16fa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dbf16fa72fa56e2b3d0db6e2790100d130d4e68c))
+* add move, change-signature, and plan-refactoring tools ([5e2f4ae](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5e2f4aea886e92a6023cbeb71cdc17594400f7bc))
+* add technology coverage, service management, and UI improvements ([56817aa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/56817aa0986fd9d627b19f67e243ccb0d2376ddd))
+* scope federations to projects with auto-discovery ([ca430c6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca430c6f5acb3c85bad0fea03abc2e804691208e))
+
+
+### Bug Fixes
+
+* update tool registrations and fix visualize test assertions ([6d59011](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6d590118ca431f6df28a457f555e3d8d88502f01))
+
+
+### Documentation
+
+* update documentation for refactoring tools and decision memory ([423675d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/423675d9b057583ce305e83c98ea36e74b6d5d1d))
+
 ## [1.18.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.17.0...v1.18.0) (2026-04-12)
 
 
