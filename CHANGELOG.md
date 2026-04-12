@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.17.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.16.1...v1.17.0) (2026-04-12)
+
+
+### Features
+
+* default to max enforcement level, add install-app CLI command with retry ([f156305](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f1563058e69c23265ba8f83a934370158dd6bd9b))
+
+
+### Bug Fixes
+
+* handle nullable topoStore in visualize tool ([e955361](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e955361e95e0b04b238e0b985be82ee283e54178))
+
 ## [1.16.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.16.0...v1.16.1) (2026-04-12)
 
 
