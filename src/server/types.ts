@@ -7,6 +7,7 @@ import type { SessionJournal } from '../session/journal.js';
 import type { AIProvider, RerankerService, EmbeddingService, BlobVectorStore } from '../ai/index.js';
 import type { ProgressState } from '../progress.js';
 import type { TopologyStore } from '../topology/topology-db.js';
+import type { DecisionStore } from '../memory/decision-store.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 export interface ServerContext {
@@ -35,6 +36,8 @@ export interface ServerContext {
   progress: ProgressState | null;
   /** Topology store for federation (null if topology disabled) */
   topoStore: TopologyStore | null;
+  /** Decision memory store (null if memory disabled) */
+  decisionStore: DecisionStore | null;
 }
 
 /** Extended context for meta tools that bypass preset gate */

@@ -14,7 +14,7 @@ import { withHints } from '../tools/shared/hints.js';
 import { SessionTracker } from '../session/tracker.js';
 import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { flushSessionSummary } from '../session/resume.js';
-import { getSnapshotPath, TOPOLOGY_DB_PATH, ensureGlobalDirs } from '../global.js';
+import { getSnapshotPath, TOPOLOGY_DB_PATH, DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
 import { computePageRank } from '../scoring/pagerank.js';
 import { createExploredTracker } from './explored-tracker.js';
 import type { ServerContext, MetaContext } from './types.js';
@@ -32,7 +32,9 @@ import { registerRefactoringTools } from '../tools/register/refactoring.js';
 import { registerAdvancedTools } from '../tools/register/advanced.js';
 import { registerQualityTools } from '../tools/register/quality.js';
 import { registerSessionTools } from '../tools/register/session.js';
+import { registerMemoryTools } from '../tools/register/memory.js';
 import { TopologyStore } from '../topology/topology-db.js';
+import { DecisionStore } from '../memory/decision-store.js';
 
 /** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response */
 function j(value: unknown): string {
@@ -252,6 +254,8 @@ export function createServer(
         prefetchBoosts: journal.getPrefetchBoosts(),
       });
     }
+    // Close decision store on shutdown
+    try { decisionStore.close(); } catch { /* best-effort */ }
   };
   process.on('SIGINT', flushAll);
   process.on('SIGTERM', flushAll);
@@ -349,6 +353,10 @@ export function createServer(
     topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
   }
 
+  // Build decision memory store (cross-session knowledge graph)
+  ensureGlobalDirs();
+  const decisionStore = new DecisionStore(DECISIONS_DB_PATH);
+
   // Build shared context and register all tools
   const ctx: ServerContext = {
     store, registry, config, projectRoot,
@@ -358,6 +366,7 @@ export function createServer(
     markExplored: explored.markExplored,
     progress: progress ?? null,
     topoStore,
+    decisionStore,
   };
 
   const metaCtx: MetaContext = {
@@ -372,6 +381,7 @@ export function createServer(
   registerRefactoringTools(server, ctx);
   registerAdvancedTools(server, ctx);
   registerQualityTools(server, ctx);
+  registerMemoryTools(server, ctx);
   registerSessionTools(server, metaCtx);
 
   return server;
