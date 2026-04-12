@@ -16,23 +16,6 @@
     "generate-icons": "node scripts/generate-icons.mjs",
     "typecheck": "tsc --noEmit"
   },
-  "build": {
-    "appId": "com.trace-mcp.app",
-    "productName": "trace-mcp",
-    "directories": {
-      "buildResources": "build"
-    },
-    "mac": {
-      "icon": "build/icon.png",
-      "category": "public.app-category.developer-tools"
-    },
-    "linux": {
-      "icon": "build"
-    },
-    "win": {
-      "icon": "build/icon.png"
-    }
-  },
   "dependencies": {
     "menubar": "^9.5.0"
   },
