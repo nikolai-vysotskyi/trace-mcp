@@ -43,6 +43,15 @@ export function resolveTestCoversEdges(state: PipelineState): void {
     .map((r) => r.refId);
   const targetFileMap = store.getFilesByIds(targetFileRefIds);
 
+  // Also resolve symbol targets to get their parent files
+  const targetSymbolRefIds = [...targetRefs.values()]
+    .filter((r) => r.nodeType === 'symbol')
+    .map((r) => r.refId);
+  const targetSymbolMap = store.getSymbolsByIds(targetSymbolRefIds);
+  // Map symbol's file_id → FileRow for filtering out test files
+  const symbolFileIds = [...new Set([...targetSymbolMap.values()].map((s) => s.file_id))];
+  const symbolFileMap = store.getFilesByIds(symbolFileIds);
+
   const testCoversType = store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('test_covers') as { id: number } | undefined;
   if (!testCoversType) return;
 
@@ -60,20 +69,37 @@ export function resolveTestCoversEdges(state: PipelineState): void {
       if (!testNodeToFile.has(edge.source_node_id)) continue;
 
       const targetRef = targetRefs.get(edge.target_node_id);
-      if (!targetRef || targetRef.nodeType !== 'file') continue;
-
-      const targetFile = targetFileMap.get(targetRef.refId);
-      if (!targetFile) continue;
-      if (TEST_PATH_RE.test(targetFile.path)) continue;
+      if (!targetRef) continue;
 
       const testFile = testNodeToFile.get(edge.source_node_id)!;
-      insertStmt.run(
-        edge.source_node_id,
-        edge.target_node_id,
-        testCoversType.id,
-        JSON.stringify({ test_file: testFile.path }),
-      );
-      created++;
+
+      if (targetRef.nodeType === 'file') {
+        const targetFile = targetFileMap.get(targetRef.refId);
+        if (!targetFile) continue;
+        if (TEST_PATH_RE.test(targetFile.path)) continue;
+
+        insertStmt.run(
+          edge.source_node_id,
+          edge.target_node_id,
+          testCoversType.id,
+          JSON.stringify({ test_file: testFile.path }),
+        );
+        created++;
+      } else if (targetRef.nodeType === 'symbol') {
+        // Create test_covers edge to the imported symbol as well
+        const targetSymbol = targetSymbolMap.get(targetRef.refId);
+        if (!targetSymbol) continue;
+        const parentFile = symbolFileMap.get(targetSymbol.file_id);
+        if (!parentFile || TEST_PATH_RE.test(parentFile.path)) continue;
+
+        insertStmt.run(
+          edge.source_node_id,
+          edge.target_node_id,
+          testCoversType.id,
+          JSON.stringify({ test_file: testFile.path, target_symbol: targetSymbol.symbol_id }),
+        );
+        created++;
+      }
     }
   })();
 

@@ -22,12 +22,15 @@ interface GetTestsForResult {
  * Find test files/symbols that cover a given symbol or file.
  *
  * Strategy (in order):
- * 1. Walk incoming `test_covers` edges (explicit — for future use when
- *    test frameworks emit these edges).
+ * 1. Walk incoming `test_covers` edges from the graph. These are created by the
+ *    edge resolver (Pass 2h) for test files that import the target file or symbol.
+ *    When the target is a symbol, both the symbol node and its parent file node
+ *    are checked for incoming test_covers edges.
  * 2. Heuristic path-based matching: look for test files whose path contains
  *    the target file's base name (e.g. UserService → user.service.spec.ts).
- * 3. FTS search for the symbol name inside files whose path matches
- *    common test patterns.
+ *
+ * Results are deduplicated — a test file found via graph edges won't appear
+ * again from heuristic matching.
  */
 export function getTestsFor(
   store: Store,
@@ -35,7 +38,8 @@ export function getTestsFor(
 ): TraceMcpResult<GetTestsForResult> {
   let targetFile: string | undefined;
   let targetSymbolId: string | undefined;
-  let nodeId: number | undefined;
+  let symbolNodeId: number | undefined;
+  let fileNodeId: number | undefined;
 
   if (opts.symbolId || opts.fqn) {
     const resolved = resolveSymbolInput(store, opts);
@@ -43,12 +47,13 @@ export function getTestsFor(
     const symbol = resolved.symbol;
     targetSymbolId = symbol.symbol_id;
     targetFile = resolved.file.path;
-    nodeId = store.getNodeId('symbol', symbol.id);
+    symbolNodeId = store.getNodeId('symbol', symbol.id);
+    fileNodeId = store.getNodeId('file', resolved.file.id);
   } else if (opts.filePath) {
     const f = store.getFile(opts.filePath);
     if (!f) return err(notFound(opts.filePath));
     targetFile = f.path;
-    nodeId = store.getNodeId('file', f.id);
+    fileNodeId = store.getNodeId('file', f.id);
   } else {
     return err(notFound('provide symbol_id, fqn, or file_path'));
   }
@@ -57,8 +62,13 @@ export function getTestsFor(
   const seen = new Set<string>();
 
   // Strategy 1: explicit test_covers edges
-  if (nodeId !== undefined) {
-    const incoming = store.getIncomingEdges(nodeId);
+  // Check both symbol node and file node — test_covers edges may target either level.
+  const nodeIdsToCheck = new Set<number>();
+  if (symbolNodeId !== undefined) nodeIdsToCheck.add(symbolNodeId);
+  if (fileNodeId !== undefined) nodeIdsToCheck.add(fileNodeId);
+
+  for (const nid of nodeIdsToCheck) {
+    const incoming = store.getIncomingEdges(nid);
     for (const edge of incoming) {
       if (edge.edge_type_name !== 'test_covers') continue;
       const ref = store.getNodeRef(edge.source_node_id);
