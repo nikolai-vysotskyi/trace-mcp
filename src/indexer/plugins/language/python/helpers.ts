@@ -192,6 +192,76 @@ export function extractInheritanceEdges(
   }));
 }
 
+// ─── if __name__ == "__main__" detection ─────────────────────
+
+/**
+ * Detect `if __name__ == "__main__":` guards at module top level and return
+ * the names of functions called directly inside that block.
+ *
+ * Common patterns:
+ *   if __name__ == "__main__": main()
+ *   if __name__ == "__main__":\n    main()
+ *   if __name__ == "__main__":\n    sys.exit(main())
+ */
+export function extractNameMainCallees(root: TSNode): string[] {
+  const callees: string[] = [];
+
+  for (const node of root.namedChildren) {
+    if (node.type !== 'if_statement') continue;
+
+    const condition = node.childForFieldName('condition');
+    if (!condition) continue;
+
+    // Match:  __name__ == "__main__"  or  "__main__" == __name__
+    if (!isNameMainCondition(condition)) continue;
+
+    // Walk the consequence block to find direct call expressions
+    const body = node.childForFieldName('consequence');
+    if (!body) continue;
+
+    collectCalleeNames(body, callees);
+  }
+
+  return callees;
+}
+
+/** Check if a condition node represents `__name__ == "__main__"`. */
+function isNameMainCondition(node: TSNode): boolean {
+  if (node.type !== 'comparison_operator') return false;
+
+  const text = node.text;
+  // Covers both  __name__ == "__main__"  and  "__main__" == __name__
+  // Also handles single-quoted variants
+  return (
+    (text.includes('__name__') && (text.includes('"__main__"') || text.includes("'__main__'")))
+  );
+}
+
+/** Recursively collect callee names from a block (handles sys.exit(main()) etc.) */
+function collectCalleeNames(node: TSNode, out: string[]): void {
+  for (const child of node.namedChildren) {
+    if (child.type === 'expression_statement') {
+      // e.g. `main()` as a statement
+      collectCalleeNames(child, out);
+    } else if (child.type === 'call') {
+      const fn = child.childForFieldName('function');
+      if (fn) {
+        if (fn.type === 'identifier') {
+          out.push(fn.text);
+        }
+        // Also recurse into arguments: sys.exit(main())
+        const args = child.childForFieldName('arguments');
+        if (args) collectCalleeNames(args, out);
+      }
+    } else if (child.type === 'function_definition' || child.type === 'class_definition') {
+      // Don't descend into nested definitions
+      continue;
+    } else {
+      collectCalleeNames(child, out);
+    }
+  }
+}
+
 // ─── TYPE_CHECKING detection ─────────────────────────────────
 
 /** Extract imports inside `if TYPE_CHECKING:` blocks, marked as type-only. */
