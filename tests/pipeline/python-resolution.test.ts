@@ -379,4 +379,41 @@ describe('Python resolution pipeline', () => {
 
     expect(callCount).toBeGreaterThan(0);
   });
+
+  // ─── Parameter annotation type inference (#54) ──────────────
+
+  it('resolves method calls on parameter-annotated instances', () => {
+    // verify_and_save(user: User, ...) calls user.save()
+    const callEdges = db.prepare(`
+      SELECT s1.name AS caller, s2.name AS callee
+      FROM edges e
+      JOIN nodes n1 ON e.source_node_id = n1.id
+      JOIN nodes n2 ON e.target_node_id = n2.id
+      JOIN symbols s1 ON n1.node_type = 'symbol' AND n1.ref_id = s1.id
+      JOIN symbols s2 ON n2.node_type = 'symbol' AND n2.ref_id = s2.id
+      JOIN edge_types et ON e.edge_type_id = et.id
+      WHERE et.name = 'calls' AND s1.name = 'verify_and_save'
+    `).all() as { caller: string; callee: string }[];
+
+    const callees = callEdges.map((e) => e.callee);
+    expect(callees).toContain('save');
+  });
+
+  it('resolves inherited method calls via parameter annotation', () => {
+    // verify_and_save(user: User) calls user.validate()
+    // validate() is inherited from BaseModel, not defined on User
+    const callEdges = db.prepare(`
+      SELECT s1.name AS caller, s2.name AS callee
+      FROM edges e
+      JOIN nodes n1 ON e.source_node_id = n1.id
+      JOIN nodes n2 ON e.target_node_id = n2.id
+      JOIN symbols s1 ON n1.node_type = 'symbol' AND n1.ref_id = s1.id
+      JOIN symbols s2 ON n2.node_type = 'symbol' AND n2.ref_id = s2.id
+      JOIN edge_types et ON e.edge_type_id = et.id
+      WHERE et.name = 'calls' AND s1.name = 'verify_and_save'
+    `).all() as { caller: string; callee: string }[];
+
+    const callees = callEdges.map((e) => e.callee);
+    expect(callees).toContain('validate');
+  });
 });

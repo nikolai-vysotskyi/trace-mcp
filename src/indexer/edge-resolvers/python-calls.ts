@@ -489,6 +489,18 @@ function resolveMethodOnClass(
     }
   }
 
+  // Inherited method fallback: if the method wasn't found directly on the class,
+  // look for any method with that name that belongs to some parent class.
+  // This handles `user.validate()` where User inherits validate from BaseModel.
+  const methodCandidates = nameIndex.get(calleeName);
+  if (methodCandidates) {
+    const match = methodCandidates.find((s) =>
+      (s.kind === 'method' || s.kind === 'function')
+      && s.parent_symbol_id != null,
+    );
+    if (match) return match;
+  }
+
   return null;
 }
 

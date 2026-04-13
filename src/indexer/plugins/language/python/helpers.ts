@@ -1219,9 +1219,39 @@ interface LocalVarInfo {
  * - `var: ClassName` → var.type = "ClassName"
  * - `var = module.ClassName(...)` → var.type = "ClassName"
  * - `var = func_name(...)` → var.assignedFrom = "func_name" (for return type inference)
+ * - `def func(param: ClassName)` → param.type = "ClassName" (parameter annotation)
  */
 function inferLocalTypes(body: TSNode): Map<string, LocalVarInfo> {
   const types = new Map<string, LocalVarInfo>();
+
+  // Extract parameter type annotations from the enclosing function/method definition.
+  // `body` is the function's body block; its parent is the function_definition node.
+  const funcDef = body.parent;
+  if (funcDef && (funcDef.type === 'function_definition' || funcDef.type === 'decorated_definition')) {
+    const defNode = funcDef.type === 'decorated_definition'
+      ? funcDef.namedChildren.find((c) => c.type === 'function_definition')
+      : funcDef;
+    if (defNode) {
+      const params = defNode.childForFieldName('parameters');
+      if (params) {
+        for (const param of params.namedChildren) {
+          if (param.type === 'typed_parameter' || param.type === 'typed_default_parameter') {
+            const nameNode = param.childForFieldName('name') ?? param.namedChildren.find((c) => c.type === 'identifier');
+            const typeNode = param.childForFieldName('type');
+            if (nameNode && typeNode) {
+              const paramName = nameNode.text;
+              // Skip 'self' and 'cls' — they're handled by isSelfCall logic
+              if (paramName === 'self' || paramName === 'cls') continue;
+              const typeName = extractParamAnnotationType(typeNode);
+              if (typeName) {
+                types.set(paramName, { type: typeName });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 
   for (const child of body.namedChildren) {
     if (child.type === 'expression_statement') {
@@ -1292,6 +1322,46 @@ function extractAnnotationType(typeNode: TSNode): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Extract type name from a function parameter's type annotation.
+ * Handles: `param: ClassName`, `param: module.ClassName`, `param: Optional[ClassName]`
+ */
+function extractParamAnnotationType(typeNode: TSNode): string | null {
+  // Direct type: `param: User` → type node is (type (identifier "User"))
+  // The type node from childForFieldName('type') may be the `type` wrapper or the identifier itself
+  if (typeNode.type === 'type') {
+    return extractAnnotationType(typeNode);
+  }
+  // Sometimes tree-sitter gives us the identifier directly
+  if (typeNode.type === 'identifier') {
+    const name = typeNode.text;
+    if (name[0] >= 'A' && name[0] <= 'Z') return name;
+    return null;
+  }
+  if (typeNode.type === 'attribute') {
+    const attr = typeNode.childForFieldName('attribute');
+    if (attr && attr.text[0] >= 'A' && attr.text[0] <= 'Z') return attr.text;
+    return null;
+  }
+  // Subscript: `Optional[User]`, `List[User]` → extract the inner type
+  if (typeNode.type === 'subscript' || typeNode.type === 'generic_type') {
+    for (const child of typeNode.namedChildren) {
+      if (child.type === 'identifier' && child.text[0] >= 'A' && child.text[0] <= 'Z') {
+        // Skip wrapper types like Optional, List, etc.
+        const WRAPPER_TYPES = new Set(['Optional', 'List', 'Set', 'Dict', 'Tuple', 'Type', 'Sequence', 'Iterable']);
+        if (!WRAPPER_TYPES.has(child.text)) return child.text;
+      }
+    }
+    // If we only found wrapper types, look deeper for the inner type argument
+    for (const child of typeNode.namedChildren) {
+      const inner = extractParamAnnotationType(child);
+      if (inner) return inner;
+    }
+  }
+  // Fallback: try extractAnnotationType
+  return extractAnnotationType(typeNode);
 }
 
 /** Parse a call's `function` field into a PythonCallSite. */
