@@ -3,6 +3,7 @@ import type { EdgeResolution } from '../../plugin-api/types.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
 import { resolveSymbolInput } from '../shared/resolve.js';
+import { expandMethodViaCha } from '../shared/cha.js';
 
 interface CallGraphEdgeInfo {
   /** How this edge was resolved */
@@ -88,10 +89,18 @@ export function getCallGraph(
     });
   }
 
+  // CHA expansion: collect polymorphically-equivalent methods to merge their edges
+  const chaMatches = expandMethodViaCha(store, symbol);
+  const chaAliasNodeIds = chaMatches
+    .filter((m) => m.relation !== 'self')
+    .map((m) => m.nodeId);
+
   const edgeTypesUsed = new Set<string>();
   const visited = new Set<number>();
 
-  const { node: rootNode, tiers } = buildCallNode(store, symbol.id, nodeId, depth, visited, edgeTypesUsed);
+  const { node: rootNode, tiers } = buildCallNode(
+    store, symbol.id, nodeId, depth, visited, edgeTypesUsed, chaAliasNodeIds,
+  );
 
   return ok({
     root: rootNode,
@@ -112,6 +121,7 @@ function buildCallNode(
   maxDepth: number,
   _visited: Set<number>,
   edgeTypesUsed: Set<string>,
+  chaAliasNodeIds: number[] = [],
 ): { node: CallGraphNode; tiers: ResolutionTiers } {
   // Phase 1: BFS to collect all reachable node IDs + edges
   interface EdgeRef {
@@ -129,8 +139,11 @@ function buildCallNode(
 
   const nodeInfoMap = new Map<number, NodeInfo>();
   const visited = new Set<number>();
-  let frontier = [rootNodeId];
+  // CHA: treat alias node IDs as if they were the root — their edges merge into root
+  const chaAliasSet = new Set(chaAliasNodeIds);
+  let frontier = [rootNodeId, ...chaAliasNodeIds];
   visited.add(rootNodeId);
+  for (const alias of chaAliasNodeIds) visited.add(alias);
   nodeInfoMap.set(rootNodeId, { nodeId: rootNodeId, symbolRefId: rootSymbolId, outgoing: [], incoming: [] });
 
   for (let d = 0; d < maxDepth; d++) {
@@ -145,20 +158,24 @@ function buildCallNode(
       if (!CALL_EDGE_TYPES.has(edge.edge_type_name)) continue;
       edgeTypesUsed.add(edge.edge_type_name);
 
-      const pivotInfo = nodeInfoMap.get(edge.pivot_node_id);
+      // CHA: edges from alias nodes merge into the root node's info
+      const effectivePivot = chaAliasSet.has(edge.pivot_node_id) ? rootNodeId : edge.pivot_node_id;
+      const pivotInfo = nodeInfoMap.get(effectivePivot);
       if (!pivotInfo) continue;
 
       const resolution = inferResolution(edge);
       tiers[resolution]++;
 
       // Outgoing: pivot is source, target is the callee
-      if (edge.source_node_id === edge.pivot_node_id && !visited.has(edge.target_node_id)) {
+      if (edge.source_node_id === edge.pivot_node_id && !visited.has(edge.target_node_id)
+        && !chaAliasSet.has(edge.target_node_id)) {
         pivotInfo.outgoing.push({ nodeId: edge.target_node_id, edgeType: edge.edge_type_name, resolution });
         newNeighbors.add(edge.target_node_id);
       }
 
       // Incoming: pivot is target, source is the caller
-      if (edge.target_node_id === edge.pivot_node_id && !visited.has(edge.source_node_id)) {
+      if (edge.target_node_id === edge.pivot_node_id && !visited.has(edge.source_node_id)
+        && !chaAliasSet.has(edge.source_node_id)) {
         pivotInfo.incoming.push({ nodeId: edge.source_node_id, edgeType: edge.edge_type_name, resolution });
         newNeighbors.add(edge.source_node_id);
       }

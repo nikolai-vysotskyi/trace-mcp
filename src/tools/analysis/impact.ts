@@ -4,6 +4,7 @@ import { notFound } from '../../errors.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { execSync } from 'node:child_process';
 import { resolveSymbolInput } from '../shared/resolve.js';
+import { getChaNodeIds } from '../shared/cha.js';
 
 // ─── Pennant (feature-flag) types ────────────────────────────────────────────
 
@@ -341,8 +342,14 @@ export function getChangeImpact(
       const sym = store.getSymbolBySymbolId(sid);
       if (!sym) continue;
       if (!firstSym) firstSym = sym;
-      const nid = store.getNodeId('symbol', sym.id);
-      if (nid != null) startNodeIds.push(nid);
+      // CHA expansion: include polymorphically-equivalent methods
+      const chaNodeIds = getChaNodeIds(store, sym);
+      if (chaNodeIds.length > 0) {
+        startNodeIds.push(...chaNodeIds);
+      } else {
+        const nid = store.getNodeId('symbol', sym.id);
+        if (nid != null) startNodeIds.push(nid);
+      }
     }
     if (!firstSym) {
       return err(notFound(opts.symbolIds[0]));
@@ -359,8 +366,15 @@ export function getChangeImpact(
       return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
     }
     const sym = resolved.symbol;
-    const nodeId = store.getNodeId('symbol', sym.id);
-    if (nodeId != null) startNodeIds.push(nodeId);
+    // CHA expansion: include polymorphically-equivalent methods (overrides + base class methods)
+    const chaNodeIds = getChaNodeIds(store, sym);
+    if (chaNodeIds.length > 0) {
+      startNodeIds.push(...chaNodeIds);
+    } else {
+      const nodeId = store.getNodeId('symbol', sym.id);
+      if (nodeId != null) startNodeIds.push(nodeId);
+    }
+    startNodeIds = [...new Set(startNodeIds)];
     targetPath = resolved.file.path;
     targetSymbolId = sym.symbol_id;
     targetSymbolName = sym.name;
