@@ -22,6 +22,7 @@ import {
   detectPropertyGrouping,
   extractClassBases,
   extractImportEdges,
+  extractNameMainCallees,
   filePathToModule,
   makeFqn,
   makeSymbolId,
@@ -614,5 +615,82 @@ describe('utility functions', () => {
     expect(bases).toContain('Mixin');
     // metaclass is a keyword arg, should be skipped
     expect(bases).not.toContain('ABCMeta');
+  });
+});
+
+// ─── extractNameMainCallees ─────────────────────────────────
+
+describe('extractNameMainCallees', () => {
+  it('detects simple if __name__ == "__main__": main()', async () => {
+    const root = await parse(`
+def main():
+    print("hello")
+
+if __name__ == "__main__":
+    main()
+`);
+    const callees = extractNameMainCallees(root);
+    expect(callees).toContain('main');
+  });
+
+  it('detects single-quoted variant', async () => {
+    const root = await parse(`
+def main():
+    pass
+
+if __name__ == '__main__':
+    main()
+`);
+    const callees = extractNameMainCallees(root);
+    expect(callees).toContain('main');
+  });
+
+  it('detects sys.exit(main()) pattern', async () => {
+    const root = await parse(`
+import sys
+
+def main():
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
+`);
+    const callees = extractNameMainCallees(root);
+    expect(callees).toContain('main');
+  });
+
+  it('detects reversed comparison "__main__" == __name__', async () => {
+    const root = await parse(`
+def run():
+    pass
+
+if "__main__" == __name__:
+    run()
+`);
+    const callees = extractNameMainCallees(root);
+    expect(callees).toContain('run');
+  });
+
+  it('returns empty for files without __name__ guard', async () => {
+    const root = await parse(`
+def main():
+    pass
+
+main()
+`);
+    const callees = extractNameMainCallees(root);
+    expect(callees).toHaveLength(0);
+  });
+
+  it('does not match other if conditions', async () => {
+    const root = await parse(`
+def main():
+    pass
+
+if DEBUG:
+    main()
+`);
+    const callees = extractNameMainCallees(root);
+    expect(callees).toHaveLength(0);
   });
 });

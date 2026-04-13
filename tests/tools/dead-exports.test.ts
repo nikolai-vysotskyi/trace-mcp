@@ -3,7 +3,10 @@ import { Store } from '../../src/db/store.js';
 import { getDeadExports } from '../../src/tools/analysis/introspect.js';
 import { createTestStore } from '../test-utils.js';
 
-function addExportedSymbol(store: Store, filePath: string, name: string, kind: string): number {
+function addExportedSymbol(
+  store: Store, filePath: string, name: string, kind: string,
+  extraMetadata?: Record<string, unknown>,
+): number {
   let file = store.getFile(filePath);
   const fileId = file ? file.id : store.insertFile(filePath, 'typescript', null, null);
   return store.insertSymbol(fileId, {
@@ -11,7 +14,7 @@ function addExportedSymbol(store: Store, filePath: string, name: string, kind: s
     name,
     kind: kind as any,
     byteStart: 0, byteEnd: 100, lineStart: 1, lineEnd: 10,
-    metadata: { exported: 1 },
+    metadata: { exported: 1, ...extraMetadata },
   });
 }
 
@@ -84,5 +87,29 @@ describe('getDeadExports', () => {
     // 'math' is added to importedNames, but 'add' is not → dead
     expect(result.dead_exports).toHaveLength(1);
     expect(result.dead_exports[0].name).toBe('add');
+  });
+
+  it('excludes symbols marked as entry points (is_entry_point metadata)', () => {
+    // Simulate a Python script with if __name__ == "__main__": main()
+    addExportedSymbol(store, 'scripts/check_ast.py', 'main', 'function', {
+      is_entry_point: 'name_main',
+    });
+    addExportedSymbol(store, 'scripts/check_ast.py', 'helper', 'function');
+
+    const result = getDeadExports(store);
+    // main() should be excluded (entry point), helper() should be reported
+    expect(result.dead_exports).toHaveLength(1);
+    expect(result.dead_exports[0].name).toBe('helper');
+  });
+
+  it('counts entry-point symbols in total_exports but not in dead', () => {
+    addExportedSymbol(store, 'scripts/run.py', 'main', 'function', {
+      is_entry_point: 'name_main',
+    });
+
+    const result = getDeadExports(store);
+    expect(result.total_exports).toBe(1);
+    expect(result.total_dead).toBe(0);
+    expect(result.dead_exports).toHaveLength(0);
   });
 });

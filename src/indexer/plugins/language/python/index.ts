@@ -43,6 +43,7 @@ import {
   extractConditionalImports,
   detectPropertyGrouping,
   extractCallSites,
+  extractNameMainCallees,
 } from './helpers.js';
 import { detectMinPythonVersion } from './version-features.js';
 
@@ -126,6 +127,21 @@ export class PythonLanguagePlugin implements LanguagePlugin {
         if (isExported) {
           sym.metadata = sym.metadata ?? {};
           sym.metadata.exported = true;
+        }
+      }
+
+      // ── if __name__ == "__main__" entry point detection ────────
+      // Symbols called from the __name__ guard are CLI entry points;
+      // they should not be reported as dead exports.
+      const nameMainCallees = extractNameMainCallees(root);
+      if (nameMainCallees.length > 0) {
+        const calleeSet = new Set(nameMainCallees);
+        for (const sym of symbols) {
+          if (sym.parentSymbolId) continue;
+          if (calleeSet.has(sym.name)) {
+            sym.metadata = sym.metadata ?? {};
+            sym.metadata.is_entry_point = 'name_main';
+          }
         }
       }
 

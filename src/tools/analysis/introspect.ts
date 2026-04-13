@@ -368,6 +368,79 @@ interface GetDeadExportsResult {
 }
 
 /**
+ * Parse pyproject.toml [project.scripts], [project.gui-scripts], and
+ * setuptools [options.entry_points] console_scripts / gui_scripts to extract
+ * the function names declared as CLI entry points.
+ *
+ * Entry format: `cli-name = "package.module:function_name"` → extracts "function_name".
+ */
+function collectPyprojectEntryPoints(store: Store): Set<string> {
+  const names = new Set<string>();
+
+  // Look for pyproject.toml in indexed files
+  const allFiles = store.getAllFiles();
+  const pyprojectFile = allFiles.find((f) => f.path.endsWith('pyproject.toml'));
+  if (!pyprojectFile) return names;
+
+  // Get symbols from the pyproject.toml file — the TOML plugin indexes
+  // [project.scripts] entries as symbols with metadata.
+  const symbols = store.getSymbolsByFile(pyprojectFile.id);
+  for (const sym of symbols) {
+    // TOML plugin stores script entries with kind 'variable' under sections like
+    // project.scripts, project.gui-scripts, tool.setuptools.scripts, etc.
+    if (!sym.metadata) continue;
+    try {
+      const meta = typeof sym.metadata === 'string'
+        ? JSON.parse(sym.metadata) as Record<string, unknown>
+        : sym.metadata as Record<string, unknown>;
+      const section = typeof meta.section === 'string' ? meta.section : '';
+      const isScriptSection = /(?:project\.(?:scripts|gui-scripts)|console_scripts|gui_scripts)/.test(section);
+      if (!isScriptSection) continue;
+
+      // The value is typically "package.module:function_name" or "package.module:Class.method"
+      const value = typeof meta.value === 'string' ? meta.value : (sym.signature ?? '');
+      const colonIdx = value.indexOf(':');
+      if (colonIdx >= 0) {
+        const funcPart = value.slice(colonIdx + 1).trim();
+        // Handle "Class.method" → "method" and plain "function" → "function"
+        const dotIdx = funcPart.lastIndexOf('.');
+        names.add(dotIdx >= 0 ? funcPart.slice(dotIdx + 1) : funcPart);
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Also check setup.py / setup.cfg style entry_points if present
+  // via file content heuristic (fallback for repos without pyproject.toml scripts)
+  const setupFile = allFiles.find((f) => f.path.endsWith('setup.py') || f.path.endsWith('setup.cfg'));
+  if (setupFile) {
+    const setupSymbols = store.getSymbolsByFile(setupFile.id);
+    for (const sym of setupSymbols) {
+      if (!sym.metadata) continue;
+      try {
+        const meta = typeof sym.metadata === 'string'
+          ? JSON.parse(sym.metadata) as Record<string, unknown>
+          : sym.metadata as Record<string, unknown>;
+        if (meta.console_scripts || meta.gui_scripts) {
+          const scripts = (meta.console_scripts ?? meta.gui_scripts) as string[];
+          if (Array.isArray(scripts)) {
+            for (const entry of scripts) {
+              const colonIdx = entry.indexOf(':');
+              if (colonIdx >= 0) {
+                const funcPart = entry.slice(colonIdx + 1).trim();
+                const dotIdx = funcPart.lastIndexOf('.');
+                names.add(dotIdx >= 0 ? funcPart.slice(dotIdx + 1) : funcPart);
+              }
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  return names;
+}
+
+/**
  * Find exported symbols that are never imported by any other file.
  * Cross-references exported symbols with import edge metadata (specifiers).
  * An export is "dead" if its name never appears as a specifier in any import edge.
@@ -404,10 +477,28 @@ export function getDeadExports(
     }
   }
 
+  // Collect entry-point symbol names from pyproject.toml [project.scripts] /
+  // [project.gui-scripts] / setuptools console_scripts / gui_scripts.
+  const pyprojectEntryNames = collectPyprojectEntryPoints(store);
+
   const dead: DeadExportItem[] = [];
   for (const sym of exported) {
     // Skip methods (their export is inherited from the class)
     if (sym.kind === 'method') continue;
+
+    // Skip symbols marked as entry points (e.g. called from `if __name__ == "__main__"`)
+    if (sym.metadata) {
+      try {
+        const meta = typeof sym.metadata === 'string'
+          ? JSON.parse(sym.metadata) as Record<string, unknown>
+          : sym.metadata as Record<string, unknown>;
+        if (meta.is_entry_point) continue;
+      } catch { /* ignore malformed metadata */ }
+    }
+
+    // Skip symbols referenced by pyproject.toml script entry points
+    if (pyprojectEntryNames.has(sym.name)) continue;
+
     if (!importedNames.has(sym.name)) {
       dead.push({
         symbol_id: sym.symbol_id,
