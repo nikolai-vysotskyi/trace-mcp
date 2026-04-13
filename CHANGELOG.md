@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.20.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.20.0...v1.20.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* resolve SQLite migration crashes and daemon PATH for launchd ([33ea80a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/33ea80ae96f34b8c941027c7164674be68cc2b90))
+
 ## [1.20.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.19.0...v1.20.0) (2026-04-13)
 
 
