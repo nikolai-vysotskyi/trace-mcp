@@ -21,7 +21,17 @@ function getTraceMcpBinary(): string {
   }
 }
 
+function resolveNodePath(): string {
+  // launchd doesn't inherit shell PATH, so we must embed it in the plist.
+  // Derive from the node binary running right now.
+  const nodeDir = path.dirname(process.execPath);
+  // Merge with a minimal fallback PATH so basic unix tools work too.
+  const fallback = '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+  return `${nodeDir}:${fallback}`;
+}
+
 function generatePlist(binaryPath: string, port: number): string {
+  const envPath = resolveNodePath();
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -35,6 +45,11 @@ function generatePlist(binaryPath: string, port: number): string {
     <string>--port</string>
     <string>${port}</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${envPath}</string>
+  </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
