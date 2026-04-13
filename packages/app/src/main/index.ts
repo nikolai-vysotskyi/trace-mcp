@@ -63,6 +63,10 @@ ipcMain.handle('restart-daemon', async () => {
       fs.mkdirSync(plistDir, { recursive: true });
     }
 
+    // launchd doesn't inherit shell PATH — embed node's directory so #!/usr/bin/env node works
+    const nodeDir = path.dirname(process.execPath);
+    const envPath = `${nodeDir}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
+
     fs.writeFileSync(plistPath, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -76,6 +80,11 @@ ipcMain.handle('restart-daemon', async () => {
     <string>--port</string>
     <string>${port}</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${envPath}</string>
+  </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>

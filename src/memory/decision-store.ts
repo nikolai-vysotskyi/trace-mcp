@@ -241,19 +241,31 @@ export class DecisionStore {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('busy_timeout = 5000');
+    this.preMigrate();
     this.db.exec(DECISIONS_DDL);
     this.migrate();
     logger.debug({ dbPath }, 'Decision store initialized');
   }
 
-  private migrate(): void {
-    // Migration: add service_name column for federation support
-    const cols = (this.db.pragma('table_info(decisions)') as Array<{ name: string }>).map(c => c.name);
-    if (!cols.includes('service_name')) {
-      this.db.exec('ALTER TABLE decisions ADD COLUMN service_name TEXT');
-      this.db.exec('CREATE INDEX IF NOT EXISTS idx_decisions_service ON decisions(service_name)');
-      logger.info('Migration: added service_name column to decisions table');
+  /**
+   * Fix legacy schemas BEFORE DDL runs — prevents crashes when
+   * CREATE INDEX references columns that don't exist in old tables.
+   */
+  private preMigrate(): void {
+    const hasTable = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='decisions'")
+      .get();
+    if (hasTable) {
+      const cols = (this.db.pragma('table_info(decisions)') as Array<{ name: string }>).map(c => c.name);
+      if (!cols.includes('service_name')) {
+        this.db.exec('ALTER TABLE decisions ADD COLUMN service_name TEXT');
+        logger.info('Pre-migration: added service_name column to decisions table');
+      }
     }
+  }
+
+  private migrate(): void {
+    // (service_name migration now handled in preMigrate)
   }
 
   close(): void {

@@ -288,9 +288,30 @@ export class TopologyStore {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('busy_timeout = 5000');
+    this.preMigrate();
     this.db.exec(TOPOLOGY_DDL);
     this.migrate();
     logger.debug({ dbPath }, 'Topology database initialized');
+  }
+
+  /**
+   * Fix legacy schemas BEFORE DDL runs — prevents crashes when
+   * CREATE INDEX references columns that don't exist in old tables.
+   */
+  private preMigrate(): void {
+    const hasTable = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='federated_repos'")
+      .get();
+    if (hasTable) {
+      const fedCols = (this.db.pragma('table_info(federated_repos)') as Array<{ name: string }>).map((c) => c.name);
+      if (!fedCols.includes('project_root')) {
+        this.db.exec(`
+          DELETE FROM client_calls;
+          DROP TABLE IF EXISTS federated_repos;
+        `);
+        logger.info('Pre-migration: dropped legacy federated_repos missing project_root column');
+      }
+    }
   }
 
   private migrate(): void {
