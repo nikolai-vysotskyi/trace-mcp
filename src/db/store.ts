@@ -137,6 +137,10 @@ export class Store {
     return this.symbols.getSymbolByName(name, kind);
   }
 
+  getSymbolChildren(parentId: number): SymbolRow[] {
+    return this.symbols.getSymbolChildren(parentId);
+  }
+
   getExportedSymbols(filePattern?: string): SymbolWithFilePath[] {
     return this.symbols.getExportedSymbols(filePattern);
   }

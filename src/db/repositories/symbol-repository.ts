@@ -134,6 +134,12 @@ export class SymbolRepository {
     return this._stmts.getSymbolById.get(id) as SymbolRow | undefined;
   }
 
+  getSymbolChildren(parentId: number): SymbolRow[] {
+    return this.db.prepare(
+      'SELECT * FROM symbols WHERE parent_id = ?',
+    ).all(parentId) as SymbolRow[];
+  }
+
   getSymbolByName(name: string, kind?: string): SymbolRow | undefined {
     if (kind) {
       return this.db.prepare(

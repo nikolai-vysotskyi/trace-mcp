@@ -170,11 +170,18 @@ export function resolvePythonCallEdges(state: PipelineState): void {
         const targetNodeId = symbolNodeMap.get(targetSymbol.id);
         if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
 
+        const edgeMeta: Record<string, unknown> = { callee: call.calleeName, line: call.line };
+        // Store receiver type for CHA-based polymorphic resolution
+        if (call.receiverType) edgeMeta.receiver_type = call.receiverType;
+        else if (call.receiverAssignedFrom) {
+          const inferredType = returnTypeIndex.get(call.receiverAssignedFrom);
+          if (inferredType) edgeMeta.receiver_type = inferredType;
+        }
         insertStmt.run(
           sourceNodeId,
           targetNodeId,
           callsEdgeType.id,
-          JSON.stringify({ callee: call.calleeName, line: call.line }),
+          JSON.stringify(edgeMeta),
         );
         created++;
       }
