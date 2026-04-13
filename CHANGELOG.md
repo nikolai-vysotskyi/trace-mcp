@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.20.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.19.0...v1.20.0) (2026-04-13)
+
+
+### Features
+
+* add Class Hierarchy Analysis (CHA) for polymorphic call resolution ([#55](https://github.com/nikolai-vysotskyi/trace-mcp/issues/55)) ([7b193ca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7b193ca67c95a12ea61beab8122df1b93b678d1e))
+
+
+### Bug Fixes
+
+* align get_tests_for with graph test_covers edges ([#56](https://github.com/nikolai-vysotskyi/trace-mcp/issues/56)) ([1cfde2e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1cfde2e6ba44653f7a44c5d650515dc58d1d9569))
+* exclude CLI entry points from get_dead_exports false positives ([#53](https://github.com/nikolai-vysotskyi/trace-mcp/issues/53)) ([3abf971](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3abf971ed54ee609eee1b2ed5456f11c3ef5007c))
+* resolve method calls on parameter-annotated instances ([#54](https://github.com/nikolai-vysotskyi/trace-mcp/issues/54)) ([46c3cbe](https://github.com/nikolai-vysotskyi/trace-mcp/commit/46c3cbe99884c24334a7b4f5d8c2c4966f6ceceb))
+
 ## [1.19.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.18.0...v1.19.0) (2026-04-12)
 
 
