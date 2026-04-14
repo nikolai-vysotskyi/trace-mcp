@@ -6,7 +6,7 @@
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "vite",
-    "dev:electron": "tsc -p tsconfig.main.json && node scripts/patch-electron-dev.mjs && electron .",
+    "dev:electron": "tsc -p tsconfig.main.json && node scripts/patch-electron-dev.mjs && unset ELECTRON_RUN_AS_NODE && electron .",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
     "build": "npm run build:renderer && npm run build:main",
