@@ -36,4 +36,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('apply-update'),
   restartApp: (): Promise<void> =>
     ipcRenderer.invoke('restart-app'),
+  // Tab management (Windows custom tab bar)
+  getPlatform: (): Promise<string> =>
+    ipcRenderer.invoke('get-platform'),
+  focusTab: (tabId: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('focus-tab', tabId),
+  onTabListChanged: (callback: (tabs: { id: string; title: string; type: string; active: boolean }[]) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, tabs: { id: string; title: string; type: string; active: boolean }[]) => callback(tabs);
+    ipcRenderer.on('tab-list-changed', handler);
+    return () => { ipcRenderer.removeListener('tab-list-changed', handler); };
+  },
 });

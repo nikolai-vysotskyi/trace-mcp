@@ -1,6 +1,6 @@
 /**
  * Download and install the trace-mcp menu bar app from GitHub Releases.
- * macOS only — called from `trace-mcp init` or standalone via `trace-mcp install-app`.
+ * Supports macOS and Windows.
  */
 
 import fs from 'node:fs';
@@ -11,8 +11,14 @@ import { execSync } from 'node:child_process';
 import { Command } from 'commander';
 
 const GITHUB_REPO = 'nikolai-vysotskyi/trace-mcp';
-const APP_NAME = 'trace-mcp.app';
-const INSTALL_DIR = path.join(os.homedir(), 'Applications');
+
+const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
+
+const APP_NAME = isMac ? 'trace-mcp.app' : 'trace-mcp';
+const INSTALL_DIR = isMac
+  ? path.join(os.homedir(), 'Applications')
+  : path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'trace-mcp');
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -130,12 +136,37 @@ function pinToDock(appPath: string): void {
   }
 }
 
+/** Create a Start Menu shortcut on Windows. */
+function createStartMenuShortcut(exePath: string): void {
+  try {
+    const startMenuDir = path.join(
+      process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'),
+      'Microsoft', 'Windows', 'Start Menu', 'Programs',
+    );
+    fs.mkdirSync(startMenuDir, { recursive: true });
+    const shortcutPath = path.join(startMenuDir, 'trace-mcp.lnk');
+
+    // Use PowerShell to create .lnk shortcut
+    const ps = `
+      $ws = New-Object -ComObject WScript.Shell;
+      $sc = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}');
+      $sc.TargetPath = '${exePath.replace(/'/g, "''")}';
+      $sc.WorkingDirectory = '${path.dirname(exePath).replace(/'/g, "''")}';
+      $sc.Description = 'trace-mcp';
+      $sc.Save();
+    `.replace(/\n/g, ' ');
+    execSync(`powershell -NoProfile -Command "${ps}"`, { stdio: 'pipe' });
+  } catch {
+    // Non-critical — don't fail the install if shortcut creation doesn't work
+  }
+}
+
 /**
  * Install the trace-mcp menu bar app.
- * 1. Detect arch (arm64 / x64)
+ * 1. Detect arch (arm64 / x64) and platform
  * 2. Fetch latest release from GitHub
- * 3. Download the matching zip
- * 4. Unzip to ~/Applications/trace-mcp.app
+ * 3. Download the matching archive
+ * 4. Extract to installation directory
  */
 export interface InstallGuiAppOptions {
   /** Max retries when the release exists but the arch zip hasn't been uploaded yet */
@@ -147,25 +178,39 @@ export interface InstallGuiAppOptions {
 }
 
 export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<InstallAppResult> {
-  if (process.platform !== 'darwin') {
-    return { installed: false, error: 'Menu bar app is macOS only' };
+  if (!isMac && !isWin) {
+    return { installed: false, error: 'App installation is supported on macOS and Windows only' };
   }
 
   const { retries = 3, retryDelayMs = 15_000, onRetry } = opts;
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  // electron-builder names: trace-mcp-{ver}-arm64-mac.zip / trace-mcp-{ver}-mac.zip (x64)
+
   const findAsset = (assets: { name: string }[]) => {
-    const zips = assets.filter((a) => /trace-mcp.*\.zip$/i.test(a.name));
-    if (arch === 'arm64') {
-      return zips.find((a) => /arm64/i.test(a.name));
+    if (isMac) {
+      // electron-builder names: trace-mcp-{ver}-arm64-mac.zip / trace-mcp-{ver}-mac.zip (x64)
+      const zips = assets.filter((a) => /trace-mcp.*-mac.*\.zip$/i.test(a.name));
+      if (arch === 'arm64') {
+        return zips.find((a) => /arm64/i.test(a.name));
+      }
+      return zips.find((a) => !/arm64/i.test(a.name));
     }
-    // x64: pick the zip that does NOT contain arm64
-    return zips.find((a) => !/arm64/i.test(a.name));
+    // Windows: trace-mcp Setup *.exe or trace-mcp-*-win.zip
+    // Prefer portable zip for silent install
+    const winZips = assets.filter((a) => /trace-mcp.*-win.*\.zip$/i.test(a.name));
+    if (winZips.length > 0) {
+      return winZips.find((a) => arch === 'arm64' ? /arm64/i.test(a.name) : !/arm64/i.test(a.name))
+        ?? winZips[0];
+    }
+    // Fallback: NSIS exe installer
+    const exes = assets.filter((a) => /trace-mcp.*\.exe$/i.test(a.name));
+    if (exes.length > 0) {
+      return exes.find((a) => arch === 'arm64' ? /arm64/i.test(a.name) : !/arm64/i.test(a.name))
+        ?? exes[0];
+    }
+    return undefined;
   };
 
   try {
-    // 1. Fetch latest release — retry if the arch asset isn't uploaded yet
-    //    (race condition: npm publish finishes before electron-builder uploads the zip)
     let release: Awaited<ReturnType<typeof fetchLatestRelease>>;
     let asset: { name: string; url: string } | undefined;
 
@@ -183,37 +228,69 @@ export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<In
     if (!asset) {
       return {
         installed: false,
-        error: `No ${arch} zip found in release ${release!.tag} (${release!.assets.length} assets available: ${release!.assets.map((a) => a.name).join(', ') || 'none'}). The build may still be in progress — try again in a few minutes with: trace-mcp install-app`,
+        error: `No ${process.platform}/${arch} archive found in release ${release!.tag} (${release!.assets.length} assets available: ${release!.assets.map((a) => a.name).join(', ') || 'none'}). The build may still be in progress — try again in a few minutes with: trace-mcp install-app`,
       };
     }
 
     // 2. Download to temp
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-app-'));
-    const zipPath = path.join(tmpDir, asset.name);
-    await downloadFile(asset.url, zipPath);
+    const archivePath = path.join(tmpDir, asset.name);
+    await downloadFile(asset.url, archivePath);
 
-    // 3. Ensure ~/Applications exists
+    // 3. Ensure install dir exists
     fs.mkdirSync(INSTALL_DIR, { recursive: true });
 
-    // 4. Remove old installation if present
-    const appPath = path.join(INSTALL_DIR, APP_NAME);
-    if (fs.existsSync(appPath)) {
-      fs.rmSync(appPath, { recursive: true, force: true });
+    if (isMac) {
+      // 4. Remove old installation if present
+      const appPath = path.join(INSTALL_DIR, APP_NAME);
+      if (fs.existsSync(appPath)) {
+        fs.rmSync(appPath, { recursive: true, force: true });
+      }
+
+      // 5. Unzip
+      execSync(`unzip -q -o "${archivePath}" -d "${INSTALL_DIR}"`, { stdio: 'pipe' });
+
+      // 6. Write version marker
+      fs.writeFileSync(path.join(INSTALL_DIR, '.trace-mcp-version'), release!.tag, 'utf-8');
+
+      // 7. Clean up temp
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+
+      // 8. Pin to Dock
+      pinToDock(appPath);
+
+      return { installed: true, path: appPath };
     }
 
-    // 5. Unzip
-    execSync(`unzip -q -o "${zipPath}" -d "${INSTALL_DIR}"`, { stdio: 'pipe' });
+    // ── Windows ──
+    const isExeInstaller = /\.exe$/i.test(asset.name);
 
-    // 6. Write version marker (used by postinstall to skip re-download)
+    if (isExeInstaller) {
+      // Run NSIS installer silently
+      execSync(`"${archivePath}" /S /D=${INSTALL_DIR}`, { stdio: 'pipe', timeout: 120000 });
+    } else {
+      // Extract zip using PowerShell (available on all modern Windows)
+      execSync(
+        `powershell -NoProfile -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${INSTALL_DIR}' -Force"`,
+        { stdio: 'pipe', timeout: 120000 },
+      );
+    }
+
+    // Write version marker
     fs.writeFileSync(path.join(INSTALL_DIR, '.trace-mcp-version'), release!.tag, 'utf-8');
 
-    // 7. Clean up temp
+    // Clean up temp
     fs.rmSync(tmpDir, { recursive: true, force: true });
 
-    // 8. Pin to Dock (if not already there)
-    pinToDock(appPath);
+    // Find the exe in install dir
+    const exePath = path.join(INSTALL_DIR, 'trace-mcp.exe');
 
-    return { installed: true, path: appPath };
+    // Create Start Menu shortcut
+    if (fs.existsSync(exePath)) {
+      createStartMenuShortcut(exePath);
+    }
+
+    return { installed: true, path: fs.existsSync(exePath) ? exePath : INSTALL_DIR };
   } catch (err) {
     return { installed: false, error: (err as Error).message };
   }
@@ -221,17 +298,44 @@ export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<In
 
 /** Check if the app is already installed */
 export function isAppInstalled(): boolean {
-  return fs.existsSync(path.join(INSTALL_DIR, APP_NAME));
+  if (isMac) {
+    return fs.existsSync(path.join(INSTALL_DIR, APP_NAME));
+  }
+  // Windows: check for exe in install dir
+  return fs.existsSync(path.join(INSTALL_DIR, 'trace-mcp.exe'));
+}
+
+/** Read the installed app version from the marker file (e.g. "v1.20.0" → "1.20.0") */
+export function getInstalledAppVersion(): string | null {
+  const markerPath = path.join(INSTALL_DIR, '.trace-mcp-version');
+  if (!fs.existsSync(markerPath)) return null;
+  return fs.readFileSync(markerPath, 'utf-8').trim().replace(/^v/, '');
+}
+
+/** Check if the installed app is older than the current CLI version */
+export function isAppOutdated(): boolean {
+  const installed = getInstalledAppVersion();
+  if (!installed) return true; // no marker → assume outdated
+  // Read CLI version from root package.json (bundled at build time)
+  const cliVersion = require('../../package.json').version as string;
+  if (installed === cliVersion) return false;
+  const cur = installed.split('.').map(Number);
+  const cli = cliVersion.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((cli[i] || 0) > (cur[i] || 0)) return true;
+    if ((cli[i] || 0) < (cur[i] || 0)) return false;
+  }
+  return false;
 }
 
 /** Standalone CLI command: `trace-mcp install-app` */
 export const installAppCommand = new Command('install-app')
-  .description('Download and install (or update) the trace-mcp menu bar app (macOS)')
+  .description('Download and install (or update) the trace-mcp menu bar app (macOS / Windows)')
   .option('--retries <n>', 'Number of retries if asset not yet uploaded', '3')
   .option('--retry-delay <ms>', 'Delay between retries in ms', '15000')
   .action(async (opts: { retries: string; retryDelay: string }) => {
-    if (process.platform !== 'darwin') {
-      console.error('Error: Menu bar app is macOS only.');
+    if (process.platform !== 'darwin' && process.platform !== 'win32') {
+      console.error('Error: App installation is supported on macOS and Windows only.');
       process.exit(1);
     }
 
@@ -239,7 +343,7 @@ export const installAppCommand = new Command('install-app')
     const retryDelayMs = parseInt(opts.retryDelay, 10);
 
     const already = isAppInstalled();
-    console.log(already ? 'Updating trace-mcp menu bar app…' : 'Installing trace-mcp menu bar app…');
+    console.log(already ? 'Updating trace-mcp app…' : 'Installing trace-mcp app…');
 
     const result = await installGuiApp({
       retries,

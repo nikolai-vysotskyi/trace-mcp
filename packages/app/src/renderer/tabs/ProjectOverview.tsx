@@ -38,7 +38,10 @@ const BASE = 'http://127.0.0.1:3741';
 const GITHUB_REPO = 'nikolai-vysotskyi/trace-mcp';
 
 function shortPath(root: string): string {
-  return root.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
+  return root
+    .replace(/^\/Users\/[^/]+/, '~')
+    .replace(/^\/home\/[^/]+/, '~')
+    .replace(/^[A-Z]:\\Users\\[^\\]+/, '~');
 }
 
 function buildIssueUrl(gap: CoverageGap | UnknownPackage): string {
@@ -171,7 +174,7 @@ export function ProjectOverview({ root, onNavigateToService }: {
         <div className="flex items-center gap-2">
           <StatusDot status={statusDot} />
           <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {root.split('/').filter(Boolean).pop()}
+            {root.split(/[/\\]/).filter(Boolean).pop()}
           </h2>
         </div>
         <div className="text-[11px] mt-0.5 ml-5" style={{ color: 'var(--text-tertiary)' }}>

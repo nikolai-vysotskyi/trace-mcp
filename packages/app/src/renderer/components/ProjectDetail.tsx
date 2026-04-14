@@ -26,11 +26,14 @@ interface ProjectDetailProps {
 const BASE = 'http://127.0.0.1:3741';
 
 function projectName(root: string): string {
-  return root.split('/').filter(Boolean).pop() || root;
+  return root.split(/[/\\]/).filter(Boolean).pop() || root;
 }
 
 function shortPath(root: string): string {
-  return root.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
+  return root
+    .replace(/^\/Users\/[^/]+/, '~')
+    .replace(/^\/home\/[^/]+/, '~')
+    .replace(/^[A-Z]:\\Users\\[^\\]+/, '~');
 }
 
 function statusToDot(status?: string): 'active' | 'idle' | 'error' | 'disconnected' {

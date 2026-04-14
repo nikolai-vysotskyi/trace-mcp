@@ -14,9 +14,20 @@ mac:
   target:
     - target: zip
 
-linux:
-  target: []
-
 win:
-  icon: build/icon.png
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  deleteAppDataOnUninstall: false
+
+linux:
   target: []

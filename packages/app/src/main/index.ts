@@ -237,11 +237,13 @@ ipcMain.handle('restart-app', () => {
 });
 
 app.whenReady().then(() => {
-  // Set custom dock icon BEFORE hiding — macOS caches it for later show()
-  if (fs.existsSync(dockIconPath)) {
-    app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
+  // macOS: set custom dock icon BEFORE hiding — macOS caches it for later show()
+  if (process.platform === 'darwin') {
+    if (fs.existsSync(dockIconPath)) {
+      app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
+    }
+    app.dock?.hide();
   }
-  app.dock?.hide();
   createTray();
 });
 

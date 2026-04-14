@@ -3,9 +3,27 @@ import { Tray, nativeImage, Menu, BrowserWindow, app, shell, ipcMain, dialog, na
 import { DaemonClient } from './api-client';
 import { ensureDaemon } from './daemon-lifecycle';
 
-const ICON_ACTIVE = path.join(__dirname, '..', '..', 'assets', 'tray-iconTemplate.png');
-const ICON_INACTIVE = path.join(__dirname, '..', '..', 'assets', 'tray-icon-dimTemplate.png');
+const isMac = process.platform === 'darwin';
+
+// macOS: Template images (auto-tinted by the system)
+// Windows: separate light/dark icons (white for dark taskbar, black for light)
+const ASSETS = path.join(__dirname, '..', '..', 'assets');
 const APP_ICON = path.join(__dirname, '..', '..', 'build', 'icon.png');
+
+function getTrayIconPaths(): { active: string; inactive: string } {
+  if (isMac) {
+    return {
+      active: path.join(ASSETS, 'tray-iconTemplate.png'),
+      inactive: path.join(ASSETS, 'tray-icon-dimTemplate.png'),
+    };
+  }
+  // Windows/Linux: pick icon color based on system theme
+  const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+  return {
+    active: path.join(ASSETS, `tray-icon-${theme}.png`),
+    inactive: path.join(ASSETS, `tray-icon-dim-${theme}.png`),
+  };
+}
 
 const TABBING_ID = 'trace-mcp-tabs';
 
@@ -30,12 +48,11 @@ function getTitleBarColor(): string {
 }
 
 function createWindowOptions(extraOpts?: Partial<Electron.BrowserWindowConstructorOptions>): Electron.BrowserWindowConstructorOptions {
-  return {
+  const opts: Electron.BrowserWindowConstructorOptions = {
     width: 960,
     height: 700,
     show: false,
     icon: APP_ICON,
-    tabbingIdentifier: TABBING_ID,
     resizable: true,
     minimizable: true,
     maximizable: true,
@@ -49,6 +66,11 @@ function createWindowOptions(extraOpts?: Partial<Electron.BrowserWindowConstruct
     },
     ...extraOpts,
   };
+  // tabbingIdentifier is macOS-only
+  if (isMac) {
+    opts.tabbingIdentifier = TABBING_ID;
+  }
+  return opts;
 }
 
 function setupWindowEvents(win: BrowserWindow): void {
@@ -63,7 +85,6 @@ function setupWindowEvents(win: BrowserWindow): void {
   win.webContents.on('render-process-gone', (_event, details) => {
     console.error(`[trace-mcp] renderer crashed in window: reason=${details.reason}`);
     if (!win.isDestroyed() && details.reason !== 'clean-exit') {
-      // Delay slightly to let GPU process restart
       setTimeout(() => {
         if (!win.isDestroyed()) win.webContents.reload();
       }, 1000);
@@ -78,11 +99,13 @@ function setupWindowEvents(win: BrowserWindow): void {
 }
 
 function ensureDockVisible(): void {
-  app.dock?.show();
-  app.dock?.setIcon(nativeImage.createFromPath(APP_ICON));
+  if (isMac) {
+    app.dock?.show();
+    app.dock?.setIcon(nativeImage.createFromPath(APP_ICON));
+  }
 }
 
-/** Notify ALL windows whether the native tab bar is visible */
+/** Notify ALL windows whether the native tab bar is visible (macOS) */
 function broadcastTabBar(visible: boolean): void {
   const allWindows = [menuWindow, ...projectWindows.values()];
   for (const win of allWindows) {
@@ -92,8 +115,82 @@ function broadcastTabBar(visible: boolean): void {
   }
 }
 
+// ── Custom tab bar for Windows ─────────────────────────────────
+// On macOS we use native tabs. On Windows we broadcast a tab list
+// to every window so the renderer can draw its own tab strip.
+
+interface TabInfo {
+  id: string;       // 'menu' or project root path
+  title: string;
+  type: 'menu' | 'project';
+  active: boolean;
+}
+
+function getTabList(focusedWebContentsId?: number): TabInfo[] {
+  const tabs: TabInfo[] = [];
+  if (menuWindow && !menuWindow.isDestroyed()) {
+    tabs.push({
+      id: 'menu',
+      title: 'Menu',
+      type: 'menu',
+      active: menuWindow.webContents.id === focusedWebContentsId,
+    });
+  }
+  for (const [root, win] of projectWindows) {
+    if (!win.isDestroyed()) {
+      const sep = process.platform === 'win32' ? '\\' : '/';
+      tabs.push({
+        id: root,
+        title: root.split(sep).filter(Boolean).pop() || root,
+        type: 'project',
+        active: win.webContents.id === focusedWebContentsId,
+      });
+    }
+  }
+  return tabs;
+}
+
+function broadcastTabList(): void {
+  if (isMac) return; // macOS uses native tabs
+  const allWindows = [menuWindow, ...projectWindows.values()];
+  const focusedWin = BrowserWindow.getFocusedWindow();
+  const tabs = getTabList(focusedWin?.webContents.id);
+  for (const win of allWindows) {
+    if (win && !win.isDestroyed()) {
+      // Send tab list with 'active' relative to each window
+      const tabsForWin = tabs.map(t => ({
+        ...t,
+        active: win.webContents.id === (
+          t.id === 'menu' ? menuWindow?.webContents.id :
+          projectWindows.get(t.id)?.webContents.id
+        ),
+      }));
+      win.webContents.send('tab-list-changed', tabsForWin);
+    }
+  }
+}
+
+// IPC: focus a tab by id (Windows custom tab bar)
+ipcMain.handle('focus-tab', (_event, tabId: string) => {
+  if (tabId === 'menu') {
+    if (menuWindow && !menuWindow.isDestroyed()) {
+      menuWindow.focus();
+    }
+  } else {
+    const win = projectWindows.get(tabId);
+    if (win && !win.isDestroyed()) {
+      win.focus();
+    }
+  }
+  broadcastTabList();
+  return { ok: true };
+});
+
+// IPC: get current platform (renderer needs this to decide whether to show custom tabs)
+ipcMain.handle('get-platform', () => process.platform);
+
 function hideDockIfNoWindows(): void {
-  if (!menuWindow && projectWindows.size === 0) {
+  if (isMac && !menuWindow && projectWindows.size === 0) {
     app.dock?.hide();
   }
 }
@@ -112,10 +209,12 @@ function showMenuWindow(tab?: string): void {
   menuWindow = new BrowserWindow(createWindowOptions());
   menuWindow.loadURL(getRendererUrl({ view: 'menu', ...(tab ? { tab } : {}) }));
 
-  // Attach to existing tab group if project windows are open
-  const existingTab = [...projectWindows.values()].find(w => !w.isDestroyed());
-  if (existingTab) {
-    existingTab.addTabbedWindow(menuWindow);
+  // Attach to existing tab group if project windows are open (macOS only)
+  if (isMac) {
+    const existingTab = [...projectWindows.values()].find(w => !w.isDestroyed());
+    if (existingTab) {
+      existingTab.addTabbedWindow(menuWindow);
+    }
   }
 
   menuWindow.webContents.on('did-finish-load', () => {
@@ -126,6 +225,7 @@ function showMenuWindow(tab?: string): void {
     ensureDockVisible();
     menuWindow?.show();
     menuWindow?.focus();
+    broadcastTabList();
   });
 
   setupWindowEvents(menuWindow);
@@ -133,7 +233,10 @@ function showMenuWindow(tab?: string): void {
   menuWindow.on('closed', () => {
     menuWindow = null;
     hideDockIfNoWindows();
+    broadcastTabList();
   });
+
+  menuWindow.on('focus', () => broadcastTabList());
 }
 
 function openProjectTab(root: string): void {
@@ -155,7 +258,7 @@ function openProjectTab(root: string): void {
   win.loadURL(getRendererUrl({ view: 'project', root }));
 
   // Attach as a native macOS tab to the menu window
-  if (menuWindow && !menuWindow.isDestroyed()) {
+  if (isMac && menuWindow && !menuWindow.isDestroyed()) {
     menuWindow.addTabbedWindow(win);
   }
 
@@ -163,14 +266,18 @@ function openProjectTab(root: string): void {
     ensureDockVisible();
     win.show();
     win.focus();
-    // First project tab opened → tab bar is now visible
-    broadcastTabBar(true);
+    // First project tab opened → tab bar is now visible (macOS native tabs)
+    if (isMac) {
+      broadcastTabBar(true);
+    }
+    broadcastTabList();
   });
 
   setupWindowEvents(win);
 
-  // Set tab title to project name (after page load so HTML <title> doesn't override)
-  const projectName = root.split('/').filter(Boolean).pop() || root;
+  // Set tab title to project name
+  const sep = process.platform === 'win32' ? '\\' : '/';
+  const projectName = root.split(sep).filter(Boolean).pop() || root;
   win.webContents.on('did-finish-load', () => {
     win.setTitle(projectName);
   });
@@ -178,11 +285,14 @@ function openProjectTab(root: string): void {
   win.on('closed', () => {
     projectWindows.delete(root);
     // If no more project tabs, tab bar disappears (only menu window left)
-    if (projectWindows.size === 0) {
+    if (isMac && projectWindows.size === 0) {
       broadcastTabBar(false);
     }
     hideDockIfNoWindows();
+    broadcastTabList();
   });
+
+  win.on('focus', () => broadcastTabList());
 }
 
 // IPC: open a project as a native tab
@@ -239,7 +349,6 @@ function createDotIcon(hex: string, glow: boolean): Electron.NativeImage {
         buf[idx + 2] = blue;
         buf[idx + 3] = 255;
       } else if (glow && dist <= r + 3 * scale) {
-        // Soft glow falloff — mimics boxShadow: 0 0 4px
         const alpha = Math.round(255 * Math.max(0, 1 - (dist - r) / (3 * scale)) * 0.4);
         buf[idx] = red;
         buf[idx + 1] = green;
@@ -268,9 +377,11 @@ function buildContextMenu(): Menu {
 }
 
 function setTrayIcon(reachable: boolean): void {
-  const iconPath = reachable ? ICON_ACTIVE : ICON_INACTIVE;
-  const img = nativeImage.createFromPath(iconPath);
-  img.setTemplateImage(true);
+  const icons = getTrayIconPaths();
+  const img = nativeImage.createFromPath(reachable ? icons.active : icons.inactive);
+  if (isMac) {
+    img.setTemplateImage(true);
+  }
   tray.setImage(img);
   tray.setToolTip(reachable ? 'trace-mcp — running' : 'trace-mcp — daemon unreachable');
 }
@@ -296,27 +407,43 @@ async function checkHealth(): Promise<void> {
   tray.setContextMenu(buildContextMenu());
 }
 
-// Handle native "+" button in tab bar — focus Menu tab
-app.on('new-window-for-tab', () => {
-  if (menuWindow && !menuWindow.isDestroyed()) {
-    menuWindow.focus();
-  } else {
-    showMenuWindow();
-  }
-});
+// Handle native "+" button in tab bar — macOS only
+if (isMac) {
+  app.on('new-window-for-tab', () => {
+    if (menuWindow && !menuWindow.isDestroyed()) {
+      menuWindow.focus();
+    } else {
+      showMenuWindow();
+    }
+  });
+}
 
 export function createTray(): Tray {
-  const icon = nativeImage.createFromPath(ICON_INACTIVE);
-  icon.setTemplateImage(true);
+  const icons = getTrayIconPaths();
+  const icon = nativeImage.createFromPath(icons.inactive);
+  if (isMac) {
+    icon.setTemplateImage(true);
+  }
 
   tray = new Tray(icon);
   tray.setContextMenu(buildContextMenu());
+
+  // On Windows, clicks on tray icon open the window (standard behavior).
+  // Single click shows window, double-click also (Windows convention).
+  if (!isMac) {
+    tray.on('click', () => {
+      showWindow();
+    });
+    tray.on('double-click', () => {
+      showWindow();
+    });
+  }
 
   // Initial health check + periodic polling
   checkHealth();
   healthInterval = setInterval(checkHealth, 5_000);
 
-  // Update title bar color when system theme changes
+  // Update title bar color + tray icon when system theme changes
   nativeTheme.on('updated', () => {
     const color = getTitleBarColor();
     const allWindows = [menuWindow, ...projectWindows.values()];
@@ -324,6 +451,10 @@ export function createTray(): Tray {
       if (win && !win.isDestroyed()) {
         win.setBackgroundColor(color);
       }
+    }
+    // On Windows, tray icon color needs to match the taskbar theme
+    if (!isMac) {
+      setTrayIcon(daemonReachable);
     }
   });
 
