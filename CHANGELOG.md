@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.21.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.21.0...v1.21.1) (2026-04-14)
+
+
+### Bug Fixes
+
+* sync lock file and make serve the default command ([0e2dd5a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0e2dd5a635d13f62173378314c5e89131804c501))
+
 ## [1.21.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.20.1...v1.21.0) (2026-04-14)
 
 
