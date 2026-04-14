@@ -332,7 +332,7 @@ export interface MultiProjectCoverageReport {
 
 /**
  * Detect technology coverage across the root project and all recursively
- * discovered child projects (monorepo / federation support).
+ * discovered child projects (monorepo / subproject support).
  */
 export function detectCoverageRecursive(
   projectRoot: string,

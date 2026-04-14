@@ -234,7 +234,7 @@ analyticsCommand
   .command('coverage')
   .description('Show technology coverage: detected deps vs trace-mcp plugin support')
   .option('--format <fmt>', 'Output: text | json', 'text')
-  .option('--no-recursive', 'Only scan root project (skip child/federated projects)')
+  .option('--no-recursive', 'Only scan root project (skip child/subproject directories)')
   .action(async (opts: { format: string; recursive: boolean }) => {
     let projectRoot: string;
     try {

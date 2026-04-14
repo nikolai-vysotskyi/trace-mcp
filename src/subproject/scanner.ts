@@ -1,5 +1,5 @@
 /**
- * Federation Client Scanner — discovers HTTP/gRPC/GraphQL client calls in source code.
+ * Subproject Client Scanner — discovers HTTP/gRPC/GraphQL client calls in source code.
  * Scans for fetch(), axios, HttpClient, gRPC stubs, GraphQL queries, etc.
  * Returns raw call sites that can be matched to known API endpoints.
  */

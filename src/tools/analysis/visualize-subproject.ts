@@ -1,5 +1,5 @@
 /**
- * Federation Topology Visualization — interactive HTML graph of services and their API connections.
+ * Subproject Topology Visualization — interactive HTML graph of services and their API connections.
  *
  * Services are nodes (sized by endpoint count, colored by health).
  * Cross-service edges show API call relationships with call counts.
@@ -15,7 +15,7 @@ import type { TopologyStore } from '../../topology/topology-db.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-interface FedVizNode {
+interface SubVizNode {
   id: string;
   label: string;
   endpointCount: number;
@@ -27,7 +27,7 @@ interface FedVizNode {
   projectGroup: string | null;
 }
 
-interface FedVizEdge {
+interface SubVizEdge {
   source: string;
   target: string;
   callCount: number;
@@ -35,7 +35,7 @@ interface FedVizEdge {
   confidence: number;
 }
 
-interface VisualizeFederationResult {
+interface VisualizeSubprojectResult {
   outputPath: string;
   services: number;
   edges: number;
@@ -45,17 +45,17 @@ interface VisualizeFederationResult {
 // BUILD GRAPH DATA
 // ════════════════════════════════════════════════════════════════════════
 
-function buildFederationData(topoStore: TopologyStore): { nodes: FedVizNode[]; edges: FedVizEdge[] } {
+function buildSubprojectData(topoStore: TopologyStore): { nodes: SubVizNode[]; edges: SubVizEdge[] } {
   const services = topoStore.getAllServices();
   const allEndpoints = topoStore.getAllEndpoints();
   const crossEdges = topoStore.getAllCrossServiceEdges();
-  const repos = topoStore.getAllFederatedRepos();
+  const repos = topoStore.getAllSubprojects();
 
   // Build repo lookup: repo_root → repo_name
   const repoNameByRoot = new Map(repos.map((r) => [r.repo_root, r.name]));
 
   // Build nodes
-  const nodes: FedVizNode[] = services.map((svc) => {
+  const nodes: SubVizNode[] = services.map((svc) => {
     const endpoints = allEndpoints.filter((e) => e.service_id === svc.id);
     const endpointIds = new Set(endpoints.map((e) => e.id));
 
@@ -73,7 +73,7 @@ function buildFederationData(topoStore: TopologyStore): { nodes: FedVizNode[]; e
       ? Math.round((linkedCount / Math.max(endpoints.length, 1)) * 100)
       : 0;
 
-    const health: FedVizNode['health'] = endpoints.length === 0 ? 'critical'
+    const health: SubVizNode['health'] = endpoints.length === 0 ? 'critical'
       : linkedPercent >= 80 ? 'healthy'
       : linkedPercent >= 50 ? 'warning'
       : 'critical';
@@ -92,7 +92,7 @@ function buildFederationData(topoStore: TopologyStore): { nodes: FedVizNode[]; e
   });
 
   // Build edges: aggregate cross-service edges by source+target
-  const edgeMap = new Map<string, FedVizEdge>();
+  const edgeMap = new Map<string, SubVizEdge>();
   for (const edge of crossEdges) {
     const sourceSvc = services.find((s) => s.id === edge.source_service_id);
     const targetSvc = services.find((s) => s.id === edge.target_service_id);
@@ -123,7 +123,7 @@ function buildFederationData(topoStore: TopologyStore): { nodes: FedVizNode[]; e
 // HTML GENERATION
 // ════════════════════════════════════════════════════════════════════════
 
-function generateFederationHtml(nodes: FedVizNode[], edges: FedVizEdge[], layout: string): string {
+function generateSubprojectHtml(nodes: SubVizNode[], edges: SubVizEdge[], layout: string): string {
   const healthColors: Record<string, string> = {
     healthy: '#22c55e',
     warning: '#f59e0b',
@@ -142,7 +142,7 @@ function generateFederationHtml(nodes: FedVizNode[], edges: FedVizEdge[], layout
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>Federation Topology — trace-mcp</title>
+<title>Subproject Topology — trace-mcp</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #e2e8f0; overflow: hidden; }
@@ -326,19 +326,19 @@ document.getElementById('stats').textContent =
 // TOOL ENTRY POINT
 // ════════════════════════════════════════════════════════════════════════
 
-export function visualizeFederationTopology(
+export function visualizeSubprojectTopology(
   topoStore: TopologyStore,
   opts?: { output?: string; layout?: string },
-): TraceMcpResult<VisualizeFederationResult> {
-  const { nodes, edges } = buildFederationData(topoStore);
+): TraceMcpResult<VisualizeSubprojectResult> {
+  const { nodes, edges } = buildSubprojectData(topoStore);
 
   if (nodes.length === 0) {
-    return err(validationError('No services found. Add repos to the federation first (federation_add_repo).'));
+    return err(validationError('No services found. Add repos as subprojects first (subproject_add_repo).'));
   }
 
   const layout = opts?.layout ?? 'force';
-  const html = generateFederationHtml(nodes, edges, layout);
-  const outputPath = opts?.output ?? path.join(process.env.TMPDIR ?? '/tmp', 'trace-mcp-federation.html');
+  const html = generateSubprojectHtml(nodes, edges, layout);
+  const outputPath = opts?.output ?? path.join(process.env.TMPDIR ?? '/tmp', 'trace-mcp-subproject-topology.html');
 
   fs.writeFileSync(outputPath, html, 'utf-8');
 

@@ -87,6 +87,30 @@ function isPlistLoaded(): boolean {
   }
 }
 
+/**
+ * Ensure the daemon is running. Installs the launchd plist if missing
+ * and loads it. Returns true if daemon is (or was already) running.
+ * macOS only — returns false on other platforms without error.
+ */
+export async function ensureDaemonRunning(port = DEFAULT_DAEMON_PORT): Promise<boolean> {
+  if (process.platform !== 'darwin') return false;
+
+  // Already running?
+  const health = await getDaemonHealth(port);
+  if (health) return true;
+
+  // Not loaded — install plist and load
+  if (!isPlistLoaded()) {
+    installPlist(port);
+  }
+
+  try {
+    execSync(`launchctl load "${LAUNCHD_PLIST_PATH}" 2>/dev/null`);
+  } catch { /* already loaded */ }
+
+  return true;
+}
+
 export const daemonCommand = new Command('daemon')
   .description('Manage the trace-mcp background daemon');
 

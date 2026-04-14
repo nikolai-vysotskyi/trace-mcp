@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diffSchemas, diffEndpoints } from '../../src/federation/schema-diff.js';
+import { diffSchemas, diffEndpoints } from '../../src/subproject/schema-diff.js';
 
 describe('diffSchemas', () => {
   it('detects removed fields', () => {

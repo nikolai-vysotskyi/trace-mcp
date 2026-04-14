@@ -146,9 +146,9 @@ export const DEFAULT_CONFIG_JSONC = `{
   // ── Cross-repo topology ──────────────────────────────────────────
   "topology": {
     "enabled": true,
-    // "repos": [],                              // extra repo paths to federate
+    // "repos": [],                              // extra repo paths for subprojects
     "auto_detect": true,
-    "auto_federation": true
+    "auto_discover": true
     // "contract_globs": []                      // globs for API contract files
   },
 

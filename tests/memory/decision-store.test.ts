@@ -249,7 +249,7 @@ describe('DecisionStore', () => {
     });
   });
 
-  describe('service/federation support', () => {
+  describe('subproject support', () => {
     it('stores and queries by service_name', () => {
       store.addDecision({ ...baseInput, title: 'Auth uses JWT', service_name: 'auth-api' });
       store.addDecision({ ...baseInput, title: 'Users DB is Postgres', service_name: 'user-service' });

@@ -8,8 +8,8 @@
  *   trace-mcp visualize --layout hierarchical --color-by framework_role
  *   trace-mcp visualize --output /tmp/graph.html --no-open
  *
- *   trace-mcp visualize federation           # federation topology
- *   trace-mcp visualize federation --layout radial
+ *   trace-mcp visualize subproject            # subproject topology
+ *   trace-mcp visualize subproject --layout radial
  */
 
 import { execSync } from 'node:child_process';
@@ -24,7 +24,7 @@ import { findProjectRoot } from '../project-root.js';
 import { getProject } from '../registry.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { visualizeGraph } from '../tools/analysis/visualize.js';
-import { visualizeFederationTopology } from '../tools/analysis/visualize-federation.js';
+import { visualizeSubprojectTopology } from '../tools/analysis/visualize-subproject.js';
 
 function openInBrowser(filePath: string): void {
   const platform = process.platform;
@@ -96,11 +96,11 @@ export const visualizeCommand = new Command('visualize')
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
 
-    // Open topology store for federation support (best-effort)
+    // Open topology store for subproject support (best-effort)
     let topoStore: InstanceType<typeof TopologyStore> | undefined;
     try {
       if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-    } catch { /* federation is optional */ }
+    } catch { /* subproject support is optional */ }
 
     const result = visualizeGraph(store, {
       scope,
@@ -133,21 +133,21 @@ export const visualizeCommand = new Command('visualize')
     }
   });
 
-// ── visualize federation ──────────────────────────────────────────────
+// ── visualize subproject ──────────────────────────────────────────────
 
 visualizeCommand
-  .command('federation')
-  .alias('fed')
-  .description('Open federation topology graph in the browser')
+  .command('subproject')
+  .alias('sub')
+  .description('Open subproject topology graph in the browser')
   .option('-l, --layout <type>', 'graph layout: force | hierarchical | radial', 'force')
   .option('-o, --output <path>', 'output HTML file path')
   .option('--no-open', 'write HTML but do not open the browser')
   .action((opts) => {
     ensureGlobalDirs();
-    const outputPath = opts.output ?? path.join(os.tmpdir(), 'trace-mcp-federation.html');
+    const outputPath = opts.output ?? path.join(os.tmpdir(), 'trace-mcp-subproject-topology.html');
     const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
 
-    const result = visualizeFederationTopology(topoStore, {
+    const result = visualizeSubprojectTopology(topoStore, {
       layout: opts.layout,
       output: outputPath,
     });
@@ -159,7 +159,7 @@ visualizeCommand
       process.exit(1);
     }
 
-    console.log(`Federation: ${result.value.services} services, ${result.value.edges} edges`);
+    console.log(`Subprojects: ${result.value.services} services, ${result.value.edges} edges`);
     console.log(`Output: ${result.value.outputPath}`);
 
     if (opts.open !== false) {

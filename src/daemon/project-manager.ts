@@ -17,7 +17,7 @@ import { listProjects, getProject } from '../registry.js';
 import { setupProject } from '../project-setup.js';
 import { detectGitWorktree } from '../project-root.js';
 import { TopologyStore } from '../topology/topology-db.js';
-import { FederationManager } from '../federation/manager.js';
+import { SubprojectManager } from '../subproject/manager.js';
 import { TOPOLOGY_DB_PATH } from '../global.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
@@ -41,7 +41,7 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
   for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
 }
 
-function runFederationAutoSync(projectRoot: string, config: TraceMcpConfig): void {
+function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
   if (config.topology?.enabled === false) return;
   try {
     ensureGlobalDirs();
@@ -49,12 +49,12 @@ function runFederationAutoSync(projectRoot: string, config: TraceMcpConfig): voi
     const dbPath = getDbPath(projectRoot);
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
-    const fm = new FederationManager(store, topoStore, projectRoot);
-    fm.syncContracts();
-    fm.syncClientCalls();
+    const sm = new SubprojectManager(store, topoStore, projectRoot);
+    sm.syncContracts();
+    sm.syncClientCalls();
     db.close();
   } catch (err) {
-    logger.warn({ error: err, projectRoot }, 'Federation auto-sync failed (non-fatal)');
+    logger.warn({ error: err, projectRoot }, 'Subproject auto-sync failed (non-fatal)');
   }
 }
 
@@ -156,7 +156,7 @@ export class ProjectManager {
       managed.status = 'ready';
       runSummarization();
       runEmbeddings();
-      runFederationAutoSync(projectRoot, config);
+      runSubprojectAutoSync(projectRoot, config);
       logger.info({ projectRoot }, 'Project indexing complete');
     }).catch((err) => {
       managed.status = 'error';

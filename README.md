@@ -23,7 +23,7 @@
 | "What did we discuss about GraphQL last month?" | Verbatim conversation fragments with file references | `search_sessions` — FTS5 search across all past session content |
 | "Show me the request flow from URL to rendered page" | Route → Middleware → Controller → Service → View with prop mapping | `get_request_flow` — framework-aware edge traversal |
 | "Find all untested code in this module" | Symbols classified as "unreached" or "imported but never called in tests" | `get_untested_symbols` — test-to-source mapping |
-| "What's the impact of this API change on other services?" | Cross-federation client calls with confidence scores | `get_federation_impact` — topology graph traversal |
+| "What's the impact of this API change on other services?" | Cross-subproject client calls with confidence scores | `get_subproject_impact` — topology graph traversal |
 | "Orient me — I just opened this project" | Project identity + active decisions + memory stats in ~300 tokens | `get_wake_up` — layered context assembly |
 
 **Three things no other tool does:**
@@ -79,7 +79,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ❌ | ✅ AST-based, bidirectional | ✅ trace_call_path | ✅ refs/importers |
 | Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ | ❌ |
 | Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Multi-repo federation | ✅ cross-repo API linking | ✅ remote repos | ❌ | ❌ | ✅ GitHub repos | ❌ | ❌ |
+| Multi-repo subprojects | ✅ cross-repo API linking | ✅ remote repos | ❌ | ❌ | ✅ GitHub repos | ❌ | ❌ |
 | Session memory | ✅ built-in | ❌ | ✅ SQLite journal | ❌ | ✅ index persistence | ✅ persistent graph | ❌ |
 | Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
 
@@ -97,7 +97,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Auto-extraction from sessions | ✅ pattern-based (0 LLM calls) | ✅ via hooks | ✅ AI-compressed | ❌ | ❌ | ❌ |
 | Wake-up context | ✅ ~300 tok (code-linked decisions) | ✅ ~170 tok (AAAK) | ❌ | ❌ | ❌ | ❌ |
 | Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
-| Service/federation scoping | ✅ decisions per service | ✅ wings per project | ❌ | ❌ | ❌ | ❌ |
+| Service/subproject scoping | ✅ decisions per service | ✅ wings per project | ❌ | ❌ | ❌ | ❌ |
 | Token usage analytics | ✅ per-tool cost breakdown | ❌ | partial | ❌ | ❌ | ❌ |
 | Code intelligence included | ✅ 130+ tools | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Works as standalone memory | ❌ code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
@@ -137,7 +137,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | MCP tools | 120+ | ~35 | ~15 | ~20 | ~25 | 90 | 139 |
 | Session memory | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Multi-repo federation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Multi-repo subprojects | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Security scanning | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | Refactoring tools | ✅ | ✅ rename, symbol editing | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Architecture governance | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -221,7 +221,7 @@ trace-mcp benchmark /path/to/project
 - **Call graph & DI tree** — bidirectional call graphs with 4-tier resolution confidence, optional LSP enrichment for compiler-grade accuracy, NestJS dependency injection
 - **ORM model context** — relationships, schema, metadata for 7 ORMs
 - **Dead code & test gap detection** — find untested exports/symbols (with "unreached" vs "imported_not_called" classification), dead code, per-symbol test reach in impact analysis
-- **Multi-service federation** — link graphs across services via API contracts; cross-service impact analysis; service-scoped decisions
+- **Multi-service subprojects** — link graphs across services via API contracts; cross-service impact analysis; service-scoped decisions
 - **AI-powered analysis** — semantic search with zero-config local ONNX embeddings (no API keys needed), plus optional LLM summarization via Ollama/OpenAI
 
 ### Supported stack
@@ -329,7 +329,7 @@ All trace-mcp state is centralized:
 ~/.trace-mcp/
   .config.json              # global config + per-project settings
   registry.json             # registered projects
-  topology.db               # cross-service topology + federation graph
+  topology.db               # cross-service topology + subproject graph
   decisions.db              # decision memory + session content (cross-session knowledge graph)
   index/
     my-app-a1b2c3d4e5f6.db  # per-project databases (named by project + hash)
@@ -552,7 +552,7 @@ query_decisions(include_invalidated=true)       → full history
 
 ### Service scoping
 
-In projects with multiple services (federations), decisions can be scoped:
+In projects with multiple services (subprojects), decisions can be scoped:
 
 ```
 add_decision(title="Use JWT", service_name="auth-api")
@@ -564,67 +564,69 @@ query_decisions()                              → all project decisions
 
 ---
 
-## Federation
+## Subprojects
 
-A **federation** (= service) is an individual microservice or service root within a project — frontend, backend, parser, etc. Each directory with its own root marker (`package.json`, `composer.json`, `go.mod`, etc.) is a federation. A project contains one or more federations; the project itself is not a federation.
+A **subproject** is any working repository that is part of your project's ecosystem: microservices, frontends, backends, shared libraries, CLI tools, etc.
 
-trace-mcp **links dependency graphs across federations** — if federation A calls an API endpoint in federation B, trace-mcp knows that changing that endpoint in B breaks clients in A. Federations can live inside the project directory or be added from outside.
+Each directory with its own root marker (`package.json`, `composer.json`, `go.mod`, etc.) is a subproject. A project contains one or more subprojects; the project itself is not a subproject.
+
+trace-mcp **links dependency graphs across subprojects** — if subproject A calls an API endpoint in subproject B, trace-mcp knows that changing that endpoint in B breaks clients in A. Subprojects can live inside the project directory or be added from outside.
 
 ### How it works
 
-Federation is **automatic by default**. Every time a project is indexed (`serve`, `serve-http`, or `index`), trace-mcp:
+Subproject discovery is **automatic by default**. Every time a project is indexed (`serve`, `serve-http`, or `index`), trace-mcp:
 
-1. **Detects federations** within the project root:
+1. **Detects subprojects** within the project root:
    - **Docker Compose** — parses `docker-compose.yml` / `compose.yml`
    - **Flat workspace** — first-level subdirs with root markers (e.g. `project/frontend/` + `project/backend/`)
    - **Grouped workspace** — two-level structure (e.g. `project/org/service-a/`)
-   - **Monolith fallback** — treats root as a single federation
-2. **Registers** each federation bound to the project in `~/.trace-mcp/topology.db`
+   - **Monolith fallback** — treats root as a single subproject
+2. **Registers** each subproject bound to the project in `~/.trace-mcp/topology.db`
 3. **Parses** API contracts — OpenAPI/Swagger, GraphQL SDL, Protobuf/gRPC
 4. **Scans** code for HTTP client calls (fetch, axios, Http::, requests, http.Get, gRPC stubs, GraphQL operations)
-5. **Links** discovered calls to known endpoints from other federations
-6. **Creates** cross-federation dependency edges
+5. **Links** discovered calls to known endpoints from other subprojects
+6. **Creates** cross-subproject dependency edges
 
 ### Example
 
 ```bash
-# Index a project — federations are auto-detected
+# Index a project — subprojects are auto-detected
 cd ~/projects/my-app && trace-mcp add
 # → auto-detects: my-app/user-service (has openapi.yaml)
 # →               my-app/order-service (has axios.get('/api/users/{id}'))
 # → links order-service → user-service via /api/users/{id}
 
-# Or add an external federation manually
-trace-mcp federation add --repo=~/projects/external-auth --project=~/projects/my-app
+# Or add an external subproject manually
+trace-mcp subproject add --repo=~/projects/external-auth --project=~/projects/my-app
 
-# Check cross-federation impact
-trace-mcp federation impact --endpoint=/api/users
-# → "GET /api/users/{id} is called by 2 client(s) in 1 federation(s)"
+# Check cross-subproject impact
+trace-mcp subproject impact --endpoint=/api/users
+# → "GET /api/users/{id} is called by 2 client(s) in 1 subproject(s)"
 #   [order-service] src/services/user-client.ts:42 (axios, confidence: 85%)
 ```
 
-### Federation CLI
+### Subproject CLI
 
 ```bash
-# Add a federation (inside or outside project dir)
-trace-mcp federation add --repo=../service-b --project=. [--contract=openapi.yaml] [--name=my-service]
-trace-mcp federation remove <name-or-path>
-trace-mcp federation list [--project=.] [--json]
-trace-mcp federation sync           # re-scan all federations
-trace-mcp federation impact --endpoint=/api/users [--method=GET] [--service=user-svc]
+# Add a subproject (inside or outside project dir)
+trace-mcp subproject add --repo=../service-b --project=. [--contract=openapi.yaml] [--name=my-service]
+trace-mcp subproject remove <name-or-path>
+trace-mcp subproject list [--project=.] [--json]
+trace-mcp subproject sync           # re-scan all subprojects
+trace-mcp subproject impact --endpoint=/api/users [--method=GET] [--service=user-svc]
 ```
 
 ### MCP tools
 
 | Tool | What it does |
 |---|---|
-| `get_federation_graph` | All federations, their connections, and stats |
-| `get_federation_impact` | Cross-federation impact: what breaks if endpoint X changes (resolves to symbol level) |
-| `get_federation_clients` | Find all client calls across federations that call a specific endpoint |
-| `federation_add_repo` | Add a federation via MCP (bound to current project, or specify `project`) |
-| `federation_sync` | Re-scan all federations |
+| `get_subproject_graph` | All subprojects, their connections, and stats |
+| `get_subproject_impact` | Cross-subproject impact: what breaks if endpoint X changes (resolves to symbol level) |
+| `get_subproject_clients` | Find all client calls across subprojects that call a specific endpoint |
+| `subproject_add_repo` | Add a subproject via MCP (bound to current project, or specify `project`) |
+| `subproject_sync` | Re-scan all subprojects |
 
-> Federation builds on top of the topology system. See [Configuration](docs/configuration.md#topology--federation) for options.
+> Subproject management builds on top of the topology system. See [Configuration](docs/configuration.md#topology--subprojects) for options.
 
 ---
 

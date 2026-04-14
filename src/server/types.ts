@@ -34,7 +34,7 @@ export interface ServerContext {
   markExplored: (filePath: string) => void;
   /** Progress state for indexing pipelines (null if not wired) */
   progress: ProgressState | null;
-  /** Topology store for federation (null if topology disabled) */
+  /** Topology store for subprojects (null if topology disabled) */
   topoStore: TopologyStore | null;
   /** Decision memory store (null if memory disabled) */
   decisionStore: DecisionStore | null;

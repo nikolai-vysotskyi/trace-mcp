@@ -86,7 +86,7 @@ export const removeCommand = new Command('remove')
       dbDeleted = true;
     }
 
-    // Clean topology data (federation, services, endpoints, etc.)
+    // Clean topology data (subprojects, services, endpoints, etc.)
     const topoCleaned = cleanTopology(entry.root);
 
     // Remove config
@@ -102,7 +102,7 @@ export const removeCommand = new Command('remove')
         project: entry.name,
         root: entry.root,
         dbDeleted,
-        topologyCleaned: topoCleaned.federatedRepos > 0 || topoCleaned.services > 0,
+        topologyCleaned: topoCleaned.subprojects > 0 || topoCleaned.services > 0,
       }, null, 2));
     } else {
       const lines: string[] = [];
@@ -112,8 +112,8 @@ export const removeCommand = new Command('remove')
       } else if (opts.keepDb) {
         lines.push(`Database kept: ${shortPath(entry.dbPath)}`);
       }
-      if (topoCleaned.federatedRepos > 0 || topoCleaned.services > 0) {
-        lines.push(`Topology cleaned: ${topoCleaned.services} service(s), ${topoCleaned.federatedRepos} federation entry`);
+      if (topoCleaned.subprojects > 0 || topoCleaned.services > 0) {
+        lines.push(`Topology cleaned: ${topoCleaned.services} service(s), ${topoCleaned.subprojects} subproject(s)`);
       }
       lines.push('Config removed');
       p.note(lines.join('\n'), 'Removed');
@@ -242,15 +242,15 @@ async function handleRemoveFromMultiRoot(
   }
 }
 
-function cleanTopology(repoRoot: string): { federatedRepos: number; services: number } {
+function cleanTopology(repoRoot: string): { subprojects: number; services: number } {
   try {
-    if (!fs.existsSync(TOPOLOGY_DB_PATH)) return { federatedRepos: 0, services: 0 };
+    if (!fs.existsSync(TOPOLOGY_DB_PATH)) return { subprojects: 0, services: 0 };
     const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
     const result = topoStore.removeByRepoRoot(repoRoot);
     topoStore.close();
     return result;
   } catch {
-    return { federatedRepos: 0, services: 0 };
+    return { subprojects: 0, services: 0 };
   }
 }
 

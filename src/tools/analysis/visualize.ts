@@ -31,8 +31,8 @@ export interface VisualizeGraphOptions {
   symbolKinds?: string[];   // filter symbol kinds when granularity=symbol
   maxFiles?: number;        // max seed files for file-level graph
   maxNodes?: number;        // max viz nodes for symbol-level graph (default: 100000)
-  topoStore?: TopologyStore; // federation topology store — when set, merges connected federated repos
-  projectRoot?: string;      // current project root — used to scope federation to connected repos only
+  topoStore?: TopologyStore; // topology store — when set, merges connected subproject repos
+  projectRoot?: string;      // current project root — used to scope subprojects to connected repos only
   highlightDepth?: number;   // BFS depth for click-highlight (default: 1)
 }
 
@@ -45,7 +45,7 @@ interface VizNode {
   community: number;
   symbolCount?: number;
   importance: number;
-  repo?: string;  // set when merging federated repos
+  repo?: string;  // set when merging subproject repos
 }
 
 interface VizEdge {
@@ -140,13 +140,13 @@ export function buildGraphData(
   const granularity = opts.granularity ?? 'file';
   const hideIsolated = opts.hideIsolated === true; // default false
 
-  // Federation: when scope='project' and topoStore is available, merge all federated repos
+  // Subproject layer: when scope='project' and topoStore is available, merge all subproject repos
   if (scope === 'project' && opts.topoStore) {
     try {
-      const fedResult = buildFederatedGraph(store, opts);
-      if (fedResult) return fedResult;
+      const subResult = buildSubprojectGraph(store, opts);
+      if (subResult) return subResult;
     } catch (e) {
-      logger.warn({ error: e }, 'Federation graph merge failed, falling back to single-project');
+      logger.warn({ error: e }, 'Subproject graph merge failed, falling back to single-project');
     }
   }
 
@@ -202,10 +202,10 @@ function buildSingleProjectGraph(
 }
 
 /**
- * Federation-aware graph: only include repos that are directly connected
+ * Subproject-aware graph: only include repos that are directly connected
  * to the current project via cross-service edges in topology.
  */
-function buildFederatedGraph(
+function buildSubprojectGraph(
   mainStore: Store,
   opts: VisualizeGraphOptions,
 ): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } | null {
@@ -213,8 +213,8 @@ function buildFederatedGraph(
   const projectRoot = opts.projectRoot;
   if (!projectRoot) return null;
 
-  const repos = topoStore.getFederatedReposByProject(projectRoot);
-  if (repos.length === 0) return null; // no connected repos — skip federation
+  const repos = topoStore.getSubprojectsByProject(projectRoot);
+  if (repos.length === 0) return null; // no connected repos — skip subproject merge
 
   const allNodes: VizNode[] = [];
   const allEdges: VizEdge[] = [];
@@ -233,7 +233,7 @@ function buildFederatedGraph(
   }
   allEdges.push(...mainResult.edges);
 
-  // Build graph for each connected federated repo
+  // Build graph for each connected subproject repo
   for (const repo of repos) {
     if (!repo.db_path || !fs.existsSync(repo.db_path)) continue;
 
@@ -267,7 +267,7 @@ function buildFederatedGraph(
         });
       }
     } catch (e) {
-      logger.warn({ repo: repo.name, error: e }, 'Failed to load federated repo for graph');
+      logger.warn({ repo: repo.name, error: e }, 'Failed to load subproject repo for graph');
     } finally {
       db?.close();
     }
@@ -847,6 +847,10 @@ export function generateHtml(
 const DATA = ${data};
 const LAYOUT = ${JSON.stringify(layout)};
 const N = DATA.nodes.length;
+// Send stats to parent iframe host (Electron app reads these)
+if (window.parent !== window) {
+  window.parent.postMessage({ type: 'graphStats', nodes: DATA.nodes.length, edges: DATA.edges.length, communities: DATA.communities.length }, '*');
+}
 let THEME = new URLSearchParams(window.location.search).get('theme') || 'dark';
 let IS_LIGHT = THEME === 'light';
 

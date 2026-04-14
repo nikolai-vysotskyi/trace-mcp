@@ -405,7 +405,7 @@ export function App() {
 
   // Navigate to graph tab with a service scope
   const navigateToService = useCallback((serviceName: string) => {
-    onGraphSettingsChange({ scope: `federation:${serviceName}` });
+    onGraphSettingsChange({ scope: `subproject:${serviceName}` });
     setProjectTab('graph');
   }, [onGraphSettingsChange]);
 

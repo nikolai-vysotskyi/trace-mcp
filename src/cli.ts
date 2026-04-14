@@ -31,7 +31,7 @@ import { doctorCommand } from './cli/doctor.js';
 import { ciReportCommand } from './cli/ci.js';
 import { checkCommand } from './cli/check.js';
 import { bundlesCommand } from './cli/bundles.js';
-import { federationCommand } from './cli/federation.js';
+import { subprojectCommand } from './cli/subproject.js';
 import { memoryCommand } from './cli/memory.js';
 import { analyticsCommand } from './cli/analytics.js';
 import { removeCommand } from './cli/remove.js';
@@ -46,7 +46,7 @@ import { getProject, listProjects } from './registry.js';
 import { setupProject } from './project-setup.js';
 import { findProjectRoot, detectGitWorktree } from './project-root.js';
 import { TopologyStore } from './topology/topology-db.js';
-import { FederationManager } from './federation/manager.js';
+import { SubprojectManager } from './subproject/manager.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import { isDaemonRunning } from './daemon/client.js';
 import { DEFAULT_DAEMON_PORT } from './global.js';
@@ -69,30 +69,31 @@ function resolveDbPath(projectRoot: string): string {
 }
 
 /**
- * Auto-federation: after indexing, detect services within the project
- * and register each as a federation member bound to this project.
- * The project itself is NOT a federation — federations are its services.
- * Runs when topology is enabled (default: true) and auto_federation is true (default: true).
+ * Auto-discover subprojects: after indexing, detect services within the project
+ * and register each as a subproject bound to this project.
+ * A subproject is any working repository in the project ecosystem (microservices,
+ * frontends, backends, shared libraries, CLI tools, etc.).
+ * Runs when topology is enabled (default: true) and auto_discover is true (default: true).
  */
-function runFederationAutoSync(projectRoot: string, config: TraceMcpConfig): void {
+function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
   if (config.topology?.enabled === false) return;
-  if (config.topology?.auto_federation === false) return;
+  if (config.topology?.auto_discover === false) return;
 
   try {
     ensureGlobalDirs();
     const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-    const manager = new FederationManager(topoStore);
+    const manager = new SubprojectManager(topoStore);
 
-    const { services } = manager.autoFederateProject(projectRoot, {
+    const { services } = manager.autoDiscoverSubprojects(projectRoot, {
       contractPaths: config.topology?.contract_globs,
     });
 
-    // Also re-link any other previously federated repos
-    const fedRepos = topoStore.getAllFederatedRepos();
-    if (fedRepos.length > 1) {
+    // Also re-link any other previously registered subprojects
+    const subprojects = topoStore.getAllSubprojects();
+    if (subprojects.length > 1) {
       const linked = topoStore.linkClientCallsToEndpoints();
       if (linked > 0) {
-        logger.info({ linked }, 'Federation: linked additional client calls');
+        logger.info({ linked }, 'Subproject: linked additional client calls');
       }
     }
 
@@ -100,15 +101,15 @@ function runFederationAutoSync(projectRoot: string, config: TraceMcpConfig): voi
     const totalClientCalls = services.reduce((sum, s) => sum + s.clientCalls, 0);
     logger.info({
       project: projectRoot,
-      federations: services.length,
+      subprojects: services.length,
       serviceNames: services.map((s) => s.name),
       endpoints: totalEndpoints,
       clientCalls: totalClientCalls,
-    }, 'Federation auto-sync completed');
+    }, 'Subproject auto-sync completed');
 
     topoStore.close();
   } catch (e) {
-    logger.warn({ error: e }, 'Federation auto-sync failed (non-fatal)');
+    logger.warn({ error: e }, 'Subproject auto-sync failed (non-fatal)');
   }
 }
 
@@ -256,7 +257,7 @@ program
       pipeline.indexAll().then(() => {
         runSummarization();
         runEmbeddings();
-        runFederationAutoSync(projectRoot, config);
+        runSubprojectAutoSync(projectRoot, config);
       }).catch((err) => {
         logger.error({ error: err }, 'Initial indexing failed');
       });
@@ -693,11 +694,11 @@ program
           const maxFiles = url.searchParams.has('maxFiles') ? parseInt(url.searchParams.get('maxFiles')!, 10) : undefined;
           const maxNodes = url.searchParams.has('maxNodes') ? parseInt(url.searchParams.get('maxNodes')!, 10) : undefined;
 
-          // Open topoStore for federation support (best-effort)
+          // Open topoStore for subproject support (best-effort)
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
           try {
             if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-          } catch { /* federation is optional */ }
+          } catch { /* subproject support is optional */ }
 
           try {
             const { nodes, edges, communities } = buildGraphData(managed.store, {
@@ -741,11 +742,11 @@ program
           const maxNodes = url.searchParams.has('maxNodes') ? parseInt(url.searchParams.get('maxNodes')!, 10) : undefined;
           const highlightDepth = url.searchParams.has('highlightDepth') ? parseInt(url.searchParams.get('highlightDepth')!, 10) : undefined;
 
-          // Open topoStore for federation support (best-effort)
+          // Open topoStore for subproject support (best-effort)
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
           try {
             if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-          } catch { /* federation is optional */ }
+          } catch { /* subproject support is optional */ }
 
           try {
             const { nodes, edges, communities } = buildGraphData(managed.store, {
@@ -1003,13 +1004,13 @@ program
         return;
       }
 
-      // REST API: list federation repos for a project
-      if (req.method === 'GET' && url.pathname === '/api/projects/federation') {
+      // REST API: list subprojects for a project
+      if (req.method === 'GET' && url.pathname === '/api/projects/subprojects') {
         try {
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
           try {
             if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-          } catch { /* federation is optional */ }
+          } catch { /* subproject support is optional */ }
 
           if (!topoStore) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1018,7 +1019,7 @@ program
           }
 
           try {
-            const manager = new FederationManager(topoStore);
+            const manager = new SubprojectManager(topoStore);
             const projectRoot = url.searchParams.get('project') ?? undefined;
             const result = manager.list(projectRoot);
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1028,13 +1029,13 @@ program
           }
         } catch (e: any) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Federation query failed' }));
+          res.end(JSON.stringify({ error: e?.message ?? 'Subproject query failed' }));
         }
         return;
       }
 
-      // REST API: add a federation to a project
-      if (req.method === 'POST' && url.pathname === '/api/projects/federation') {
+      // REST API: add a subproject to a project
+      if (req.method === 'POST' && url.pathname === '/api/projects/subprojects') {
         let body = '';
         req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
         req.on('end', () => {
@@ -1057,13 +1058,13 @@ program
             }
 
             try {
-              const manager = new FederationManager(topoStore);
+              const manager = new SubprojectManager(topoStore);
               const result = manager.add(repoPath, project);
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify(result));
             } catch (e: any) {
               res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: e?.message ?? 'Failed to add federation' }));
+              res.end(JSON.stringify({ error: e?.message ?? 'Failed to add subproject' }));
             } finally {
               topoStore?.close();
             }
@@ -1075,8 +1076,8 @@ program
         return;
       }
 
-      // REST API: remove a federation
-      if (req.method === 'DELETE' && url.pathname === '/api/projects/federation') {
+      // REST API: remove a subproject
+      if (req.method === 'DELETE' && url.pathname === '/api/projects/subprojects') {
         const name = url.searchParams.get('name');
         if (!name) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -1088,30 +1089,30 @@ program
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
           try {
             if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-          } catch { /* federation is optional */ }
+          } catch { /* subproject support is optional */ }
 
           if (!topoStore) {
             res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'No federation data' }));
+            res.end(JSON.stringify({ error: 'No subproject data' }));
             return;
           }
 
           try {
-            const manager = new FederationManager(topoStore);
+            const manager = new SubprojectManager(topoStore);
             const removed = manager.remove(name);
             if (removed) {
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ ok: true }));
             } else {
               res.writeHead(404, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: `Federation '${name}' not found` }));
+              res.end(JSON.stringify({ error: `Subproject '${name}' not found` }));
             }
           } finally {
             topoStore.close();
           }
         } catch (e: any) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Federation delete failed' }));
+          res.end(JSON.stringify({ error: e?.message ?? 'Subproject delete failed' }));
         }
         return;
       }
@@ -1389,8 +1390,8 @@ program
     const result = await pipeline.indexAll(opts.force ?? false);
     logger.info(result, 'Indexing completed');
 
-    // Auto-federation: register this project, scan contracts & client calls
-    runFederationAutoSync(resolvedDir, config);
+    // Auto-discover subprojects: register this project, scan contracts & client calls
+    runSubprojectAutoSync(resolvedDir, config);
 
     db.close();
   });
@@ -1477,7 +1478,7 @@ program.addCommand(doctorCommand);
 program.addCommand(ciReportCommand);
 program.addCommand(checkCommand);
 program.addCommand(bundlesCommand);
-program.addCommand(federationCommand);
+program.addCommand(subprojectCommand);
 program.addCommand(memoryCommand);
 program.addCommand(analyticsCommand);
 program.addCommand(statusCommand);

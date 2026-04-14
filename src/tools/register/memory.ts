@@ -20,11 +20,11 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
   const { projectRoot, j, decisionStore, topoStore } = ctx;
   if (!decisionStore) return;
 
-  /** Get federation service names within this project */
-  function getFederationServiceNames(): string[] {
+  /** Get subproject names within this project */
+  function getSubprojectNames(): string[] {
     if (!topoStore) return [];
     try {
-      const repos = topoStore.getFederatedReposByProject(projectRoot);
+      const repos = topoStore.getSubprojectsByProject(projectRoot);
       return repos.map(r => r.name);
     } catch { return []; }
   }
@@ -53,12 +53,12 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'add_decision',
-    'Manually record an architectural decision, tech choice, preference, or convention. Links to code symbols/files and optionally to a specific service (federation) for code-aware memory. Decisions have temporal validity — they can be invalidated later when they become outdated.',
+    'Manually record an architectural decision, tech choice, preference, or convention. Links to code symbols/files and optionally to a specific subproject for code-aware memory. Decisions have temporal validity — they can be invalidated later when they become outdated.',
     {
       title: z.string().min(1).max(200).describe('Short summary of the decision'),
       content: z.string().min(1).max(5000).describe('Full decision text — reasoning, context, tradeoffs'),
       type: z.enum(DECISION_TYPES).describe('Decision type'),
-      service_name: z.string().max(256).optional().describe('Service/federation name this decision is about (e.g., "auth-api", "user-service")'),
+      service_name: z.string().max(256).optional().describe('Subproject name this decision is about (e.g., "auth-api", "user-service")'),
       symbol_id: z.string().max(512).optional().describe('Symbol FQN this decision is about (e.g., "src/auth/provider.ts::AuthProvider#class")'),
       file_path: z.string().max(1024).optional().describe('File path this decision is about'),
       tags: z.array(z.string().max(64)).max(20).optional().describe('Tags for categorization (e.g., ["auth", "security"])'),
@@ -84,10 +84,10 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'query_decisions',
-    'Query the decision knowledge graph. Filter by type, service (federation), code symbol, file path, tag, or time. Returns decisions linked to code — "why was this architecture chosen?" answered with the actual decision record. Use service_name to filter by a specific service/federation within the project.',
+    'Query the decision knowledge graph. Filter by type, subproject, code symbol, file path, tag, or time. Returns decisions linked to code — "why was this architecture chosen?" answered with the actual decision record. Use service_name to filter by a specific subproject within the project.',
     {
       type: z.enum(DECISION_TYPES).optional().describe('Filter by decision type'),
-      service_name: z.string().max(256).optional().describe('Filter by service/federation name (e.g., "auth-api")'),
+      service_name: z.string().max(256).optional().describe('Filter by subproject name (e.g., "auth-api")'),
       symbol_id: z.string().max(512).optional().describe('Filter by linked symbol FQN'),
       file_path: z.string().max(1024).optional().describe('Filter by linked file path'),
       tag: z.string().max(64).optional().describe('Filter by tag'),
@@ -111,7 +111,7 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       });
 
       const stats = decisionStore.getStats(projectRoot);
-      const serviceNames = getFederationServiceNames();
+      const serviceNames = getSubprojectNames();
       const result: Record<string, unknown> = { decisions, total_results: decisions.length, store_stats: stats };
       if (serviceNames.length > 0) {
         result.available_services = serviceNames;

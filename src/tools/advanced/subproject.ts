@@ -1,29 +1,29 @@
 /**
- * Federation MCP tools — cross-repo impact analysis and dependency graph.
+ * Subproject MCP tools — cross-repo impact analysis and dependency graph.
  */
 
 import { ok, err, type TraceMcpResult } from '../../errors.js';
 import { validationError, notFound } from '../../errors.js';
-import { FederationManager, type CrossRepoImpactResult, type FederationGraphResult } from '../../federation/manager.js';
+import { SubprojectManager, type CrossRepoImpactResult, type SubprojectGraphResult } from '../../subproject/manager.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
-import { diffEndpoints, type EndpointSchemaDiff } from '../../federation/schema-diff.js';
+import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
 
 // ════════════════════════════════════════════════════════════════════════
-// 1. FEDERATION GRAPH — show all federated repos and their connections
+// 1. SUBPROJECT GRAPH — show all subprojects and their connections
 // ════════════════════════════════════════════════════════════════════════
 
-export function getFederationGraph(
+export function getSubprojectGraph(
   topoStore: TopologyStore,
-): TraceMcpResult<FederationGraphResult> {
-  const manager = new FederationManager(topoStore);
+): TraceMcpResult<SubprojectGraphResult> {
+  const manager = new SubprojectManager(topoStore);
   return ok(manager.list());
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// 2. FEDERATION IMPACT — cross-repo impact of changing an endpoint
+// 2. SUBPROJECT IMPACT — cross-repo impact of changing an endpoint
 // ════════════════════════════════════════════════════════════════════════
 
-export function getFederationImpact(
+export function getSubprojectImpact(
   topoStore: TopologyStore,
   opts: { endpoint?: string; method?: string; service?: string },
 ): TraceMcpResult<CrossRepoImpactResult[]> {
@@ -31,15 +31,15 @@ export function getFederationImpact(
     return err(validationError('At least one of endpoint or service is required'));
   }
 
-  const manager = new FederationManager(topoStore);
+  const manager = new SubprojectManager(topoStore);
   return ok(manager.getImpact(opts));
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// 3. FEDERATION ADD — add a repo to the federation (via MCP tool)
+// 3. SUBPROJECT ADD — add a repo as a subproject (via MCP tool)
 // ════════════════════════════════════════════════════════════════════════
 
-export function federationAddRepo(
+export function subprojectAddRepo(
   topoStore: TopologyStore,
   opts: { repoPath: string; projectRoot: string; name?: string; contractPaths?: string[] },
 ): TraceMcpResult<{
@@ -51,7 +51,7 @@ export function federationAddRepo(
   linkedCalls: number;
 }> {
   try {
-    const manager = new FederationManager(topoStore);
+    const manager = new SubprojectManager(topoStore);
     const result = manager.add(opts.repoPath, opts.projectRoot, {
       name: opts.name,
       contractPaths: opts.contractPaths,
@@ -63,10 +63,10 @@ export function federationAddRepo(
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// 4. FEDERATION SYNC — re-scan all federated repos
+// 4. SUBPROJECT SYNC — re-scan all subprojects
 // ════════════════════════════════════════════════════════════════════════
 
-export function federationSync(
+export function subprojectSync(
   topoStore: TopologyStore,
 ): TraceMcpResult<{
   repos: number;
@@ -76,16 +76,16 @@ export function federationSync(
   newlyLinked: number;
   crossRepoEdges: number;
 }> {
-  const manager = new FederationManager(topoStore);
+  const manager = new SubprojectManager(topoStore);
   const result = manager.sync();
   return ok(result);
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// 5. FEDERATION CLIENTS — find all client calls to a specific endpoint
+// 5. SUBPROJECT CLIENTS — find all client calls to a specific endpoint
 // ════════════════════════════════════════════════════════════════════════
 
-interface FederationClientCallsResult {
+interface SubprojectClientCallsResult {
   endpoint: { method: string | null; path: string; service: string };
   clients: Array<{
     repo: string;
@@ -97,10 +97,10 @@ interface FederationClientCallsResult {
   totalClients: number;
 }
 
-export function getFederationClients(
+export function getSubprojectClients(
   topoStore: TopologyStore,
   opts: { endpoint: string; method?: string },
-): TraceMcpResult<FederationClientCallsResult[]> {
+): TraceMcpResult<SubprojectClientCallsResult[]> {
   const allEndpoints = topoStore.getAllEndpoints();
   const normalized = opts.endpoint.toLowerCase();
 
@@ -110,7 +110,7 @@ export function getFederationClients(
     return true;
   });
 
-  const results: FederationClientCallsResult[] = [];
+  const results: SubprojectClientCallsResult[] = [];
 
   for (const ep of matchingEndpoints) {
     const clientCalls = topoStore.getClientCallsByEndpoint(ep.id);

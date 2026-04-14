@@ -7,7 +7,7 @@
  * paths, and reports which ones are still valid (the directory exists and
  * looks like a code project).
  *
- * Optionally adds discovered repos to the federation in one shot — useful
+ * Optionally registers discovered repos as subprojects in one shot — useful
  * for multi-repo workflows where you want trace-mcp to index every repo
  * Claude has touched recently.
  */
@@ -18,7 +18,7 @@ import os from 'node:os';
 import { err, ok } from 'neverthrow';
 import { validationError, type TraceMcpResult } from '../../errors.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
-import { FederationManager } from '../../federation/manager.js';
+import { SubprojectManager } from '../../subproject/manager.js';
 import { logger } from '../../logger.js';
 
 export interface DiscoveredSession {
@@ -38,14 +38,14 @@ export interface DiscoverClaudeSessionsResult {
   scannedRoot: string;
   totalDirs: number;
   sessions: DiscoveredSession[];
-  /** Populated only when add_to_federation=true */
-  federationAdded?: Array<{
+  /** Populated only when add_as_subprojects=true */
+  subprojectsAdded?: Array<{
     repo: string;
     name: string;
     services: number;
     endpoints: number;
   }>;
-  federationSkipped?: Array<{ repo: string; reason: string }>;
+  subprojectsSkipped?: Array<{ repo: string; reason: string }>;
 }
 
 /**
@@ -183,9 +183,9 @@ export function discoverClaudeSessions(opts: {
 }
 
 /**
- * Discover sessions and add each existing one to the federation in one call.
+ * Discover sessions and register each existing one as a subproject in one call.
  */
-export function discoverAndFederate(
+export function discoverAndRegisterSubprojects(
   topoStore: TopologyStore,
   opts: {
     scanRoot?: string;
@@ -197,13 +197,13 @@ export function discoverAndFederate(
   if (discovered.isErr()) return discovered;
 
   const result = discovered.value;
-  const added: NonNullable<DiscoverClaudeSessionsResult['federationAdded']> = [];
-  const skipped: NonNullable<DiscoverClaudeSessionsResult['federationSkipped']> = [];
+  const added: NonNullable<DiscoverClaudeSessionsResult['subprojectsAdded']> = [];
+  const skipped: NonNullable<DiscoverClaudeSessionsResult['subprojectsSkipped']> = [];
 
-  const manager = new FederationManager(topoStore);
+  const manager = new SubprojectManager(topoStore);
   for (const session of result.sessions) {
     try {
-      const { services } = manager.autoFederateProject(session.projectPath);
+      const { services } = manager.autoDiscoverSubprojects(session.projectPath);
       const totalEndpoints = services.reduce((sum, s) => sum + s.endpoints, 0);
       added.push({
         repo: session.projectPath,
@@ -214,13 +214,13 @@ export function discoverAndFederate(
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       skipped.push({ repo: session.projectPath, reason: message });
-      logger.warn({ err: e, repo: session.projectPath }, 'discoverAndFederate: skip');
+      logger.warn({ err: e, repo: session.projectPath }, 'discoverAndRegisterSubprojects: skip');
     }
   }
 
   return ok({
     ...result,
-    federationAdded: added,
-    federationSkipped: skipped,
+    subprojectsAdded: added,
+    subprojectsSkipped: skipped,
   });
 }

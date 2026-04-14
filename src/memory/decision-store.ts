@@ -32,7 +32,7 @@ export interface DecisionRow {
   type: DecisionType;
   /** Project root this decision belongs to */
   project_root: string;
-  /** Optional: service/federation name within the project (e.g., 'auth-api', 'user-service') */
+  /** Optional: subproject name within the project (e.g., 'auth-api', 'user-service') */
   service_name: string | null;
   /** Optional: symbol FQN this decision is about */
   symbol_id: string | null;
@@ -58,7 +58,7 @@ export interface DecisionInput {
   content: string;
   type: DecisionType;
   project_root: string;
-  /** Service/federation name within the project (e.g., 'auth-api') */
+  /** Subproject name within the project (e.g., 'auth-api') */
   service_name?: string;
   symbol_id?: string;
   file_path?: string;
@@ -71,7 +71,7 @@ export interface DecisionInput {
 
 export interface DecisionQuery {
   project_root?: string;
-  /** Filter by service/federation name within the project */
+  /** Filter by subproject name within the project */
   service_name?: string;
   type?: DecisionType;
   symbol_id?: string;
@@ -482,7 +482,7 @@ export class DecisionStore {
     return this.db.prepare(`SELECT * FROM decisions WHERE file_path LIKE ?${filter} ORDER BY valid_from DESC`).all(pathPattern) as DecisionRow[];
   }
 
-  /** Get all decisions for a specific service/federation within a project */
+  /** Get all decisions for a specific subproject within a project */
   getDecisionsForService(serviceName: string, projectRoot?: string, activeOnly = true): DecisionRow[] {
     const filter = activeOnly ? ' AND valid_until IS NULL' : '';
     if (projectRoot) {

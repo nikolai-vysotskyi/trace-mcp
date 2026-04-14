@@ -1,44 +1,47 @@
 /**
- * CLI: trace-mcp federation — multi-repo graph federation commands.
+ * CLI: trace-mcp subproject — manage subprojects within your project ecosystem.
+ *
+ * A subproject is any working repository that is part of your project's ecosystem:
+ * microservices, frontends, backends, shared libraries, CLI tools, etc.
  *
  * Usage:
- *   trace-mcp federation add --repo=../service-b [--contract=openapi.yaml] [--name=my-service]
- *   trace-mcp federation remove <name-or-path>
- *   trace-mcp federation list [--json]
- *   trace-mcp federation sync
- *   trace-mcp federation impact --endpoint=/api/users [--method=GET] [--service=user-svc]
+ *   trace-mcp subproject add --repo=../service-b [--contract=openapi.yaml] [--name=my-service]
+ *   trace-mcp subproject remove <name-or-path>
+ *   trace-mcp subproject list [--json]
+ *   trace-mcp subproject sync
+ *   trace-mcp subproject impact --endpoint=/api/users [--method=GET] [--service=user-svc]
  */
 
 import { Command } from 'commander';
 import { TopologyStore } from '../topology/topology-db.js';
-import { FederationManager } from '../federation/manager.js';
+import { SubprojectManager } from '../subproject/manager.js';
 import { TOPOLOGY_DB_PATH, ensureGlobalDirs } from '../global.js';
 import { logger } from '../logger.js';
 
-function createManager(): { manager: FederationManager; topoStore: TopologyStore } {
+function createManager(): { manager: SubprojectManager; topoStore: TopologyStore } {
   ensureGlobalDirs();
   const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-  const manager = new FederationManager(topoStore);
+  const manager = new SubprojectManager(topoStore);
   return { manager, topoStore };
 }
 
-export const federationCommand = new Command('federation')
-  .description('Multi-repo graph federation — link API contracts across repositories')
-  .alias('fed');
+export const subprojectCommand = new Command('subproject')
+  .description('Manage subprojects — link repositories in your project ecosystem (microservices, frontends, backends, shared libs, etc.)')
+  .alias('sub');
 
-// ── federation add ──────────────────────────────────────────────────
+// ── subproject add ──────────────────────────────────────────────────
 
-federationCommand
+subprojectCommand
   .command('add')
-  .description('Add a repository/service to the federation, bound to a project')
+  .description('Add a repository as a subproject, bound to a project')
   .requiredOption('--repo <path>', 'Path to the repository/service')
-  .requiredOption('--project <path>', 'Project root this federation belongs to')
+  .requiredOption('--project <path>', 'Project root this subproject belongs to')
   .option('--contract <paths...>', 'Explicit contract file paths (relative to repo root)')
   .option('--name <name>', 'Name for this repo (default: directory basename)')
   .action((opts: { repo: string; project: string; contract?: string[]; name?: string }) => {
     const { manager, topoStore } = createManager();
     try {
-      console.log(`Adding repo to federation: ${opts.repo} (project: ${opts.project})`);
+      console.log(`Adding subproject: ${opts.repo} (project: ${opts.project})`);
       const result = manager.add(opts.repo, opts.project, {
         name: opts.name,
         contractPaths: opts.contract,
@@ -53,7 +56,7 @@ federationCommand
       console.log(`  Linked to endpoints: ${result.linkedCalls}`);
       console.log();
     } catch (e) {
-      logger.error({ error: e }, 'Failed to add repo');
+      logger.error({ error: e }, 'Failed to add subproject');
       console.error(`Error: ${(e as Error).message}`);
       process.exit(1);
     } finally {
@@ -61,19 +64,19 @@ federationCommand
     }
   });
 
-// ── federation remove ───────────────────────────────────────────────
+// ── subproject remove ───────────────────────────────────────────────
 
-federationCommand
+subprojectCommand
   .command('remove <name-or-path>')
-  .description('Remove a repository from the federation')
+  .description('Remove a subproject')
   .action((nameOrPath: string) => {
     const { manager, topoStore } = createManager();
     try {
       const removed = manager.remove(nameOrPath);
       if (removed) {
-        console.log(`Removed '${nameOrPath}' from federation.`);
+        console.log(`Removed '${nameOrPath}' from subprojects.`);
       } else {
-        console.log(`Repository '${nameOrPath}' not found in federation.`);
+        console.log(`Subproject '${nameOrPath}' not found.`);
         process.exit(1);
       }
     } finally {
@@ -81,13 +84,13 @@ federationCommand
     }
   });
 
-// ── federation list ─────────────────────────────────────────────────
+// ── subproject list ─────────────────────────────────────────────────
 
-federationCommand
+subprojectCommand
   .command('list')
-  .description('List federated repositories and their connections')
+  .description('List subprojects and their connections')
   .option('--json', 'Output as JSON')
-  .option('--project <path>', 'Filter to federations of a specific project')
+  .option('--project <path>', 'Filter to subprojects of a specific project')
   .action((opts: { json?: boolean; project?: string }) => {
     const { manager, topoStore } = createManager();
     try {
@@ -99,11 +102,11 @@ federationCommand
       }
 
       if (graph.repos.length === 0) {
-        console.log('No federated repositories. Use `trace-mcp federation add --repo=<path>` to add one.');
+        console.log('No subprojects. Use `trace-mcp subproject add --repo=<path>` to add one.');
         return;
       }
 
-      console.log('Federated Repositories:\n');
+      console.log('Subprojects:\n');
       for (const repo of graph.repos) {
         console.log(`  ${repo.name}`);
         console.log(`    Root: ${repo.repoRoot}`);
@@ -128,15 +131,15 @@ federationCommand
     }
   });
 
-// ── federation sync ─────────────────────────────────────────────────
+// ── subproject sync ─────────────────────────────────────────────────
 
-federationCommand
+subprojectCommand
   .command('sync')
-  .description('Re-scan all federated repos: contracts, client calls, and re-link')
+  .description('Re-scan all subprojects: contracts, client calls, and re-link')
   .action(() => {
     const { manager, topoStore } = createManager();
     try {
-      console.log('Syncing all federated repositories...');
+      console.log('Syncing all subprojects...');
       const result = manager.sync();
 
       console.log(`\n  Repos synced: ${result.repos}`);
@@ -148,7 +151,7 @@ federationCommand
       console.log(`  Cross-repo edges: ${result.crossRepoEdges}`);
       console.log();
     } catch (e) {
-      logger.error({ error: e }, 'Federation sync failed');
+      logger.error({ error: e }, 'Subproject sync failed');
       console.error(`Error: ${(e as Error).message}`);
       process.exit(1);
     } finally {
@@ -156,9 +159,9 @@ federationCommand
     }
   });
 
-// ── federation impact ───────────────────────────────────────────────
+// ── subproject impact ───────────────────────────────────────────────
 
-federationCommand
+subprojectCommand
   .command('impact')
   .description('Cross-repo impact analysis: who breaks if this endpoint changes?')
   .option('--endpoint <path>', 'Endpoint path pattern (e.g. /api/users)')
