@@ -35,73 +35,11 @@ ipcMain.handle('open-in-editor', async (_event, filePath: string) => {
   await shell.openPath(filePath);
 });
 
+import { restartDaemon } from './daemon-lifecycle';
+
 // IPC: restart daemon (kill old, create plist if needed, start new via launchd)
 ipcMain.handle('restart-daemon', async () => {
-  const home = os.homedir();
-  const traceMcpHome = path.join(home, '.trace-mcp');
-  const daemonLogPath = path.join(traceMcpHome, 'daemon.log');
-  const plistPath = path.join(home, 'Library', 'LaunchAgents', 'com.trace-mcp.server.plist');
-  const port = 3741;
-
-  // Unload existing plist if loaded
-  try {
-    execSync(`launchctl unload "${plistPath}" 2>/dev/null`);
-  } catch { /* not loaded — fine */ }
-
-  // Create plist if it doesn't exist (same as `trace-mcp daemon start`)
-  if (!fs.existsSync(plistPath)) {
-    // Find the trace-mcp binary
-    let binaryPath: string;
-    try {
-      binaryPath = execSync('which trace-mcp', { encoding: 'utf-8' }).trim();
-    } catch {
-      throw new Error('trace-mcp not found in PATH. Install it first: npm i -g trace-mcp');
-    }
-
-    const plistDir = path.dirname(plistPath);
-    if (!fs.existsSync(plistDir)) {
-      fs.mkdirSync(plistDir, { recursive: true });
-    }
-
-    // launchd doesn't inherit shell PATH — embed node's directory so #!/usr/bin/env node works
-    const nodeDir = path.dirname(process.execPath);
-    const envPath = `${nodeDir}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
-
-    fs.writeFileSync(plistPath, `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.trace-mcp.server</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${binaryPath}</string>
-    <string>serve-http</string>
-    <string>--port</string>
-    <string>${port}</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>${envPath}</string>
-  </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>${daemonLogPath}</string>
-  <key>StandardErrorPath</key>
-  <string>${daemonLogPath}</string>
-  <key>WorkingDirectory</key>
-  <string>${traceMcpHome}</string>
-</dict>
-</plist>
-`, 'utf-8');
-  }
-
-  execSync(`launchctl load "${plistPath}"`);
-  return { ok: true };
+  return restartDaemon();
 });
 
 // IPC: detect which MCP clients have trace-mcp configured
