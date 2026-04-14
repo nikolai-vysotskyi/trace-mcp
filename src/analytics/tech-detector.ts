@@ -17,6 +17,8 @@ interface DependencyInfo {
   coveredByPlugin: string | null;
   priority: PackageMeta['priority'];
   ecosystem: Ecosystem;
+  deprecated?: boolean;
+  successor?: string;
 }
 
 interface CoverageGap {
@@ -50,6 +52,7 @@ interface CoverageReport {
   covered: { name: string; version: string; plugin: string }[];
   gaps: CoverageGap[];
   unknown: UnknownPackage[];
+  deprecated: { name: string; version: string; successor: string }[];
 }
 
 // --- Manifest parsers ---
@@ -271,6 +274,8 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
         coveredByPlugin: known?.plugin ?? null,
         priority: known?.priority ?? 'none',
         ecosystem,
+        ...(known?.deprecated && { deprecated: true }),
+        ...(known?.successor && { successor: known.successor }),
       });
     }
   }
@@ -304,6 +309,10 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
       return (prio[a.needs_plugin] ?? 3) - (prio[b.needs_plugin] ?? 3);
     });
 
+  const deprecatedDeps = allDeps
+    .filter(d => d.deprecated && d.successor)
+    .map(d => ({ name: d.name, version: d.version, successor: d.successor! }));
+
   return {
     project: projectRoot,
     manifests_analyzed: manifestsFound,
@@ -316,6 +325,7 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
     covered: covered.map(d => ({ name: d.name, version: d.version, plugin: d.coveredByPlugin! })),
     gaps,
     unknown,
+    deprecated: deprecatedDeps,
   };
 }
 

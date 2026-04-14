@@ -24,7 +24,7 @@ function resolveDbPath(projectRoot: string): string {
 }
 
 function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
-  const { coverage, covered, gaps, unknown } = result;
+  const { coverage, covered, gaps, unknown, deprecated } = result;
   const pct = coverage.coverage_pct;
   const pctIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️ ' : '❌';
 
@@ -45,6 +45,14 @@ function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
     }
   }
 
+  // Deprecated — actionable warnings with upgrade paths
+  if (deprecated.length > 0) {
+    console.log(`\n⛔ Deprecated packages (${deprecated.length}):`);
+    for (const d of deprecated) {
+      console.log(`   ${d.name} ${d.version} → ${d.successor}`);
+    }
+  }
+
   // Unknown — summary line, then only "likely" verbose
   if (unknown.length > 0) {
     const likely = unknown.filter(u => u.needs_plugin === 'likely');
@@ -57,7 +65,7 @@ function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
       no.length     ? `🟢 ok: ${no.length}` : '',
     ].filter(Boolean).join('  ·  ');
 
-    console.log(`\n📋 Not in catalog (${unknown.length}, language fallback active)  ${parts}`);
+    console.log(`\n📋 Not in catalog (${unknown.length})  ${parts}`);
 
     if (likely.length > 0) {
       console.log(`   — should add to catalog:`);
@@ -281,12 +289,14 @@ analyticsCommand
     const { covered: covCount, total_significant: totalSig, coverage_pct: pct, total_projects } = aggregate;
     const pctIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️ ' : '❌';
 
-    // Deduplicate gaps and unknowns across all projects
+    // Deduplicate gaps, unknowns, and deprecated across all projects
     const allGaps = new Map<string, (typeof projects[0]['gaps'][0])>();
     const allUnknown = new Map<string, (typeof projects[0]['unknown'][0])>();
+    const allDeprecated = new Map<string, (typeof projects[0]['deprecated'][0])>();
     for (const proj of projects) {
       for (const g of proj.gaps) if (!allGaps.has(g.name)) allGaps.set(g.name, g);
       for (const u of proj.unknown) if (!allUnknown.has(u.name)) allUnknown.set(u.name, u);
+      for (const d of proj.deprecated) if (!allDeprecated.has(d.name)) allDeprecated.set(d.name, d);
     }
     const gaps = [...allGaps.values()].sort((a, b) => {
       const prio = { high: 0, medium: 1, low: 2 };
@@ -295,6 +305,7 @@ analyticsCommand
     const unknown = [...allUnknown.values()];
     const likely  = unknown.filter(u => u.needs_plugin === 'likely');
     const maybe   = unknown.filter(u => u.needs_plugin === 'maybe');
+    const deprecated = [...allDeprecated.values()];
 
     console.log(`\n📦 Technology Coverage  ${pctIcon} ${covCount}/${totalSig} significant deps (${pct}%)  ·  ${total_projects} projects\n`);
 
@@ -302,6 +313,13 @@ analyticsCommand
       console.log(`⚠️  Gaps — no plugin (${gaps.length}):`);
       for (const g of gaps) {
         console.log(`   [${g.priority.padEnd(6)}] ${g.name}`);
+      }
+    }
+
+    if (deprecated.length > 0) {
+      console.log(`\n⛔ Deprecated packages (${deprecated.length}):`);
+      for (const d of deprecated) {
+        console.log(`   ${d.name} → ${d.successor}`);
       }
     }
 
