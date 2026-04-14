@@ -69,6 +69,15 @@ import { LeanLanguagePlugin } from './lean/index.js';
 import { FormLanguagePlugin } from './form/index.js';
 import { MagmaLanguagePlugin } from './magma/index.js';
 import { WolframLanguagePlugin } from './wolfram/index.js';
+import { PascalLanguagePlugin } from './pascal/index.js';
+import { AdaLanguagePlugin } from './ada/index.js';
+import { SolidityLanguagePlugin } from './solidity/index.js';
+import { PowerShellLanguagePlugin } from './powershell/index.js';
+import { ApexLanguagePlugin } from './apex/index.js';
+import { PlsqlLanguagePlugin } from './plsql/index.js';
+import { NimLanguagePlugin } from './nim/index.js';
+import { TclLanguagePlugin } from './tcl/index.js';
+import { DLanguagePlugin } from './dlang/index.js';
 
 export function createAllLanguagePlugins(): LanguagePlugin[] {
   return [
@@ -142,5 +151,14 @@ export function createAllLanguagePlugins(): LanguagePlugin[] {
     new FormLanguagePlugin(),
     new MagmaLanguagePlugin(),
     new WolframLanguagePlugin(),
+    new PascalLanguagePlugin(),
+    new AdaLanguagePlugin(),
+    new SolidityLanguagePlugin(),
+    new PowerShellLanguagePlugin(),
+    new ApexLanguagePlugin(),
+    new PlsqlLanguagePlugin(),
+    new NimLanguagePlugin(),
+    new TclLanguagePlugin(),
+    new DLanguagePlugin(),
   ];
 }
