@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.21.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.21.1...v1.21.2) (2026-04-14)
+
+
+### Bug Fixes
+
+* **ci:** pass --repo to gh commands in release notes step ([8b1b9a1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b1b9a1aecb092d4da925ea01f7ed49f5b9d7652))
+
 ## [1.21.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.21.0...v1.21.1) (2026-04-14)
 
 
