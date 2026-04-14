@@ -561,7 +561,13 @@ export function Settings() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [search, setSearch] = useState('');
   const [showDiff, setShowDiff] = useState(false);
-  const [screen, setScreen] = useState<Screen>({ type: 'list' });
+  const [screen, setScreen] = useState<Screen>(() => {
+    const section = new URLSearchParams(window.location.search).get('section');
+    if (section && CONFIG_SCHEMA.some(s => s.key === section)) {
+      return { type: 'section', key: section };
+    }
+    return { type: 'list' };
+  });
 
   const server = (settings?.settings as Record<string, unknown>) ?? {};
   const config = local ?? server;

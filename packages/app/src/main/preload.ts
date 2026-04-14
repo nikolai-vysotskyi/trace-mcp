@@ -36,6 +36,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('apply-update'),
   restartApp: (): Promise<void> =>
     ipcRenderer.invoke('restart-app'),
+  openSettings: (section?: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('open-settings', section),
   // Tab management (Windows custom tab bar)
   getPlatform: (): Promise<string> =>
     ipcRenderer.invoke('get-platform'),
