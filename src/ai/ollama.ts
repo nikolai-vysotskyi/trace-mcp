@@ -1,7 +1,8 @@
 /**
  * Ollama AI provider — connects to a local Ollama instance via its HTTP API.
  */
-import type { AIProvider, EmbeddingService, InferenceService } from './interfaces.js';
+import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import { parseOllamaChatStream } from './sse.js';
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 
@@ -83,6 +84,37 @@ class OllamaInferenceService implements InferenceService {
       const data = (await resp.json()) as { response: string };
       return data.response;
     }, { label: 'Ollama generate' });
+  }
+
+  async *generateStream(
+    messages: ChatMessage[],
+    options?: { maxTokens?: number; temperature?: number },
+  ): AsyncIterable<string> {
+    const reqBody: Record<string, unknown> = {
+      model: this.model,
+      messages,
+      stream: true,
+    };
+
+    if (options?.maxTokens || options?.temperature !== undefined) {
+      reqBody.options = {
+        ...(options.maxTokens ? { num_predict: options.maxTokens } : {}),
+        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      };
+    }
+
+    const resp = await fetch(`${this.baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reqBody),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`Ollama chat stream failed: ${resp.status} ${resp.statusText}`);
+    }
+
+    yield* parseOllamaChatStream(resp.body!);
   }
 }
 

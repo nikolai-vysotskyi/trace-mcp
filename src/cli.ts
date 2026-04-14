@@ -40,6 +40,7 @@ import { visualizeCommand } from './cli/visualize.js';
 import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { daemonCommand } from './cli/daemon.js';
 import { installAppCommand } from './cli/install-app.js';
+import { askCommand } from './cli/ask.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH, GLOBAL_CONFIG_PATH, stripJsonComments, DAEMON_LOG_PATH } from './global.js';
 import { getProject, listProjects } from './registry.js';
@@ -1301,6 +1302,130 @@ program
         return;
       }
 
+      // REST API: Ask — resolve LLM provider for a project
+      if (req.method === 'GET' && url.pathname === '/api/ask/provider') {
+        const projectRoot = url.searchParams.get('project');
+        if (!projectRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= parameter' }));
+          return;
+        }
+        const managed = projectManager.getProject(projectRoot);
+        if (!managed || managed.status !== 'ready') {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Project not found or not ready' }));
+          return;
+        }
+        try {
+          const { resolveProvider } = await import('./ai/ask-shared.js');
+          const provider = resolveProvider({}, managed.config);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ provider: provider.name }));
+        } catch (e: any) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e?.message ?? 'No provider available' }));
+        }
+        return;
+      }
+
+      // REST API: Ask — stream LLM response with code context
+      if (req.method === 'POST' && url.pathname === '/api/ask') {
+        const projectRoot = url.searchParams.get('project');
+        if (!projectRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= parameter' }));
+          return;
+        }
+        const managed = projectManager.getProject(projectRoot);
+        if (!managed || managed.status !== 'ready') {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Project not found or not ready' }));
+          return;
+        }
+
+        let body: { messages?: { role: string; content: string }[]; model?: string; provider?: string; budget?: number };
+        try {
+          const raw = await collectBody(req);
+          body = JSON.parse(raw.toString());
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+          return;
+        }
+
+        const messages = body.messages;
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'messages array is required' }));
+          return;
+        }
+
+        // Find the latest user message for context retrieval
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+        if (!lastUserMsg) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'No user message found' }));
+          return;
+        }
+
+        // Start SSE response
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        });
+
+        const sendEvent = (data: Record<string, unknown>) => {
+          res.write(`data: ${JSON.stringify(data)}\n\n`);
+        };
+
+        try {
+          const { resolveProvider, gatherContext, buildSystemPrompt, stripContextFromMessage } = await import('./ai/ask-shared.js');
+          const provider = resolveProvider(
+            { model: body.model, provider: body.provider },
+            managed.config,
+          );
+
+          // Phase 1: Retrieve context
+          sendEvent({ type: 'phase', phase: 'retrieving' });
+          const budget = body.budget ?? 12000;
+          const context = await gatherContext(
+            projectRoot, managed.store, managed.registry, lastUserMsg.content, budget,
+          );
+
+          // Phase 2: Build message array for LLM
+          sendEvent({ type: 'phase', phase: 'streaming' });
+          const systemMsg = { role: 'system' as const, content: buildSystemPrompt(projectRoot) };
+          const chatMessages = [
+            systemMsg,
+            // Strip context from older user messages
+            ...messages.slice(0, -1).map(m => stripContextFromMessage(m as any)),
+            // Latest user message with fresh context
+            {
+              role: 'user' as const,
+              content: `## Code Context\n\n${context}\n\n## Question\n\n${lastUserMsg.content}`,
+            },
+          ];
+
+          // Keep history manageable
+          while (chatMessages.length > 21) {
+            chatMessages.splice(1, 2);
+          }
+
+          // Phase 3: Stream LLM response
+          for await (const chunk of provider.streamChat(chatMessages, { maxTokens: 4096 })) {
+            sendEvent({ type: 'chunk', content: chunk });
+          }
+
+          sendEvent({ type: 'done' });
+        } catch (e: any) {
+          sendEvent({ type: 'error', message: e?.message ?? 'Unknown error' });
+        }
+
+        res.end();
+        return;
+      }
+
       // REST API: SSE event stream
       if (req.method === 'GET' && url.pathname === '/api/events') {
         res.writeHead(200, {
@@ -1485,5 +1610,6 @@ program.addCommand(statusCommand);
 program.addCommand(visualizeCommand);
 program.addCommand(daemonCommand);
 program.addCommand(installAppCommand);
+program.addCommand(askCommand);
 
 program.parse();

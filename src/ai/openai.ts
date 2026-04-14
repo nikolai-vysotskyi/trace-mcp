@@ -2,7 +2,8 @@
  * OpenAI AI provider — connects to the OpenAI API (or any OpenAI-compatible endpoint).
  * Uses fetch directly; no SDK dependency required.
  */
-import type { AIProvider, EmbeddingService, InferenceService } from './interfaces.js';
+import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import { parseOpenAIStream } from './sse.js';
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 
@@ -96,6 +97,35 @@ class OpenAIInferenceService implements InferenceService {
       const data = (await resp.json()) as { choices: { message: { content: string } }[] };
       return data.choices[0]?.message?.content ?? '';
     }, { label: 'OpenAI chat' });
+  }
+
+  async *generateStream(
+    messages: ChatMessage[],
+    options?: { maxTokens?: number; temperature?: number },
+  ): AsyncIterable<string> {
+    const resp = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages,
+        stream: true,
+        ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
+        ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+      throw new Error(`OpenAI chat stream failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
+    }
+
+    yield* parseOpenAIStream(resp.body!);
   }
 }
 
