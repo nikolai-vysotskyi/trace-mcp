@@ -20,7 +20,7 @@
     "prepublishOnly": "npm run build"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "license": "ELv2",
   "author": "Nikolai Vysotskyi",
@@ -50,7 +50,7 @@
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@parcel/watcher": "^2.5.6",
     "@vue/compiler-sfc": "^3.5.32",
-    "better-sqlite3": "^11.7.0",
+    "better-sqlite3": "^12.9.0",
     "commander": "^13.1.0",
     "cosmiconfig": "^9.0.0",
     "fast-glob": "^3.3.3",
@@ -65,7 +65,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.13.0",
     "fast-check": "^4.6.0",
     "tsup": "^8.4.0",
