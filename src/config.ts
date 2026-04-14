@@ -126,6 +126,8 @@ const ToolsConfigSchema = z.object({
     z.boolean(),
     z.array(z.enum(['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta', '_duplication_warnings', '_methodology'])),
   ]).default(true),
+  /** Strip advanced/optional parameters from tool schemas to reduce token overhead (~40-60% schema size reduction). Only core parameters are exposed; advanced options still work if passed. */
+  compact_schemas: z.boolean().default(false),
 }).optional();
 
 const QualityGatesRuleSchema = z.object({

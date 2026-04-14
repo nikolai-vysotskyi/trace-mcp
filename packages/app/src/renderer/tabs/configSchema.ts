@@ -338,6 +338,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'description_verbosity', label: 'Description verbosity', type: 'select', options: ['full', 'minimal', 'none'], defaultValue: 'full' },
       { key: 'instructions_verbosity', label: 'Instructions verbosity', type: 'select', options: ['full', 'minimal', 'none'], defaultValue: 'full' },
       { key: 'meta_fields', label: 'Meta fields', type: 'boolean', defaultValue: true },
+      { key: 'compact_schemas', label: 'Compact schemas', type: 'boolean', defaultValue: false, description: 'Strip advanced parameters from tool schemas to reduce token overhead (~40-60%)' },
       { key: 'descriptions', label: 'Custom descriptions', type: 'json', description: '{ "tool_name": "description" }' },
     ],
   },

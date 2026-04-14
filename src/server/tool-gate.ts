@@ -9,6 +9,7 @@ import type { SessionJournal } from '../session/journal.js';
 import type { ToolResponse } from './types.js';
 import { markToolConsultation } from './consultation-markers.js';
 import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
+import { COMPACT_CORE_PARAMS } from './compact-params.js';
 
 interface ToolGateResult {
   _originalTool: McpServer['tool'];
@@ -55,6 +56,7 @@ export function installToolGate(
   const includeSet = config.tools?.include ? new Set(config.tools.include) : null;
   const excludeSet = config.tools?.exclude ? new Set(config.tools.exclude) : null;
   const descriptionVerbosity = config.tools?.description_verbosity ?? 'full';
+  const compactSchemas = config.tools?.compact_schemas ?? false;
 
   function applyVerbosity(description: string): string {
     if (descriptionVerbosity === 'full') return description;
@@ -122,6 +124,23 @@ export function installToolGate(
             const def = (val as { _def: Record<string, unknown> })._def;
             delete def.description;
             delete (val as Record<string, unknown>).description;
+          }
+        }
+      }
+    }
+
+    // Strip advanced params when compact_schemas is enabled
+    if (compactSchemas) {
+      const coreParams = COMPACT_CORE_PARAMS[name];
+      if (coreParams) {
+        const schemaIdx = typeof args[1] === 'string' ? 2 : 1;
+        const schema = args[schemaIdx];
+        if (schema && typeof schema === 'object') {
+          const coreSet = new Set(coreParams);
+          for (const key of Object.keys(schema as Record<string, unknown>)) {
+            if (!coreSet.has(key)) {
+              delete (schema as Record<string, unknown>)[key];
+            }
           }
         }
       }
