@@ -23,7 +23,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_implementations',
-    'Find all classes that implement or extend a given interface or base class',
+    'Find all classes that implement or extend a given interface or base class. Use when you know the interface name. For full hierarchy tree (ancestors + descendants) use get_type_hierarchy instead. Read-only. Returns JSON: { implementations: [{ symbol_id, name, kind, file, line }], total }.',
     {
       name: z.string().max(256).describe('Interface or base class name (e.g. UserRepositoryInterface)'),
     },
@@ -51,7 +51,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_api_surface',
-    'List all exported symbols (public API) of a file or matching files',
+    'List all exported symbols (public API) of a file or matching files. Use to understand what a module exposes. For finding unused exports use get_dead_exports instead. Read-only. Returns JSON: { files: [{ path, exports: [{ name, kind, signature }] }] }.',
     {
       file_pattern: z.string().max(512).optional().describe('Glob-style pattern to filter files (e.g. src/services/*.ts)'),
     },
@@ -63,7 +63,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_plugin_registry',
-    'List all registered indexer plugins and the edge types they emit',
+    'List all registered indexer plugins and the edge types they emit. Use for debugging indexer behavior or understanding which frameworks are supported. Read-only. Returns JSON: { languagePlugins, frameworkPlugins, edgeTypes }.',
     {},
     async () => {
       const result = getPluginRegistry(store, registry, frameworkNames);
@@ -73,7 +73,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_type_hierarchy',
-    'Walk TypeScript class/interface hierarchy: ancestors (what it extends/implements) and descendants (what extends/implements it)',
+    'Walk TypeScript class/interface hierarchy: ancestors (what it extends/implements) and descendants (what extends/implements it). Use to understand inheritance trees. For a flat list of implementations only use get_implementations instead. Read-only. Returns JSON: { name, ancestors: [...], descendants: [...] }.',
     {
       name: z.string().max(256).describe('Class or interface name (e.g. "LanguagePlugin", "Store")'),
       max_depth: z.number().int().min(1).max(20).optional().describe('Max traversal depth (default 10)'),
@@ -101,7 +101,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dead_exports',
-    'Find exported symbols never imported by any other file — dead code candidates',
+    'Find exported symbols never imported by any other file — dead code candidates. Use for quick export-level dead code scan. For deeper multi-signal dead code detection (including call graph) use get_dead_code instead. Read-only. Returns JSON: { deadExports: [{ symbol_id, name, kind, file }], total }.',
     {
       file_pattern: z.string().max(512).optional().describe('Filter files by glob pattern (e.g. "src/tools/*.ts")'),
     },
@@ -113,7 +113,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_import_graph',
-    'Show file-level dependency graph: what a file imports and what imports it (requires reindex for ESM edge resolution)',
+    'Show file-level dependency graph: what a file imports and what imports it (requires reindex for ESM edge resolution). Use to understand module dependencies for a specific file. For project-wide coupling analysis use get_coupling; for visual diagram use get_dependency_diagram. Read-only. Returns JSON: { file, imports: [{ path }], importedBy: [{ path }] }.',
     {
       file_path: z.string().max(512).describe('Relative file path to analyze (e.g. "src/server.ts")'),
     },
@@ -127,7 +127,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_untested_exports',
-    'Find exported public symbols with no matching test file — test coverage gaps',
+    'Find exported public symbols with no matching test file — test coverage gaps. For deeper analysis including non-exported symbols use get_untested_symbols instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file }], total }.',
     {
       file_pattern: z.string().max(512).optional().describe('Filter by file glob pattern (e.g. "src/tools/%")'),
     },
@@ -139,7 +139,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_untested_symbols',
-    'Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test file imports the source) or "imported_not_called" (test imports file but never references this symbol). Use for thorough coverage gap analysis.',
+    'Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test file imports the source) or "imported_not_called" (test imports file but never references this symbol). Use for thorough coverage gap analysis. For exports-only quick scan use get_untested_exports instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file, classification }], total }.',
     {
       file_pattern: z.string().max(512).optional().describe('Filter by file glob pattern (e.g. "src/tools/%")'),
       max_results: z.number().int().min(1).max(500).optional().describe('Cap on returned items (default: all)'),
@@ -150,7 +150,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     },
   );
 
-  server.tool('self_audit', 'Dead code & coverage audit: dead exports, untested public symbols, heritage debt. Use for cleanup and coverage tasks.', {}, async () => {
+  server.tool('self_audit', 'Dead code & coverage audit: dead exports, untested public symbols, heritage debt. Use as a one-shot health check combining dead exports + untested symbols + heritage debt. For individual checks use get_dead_exports, get_untested_symbols, or get_dead_code separately. Read-only. Returns JSON: { deadExports, untestedSymbols, heritageDebt, summary }.', {}, async () => {
     return { content: [{ type: 'text', text: j(selfAudit(store)) }] };
   });
 
@@ -158,7 +158,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_coupling',
-    'Coupling analysis: afferent (Ca), efferent (Ce), instability index per file. Shows which modules are stable vs unstable',
+    'Coupling analysis: afferent (Ca), efferent (Ce), instability index per file. Shows which modules are stable vs unstable. Use to identify fragile or overly-depended-on modules. For coupling changes over time use get_coupling_trend instead. Read-only. Returns JSON: [{ file, ca, ce, instability, assessment }].',
     {
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default: all)'),
       assessment: z.enum(['stable', 'neutral', 'unstable', 'isolated']).optional().describe('Filter by stability assessment'),
@@ -173,7 +173,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_circular_imports',
-    'Find circular dependency chains in the import graph (Kosaraju SCC algorithm)',
+    'Find circular dependency chains in the import graph (Kosaraju SCC algorithm). Use to detect and break dependency cycles. Read-only. Returns JSON: { total_cycles, cycles: [[file1, file2, ...]] }.',
     {},
     async () => {
       const cycles = getDependencyCycles(store);
@@ -193,7 +193,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_pagerank',
-    'File importance ranking via PageRank on the import graph. Shows most central/important files',
+    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. Read-only. Returns JSON: [{ file, score }].',
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
     },
@@ -205,7 +205,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_refactor_candidates',
-    'Find functions with high complexity called from many files — candidates for extraction to shared modules',
+    'Find functions with high complexity called from many files — candidates for extraction to shared modules. Use during architecture review to identify hotspots worth refactoring. Read-only. Returns JSON: [{ symbol_id, name, file, cyclomatic, callerCount }].',
     {
       min_cyclomatic: z.number().int().min(1).optional().describe('Min cyclomatic complexity (default: 5)'),
       min_callers: z.number().int().min(1).optional().describe('Min distinct caller files (default: 2)'),
@@ -223,7 +223,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_project_health',
-    'Structural health: coupling instability, dependency cycles, PageRank rankings, refactor candidates. Use for architecture review.',
+    'Structural health: coupling instability, dependency cycles, PageRank rankings, refactor candidates. Use for architecture review as a single aggregated report. For individual metrics use get_coupling, get_circular_imports, or get_pagerank separately. Read-only. Returns JSON: { coupling, cycles, pagerank, refactorCandidates, hotspots }.',
     {},
     async () => {
       const result = getRepoHealth(store);
@@ -236,7 +236,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'check_architecture',
-    'Check architectural layer rules: detect forbidden imports between layers (e.g. domain importing infrastructure). Supports auto-detected presets (clean-architecture, hexagonal) or custom layers.',
+    'Check architectural layer rules: detect forbidden imports between layers (e.g. domain importing infrastructure). Supports auto-detected presets (clean-architecture, hexagonal) or custom layers. Use to enforce architectural boundaries. Read-only. Returns JSON: { violations: [{ from, to, rule, file, line }], total, preset }.',
     {
       preset: z.enum(['clean-architecture', 'hexagonal']).optional().describe('Use a built-in layer preset (auto-detected if omitted)'),
       layers: z.array(z.object({
@@ -269,7 +269,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_code_owners',
-    'Git-based code ownership: who contributed most to specific files (git shortlog). Requires git.',
+    'Git-based code ownership: who contributed most to specific files (git shortlog). Requires git. Use to identify who to ask about specific files. For symbol-level ownership use get_symbol_owners instead. Read-only. Returns JSON: [{ file, owners: [{ author, commits, percentage }] }].',
     {
       file_paths: z.array(z.string().max(512)).min(1).max(20).describe('File paths to check ownership for'),
     },
@@ -288,7 +288,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_symbol_owners',
-    'Git blame-based symbol ownership: who wrote which lines of a specific symbol. Requires git.',
+    'Git blame-based symbol ownership: who wrote which lines of a specific symbol. Requires git. Use for fine-grained ownership of a specific function/class. For file-level ownership use get_code_owners instead. Read-only. Returns JSON: { symbol_id, owners: [{ author, lines, percentage }] }.',
     {
       symbol_id: z.string().max(512).describe('Symbol ID to check ownership for'),
     },
@@ -303,7 +303,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_complexity_trend',
-    'File complexity over git history: cyclomatic complexity at past commits. Shows if a file is getting more or less complex.',
+    'File complexity over git history: cyclomatic complexity at past commits. Shows if a file is getting more or less complex. Requires git. Use to track whether a file is improving or degrading. For current snapshot use get_complexity_report; for symbol-level trends use get_symbol_complexity_trend. Read-only. Returns JSON: { file, snapshots: [{ commit, date, complexity }] }.',
     {
       file_path: z.string().max(512).describe('File path to analyze'),
       snapshots: z.number().int().min(2).max(20).optional().describe('Number of historical snapshots (default: 5)'),
@@ -321,7 +321,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_coupling_trend',
-    'File coupling over git history: Ca/Ce/instability at past commits. Shows if a module is stabilizing or destabilizing.',
+    'File coupling over git history: Ca/Ce/instability at past commits. Shows if a module is stabilizing or destabilizing. Requires git. Use to track module stability over time. For current coupling snapshot use get_coupling instead. Read-only. Returns JSON: { file, snapshots: [{ commit, date, ca, ce, instability }] }.',
     {
       file_path: z.string().max(512).describe('File path to analyze'),
       since_days: z.number().int().min(1).optional().describe('Analyze last N days (default: 90)'),
@@ -343,7 +343,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_symbol_complexity_trend',
-    'Single symbol complexity over git history: cyclomatic, nesting, params, lines at past commits.',
+    'Single symbol complexity over git history: cyclomatic, nesting, params, lines at past commits. Requires git. Use to track a specific function\'s complexity evolution. For file-level trends use get_complexity_trend instead. Read-only. Returns JSON: { symbol_id, snapshots: [{ commit, date, cyclomatic, nesting, params, lines }] }.',
     {
       symbol_id: z.string().min(1).max(512).describe('Symbol ID to analyze (from search or outline)'),
       since_days: z.number().int().min(1).optional().describe('Analyze last N days (default: all history)'),
@@ -365,7 +365,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'check_duplication',
-    'Check if a function/class name already exists elsewhere in the codebase before creating it. Prevents duplicating existing logic. Call with just a name when planning new code, or symbol_id to check an existing symbol. Returns scored matches — score ≥0.7 means high likelihood of duplication, review the existing symbol before proceeding.',
+    'Check if a function/class name already exists elsewhere in the codebase before creating it. Prevents duplicating existing logic. Call with just a name when planning new code, or symbol_id to check an existing symbol. Returns scored matches — score ≥0.7 means high likelihood of duplication, review the existing symbol before proceeding. Read-only. Returns JSON: { duplicates: [{ symbol_id, name, file, score }], hasDuplication }.',
     {
       symbol_id: z.string().max(512).optional().describe('Existing symbol ID to check for duplicates'),
       name: z.string().max(256).optional().describe('Function/class name to check (when symbol_id not available)'),

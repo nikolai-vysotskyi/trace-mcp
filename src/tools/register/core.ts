@@ -15,7 +15,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_index_health',
-    'Get index status, statistics, health information, and pipeline progress (indexing, summarization, embedding)',
+    'Get index status, statistics, health information, and pipeline progress (indexing, summarization, embedding). Read-only, no side effects. Use to verify the index is ready before running queries. Returns JSON: { totalFiles, totalSymbols, languages, frameworks, pipelineProgress }.',
     {},
     async () => {
       const result = getIndexHealth(store, config);
@@ -28,7 +28,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'reindex',
-    'Trigger (re)indexing of the project or a subdirectory',
+    'Trigger (re)indexing of the project or a subdirectory. Mutates the local index (SQLite). Use after major file changes; for single-file updates prefer register_edit instead. Idempotent — safe to re-run. Returns JSON: { status, totalFiles, indexed, skipped, errors, durationMs }.',
     {
       path: z.string().max(512).optional().describe('Subdirectory to index (default: project root)'),
       force: z.boolean().optional().describe('Skip hash check and reindex all files'),
@@ -51,7 +51,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'embed_repo',
-    'Precompute and cache symbol embeddings for semantic / hybrid search. Embeddings are also computed lazily on first semantic query, but calling this once after a fresh index avoids the first-query latency spike. Requires AI provider to be enabled in config (ollama/openai). Set force=true to drop and recompute all existing embeddings.',
+    'Precompute and cache symbol embeddings for semantic / hybrid search. Embeddings are also computed lazily on first semantic query, but calling this once after a fresh index avoids the first-query latency spike. Requires AI provider to be enabled in config (ollama/openai). Set force=true to drop and recompute all existing embeddings. Mutates the vector store; idempotent. Use after reindex when you plan to use semantic search. Returns JSON: { status, indexed_this_run, total_embedded, coverage_pct, duration_ms }.',
     {
       batch_size: z.number().int().min(1).max(500).optional().describe('Symbols per embedding API batch (default 50)'),
       force: z.boolean().optional().describe('Drop existing embeddings and re-embed everything (default false — incremental)'),
@@ -107,7 +107,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'register_edit',
-    'Notify trace-mcp that a file was edited. Reindexes the single file and invalidates search caches. Call after Edit/Write to keep index fresh. Also checks for duplicate symbols — if `_duplication_warnings` appears in the response, you may be recreating existing logic; review the referenced symbols before continuing.',
+    'Notify trace-mcp that a file was edited. Reindexes the single file and invalidates search caches. Call after Edit/Write to keep index fresh — much lighter than full reindex. Also checks for duplicate symbols — if `_duplication_warnings` appears in the response, you may be recreating existing logic; review the referenced symbols before continuing. Mutates the index; idempotent. Returns JSON: { status, file, totalFiles, indexed, _duplication_warnings? }.',
     {
       file_path: z.string().min(1).max(512).describe('Relative path to the edited file'),
     },
@@ -149,7 +149,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_project_map',
-    'Get project overview: detected frameworks, languages, file counts, structure. Call with summary_only=true at session start to orient yourself before diving into code.',
+    'Get project overview: detected frameworks, languages, file counts, structure. Read-only, no side effects. Call with summary_only=true at session start to orient yourself before diving into code. Use instead of manual ls/find. Returns JSON: { frameworks, languages, fileCount, symbolCount, structure }.',
     {
       summary_only: z.boolean().optional().describe('Return only framework list + counts (default false)'),
     },
@@ -164,7 +164,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_env_vars',
-    'List environment variable keys from .env files with inferred value types/formats. Never exposes actual values — only keys, types (string/number/boolean/empty), and formats (url/email/ip/path/uuid/json/base64/csv/dsn/etc). Use to understand project configuration without accessing secrets.',
+    'List environment variable keys from .env files with inferred value types/formats. Never exposes actual values — only keys, types (string/number/boolean/empty), and formats (url/email/ip/path/uuid/json/base64/csv/dsn/etc). Read-only, no side effects, safe for secrets. Use to understand project configuration without accessing actual values. Returns JSON grouped by file: { [file]: [{ key, type, format, comment }] }.',
     {
       pattern: z.string().max(256).optional().describe('Filter keys by pattern (e.g. "DB_" or "REDIS")'),
       file: z.string().max(512).optional().describe('Filter by specific .env file path'),
