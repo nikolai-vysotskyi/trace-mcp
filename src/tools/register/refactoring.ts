@@ -13,7 +13,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'apply_rename',
-    'Rename a symbol across all usages (definition + all importing files). Runs collision detection first and aborts on conflicts. Returns the list of edits applied.',
+    'Rename a symbol across all usages (definition + all importing files). Runs collision detection first and aborts on conflicts. Returns the list of edits applied. Modifies source files. Use check_rename first to verify safety; use plan_refactoring with type="rename" to preview edits. Returns JSON: { success, edits: [{ file, old_text, new_text }], filesModified }.',
     {
       symbol_id: z.string().max(512).describe('Symbol ID to rename (from search or outline)'),
       new_name: z.string().min(1).max(256).describe('New name for the symbol'),
@@ -30,7 +30,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'remove_dead_code',
-    'Safely remove a dead symbol from its file. Verifies the symbol is actually dead (multi-signal detection or zero incoming edges) before removal. Warns about orphaned imports in other files.',
+    'Safely remove a dead symbol from its file. Verifies the symbol is actually dead (multi-signal detection or zero incoming edges) before removal. Warns about orphaned imports in other files. Destructive — deletes code from source files. Use get_dead_code first to identify candidates. Returns JSON: { success, removed: { symbol_id, file }, orphanedImports }.',
     {
       symbol_id: z.string().max(512).describe('Symbol ID to remove (from get_dead_code results)'),
       dry_run: z.boolean().default(false).describe('Preview changes without applying (default: false)'),
@@ -46,7 +46,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'extract_function',
-    'Extract a range of lines into a new named function. Detects parameters (variables from outer scope) and return values (variables used after the range). Supports TypeScript/JavaScript, Python, and Go.',
+    'Extract a range of lines into a new named function. Detects parameters (variables from outer scope) and return values (variables used after the range). Supports TypeScript/JavaScript, Python, and Go. Modifies source files. Use plan_refactoring with type="extract" to preview first. Returns JSON: { success, edits: [{ file, old_text, new_text }], extractedFunction }.',
     {
       file_path: z.string().max(512).describe('File path (relative to project root)'),
       start_line: z.number().int().min(1).describe('First line to extract (1-indexed, inclusive)'),
@@ -67,7 +67,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'apply_codemod',
-    'Bulk regex find-and-replace across files. Dry-run by default — first call shows preview, second call with dry_run=false applies. Use for mechanical changes like adding async/await, renaming patterns, updating imports across many files.',
+    'Bulk regex find-and-replace across files. Dry-run by default — first call shows preview, second call with dry_run=false applies. Use for mechanical changes like adding async/await, renaming patterns, updating imports across many files. Potentially destructive — can modify or delete code. Always preview with dry_run=true first. Returns JSON: { success, matchedFiles, changes: [{ file, matches }], applied }.',
     {
       pattern: z.string().min(1).max(1000).describe('Regex pattern to match (JavaScript regex syntax)'),
       replacement: z.string().max(1000).describe('Replacement string ($1, $2 for capture groups)'),
@@ -93,7 +93,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'apply_move',
-    'Move a symbol to a different file or rename/move a file, updating all import paths across the codebase. Dry-run by default (safe preview).',
+    'Move a symbol to a different file or rename/move a file, updating all import paths across the codebase. Dry-run by default (safe preview). Modifies source files. Use plan_refactoring with type="move" to preview first. Returns JSON: { success, edits: [{ file, old_text, new_text }], filesModified }.',
     {
       symbol_id: z.string().max(512).optional().describe('Symbol ID to move (mode: symbol)'),
       target_file: z.string().max(512).optional().describe('Target file path for the symbol (mode: symbol)'),
@@ -162,7 +162,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'change_signature',
-    'Change a function/method signature (add/remove/rename/reorder parameters) and update all call sites. Dry-run by default (safe preview).',
+    'Change a function/method signature (add/remove/rename/reorder parameters) and update all call sites. Dry-run by default (safe preview). Modifies source files. Use plan_refactoring with type="signature" to preview first. Returns JSON: { success, edits: [{ file, old_text, new_text }], callSitesUpdated }.',
     {
       symbol_id: z.string().max(512).describe('Symbol ID of the function/method to modify'),
       changes: z.array(signatureChangeSchema).min(1).max(20).describe('Array of changes to apply'),
@@ -194,7 +194,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'plan_refactoring',
-    'Preview any refactoring (rename, move, extract, signature) without applying. Returns all edits as {old_text, new_text} pairs. Use to review changes before applying the real tool.',
+    'Preview any refactoring (rename, move, extract, signature) without applying. Returns all edits as {old_text, new_text} pairs. Read-only (does not modify files). Use to review the blast radius before calling apply_rename, apply_move, change_signature, or extract_function. Returns JSON: { success, type, edits: [{ file, old_text, new_text }], filesAffected }.',
     {
       type: z.enum(['rename', 'move', 'extract', 'signature']).describe('Type of refactoring to preview'),
       symbol_id: z.string().max(512).optional().describe('Symbol ID (for rename, move symbol, signature)'),

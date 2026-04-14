@@ -24,7 +24,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_symbol',
-    'Look up a symbol by symbol_id or FQN and return its source code. Use instead of Read when you need one specific function/class/method — returns only the symbol, not the whole file.',
+    'Look up a symbol by symbol_id or FQN and return its source code. Use instead of Read when you need one specific function/class/method — returns only the symbol, not the whole file. For multiple symbols at once, prefer get_context_bundle. Read-only. Returns JSON: { symbol_id, name, kind, fqn, signature, file, line_start, line_end, source }.',
     {
       symbol_id: z.string().max(512).optional().describe('The symbol_id to look up'),
       fqn: z.string().max(512).optional().describe('The fully qualified name to look up'),
@@ -60,7 +60,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'search',
-    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once). Set fusion=true for Signal Fusion — multi-channel ranking (BM25 + PageRank + embeddings + identity match) via Weighted Reciprocal Rank fusion.',
+    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. For raw text/string/comment search use search_text instead. For finding who references a known symbol use find_usages instead. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once). Set fusion=true for Signal Fusion — multi-channel ranking (BM25 + PageRank + embeddings + identity match) via Weighted Reciprocal Rank fusion. Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode }.',
     {
       query: z.string().min(1).max(500).describe('Search query'),
       kind: z.string().max(64).optional().describe('Filter by symbol kind (class, method, function, etc.)'),
@@ -187,7 +187,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_outline',
-    'Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens.',
+    'Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens. For reading one symbol\'s source, follow up with get_symbol. Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd }] }.',
     {
       path: z.string().max(512).describe('Relative file path'),
     },
@@ -217,7 +217,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_change_impact',
-    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Supports diff-aware mode via symbol_ids to scope analysis to only changed symbols.',
+    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Supports diff-aware mode via symbol_ids to scope analysis to only changed symbols. Use before modifying code to understand blast radius. For quick risk assessment without full report, use assess_change_risk instead. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
     {
       file_path: z.string().max(512).optional().describe('Relative file path to analyze'),
       symbol_id: z.string().max(512).optional().describe('Symbol ID to analyze'),
@@ -261,7 +261,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_feature_context',
-    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature.',
+    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points, use get_task_context instead. For symbol metadata without source, use search. Read-only. Returns JSON: { items: [{ symbol_id, name, file, source, score }], token_usage }.',
     {
       description: z.string().min(1).max(2000).describe('Natural language description of the feature to find context for'),
       token_budget: z.number().int().min(100).max(100000).optional().describe('Max tokens for assembled context (default 4000)'),
@@ -281,7 +281,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'suggest_queries',
-    'Onboarding helper: shows top imported files, most connected symbols (PageRank), language stats, and example tool calls. Call this first when exploring an unfamiliar project.',
+    'Onboarding helper: shows top imported files, most connected symbols (PageRank), language stats, and example tool calls. Call this first when exploring an unfamiliar project. For a structured project map use get_project_map instead. Read-only. Returns JSON: { topFiles, topSymbols, languageStats, exampleQueries }.',
     {},
     async () => {
       const result = suggestQueries(store);
@@ -291,7 +291,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_related_symbols',
-    'Find symbols related via co-location (same file), shared importers, and name similarity. Useful for discovering related code when exploring a symbol.',
+    'Find symbols related via co-location (same file), shared importers, and name similarity. Use when exploring a symbol to discover sibling code. For call-graph relationships use get_call_graph instead; for all usages use find_usages. Read-only. Returns JSON: { related: [{ symbol_id, name, kind, file, relation_type, score }] }.',
     {
       symbol_id: z.string().max(512).describe('Symbol ID to find related symbols for'),
       max_results: z.number().int().min(1).max(100).optional().describe('Max results (default 20)'),
@@ -307,7 +307,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_context_bundle',
-    'Get a symbol\'s source code + its import dependencies + optional callers, packed within a token budget. Supports batch queries with shared-import deduplication.',
+    'Get a symbol\'s source code + its import dependencies + optional callers, packed within a token budget. Supports batch queries with shared-import deduplication. Use instead of chaining get_symbol calls — deduplicates shared imports across symbols. For a single symbol without imports, get_symbol is lighter. Read-only. Returns JSON: { primary: [{ symbol_id, file, source }], imports: [{ file, source }], token_usage }.',
     {
       symbol_id: z.string().max(512).optional().describe('Single symbol ID'),
       symbol_ids: z.array(z.string().max(512)).max(20).optional().describe('Batch: multiple symbol IDs'),
@@ -340,7 +340,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_task_context',
-    'All-in-one context for starting a dev task: execution paths, tests, entry points, adapted by task type. Use as your FIRST call when beginning any new task.',
+    'All-in-one context for starting a dev task: execution paths, tests, entry points, adapted by task type. Use as your FIRST call when beginning any new task — replaces manual chaining of search → get_symbol → Read. For narrower feature-code lookup use get_feature_context instead. Read-only. Returns JSON: { symbols: [{ symbol_id, name, file, source }], tests, entryPoints, taskType, token_usage }.',
     {
       task: z.string().min(1).max(2000).describe('Natural language description of the task'),
       token_budget: z.number().int().min(100).max(100000).optional().describe('Max tokens (default 8000)'),

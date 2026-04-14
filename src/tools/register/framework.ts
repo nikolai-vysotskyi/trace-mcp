@@ -28,7 +28,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('vue', 'nuxt', 'inertia')) {
     server.tool(
       'get_component_tree',
-      'Build a component render tree starting from a given .vue file',
+      'Build a component render tree starting from a given .vue file. Use to visualize parent-child component hierarchy. Read-only. Returns JSON: { root, children: [{ component, props, slots, depth }], totalComponents }.',
       {
         component_path: z.string().max(512).describe('Relative path to the root .vue file'),
         depth: z.number().int().min(1).max(20).optional().describe('Max tree depth (default 3)'),
@@ -51,7 +51,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('express', 'nestjs', 'laravel', 'fastapi', 'flask', 'drf', 'spring', 'rails', 'fastify', 'hono', 'trpc')) {
     server.tool(
       'get_request_flow',
-      'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS/Fastify/Hono/tRPC/FastAPI/Flask/DRF)',
+      'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS/Fastify/Hono/tRPC/FastAPI/Flask/DRF). Use to understand how a request is handled end-to-end. For middleware-only analysis use get_middleware_chain instead. Read-only. Returns JSON: { route, steps: [{ type, symbol_id, name, file }] }.',
       {
         url: z.string().max(512).describe('Route URL (e.g. /api/users)'),
         method: z.string().max(64).optional().describe('HTTP method (default GET)'),
@@ -69,7 +69,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('express', 'nestjs', 'fastapi', 'flask', 'spring')) {
     server.tool(
       'get_middleware_chain',
-      'Trace middleware chain for a route URL (Express/NestJS/FastAPI/Flask)',
+      'Trace middleware chain for a route URL (Express/NestJS/FastAPI/Flask). Use when you only need the middleware stack, not the full request flow. For full route→controller→service flow use get_request_flow instead. Read-only. Returns JSON: { url, middlewares: [{ name, file, order }] }.',
       {
         url: z.string().max(512).describe('Route URL to trace middleware for'),
       },
@@ -86,7 +86,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('nestjs')) {
     server.tool(
       'get_module_graph',
-      'Build NestJS module dependency graph (module -> imports -> controllers -> providers -> exports)',
+      'Build NestJS module dependency graph (module -> imports -> controllers -> providers -> exports). Use to understand NestJS module structure and DI wiring. For provider-level DI tree use get_di_tree instead. Read-only. Returns JSON: { module, imports, controllers, providers, exports, edges }.',
       {
         module_name: z.string().max(256).describe('NestJS module class name (e.g. AppModule)'),
       },
@@ -101,7 +101,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
     server.tool(
       'get_di_tree',
-      'Trace NestJS dependency injection tree (what a service injects + who injects it)',
+      'Trace NestJS dependency injection tree (what a service injects + who injects it). Use to understand DI wiring for a specific provider. For module-level graph use get_module_graph instead. Read-only. Returns JSON: { service, injects: [{ name, kind }], injected_by: [{ name, kind }] }.',
       {
         service_name: z.string().max(256).describe('NestJS service/provider class name'),
       },
@@ -118,7 +118,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('react-native')) {
     server.tool(
       'get_navigation_graph',
-      'Build React Native navigation tree from screens, navigators, and deep links',
+      'Build React Native navigation tree from screens, navigators, and deep links. Use to understand app navigation structure. For details on a specific screen use get_screen_context instead. Read-only. Returns JSON: { navigators, screens, deepLinks, edges }.',
       {},
       async () => {
         const result = getNavigationGraph(store);
@@ -131,7 +131,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
     server.tool(
       'get_screen_context',
-      'Get full context for a React Native screen: navigator, navigation edges, deep link, platform variants, native modules',
+      'Get full context for a React Native screen: navigator, navigation edges, deep link, platform variants, native modules. Use to understand a specific screen before modifying it. For the full navigation tree use get_navigation_graph instead. Read-only. Returns JSON: { screen, navigator, deepLink, platformVariants, nativeModules, navigationEdges }.',
       {
         screen_name: z.string().max(256).describe('Screen name (e.g. ProfileScreen or Profile)'),
       },
@@ -148,7 +148,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('laravel', 'mongoose', 'sequelize', 'prisma', 'typeorm', 'drizzle', 'sqlalchemy')) {
     server.tool(
       'get_model_context',
-      'Get full model context: relationships, schema, and metadata (Eloquent/Mongoose/Sequelize/SQLAlchemy/Prisma/TypeORM/Drizzle)',
+      'Get full model context: relationships, schema, and metadata (Eloquent/Mongoose/Sequelize/SQLAlchemy/Prisma/TypeORM/Drizzle). Use to understand a specific ORM model. For raw table schema without ORM context use get_schema instead. Read-only. Returns JSON: { model, table, relationships: [{ type, related, foreignKey }], fields, metadata }.',
       {
         model_name: z.string().max(256).describe('Model class name (e.g. User, Post)'),
       },
@@ -163,7 +163,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
     server.tool(
       'get_schema',
-      'Get database schema reconstructed from migrations or ORM model definitions',
+      'Get database schema reconstructed from migrations or ORM model definitions. Use to understand table structure. For ORM-level context with relationships use get_model_context instead. Read-only. Returns JSON: { tables: [{ name, columns: [{ name, type, nullable, default }], indexes }] }.',
       {
         table_name: z.string().max(256).optional().describe('Table/collection/model name (omit for all)'),
       },
@@ -180,7 +180,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('laravel', 'nestjs', 'celery', 'django', 'socketio')) {
     server.tool(
       'get_event_graph',
-      'Get event/signal/task dispatch graph (Laravel events, Django signals, NestJS events, Celery tasks, Socket.io events)',
+      'Get event/signal/task dispatch graph (Laravel events, Django signals, NestJS events, Celery tasks, Socket.io events). Use to understand event-driven architecture and trace event producers/consumers. Read-only. Returns JSON: { events: [{ name, dispatchers, listeners, file }] }.',
       {
         event_name: z.string().max(256).optional().describe('Filter to a specific event class name'),
       },
@@ -196,7 +196,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'find_usages',
-    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — understands semantic relationships, not just text matches.',
+    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — understands semantic relationships, not just text matches. For bidirectional call graph use get_call_graph instead. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total }.',
     {
       symbol_id: z.string().max(512).optional().describe('Symbol ID to find references for'),
       fqn: z.string().max(512).optional().describe('Fully qualified name to find references for'),
@@ -231,7 +231,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'get_call_graph',
-    'Build a bidirectional call graph centered on a symbol (who calls it + what it calls). Use to understand control flow through a function.',
+    'Build a bidirectional call graph centered on a symbol (who calls it + what it calls). Use to understand control flow through a function. For flat list of all references use find_usages instead. Read-only. Returns JSON: { root: { symbol_id, name, calls: [...], called_by: [...] } }.',
     {
       symbol_id: z.string().max(512).optional().describe('Symbol ID to center the graph on'),
       fqn: z.string().max(512).optional().describe('Fully qualified name to center the graph on'),
@@ -265,7 +265,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'get_tests_for',
-    'Find test files and test functions that cover a given symbol or file. Use instead of Glob/Grep — understands test-to-source mapping, not just filename conventions.',
+    'Find test files and test functions that cover a given symbol or file. Use instead of Glob/Grep — understands test-to-source mapping, not just filename conventions. For project-wide test coverage gaps use get_untested_symbols instead. Read-only. Returns JSON: { tests: [{ file, testName, symbol_id }], total }.',
     {
       symbol_id: z.string().max(512).optional().describe('Symbol ID to find tests for'),
       fqn: z.string().max(512).optional().describe('Fully qualified name to find tests for'),
@@ -301,7 +301,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('laravel')) {
     server.tool(
       'get_livewire_context',
-      'Get full context for a Livewire component: properties, actions, events, view, child components',
+      'Get full context for a Livewire component: properties, actions, events, view, child components. Use to understand a specific Livewire component before modifying it. Read-only. Returns JSON: { component, properties, actions, events, view, children }.',
       {
         component_name: z.string().max(256).describe('Livewire component class name or FQN (e.g. UserProfile or App\\Livewire\\UserProfile)'),
       },
@@ -316,7 +316,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
     server.tool(
       'get_nova_resource',
-      'Get full context for a Laravel Nova resource: model, fields, actions, filters, lenses, metrics',
+      'Get full context for a Laravel Nova resource: model, fields, actions, filters, lenses, metrics. Use to understand a Nova admin resource before modifying it. Read-only. Returns JSON: { resource, model, fields, actions, filters, lenses, metrics }.',
       {
         resource_name: z.string().max(256).describe('Nova resource class name or FQN (e.g. User or App\\Nova\\User)'),
       },
@@ -333,7 +333,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
   if (has('zustand-redux')) {
     server.tool(
       'get_state_stores',
-      'List all Zustand stores and Redux Toolkit slices with their state fields, actions/reducers, and dispatch sites',
+      'List all Zustand stores and Redux Toolkit slices with their state fields, actions/reducers, and dispatch sites. Use to understand state management architecture. Read-only. Returns JSON: { stores: [{ type, name, handler, metadata }], dispatches, totalStores, totalDispatches }.',
       {},
       async () => {
         const routes = store.getAllRoutes();

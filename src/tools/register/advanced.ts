@@ -28,7 +28,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_service_map',
-      'Get map of all services, their APIs, and inter-service dependencies. Auto-detects services from Docker Compose or treats each repo as a service.',
+      'Get map of all services, their APIs, and inter-service dependencies. Auto-detects services from Docker Compose or treats each repo as a service. Use to understand microservice topology. For subproject-level graph use get_subproject_graph instead. Read-only. Returns JSON: { services: [{ name, endpoints, dependencies }], total }.',
       {
         include_endpoints: z.boolean().optional().describe('Include full endpoint list per service (default false)'),
       },
@@ -41,7 +41,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_cross_service_impact',
-      'Analyze cross-service impact of changing an endpoint or event. Shows which services would be affected.',
+      'Analyze cross-service impact of changing an endpoint or event. Shows which services would be affected. Use before modifying a shared endpoint. For within-codebase impact use get_change_impact instead. Read-only. Returns JSON: { service, affectedServices: [{ name, reason }], total }.',
       {
         service: z.string().min(1).max(256).describe('Service name'),
         endpoint: z.string().max(512).optional().describe('Endpoint path (e.g. /api/users/{id})'),
@@ -56,7 +56,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_api_contract',
-      'Get API contract (OpenAPI/gRPC/GraphQL) for a service. Parses spec files found in the service repo.',
+      'Get API contract (OpenAPI/gRPC/GraphQL) for a service. Parses spec files found in the service repo. Use to inspect a service\'s public API. For detecting spec-vs-code mismatches use get_contract_drift instead. Read-only. Returns JSON: { service, contract_type, endpoints, schemas }.',
       {
         service: z.string().min(1).max(256).describe('Service name'),
         contract_type: z.enum(['openapi', 'grpc', 'graphql']).optional().describe('Filter by contract type'),
@@ -70,7 +70,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_service_deps',
-      'Get external service dependencies: which services this one calls (outgoing) and which call it (incoming).',
+      'Get external service dependencies: which services this one calls (outgoing) and which call it (incoming). Use to understand a single service\'s dependency profile. For full topology use get_service_map instead. Read-only. Returns JSON: { service, outgoing, incoming }.',
       {
         service: z.string().min(1).max(256).describe('Service name'),
         direction: z.enum(['outgoing', 'incoming', 'both']).optional().describe('Dependency direction (default both)'),
@@ -84,7 +84,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_contract_drift',
-      'Detect mismatches between API spec and implementation: endpoints in spec but not in code, or in code but not in spec.',
+      'Detect mismatches between API spec and implementation: endpoints in spec but not in code, or in code but not in spec. Use to verify API contract accuracy. For reading the contract itself use get_api_contract instead. Read-only. Returns JSON: { service, missingInCode, missingInSpec, total }.',
       {
         service: z.string().min(1).max(256).describe('Service name'),
       },
@@ -99,7 +99,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_subproject_graph',
-      'Show all subprojects and their cross-repo connections. A subproject is any working repository in your project ecosystem (microservices, frontends, backends, shared libraries, CLI tools, etc.). Displays repos, endpoints, client calls, and inter-repo dependency edges.',
+      'Show all subprojects and their cross-repo connections. A subproject is any working repository in your project ecosystem (microservices, frontends, backends, shared libraries, CLI tools, etc.). Displays repos, endpoints, client calls, and inter-repo dependency edges. Use to understand multi-repo topology. Register repos first with subproject_add_repo. Read-only. Returns JSON: { repos, endpoints, clientCalls, edges }.',
       {},
       async () => {
         const result = getSubprojectGraph(topoStore);
@@ -110,7 +110,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_subproject_impact',
-      'Cross-repo impact analysis: find all client code across subprojects that would break if an endpoint changes. Resolves down to symbol level when per-repo indexes exist.',
+      'Cross-repo impact analysis: find all client code across subprojects that would break if an endpoint changes. Resolves down to symbol level when per-repo indexes exist. Use before modifying a shared API endpoint. Read-only. Returns JSON: { endpoint, affectedClients: [{ repo, file, line, callType }], total }.',
       {
         endpoint: z.string().max(512).optional().describe('Endpoint path pattern (e.g. /api/users)'),
         method: z.string().max(10).optional().describe('HTTP method filter (e.g. GET, POST)'),
@@ -125,7 +125,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'subproject_add_repo',
-      'Add a repository as a subproject of the current project. A subproject is any working repository in your ecosystem: microservices, frontends, backends, shared libraries, CLI tools. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints.',
+      'Add a repository as a subproject of the current project. A subproject is any working repository in your ecosystem: microservices, frontends, backends, shared libraries, CLI tools. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints. Mutates the topology store; idempotent. Use to build multi-repo intelligence. Returns JSON: { added, services, contracts, clientCalls }.',
       {
         repo_path: z.string().min(1).max(1024).describe('Absolute or relative path to the repository/service'),
         name: z.string().max(256).optional().describe('Display name for the repo (default: directory basename)'),
@@ -142,7 +142,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'subproject_sync',
-      'Re-scan all subprojects: re-discover services, re-parse contracts, re-scan client calls, and re-link everything.',
+      'Re-scan all subprojects: re-discover services, re-parse contracts, re-scan client calls, and re-link everything. Mutates the topology store; idempotent. Use after code changes in subproject repos. Returns JSON: { synced, services, contracts, clientCalls }.',
       {},
       async () => {
         const result = subprojectSync(topoStore);
@@ -153,7 +153,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_subproject_clients',
-      'Find all client calls across subprojects that call a specific endpoint. Shows file, line, call type, and confidence.',
+      'Find all client calls across subprojects that call a specific endpoint. Shows file, line, call type, and confidence. Use to find all consumers of an endpoint before modifying it. Read-only. Returns JSON: { endpoint, clients: [{ repo, file, line, callType, confidence }], total }.',
       {
         endpoint: z.string().min(1).max(512).describe('Endpoint path to search for (e.g. /api/users)'),
         method: z.string().max(10).optional().describe('HTTP method filter'),
@@ -167,7 +167,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_contract_versions',
-      'Show version history for a service API contract with breaking change detection between versions. Compares request/response schemas across snapshots to flag removed fields, type changes, and renames.',
+      'Show version history for a service API contract with breaking change detection between versions. Compares request/response schemas across snapshots to flag removed fields, type changes, and renames. Use to review API evolution. For current spec-vs-code drift use get_contract_drift instead. Read-only. Returns JSON: { service, versions: [{ version, date, breakingChanges }] }.',
       {
         service: z.string().min(1).max(256).describe('Service name'),
         limit: z.number().int().min(1).max(50).optional().describe('Max versions to show (default 10)'),
@@ -181,7 +181,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'discover_claude_sessions',
-      'Scan ~/.claude/projects for projects Claude Code has touched on this machine, decode each directory name back to its absolute path, and report which ones still exist plus session-file count and last activity. With add_as_subprojects=true, every existing project is registered as a subproject in one call — useful for spinning up multi-repo intelligence after a fresh clone.',
+      'Scan ~/.claude/projects for projects Claude Code has touched on this machine, decode each directory name back to its absolute path, and report which ones still exist plus session-file count and last activity. With add_as_subprojects=true, every existing project is registered as a subproject in one call — useful for spinning up multi-repo intelligence after a fresh clone. Reads local filesystem; with add_as_subprojects=true also mutates topology store. Returns JSON: { projects: [{ path, sessions, lastActivity }], total }.',
       {
         scan_root: z.string().max(1024).optional().describe('Override the scan root (default: ~/.claude/projects)'),
         exclude_current: z.boolean().optional().describe('Exclude the current project from results (default: true)'),
@@ -206,7 +206,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'visualize_subproject_topology',
-      'Open interactive HTML visualization of the subproject topology: services as nodes, API calls as edges, health/risk indicators per service. Node size = endpoint count, color = health (green/yellow/red).',
+      'Open interactive HTML visualization of the subproject topology: services as nodes, API calls as edges, health/risk indicators per service. Node size = endpoint count, color = health (green/yellow/red). Writes an HTML file to disk. Use for visual architecture review. Returns JSON: { outputPath, services, edges }.',
       {
         output: z.string().max(512).optional().describe('Output file path (default: /tmp/trace-mcp-subproject-topology.html)'),
         layout: z.enum(['force', 'hierarchical', 'radial']).optional().describe('Graph layout (default force)'),
@@ -231,7 +231,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_runtime_profile',
-      'Runtime profile for a symbol or route: call count, latency percentiles (p50/p95/p99), error rate, calls per hour. Requires OTLP trace ingestion.',
+      'Runtime profile for a symbol or route: call count, latency percentiles (p50/p95/p99), error rate, calls per hour. Requires OTLP trace ingestion. Read-only, queries external runtime data. Use for performance analysis of specific endpoints. Returns JSON: { symbol_id, callCount, latency: { p50, p95, p99 }, errorRate, callsPerHour }.',
       {
         symbol_id: z.string().max(512).optional().describe('Symbol ID to profile'),
         fqn: z.string().max(512).optional().describe('Fully qualified name'),
@@ -247,7 +247,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_runtime_call_graph',
-      'Actual call graph from runtime traces (vs static analysis). Shows observed call paths with call counts and latency.',
+      'Actual call graph from runtime traces (vs static analysis). Shows observed call paths with call counts and latency. Requires OTLP trace ingestion. Read-only, queries external runtime data. For static call graph use get_call_graph instead. Returns JSON: { root, calls: [{ symbol, count, latency }] }.',
       {
         symbol_id: z.string().max(512).optional().describe('Symbol ID as root'),
         fqn: z.string().max(512).optional().describe('Fully qualified name as root'),
@@ -263,7 +263,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_endpoint_analytics',
-      'Per-route analytics: request count, error rate, latency, caller services. Requires OTLP trace ingestion.',
+      'Per-route analytics: request count, error rate, latency, caller services. Requires OTLP trace ingestion. Read-only, queries external runtime data. Use to understand endpoint performance and traffic. Returns JSON: { uri, method, requestCount, errorRate, latency, callerServices }.',
       {
         uri: z.string().max(512).describe('Route URI (e.g. "/api/users/{id}")'),
         method: z.string().max(10).optional().describe('HTTP method filter'),
@@ -278,7 +278,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_runtime_deps',
-      'Which external services (databases, caches, APIs, queues) does this code actually call at runtime. Based on OTLP traces.',
+      'Which external services (databases, caches, APIs, queues) does this code actually call at runtime. Based on OTLP traces. Read-only, queries external runtime data. Use to discover actual runtime dependencies vs static analysis. Returns JSON: { dependencies: [{ type, name, callCount }] }.',
       {
         symbol_id: z.string().max(512).optional().describe('Symbol ID'),
         fqn: z.string().max(512).optional().describe('Fully qualified name'),
@@ -300,7 +300,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'query_by_intent',
-    'Map a business question to domain taxonomy → returns domain ownership and relevance scores (no source code). Use when you need to know WHICH DOMAIN owns specific functionality.',
+    'Map a business question to domain taxonomy → returns domain ownership and relevance scores (no source code). Use when you need to know WHICH DOMAIN owns specific functionality. For actual source code use get_feature_context instead. Read-only. Returns JSON: { symbols: [{ symbol_id, domain, relevance }] }.',
     {
       query: z.string().min(1).max(500).describe('Business-level question about the codebase'),
       limit: z.number().int().min(1).max(50).optional().describe('Max symbols to return (default 15)'),
@@ -319,7 +319,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_domain_map',
-    'Get hierarchical map of business domains with key symbols per domain. Auto-builds domain taxonomy on first call using heuristic classification.',
+    'Get hierarchical map of business domains with key symbols per domain. Auto-builds domain taxonomy on first call using heuristic classification. Use to understand business domain boundaries. For specific domain code use get_domain_context instead. Read-only. Returns JSON: { domains: [{ name, children, symbols }] }.',
     {
       depth: z.number().int().min(1).max(5).optional().describe('Max taxonomy depth (default 3)'),
       include_symbols: z.boolean().optional().describe('Include top symbols per domain (default true)'),
@@ -334,7 +334,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_domain_context',
-    'Get all code related to a specific business domain. Supports "parent/child" notation (e.g. "payments/refunds").',
+    'Get all code related to a specific business domain. Supports "parent/child" notation (e.g. "payments/refunds"). Use to explore code within a domain boundary. For the full domain taxonomy use get_domain_map instead. Read-only. Returns JSON: { domain, symbols: [{ symbol_id, name, file, source }], relatedDomains }.',
     {
       domain: z.string().min(1).max(256).describe('Domain name (e.g. "payments" or "payments/refunds")'),
       include_related: z.boolean().optional().describe('Include symbols from related domains (default false)'),
@@ -349,7 +349,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_cross_domain_deps',
-    'Show which business domains depend on which. Based on edges between symbols in different domains.',
+    'Show which business domains depend on which. Based on edges between symbols in different domains. Use to understand domain coupling. Read-only. Returns JSON: { dependencies: [{ from, to, edgeCount }] }.',
     {
       domain: z.string().max(256).optional().describe('Focus on a specific domain (default: all)'),
     },
@@ -364,7 +364,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'graph_query',
-    'Trace how named symbols relate in the dependency graph → returns subgraph + Mermaid diagram. Input must contain symbol/class names (e.g. "How does AuthService reach Database?", "What depends on UserModel?").',
+    'Trace how named symbols relate in the dependency graph → returns subgraph + Mermaid diagram. Input must contain symbol/class names (e.g. "How does AuthService reach Database?", "What depends on UserModel?"). Use for ad-hoc graph exploration. For structured call graph use get_call_graph instead. Read-only. Returns JSON: { nodes, edges, mermaid }.',
     {
       query: z.string().min(1).max(500).describe('Natural language question about code relationships'),
       depth: z.number().int().min(1).max(6).optional().describe('Max traversal depth (default 3)'),
@@ -381,7 +381,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dataflow',
-    'Intra-function dataflow analysis: track how each parameter flows through the function body — into which calls, where it gets mutated, and what is returned. Phase 1: single function scope.',
+    'Intra-function dataflow analysis: track how each parameter flows through the function body — into which calls, where it gets mutated, and what is returned. Phase 1: single function scope. Use to understand data transformations within a function. For security-focused data flow use taint_analysis instead. Read-only. Returns JSON: { symbol_id, params: [{ name, flows: [{ target, mutated }] }], returnPaths }.',
     {
       symbol_id: z.string().max(512).optional().describe('Symbol ID of the function/method to analyze'),
       fqn: z.string().max(512).optional().describe('Fully qualified name of the function/method'),
@@ -399,7 +399,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'visualize_graph',
-    'Open interactive HTML graph in browser showing file/symbol dependencies. Supports force/hierarchical/radial layouts, community coloring. Use granularity=symbol to see individual functions/classes/methods as nodes instead of files.',
+    'Open interactive HTML graph in browser showing file/symbol dependencies. Supports force/hierarchical/radial layouts, community coloring. Use granularity=symbol to see individual functions/classes/methods as nodes instead of files. Writes an HTML file to disk. For static Mermaid/DOT output use get_dependency_diagram instead. Returns JSON: { outputPath, nodes, edges }.',
     {
       scope: z.string().min(1).max(512).describe('Scope: file path, directory (e.g. "src/"), or "project"'),
       depth: z.number().int().min(1).max(5).optional().describe('Max hops from scope (default 2)'),
@@ -436,7 +436,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dependency_diagram',
-    'Render dependency diagram for a file/directory path as Mermaid or DOT. Input: a path like "src/tools/" — not a question. Trims to max_nodes most important nodes.',
+    'Render dependency diagram for a file/directory path as Mermaid or DOT. Input: a path like "src/tools/" — not a question. Trims to max_nodes most important nodes. Read-only. For interactive HTML visualization use visualize_graph instead. Returns JSON: { format, diagram, nodes, edges }.',
     {
       scope: z.string().min(1).max(512).describe('Scope: file path, directory, or "project"'),
       depth: z.number().int().min(1).max(5).optional().describe('Max hops from scope (default 2)'),
@@ -454,7 +454,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'search_text',
-    'Full-text search across all indexed files. Supports regex, glob file patterns, language filter. Use for finding strings, comments, TODOs, config values, error messages — anything not captured as a symbol.',
+    'Full-text search across all indexed files. Supports regex, glob file patterns, language filter. Use for finding strings, comments, TODOs, config values, error messages — anything not captured as a symbol. For symbol search (functions, classes) use search instead. Read-only. Returns JSON: { matches: [{ file, line, text, context }], total_matches }.',
     {
       query: z.string().min(1).max(1000).describe('Search string or regex pattern'),
       is_regex: z.boolean().optional().describe('Treat query as regex (default false)'),
@@ -488,7 +488,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'predict_bugs',
-    'Predict which files are most likely to contain bugs. Multi-signal scoring: git churn, fix-commit ratio, complexity, coupling, PageRank importance, author count. Each prediction includes a numeric score, risk bucket (low/medium/high/critical) AND a confidence_level (low/medium/high/multi_signal) counting how many independent signals actually fired. Result envelope includes _methodology disclosure. Cached for 1 hour; use refresh=true to recompute.',
+    'Predict which files are most likely to contain bugs. Multi-signal scoring: git churn, fix-commit ratio, complexity, coupling, PageRank importance, author count. Each prediction includes a numeric score, risk bucket (low/medium/high/critical) AND a confidence_level (low/medium/high/multi_signal) counting how many independent signals actually fired. Result envelope includes _methodology disclosure. Cached for 1 hour; use refresh=true to recompute. Requires git. Use for proactive bug hunting. For complexity+churn hotspots only use get_risk_hotspots instead. Read-only. Returns JSON: { predictions: [{ file, score, risk, confidence_level, signals }], total }.',
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
       min_score: z.number().min(0).max(1).optional().describe('Min bug probability score to include (default: 0)'),
@@ -512,7 +512,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'detect_drift',
-    'Detect architectural drift: cross-module co-change anomalies (files in different modules that always change together) and shotgun surgery patterns (commits touching 3+ modules). Requires git.',
+    'Detect architectural drift: cross-module co-change anomalies (files in different modules that always change together) and shotgun surgery patterns (commits touching 3+ modules). Requires git. Use to identify hidden coupling across modules. For file-pair co-changes use get_co_changes instead. Read-only. Returns JSON: { anomalies, shotgunSurgery, total }.',
     {
       since_days: z.number().int().min(1).optional().describe('Analyze commits from last N days (default: 180)'),
       min_confidence: z.number().min(0).max(1).optional().describe('Min Jaccard confidence for co-change anomalies (default: 0.3)'),
@@ -530,7 +530,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_tech_debt',
-    'Per-module tech debt score (A–F grade) combining: complexity, coupling instability, test coverage gaps, and git churn. Includes actionable recommendations.',
+    'Per-module tech debt score (A–F grade) combining: complexity, coupling instability, test coverage gaps, and git churn. Includes actionable recommendations. Use for architecture review and prioritizing cleanup. Read-only. Returns JSON: { modules: [{ module, grade, score, factors, recommendations }] }.',
     {
       module: z.string().max(256).optional().describe('Focus on a specific module path (e.g. "src/tools")'),
       refresh: z.boolean().optional().describe('Force recomputation (default: false)'),
@@ -550,7 +550,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'assess_change_risk',
-    'Before modifying a file or symbol, predict risk level (low/medium/high/critical) with contributing factors and recommended mitigations. Combines blast radius, complexity, git churn, test coverage, and coupling.',
+    'Before modifying a file or symbol, predict risk level (low/medium/high/critical) with contributing factors and recommended mitigations. Combines blast radius, complexity, git churn, test coverage, and coupling. Use as a quick risk check. For full impact report with affected tests and dependents use get_change_impact instead. Read-only. Returns JSON: { risk, level, factors: [{ name, value }], mitigations }.',
     {
       file_path: z.string().max(512).optional().describe('File path to assess'),
       symbol_id: z.string().max(512).optional().describe('Symbol ID to assess'),
@@ -573,7 +573,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_health_trends',
-    'Time-series health metrics for a file or module: bug score, complexity, coupling, churn over time. Populated by predict_bugs runs.',
+    'Time-series health metrics for a file or module: bug score, complexity, coupling, churn over time. Populated by predict_bugs runs. Use to track if a module is improving or degrading. Read-only. Returns JSON: { dataPoints: [{ date, bugScore, complexity, coupling, churn }] }.',
     {
       file_path: z.string().max(512).optional().describe('File path to check'),
       module: z.string().max(256).optional().describe('Module path prefix to check'),
@@ -594,7 +594,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_workspace_map',
-    'List all detected monorepo workspaces with file counts, symbol counts, and languages. Returns dependency graph between workspaces showing cross-workspace imports.',
+    'List all detected monorepo workspaces with file counts, symbol counts, and languages. Returns dependency graph between workspaces showing cross-workspace imports. Use for monorepo structure overview. For impact of changes on other workspaces use get_cross_workspace_impact instead. Read-only. Returns JSON: { workspaces: [{ name, files, symbols, languages }], dependencies }.',
     {
       include_dependencies: z.boolean().optional().describe('Include cross-workspace dependency graph (default: true)'),
     },
@@ -629,7 +629,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_cross_workspace_impact',
-    'Show which workspaces are affected by changes in a given workspace. Lists all cross-workspace edges, affected symbols, and the public API surface consumed by other workspaces.',
+    'Show which workspaces are affected by changes in a given workspace. Lists all cross-workspace edges, affected symbols, and the public API surface consumed by other workspaces. Use before modifying shared code in a monorepo. Read-only. Returns JSON: { workspace, public_api, consumed_by, depends_on, cross_workspace_edges }.',
     {
       workspace: z.string().max(256).describe('Workspace name to analyze'),
     },
