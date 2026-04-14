@@ -186,6 +186,13 @@ ipcMain.handle('focus-tab', (_event, tabId: string) => {
   return { ok: true };
 });
 
+// IPC: open settings window (optionally navigating to a specific section via ?section= query param)
+ipcMain.handle('open-settings', (_event: Electron.IpcMainInvokeEvent, section?: string) => {
+  const tab = section ? `settings&section=${section}` : 'settings';
+  showMenuWindow(tab);
+  return { ok: true };
+});
+
 // IPC: get current platform (renderer needs this to decide whether to show custom tabs)
 ipcMain.handle('get-platform', () => process.platform);
 
