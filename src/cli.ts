@@ -122,7 +122,7 @@ program
   .version(PKG_VERSION, '-v, --version');
 
 program
-  .command('serve')
+  .command('serve', { isDefault: true })
   .description('Start MCP server (stdio transport)')
   .action(async () => {
     const projectRoot = process.cwd();
