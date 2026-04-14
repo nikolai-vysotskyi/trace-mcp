@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.21.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.20.1...v1.21.0) (2026-04-14)
+
+
+### Features
+
+* **ai:** add streaming inference and ask command with code context ([d96fe86](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d96fe8642e15388238981d760be50235c98b5b4c))
+* **analytics:** expand known-packages catalog with deprecation tracking ([538e479](https://github.com/nikolai-vysotskyi/trace-mcp/commit/538e4793375abfb6ec30bdb85373de9a0e1c5c1e))
+* **app:** add Windows platform support with custom tab bar and installer ([5ff2bda](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5ff2bda4c5e6e539b7cf95d8adeaecbfccce1c42))
+* **app:** extract daemon-lifecycle module and auto-start daemon from tray ([a255a6e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a255a6ea209c18d65f66ab68ba040681cb3c53a6))
+* **lang:** add 10 new language plugins (Ada, Apex, D, Nim, Pascal, PL/SQL, PowerShell, Solidity, Tcl, VHDL) ([42dca87](https://github.com/nikolai-vysotskyi/trace-mcp/commit/42dca878f89778a049f2a18ffbb80bdd42ccc619))
+* **lang:** enhance regex-base with scope tracking, doc comments, and multi-line signatures ([1c6b6ae](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1c6b6ae52a1c744a98d9f43b43e06df09cb5f300))
+* **lang:** improve regex-based plugins for Clojure, COBOL, Common Lisp, and 7 others ([354023b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/354023bcda01f885cc25e060270a3ea63cd15d26))
+* rename "federation" to "subproject" across entire codebase ([a8ec5ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a8ec5ab8853049881d4bfb591faaa77f60a8aee2))
+* **server:** add compact_schemas option to reduce tool schema token overhead ([b9f98ac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b9f98ac1630d82c1a66457b523337566a5ace602))
+
 ## [Unreleased]
 
 ### Breaking Changes
