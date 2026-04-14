@@ -1,6 +1,12 @@
 #!/bin/bash
-# Patch Electron.app bundle for dev mode: custom name + icon
+# Patch Electron.app bundle for dev mode: custom name + icon (macOS only)
+# On other platforms this is a no-op — Electron exe icons are set at build time.
 set -e
+
+if [ "$(uname)" != "Darwin" ]; then
+  echo "Skipping Electron dev patch (macOS only)"
+  exit 0
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/.."

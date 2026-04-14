@@ -3,7 +3,9 @@ import { Indexes } from './tabs/Indexes';
 import { Clients } from './tabs/Clients';
 import { Settings } from './tabs/Settings';
 import { ProjectOverview } from './tabs/ProjectOverview';
+import { AskTab } from './tabs/AskTab';
 import { GraphExplorer, GraphExplorerHandle, GraphSettings, DEFAULT_GRAPH_SETTINGS } from './tabs/GraphExplorer';
+import { WindowTabBar } from './components/WindowTabBar';
 
 // ── URL params determine window type ──────────────────────────
 // ?view=menu&tab=projects  → Menu window (sidebar + Projects/Clients/Settings)
@@ -16,9 +18,10 @@ const GLOBAL_TABS: { id: GlobalTab; label: string }[] = [
   { id: 'settings', label: 'Settings' },
 ];
 
-type ProjectTab = 'overview' | 'graph';
+type ProjectTab = 'overview' | 'ask' | 'graph';
 const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'ask', label: 'Ask' },
   { id: 'graph', label: 'Graph' },
 ];
 
@@ -103,7 +106,7 @@ function RecentProjects() {
             style={{ color: 'var(--text-secondary)' }}
             title={root}
           >
-            {root.split('/').filter(Boolean).pop()}
+            {root.split(/[/\\]/).filter(Boolean).pop()}
           </button>
           <button
             onClick={(e) => {
@@ -176,7 +179,7 @@ function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope
 
   // Short display path: strip project root prefix
   const shortPath = (p: string) => {
-    if (p.startsWith(root)) return p.slice(root.length).replace(/^\//, '');
+    if (p.startsWith(root)) return p.slice(root.length).replace(/^[/\\]/, '');
     return p;
   };
 
@@ -230,7 +233,7 @@ function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope
               style={{ color: 'var(--text-secondary)' }}
               title={`${shortPath(f.path)} — ${f.symbols} symbols, ${f.edges} edges`}
             >
-              <span className="truncate flex-1">{shortPath(f.path)}</span>
+              <span className="truncate flex-1" style={{ direction: 'rtl', textAlign: 'left' }}>{shortPath(f.path)}</span>
               <span
                 className="shrink-0 text-[9px] tabular-nums"
                 style={{ color: 'var(--text-tertiary)' }}
@@ -367,6 +370,8 @@ function ProjectContent({ root, tab, graphRef, graphSettings, onGraphSettingsCha
     <>
       {/* Overview — mount/unmount normally */}
       {tab === 'overview' && <ProjectOverview root={root} onNavigateToService={onNavigateToService} />}
+      {/* Ask — chat interface, needs flex layout */}
+      {tab === 'ask' && <AskTab root={root} />}
       {/* Graph — always mounted, hidden when inactive (preserves iframe + state) */}
       <div className={tab === 'graph' ? 'flex-1 min-h-0 flex flex-col' : 'hidden'}>
         <GraphExplorer ref={graphRef} root={root} settings={graphSettings} onSettingsChange={onGraphSettingsChange} />
@@ -457,10 +462,15 @@ export function App() {
 
 
   const isGraph = isProject && projectTab === 'graph';
+  const needsFlexLayout = isProject && (projectTab === 'graph' || projectTab === 'ask');
 
   return (
-    <div className="flex h-screen" style={{ padding: 8, gap: 0, background: 'var(--bg-primary)' }}>
-      {/* Left sidebar — macOS floating panel */}
+    <div className="flex flex-col h-screen" style={{ background: 'var(--bg-primary)' }}>
+      {/* Windows custom tab bar (hidden on macOS — native tabs handle it) */}
+      <WindowTabBar />
+
+      <div className="flex flex-1 min-h-0" style={{ padding: 8, gap: 0 }}>
+      {/* Left sidebar */}
       <div
         className="shrink-0 relative"
         style={{
@@ -474,7 +484,8 @@ export function App() {
             border: '1px solid var(--sidebar-border)',
             borderRadius: 12,
             background: 'var(--sidebar-bg)',
-          }}
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
         >
           {isProject ? (
             <>
@@ -543,11 +554,11 @@ export function App() {
 
       {/* Main content */}
       <main
-        className={`flex-1 flex flex-col min-h-0 ${isGraph ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
+        className={`flex-1 flex flex-col min-h-0 ${needsFlexLayout ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div
-          className={isGraph ? 'flex-1 min-h-0 flex flex-col' : 'flex-1 flex flex-col min-h-0'}
+          className={needsFlexLayout ? 'flex-1 min-h-0 flex flex-col' : 'flex-1 flex flex-col min-h-0'}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {isProject ? (
@@ -557,6 +568,7 @@ export function App() {
           )}
         </div>
       </main>
+      </div>
     </div>
   );
 }

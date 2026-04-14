@@ -19,7 +19,7 @@ const buildDir = path.join(__dirname, '..', 'build');
 
 // ── Tray icon design (graph nodes + edges) ──────────────────────────
 
-function trayIconSVG(size, dim = false) {
+function trayIconSVG(size, dim = false, color = 'black') {
   // Coordinates are in a 32x32 viewBox, scaled to any size
   const opacity = dim ? 0.45 : 1.0;
   const strokeW = size <= 16 ? 1.8 : 1.5;
@@ -46,11 +46,11 @@ function trayIconSVG(size, dim = false) {
   ];
 
   const edgesSVG = edges.map(([a, b]) =>
-    `<line x1="${nodes[a].x}" y1="${nodes[a].y}" x2="${nodes[b].x}" y2="${nodes[b].y}" stroke="black" stroke-width="${strokeW}" stroke-linecap="round" opacity="${opacity}"/>`
+    `<line x1="${nodes[a].x}" y1="${nodes[a].y}" x2="${nodes[b].x}" y2="${nodes[b].y}" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" opacity="${opacity}"/>`
   ).join('\n    ');
 
   const nodesSVG = nodes.map(n =>
-    `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="black" opacity="${opacity}"/>`
+    `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="${color}" opacity="${opacity}"/>`
   ).join('\n    ');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 32 32">
@@ -156,7 +156,7 @@ async function generate() {
 
   const tasks = [];
 
-  // Tray icons (macOS Template naming)
+  // Tray icons — macOS (Template naming, black on transparent — macOS auto-tints)
   const trayConfigs = [
     { name: 'tray-iconTemplate.png', size: 22, dim: false },
     { name: 'tray-iconTemplate@2x.png', size: 44, dim: false },
@@ -172,6 +172,25 @@ async function generate() {
         .png()
         .toFile(outPath)
         .then(() => console.log(`  ✓ ${cfg.name} (${cfg.size}x${cfg.size})`))
+    );
+  }
+
+  // Tray icons — Windows (white for dark taskbar, black for light taskbar)
+  const winTrayConfigs = [
+    { name: 'tray-icon-light.png', size: 32, dim: false, color: 'black' },    // for light taskbar
+    { name: 'tray-icon-dim-light.png', size: 32, dim: true, color: 'black' },
+    { name: 'tray-icon-dark.png', size: 32, dim: false, color: 'white' },     // for dark taskbar
+    { name: 'tray-icon-dim-dark.png', size: 32, dim: true, color: 'white' },
+  ];
+
+  for (const cfg of winTrayConfigs) {
+    const svg = trayIconSVG(cfg.size, cfg.dim, cfg.color);
+    const outPath = path.join(assetsDir, cfg.name);
+    tasks.push(
+      sharp(Buffer.from(svg))
+        .png()
+        .toFile(outPath)
+        .then(() => console.log(`  ✓ ${cfg.name} (${cfg.size}x${cfg.size}, ${cfg.color} — Windows)`))
     );
   }
 
@@ -200,6 +219,50 @@ async function generate() {
   );
 
   await Promise.all(tasks);
+
+  // ── Windows .ico (multi-size icon) ──────────────────────────────
+  // ICO format: header + directory entries + PNG payloads
+  const icoSizes = [16, 32, 48, 64, 128, 256];
+  const pngBuffers = [];
+  for (const size of icoSizes) {
+    const svg = appIconSVG(512);
+    const buf = await sharp(Buffer.from(svg)).resize(size, size).png().toBuffer();
+    pngBuffers.push({ size, buf });
+  }
+
+  // ICO header: 3 x uint16 (reserved=0, type=1, count)
+  const headerSize = 6;
+  const dirEntrySize = 16;
+  const numImages = pngBuffers.length;
+  let dataOffset = headerSize + dirEntrySize * numImages;
+  const dirEntries = [];
+  for (const { size, buf } of pngBuffers) {
+    const w = size >= 256 ? 0 : size; // 0 means 256 in ICO format
+    const h = w;
+    const entry = Buffer.alloc(dirEntrySize);
+    entry.writeUInt8(w, 0);        // width
+    entry.writeUInt8(h, 1);        // height
+    entry.writeUInt8(0, 2);        // color palette
+    entry.writeUInt8(0, 3);        // reserved
+    entry.writeUInt16LE(1, 4);     // color planes
+    entry.writeUInt16LE(32, 6);    // bits per pixel
+    entry.writeUInt32LE(buf.length, 8);   // image size
+    entry.writeUInt32LE(dataOffset, 12);  // data offset
+    dirEntries.push(entry);
+    dataOffset += buf.length;
+  }
+
+  const header = Buffer.alloc(headerSize);
+  header.writeUInt16LE(0, 0);           // reserved
+  header.writeUInt16LE(1, 2);           // type = ICO
+  header.writeUInt16LE(numImages, 4);   // count
+
+  const { writeFile } = await import('fs/promises');
+  const icoBuffer = Buffer.concat([header, ...dirEntries, ...pngBuffers.map(p => p.buf)]);
+  const icoPath = path.join(buildDir, 'icon.ico');
+  await writeFile(icoPath, icoBuffer);
+  console.log(`  ✓ icon.ico (${icoSizes.join(', ')}px — Windows)`);
+
   console.log('\n  All icons generated!');
   console.log(`  Tray icons: ${assetsDir}`);
   console.log(`  App icons:  ${buildDir}`);

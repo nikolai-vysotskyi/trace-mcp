@@ -20,7 +20,10 @@ export interface ProjectRowProps {
 
 function shortPath(root: string): string {
   const home = '~';
-  return root.replace(/^\/Users\/[^/]+/, home).replace(/^\/home\/[^/]+/, home);
+  return root
+    .replace(/^\/Users\/[^/]+/, home)
+    .replace(/^\/home\/[^/]+/, home)
+    .replace(/^[A-Z]:\\Users\\[^\\]+/, home);
 }
 
 function statusToDot(status: string): 'active' | 'idle' | 'error' | 'disconnected' {

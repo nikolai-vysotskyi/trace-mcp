@@ -6,13 +6,13 @@
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "vite",
-    "dev:electron": "tsc -p tsconfig.main.json && bash scripts/patch-electron-dev.sh && unset ELECTRON_RUN_AS_NODE && electron .",
+    "dev:electron": "tsc -p tsconfig.main.json && node scripts/patch-electron-dev.mjs && electron .",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
     "build": "npm run build:renderer && npm run build:main",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "postinstall": "bash scripts/patch-electron-dev.sh",
+    "postinstall": "node scripts/patch-electron-dev.mjs",
     "generate-icons": "node scripts/generate-icons.mjs",
     "typecheck": "tsc --noEmit"
   },

@@ -17,6 +17,10 @@ declare global {
       checkForUpdate: () => Promise<{ available: boolean; current?: string; latest?: string; error?: string }>;
       applyUpdate: () => Promise<{ ok: boolean; error?: string }>;
       restartApp: () => Promise<void>;
+      // Tab management (Windows custom tab bar)
+      getPlatform: () => Promise<string>;
+      focusTab: (tabId: string) => Promise<{ ok: boolean }>;
+      onTabListChanged: (callback: (tabs: { id: string; title: string; type: string; active: boolean }[]) => void) => () => void;
     };
   }
 }

@@ -19,6 +19,27 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Append upgrade instructions to release notes
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          BODY=$(gh release view "$TAG" --json body --jq '.body')
+          FOOTER=$(cat <<'UPGRADE'
+
+          ---
+
+          ### Upgrade
+
+          ```bash
+          npm install -g trace-mcp@latest
+          trace-mcp init
+          ```
+          UPGRADE
+          )
+          gh release edit "$TAG" --notes "${BODY}${FOOTER}"
+
   # GITHUB_TOKEN actions don't trigger pull_request events, so the CI
   # impact-report never fires for release-please PRs.  Run it here instead.
   impact-report:
@@ -104,7 +125,7 @@ jobs:
       - run: npm test
       - run: npx -y npm@11 publish --provenance --access public
 
-  build-app:
+  build-app-mac:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: macos-latest
@@ -136,6 +157,12 @@ jobs:
         working-directory: packages/app
         run: npm run build
 
+      - name: Sync app version from root package.json
+        working-directory: packages/app
+        run: |
+          ROOT_VERSION=$(node -p "require('../../package.json').version")
+          npm pkg set version="$ROOT_VERSION"
+
       - name: Package with electron-builder
         working-directory: packages/app
         env:
@@ -148,4 +175,63 @@ jobs:
         run: |
           gh release upload "${{ needs.release-please.outputs.tag_name }}" \
             packages/app/release/*.zip \
+            --clobber
+
+  build-app-win:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install root dependencies and build server
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install app dependencies
+        working-directory: packages/app
+        run: npm ci
+
+      - name: Generate icons (including .ico for Windows)
+        working-directory: packages/app
+        run: node scripts/generate-icons.mjs
+
+      - name: Build app
+        working-directory: packages/app
+        run: npm run build
+
+      - name: Sync app version from root package.json
+        working-directory: packages/app
+        shell: bash
+        run: |
+          ROOT_VERSION=$(node -p "require('../../package.json').version")
+          npm pkg set version="$ROOT_VERSION"
+
+      - name: Package with electron-builder
+        working-directory: packages/app
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          FILES=(packages/app/release/*.exe packages/app/release/*-win*.zip)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No artifacts found to upload"
+            exit 1
+          fi
+          gh release upload "${{ needs.release-please.outputs.tag_name }}" \
+            "${FILES[@]}" \
             --clobber

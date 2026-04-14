@@ -112,8 +112,12 @@ function timeAgo(iso: string): string {
   return `${hours}h ago`;
 }
 
+const CLIENT_LABELS: Record<string, string> = Object.fromEntries(
+  ALL_CLIENTS.map((c) => [c.name, c.label]),
+);
+
 function clientDisplayName(client: ClientInfo): string {
-  if (client.name) return client.name;
+  if (client.name) return CLIENT_LABELS[client.name] ?? client.name;
   return client.id.slice(0, 8);
 }
 
@@ -146,8 +150,9 @@ function ConnectedClientRow({ client }: { client: ClientInfo }) {
           <div
             className="text-[10px] truncate"
             style={{ color: 'var(--text-secondary)' }}
+            title={client.project}
           >
-            {client.project.split('/').filter(Boolean).pop()}
+            {client.project.split(/[/\\]/).filter(Boolean).pop()}
           </div>
         )}
       </div>
@@ -435,7 +440,9 @@ export function Clients() {
           </div>
         ) : (
           <div className="space-y-1">
-            {clients.map((c) => (
+            {[...clients]
+              .sort((a, b) => new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime())
+              .map((c) => (
               <ConnectedClientRow key={c.id} client={c} />
             ))}
           </div>

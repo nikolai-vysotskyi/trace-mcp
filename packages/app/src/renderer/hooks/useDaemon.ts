@@ -119,7 +119,12 @@ export function useDaemon() {
     const es = new EventSource(`${BASE}/api/events`);
     eventSourceRef.current = es;
 
-    es.onopen = () => setConnected(true);
+    es.onopen = () => {
+      setConnected(true);
+      // Re-fetch full state on reconnect — events during the gap are lost
+      fetchClients();
+      fetchProjects();
+    };
     es.onerror = () => setConnected(false);
 
     es.onmessage = (msg) => {

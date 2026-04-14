@@ -31,7 +31,7 @@ import { PluginRegistry } from '../plugin-api/registry.js';
 import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
 import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
-import { installGuiApp, isAppInstalled } from './install-app.js';
+import { installGuiApp, isAppInstalled, isAppOutdated } from './install-app.js';
 import { ensureDaemonRunning } from './daemon.js';
 
 export const initCommand = new Command('init')
@@ -192,14 +192,22 @@ export const initCommand = new Command('init')
         }
       }
 
-      // Q6: Install menu bar app (macOS only)
-      if (process.platform === 'darwin' && !isAppInstalled()) {
-        const appResult = await p.confirm({
-          message: 'Install trace-mcp menu bar app?',
-          initialValue: true,
-        });
-        if (p.isCancel(appResult)) { p.cancel('Cancelled.'); process.exit(0); }
-        installApp = appResult;
+      // Q6: Install or update menu bar app (macOS / Windows)
+      if (process.platform === 'darwin' || process.platform === 'win32') {
+        const appExists = isAppInstalled();
+        const appOutdated = appExists && isAppOutdated();
+
+        if (!appExists || appOutdated) {
+          const message = appOutdated
+            ? 'Update trace-mcp menu bar app to latest version?'
+            : 'Install trace-mcp menu bar app?';
+          const appResult = await p.confirm({
+            message,
+            initialValue: true,
+          });
+          if (p.isCancel(appResult)) { p.cancel('Cancelled.'); process.exit(0); }
+          installApp = appResult;
+        }
       }
     } else {
       // Non-interactive defaults
@@ -360,16 +368,18 @@ export const initCommand = new Command('init')
       } else {
         spin.stop('App installation failed');
         p.log.warn(`Could not install app: ${appResult.error}`);
-        steps.push({ target: '~/Applications/trace-mcp.app', action: 'skipped', detail: appResult.error ?? 'Installation failed' });
+        const fallbackPath = process.platform === 'darwin' ? '~/Applications/trace-mcp.app' : 'trace-mcp';
+        steps.push({ target: fallbackPath, action: 'skipped', detail: appResult.error ?? 'Installation failed' });
       }
     }
 
     // --- Ensure daemon is running ---
-    if (!opts.dryRun && process.platform === 'darwin') {
+    if (!opts.dryRun && (process.platform === 'darwin' || process.platform === 'win32')) {
       try {
         const started = await ensureDaemonRunning();
         if (started) {
-          steps.push({ target: 'daemon', action: 'updated', detail: 'Daemon started (launchd)' });
+          const method = process.platform === 'darwin' ? 'launchd' : 'background process';
+          steps.push({ target: 'daemon', action: 'updated', detail: `Daemon started (${method})` });
         }
       } catch { /* best effort — don't block init */ }
     }
