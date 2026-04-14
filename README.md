@@ -7,7 +7,6 @@
 <p align="center">
   <a href="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp"><img src="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp/badges/score.svg" alt="Glama score" /></a>
   <a href="https://www.npmjs.com/package/trace-mcp"><img src="https://img.shields.io/npm/v/trace-mcp" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/trace-mcp"><img src="https://img.shields.io/npm/dm/trace-mcp" alt="npm downloads" /></a>
   <img src="https://img.shields.io/node/v/trace-mcp" alt="Node.js version" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-ELv2-blue" alt="License" /></a>
 </p>
