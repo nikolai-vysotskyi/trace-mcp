@@ -51,7 +51,7 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
   return new FallbackProvider();
 }
 
-export type { AIProvider, EmbeddingService, InferenceService, VectorStore, RerankerService } from './interfaces.js';
+export type { AIProvider, ChatMessage, EmbeddingService, InferenceService, VectorStore, RerankerService } from './interfaces.js';
 export { FallbackProvider } from './fallback.js';
 export { OllamaProvider } from './ollama.js';
 export { OpenAIProvider } from './openai.js';
@@ -64,4 +64,7 @@ export { CachedInferenceService } from './cached-inference.js';
 export { SummarizationPipeline } from './summarization-pipeline.js';
 export { PROMPTS } from './prompts.js';
 export { LLMReranker } from './reranker.js';
+export { parseOpenAIStream, parseAnthropicStream, parseOllamaChatStream } from './sse.js';
+export { resolveProvider, gatherContext, buildSystemPrompt, stripContextFromMessage } from './ask-shared.js';
+export type { LLMProvider } from './ask-shared.js';
 export type { PromptTemplate } from './prompts.js';

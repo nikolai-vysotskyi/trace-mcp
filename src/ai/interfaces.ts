@@ -8,8 +8,17 @@ export interface EmbeddingService {
   dimensions(): number;
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 export interface InferenceService {
   generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string>;
+  generateStream?(
+    messages: ChatMessage[],
+    options?: { maxTokens?: number; temperature?: number },
+  ): AsyncIterable<string>;
 }
 
 export interface VectorStore {
