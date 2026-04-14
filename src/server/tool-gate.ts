@@ -10,6 +10,7 @@ import type { ToolResponse } from './types.js';
 import { markToolConsultation } from './consultation-markers.js';
 import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
 import { COMPACT_CORE_PARAMS } from './compact-params.js';
+import { getToolAnnotations } from './tool-annotations.js';
 
 interface ToolGateResult {
   _originalTool: McpServer['tool'];
@@ -235,8 +236,28 @@ export function installToolGate(
         return result;
       };
     }
+    // Inject ToolAnnotations before the callback so the MCP SDK
+    // registers behavioural hints (readOnlyHint, destructiveHint, etc.)
+    const annotations = getToolAnnotations(name);
+    const lastIdx = args.length - 1;
+    if (typeof args[lastIdx] === 'function') {
+      args.splice(lastIdx, 0, annotations);
+    }
+
     return (_originalTool as Function)(...args);
   }) as typeof server.tool;
 
-  return { _originalTool, registeredToolNames, toolHandlers };
+  // Wrap _originalTool so tools registered outside the gate (session meta-tools)
+  // also get annotations injected automatically.
+  const annotatedOriginalTool = ((...oArgs: unknown[]) => {
+    const oName = oArgs[0] as string;
+    const ann = getToolAnnotations(oName);
+    const oLastIdx = oArgs.length - 1;
+    if (typeof oArgs[oLastIdx] === 'function') {
+      oArgs.splice(oLastIdx, 0, ann);
+    }
+    return (_originalTool as Function)(...oArgs);
+  }) as typeof _originalTool;
+
+  return { _originalTool: annotatedOriginalTool, registeredToolNames, toolHandlers };
 }
