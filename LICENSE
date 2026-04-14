@@ -1,6 +1,4 @@
-Elastic License 2.0 + Ethical Use Addendum
-
-Copyright 2026 Nikolai Vysotskyi
+Elastic License 2.0
 
 URL: https://www.elastic.co/licensing/elastic-license
 
@@ -21,69 +19,26 @@ You may not provide the software to third parties as a hosted or managed
 service, where the service provides users with access to any substantial set
 of the features or functionality of the software.
 
+You may not move, change, disable, or circumvent the license key functionality
+in the software, and you may not remove or obscure any functionality in the
+software that is protected by the license key.
+
 You may not alter, remove, or obscure any licensing, copyright, or other
 notices of the licensor in the software. Any use of the licensor's trademarks
 is subject to applicable law.
 
-## Ethical Use Restrictions
+## Patents
 
-In addition to the limitations above, you may NOT use, deploy, integrate, or
-incorporate this software (in whole or in part, directly or indirectly) in any
-of the following contexts:
-
-### 1. Military and Warfare
-
-(a) Military operations, including but not limited to combat planning,
-    logistics of armed conflict, targeting, and battlefield management.
-(b) Development, production, testing, maintenance, or deployment of weapons,
-    weapons systems, munitions, or military-grade equipment.
-(c) Military intelligence gathering or military reconnaissance.
-
-### 2. Violence and Harm
-
-(a) Any project, product, or service whose purpose or foreseeable effect is to
-    facilitate, promote, or cause physical violence against individuals or
-    groups.
-(b) Development or operation of autonomous systems designed to cause physical
-    harm to persons.
-
-### 3. Surveillance
-
-(a) Mass surveillance of populations, including but not limited to: collection,
-    aggregation, or analysis of personal data of individuals without their
-    informed, voluntary consent and without lawful authority.
-(b) Social scoring systems that rank, classify, or restrict individuals' rights
-    or access to services based on aggregated behavioral data.
-(c) Facial recognition or biometric identification systems used for tracking
-    individuals without their explicit consent.
-
-### 4. Discrimination and Oppression
-
-(a) Any use that facilitates discrimination, oppression, or persecution of
-    individuals or groups based on race, ethnicity, national origin, religion,
-    gender, sexual orientation, disability, or political opinion.
-(b) Any use in systems designed to suppress freedom of expression, freedom of
-    assembly, or freedom of the press.
-
-## Ethical Restrictions Apply to Derivative Works
-
-Any derivative work based on this software, in whole or in part, must retain
-and be subject to the Ethical Use Restrictions set forth above. You may not
-re-license, sublicense, or otherwise distribute derivative works under terms
-that remove, weaken, or circumvent these restrictions.
-
-## Clarifications
-
-- Use by civilian government agencies for non-military, non-surveillance
-  purposes (e.g., healthcare, education, public infrastructure) is permitted.
-- Use by medical or humanitarian organizations, including those operating in
-  conflict zones for the purpose of saving lives, is permitted.
-- Security research, defensive cybersecurity, and lawful penetration testing
-  are permitted.
-- Standard business analytics and application monitoring that process only
-  aggregated, anonymized data are not considered surveillance.
-- Law enforcement use is permitted only where it does not conflict with the
-  Ethical Use Restrictions above.
+The licensor grants you a license, under any patent claims the licensor can
+license, or becomes able to license, to make, have made, use, sell, offer for
+sale, import and have imported the software, in each case subject to the
+limitations and conditions in this license. This license does not cover any
+patent claims that you cause to be infringed by modifications or additions to
+the software. If you or your company make any written claim that the software
+infringes or contributes to infringement of any patent, your patent license
+for the software granted under these terms ends immediately. If your company
+makes such a claim, your patent license ends immediately for work on behalf of
+your company.
 
 ## Notices
 
@@ -102,7 +57,7 @@ these terms.
 
 If you use the software in violation of these terms, such use is not licensed,
 and your licenses will automatically terminate. If the licensor provides you
-with a notice of your violation, and you cease all violation of these terms no
+with a notice of your violation, and you cease all violation of this license no
 later than 30 days after you receive that notice, your licenses will be
 reinstated retroactively. However, if you violate these terms after such
 reinstatement, any additional violation of these terms will cause your licenses
@@ -121,13 +76,14 @@ The **licensor** is the entity offering these terms, and the **software** is
 the software the licensor makes available under these terms, including any
 portion of it.
 
-**you** refers to the individual or entity agreeing to these terms, including
-any legal entity, sole proprietorship, or other organization that you work for,
-plus all organizations that have control over, are under the control of, or are
-under common control with that organization. **control** means ownership of
-substantially all the assets of an entity, or the power to direct its
-management and policies by vote, contract, or otherwise. Control can be direct
-or indirect.
+**you** refers to the individual or entity agreeing to these terms.
+
+**your company** is any legal entity, sole proprietorship, or other kind of
+organization that you work for, plus all organizations that have control over,
+are under the control of, or are under common control with that organization.
+**control** means ownership of substantially all the assets of an entity, or
+the power to direct its management and policies by vote, contract, or
+otherwise. Control can be direct or indirect.
 
 **your licenses** are all the licenses granted to you for the software under
 these terms.
@@ -135,3 +91,10 @@ these terms.
 **use** means anything you do with the software requiring one of your licenses.
 
 **trademark** means trademarks, service marks, and similar rights.
+
+---
+
+**IMPORTANT:** This software is additionally governed by an Ethical Use
+Addendum. See [LICENSE-ETHICAL-ADDENDUM](LICENSE-ETHICAL-ADDENDUM) for the
+full text. By using this software you agree to both this license and the
+Ethical Use Addendum.
