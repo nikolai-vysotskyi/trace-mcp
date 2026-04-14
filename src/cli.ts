@@ -187,6 +187,99 @@ program
       attachFileLogging(config.logging);
     }
 
+    // --- Lifecycle helpers (shared by proxy & full mode) ---
+    let shuttingDown = false;
+    const makeShutdown = (cleanup?: () => Promise<void>) => {
+      return async (reason?: string) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        logger.info({ reason: reason ?? 'unknown' }, 'Shutting down trace-mcp server');
+        if (cleanup) await cleanup().catch(() => {});
+        process.exit(0);
+      };
+    };
+    const attachLifecycleHandlers = (shutdown: (reason?: string) => Promise<void>, idleTimeoutMs: number) => {
+      process.on('SIGINT', () => shutdown('SIGINT'));
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
+      // Orphan prevention: detect parent death via stdin closure.
+      // When the MCP client (Claude Code, Cursor, etc.) exits, it closes our stdin pipe.
+      // Without this, the process stays alive forever as a zombie.
+      process.stdin.on('end', () => shutdown('stdin-end'));
+      process.stdin.on('close', () => shutdown('stdin-close'));
+      // Safety net: idle timeout — self-terminate if no MCP messages arrive.
+      let idleTimer: ReturnType<typeof setTimeout> | null = null;
+      const resetIdleTimer = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => shutdown('idle-timeout'), idleTimeoutMs);
+        idleTimer.unref();
+      };
+      resetIdleTimer();
+      process.stdin.on('data', resetIdleTimer);
+    };
+
+    const IDLE_TIMEOUT_MS = (config as Record<string, unknown>).idle_timeout_minutes
+      ? (config as Record<string, unknown>).idle_timeout_minutes as number * 60_000
+      : 5 * 60_000;
+
+    // ── Proxy mode: lightweight stdio↔HTTP bridge when daemon is running ──
+    // Instead of opening DB/Store/plugins (~120MB), forward MCP messages to daemon (~5MB).
+    // Each stdio session becomes a thin pipe: stdin → HTTP POST → daemon → stdout.
+    const daemonActive = await isDaemonRunning(DEFAULT_DAEMON_PORT);
+    if (daemonActive) {
+      const daemonUrl = `http://127.0.0.1:${DEFAULT_DAEMON_PORT}`;
+      const mcpUrl = `${daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
+      const clientId = randomUUID();
+
+      // Ensure project is registered with daemon (it may have started before this project was opened)
+      await fetch(`${daemonUrl}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ root: projectRoot }),
+      }).catch(() => { /* daemon will 409 if already registered — fine */ });
+
+      // Register this stdio client for the menu bar app
+      fetch(`${daemonUrl}/api/clients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: clientId, project: projectRoot, transport: 'stdio-proxy' }),
+      }).catch(() => {});
+
+      const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+      const httpTransport = new StreamableHTTPClientTransport(new URL(mcpUrl));
+      const stdioTransport = new StdioServerTransport();
+
+      // Bridge: stdio → HTTP (client sends MCP request via stdin → forward to daemon)
+      stdioTransport.onmessage = (msg) => {
+        httpTransport.send(msg).catch((err) => {
+          logger.error({ error: err }, 'Proxy: failed to forward message to daemon');
+        });
+      };
+      // Bridge: HTTP → stdio (daemon sends MCP response → forward to client via stdout)
+      httpTransport.onmessage = (msg) => {
+        stdioTransport.send(msg).catch((err) => {
+          logger.error({ error: err }, 'Proxy: failed to forward message to client');
+        });
+      };
+
+      httpTransport.onerror = (err) => {
+        logger.error({ error: err }, 'Proxy: HTTP transport error');
+      };
+
+      const shutdown = makeShutdown(async () => {
+        await fetch(`${daemonUrl}/api/clients?id=${clientId}`, { method: 'DELETE' }).catch(() => {});
+        await httpTransport.close().catch(() => {});
+        await stdioTransport.close().catch(() => {});
+      });
+      attachLifecycleHandlers(shutdown, IDLE_TIMEOUT_MS);
+
+      await httpTransport.start();
+      await stdioTransport.start();
+
+      logger.info({ projectRoot, mode: 'proxy', daemonUrl, idleTimeoutMs: IDLE_TIMEOUT_MS }, 'trace-mcp proxy started (forwarding to daemon)');
+      return; // Proxy mode — done, event loop keeps us alive via stdin
+    }
+
+    // ── Full mode: standalone server with own DB, indexer, watcher ──
     const dbPath = resolveDbPath(indexRoot);
     ensureGlobalDirs();
 
@@ -198,110 +291,76 @@ program
 
     const progress = new ProgressState(db);
 
-    // Check if daemon is running — if so, skip indexer + watcher (daemon owns indexing)
-    const daemonActive = await isDaemonRunning(DEFAULT_DAEMON_PORT);
-
     let watcher: FileWatcher | null = null;
 
-    // Register this stdio client with the daemon so it appears in the menu bar app
-    let daemonClientId: string | null = null;
-    if (daemonActive) {
-      logger.info({ port: DEFAULT_DAEMON_PORT }, 'Daemon detected — skipping indexer, serving MCP over existing DB');
-      daemonClientId = randomUUID();
-      fetch(`http://127.0.0.1:${DEFAULT_DAEMON_PORT}/api/clients`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: daemonClientId, project: projectRoot, transport: 'stdio' }),
-      }).catch(() => { /* best-effort */ });
-    } else {
-      const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress);
-      watcher = new FileWatcher();
+    const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress);
+    watcher = new FileWatcher();
 
-      const aiProvider = createAIProvider(config);
-      const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
-      const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
-      const embeddingPipeline = vectorStore && embeddingService
-        ? new EmbeddingPipeline(store, embeddingService, vectorStore, progress)
-        : null;
+    const aiProvider = createAIProvider(config);
+    const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
+    const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
+    const embeddingPipeline = vectorStore && embeddingService
+      ? new EmbeddingPipeline(store, embeddingService, vectorStore, progress)
+      : null;
 
-      const inferenceCache = config.ai?.enabled ? new InferenceCache(store.db) : null;
-      inferenceCache?.evictExpired();
-      const summarizationPipeline = config.ai?.enabled && config.ai.summarize_on_index !== false
-        ? new SummarizationPipeline(
-            store,
-            new CachedInferenceService(aiProvider.fastInference(), inferenceCache!, config.ai.fast_model ?? 'fast'),
-            projectRoot,
-            {
-              batchSize: config.ai.summarize_batch_size ?? 20,
-              kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
-              concurrency: config.ai.concurrency ?? 1,
-            },
-            progress,
-          )
-        : null;
+    const inferenceCache = config.ai?.enabled ? new InferenceCache(store.db) : null;
+    inferenceCache?.evictExpired();
+    const summarizationPipeline = config.ai?.enabled && config.ai.summarize_on_index !== false
+      ? new SummarizationPipeline(
+          store,
+          new CachedInferenceService(aiProvider.fastInference(), inferenceCache!, config.ai.fast_model ?? 'fast'),
+          projectRoot,
+          {
+            batchSize: config.ai.summarize_batch_size ?? 20,
+            kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
+            concurrency: config.ai.concurrency ?? 1,
+          },
+          progress,
+        )
+      : null;
 
-      const runEmbeddings = () => {
-        if (!embeddingPipeline) return;
-        embeddingPipeline.indexUnembedded().catch((err) => {
-          logger.error({ error: err }, 'Embedding indexing failed');
-        });
-      };
-
-      const runSummarization = () => {
-        if (!summarizationPipeline) return;
-        summarizationPipeline.summarizeUnsummarized().catch((err) => {
-          logger.error({ error: err }, 'Summarization failed');
-        });
-      };
-
-      // Initial index runs in background so the server starts immediately
-      pipeline.indexAll().then(() => {
-        runSummarization();
-        runEmbeddings();
-        runSubprojectAutoSync(projectRoot, config);
-      }).catch((err) => {
-        logger.error({ error: err }, 'Initial indexing failed');
+    const runEmbeddings = () => {
+      if (!embeddingPipeline) return;
+      embeddingPipeline.indexUnembedded().catch((err) => {
+        logger.error({ error: err }, 'Embedding indexing failed');
       });
+    };
 
-      await watcher.start(projectRoot, config, async (paths) => {
-        await pipeline.indexFiles(paths);
-        runSummarization();
-        runEmbeddings();
-      }, undefined, async (deleted) => {
-        pipeline.deleteFiles(deleted);
+    const runSummarization = () => {
+      if (!summarizationPipeline) return;
+      summarizationPipeline.summarizeUnsummarized().catch((err) => {
+        logger.error({ error: err }, 'Summarization failed');
       });
-    }
+    };
 
-    const shutdown = async () => {
+    // Initial index runs in background so the server starts immediately
+    pipeline.indexAll().then(() => {
+      runSummarization();
+      runEmbeddings();
+      runSubprojectAutoSync(projectRoot, config);
+    }).catch((err) => {
+      logger.error({ error: err }, 'Initial indexing failed');
+    });
+
+    await watcher.start(projectRoot, config, async (paths) => {
+      await pipeline.indexFiles(paths);
+      runSummarization();
+      runEmbeddings();
+    }, undefined, async (deleted) => {
+      pipeline.deleteFiles(deleted);
+    });
+
+    const shutdown = makeShutdown(async () => {
       clearServerPid(db);
       if (watcher) await watcher.stop();
-      if (daemonClientId) {
-        await fetch(`http://127.0.0.1:${DEFAULT_DAEMON_PORT}/api/clients?id=${daemonClientId}`, { method: 'DELETE' }).catch(() => {});
-      }
-      process.exit(0);
-    };
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+      try { db.close(); } catch { /* best-effort */ }
+    });
+    attachLifecycleHandlers(shutdown, IDLE_TIMEOUT_MS);
 
     const server = createServer(store, registry, config, projectRoot, progress);
     const transport = new StdioServerTransport();
 
-    // After MCP initialize handshake, report client name to daemon
-    if (daemonActive && daemonClientId) {
-      const cid = daemonClientId;
-      server.server.oninitialized = () => {
-        const clientVersion = server.server.getClientVersion();
-        if (clientVersion?.name) {
-          fetch(`http://127.0.0.1:${DEFAULT_DAEMON_PORT}/api/clients`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: cid, name: clientVersion.name }),
-          }).catch(() => { /* best-effort */ });
-        }
-      };
-    }
-
-    logger.info({ projectRoot, indexRoot, dbPath, daemonActive }, 'Starting trace-mcp MCP server...');
+    logger.info({ projectRoot, indexRoot, dbPath, mode: 'full', idleTimeoutMs: IDLE_TIMEOUT_MS }, 'Starting trace-mcp MCP server...');
     await server.connect(transport);
   });
 
