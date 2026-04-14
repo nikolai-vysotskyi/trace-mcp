@@ -1037,6 +1037,7 @@ const preTicks = Math.min(300, Math.max(50, Math.ceil(Math.log(N + 1) * 40)));
 let ticksDone = 0;
 const TICK_BATCH = N > 5000 ? 5 : 15;
 let layoutDone = false;
+let frameRequested = false;
 (function tickBatch() {
   const t0 = performance.now();
   while (ticksDone < preTicks && performance.now() - t0 < 12) { sim.tick(); ticksDone++; }
@@ -1178,7 +1179,6 @@ let highlightSet = null;
 let hoveredNode = null;
 let searchQ = '';
 let animating = false;
-let frameRequested = false;
 
 function scheduleFrame() {
   if (!frameRequested) { frameRequested = true; requestAnimationFrame(frame); }
