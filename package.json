@@ -22,7 +22,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "license": "ELv2",
+  "license": "Elastic-2.0",
   "author": "Nikolai Vysotskyi",
   "repository": {
     "type": "git",
