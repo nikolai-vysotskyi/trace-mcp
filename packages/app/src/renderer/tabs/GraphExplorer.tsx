@@ -53,13 +53,13 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
   const setMaxNodes = (v: string) => onSettingsChange({ maxNodes: v });
   const isScopedView = scope.trim() !== '' && scope.trim() !== 'project';
 
-  // Federation repos for quick scope switching — filtered to this project
-  const [fedRepos, setFedRepos] = useState<Array<{ name: string; repoRoot: string; services: number; endpoints: number }>>([]);
+  // Subproject repos for quick scope switching — filtered to this project
+  const [subprojects, setSubprojects] = useState<Array<{ name: string; repoRoot: string; services: number; endpoints: number }>>([]);
   useEffect(() => {
     const params = new URLSearchParams({ project: root });
-    fetch(`${BASE}/api/projects/federation?${params}`)
+    fetch(`${BASE}/api/projects/subprojects?${params}`)
       .then((r) => r.ok ? r.json() : { repos: [] })
-      .then((data) => setFedRepos(data.repos ?? []))
+      .then((data) => setSubprojects(data.repos ?? []))
       .catch(() => {});
   }, [root]);
 
@@ -95,35 +95,22 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
     if (curSymbolKinds.trim()) params.set('symbolKinds', curSymbolKinds.trim());
     if (curMaxNodes.trim()) params.set(granularity === 'symbol' ? 'maxNodes' : 'maxFiles', curMaxNodes.trim());
 
-    // Single request: fetch HTML and extract stats from response headers
-    // (avoids running buildGraphData twice — was the #1 server-side bottleneck)
     const theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     params.set('embedded', 'true');
     params.set('theme', theme);
 
     try {
-      const htmlRes = await fetch(`${BASE}/api/projects/graph/html?${params}`);
-      if (!htmlRes.ok) {
-        const errText = await htmlRes.text();
-        throw new Error(errText || htmlRes.statusText);
-      }
-      // Extract stats from headers
-      const nNodes = parseInt(htmlRes.headers.get('X-Graph-Nodes') || '0', 10);
-      const nEdges = parseInt(htmlRes.headers.get('X-Graph-Edges') || '0', 10);
-      const nCommunities = parseInt(htmlRes.headers.get('X-Graph-Communities') || '0', 10);
-      setStats({ nodes: nNodes, edges: nEdges, communities: nCommunities });
-
-      // Create blob URL from HTML response to load into iframe
-      const blob = new Blob([await htmlRes.arrayBuffer()], { type: 'text/html' });
-      const blobUrl = URL.createObjectURL(blob);
+      // Load graph HTML directly in iframe (not via blob: URL) so the
+      // localhost origin allows external script loading (D3 CDN).
+      // Stats are sent back from the iframe via postMessage.
       iframeReady.current = false;
-      setGraphUrl(blobUrl);
+      setGraphUrl(`${BASE}/api/projects/graph/html?${params}`);
     } catch (e: any) {
       setError(e.message);
       setGraphUrl(null);
       setStats(null);
+      setLoading(false);
     }
-    setLoading(false);
   }, [root, depth, granularity, layout, hideIsolated]);
 
   // Expose focusFile to parent — waits for iframe load if needed
@@ -141,6 +128,17 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
   useImperativeHandle(ref, () => ({
     focusFile: sendFocusToIframe,
   }), [sendFocusToIframe]);
+
+  // Listen for stats postMessage from graph iframe
+  useEffect(() => {
+    const handler = (evt: MessageEvent) => {
+      if (evt.data?.type === 'graphStats') {
+        setStats({ nodes: evt.data.nodes, edges: evt.data.edges, communities: evt.data.communities });
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   // Reload graph on system theme change
   useEffect(() => {
@@ -179,6 +177,7 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
 
   // Flush pending focus when iframe finishes loading
   const onIframeLoad = useCallback(() => {
+    setLoading(false);
     // Small delay so the graph JS initializes (d3 simulation, event listeners)
     setTimeout(() => {
       iframeReady.current = true;
@@ -265,7 +264,7 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
       </div>
 
       {/* Service quick-scope chips */}
-      {fedRepos.length > 0 && (
+      {subprojects.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap shrink-0">
           <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Services:</span>
           <button
@@ -278,14 +277,14 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
             }}>
             All
           </button>
-          {fedRepos.map((repo) => (
+          {subprojects.map((repo) => (
             <button key={repo.name}
-              onClick={() => setScope(`federation:${repo.name}`)}
+              onClick={() => setScope(`subproject:${repo.name}`)}
               title={`${repo.repoRoot}\n${repo.endpoints} endpoints`}
               className="text-[10px] px-1.5 py-0.5 rounded-full cursor-pointer transition-colors"
               style={{
-                background: scope === `federation:${repo.name}` ? 'var(--accent, #007aff)' : 'var(--bg-secondary)',
-                color: scope === `federation:${repo.name}` ? '#fff' : 'var(--text-secondary)',
+                background: scope === `subproject:${repo.name}` ? 'var(--accent, #007aff)' : 'var(--bg-secondary)',
+                color: scope === `subproject:${repo.name}` ? '#fff' : 'var(--text-secondary)',
                 border: '1px solid var(--border)',
               }}>
               {repo.name}

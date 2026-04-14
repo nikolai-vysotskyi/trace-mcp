@@ -292,11 +292,11 @@ export const CONFIG_SCHEMA: SectionDef[] = [
     key: 'topology',
     label: 'Cross-repo Topology',
     icon: '🔗',
-    description: 'Federation and cross-service dependency tracking',
+    description: 'Subprojects and cross-service dependency tracking',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },
       { key: 'auto_detect', label: 'Auto-detect repos', type: 'boolean', defaultValue: true, showIf: 'enabled' },
-      { key: 'auto_federation', label: 'Auto-federation', type: 'boolean', defaultValue: true, showIf: 'enabled' },
+      { key: 'auto_discover', label: 'Auto-discover subprojects', type: 'boolean', defaultValue: true, showIf: 'enabled' },
       { key: 'repos', label: 'Extra repo paths', type: 'array', placeholder: '/path/to/repo', showIf: 'enabled' },
       { key: 'contract_globs', label: 'Contract globs', type: 'array', placeholder: '**/*.proto, **/*.graphql', showIf: 'enabled' },
     ],

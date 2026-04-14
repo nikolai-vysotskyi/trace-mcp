@@ -32,6 +32,7 @@ import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
 import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { installGuiApp, isAppInstalled } from './install-app.js';
+import { ensureDaemonRunning } from './daemon.js';
 
 export const initCommand = new Command('init')
   .description('One-time global setup: configure MCP clients, install hooks, set up CLAUDE.md')
@@ -361,6 +362,16 @@ export const initCommand = new Command('init')
         p.log.warn(`Could not install app: ${appResult.error}`);
         steps.push({ target: '~/Applications/trace-mcp.app', action: 'skipped', detail: appResult.error ?? 'Installation failed' });
       }
+    }
+
+    // --- Ensure daemon is running ---
+    if (!opts.dryRun && process.platform === 'darwin') {
+      try {
+        const started = await ensureDaemonRunning();
+        if (started) {
+          steps.push({ target: 'daemon', action: 'updated', detail: 'Daemon started (launchd)' });
+        }
+      } catch { /* best effort — don't block init */ }
     }
 
     // --- Report ---

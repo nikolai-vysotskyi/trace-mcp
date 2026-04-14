@@ -78,7 +78,7 @@ function priorityBadge(priority: string) {
   );
 }
 
-interface FederationRepo {
+interface SubprojectInfo {
   name: string;
   repoRoot: string;
   services: number;
@@ -97,7 +97,7 @@ export function ProjectOverview({ root, onNavigateToService }: {
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [coverage, setCoverage] = useState<CoverageReport | null>(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
-  const [services, setServices] = useState<FederationRepo[]>([]);
+  const [services, setServices] = useState<SubprojectInfo[]>([]);
   const [addingService, setAddingService] = useState(false);
 
   const fetchStats = useCallback(async () => {
@@ -119,7 +119,7 @@ export function ProjectOverview({ root, onNavigateToService }: {
   const fetchServices = useCallback(async () => {
     try {
       const params = new URLSearchParams({ project: root });
-      const res = await fetch(`${BASE}/api/projects/federation?${params}`);
+      const res = await fetch(`${BASE}/api/projects/subprojects?${params}`);
       if (res.ok) {
         const data = await res.json();
         setServices(data.repos ?? []);
@@ -140,7 +140,7 @@ export function ProjectOverview({ root, onNavigateToService }: {
     try {
       const folder = await api.selectFolder();
       if (!folder) return;
-      await fetch(`${BASE}/api/projects/federation`, {
+      await fetch(`${BASE}/api/projects/subprojects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoPath: folder, project: root }),
@@ -152,7 +152,7 @@ export function ProjectOverview({ root, onNavigateToService }: {
 
   const handleRemoveService = async (name: string) => {
     try {
-      const res = await fetch(`${BASE}/api/projects/federation?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+      const res = await fetch(`${BASE}/api/projects/subprojects?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
       if (res.ok) setServices((prev) => prev.filter((s) => s.name !== name));
     } catch { /* optional */ }
   };

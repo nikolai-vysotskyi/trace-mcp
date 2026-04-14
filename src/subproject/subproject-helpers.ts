@@ -1,7 +1,7 @@
 /**
- * Federation impact helpers — risk computation, breaking-change detection,
+ * Subproject impact helpers — risk computation, breaking-change detection,
  * and per-repo symbol resolution.
- * Extracted from FederationManager to reduce class complexity.
+ * Extracted from SubprojectManager to reduce class complexity.
  */
 import Database from 'better-sqlite3';
 import type { TopologyStore } from '../topology/topology-db.js';

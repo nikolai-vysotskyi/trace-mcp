@@ -178,7 +178,7 @@ const TopologyConfigSchema = z.object({
   enabled: z.boolean().default(true),
   repos: z.array(z.string()).default([]),
   auto_detect: z.boolean().default(true),
-  auto_federation: z.boolean().default(true),
+  auto_discover: z.boolean().default(true),
   contract_globs: z.array(z.string()).optional(),
 }).optional();
 

@@ -1,9 +1,9 @@
-export { FederationManager } from './manager.js';
+export { SubprojectManager } from './manager.js';
 export { scanClientCalls } from './scanner.js';
 export type {
-  FederationAddResult,
-  FederationSyncResult,
+  SubprojectAddResult,
+  SubprojectSyncResult,
   CrossRepoImpactResult,
-  FederationGraphResult,
+  SubprojectGraphResult,
 } from './manager.js';
 export type { ScannedClientCall } from './scanner.js';

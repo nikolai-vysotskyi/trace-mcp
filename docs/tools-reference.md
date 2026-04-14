@@ -71,9 +71,9 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). More thorough than `get_untested_exports` |
 | `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
 
-## Topology & federation
+## Topology & subprojects
 
-Enabled by default (`topology.enabled: true`). See [Configuration](configuration.md#topology--federation).
+Enabled by default (`topology.enabled: true`). See [Configuration](configuration.md#topology--subprojects).
 
 ### Service topology
 
@@ -85,17 +85,17 @@ Enabled by default (`topology.enabled: true`). See [Configuration](configuration
 | `get_service_deps` | External service dependencies: outgoing and incoming |
 | `get_contract_drift` | Mismatches between API spec and implementation |
 
-### Federation
+### Subprojects
 
-A federation (= service) is an individual microservice or service root within a project. A project auto-detects its federations on indexing, or you can add external ones manually.
+A subproject is any working repository that is part of your project's ecosystem: microservices, frontends, backends, shared libraries, CLI tools, etc. A project auto-detects its subprojects on indexing, or you can add external ones manually.
 
 | Tool | What it does |
 |---|---|
-| `get_federation_graph` | All federations, cross-federation connections, and stats |
-| `get_federation_impact` | Cross-federation impact: find all client code that would break if an endpoint changes. Resolves to symbol level when per-federation indexes exist |
-| `get_federation_clients` | Find all client calls across federations that call a specific endpoint |
-| `federation_add_repo` | Add a federation, bound to the current project (or specify `project` param for external federations) |
-| `federation_sync` | Re-scan all federations: contracts, client calls, and re-link |
+| `get_subproject_graph` | All subprojects, cross-subproject connections, and stats |
+| `get_subproject_impact` | Cross-subproject impact: find all client code that would break if an endpoint changes. Resolves to symbol level when per-subproject indexes exist |
+| `get_subproject_clients` | Find all client calls across subprojects that call a specific endpoint |
+| `subproject_add_repo` | Add a subproject, bound to the current project (or specify `project` param for external subprojects) |
+| `subproject_sync` | Re-scan all subprojects: contracts, client calls, and re-link |
 
 ## Decision memory
 
@@ -180,9 +180,9 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "What NestJS modules does this depend on?" | `get_module_graph` — full dependency tree |
 | "Find untested code" | `get_untested_symbols` — deep analysis with "unreached"/"imported_not_called" classification. Or lighter: `get_untested_exports` + `self_audit` |
 | "Explain this complex service" | `explain_symbol` — AI-generated explanation with context |
-| "What repos call this endpoint?" | `get_federation_clients("/api/users")` — all client calls across repos |
-| "Will this API change break anything?" | `get_federation_impact` — cross-repo impact with symbol resolution |
-| "Show me all service connections" | `get_federation_graph` — repos, edges, stats |
+| "What repos call this endpoint?" | `get_subproject_clients("/api/users")` — all client calls across repos |
+| "Will this API change break anything?" | `get_subproject_impact` — cross-repo impact with symbol resolution |
+| "Show me all service connections" | `get_subproject_graph` — repos, edges, stats |
 | "Starting work on a task" | `get_task_context("fix the login bug")` — full execution context adapted to bugfix/feature/refactor |
 | "PR impact report" | `trace-mcp ci-report --base main --head HEAD` — blast radius, risk score, test gaps |
 | "How much am I spending on tokens?" | `get_session_analytics` — full breakdown by tool, file, model |

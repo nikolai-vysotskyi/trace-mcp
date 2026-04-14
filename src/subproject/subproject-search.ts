@@ -1,6 +1,6 @@
 /**
- * Federated search — cross-repo BM25 FTS across all registered repos.
- * Extracted from FederationManager to reduce class complexity.
+ * Subproject search — cross-repo BM25 FTS across all registered subprojects.
+ * Extracted from SubprojectManager to reduce class complexity.
  */
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
@@ -8,7 +8,7 @@ import type { TopologyStore } from '../topology/topology-db.js';
 import { searchFts } from '../db/fts.js';
 import { logger } from '../logger.js';
 
-export interface FederatedSearchItem {
+export interface SubprojectSearchItem {
   repo: string;
   symbol_id: string;
   name: string;
@@ -20,25 +20,25 @@ export interface FederatedSearchItem {
   score: number;
 }
 
-export interface FederatedSearchResult {
-  items: FederatedSearchItem[];
+export interface SubprojectSearchResult {
+  items: SubprojectSearchItem[];
   total: number;
   repos_searched: number;
 }
 
 /**
- * Search across all federated repos. Opens each per-repo DB readonly,
+ * Search across all subprojects. Opens each per-repo DB readonly,
  * runs FTS search, normalizes scores within the repo, and merges results.
  */
-export function federatedSearch(
+export function subprojectSearch(
   topoStore: TopologyStore,
   query: string,
   filters?: { kind?: string; language?: string; filePattern?: string },
   limit = 20,
   excludeRoot?: string,
-): FederatedSearchResult {
-  const repos = topoStore.getAllFederatedRepos();
-  const allItems: FederatedSearchItem[] = [];
+): SubprojectSearchResult {
+  const repos = topoStore.getAllSubprojects();
+  const allItems: SubprojectSearchItem[] = [];
   let reposSearched = 0;
 
   // Normalize excludeRoot for comparison (strip trailing slash)
@@ -97,7 +97,7 @@ export function federatedSearch(
         });
       }
     } catch (e) {
-      logger.warn({ repo: repo.name, error: e }, 'Failed to search federated repo');
+      logger.warn({ repo: repo.name, error: e }, 'Failed to search subproject repo');
     } finally {
       db?.close();
     }

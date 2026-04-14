@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [Unreleased]
+
+### Breaking Changes
+
+* **rename: "federation" → "subproject"** — The concept formerly called "federation" is now "subproject". A subproject is any working repository that is part of your project's ecosystem: microservices, frontends, backends, shared libraries, CLI tools, etc. This affects:
+  - CLI: `trace-mcp federation` → `trace-mcp subproject` (alias `sub`)
+  - MCP tools: `get_federation_graph` → `get_subproject_graph`, `get_federation_impact` → `get_subproject_impact`, `federation_add_repo` → `subproject_add_repo`, `federation_sync` → `subproject_sync`, `get_federation_clients` → `get_subproject_clients`, `visualize_federation` → `visualize_subproject_topology`
+  - Config: `topology.auto_federation` → `topology.auto_discover`
+  - REST API: `/api/projects/federation` → `/api/projects/subprojects`
+  - DB table: `federated_repos` → `subprojects` (auto-migrated)
+  - Source directory: `src/federation/` → `src/subproject/`
+
 ## [1.20.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.20.0...v1.20.1) (2026-04-13)
 
 

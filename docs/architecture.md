@@ -40,7 +40,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
 ┌──────────────────────────────────────────┐
-│  Federation (auto, post-index)          │
+│  Subprojects (auto, post-index)         │
 │  Topology DB (~/.trace-mcp/topology.db) │
 │  Auto-detect services per project       │
 │  Contracts · Endpoints · Client calls   │
@@ -60,7 +60,7 @@ All state is centralized in `~/.trace-mcp/`:
 ~/.trace-mcp/
   .config.json              # global config + per-project settings
   registry.json             # project registry (all added projects)
-  topology.db               # cross-service topology + federation graph
+  topology.db               # cross-service topology + subproject graph
   analytics.db              # session analytics (cross-project)
   savings.json              # cumulative token savings tracker
   index/
@@ -71,13 +71,13 @@ All state is centralized in `~/.trace-mcp/`:
 Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself.
 
 The **topology database** (`topology.db`) is shared across all projects. It stores:
-- **Federations** (= services) — bound to projects, auto-detected or manually added
+- **Subprojects** (= services) — bound to projects, auto-detected or manually added
 - **API contracts** — parsed OpenAPI, GraphQL SDL, Protobuf specs
 - **Endpoints** — normalized API endpoints extracted from contracts
 - **Client calls** — HTTP/gRPC/GraphQL calls discovered in code
-- **Cross-federation edges** — links between client calls and endpoints
+- **Cross-subproject edges** — links between client calls and endpoints
 
-Each federation is bound to a project via `project_root`. A project can have multiple federations (frontend, backend, etc.), and the same federation can belong to multiple projects.
+Each subproject is bound to a project via `project_root`. A project can have multiple subprojects (frontend, backend, etc.), and the same subproject can belong to multiple projects.
 
 The **decision memory database** (`decisions.db`) is also shared across all projects. It stores:
 - **Decisions** — architectural decisions, tech choices, bug root causes, preferences, etc., each with temporal validity (`valid_from`/`valid_until`) and optional code linkage (`symbol_id`, `file_path`, `service_name`)
@@ -179,13 +179,13 @@ Three module resolvers handle cross-file imports:
 src/
 ├── ai/                     # Embeddings, reranker, summarization, vector store, inference caching
 ├── db/                     # SQLite schema, store, FTS5
-├── federation/             # Federation layer (federations = services, bound to projects)
-│   ├── manager.ts          #   Add/remove/sync federations, auto-federate projects, cross-federation impact
+├── subproject/             # Subproject layer (subprojects = services, bound to projects)
+│   ├── manager.ts          #   Add/remove/sync subprojects, auto-discover projects, cross-subproject impact
 │   └── scanner.ts          #   HTTP/gRPC/GraphQL client call scanner
 ├── topology/               # Cross-service topology layer
-│   ├── topology-db.ts      #   Topology + federation SQLite store (federations bound to projects via project_root)
+│   ├── topology-db.ts      #   Topology + subproject SQLite store (subprojects bound to projects via project_root)
 │   ├── contract-parser.ts  #   OpenAPI, GraphQL SDL, Protobuf parsers
-│   └── service-detector.ts #   Federation discovery (Docker Compose, flat/grouped workspace, monolith fallback)
+│   └── service-detector.ts #   Subproject discovery (Docker Compose, flat/grouped workspace, monolith fallback)
 ├── indexer/
 │   ├── plugins/
 │   │   ├── language/       # 68 languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
@@ -233,7 +233,7 @@ src/
 ├── config.ts               # Cosmiconfig + Zod validation
 ├── errors.ts               # Error types (neverthrow)
 ├── logger.ts               # Pino logger setup
-├── cli.ts                  # Commander CLI (serve, serve-http, index, federation, analytics)
+├── cli.ts                  # Commander CLI (serve, serve-http, index, subproject, analytics)
 ├── cli-analytics.ts        # Analytics CLI subcommands (sync, report, optimize, benchmark, coverage, savings, trends)
-└── cli-federation.ts       # Federation CLI subcommands (add --project, list --project, etc.)
+└── cli-subproject.ts       # Subproject CLI subcommands (add --project, list --project, etc.)
 ```

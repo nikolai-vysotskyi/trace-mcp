@@ -66,7 +66,7 @@ export interface CrossServiceEdgeRow {
   metadata: string | null;
 }
 
-export interface FederatedRepoRow {
+export interface SubprojectRow {
   id: number;
   name: string;
   repo_root: string;
@@ -179,10 +179,10 @@ CREATE TABLE IF NOT EXISTS topology_meta (
 );
 
 -- ════════════════════════════════════════════════════════════════
--- FEDERATION — explicit multi-repo graph linking
+-- SUBPROJECTS — explicit multi-repo graph linking
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS federated_repos (
+CREATE TABLE IF NOT EXISTS subprojects (
     id              INTEGER PRIMARY KEY,
     name            TEXT NOT NULL,
     repo_root       TEXT NOT NULL,
@@ -194,12 +194,12 @@ CREATE TABLE IF NOT EXISTS federated_repos (
     metadata        TEXT,
     UNIQUE(repo_root, project_root)
 );
-CREATE INDEX IF NOT EXISTS idx_federated_repos_project ON federated_repos(project_root);
+CREATE INDEX IF NOT EXISTS idx_subprojects_project ON subprojects(project_root);
 
 CREATE TABLE IF NOT EXISTS client_calls (
     id              INTEGER PRIMARY KEY,
-    source_repo_id  INTEGER NOT NULL REFERENCES federated_repos(id) ON DELETE CASCADE,
-    target_repo_id  INTEGER REFERENCES federated_repos(id),
+    source_repo_id  INTEGER NOT NULL REFERENCES subprojects(id) ON DELETE CASCADE,
+    target_repo_id  INTEGER REFERENCES subprojects(id),
     file_path       TEXT NOT NULL,
     line            INTEGER,
     call_type       TEXT NOT NULL,
@@ -299,17 +299,29 @@ export class TopologyStore {
    * CREATE INDEX references columns that don't exist in old tables.
    */
   private preMigrate(): void {
-    const hasTable = this.db
+    // Migrate legacy federated_repos → subprojects
+    const hasLegacy = this.db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='federated_repos'")
       .get();
+    if (hasLegacy) {
+      this.db.exec(`
+        DELETE FROM client_calls;
+        DROP TABLE IF EXISTS federated_repos;
+      `);
+      logger.info('Pre-migration: dropped legacy federated_repos table (replaced by subprojects)');
+    }
+
+    const hasTable = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='subprojects'")
+      .get();
     if (hasTable) {
-      const fedCols = (this.db.pragma('table_info(federated_repos)') as Array<{ name: string }>).map((c) => c.name);
-      if (!fedCols.includes('project_root')) {
+      const cols = (this.db.pragma('table_info(subprojects)') as Array<{ name: string }>).map((c) => c.name);
+      if (!cols.includes('project_root')) {
         this.db.exec(`
           DELETE FROM client_calls;
-          DROP TABLE IF EXISTS federated_repos;
+          DROP TABLE IF EXISTS subprojects;
         `);
-        logger.info('Pre-migration: dropped legacy federated_repos missing project_root column');
+        logger.info('Pre-migration: dropped legacy subprojects missing project_root column');
       }
     }
   }
@@ -320,15 +332,15 @@ export class TopologyStore {
       this.db.exec('ALTER TABLE services ADD COLUMN project_group TEXT');
     }
 
-    // Migration: federated_repos now requires project_root column.
-    // Drop all old federation data and let auto-sync rebuild it correctly.
-    const fedCols = (this.db.pragma('table_info(federated_repos)') as Array<{ name: string }>).map((c) => c.name);
-    if (!fedCols.includes('project_root')) {
+    // Migration: subprojects table requires project_root column.
+    // Drop all old data and let auto-sync rebuild it correctly.
+    const subCols = (this.db.pragma('table_info(subprojects)') as Array<{ name: string }>).map((c) => c.name);
+    if (!subCols.includes('project_root')) {
       this.db.exec(`
         DELETE FROM client_calls;
-        DELETE FROM federated_repos;
-        DROP TABLE IF EXISTS federated_repos;
-        CREATE TABLE IF NOT EXISTS federated_repos (
+        DELETE FROM subprojects;
+        DROP TABLE IF EXISTS subprojects;
+        CREATE TABLE IF NOT EXISTS subprojects (
           id              INTEGER PRIMARY KEY,
           name            TEXT NOT NULL,
           repo_root       TEXT NOT NULL,
@@ -340,9 +352,9 @@ export class TopologyStore {
           metadata        TEXT,
           UNIQUE(repo_root, project_root)
         );
-        CREATE INDEX IF NOT EXISTS idx_federated_repos_project ON federated_repos(project_root);
+        CREATE INDEX IF NOT EXISTS idx_subprojects_project ON subprojects(project_root);
       `);
-      logger.info('Migration: rebuilt federated_repos with project_root column, old federation data cleared');
+      logger.info('Migration: rebuilt subprojects with project_root column, old data cleared');
     }
   }
 
@@ -578,9 +590,9 @@ export class TopologyStore {
     };
   }
 
-  // ── Federated Repos ───────────────────────────────────────────────
+  // ── Subprojects ───────────────────────────────────────────────
 
-  upsertFederatedRepo(input: {
+  upsertSubproject(input: {
     name: string;
     repoRoot: string;
     projectRoot: string;
@@ -589,11 +601,11 @@ export class TopologyStore {
     metadata?: Record<string, unknown>;
   }): number {
     const existing = this.db.prepare(
-      'SELECT id FROM federated_repos WHERE repo_root = ? AND project_root = ?',
+      'SELECT id FROM subprojects WHERE repo_root = ? AND project_root = ?',
     ).get(input.repoRoot, input.projectRoot) as { id: number } | undefined;
     if (existing) {
       this.db.prepare(`
-        UPDATE federated_repos SET name = ?, db_path = COALESCE(?, db_path),
+        UPDATE subprojects SET name = ?, db_path = COALESCE(?, db_path),
           contract_paths = COALESCE(?, contract_paths),
           metadata = COALESCE(?, metadata), last_synced = datetime('now')
         WHERE id = ?
@@ -604,7 +616,7 @@ export class TopologyStore {
     }
 
     return this.db.prepare(`
-      INSERT INTO federated_repos (name, repo_root, project_root, db_path, contract_paths, metadata, added_at)
+      INSERT INTO subprojects (name, repo_root, project_root, db_path, contract_paths, metadata, added_at)
       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
     `).run(input.name, input.repoRoot, input.projectRoot, input.dbPath ?? null,
       input.contractPaths ? JSON.stringify(input.contractPaths) : null,
@@ -612,41 +624,41 @@ export class TopologyStore {
     ).lastInsertRowid as number;
   }
 
-  getFederatedRepo(nameOrRoot: string, projectRoot?: string): FederatedRepoRow | undefined {
+  getSubproject(nameOrRoot: string, projectRoot?: string): SubprojectRow | undefined {
     if (projectRoot) {
-      return (this.db.prepare('SELECT * FROM federated_repos WHERE (name = ? OR repo_root = ?) AND project_root = ?')
-        .get(nameOrRoot, nameOrRoot, projectRoot) as FederatedRepoRow | undefined);
+      return (this.db.prepare('SELECT * FROM subprojects WHERE (name = ? OR repo_root = ?) AND project_root = ?')
+        .get(nameOrRoot, nameOrRoot, projectRoot) as SubprojectRow | undefined);
     }
-    return (this.db.prepare('SELECT * FROM federated_repos WHERE name = ? OR repo_root = ?')
-      .get(nameOrRoot, nameOrRoot) as FederatedRepoRow | undefined);
+    return (this.db.prepare('SELECT * FROM subprojects WHERE name = ? OR repo_root = ?')
+      .get(nameOrRoot, nameOrRoot) as SubprojectRow | undefined);
   }
 
-  getFederatedReposByProject(projectRoot: string): FederatedRepoRow[] {
-    return this.db.prepare('SELECT * FROM federated_repos WHERE project_root = ? ORDER BY name').all(projectRoot) as FederatedRepoRow[];
+  getSubprojectsByProject(projectRoot: string): SubprojectRow[] {
+    return this.db.prepare('SELECT * FROM subprojects WHERE project_root = ? ORDER BY name').all(projectRoot) as SubprojectRow[];
   }
 
-  getAllFederatedRepos(): FederatedRepoRow[] {
-    return this.db.prepare('SELECT * FROM federated_repos ORDER BY name').all() as FederatedRepoRow[];
+  getAllSubprojects(): SubprojectRow[] {
+    return this.db.prepare('SELECT * FROM subprojects ORDER BY name').all() as SubprojectRow[];
   }
 
-  deleteFederatedRepo(id: number): void {
-    this.db.prepare('DELETE FROM federated_repos WHERE id = ?').run(id);
+  deleteSubproject(id: number): void {
+    this.db.prepare('DELETE FROM subprojects WHERE id = ?').run(id);
   }
 
   /**
    * Remove all topology data associated with a repo root:
-   * federated_repos (+ cascading client_calls), services (+ cascading contracts,
+   * subprojects (+ cascading client_calls), services (+ cascading contracts,
    * endpoints, events, edges, snapshots).
    * Returns counts of deleted rows for logging.
    */
-  removeByRepoRoot(repoRoot: string): { federatedRepos: number; services: number } {
-    const result = { federatedRepos: 0, services: 0 };
+  removeByRepoRoot(repoRoot: string): { subprojects: number; services: number } {
+    const result = { subprojects: 0, services: 0 };
 
-    // Delete federated repo entry (cascades to client_calls)
-    const fedRepo = this.getFederatedRepo(repoRoot);
-    if (fedRepo) {
-      this.deleteFederatedRepo(fedRepo.id);
-      result.federatedRepos = 1;
+    // Delete subproject entry (cascades to client_calls)
+    const sub = this.getSubproject(repoRoot);
+    if (sub) {
+      this.deleteSubproject(sub.id);
+      result.subprojects = 1;
     }
 
     // Delete all services rooted in this path (cascades to contracts, endpoints, events, edges, snapshots)
@@ -663,8 +675,8 @@ export class TopologyStore {
     return result;
   }
 
-  updateFederatedRepoSyncTime(id: number): void {
-    this.db.prepare("UPDATE federated_repos SET last_synced = datetime('now') WHERE id = ?").run(id);
+  updateSubprojectSyncTime(id: number): void {
+    this.db.prepare("UPDATE subprojects SET last_synced = datetime('now') WHERE id = ?").run(id);
   }
 
   // ── Client Calls ──────────────────────────────────────────────────
@@ -704,7 +716,7 @@ export class TopologyStore {
   getClientCallsByEndpoint(endpointId: number): Array<ClientCallRow & { source_repo_name: string }> {
     return this.db.prepare(`
       SELECT cc.*, fr.name as source_repo_name FROM client_calls cc
-      JOIN federated_repos fr ON cc.source_repo_id = fr.id
+      JOIN subprojects sp ON cc.source_repo_id = sp.id
       WHERE cc.matched_endpoint_id = ?
       ORDER BY cc.confidence DESC
     `).all(endpointId) as Array<ClientCallRow & { source_repo_name: string }>;
@@ -717,8 +729,8 @@ export class TopologyStore {
 
   getClientCallsForTarget(targetRepoId: number): Array<ClientCallRow & { source_repo_name: string }> {
     return this.db.prepare(`
-      SELECT cc.*, fr.name as source_repo_name FROM client_calls cc
-      JOIN federated_repos fr ON cc.source_repo_id = fr.id
+      SELECT cc.*, sp.name as source_repo_name FROM client_calls cc
+      JOIN subprojects sp ON cc.source_repo_id = sp.id
       WHERE cc.target_repo_id = ?
       ORDER BY cc.confidence DESC
     `).all(targetRepoId) as Array<ClientCallRow & { source_repo_name: string }>;
@@ -746,7 +758,7 @@ export class TopologyStore {
           const svc = this.db.prepare('SELECT repo_root FROM services WHERE id = ?')
             .get(match.service_id) as { repo_root: string } | undefined;
           const targetRepo = svc
-            ? this.db.prepare('SELECT id FROM federated_repos WHERE repo_root = ?')
+            ? this.db.prepare('SELECT id FROM subprojects WHERE repo_root = ?')
                 .get(svc.repo_root) as { id: number } | undefined
             : undefined;
 
@@ -793,9 +805,9 @@ export class TopologyStore {
     ).all(serviceId, limit) as ContractSnapshotRow[];
   }
 
-  // ── Federation Stats ─────────────────────────────────────────────
+  // ── Subproject Stats ─────────────────────────────────────────────
 
-  getFederationStats(): {
+  getSubprojectStats(): {
     repos: number;
     clientCalls: number;
     linkedCalls: number;
@@ -803,7 +815,7 @@ export class TopologyStore {
   } {
     const cnt = (sql: string) => (this.db.prepare(sql).get() as { cnt: number }).cnt;
     return {
-      repos: cnt('SELECT COUNT(*) as cnt FROM federated_repos'),
+      repos: cnt('SELECT COUNT(*) as cnt FROM subprojects'),
       clientCalls: cnt('SELECT COUNT(*) as cnt FROM client_calls'),
       linkedCalls: cnt('SELECT COUNT(*) as cnt FROM client_calls WHERE matched_endpoint_id IS NOT NULL'),
       crossRepoEdges: cnt('SELECT COUNT(*) as cnt FROM cross_service_edges'),

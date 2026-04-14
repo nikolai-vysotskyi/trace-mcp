@@ -1,8 +1,11 @@
 /**
- * Federation Manager — orchestrates multi-repo graph federation.
+ * Subproject Manager — orchestrates multi-repo graph linking.
+ *
+ * A subproject is any working repository that is part of your project's ecosystem:
+ * microservices, frontends, backends, shared libraries, CLI tools, etc.
  *
  * Responsibilities:
- * - Add/remove repos to the federation
+ * - Add/remove repos as subprojects
  * - Parse contracts and register services/endpoints
  * - Scan repos for client calls and link to endpoints
  * - Cross-repo impact analysis at symbol level
@@ -10,7 +13,7 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
-import { TopologyStore, type FederatedRepoRow, type ClientCallRow } from '../topology/topology-db.js';
+import { TopologyStore, type SubprojectRow, type ClientCallRow } from '../topology/topology-db.js';
 import { parseContracts, extractRoutesFromDb } from '../topology/contract-parser.js';
 import { detectServices } from '../topology/service-detector.js';
 import { scanClientCalls } from './scanner.js';
@@ -18,20 +21,20 @@ import { diffEndpoints, type EndpointSchemaDiff } from './schema-diff.js';
 import { getDbPath } from '../global.js';
 import { Store } from '../db/store.js';
 import { logger } from '../logger.js';
-import { federatedSearch as _federatedSearch } from './federated-search.js';
-import type { FederatedSearchResult } from './federated-search.js';
+import { subprojectSearch as _subprojectSearch } from './subproject-search.js';
+import type { SubprojectSearchResult } from './subproject-search.js';
 import {
   computeRiskLevel,
   upgradeRiskIfBreaking,
   detectBreakingChanges as _detectBreakingChanges,
   resolveSymbolsAtLocation,
-} from './federation-helpers.js';
+} from './subproject-helpers.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-interface FederationAddResult {
+interface SubprojectAddResult {
   repo: string;
   name: string;
   services: number;
@@ -41,7 +44,7 @@ interface FederationAddResult {
   linkedCalls: number;
 }
 
-interface FederationSyncResult {
+interface SubprojectSyncResult {
   repos: number;
   servicesUpdated: number;
   contractsUpdated: number;
@@ -73,7 +76,7 @@ export interface CrossRepoImpactResult {
   breakingChanges?: import('./schema-diff.js').EndpointSchemaDiff[];
 }
 
-export interface FederationGraphResult {
+export interface SubprojectGraphResult {
   repos: Array<{
     name: string;
     repoRoot: string;
@@ -98,27 +101,27 @@ export interface FederationGraphResult {
 }
 
 // Re-export so existing callers importing from manager.ts still work
-export type { FederatedSearchItem, FederatedSearchResult } from './federated-search.js';
+export type { SubprojectSearchItem, SubprojectSearchResult } from './subproject-search.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // MANAGER
 // ════════════════════════════════════════════════════════════════════════
 
-export class FederationManager {
+export class SubprojectManager {
   constructor(private topoStore: TopologyStore) {}
 
   /**
-   * Add a repo to the federation bound to a specific project.
+   * Add a repo as a subproject bound to a specific project.
    * Discovers services, parses contracts, scans for client calls, and links to known endpoints.
    *
-   * @param repoRoot - path to the repo/service being added as a federation member
-   * @param projectRoot - the project this federation belongs to
+   * @param repoRoot - path to the repo being added as a subproject
+   * @param projectRoot - the project this subproject belongs to
    * @param opts - optional name, contract paths
    */
   add(repoRoot: string, projectRoot: string, opts?: {
     name?: string;
     contractPaths?: string[];
-  }): FederationAddResult {
+  }): SubprojectAddResult {
     const absRoot = path.resolve(repoRoot);
     const absProjectRoot = path.resolve(projectRoot);
     if (!fs.existsSync(absRoot)) {
@@ -128,7 +131,7 @@ export class FederationManager {
     const repoName = opts?.name ?? path.basename(absRoot);
     const dbPath = getDbPath(absRoot);
 
-    const repoId = this.topoStore.upsertFederatedRepo({
+    const repoId = this.topoStore.upsertSubproject({
       name: repoName,
       repoRoot: absRoot,
       projectRoot: absProjectRoot,
@@ -152,7 +155,7 @@ export class FederationManager {
 
     const clientCalls = this.scanAndLinkClientCalls(repoId, absRoot);
 
-    this.topoStore.updateFederatedRepoSyncTime(repoId);
+    this.topoStore.updateSubprojectSyncTime(repoId);
 
     const stats = this.topoStore.getTopologyStats();
     return {
@@ -167,27 +170,27 @@ export class FederationManager {
   }
 
   /**
-   * Auto-federate a project: detect services within the project root
-   * and register each as a federation member bound to this project.
+   * Auto-discover subprojects: detect services within the project root
+   * and register each as a subproject bound to this project.
    * Unlike add(), this doesn't add the project itself — it discovers
    * sub-services (from docker-compose, workspace structure, or root markers).
    */
-  autoFederateProject(projectRoot: string, opts?: {
+  autoDiscoverSubprojects(projectRoot: string, opts?: {
     contractPaths?: string[];
-  }): { services: FederationAddResult[] } {
+  }): { services: SubprojectAddResult[] } {
     const absProjectRoot = path.resolve(projectRoot);
     if (!fs.existsSync(absProjectRoot)) {
       throw new Error(`Project path does not exist: ${absProjectRoot}`);
     }
 
     const detected = detectServices([absProjectRoot]);
-    const results: FederationAddResult[] = [];
+    const results: SubprojectAddResult[] = [];
 
     for (const svc of detected) {
       const repoName = svc.name;
       const dbPath = getDbPath(svc.repoRoot);
 
-      const repoId = this.topoStore.upsertFederatedRepo({
+      const repoId = this.topoStore.upsertSubproject({
         name: repoName,
         repoRoot: svc.repoRoot,
         projectRoot: absProjectRoot,
@@ -207,7 +210,7 @@ export class FederationManager {
       this.registerContracts(serviceId, svc.repoRoot, svc.repoRoot, opts?.contractPaths);
 
       const clientCalls = this.scanAndLinkClientCalls(repoId, svc.repoRoot);
-      this.topoStore.updateFederatedRepoSyncTime(repoId);
+      this.topoStore.updateSubprojectSyncTime(repoId);
 
       const stats = this.topoStore.getTopologyStats();
       results.push({
@@ -225,10 +228,10 @@ export class FederationManager {
   }
 
   /**
-   * Remove a repo from the federation.
+   * Remove a subproject.
    */
   remove(nameOrRoot: string): boolean {
-    const repo = this.topoStore.getFederatedRepo(nameOrRoot);
+    const repo = this.topoStore.getSubproject(nameOrRoot);
     if (!repo) return false;
 
     // Remove client calls
@@ -243,22 +246,22 @@ export class FederationManager {
     }
 
     // Remove repo
-    this.topoStore.deleteFederatedRepo(repo.id);
+    this.topoStore.deleteSubproject(repo.id);
     return true;
   }
 
   /**
-   * List federated repos with stats, optionally filtered by project.
+   * List subprojects with stats, optionally filtered by project.
    */
-  list(projectRoot?: string): FederationGraphResult {
+  list(projectRoot?: string): SubprojectGraphResult {
     const repos = projectRoot
-      ? this.topoStore.getFederatedReposByProject(projectRoot)
-      : this.topoStore.getAllFederatedRepos();
+      ? this.topoStore.getSubprojectsByProject(projectRoot)
+      : this.topoStore.getAllSubprojects();
     const allServices = this.topoStore.getAllServices();
     const allEndpoints = this.topoStore.getAllEndpoints();
-    const fedStats = this.topoStore.getFederationStats();
+    const subStats = this.topoStore.getSubprojectStats();
 
-    const repoResults: FederationGraphResult['repos'] = repos.map((repo) => {
+    const repoResults: SubprojectGraphResult['repos'] = repos.map((repo) => {
       const services = allServices.filter((s) => s.repo_root === repo.repo_root);
       const serviceIds = new Set(services.map((s) => s.id));
       const endpoints = allEndpoints.filter((e) => serviceIds.has(e.service_id));
@@ -314,22 +317,22 @@ export class FederationManager {
         callTypes: [...e.callTypes],
       })),
       stats: {
-        repos: fedStats.repos,
+        repos: subStats.repos,
         totalEndpoints: allEndpoints.length,
-        totalClientCalls: fedStats.clientCalls,
-        linkedCallsPercent: fedStats.clientCalls > 0
-          ? Math.round((fedStats.linkedCalls / fedStats.clientCalls) * 100)
+        totalClientCalls: subStats.clientCalls,
+        linkedCallsPercent: subStats.clientCalls > 0
+          ? Math.round((subStats.linkedCalls / subStats.clientCalls) * 100)
           : 0,
       },
     };
   }
 
   /**
-   * Re-sync all federated repos: re-scan contracts and client calls,
+   * Re-sync all subprojects: re-scan contracts and client calls,
    * re-link everything.
    */
-  sync(): FederationSyncResult {
-    const repos = this.topoStore.getAllFederatedRepos();
+  sync(): SubprojectSyncResult {
+    const repos = this.topoStore.getAllSubprojects();
     let servicesUpdated = 0;
     let contractsUpdated = 0;
     let endpointsUpdated = 0;
@@ -337,7 +340,7 @@ export class FederationManager {
 
     for (const repo of repos) {
       if (!fs.existsSync(repo.repo_root)) {
-        logger.warn({ repo: repo.name, root: repo.repo_root }, 'Federated repo no longer exists, skipping');
+        logger.warn({ repo: repo.name, root: repo.repo_root }, 'Subproject repo no longer exists, skipping');
         continue;
       }
 
@@ -368,7 +371,7 @@ export class FederationManager {
       const calls = this.scanAndLinkClientCalls(repo.id, repo.repo_root);
       clientCallsScanned += calls.scanned;
 
-      this.topoStore.updateFederatedRepoSyncTime(repo.id);
+      this.topoStore.updateSubprojectSyncTime(repo.id);
     }
 
     return {
@@ -384,7 +387,7 @@ export class FederationManager {
 
   /**
    * Cross-repo impact analysis: given an endpoint (or path pattern),
-   * find all client code across federated repos that would break.
+   * find all client code across subprojects that would break.
    * If per-repo DBs exist, resolves down to symbol level.
    */
   getImpact(opts: {
@@ -404,7 +407,7 @@ export class FederationManager {
       const baseRisk = computeRiskLevel(uniqueRepos.size, clients.length);
 
       const svc = this.topoStore.getAllServices().find((s) => s.id === ep.service_id);
-      const repo = svc ? this.topoStore.getFederatedRepo(svc.repo_root) : undefined;
+      const repo = svc ? this.topoStore.getSubproject(svc.repo_root) : undefined;
       const breakingChanges = this.detectBreakingChanges(ep);
       const riskLevel = upgradeRiskIfBreaking(baseRisk, breakingChanges);
 
@@ -553,7 +556,7 @@ export class FederationManager {
 
     const clients: CrossRepoImpactResult['clients'] = [];
     for (const [repoName, calls] of byRepo) {
-      const repo = this.topoStore.getFederatedRepo(repoName);
+      const repo = this.topoStore.getSubproject(repoName);
       for (const call of calls) {
         const symbols = repo?.db_path && fs.existsSync(repo.db_path)
           ? resolveSymbolsAtLocation(repo.db_path, call.file_path, call.line)
@@ -575,21 +578,21 @@ export class FederationManager {
     return _detectBreakingChanges(this.topoStore, ep);
   }
 
-  /** Search across all federated repos — delegates to federated-search module. */
-  federatedSearch(
+  /** Search across all subprojects — delegates to subproject-search module. */
+  subprojectSearch(
     query: string,
     filters?: { kind?: string; language?: string; filePattern?: string },
     limit = 20,
     excludeRoot?: string,
-  ): FederatedSearchResult {
-    return _federatedSearch(this.topoStore, query, filters, limit, excludeRoot);
+  ): SubprojectSearchResult {
+    return _subprojectSearch(this.topoStore, query, filters, limit, excludeRoot);
   }
 
   /**
    * Build cross-service edges from linked client calls.
    */
   private buildCrossServiceEdges(): void {
-    const repos = this.topoStore.getAllFederatedRepos();
+    const repos = this.topoStore.getAllSubprojects();
     const services = this.topoStore.getAllServices();
 
     for (const repo of repos) {

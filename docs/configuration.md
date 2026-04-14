@@ -312,19 +312,19 @@ The `get_call_graph` tool reports a `resolution_tiers` summary showing the distr
 
 ---
 
-## Topology & federation
+## Topology & subprojects
 
-trace-mcp includes a **topology layer** for cross-service analysis and a **federation layer** for linking dependency graphs across federations within a project.
+trace-mcp includes a **topology layer** for cross-service analysis and a **subproject layer** for linking dependency graphs across subprojects within a project.
 
-A **federation** (= service) is an individual microservice or service root within a project — frontend, backend, parser, etc. Each directory with its own root marker (`package.json`, `composer.json`, `go.mod`, etc.) is a federation. A project contains one or more federations; the project itself is not a federation. Federations can live inside the project directory (e.g. `project/frontend/`) or outside it (added manually via `federation add`).
+A **subproject** is any working repository that is part of your project's ecosystem: microservices, frontends, backends, shared libraries, CLI tools, etc. Each directory with its own root marker (`package.json`, `composer.json`, `go.mod`, etc.) is a subproject. A project contains one or more subprojects; the project itself is not a subproject. Subprojects can live inside the project directory (e.g. `project/frontend/`) or outside it (added manually via `subproject add`).
 
-Both topology and federation are **enabled by default** — every indexed project auto-detects its federations.
+Both topology and subprojects are **enabled by default** — every indexed project auto-detects its subprojects.
 
 ```jsonc
 {
   "topology": {
-    "enabled": true,           // default: true — enable topology + federation tools
-    "auto_federation": true,   // default: true — auto-detect and register federations on indexing
+    "enabled": true,           // default: true — enable topology + subproject tools
+    "auto_discover": true,     // default: true — auto-detect and register subprojects on indexing
     "auto_detect": true,       // default: true — auto-detect from Docker Compose
     "repos": [],               // additional repo paths to include in topology
     "contract_globs": []       // explicit contract file patterns (e.g. ["api/openapi.yaml"])
@@ -334,34 +334,34 @@ Both topology and federation are **enabled by default** — every indexed projec
 
 | Option | Default | Description |
 |---|---|---|
-| `topology.enabled` | `true` | Enable topology and federation tools |
-| `topology.auto_federation` | `true` | Auto-detect and register federations on every index |
-| `topology.auto_detect` | `true` | Auto-detect federations from Docker Compose / workspace structure |
+| `topology.enabled` | `true` | Enable topology and subproject tools |
+| `topology.auto_discover` | `true` | Auto-detect and register subprojects on every index |
+| `topology.auto_detect` | `true` | Auto-detect subprojects from Docker Compose / workspace structure |
 | `topology.repos` | `[]` | Additional repo paths to include in the topology graph |
 | `topology.contract_globs` | — | Explicit paths to API contract files (relative to project root) |
 
-### Auto-federation flow
+### Auto-discovery flow
 
 When a project is indexed (via `serve`, `serve-http`, or `index`):
 
-1. **Federations are detected** within the project root using these strategies (in order):
+1. **Subprojects are detected** within the project root using these strategies (in order):
    - **Docker Compose** — parses `docker-compose.yml` / `compose.yml` for service definitions
    - **Flat workspace** — scans first-level subdirectories for root markers (`package.json`, `composer.json`, `go.mod`, etc.). Requires ≥2 found (e.g. `project/frontend/` + `project/backend/`)
    - **Grouped workspace** — scans two levels deep (`root/group/service/`). Requires ≥2 found (e.g. `project/org/service-a/` + `project/org/service-b/`)
-   - **Monolith fallback** — treats the project root as a single federation
-2. Each detected federation is **registered** and bound to the project in `~/.trace-mcp/topology.db`
-3. **API contracts** are parsed (OpenAPI, GraphQL SDL, Protobuf) for each federation
+   - **Monolith fallback** — treats the project root as a single subproject
+2. Each detected subproject is **registered** and bound to the project in `~/.trace-mcp/topology.db`
+3. **API contracts** are parsed (OpenAPI, GraphQL SDL, Protobuf) for each subproject
 4. Code is **scanned** for HTTP/gRPC client calls (fetch, axios, Http::, requests, etc.)
-5. Client calls are **matched** to known endpoints from other federations
-6. **Cross-federation edges** are created
+5. Client calls are **matched** to known endpoints from other subprojects
+6. **Cross-subproject edges** are created
 
-This is non-blocking — the server starts immediately, and federation syncs in the background.
+This is non-blocking — the server starts immediately, and subproject syncs in the background.
 
 ### Disabling
 
-To disable auto-federation while keeping topology tools:
+To disable auto-discovery while keeping topology tools:
 ```jsonc
-{ "topology": { "enabled": true, "auto_federation": false } }
+{ "topology": { "enabled": true, "auto_discover": false } }
 ```
 
 To disable everything:
@@ -369,15 +369,15 @@ To disable everything:
 { "topology": { "enabled": false } }
 ```
 
-### Federation CLI
+### Subproject CLI
 
 ```bash
-# Add a federation (can be inside or outside project dir)
-trace-mcp federation add --repo=../service-b --project=. [--contract=openapi.yaml] [--name=my-service]
-trace-mcp federation remove <name-or-path>
-trace-mcp federation list [--project=.] [--json]
-trace-mcp federation sync
-trace-mcp federation impact --endpoint=/api/users [--method=GET] [--service=user-svc]
+# Add a subproject (can be inside or outside project dir)
+trace-mcp subproject add --repo=../service-b --project=. [--contract=openapi.yaml] [--name=my-service]
+trace-mcp subproject remove <name-or-path>
+trace-mcp subproject list [--project=.] [--json]
+trace-mcp subproject sync
+trace-mcp subproject impact --endpoint=/api/users [--method=GET] [--service=user-svc]
 ```
 
 ### Supported contract formats
@@ -432,18 +432,18 @@ trace-mcp serve-http           # Start HTTP/SSE server (default: 127.0.0.1:3741)
 trace-mcp index <dir>          # Index a project directory
   -f, --force                  # Force reindex all files
 
-# Federation (= services bound to projects)
-trace-mcp federation add       # Add a federation to a project
-  --repo <path>                # Federation/service path (required)
-  --project <path>             # Project this federation belongs to (required)
+# Subprojects (= services bound to projects)
+trace-mcp subproject add       # Add a subproject to a project
+  --repo <path>                # Subproject/service path (required)
+  --project <path>             # Project this subproject belongs to (required)
   --contract <paths...>        # Explicit contract file paths
   --name <name>                # Display name
-trace-mcp federation remove <name-or-path>   # Remove a federation
-trace-mcp federation list                    # List federations
+trace-mcp subproject remove <name-or-path>   # Remove a subproject
+trace-mcp subproject list                    # List subprojects
   --project <path>             # Filter to a specific project
   --json                       # Output as JSON
-trace-mcp federation sync                    # Re-scan all federations
-trace-mcp federation impact                  # Cross-federation impact analysis
+trace-mcp subproject sync                    # Re-scan all subprojects
+trace-mcp subproject impact                  # Cross-subproject impact analysis
   --endpoint <path>            # Endpoint path pattern
   --method <method>            # HTTP method filter
   --service <name>             # Service name filter

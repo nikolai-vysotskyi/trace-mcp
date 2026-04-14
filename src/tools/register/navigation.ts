@@ -14,7 +14,7 @@ import { searchText } from '../navigation/search-text.js';
 import { fallbackSearch, fallbackOutline } from '../navigation/zero-index.js';
 import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../shared/confidence.js';
-import { FederationManager } from '../../federation/manager.js';
+import { SubprojectManager } from '../../subproject/manager.js';
 import { decisionsForImpact, decisionsForTask } from '../../memory/enrichment.js';
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
@@ -161,24 +161,24 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         }
       }
 
-      // Federation layer: search across all federated repos when topology is enabled
+      // Subproject layer: search across all subprojects when topology is enabled
       if (ctx.topoStore) {
         try {
-          const fedRepos = ctx.topoStore.getAllFederatedRepos();
-          if (fedRepos.length > 0) {
-            const manager = new FederationManager(ctx.topoStore);
-            const fedResult = manager.federatedSearch(
+          const subprojects = ctx.topoStore.getAllSubprojects();
+          if (subprojects.length > 0) {
+            const manager = new SubprojectManager(ctx.topoStore);
+            const subResult = manager.subprojectSearch(
               query,
               { kind, language, filePattern: file_pattern },
               limit ?? 20,
               projectRoot,
             );
-            if (fedResult.items.length > 0) {
-              response.federated_results = fedResult.items;
-              response.federated_repos_searched = fedResult.repos_searched;
+            if (subResult.items.length > 0) {
+              response.subproject_results = subResult.items;
+              response.subproject_repos_searched = subResult.repos_searched;
             }
           }
-        } catch { /* federation search is best-effort */ }
+        } catch { /* subproject search is best-effort */ }
       }
 
       return { content: [{ type: 'text', text: jh('search', response) }] };

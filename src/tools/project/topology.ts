@@ -12,7 +12,7 @@ import { notFound, validationError } from '../../errors.js';
 import { TopologyStore, type ServiceRow, type EndpointRow, type CrossServiceEdgeRow } from '../../topology/topology-db.js';
 import { detectServices } from '../../topology/service-detector.js';
 import { parseContracts } from '../../topology/contract-parser.js';
-import { diffEndpoints, type EndpointSchemaDiff } from '../../federation/schema-diff.js';
+import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
 import { getDbPath } from '../../global.js';
 import path from 'node:path';
 

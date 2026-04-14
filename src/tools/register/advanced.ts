@@ -5,15 +5,15 @@ import { formatToolError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
 import { getServiceMap, getCrossServiceImpact, getApiContract, getServiceDependencies, getContractDrift } from '../project/topology.js';
-import { getFederationGraph, getFederationImpact, federationAddRepo, federationSync, getFederationClients, getContractVersions } from '../advanced/federation.js';
-import { discoverClaudeSessions, discoverAndFederate } from '../advanced/claude-sessions.js';
+import { getSubprojectGraph, getSubprojectImpact, subprojectAddRepo, subprojectSync, getSubprojectClients, getContractVersions } from '../advanced/subproject.js';
+import { discoverClaudeSessions, discoverAndRegisterSubprojects } from '../advanced/claude-sessions.js';
 import { RuntimeIntelligence } from '../../runtime/lifecycle.js';
 import { getRuntimeProfile, getRuntimeCallGraph, getEndpointAnalytics, getRuntimeDependencies } from '../advanced/runtime.js';
 import { queryByIntent, getDomainMap, getDomainContext, getCrossDomainDependencies } from '../advanced/intent.js';
 import { graphQuery } from '../analysis/graph-query.js';
 import { getDataflow } from '../analysis/dataflow.js';
 import { visualizeGraph, getDependencyDiagram } from '../analysis/visualize.js';
-import { visualizeFederationTopology } from '../analysis/visualize-federation.js';
+import { visualizeSubprojectTopology } from '../analysis/visualize-subproject.js';
 import { searchText } from '../navigation/search-text.js';
 import { predictBugs, detectDrift, getTechDebt, assessChangeRisk, getHealthTrends } from '../analysis/predictive-intelligence.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
@@ -95,71 +95,71 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       },
     );
 
-    // --- Federation Tools (within topology block) ---
+    // --- Subproject Tools (within topology block) ---
 
     server.tool(
-      'get_federation_graph',
-      'Show all federated repositories and their cross-repo connections. Displays repos, endpoints, client calls, and inter-repo dependency edges.',
+      'get_subproject_graph',
+      'Show all subprojects and their cross-repo connections. A subproject is any working repository in your project ecosystem (microservices, frontends, backends, shared libraries, CLI tools, etc.). Displays repos, endpoints, client calls, and inter-repo dependency edges.',
       {},
       async () => {
-        const result = getFederationGraph(topoStore);
+        const result = getSubprojectGraph(topoStore);
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
     );
 
     server.tool(
-      'get_federation_impact',
-      'Cross-repo impact analysis: find all client code across federated repos that would break if an endpoint changes. Resolves down to symbol level when per-repo indexes exist.',
+      'get_subproject_impact',
+      'Cross-repo impact analysis: find all client code across subprojects that would break if an endpoint changes. Resolves down to symbol level when per-repo indexes exist.',
       {
         endpoint: z.string().max(512).optional().describe('Endpoint path pattern (e.g. /api/users)'),
         method: z.string().max(10).optional().describe('HTTP method filter (e.g. GET, POST)'),
         service: z.string().max(256).optional().describe('Service name filter'),
       },
       async ({ endpoint, method, service }) => {
-        const result = getFederationImpact(topoStore, { endpoint, method, service });
+        const result = getSubprojectImpact(topoStore, { endpoint, method, service });
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
     );
 
     server.tool(
-      'federation_add_repo',
-      'Add a repository as a federation member (service) of the current project. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints. The federation is bound to the current project — use `project` to override.',
+      'subproject_add_repo',
+      'Add a repository as a subproject of the current project. A subproject is any working repository in your ecosystem: microservices, frontends, backends, shared libraries, CLI tools. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints.',
       {
         repo_path: z.string().min(1).max(1024).describe('Absolute or relative path to the repository/service'),
         name: z.string().max(256).optional().describe('Display name for the repo (default: directory basename)'),
-        project: z.string().max(1024).optional().describe('Project root this federation belongs to (default: current project)'),
+        project: z.string().max(1024).optional().describe('Project root this subproject belongs to (default: current project)'),
         contract_paths: z.array(z.string().max(512)).optional().describe('Explicit contract file paths relative to repo root'),
       },
       async ({ repo_path, name, project, contract_paths }) => {
         const targetProject = project ?? projectRoot;
-        const result = federationAddRepo(topoStore, { repoPath: repo_path, projectRoot: targetProject, name, contractPaths: contract_paths });
+        const result = subprojectAddRepo(topoStore, { repoPath: repo_path, projectRoot: targetProject, name, contractPaths: contract_paths });
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
     );
 
     server.tool(
-      'federation_sync',
-      'Re-scan all federated repos: re-discover services, re-parse contracts, re-scan client calls, and re-link everything.',
+      'subproject_sync',
+      'Re-scan all subprojects: re-discover services, re-parse contracts, re-scan client calls, and re-link everything.',
       {},
       async () => {
-        const result = federationSync(topoStore);
+        const result = subprojectSync(topoStore);
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
     );
 
     server.tool(
-      'get_federation_clients',
-      'Find all client calls across federated repos that call a specific endpoint. Shows file, line, call type, and confidence.',
+      'get_subproject_clients',
+      'Find all client calls across subprojects that call a specific endpoint. Shows file, line, call type, and confidence.',
       {
         endpoint: z.string().min(1).max(512).describe('Endpoint path to search for (e.g. /api/users)'),
         method: z.string().max(10).optional().describe('HTTP method filter'),
       },
       async ({ endpoint, method }) => {
-        const result = getFederationClients(topoStore, { endpoint, method });
+        const result = getSubprojectClients(topoStore, { endpoint, method });
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
@@ -181,23 +181,23 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'discover_claude_sessions',
-      'Scan ~/.claude/projects for projects Claude Code has touched on this machine, decode each directory name back to its absolute path, and report which ones still exist plus session-file count and last activity. With add_to_federation=true, every existing project is added to the topology federation in one call — useful for spinning up multi-repo intelligence after a fresh clone.',
+      'Scan ~/.claude/projects for projects Claude Code has touched on this machine, decode each directory name back to its absolute path, and report which ones still exist plus session-file count and last activity. With add_as_subprojects=true, every existing project is registered as a subproject in one call — useful for spinning up multi-repo intelligence after a fresh clone.',
       {
         scan_root: z.string().max(1024).optional().describe('Override the scan root (default: ~/.claude/projects)'),
         exclude_current: z.boolean().optional().describe('Exclude the current project from results (default: true)'),
         only_existing: z.boolean().optional().describe('Drop entries whose decoded path no longer exists on disk (default: true)'),
         limit: z.number().int().min(1).max(500).optional().describe('Max sessions to return, most recently active first (default: 50)'),
-        add_to_federation: z.boolean().optional().describe('Add every discovered project to the federation in one shot (default: false)'),
+        add_as_subprojects: z.boolean().optional().describe('Register every discovered project as a subproject in one shot (default: false)'),
       },
-      async ({ scan_root, exclude_current, only_existing, limit, add_to_federation }) => {
+      async ({ scan_root, exclude_current, only_existing, limit, add_as_subprojects }) => {
         const opts = {
           scanRoot: scan_root,
           excludePrefix: exclude_current === false ? undefined : projectRoot,
           onlyExisting: only_existing !== false,
           limit: limit ?? 50,
         };
-        const result = add_to_federation
-          ? discoverAndFederate(topoStore, opts)
+        const result = add_as_subprojects
+          ? discoverAndRegisterSubprojects(topoStore, opts)
           : discoverClaudeSessions(opts);
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
@@ -205,14 +205,14 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
     );
 
     server.tool(
-      'visualize_federation',
-      'Open interactive HTML visualization of the federation topology: services as nodes, API calls as edges, health/risk indicators per service. Node size = endpoint count, color = health (green/yellow/red).',
+      'visualize_subproject_topology',
+      'Open interactive HTML visualization of the subproject topology: services as nodes, API calls as edges, health/risk indicators per service. Node size = endpoint count, color = health (green/yellow/red).',
       {
-        output: z.string().max(512).optional().describe('Output file path (default: /tmp/trace-mcp-federation.html)'),
+        output: z.string().max(512).optional().describe('Output file path (default: /tmp/trace-mcp-subproject-topology.html)'),
         layout: z.enum(['force', 'hierarchical', 'radial']).optional().describe('Graph layout (default force)'),
       },
       async ({ output, layout }) => {
-        const result = visualizeFederationTopology(topoStore, { output, layout });
+        const result = visualizeSubprojectTopology(topoStore, { output, layout });
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
         return { content: [{ type: 'text', text: j(result.value) }] };
       },

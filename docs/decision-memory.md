@@ -84,7 +84,7 @@ Decisions can be linked to:
 
 - **Symbols** — `symbol_id: "src/auth/provider.ts::AuthProvider#class"` — any symbol in the code graph
 - **Files** — `file_path: "src/auth/provider.ts"` — a specific file
-- **Services** — `service_name: "auth-api"` — a service/federation within the project
+- **Services** — `service_name: "auth-api"` — a service/subproject within the project
 
 When linked, decisions automatically surface in code intelligence tools:
 
@@ -116,7 +116,7 @@ query_decisions(include_invalidated=true)       # full history
 
 ## Service scoping
 
-In projects with multiple services (federations), decisions can be scoped to a specific service:
+In projects with multiple services (subprojects), decisions can be scoped to a specific service:
 
 ```
 add_decision(
