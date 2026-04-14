@@ -28,7 +28,7 @@ export class CppLanguagePlugin implements LanguagePlugin {
     priority: 5,
   };
 
-  supportedExtensions = ['.cpp', '.cxx', '.cc', '.hpp', '.hxx', '.hh', '.h++'];
+  supportedExtensions = ['.cpp', '.cxx', '.cc', '.hpp', '.hxx', '.hh', '.h++', '.ino', '.pde'];
 
   async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
