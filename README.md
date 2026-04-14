@@ -704,7 +704,7 @@ The full workflow is in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) �
 
 ## License
 
-[Elastic License 2.0 + Ethical Use Addendum](LICENSE) — free for personal and internal use. See LICENSE for full terms.
+[Elastic License 2.0](LICENSE) + [Ethical Use Addendum](LICENSE-ETHICAL-ADDENDUM) — free for personal and internal use.
 
 ---
 
