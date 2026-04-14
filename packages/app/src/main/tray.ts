@@ -1,6 +1,7 @@
 import path from 'path';
 import { Tray, nativeImage, Menu, BrowserWindow, app, shell, ipcMain, dialog, nativeTheme } from 'electron';
 import { DaemonClient } from './api-client';
+import { ensureDaemon } from './daemon-lifecycle';
 
 const ICON_ACTIVE = path.join(__dirname, '..', '..', 'assets', 'tray-iconTemplate.png');
 const ICON_INACTIVE = path.join(__dirname, '..', '..', 'assets', 'tray-icon-dimTemplate.png');
@@ -13,6 +14,7 @@ let menuWindow: BrowserWindow | null = null;
 const projectWindows = new Map<string, BrowserWindow>(); // root → window
 let healthInterval: ReturnType<typeof setInterval>;
 let daemonReachable = false;
+let daemonStartAttempted = false;
 
 const daemon = new DaemonClient();
 
@@ -277,8 +279,16 @@ async function checkHealth(): Promise<void> {
   try {
     await daemon.health();
     daemonReachable = true;
+    daemonStartAttempted = false; // reset so we can retry if it goes down later
     setTrayIcon(true);
   } catch {
+    // Try to auto-start daemon once when it's unreachable
+    if (!daemonStartAttempted) {
+      daemonStartAttempted = true;
+      try {
+        ensureDaemon();
+      } catch { /* best effort */ }
+    }
     daemonReachable = false;
     setTrayIcon(false);
   }
