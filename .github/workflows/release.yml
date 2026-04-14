@@ -25,7 +25,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag_name }}
         run: |
-          BODY=$(gh release view "$TAG" --json body --jq '.body')
+          BODY=$(gh release view "$TAG" --repo "${{ github.repository }}" --json body --jq '.body')
           FOOTER=$(cat <<'UPGRADE'
 
           ---
@@ -38,7 +38,7 @@ jobs:
           ```
           UPGRADE
           )
-          gh release edit "$TAG" --notes "${BODY}${FOOTER}"
+          gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}"
 
   # GITHUB_TOKEN actions don't trigger pull_request events, so the CI
   # impact-report never fires for release-please PRs.  Run it here instead.
