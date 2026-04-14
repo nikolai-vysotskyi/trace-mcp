@@ -33,4 +33,4 @@ npm test
 
 ## License
 
-All contributions are licensed under the [Elastic License 2.0 with Ethical Use Addendum](LICENSE).
+All contributions are licensed under the [MIT License](LICENSE).

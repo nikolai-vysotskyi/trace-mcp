@@ -26,7 +26,7 @@ by the Maintainer a perpetual, worldwide, non-exclusive, irrevocable,
 royalty-free copyright license to reproduce, prepare derivative works of,
 publicly display, publicly perform, sublicense, and distribute Your
 Contributions and any derivative works thereof, **under any license terms the
-Maintainer chooses**, including but not limited to the Elastic License 2.0,
+Maintainer chooses**, including but not limited to the MIT License,
 commercial licenses, or any future license.
 
 ## 3. Grant of Patent License
