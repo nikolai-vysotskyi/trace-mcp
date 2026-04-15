@@ -2,8 +2,9 @@
  * PHP import resolver — resolves php_imports edges to file-level dependencies.
  *
  * Handles:
- * - PSR-4 resolution via composer.json autoload mappings
+ * - PSR-4 resolution via composer.json autoload mappings (per-workspace)
  * - FQN-based resolution via the symbols table (classes, interfaces, traits, enums)
+ * - Workspace isolation: imports resolve within the same workspace first
  *
  * PHP `use App\Models\User;` → find the file containing the `App\Models\User` class.
  */
@@ -15,42 +16,60 @@ import { logger } from '../../logger.js';
 
 /**
  * Resolve PHP import edges from pendingImports into file→file edges.
- * Uses two strategies:
- * 1. FQN lookup in the symbols table (most reliable — works for any indexed symbol)
- * 2. PSR-4 resolution from composer.json (fallback for symbols not yet indexed)
+ * Workspace-aware: only creates edges within the same workspace to prevent
+ * false connections between independent projects under a common root.
  */
 export function resolvePhpImportEdges(state: PipelineState): void {
   const { store } = state;
   if (state.pendingImports.size === 0) return;
 
-  // Collect all indexed PHP files
+  // Collect all indexed PHP files with their workspace
   const allPhpFiles = store.db.prepare(
-    `SELECT id, path FROM files WHERE language = 'php'`,
-  ).all() as Array<{ id: number; path: string }>;
+    `SELECT id, path, workspace FROM files WHERE language = 'php'`,
+  ).all() as Array<{ id: number; path: string; workspace: string | null }>;
 
   if (allPhpFiles.length === 0) return;
 
-  // Strategy 1: Build FQN → fileId lookup from symbols table
-  const fqnToFile = new Map<string, { id: number; path: string }>();
+  // Build workspace-aware FQN → file lookup
+  // Key: "workspace\0fqn" (or "\0fqn" for files without workspace)
+  const fqnToFile = new Map<string, { id: number; path: string; workspace: string | null }>();
   const fqnRows = store.db.prepare(
-    `SELECT s.fqn, f.id, f.path FROM symbols s
+    `SELECT s.fqn, f.id, f.path, f.workspace FROM symbols s
      JOIN files f ON s.file_id = f.id
      WHERE s.fqn IS NOT NULL AND f.language = 'php'
        AND s.kind IN ('class', 'interface', 'trait', 'enum')`,
-  ).all() as Array<{ fqn: string; id: number; path: string }>;
+  ).all() as Array<{ fqn: string; id: number; path: string; workspace: string | null }>;
 
   for (const row of fqnRows) {
-    fqnToFile.set(row.fqn, { id: row.id, path: row.path });
+    const key = `${row.workspace ?? ''}\0${row.fqn}`;
+    fqnToFile.set(key, { id: row.id, path: row.path, workspace: row.workspace });
   }
 
-  // Strategy 2: Try PSR-4 resolver from composer.json
-  const composerPath = path.join(state.rootPath, 'composer.json');
-  const psr4 = fs.existsSync(composerPath)
-    ? Psr4Resolver.fromComposerJson(composerPath, state.rootPath)
-    : undefined;
+  // Build per-workspace PSR-4 resolvers from composer.json
+  const psr4Resolvers = new Map<string, Psr4Resolver>();
+  const workspacePaths = new Set<string>();
+  for (const f of allPhpFiles) {
+    if (f.workspace) workspacePaths.add(f.workspace);
+  }
 
-  // Build file path → fileId index for PSR-4 fallback
-  const pathToFile = new Map<string, { id: number; path: string }>();
+  for (const wsPath of workspacePaths) {
+    const wsRoot = path.join(state.rootPath, wsPath);
+    const composerPath = path.join(wsRoot, 'composer.json');
+    if (fs.existsSync(composerPath)) {
+      const resolver = Psr4Resolver.fromComposerJson(composerPath, wsRoot);
+      if (resolver) psr4Resolvers.set(wsPath, resolver);
+    }
+  }
+
+  // Also try root-level composer.json for files without workspace
+  const rootComposer = path.join(state.rootPath, 'composer.json');
+  if (fs.existsSync(rootComposer)) {
+    const resolver = Psr4Resolver.fromComposerJson(rootComposer, state.rootPath);
+    if (resolver) psr4Resolvers.set('', resolver);
+  }
+
+  // Build file path → file index
+  const pathToFile = new Map<string, { id: number; path: string; workspace: string | null }>();
   for (const f of allPhpFiles) {
     pathToFile.set(f.path, f);
   }
@@ -72,7 +91,7 @@ export function resolvePhpImportEdges(state: PipelineState): void {
 
   const insertStmt = store.db.prepare(
     `INSERT INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
-     VALUES (?, ?, ?, 1, ?, 0)
+     VALUES (?, ?, ?, 1, ?, ?)
      ON CONFLICT(source_node_id, target_node_id, edge_type_id)
      DO UPDATE SET metadata = excluded.metadata`,
   );
@@ -80,6 +99,12 @@ export function resolvePhpImportEdges(state: PipelineState): void {
   // Collect pending PHP file IDs
   const pendingFileIds = Array.from(state.pendingImports.keys());
   const fileMap = store.getFilesByIds(pendingFileIds);
+
+  // Build fileId → workspace lookup for pending files
+  const fileWorkspace = new Map<number, string | null>();
+  for (const f of allPhpFiles) {
+    fileWorkspace.set(f.id, f.workspace);
+  }
 
   // Pre-load node IDs for pending files
   for (let i = 0; i < pendingFileIds.length; i += CHUNK) {
@@ -98,6 +123,8 @@ export function resolvePhpImportEdges(state: PipelineState): void {
       const sourceNodeId = fileNodeMap.get(fileId);
       if (sourceNodeId == null) continue;
 
+      const sourceWs = fileWorkspace.get(fileId) ?? null;
+
       // Consolidate imports by FQN
       const consolidated = new Map<string, string[]>();
       for (const { from, specifiers } of imports) {
@@ -107,18 +134,21 @@ export function resolvePhpImportEdges(state: PipelineState): void {
       }
 
       for (const [fqn, specifiers] of consolidated) {
-        const target = resolvePhpFqn(fqn, fqnToFile, psr4, pathToFile);
+        const target = resolvePhpFqn(fqn, sourceWs, fqnToFile, psr4Resolvers, pathToFile, state.rootPath);
         if (!target) continue;
 
         const targetNodeId = fileNodeMap.get(target.id);
         if (targetNodeId == null) continue;
         if (sourceNodeId === targetNodeId) continue;
 
+        const isCrossWs = sourceWs !== target.workspace ? 1 : 0;
+
         insertStmt.run(
           sourceNodeId,
           targetNodeId,
           importsEdgeType.id,
           JSON.stringify({ from: fqn, specifiers }),
+          isCrossWs,
         );
         created++;
       }
@@ -131,29 +161,51 @@ export function resolvePhpImportEdges(state: PipelineState): void {
 }
 
 /**
- * Resolve a PHP FQN to a file using multiple strategies:
- * 1. Direct FQN lookup in the symbols table
- * 2. PSR-4 resolution from composer.json
+ * Resolve a PHP FQN to a file, respecting workspace isolation.
+ *
+ * Resolution order:
+ * 1. Same-workspace FQN lookup (symbols table)
+ * 2. Same-workspace PSR-4 resolution (composer.json)
+ * 3. No-workspace FQN lookup (for files outside any workspace)
+ * 4. Root PSR-4 fallback
+ *
+ * Cross-workspace resolution is intentionally skipped to prevent false
+ * connections between independent projects under a common root.
  */
 function resolvePhpFqn(
   fqn: string,
-  fqnIndex: Map<string, { id: number; path: string }>,
-  psr4: Psr4Resolver | undefined,
-  pathIndex: Map<string, { id: number; path: string }>,
-): { id: number; path: string } | null {
+  sourceWorkspace: string | null,
+  fqnIndex: Map<string, { id: number; path: string; workspace: string | null }>,
+  psr4Resolvers: Map<string, Psr4Resolver>,
+  pathIndex: Map<string, { id: number; path: string; workspace: string | null }>,
+  rootPath: string,
+): { id: number; path: string; workspace: string | null } | null {
   if (!fqn) return null;
 
-  // Strategy 1: direct FQN lookup (most reliable)
-  const fromFqn = fqnIndex.get(fqn);
-  if (fromFqn) return fromFqn;
+  const wsKey = sourceWorkspace ?? '';
 
-  // Strategy 2: PSR-4 resolution
+  // 1. Same-workspace FQN lookup
+  const sameWs = fqnIndex.get(`${wsKey}\0${fqn}`);
+  if (sameWs) return sameWs;
+
+  // 2. Same-workspace PSR-4 resolution
+  const psr4 = psr4Resolvers.get(wsKey);
   if (psr4) {
     const resolved = psr4.resolve(fqn);
     if (resolved) {
-      const fromPath = pathIndex.get(resolved);
+      // PSR-4 returns path relative to workspace root — convert to project-relative
+      const projectRelative = sourceWorkspace
+        ? `${sourceWorkspace}/${resolved}`
+        : resolved;
+      const fromPath = pathIndex.get(projectRelative);
       if (fromPath) return fromPath;
     }
+  }
+
+  // 3. No-workspace fallback (for files not assigned to any workspace)
+  if (sourceWorkspace) {
+    const noWs = fqnIndex.get(`\0${fqn}`);
+    if (noWs) return noWs;
   }
 
   return null;
