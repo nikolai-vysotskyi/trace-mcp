@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.23.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.23.0...v1.23.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **app:** remove unused trace-mcp runtime dependency ([7ac57c7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7ac57c7827b1d6358e80072cfeebc55be6c32629))
+
 ## [1.23.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.22.0...v1.23.0) (2026-04-15)
 
 
