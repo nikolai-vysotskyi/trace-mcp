@@ -343,6 +343,9 @@ function findSpecFiles(root: string): Array<{ filePath: string; type: 'openapi' 
  *                    source file path starts with this prefix are included.
  *                    Enables filtering sub-service routes from a monorepo DB.
  */
+// HTTP methods that represent real API endpoints (vs CLI, JOB, TOOL, TEST, etc.)
+const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'ANY']);
+
 export function extractRoutesFromDb(dbPath: string, pathPrefix?: string): ParsedContract | null {
   if (!fs.existsSync(dbPath)) return null;
   try {
@@ -365,6 +368,9 @@ export function extractRoutesFromDb(dbPath: string, pathPrefix?: string): Parsed
           'SELECT method, uri, name FROM routes ORDER BY uri',
         ).all() as Array<{ method: string; uri: string; name: string | null }>;
       }
+
+      // Filter to HTTP routes only — exclude CLI commands, CI jobs, MCP tools, test routes, etc.
+      rows = rows.filter((r) => HTTP_METHODS.has(r.method));
 
       if (rows.length === 0) return null;
 

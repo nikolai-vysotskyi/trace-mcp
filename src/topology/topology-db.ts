@@ -356,6 +356,64 @@ export class TopologyStore {
       `);
       logger.info('Migration: rebuilt subprojects with project_root column, old data cleared');
     }
+
+    // Migration: clean up duplicate framework_routes contracts and non-HTTP endpoints.
+    // Prior to this fix, add()/autoDiscoverSubprojects() appended contracts without
+    // clearing old ones, and extractRoutesFromDb() included CLI/JOB/TOOL/TEST routes.
+    this.runOnce('clean_duplicate_contracts_v1', () => {
+      // For each service, keep only the LATEST framework_routes contract and delete older duplicates.
+      const services = this.db.prepare(
+        `SELECT DISTINCT service_id FROM api_contracts WHERE contract_type = 'framework_routes'`,
+      ).all() as Array<{ service_id: number }>;
+
+      let deletedContracts = 0;
+      let deletedEndpoints = 0;
+
+      for (const { service_id } of services) {
+        // Find the latest contract (highest id) per service
+        const latest = this.db.prepare(
+          `SELECT id FROM api_contracts WHERE service_id = ? AND contract_type = 'framework_routes' ORDER BY id DESC LIMIT 1`,
+        ).get(service_id) as { id: number } | undefined;
+
+        if (!latest) continue;
+
+        // Delete all older framework_routes contracts (cascade deletes their endpoints)
+        const result = this.db.prepare(
+          `DELETE FROM api_contracts WHERE service_id = ? AND contract_type = 'framework_routes' AND id != ?`,
+        ).run(service_id, latest.id);
+        deletedContracts += result.changes;
+
+        // Delete non-HTTP endpoints from the remaining contract
+        const httpMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'ANY'];
+        const placeholders = httpMethods.map(() => '?').join(',');
+        const epResult = this.db.prepare(
+          `DELETE FROM api_endpoints WHERE contract_id = ? AND method IS NOT NULL AND method NOT IN (${placeholders})`,
+        ).run(latest.id, ...httpMethods);
+        deletedEndpoints += epResult.changes;
+      }
+
+      if (deletedContracts > 0 || deletedEndpoints > 0) {
+        logger.info({ deletedContracts, deletedEndpoints }, 'Migration: cleaned duplicate contracts and non-HTTP endpoints');
+      }
+    });
+
+    // Migration: clear stale cross_service_edges that pointed to non-HTTP endpoints.
+    // These were created when services had 230K+ fake endpoints (TEST/TOOL/CLI/JOB routes).
+    // All edges need to be rebuilt from scratch after topology data is cleaned.
+    this.runOnce('rebuild_cross_service_edges_v1', () => {
+      const result = this.db.prepare('DELETE FROM cross_service_edges').run();
+      if (result.changes > 0) {
+        logger.info({ deleted: result.changes }, 'Migration: cleared stale cross-service edges for rebuild');
+      }
+    });
+  }
+
+  /** Run a migration block exactly once, tracked by key in topology_meta. */
+  private runOnce(key: string, fn: () => void): void {
+    const existing = this.db.prepare('SELECT value FROM topology_meta WHERE key = ?').get(key);
+    if (existing) return;
+    fn();
+    this.db.prepare('INSERT OR REPLACE INTO topology_meta (key, value) VALUES (?, ?)').run(key, new Date().toISOString());
   }
 
   close(): void {

@@ -150,6 +150,7 @@ export class SubprojectManager {
         projectGroup: svc.projectGroup,
         metadata: svc.metadata,
       });
+      this.topoStore.deleteContractsByService(serviceId);
       this.registerContracts(serviceId, svc.repoRoot, absRoot, opts?.contractPaths);
     }
 
@@ -207,6 +208,7 @@ export class SubprojectManager {
         projectGroup: svc.projectGroup,
         metadata: svc.metadata,
       });
+      this.topoStore.deleteContractsByService(serviceId);
       this.registerContracts(serviceId, svc.repoRoot, svc.repoRoot, opts?.contractPaths);
 
       const clientCalls = this.scanAndLinkClientCalls(repoId, svc.repoRoot);
