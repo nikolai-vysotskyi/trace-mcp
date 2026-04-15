@@ -62,6 +62,7 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
   scan_security: ['file_pattern', 'rules'],
   check_quality_gates: ['scope'],
   taint_analysis: ['source_symbol_id', 'file_pattern'],
+  export_security_context: ['scope', 'depth'],
   audit_config: [],
 
   // Framework

@@ -41,6 +41,7 @@ import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { daemonCommand } from './cli/daemon.js';
 import { installAppCommand } from './cli/install-app.js';
 import { askCommand } from './cli/ask.js';
+import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH, GLOBAL_CONFIG_PATH, stripJsonComments, DAEMON_LOG_PATH } from './global.js';
 import { getProject, listProjects } from './registry.js';
@@ -1670,5 +1671,6 @@ program.addCommand(visualizeCommand);
 program.addCommand(daemonCommand);
 program.addCommand(installAppCommand);
 program.addCommand(askCommand);
+program.addCommand(exportSecurityContextCommand);
 
 program.parse();

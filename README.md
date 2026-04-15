@@ -228,6 +228,7 @@ trace-mcp benchmark /path/to/project
 - **Call graph & DI tree** — bidirectional call graphs with 4-tier resolution confidence, optional LSP enrichment for compiler-grade accuracy, NestJS dependency injection
 - **ORM model context** — relationships, schema, metadata for 7 ORMs
 - **Dead code & test gap detection** — find untested exports/symbols (with "unreached" vs "imported_not_called" classification), dead code, per-symbol test reach in impact analysis
+- **Security scanning & MCP server analysis** — OWASP Top-10 pattern scanning, taint analysis (source→sink data flow), MCP security context export for [skill-scan](https://github.com/kkdub/skill-scan) enrichment (tool annotations verification, capability classification, sensitive data flows)
 - **Multi-service subprojects** — link graphs across services via API contracts; cross-service impact analysis; service-scoped decisions
 - **AI-powered analysis** — semantic search with zero-config local ONNX embeddings (no API keys needed), plus optional LLM summarization via Ollama/OpenAI
 
