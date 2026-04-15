@@ -796,12 +796,29 @@ export class TopologyStore {
 
   /** Match unlinked client calls to known endpoints. Returns number of newly linked calls. */
   linkClientCallsToEndpoints(): number {
-    // Match by URL pattern similarity
+    // Match by URL pattern similarity, respecting project_group isolation.
+    // fair-front should only match fair-laravel endpoints, not thewed-laravel's.
     const unlinked = this.db.prepare(
       'SELECT * FROM client_calls WHERE matched_endpoint_id IS NULL',
     ).all() as ClientCallRow[];
 
     const endpoints = this.getAllEndpoints();
+    const services = this.getAllServices();
+
+    // Build service_id → project_group lookup
+    const serviceGroup = new Map<number, string | null>();
+    for (const svc of services) {
+      serviceGroup.set(svc.id, svc.project_group ?? null);
+    }
+
+    // Build source_repo_id → project_group lookup (via repo_root → service match)
+    const repoGroup = new Map<number, string | null>();
+    const allRepos = this.getAllSubprojects();
+    for (const repo of allRepos) {
+      const svc = services.find((s) => s.repo_root === repo.repo_root);
+      repoGroup.set(repo.id, svc?.project_group ?? null);
+    }
+
     let linked = 0;
 
     const updateStmt = this.db.prepare(
@@ -810,7 +827,18 @@ export class TopologyStore {
 
     this.db.transaction(() => {
       for (const call of unlinked) {
-        const match = findBestEndpointMatch(call.url_pattern, call.method, endpoints);
+        const sourceGroup = repoGroup.get(call.source_repo_id);
+
+        // Filter endpoints to same project_group when group is known
+        const candidateEndpoints = sourceGroup
+          ? endpoints.filter((ep) => {
+            const epGroup = serviceGroup.get(ep.service_id);
+            // Match if: same group, or either has no group (ungrouped services)
+            return epGroup === sourceGroup || !epGroup || !sourceGroup;
+          })
+          : endpoints;
+
+        const match = findBestEndpointMatch(call.url_pattern, call.method, candidateEndpoints);
         if (match) {
           // Find the repo for this service
           const svc = this.db.prepare('SELECT repo_root FROM services WHERE id = ?')
