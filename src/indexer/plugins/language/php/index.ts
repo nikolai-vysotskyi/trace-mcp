@@ -5,13 +5,14 @@
  * constants, properties, and enum_cases from PHP source files.
  */
 import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
+import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   extractNamespace,
+  extractUseStatements,
   makeSymbolId,
   makeFqn,
   extractSignature,
@@ -59,10 +60,21 @@ export class PhpLanguagePlugin implements LanguagePlugin {
 
       this.walkTopLevel(root, filePath, namespace, symbols);
 
+      // Extract use statements as import edges for PSR-4 resolution
+      const useStatements = extractUseStatements(root);
+      const edges: RawEdge[] = useStatements.map((u) => ({
+        edgeType: 'php_imports',
+        metadata: {
+          from: u.fqn,
+          specifiers: [u.alias ?? u.fqn.split('\\').pop() ?? u.fqn],
+        },
+      }));
+
       return ok({
         language: 'php',
         status: hasError ? 'partial' : 'ok',
         symbols,
+        edges: edges.length > 0 ? edges : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
       });
     } catch (e) {

@@ -271,3 +271,64 @@ export function extractConstantSymbols(
   }
   return symbols;
 }
+
+/**
+ * Extract PHP `use` statements from the program root node.
+ * Returns an array of FQN strings imported by the file.
+ *
+ * Handles:
+ *  - `use App\Models\User;`
+ *  - `use App\Models\User as Alias;`
+ *  - `use App\Contracts\{Searchable, Filterable};`
+ */
+export function extractUseStatements(rootNode: TSNode): { fqn: string; alias?: string }[] {
+  const results: { fqn: string; alias?: string }[] = [];
+
+  for (const node of rootNode.namedChildren) {
+    if (node.type === 'namespace_use_declaration') {
+      // Check for grouped use: use Prefix\{A, B};
+      const group = node.namedChildren.find((c) => c.type === 'namespace_use_group');
+      if (group) {
+        const prefixNode = node.namedChildren.find((c) => c.type === 'namespace_name');
+        const prefix = prefixNode ? prefixNode.text : '';
+
+        for (const clause of group.namedChildren) {
+          if (clause.type === 'namespace_use_group_clause') {
+            const nameNode = clause.namedChildren.find((c) => c.type === 'namespace_name' || c.type === 'name');
+            if (nameNode) {
+              const fqn = prefix ? `${prefix}\\${nameNode.text}` : nameNode.text;
+              const aliasNode = clause.namedChildren.find((c) => c.type === 'namespace_aliasing_clause');
+              const alias = aliasNode?.namedChildren.find((c) => c.type === 'name')?.text;
+              results.push({ fqn, alias });
+            }
+          }
+        }
+      } else {
+        // Simple use: use Foo\Bar\Baz; or use Foo\Bar\Baz as Alias;
+        for (const clause of node.namedChildren) {
+          if (clause.type === 'namespace_use_clause') {
+            const qn = clause.namedChildren.find((c) => c.type === 'qualified_name');
+            if (qn) {
+              const fqn = qn.text;
+              const aliasNode = clause.namedChildren.find((c) => c.type === 'namespace_aliasing_clause');
+              const alias = aliasNode?.namedChildren.find((c) => c.type === 'name')?.text;
+              results.push({ fqn, alias });
+            }
+          }
+        }
+      }
+    }
+
+    // Handle namespace body — use statements may be inside namespace {}
+    if (node.type === 'namespace_definition') {
+      const body = node.namedChildren.find(
+        (c) => c.type === 'compound_statement' || c.type === 'declaration_list',
+      );
+      if (body) {
+        results.push(...extractUseStatements(body));
+      }
+    }
+  }
+
+  return results;
+}
