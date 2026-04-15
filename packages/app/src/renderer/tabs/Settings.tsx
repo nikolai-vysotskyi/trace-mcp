@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { StatusDot } from '../components/StatusDot';
 import { useDaemon } from '../hooks/useDaemon';
 import {
@@ -101,6 +101,33 @@ function BackButton({ label, onClick }: { label: string; onClick: () => void }) 
   );
 }
 
+/* ═══ Tooltip ═══════════════════════════════════════════════════════ */
+
+function Tooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  return (
+    <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}
+      onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      <span style={{
+        fontSize: 10, color: 'var(--text-tertiary)', width: 14, height: 14, borderRadius: 7,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg-inset)', cursor: 'help', flexShrink: 0, fontWeight: 600,
+      }}>?</span>
+      {show && (
+        <span style={{
+          position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+          marginBottom: 6, padding: '6px 10px', borderRadius: 6,
+          background: 'var(--bg-popover, #1a1a1a)', color: 'var(--text-popover, #e0e0e0)',
+          fontSize: 11, lineHeight: '15px', whiteSpace: 'normal', width: 220,
+          boxShadow: '0 4px 12px rgba(0,0,0,.3), 0 0 0 .5px rgba(255,255,255,.08)',
+          zIndex: 100, pointerEvents: 'none',
+        }}>{text}</span>
+      )}
+    </span>
+  );
+}
+
 /* ═══ Right chevron ══════════════════════════════════════════════════ */
 
 function ChevronRight() {
@@ -120,8 +147,9 @@ const inputBase: React.CSSProperties = {
   color: 'var(--text-primary)', boxShadow: 'var(--shadow-control)',
 };
 
-function FieldControl({ field, value, onChange, onOpenPicker }: {
+function FieldControl({ field, value, onChange, onOpenPicker, sectionData }: {
   field: FieldDef; value: unknown; onChange: (v: unknown) => void; onOpenPicker?: () => void;
+  sectionData?: Record<string, unknown>;
 }) {
   const err = validateField(field, value);
   const errS = err ? { borderColor: 'var(--destructive)' } : {};
@@ -149,6 +177,10 @@ function FieldControl({ field, value, onChange, onOpenPicker }: {
         <input type={field.sensitive ? 'password' : 'text'} value={(value as string) ?? ''}
           placeholder={field.placeholder} onChange={e => onChange(e.target.value || undefined)}
           style={{ ...inputBase, ...errS, width: '100%', textAlign: 'right' }} />{hint}</div>);
+    case 'multiselect':
+      return <MultiselectCtrl field={field} value={value} onChange={onChange} />;
+    case 'model-select':
+      return <ModelSelectCtrl field={field} value={value} sectionData={sectionData ?? {}} onChange={onChange} />;
     case 'array':
       return <ArrayCtrl value={value as string[] | undefined} placeholder={field.placeholder} onChange={onChange} />;
     case 'json':
@@ -185,6 +217,271 @@ function JsonCtrl({ value, placeholder, onChange }: {
       }} />
     {error && <div style={{ fontSize: 11, color: 'var(--destructive)', marginTop: 2 }}>Invalid JSON</div>}
   </div>);
+}
+
+/* ═══ Multiselect (checkbox list) ═══════════════════════════════════ */
+
+function MultiselectCtrl({ field, value, onChange }: {
+  field: FieldDef; value: unknown; onChange: (v: unknown) => void;
+}) {
+  const selected = new Set(Array.isArray(value) ? value as string[] : []);
+  const options = field.options ?? [];
+  const toggle = (opt: string) => {
+    const next = new Set(selected);
+    if (next.has(opt)) next.delete(opt); else next.add(opt);
+    onChange(next.size > 0 ? [...next] : undefined);
+  };
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 0' }}>
+      {options.map(opt => {
+        const active = selected.has(opt);
+        return (
+          <button key={opt} type="button" onClick={() => toggle(opt)}
+            style={{
+              fontSize: 11, padding: '3px 8px', borderRadius: 5, cursor: 'pointer',
+              border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+              background: active ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--fill-control)',
+              color: active ? 'var(--accent)' : 'var(--text-secondary)',
+              fontWeight: active ? 600 : 400, transition: 'all .15s ease',
+            }}>
+            {opt}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ═══ Model select (fetch models from provider) ════════════════════ */
+
+interface ModelOption { name: string; size?: string; }
+
+/** Default base URLs for all providers (used when base_url field is empty). */
+const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; label: string }> = {
+  ollama:   { baseUrl: 'http://localhost:11434', label: 'Ollama' },
+  lmstudio: { baseUrl: 'http://localhost:1234/v1', label: 'LM Studio' },
+  openai:   { baseUrl: 'https://api.openai.com', label: 'OpenAI' },
+  anthropic: { baseUrl: 'https://api.anthropic.com', label: 'Anthropic' },
+  gemini:   { baseUrl: 'https://generativelanguage.googleapis.com', label: 'Gemini' },
+  mistral:  { baseUrl: 'https://api.mistral.ai/v1', label: 'Mistral' },
+  groq:     { baseUrl: 'https://api.groq.com/openai/v1', label: 'Groq' },
+  together: { baseUrl: 'https://api.together.xyz/v1', label: 'Together' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1', label: 'DeepSeek' },
+  xai:      { baseUrl: 'https://api.x.ai/v1', label: 'xAI' },
+};
+
+/** Providers that use the OpenAI-compatible /v1/models endpoint. */
+const OPENAI_COMPAT_PROVIDERS = new Set(['openai', 'lmstudio', 'mistral', 'groq', 'together', 'deepseek', 'xai']);
+
+/** Anthropic models (no list API — static list of current models). */
+const ANTHROPIC_MODELS: ModelOption[] = [
+  { name: 'claude-opus-4-20250514' },
+  { name: 'claude-sonnet-4-20250514' },
+  { name: 'claude-haiku-4-5-20251001' },
+];
+
+async function fetchOpenAICompatModels(url: string, key: string, label: string, signal: AbortSignal): Promise<ModelOption[]> {
+  const endpoint = `${url.replace(/\/+$/, '')}/models`;
+  const headers: Record<string, string> = { };
+  if (key) headers['Authorization'] = `Bearer ${key}`;
+  const res = await fetch(endpoint, { signal, headers });
+  if (!res.ok) throw new Error(`${label}: ${res.status}${res.status === 401 ? ' (check API key)' : ''}`);
+  const data = await res.json();
+  const list: ModelOption[] = (data.data ?? []).map((m: any) => ({ name: m.id }));
+  list.sort((a, b) => a.name.localeCompare(b.name));
+  return list;
+}
+
+function useProviderModels(provider: string | undefined, baseUrl: string | undefined, apiKey: string | undefined): {
+  models: ModelOption[]; loading: boolean; error: string | null; refresh: () => void;
+} {
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchModels = useCallback(async () => {
+    if (!provider || provider === 'onnx') { setModels([]); return; }
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true); setError(null);
+
+    const defaults = PROVIDER_DEFAULTS[provider];
+    const label = defaults?.label ?? provider;
+    const key = apiKey || '';
+
+    try {
+      // ── Ollama: custom /api/tags endpoint ──
+      if (provider === 'ollama') {
+        const url = (baseUrl || defaults?.baseUrl || 'http://localhost:11434').replace(/\/+$/, '');
+        const res = await fetch(`${url}/api/tags`, { signal: ctrl.signal });
+        if (!res.ok) throw new Error(`Ollama: ${res.status}`);
+        const data = await res.json();
+        const list: ModelOption[] = (data.models ?? []).map((m: any) => ({
+          name: m.name ?? m.model,
+          size: m.size ? `${(m.size / 1e9).toFixed(1)} GB` : undefined,
+        }));
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        setModels(list);
+      }
+      // ── Anthropic: static list (no models API) ──
+      else if (provider === 'anthropic') {
+        setModels(ANTHROPIC_MODELS);
+      }
+      // ── Gemini: Google AI REST API ──
+      else if (provider === 'gemini') {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`,
+          { signal: ctrl.signal },
+        );
+        if (!res.ok) throw new Error(`Gemini: ${res.status}${res.status === 400 ? ' (check API key)' : ''}`);
+        const data = await res.json();
+        const list: ModelOption[] = (data.models ?? []).map((m: any) => ({
+          name: (m.name ?? '').replace(/^models\//, ''),
+        }));
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        setModels(list);
+      }
+      // ── All OpenAI-compatible providers ──
+      else if (OPENAI_COMPAT_PROVIDERS.has(provider)) {
+        const url = baseUrl || defaults?.baseUrl || '';
+        // LM Studio doesn't need an API key, others strip /v1 from baseUrl for fetch
+        const resolvedUrl = url.replace(/\/+$/, '');
+        // Ensure we have /v1 in the path for the models endpoint
+        const modelsUrl = resolvedUrl.endsWith('/v1') ? resolvedUrl : resolvedUrl;
+        setModels(await fetchOpenAICompatModels(modelsUrl, key, label, ctrl.signal));
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') setError(e.message ?? 'Failed to fetch models');
+    } finally {
+      setLoading(false);
+    }
+  }, [provider, baseUrl, apiKey]);
+
+  useEffect(() => { fetchModels(); }, [fetchModels]);
+
+  return { models, loading, error, refresh: fetchModels };
+}
+
+function ModelSelectCtrl({ field, value, sectionData, onChange }: {
+  field: FieldDef; value: unknown; sectionData: Record<string, unknown>; onChange: (v: unknown) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  const provider = field.modelProvider ? String(sectionData[field.modelProvider] ?? '') : undefined;
+  const baseUrl = field.modelBaseUrlField ? (sectionData[field.modelBaseUrlField] as string | undefined) : undefined;
+  const apiKey = sectionData['api_key'] as string | undefined;
+  const { models, loading, error, refresh } = useProviderModels(provider, baseUrl, apiKey);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const current = (value as string) ?? '';
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const filtered = filter
+    ? models.filter(m => m.name.toLowerCase().includes(filter.toLowerCase()))
+    : models;
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', minWidth: 0 }}>
+      <button type="button" onClick={() => setOpen(!open)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          background: 'none', border: 'none', cursor: 'pointer', padding: 0, maxWidth: 180,
+        }}>
+        <span style={{
+          fontSize: 13, color: current ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{current || field.placeholder || 'Select model…'}</span>
+        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}>
+          <path d="M1 1L4 4L7 1" stroke="var(--text-tertiary)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 200,
+          width: 260, maxHeight: 280, background: 'var(--bg-popover, var(--bg-grouped))',
+          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.25), 0 0 0 .5px rgba(255,255,255,.08)',
+          overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Search */}
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-row)' }}>
+            <input type="text" value={filter} autoFocus placeholder="Filter models…"
+              onChange={e => setFilter(e.target.value)}
+              style={{ ...inputBase, width: '100%', height: 26, textAlign: 'left', fontSize: 12 }} />
+          </div>
+          {/* List */}
+          <div style={{ flex: 1, overflowY: 'auto', maxHeight: 200 }}>
+            {loading && <div style={{ padding: '12px 10px', fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center' }}>Loading models…</div>}
+            {error && (
+              <div style={{ padding: '8px 10px', fontSize: 11 }}>
+                <div style={{ color: 'var(--destructive)', marginBottom: 4 }}>{error}</div>
+                <button type="button" onClick={refresh}
+                  style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {!loading && !error && filtered.length === 0 && (
+              <div style={{ padding: '12px 10px', fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                {models.length === 0 ? 'No models found' : 'No matches'}
+              </div>
+            )}
+            {/* Clear option */}
+            {!loading && !error && current && (
+              <button type="button" onClick={() => { onChange(undefined); setOpen(false); setFilter(''); }}
+                style={{
+                  display: 'flex', alignItems: 'center', width: '100%', padding: '6px 10px',
+                  background: 'none', border: 'none', borderBottom: '1px solid var(--border-row)',
+                  cursor: 'pointer', textAlign: 'left',
+                }}>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Clear selection</span>
+              </button>
+            )}
+            {filtered.map(m => (
+              <button type="button" key={m.name} onClick={() => { onChange(m.name); setOpen(false); setFilter(''); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '6px 10px',
+                  background: m.name === current ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'none',
+                  border: 'none', cursor: 'pointer', textAlign: 'left',
+                  borderBottom: '1px solid var(--border-row)',
+                }}>
+                <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+                {m.size && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', flexShrink: 0 }}>{m.size}</span>}
+                {m.name === current && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <path d="M5 13l4 4L19 7" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+          {/* Manual input fallback */}
+          <div style={{
+            padding: '6px 8px', borderTop: '1px solid var(--border-row)',
+            display: 'flex', gap: 4, alignItems: 'center',
+          }}>
+            <input type="text" placeholder="Or type model name…" defaultValue=""
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const v = (e.target as HTMLInputElement).value.trim();
+                  if (v) { onChange(v); setOpen(false); setFilter(''); }
+                }
+              }}
+              style={{ ...inputBase, flex: 1, height: 24, textAlign: 'left', fontSize: 11 }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ═══ Screen: Section list (top level) ═══════════════════════════════ */
@@ -289,11 +586,12 @@ function SectionDetail({ section, data, onUpdate, onBack, onOpenPicker }: {
           const hasDef = field.defaultValue !== undefined;
           const isModified = hasDef && JSON.stringify(value) !== JSON.stringify(field.defaultValue);
           const isSet = value !== undefined && value !== null && value !== '';
-          const isBlock = field.type === 'json' || field.type === 'array';
+          const isBlock = field.type === 'json' || field.type === 'array' || field.type === 'multiselect';
           const changeFn = (v: unknown) => onUpdate(section.key, sv(data, field, v));
+          const showReset = isModified || (!hasDef && isSet);
 
           return (
-            <div key={`${field.nested ?? ''}.${field.key}`}
+            <div key={`${field.nested ?? ''}.${field.key}.${field.showIf ?? ''}`}
               style={{
                 padding: '0 12px',
                 borderBottom: i < visible.length - 1 ? '1px solid var(--border-row)' : 'none',
@@ -307,15 +605,10 @@ function SectionDetail({ section, data, onUpdate, onBack, onOpenPicker }: {
                     {field.nested && <span style={{ color: 'var(--text-tertiary)' }}>{field.nested}.</span>}
                     {field.label}
                   </span>
-                  {field.description && !isBlock && (
-                    <span title={field.description}
-                      style={{
-                        fontSize: 10, color: 'var(--text-tertiary)', width: 14, height: 14, borderRadius: 7,
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        background: 'var(--bg-inset)', cursor: 'help', flexShrink: 0, fontWeight: 600,
-                      }}>?</span>
-                  )}
-                  {(isModified || (!hasDef && isSet)) && (
+                  {field.description && !isBlock && <Tooltip text={field.description} />}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  {showReset && (
                     <button type="button" onClick={() => changeFn(field.defaultValue)}
                       style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: 0.7, flexShrink: 0 }}
                       onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
@@ -323,13 +616,18 @@ function SectionDetail({ section, data, onUpdate, onBack, onOpenPicker }: {
                       Reset
                     </button>
                   )}
+                  {!isBlock && (
+                    <FieldControl field={field} value={value} onChange={changeFn} sectionData={data}
+                      onOpenPicker={field.type === 'select' ? () => onOpenPicker({ field, value, onChange: changeFn }) : undefined} />
+                  )}
                 </div>
-                {!isBlock && (
-                  <FieldControl field={field} value={value} onChange={changeFn}
-                    onOpenPicker={field.type === 'select' ? () => onOpenPicker({ field, value, onChange: changeFn }) : undefined} />
-                )}
               </div>
-              {isBlock && <div style={{ paddingBottom: 8 }}><FieldControl field={field} value={value} onChange={changeFn} /></div>}
+              {isBlock && (
+                <div style={{ paddingBottom: 8 }}>
+                  {field.description && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4 }}>{field.description}</div>}
+                  <FieldControl field={field} value={value} onChange={changeFn} sectionData={data} />
+                </div>
+              )}
             </div>
           );
         })}

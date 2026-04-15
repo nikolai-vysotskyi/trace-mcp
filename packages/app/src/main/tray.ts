@@ -188,8 +188,13 @@ ipcMain.handle('focus-tab', (_event, tabId: string) => {
 
 // IPC: open settings window (optionally navigating to a specific section via ?section= query param)
 ipcMain.handle('open-settings', (_event: Electron.IpcMainInvokeEvent, section?: string) => {
-  const tab = section ? `settings&section=${section}` : 'settings';
-  showMenuWindow(tab);
+  showMenuWindow('settings');
+  // Inject section param by reloading with the extra query param
+  if (section && menuWindow && !menuWindow.isDestroyed()) {
+    const base = `file://${path.join(__dirname, '..', 'renderer', 'index.html')}`;
+    const qs = new URLSearchParams({ view: 'menu', tab: 'settings', section }).toString();
+    menuWindow.loadURL(`${base}?${qs}`);
+  }
   return { ok: true };
 });
 
