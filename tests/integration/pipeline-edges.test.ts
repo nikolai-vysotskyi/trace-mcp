@@ -207,3 +207,43 @@ describe('pipeline edge creation (inertia-laravel-vue)', () => {
     expect(meta.props || meta.sfc).toBeDefined();
   });
 });
+
+describe('PHP import edge resolution (laravel-10)', () => {
+  const fixturePath = path.resolve(__dirname, '../fixtures/laravel-10');
+  let store: Store;
+
+  beforeEach(async () => {
+    const setup = setupPipeline(fixturePath);
+    store = setup.store;
+    await setup.pipeline.indexAll();
+  });
+
+  it('creates import edges from PHP use statements', () => {
+    const importEdges = store.getEdgesByType('imports');
+    // User.php has use Illuminate\...\Model, use ...\HasMany, use ...\BelongsToMany
+    // These should resolve to file→file edges where the target is an indexed file
+    // At minimum, intra-project imports (App\...) should resolve via FQN lookup
+    const phpFiles = store.getAllFiles().filter((f) => f.language === 'php');
+    // There should be at least some PHP import edges (intra-project)
+    const phpFileIds = new Set(phpFiles.map((f) => f.id));
+    const phpImportEdges = importEdges.filter((e) => {
+      const srcNode = store.getNodeByNodeId(e.source_node_id);
+      if (!srcNode || srcNode.node_type !== 'file') return false;
+      return phpFileIds.has(srcNode.ref_id);
+    });
+    expect(phpImportEdges.length).toBeGreaterThan(0);
+  });
+
+  it('import edge metadata contains FQN', () => {
+    const importEdges = store.getEdgesByType('imports');
+    const withMeta = importEdges.filter((e) => {
+      const meta = JSON.parse(e.metadata ?? '{}');
+      return meta.from && meta.from.includes('\\');
+    });
+    expect(withMeta.length).toBeGreaterThan(0);
+
+    const meta = JSON.parse(withMeta[0].metadata!);
+    expect(meta.from).toMatch(/\\/); // PHP FQN with backslash
+    expect(meta.specifiers).toBeDefined();
+  });
+});

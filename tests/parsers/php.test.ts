@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { extractUseStatements } from '../../src/indexer/plugins/language/php/helpers.js';
+import { getParser } from '../../src/parser/tree-sitter.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
 async function parse(code: string, filePath = 'app/Models/User.php') {
@@ -255,5 +257,138 @@ class Foo
     expect(cls.lineStart).toBe(4);
     const method = findSymbol(result.symbols, 'bar', 'method');
     expect(method.lineStart).toBe(6);
+  });
+
+  // ---------- use statement extraction ----------
+
+  it('extracts simple use statements as import edges', async () => {
+    const code = `<?php
+namespace App\\Models;
+
+use Illuminate\\Database\\Eloquent\\Model;
+use App\\Contracts\\Searchable;
+
+class User extends Model {}`;
+    const result = await parse(code);
+    expect(result.edges).toBeDefined();
+    expect(result.edges!.length).toBe(2);
+
+    const modelEdge = result.edges!.find((e) => (e.metadata as any).from === 'Illuminate\\Database\\Eloquent\\Model');
+    expect(modelEdge).toBeDefined();
+    expect(modelEdge!.edgeType).toBe('php_imports');
+    expect((modelEdge!.metadata as any).specifiers).toEqual(['Model']);
+
+    const searchableEdge = result.edges!.find((e) => (e.metadata as any).from === 'App\\Contracts\\Searchable');
+    expect(searchableEdge).toBeDefined();
+    expect((searchableEdge!.metadata as any).specifiers).toEqual(['Searchable']);
+  });
+
+  it('extracts aliased use statements', async () => {
+    const code = `<?php
+namespace App;
+
+use App\\Traits\\HasUuid as UuidTrait;
+
+class User {}`;
+    const result = await parse(code);
+    expect(result.edges).toBeDefined();
+    expect(result.edges!.length).toBe(1);
+    expect((result.edges![0].metadata as any).from).toBe('App\\Traits\\HasUuid');
+    expect((result.edges![0].metadata as any).specifiers).toEqual(['UuidTrait']);
+  });
+
+  it('extracts grouped use statements', async () => {
+    const code = `<?php
+namespace App;
+
+use App\\Contracts\\{Searchable, Filterable};
+
+class User {}`;
+    const result = await parse(code);
+    expect(result.edges).toBeDefined();
+    expect(result.edges!.length).toBe(2);
+
+    const fqns = result.edges!.map((e) => (e.metadata as any).from).sort();
+    expect(fqns).toEqual(['App\\Contracts\\Filterable', 'App\\Contracts\\Searchable']);
+  });
+
+  it('returns no edges for file without use statements', async () => {
+    const code = `<?php
+function helper(): void {}`;
+    const result = await parse(code, 'helpers.php');
+    expect(result.edges).toBeUndefined();
+  });
+});
+
+// ---------- extractUseStatements unit tests ----------
+
+describe('extractUseStatements', () => {
+  async function parseAst(code: string) {
+    const parser = await getParser('php');
+    return parser.parse(code).rootNode;
+  }
+
+  it('extracts simple use', async () => {
+    const root = await parseAst(`<?php
+use App\\Models\\User;
+`);
+    const uses = extractUseStatements(root);
+    expect(uses).toEqual([{ fqn: 'App\\Models\\User' }]);
+  });
+
+  it('extracts use with alias', async () => {
+    const root = await parseAst(`<?php
+use App\\Traits\\HasUuid as UuidTrait;
+`);
+    const uses = extractUseStatements(root);
+    expect(uses).toEqual([{ fqn: 'App\\Traits\\HasUuid', alias: 'UuidTrait' }]);
+  });
+
+  it('extracts grouped use', async () => {
+    const root = await parseAst(`<?php
+use App\\Contracts\\{Searchable, Filterable};
+`);
+    const uses = extractUseStatements(root);
+    expect(uses).toHaveLength(2);
+    expect(uses.map((u) => u.fqn).sort()).toEqual([
+      'App\\Contracts\\Filterable',
+      'App\\Contracts\\Searchable',
+    ]);
+  });
+
+  it('extracts use inside namespace block', async () => {
+    const root = await parseAst(`<?php
+namespace App\\Models {
+    use Illuminate\\Database\\Eloquent\\Model;
+    class User extends Model {}
+}
+`);
+    const uses = extractUseStatements(root);
+    expect(uses).toEqual([{ fqn: 'Illuminate\\Database\\Eloquent\\Model' }]);
+  });
+
+  it('returns empty for file without use', async () => {
+    const root = await parseAst(`<?php
+class Foo {}
+`);
+    const uses = extractUseStatements(root);
+    expect(uses).toEqual([]);
+  });
+
+  it('handles multiple use statements', async () => {
+    const root = await parseAst(`<?php
+namespace App;
+use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Http\\Request;
+use App\\Traits\\{HasUuid, SoftDeletes};
+`);
+    const uses = extractUseStatements(root);
+    expect(uses).toHaveLength(4);
+    expect(uses.map((u) => u.fqn).sort()).toEqual([
+      'App\\Traits\\HasUuid',
+      'App\\Traits\\SoftDeletes',
+      'Illuminate\\Database\\Eloquent\\Model',
+      'Illuminate\\Http\\Request',
+    ]);
   });
 });

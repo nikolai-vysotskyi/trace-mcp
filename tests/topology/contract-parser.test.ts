@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { parseContracts } from '../../src/topology/contract-parser.js';
+import Database from 'better-sqlite3';
+import { parseContracts, extractRoutesFromDb } from '../../src/topology/contract-parser.js';
 
 describe('parseContracts', () => {
   let tmpDir: string;
@@ -190,5 +191,78 @@ service UserService {
     // Should not throw
     const result = parseContracts(tmpDir);
     expect(result).toEqual([]);
+  });
+});
+
+describe('extractRoutesFromDb', () => {
+  let dbPath: string;
+
+  beforeEach(() => {
+    dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'routes-db-')), 'index.db');
+    const db = new Database(dbPath);
+    db.exec(`
+      CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT NOT NULL);
+      CREATE TABLE routes (
+        id INTEGER PRIMARY KEY,
+        file_id INTEGER NOT NULL REFERENCES files(id),
+        method TEXT NOT NULL,
+        uri TEXT NOT NULL,
+        name TEXT
+      );
+      INSERT INTO files (id, path) VALUES (1, 'app/routes/web.php');
+      INSERT INTO files (id, path) VALUES (2, 'src/cli.ts');
+    `);
+    // HTTP routes (should be included)
+    db.exec(`
+      INSERT INTO routes (file_id, method, uri, name) VALUES (1, 'GET', '/users', 'users.index');
+      INSERT INTO routes (file_id, method, uri, name) VALUES (1, 'POST', '/users', 'users.store');
+      INSERT INTO routes (file_id, method, uri, name) VALUES (1, 'ANY', '/webhook', NULL);
+    `);
+    // Non-HTTP routes (should be filtered out)
+    db.exec(`
+      INSERT INTO routes (file_id, method, uri, name) VALUES (2, 'CLI', 'serve', NULL);
+      INSERT INTO routes (file_id, method, uri, name) VALUES (2, 'JOB', 'deploy', NULL);
+      INSERT INTO routes (file_id, method, uri, name) VALUES (2, 'TOOL', 'search', NULL);
+      INSERT INTO routes (file_id, method, uri, name) VALUES (2, 'TEST', 'test_foo', NULL);
+    `);
+    db.close();
+  });
+
+  afterEach(() => {
+    fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+  });
+
+  it('only extracts HTTP method routes', () => {
+    const contract = extractRoutesFromDb(dbPath);
+    expect(contract).not.toBeNull();
+    expect(contract!.type).toBe('framework_routes');
+    expect(contract!.endpoints).toHaveLength(3); // GET, POST, ANY
+    const methods = contract!.endpoints.map((e) => e.method);
+    expect(methods).not.toContain('CLI');
+    expect(methods).not.toContain('JOB');
+    expect(methods).not.toContain('TOOL');
+    expect(methods).not.toContain('TEST');
+  });
+
+  it('returns null when only non-HTTP routes exist', () => {
+    // Remove HTTP routes
+    const db = new Database(dbPath);
+    db.exec("DELETE FROM routes WHERE method IN ('GET', 'POST', 'ANY')");
+    db.close();
+
+    const contract = extractRoutesFromDb(dbPath);
+    expect(contract).toBeNull();
+  });
+
+  it('returns null for non-existent DB', () => {
+    expect(extractRoutesFromDb('/nonexistent/path.db')).toBeNull();
+  });
+
+  it('filters by pathPrefix when provided', () => {
+    const contract = extractRoutesFromDb(dbPath, 'app/routes');
+    // Only routes from files matching the prefix should be included
+    expect(contract).not.toBeNull();
+    // File 1 matches 'app/routes/web.php', file 2 doesn't
+    expect(contract!.endpoints).toHaveLength(3);
   });
 });

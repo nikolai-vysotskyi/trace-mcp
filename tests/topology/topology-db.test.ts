@@ -288,4 +288,62 @@ describe('TopologyStore', () => {
       expect(stats.contracts).toBe(1);
     });
   });
+
+  describe('contract deduplication', () => {
+    it('deleteContractsByService clears contracts and cascades to endpoints', () => {
+      const svcId = store.upsertService({ name: 'dedup-svc', repoRoot: '/dedup', serviceType: 'api', detectionSource: 'ws', dbPath: '/fake/db' });
+
+      // Insert two contracts with endpoints
+      const c1 = store.insertContract(svcId, {
+        contractType: 'framework_routes', specPath: '/db1', version: 'auto', parsedSpec: '{}',
+      });
+      store.insertEndpoints(c1, svcId, [
+        { method: 'GET', path: '/users' },
+        { method: 'POST', path: '/users' },
+      ]);
+      const c2 = store.insertContract(svcId, {
+        contractType: 'framework_routes', specPath: '/db2', version: 'auto', parsedSpec: '{}',
+      });
+      store.insertEndpoints(c2, svcId, [
+        { method: 'GET', path: '/posts' },
+      ]);
+
+      expect(store.getContractsByService(svcId)).toHaveLength(2);
+      expect(store.getEndpointsByService(svcId)).toHaveLength(3);
+
+      // deleteContractsByService should clear everything
+      store.deleteContractsByService(svcId);
+      expect(store.getContractsByService(svcId)).toHaveLength(0);
+      expect(store.getEndpointsByService(svcId)).toHaveLength(0);
+    });
+
+    it('calling registerContracts after deleteContractsByService avoids duplication', () => {
+      const svcId = store.upsertService({ name: 'norep-svc', repoRoot: '/norep', serviceType: 'api', detectionSource: 'ws', dbPath: '/fake/db' });
+
+      // Simulate first sync: add contracts
+      const c1 = store.insertContract(svcId, {
+        contractType: 'framework_routes', specPath: '/db', version: 'auto', parsedSpec: '{}',
+      });
+      store.insertEndpoints(c1, svcId, [
+        { method: 'GET', path: '/users' },
+        { method: 'POST', path: '/users' },
+      ]);
+      expect(store.getEndpointsByService(svcId)).toHaveLength(2);
+
+      // Simulate second sync: delete first, then re-add
+      store.deleteContractsByService(svcId);
+      const c2 = store.insertContract(svcId, {
+        contractType: 'framework_routes', specPath: '/db', version: 'auto', parsedSpec: '{}',
+      });
+      store.insertEndpoints(c2, svcId, [
+        { method: 'GET', path: '/users' },
+        { method: 'POST', path: '/users' },
+        { method: 'DELETE', path: '/users/{id}' },
+      ]);
+
+      // Should have exactly the new set, no duplicates
+      expect(store.getContractsByService(svcId)).toHaveLength(1);
+      expect(store.getEndpointsByService(svcId)).toHaveLength(3);
+    });
+  });
 });
