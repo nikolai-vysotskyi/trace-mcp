@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.22.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.21.2...v1.22.0) (2026-04-15)
+
+
+### Features
+
+* add MCP ToolAnnotations to all tools for Glama TDQS scoring ([5be916b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5be916b2b648f03cd4fc92ea2d83a065dc84bfbc))
+* add security context export for MCP server analysis ([7b685c4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7b685c49e48a2caa106c5af0b0138dda6513eba9))
+* add stdio proxy mode and lifecycle management ([722579e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/722579e1f96f6bfc4e0ecea00884102bdd365b0d))
+* redesign AskTab with provider setup CTA and settings deep-linking ([d55226e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d55226ee3610cdd46683ff00a7e0ebd6687f7131))
+
+
+### Bug Fixes
+
+* add pre-flight check in GraphExplorer to prevent raw error display ([eb1e06b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eb1e06b633799c3f8b8329c42a78ca43ba948ce1))
+* match LICENSE text to SPDX Elastic-2.0 canonical template ([717951d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/717951d35ac5a812d79afeb8a2c85dfec8b19dee))
+* move frameRequested declaration before first use in visualize ([ee86d7b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ee86d7bb68e0f6ea66e0782dd8adbb9180e5a4d8))
+* remove extra text from LICENSE for exact SPDX template match ([6b0a6e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6b0a6e08151a86e87538c3e20f4e841b37b28f18))
+* split license into standard ELv2 + ethical addendum ([0a9ccd3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0a9ccd32b3026a7f679c754ed25fac845ceff12d))
+* unset ELECTRON_RUN_AS_NODE in electron dev script ([1c2c21c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1c2c21cede2e4df820565e1e1ba8019a302bacc9))
+* use valid SPDX license identifier for Elastic-2.0 ([11e128b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/11e128b399a07218109fedc0100be682093ed370))
+
+
+### Documentation
+
+* add usage guidelines and output format to all tool descriptions ([2b544a5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2b544a5cffee2209febbb4960d702d102880ae4a))
+
 ## [1.21.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.21.1...v1.21.2) (2026-04-14)
 
 
