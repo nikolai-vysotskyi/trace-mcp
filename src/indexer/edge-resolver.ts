@@ -14,6 +14,7 @@ import { resolveEsmImportEdges as _resolveImports } from './edge-resolvers/impor
 import { resolvePythonImportEdges as _resolvePyImports } from './edge-resolvers/python-imports.js';
 import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolvers/python-heritage.js';
 import { resolvePythonCallEdges as _resolvePyCalls } from './edge-resolvers/python-calls.js';
+import { resolvePhpImportEdges as _resolvePhpImports } from './edge-resolvers/php-imports.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
 
 export class EdgeResolver {
@@ -79,6 +80,9 @@ export class EdgeResolver {
 
   /** Pass 2e: Python import edges (dotted paths, relative imports). */
   resolvePythonImportEdges(): void { _resolvePyImports(this.state); }
+
+  /** Pass 2e2: PHP import edges (PSR-4 use statements). */
+  resolvePhpImportEdges(): void { _resolvePhpImports(this.state); }
 
   /** Pass 2f: Python heritage edges (class inheritance). */
   resolvePythonHeritageEdges(): void { _resolvePyHeritage(this.state); }

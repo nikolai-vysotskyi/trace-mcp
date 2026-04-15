@@ -129,7 +129,7 @@ export class FileExtractor {
     if (parsed.edges?.length) {
       for (const edge of parsed.edges) {
         // Capture both JS/TS imports and Python imports for file-level resolution
-        const isImportEdge = (edge.edgeType === 'imports' || edge.edgeType === 'py_imports')
+        const isImportEdge = (edge.edgeType === 'imports' || edge.edgeType === 'py_imports' || edge.edgeType === 'php_imports')
           && !edge.sourceNodeType && !edge.sourceSymbolId;
         if (isImportEdge) {
           importEdges.push({
