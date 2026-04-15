@@ -462,6 +462,17 @@ export class TopologyStore {
     return this.db.prepare('SELECT * FROM services ORDER BY name').all() as ServiceRow[];
   }
 
+  updateServiceGroup(serviceId: number, projectGroup: string | null): void {
+    this.db.prepare('UPDATE services SET project_group = ? WHERE id = ?').run(projectGroup, serviceId);
+  }
+
+  getServicesWithEndpointCounts(): Array<ServiceRow & { endpoint_count: number }> {
+    return this.db.prepare(`
+      SELECT s.*, (SELECT COUNT(*) FROM api_endpoints WHERE service_id = s.id) as endpoint_count
+      FROM services s ORDER BY s.project_group NULLS LAST, s.name
+    `).all() as Array<ServiceRow & { endpoint_count: number }>;
+  }
+
   deleteService(id: number): void {
     this.db.prepare('DELETE FROM services WHERE id = ?').run(id);
   }

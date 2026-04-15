@@ -1075,7 +1075,7 @@ program
 
           if (!topoStore) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ repos: [] }));
+            res.end(JSON.stringify({ repos: [], services: [] }));
             return;
           }
 
@@ -1083,8 +1083,20 @@ program
             const manager = new SubprojectManager(topoStore);
             const projectRoot = url.searchParams.get('project') ?? undefined;
             const result = manager.list(projectRoot);
+
+            // Also return services with project_group for UI grouping
+            const servicesWithCounts = topoStore.getServicesWithEndpointCounts();
+            const services = servicesWithCounts.map((s) => ({
+              id: s.id,
+              name: s.name,
+              repoRoot: s.repo_root,
+              serviceType: s.service_type,
+              projectGroup: s.project_group,
+              endpointCount: s.endpoint_count,
+            }));
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ repos: result.repos }));
+            res.end(JSON.stringify({ repos: result.repos, services }));
           } finally {
             topoStore.close();
           }
@@ -1092,6 +1104,44 @@ program
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e?.message ?? 'Subproject query failed' }));
         }
+        return;
+      }
+
+      // REST API: update service project_group
+      if (req.method === 'PATCH' && url.pathname === '/api/projects/services') {
+        let body = '';
+        req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+        req.on('end', () => {
+          try {
+            const { serviceId, projectGroup } = JSON.parse(body) as { serviceId: number; projectGroup: string | null };
+            if (serviceId == null) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'serviceId is required' }));
+              return;
+            }
+
+            let topoStore: InstanceType<typeof TopologyStore> | undefined;
+            try {
+              ensureGlobalDirs();
+              topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+            } catch (e: any) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: e?.message ?? 'Failed to open topology DB' }));
+              return;
+            }
+
+            try {
+              topoStore.updateServiceGroup(serviceId, projectGroup ?? null);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: true }));
+            } finally {
+              topoStore.close();
+            }
+          } catch (e: any) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+          }
+        });
         return;
       }
 
@@ -1378,7 +1428,10 @@ program
         }
         try {
           const { resolveProvider } = await import('./ai/ask-shared.js');
-          const provider = resolveProvider({}, managed.config);
+          // Reload config from disk so we pick up settings changed via the UI
+          const freshConfig = (await loadConfig(projectRoot));
+          const config = freshConfig.isOk() ? freshConfig.value : managed.config;
+          const provider = resolveProvider({}, config);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ provider: provider.name }));
         } catch (e: any) {
@@ -1441,9 +1494,11 @@ program
 
         try {
           const { resolveProvider, gatherContext, buildSystemPrompt, stripContextFromMessage } = await import('./ai/ask-shared.js');
+          const freshConfig = (await loadConfig(projectRoot));
+          const config = freshConfig.isOk() ? freshConfig.value : managed.config;
           const provider = resolveProvider(
             { model: body.model, provider: body.provider },
-            managed.config,
+            config,
           );
 
           // Phase 1: Retrieve context

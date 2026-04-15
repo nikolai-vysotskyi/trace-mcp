@@ -88,6 +88,15 @@ interface SubprojectInfo {
   endpoints: number;
 }
 
+interface ServiceInfo {
+  id: number;
+  name: string;
+  repoRoot: string;
+  serviceType: string | null;
+  projectGroup: string | null;
+  endpointCount: number;
+}
+
 export function ProjectOverview({ root, onNavigateToService }: {
   root: string;
   onNavigateToService?: (serviceName: string) => void;
@@ -101,7 +110,10 @@ export function ProjectOverview({ root, onNavigateToService }: {
   const [coverage, setCoverage] = useState<CoverageReport | null>(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [services, setServices] = useState<SubprojectInfo[]>([]);
+  const [svcList, setSvcList] = useState<ServiceInfo[]>([]);
   const [addingService, setAddingService] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<number | null>(null);
+  const [groupInput, setGroupInput] = useState('');
 
   const fetchStats = useCallback(async () => {
     try {
@@ -126,6 +138,7 @@ export function ProjectOverview({ root, onNavigateToService }: {
       if (res.ok) {
         const data = await res.json();
         setServices(data.repos ?? []);
+        setSvcList(data.services ?? []);
       }
     } catch { /* optional */ }
   }, [root]);
@@ -158,6 +171,22 @@ export function ProjectOverview({ root, onNavigateToService }: {
       const res = await fetch(`${BASE}/api/projects/subprojects?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
       if (res.ok) setServices((prev) => prev.filter((s) => s.name !== name));
     } catch { /* optional */ }
+  };
+
+  const handleUpdateGroup = async (serviceId: number, projectGroup: string | null) => {
+    try {
+      const res = await fetch(`${BASE}/api/projects/services`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId, projectGroup: projectGroup || null }),
+      });
+      if (res.ok) {
+        setSvcList((prev) => prev.map((s) =>
+          s.id === serviceId ? { ...s, projectGroup: projectGroup || null } : s,
+        ));
+      }
+    } catch { /* optional */ }
+    setEditingGroup(null);
   };
 
   const statusDot = status === 'indexing' ? 'idle' as const
@@ -326,7 +355,7 @@ export function ProjectOverview({ root, onNavigateToService }: {
         </div>
       )}
 
-      {/* Services card */}
+      {/* Services card — grouped by project_group */}
       <div className="px-3 py-2.5 rounded-lg space-y-2" style={{ background: 'var(--bg-secondary)' }}>
         <div className="flex items-center justify-between">
           <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
@@ -343,41 +372,117 @@ export function ProjectOverview({ root, onNavigateToService }: {
           </button>
         </div>
 
-        {services.length === 0 ? (
+        {svcList.length === 0 && services.length === 0 ? (
           <div className="text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
             No services detected. Re-index the project or add manually.
           </div>
-        ) : (
-          <div className="flex flex-col gap-0.5">
-            {services.map((svc) => (
-              <div key={svc.name} className="group flex items-center gap-1.5 rounded-md transition-colors hover:bg-[var(--bg-active)] -mx-1 px-1">
-                <button
-                  onClick={() => onNavigateToService?.(svc.name)}
-                  className="flex-1 min-w-0 text-left py-1"
-                  title={`${svc.repoRoot}\n${svc.endpoints} endpoints`}
-                >
-                  <div className="text-[11px] truncate" style={{ color: 'var(--text-primary)' }}>
-                    {svc.name}
+        ) : (() => {
+          // Group services by projectGroup
+          const grouped = new Map<string, ServiceInfo[]>();
+          const existingGroups: string[] = [];
+          for (const svc of svcList) {
+            const key = svc.projectGroup ?? '';
+            if (!grouped.has(key)) {
+              grouped.set(key, []);
+              existingGroups.push(key);
+            }
+            grouped.get(key)!.push(svc);
+          }
+          const groupKeys = [...grouped.keys()].sort((a, b) => {
+            if (!a) return 1; // ungrouped last
+            if (!b) return -1;
+            return a.localeCompare(b);
+          });
+
+          return (
+            <div className="flex flex-col gap-2">
+              {groupKeys.map((groupKey) => {
+                const groupServices = grouped.get(groupKey)!;
+                return (
+                  <div key={groupKey || '__ungrouped__'}>
+                    {/* Group header */}
+                    <div
+                      className="text-[9px] font-semibold uppercase tracking-wider mb-1 px-0.5"
+                      style={{ color: groupKey ? 'var(--accent)' : 'var(--text-tertiary)' }}
+                    >
+                      {groupKey || 'Ungrouped'}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      {groupServices.map((svc) => (
+                        <div
+                          key={svc.id}
+                          className="group flex items-center gap-1.5 rounded-md transition-colors hover:bg-[var(--bg-active)] -mx-1 px-1"
+                        >
+                          <button
+                            onClick={() => onNavigateToService?.(svc.name)}
+                            className="flex-1 min-w-0 text-left py-1"
+                            title={`${svc.repoRoot}\n${svc.endpointCount} endpoints\nGroup: ${svc.projectGroup ?? 'none'}`}
+                          >
+                            <div className="text-[11px] truncate" style={{ color: 'var(--text-primary)' }}>
+                              {svc.name}
+                            </div>
+                            <div className="text-[9px] truncate" style={{ color: 'var(--text-tertiary)' }}>
+                              {shortPath(svc.repoRoot)}
+                              {svc.endpointCount > 0 && ` · ${svc.endpointCount} endpoints`}
+                            </div>
+                          </button>
+
+                          {/* Group edit button */}
+                          {editingGroup === svc.id ? (
+                            <form
+                              className="shrink-0 flex items-center gap-1"
+                              onSubmit={(e) => { e.preventDefault(); handleUpdateGroup(svc.id, groupInput); }}
+                            >
+                              <input
+                                autoFocus
+                                value={groupInput}
+                                onChange={(e) => setGroupInput(e.target.value)}
+                                onBlur={() => setEditingGroup(null)}
+                                placeholder="group"
+                                list="group-options"
+                                className="w-16 text-[10px] px-1 py-0.5 rounded border outline-none"
+                                style={{
+                                  background: 'var(--bg-primary)',
+                                  borderColor: 'var(--border)',
+                                  color: 'var(--text-primary)',
+                                }}
+                              />
+                              <datalist id="group-options">
+                                {existingGroups.filter(Boolean).map((g) => (
+                                  <option key={g} value={g} />
+                                ))}
+                              </datalist>
+                            </form>
+                          ) : (
+                            <button
+                              onClick={() => { setEditingGroup(svc.id); setGroupInput(svc.projectGroup ?? ''); }}
+                              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] px-1 py-0.5 rounded"
+                              style={{ color: 'var(--text-tertiary)' }}
+                              title="Change group"
+                            >
+                              grp
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => handleRemoveService(svc.name)}
+                            className="shrink-0 w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--bg-secondary)]"
+                            style={{ color: 'var(--text-tertiary)' }}
+                            title="Remove service"
+                          >
+                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M1 1l6 6M7 1l-6 6" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-[9px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-                    {shortPath(svc.repoRoot)}
-                    {svc.endpoints > 0 && ` · ${svc.endpoints} endpoints`}
-                  </div>
-                </button>
-                <button
-                  onClick={() => handleRemoveService(svc.name)}
-                  className="shrink-0 w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--bg-secondary)]"
-                  style={{ color: 'var(--text-tertiary)' }}
-                  title="Remove service"
-                >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <path d="M1 1l6 6M7 1l-6 6" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Actions */}
