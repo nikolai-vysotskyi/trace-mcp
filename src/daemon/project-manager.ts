@@ -43,16 +43,14 @@ function registerDefaultPlugins(registry: PluginRegistry): void {
 
 function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
   if (config.topology?.enabled === false) return;
+  if (config.topology?.auto_discover === false) return;
   try {
     ensureGlobalDirs();
     const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-    const dbPath = getDbPath(projectRoot);
-    const db = initializeDatabase(dbPath);
-    const store = new Store(db);
-    const sm = new SubprojectManager(store, topoStore, projectRoot);
-    sm.syncContracts();
-    sm.syncClientCalls();
-    db.close();
+    const manager = new SubprojectManager(topoStore);
+    manager.autoDiscoverSubprojects(projectRoot, {
+      contractPaths: config.topology?.contract_globs,
+    });
   } catch (err) {
     logger.warn({ error: err, projectRoot }, 'Subproject auto-sync failed (non-fatal)');
   }
