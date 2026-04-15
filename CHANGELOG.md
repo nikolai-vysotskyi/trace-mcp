@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.23.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.22.0...v1.23.0) (2026-04-15)
+
+
+### Features
+
+* add Anthropic, Gemini, and OpenAI-compatible AI providers ([960eb13](https://github.com/nikolai-vysotskyi/trace-mcp/commit/960eb1318ec897d7be4b98b22c9a3db0183daa16))
+* add PHP import edge resolver for use statement resolution ([836d10a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/836d10a71ae2b379e25658f20093539a241f6b27))
+* add service group management UI and API ([4646230](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4646230bf397476eae7072ab7c73a54c2465c973))
+* **app:** add model-select and multiselect controls for AI settings ([25bb2bf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/25bb2bf42084e9454bbc3e252ccfbfca442e4c80))
+
+
+### Bug Fixes
+
+* add workspace isolation to PHP import resolver ([5c8d9cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5c8d9cf4cda00e68a45cfccc7e79f6f572b0bb05))
+* isolate cross-service endpoint matching by project_group ([0630908](https://github.com/nikolai-vysotskyi/trace-mcp/commit/06309081423a49fc13673adbd1a49bbffd69d7ec))
+* prevent topology contract duplication, false endpoints, and stale edges ([79f2ad1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/79f2ad1d7b229da9daf564c1794e3bd23d61a3b5))
+
+
+### Tests
+
+* add tests for topology fixes and PHP import resolver ([11a4ddb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/11a4ddbfe5c0dff5f5b9699bb03cdd788ee51803))
+
 ## [1.22.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.21.2...v1.22.0) (2026-04-15)
 
 
