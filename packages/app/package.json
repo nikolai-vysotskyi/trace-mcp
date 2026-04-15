@@ -17,8 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "menubar": "^9.5.0",
-    "trace-mcp": "^1.22.0"
+    "menubar": "^9.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.4",
