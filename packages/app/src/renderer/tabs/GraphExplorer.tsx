@@ -100,11 +100,32 @@ export const GraphExplorer = forwardRef<GraphExplorerHandle, GraphExplorerProps>
     params.set('theme', theme);
 
     try {
+      // Pre-flight: verify the server responds OK before loading in iframe.
+      // This avoids showing raw JSON error bodies (e.g. 429 rate-limit)
+      // inside the iframe. The extra request is cheap for localhost.
+      const url = `${BASE}/api/projects/graph/html?${params}`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        let errorMsg: string;
+        if (resp.status === 429) {
+          const retryAfter = resp.headers.get('Retry-After');
+          errorMsg = `Too many requests — try again ${retryAfter ? `in ${retryAfter}s` : 'later'}`;
+        } else {
+          try {
+            const body = await resp.json();
+            errorMsg = body.error ?? `Server error (${resp.status})`;
+          } catch {
+            errorMsg = `Server error (${resp.status})`;
+          }
+        }
+        throw new Error(errorMsg);
+      }
+
       // Load graph HTML directly in iframe (not via blob: URL) so the
       // localhost origin allows external script loading (D3 CDN).
       // Stats are sent back from the iframe via postMessage.
       iframeReady.current = false;
-      setGraphUrl(`${BASE}/api/projects/graph/html?${params}`);
+      setGraphUrl(url);
     } catch (e: any) {
       setError(e.message);
       setGraphUrl(null);
