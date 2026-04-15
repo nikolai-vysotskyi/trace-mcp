@@ -11,6 +11,7 @@ import { getPackageDeps } from '../project/package-deps.js';
 import { generateDocs } from '../project/generate-docs.js';
 import { packContext } from '../refactoring/pack-context.js';
 import { evaluateQualityGates, QualityGatesConfigSchema, type QualityGatesConfig } from '../quality/quality-gates.js';
+import { exportSecurityContext } from '../quality/security-context-export.js';
 
 export function registerQualityTools(server: McpServer, ctx: ServerContext): void {
   const { store, registry, config, projectRoot, j } = ctx;
@@ -207,6 +208,23 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
       });
 
       return { content: [{ type: 'text', text: j(report) }] };
+    },
+  );
+
+  // --- Security Context Export ---
+  server.tool(
+    'export_security_context',
+    'Export security context for MCP server analysis. Generates enrichment JSON for skill-scan: tool registrations with annotations, transitive call graphs classified by security category (file_read, file_write, network_outbound, env_read, shell_exec, crypto, serialization), sensitive data flows, and per-file capability maps. Use to analyze MCP server security before installation. Read-only. Returns JSON: { tool_registrations, sensitive_flows, capability_map, warnings }.',
+    {
+      scope: z.string().max(512).optional().describe('Limit analysis to directory (relative to project root)'),
+      depth: z.number().int().min(1).max(5).optional().describe('Call graph traversal depth (default: 3)'),
+    },
+    async ({ scope, depth }) => {
+      const result = exportSecurityContext(store, projectRoot, { scope, depth });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
 }

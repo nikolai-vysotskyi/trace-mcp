@@ -71,6 +71,17 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). More thorough than `get_untested_exports` |
 | `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
 
+## Quality & security
+
+| Tool | What it does |
+|---|---|
+| `scan_security` | OWASP Top-10 vulnerability scan: SQL injection, XSS, command injection, path traversal, hardcoded secrets, insecure crypto, open redirects, SSRF |
+| `taint_analysis` | Track untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL, exec, innerHTML). Framework-aware, cross-file |
+| `scan_code_smells` | Find TODO/FIXME/HACK comments, empty functions, hardcoded values, magic numbers |
+| `detect_antipatterns` | Performance antipattern detection |
+| `check_quality_gates` | Quality gate validation against configurable thresholds |
+| `export_security_context` | Export security context for MCP server analysis — enrichment JSON for [skill-scan](https://github.com/kkdub/skill-scan): tool registrations with annotations, transitive call graphs classified by security category, sensitive data flows, capability maps |
+
 ## Topology & subprojects
 
 Enabled by default (`topology.enabled: true`). See [Configuration](configuration.md#topology--subprojects).
@@ -142,6 +153,26 @@ trace-mcp ci-report --base main --head HEAD --fail-on high
 ```
 
 Generates a change impact report with blast radius, risk scores, test coverage gaps, architecture violations, and dead code. See [README](../README.md#cipr-change-impact-reports) for GitHub Action setup.
+
+## Security context export (CLI)
+
+Export security context for MCP server analysis — generates enrichment JSON for [skill-scan](https://github.com/kkdub/skill-scan):
+
+```bash
+# Export to file
+trace-mcp export-security-context -o enrichment.json
+
+# Limit scope and call graph depth
+trace-mcp export-security-context --scope src/tools --depth 4
+
+# Re-index before export
+trace-mcp export-security-context --index -o enrichment.json
+
+# Use with skill-scan
+trace-mcp export-security-context -o ctx.json && skill-scan scan . --enrich ctx.json
+```
+
+Output contains: MCP tool registrations with annotations, transitive call graphs classified by security category (`file_read`, `file_write`, `network_outbound`, `env_read`, `shell_exec`, `crypto`, `serialization`), sensitive data flows, and per-file capability maps.
 
 ## AI-powered (optional)
 
