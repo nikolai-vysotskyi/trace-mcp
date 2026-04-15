@@ -4,17 +4,22 @@
  * each field renders the appropriate control.
  */
 
-export type FieldType = 'boolean' | 'string' | 'number' | 'select' | 'array' | 'json';
+export type FieldType = 'boolean' | 'string' | 'number' | 'select' | 'array' | 'json' | 'multiselect' | 'model-select';
 
 export interface FieldDef {
   key: string;
   label: string;
   type: FieldType;
-  options?: string[];           // for 'select' type
+  options?: string[];           // for 'select' and 'multiselect' types
   placeholder?: string;
   description?: string;
   sensitive?: boolean;          // mask value (api keys)
   nested?: string;              // dot-path parent, e.g. "otlp" for runtime.otlp.port
+  /** For 'model-select': which provider field to read to determine the model source.
+   *  The value of that field determines which API to call (ollama / openai). */
+  modelProvider?: string;
+  /** For 'model-select': which field holds the base URL for the provider. */
+  modelBaseUrlField?: string;
   min?: number;                 // for 'number' type
   max?: number;                 // for 'number' type
   pattern?: string;             // regex for 'string' type
@@ -61,8 +66,12 @@ export function validateField(field: FieldDef, value: unknown): string | null {
         return `Must be one of: ${field.options.join(', ')}`;
       }
       break;
+    case 'multiselect':
     case 'array':
       if (!Array.isArray(value)) return 'Must be a list';
+      break;
+    case 'model-select':
+      if (typeof value !== 'string') return 'Must be a string';
       break;
     case 'json':
       if (typeof value === 'string') return 'Must be valid JSON (not a string)';
@@ -220,18 +229,82 @@ export const CONFIG_SCHEMA: SectionDef[] = [
     description: 'AI provider for semantic search, summaries, and intent classification',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
-      { key: 'provider', label: 'Provider', type: 'select', options: ['onnx', 'ollama', 'openai'], defaultValue: 'onnx', showIf: 'enabled', description: 'onnx = local embeddings (zero-config, no API key)' },
-      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'http://localhost:11434', showIf: 'provider=ollama', description: 'Custom endpoint for ollama/openai' },
-      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-...', sensitive: true, showIf: 'provider=openai', description: 'Required for OpenAI; or set OPENAI_API_KEY env' },
-      { key: 'inference_model', label: 'Inference model', type: 'string', placeholder: 'gemma4-e4b', showIf: 'provider=ollama', description: 'Not available with onnx provider' },
-      { key: 'fast_model', label: 'Fast model', type: 'string', placeholder: 'gemma4-e4b', showIf: 'provider=ollama', description: 'Not available with onnx provider' },
-      { key: 'embedding_model', label: 'Embedding model', type: 'string', placeholder: 'Xenova/all-MiniLM-L6-v2', showIf: 'enabled' },
-      { key: 'embedding_dimensions', label: 'Embedding dimensions', type: 'number', placeholder: '384', min: 1, showIf: 'enabled' },
-      { key: 'summarize_on_index', label: 'Summarize on index', type: 'boolean', defaultValue: false, showIf: 'enabled', description: 'Requires ollama/openai provider with LLM model' },
-      { key: 'summarize_batch_size', label: 'Summarize batch size', type: 'number', placeholder: '20', min: 1, defaultValue: 20, showIf: 'enabled' },
-      { key: 'summarize_kinds', label: 'Summarize kinds', type: 'array', placeholder: 'class, function, method, ...', defaultValue: ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'], showIf: 'enabled' },
-      { key: 'concurrency', label: 'Concurrency', type: 'number', placeholder: '1', min: 1, max: 32, defaultValue: 1, showIf: 'enabled', description: 'Match OLLAMA_NUM_PARALLEL for ollama' },
-      { key: 'reranker_model', label: 'Reranker model', type: 'string', placeholder: 'bge-reranker-v2-m3', showIf: 'enabled' },
+      { key: 'provider', label: 'Provider', type: 'select', options: ['onnx', 'ollama', 'lmstudio', 'openai', 'anthropic', 'gemini', 'mistral', 'groq', 'together', 'deepseek', 'xai'], defaultValue: 'onnx', showIf: 'enabled', description: 'onnx = local zero-config. ollama/lmstudio = local with model choice. Others = cloud APIs.' },
+
+      // ── Connection: Ollama ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'http://localhost:11434', showIf: 'provider=ollama', description: 'Ollama server endpoint. Change if running on a different host or port.' },
+      // ── Connection: LM Studio ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'http://localhost:1234/v1', showIf: 'provider=lmstudio', description: 'LM Studio local server endpoint.' },
+      // ── Connection: OpenAI ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.openai.com', showIf: 'provider=openai', description: 'OpenAI API endpoint. Change for Azure OpenAI or compatible providers.' },
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-...', sensitive: true, showIf: 'provider=openai', description: 'Required. Or set OPENAI_API_KEY env var.' },
+      // ── Connection: Anthropic ──
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-ant-...', sensitive: true, showIf: 'provider=anthropic', description: 'Anthropic API key from console.anthropic.com. Or set ANTHROPIC_API_KEY env var.' },
+      // ── Connection: Gemini ──
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'AIza...', sensitive: true, showIf: 'provider=gemini', description: 'Google AI API key from ai.google.dev. Or set GEMINI_API_KEY env var.' },
+      // ── Connection: Mistral ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.mistral.ai/v1', showIf: 'provider=mistral', description: 'Mistral API endpoint.' },
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-...', sensitive: true, showIf: 'provider=mistral', description: 'Mistral API key from console.mistral.ai. Or set MISTRAL_API_KEY env var.' },
+      // ── Connection: Groq ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.groq.com/openai/v1', showIf: 'provider=groq', description: 'Groq API endpoint.' },
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'gsk_...', sensitive: true, showIf: 'provider=groq', description: 'Groq API key from console.groq.com. Or set GROQ_API_KEY env var.' },
+      // ── Connection: Together ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.together.xyz/v1', showIf: 'provider=together', description: 'Together AI API endpoint.' },
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-...', sensitive: true, showIf: 'provider=together', description: 'Together API key from api.together.ai. Or set TOGETHER_API_KEY env var.' },
+      // ── Connection: DeepSeek ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.deepseek.com/v1', showIf: 'provider=deepseek', description: 'DeepSeek API endpoint.' },
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-...', sensitive: true, showIf: 'provider=deepseek', description: 'DeepSeek API key from platform.deepseek.com. Or set DEEPSEEK_API_KEY env var.' },
+      // ── Connection: xAI ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.x.ai/v1', showIf: 'provider=xai', description: 'xAI (Grok) API endpoint.' },
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'xai-...', sensitive: true, showIf: 'provider=xai', description: 'xAI API key from console.x.ai. Or set XAI_API_KEY env var.' },
+
+      // ── Model fields: Ollama ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gemma4-e4b', showIf: 'provider=ollama', description: 'LLM for summarization and intent classification.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gemma4-e4b', showIf: 'provider=ollama', description: 'Smaller/faster LLM for low-latency tasks. Falls back to inference model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'nomic-embed-text', showIf: 'provider=ollama', description: 'Embedding model for semantic search. Must match embedding_dimensions.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'reranker_model', label: 'Reranker model', type: 'model-select', placeholder: 'bge-reranker-v2-m3', showIf: 'provider=ollama', description: 'Cross-encoder for re-ranking search results.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: LM Studio ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'qwen2.5-coder-7b-instruct', showIf: 'provider=lmstudio', description: 'LLM loaded in LM Studio.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'qwen2.5-coder-7b-instruct', showIf: 'provider=lmstudio', description: 'Fast LLM for low-latency tasks.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'nomic-embed-text-v1.5', showIf: 'provider=lmstudio', description: 'Embedding model loaded in LM Studio.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: OpenAI ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gpt-4o-mini', showIf: 'provider=openai', description: 'LLM for summarization and intent classification.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gpt-4o-mini', showIf: 'provider=openai', description: 'Faster/cheaper LLM. Falls back to inference model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'text-embedding-3-small', showIf: 'provider=openai', description: 'text-embedding-3-small (cheap) or text-embedding-3-large (accurate).', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: Anthropic (inference only — no embeddings API) ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'claude-sonnet-4-20250514', showIf: 'provider=anthropic', description: 'Claude model for summarization and reasoning.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'claude-haiku-4-5-20251001', showIf: 'provider=anthropic', description: 'Fastest Claude model for low-latency tasks.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: Gemini ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gemini-2.0-flash', showIf: 'provider=gemini', description: 'Gemini model for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gemini-2.0-flash', showIf: 'provider=gemini', description: 'Fast Gemini model for low-latency tasks.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'text-embedding-004', showIf: 'provider=gemini', description: 'Gemini embedding model. text-embedding-004 (768d) is recommended.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: Mistral ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'mistral-small-latest', showIf: 'provider=mistral', description: 'Mistral LLM for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'mistral-small-latest', showIf: 'provider=mistral', description: 'Fast Mistral model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'mistral-embed', showIf: 'provider=mistral', description: 'Mistral embedding model (1024d).', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: Groq ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'llama-3.3-70b-versatile', showIf: 'provider=groq', description: 'Groq-hosted LLM. Ultra-fast inference.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'llama-3.1-8b-instant', showIf: 'provider=groq', description: 'Fastest Groq model for low-latency tasks.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'nomic-embed-text-v1.5', showIf: 'provider=groq', description: 'Groq embedding model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: Together ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', showIf: 'provider=together', description: 'Together-hosted LLM.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'meta-llama/Llama-3.1-8B-Instruct-Turbo', showIf: 'provider=together', description: 'Fast Together model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'togethercomputer/m2-bert-80M-8k-retrieval', showIf: 'provider=together', description: 'Together embedding model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: DeepSeek ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'deepseek-chat', showIf: 'provider=deepseek', description: 'DeepSeek V3 for summarization and reasoning.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'deepseek-chat', showIf: 'provider=deepseek', description: 'DeepSeek fast model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: xAI ──
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'grok-2', showIf: 'provider=xai', description: 'Grok model for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'grok-2', showIf: 'provider=xai', description: 'Fast Grok model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: ONNX ──
+      { key: 'embedding_model', label: 'Embedding model', type: 'string', placeholder: 'Xenova/all-MiniLM-L6-v2', showIf: 'provider=onnx', description: 'ONNX model for local embeddings. Default works out of the box.' },
+
+      // ── Common fields ──
+      { key: 'embedding_dimensions', label: 'Embedding dimensions', type: 'number', placeholder: '384', min: 1, showIf: 'enabled', description: 'Vector size. Must match the model (384 for MiniLM, 768 for nomic/Gemini, 1024 for Mistral, 1536 for OpenAI).' },
+      { key: 'summarize_on_index', label: 'Summarize on index', type: 'boolean', defaultValue: false, showIf: 'enabled', description: 'Generate natural-language summaries during indexing. Requires a provider with inference model.' },
+      { key: 'summarize_batch_size', label: 'Summarize batch size', type: 'number', placeholder: '20', min: 1, defaultValue: 20, showIf: 'summarize_on_index', description: 'Symbols to summarize in parallel per batch.' },
+      { key: 'summarize_kinds', label: 'Summarize kinds', type: 'multiselect', options: ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type', 'variable', 'constant', 'property', 'module', 'namespace'], defaultValue: ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'], showIf: 'summarize_on_index', description: 'Which symbol kinds to generate summaries for.' },
+      { key: 'concurrency', label: 'Concurrency', type: 'number', placeholder: '1', min: 1, max: 32, defaultValue: 1, showIf: 'enabled', description: 'Parallel AI requests. For Ollama, match OLLAMA_NUM_PARALLEL.' },
     ],
   },
   {
