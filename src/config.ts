@@ -26,7 +26,7 @@ const FrameworkConfigSchema = z.object({
 
 const AiConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  provider: z.enum(['onnx', 'ollama', 'openai']).default('onnx'),
+  provider: z.enum(['onnx', 'ollama', 'openai', 'anthropic', 'lmstudio', 'gemini', 'mistral', 'deepseek', 'groq', 'together', 'xai']).default('onnx'),
   base_url: z.string().optional(),
   api_key: z.string().optional(),
   inference_model: z.string().optional(),
