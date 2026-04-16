@@ -11,6 +11,30 @@ import type {
 } from '../../../../../plugin-api/types.js';
 import { resolveComponentTag, toKebabCase, toPascalCase } from './resolver.js';
 
+/** Common single-word component names that produce too many false positives. */
+const GENERIC_COMPONENT_NAMES = new Set([
+  'Button', 'Link', 'Input', 'Form', 'Card', 'Modal', 'Page', 'App',
+  'Header', 'Footer', 'Layout', 'Section', 'Container', 'Wrapper', 'Item',
+  'List', 'Menu', 'Tab', 'Tabs', 'Icon', 'Image', 'Avatar', 'Badge',
+  'Alert', 'Toast', 'Spinner', 'Loader', 'Table', 'Row', 'Cell', 'Panel',
+  'Error', 'Success', 'Warning', 'Info', 'Dialog', 'Tooltip', 'Popover',
+  'Index', 'Main', 'Default', 'Root', 'Home',
+]);
+
+/**
+ * Decide whether a component name is distinctive enough to scan for as
+ * a string/identifier reference. Generic single-word names produce too
+ * many false positives (e.g., `Button` matches everywhere).
+ */
+function isDistinctiveComponentName(name: string): boolean {
+  if (name.length < 5) return false;
+  if (GENERIC_COMPONENT_NAMES.has(name)) return false;
+  // Must be PascalCase — start with uppercase, have at least one lowercase
+  // letter before another uppercase (camelHump) or be long enough to be unique.
+  if (!/^[A-Z]/.test(name)) return false;
+  return /[a-z][A-Z]/.test(name) || name.length >= 8;
+}
+
 export class VueFrameworkPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
     name: 'vue-framework',
@@ -50,6 +74,7 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
         { name: 'renders_component', category: 'vue', description: 'Parent component renders child in template' },
         { name: 'uses_composable', category: 'vue', description: 'Component calls a composable function' },
         { name: 'provides_slot', category: 'vue', description: 'Component provides a named slot' },
+        { name: 'references_component', category: 'vue', description: 'Dynamic reference to component (e.g., from config/TS)' },
       ],
     };
   }
@@ -142,7 +167,77 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
       }
     }
 
+    // Dynamic component references: scan TS/JS files for component names
+    // mentioned as identifiers/strings (e.g., in config files, route tables,
+    // plugin registrations). Covers cases where a component isn't rendered
+    // via <Tag/> but IS referenced dynamically.
+    this.resolveDynamicComponentRefs(ctx, allFiles, componentNameToSymbolId, edges);
+
     return ok(edges);
+  }
+
+  /**
+   * Scan TS/JS files for references to Vue component names.
+   * Emits `references_component` edges from the referring file to the
+   * component symbol when a component name appears as a whole word.
+   *
+   * Filters out short or common names (e.g. "Button", "Link") to avoid
+   * false positives — only PascalCase names ≥5 chars with a distinctive
+   * prefix or camelHump are considered references.
+   */
+  private resolveDynamicComponentRefs(
+    ctx: ResolveContext,
+    allFiles: { id: number; path: string; language: string | null }[],
+    componentNameToSymbolId: Map<string, string>,
+    edges: RawEdge[],
+  ): void {
+    // Only consider distinctive component names.
+    const names = [...componentNameToSymbolId.keys()].filter(isDistinctiveComponentName);
+    if (names.length === 0) return;
+
+    // Build a single anchored regex: \b(Name1|Name2|...)\b
+    const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'g');
+
+    // Map component name → own file path (to skip self-references).
+    const nameToOwnFile = new Map<string, string>();
+    for (const [name] of componentNameToSymbolId) {
+      // Pull from earlier-built map — defensive access is cheap.
+      const symbolId = componentNameToSymbolId.get(name);
+      if (!symbolId) continue;
+      const ownFile = symbolId.split('::')[0];
+      if (ownFile) nameToOwnFile.set(name, ownFile);
+    }
+
+    for (const file of allFiles) {
+      // Scan TS/JS (config, routes, plugins) and Vue (sibling imports).
+      const lang = file.language;
+      if (lang !== 'typescript' && lang !== 'javascript' && lang !== 'vue') continue;
+
+      const source = ctx.readFile(file.path);
+      if (!source) continue;
+
+      const found = new Set<string>();
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(source)) !== null) {
+        found.add(m[1]);
+      }
+
+      for (const name of found) {
+        // Skip the component's own file
+        if (nameToOwnFile.get(name) === file.path) continue;
+        const targetSymbolId = componentNameToSymbolId.get(name);
+        if (!targetSymbolId) continue;
+        edges.push({
+          sourceNodeType: 'file',
+          sourceRefId: file.id,
+          targetSymbolId,
+          edgeType: 'references_component',
+          metadata: { name, kind: 'dynamic_ref' },
+        });
+      }
+    }
   }
 
   /**
