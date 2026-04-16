@@ -37,7 +37,9 @@ export function resolvePhpCallEdges(state: PipelineState): void {
   const extendsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('extends') as { id: number } | undefined;
   const implementsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('implements') as { id: number } | undefined;
   const usesTraitType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('uses_trait') as { id: number } | undefined;
-  if (!callsType || !instType || !extendsType || !implementsType || !usesTraitType) return;
+  const propType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('accesses_property') as { id: number } | undefined;
+  const constType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('accesses_constant') as { id: number } | undefined;
+  if (!callsType || !instType || !extendsType || !implementsType || !usesTraitType || !propType || !constType) return;
 
   // Load all PHP symbols once
   const allSymbols = store.db.prepare(`
@@ -105,6 +107,8 @@ export function resolvePhpCallEdges(state: PipelineState): void {
   let extendsEdges = 0;
   let implementsEdges = 0;
   let usesTraitEdges = 0;
+  let propAccesses = 0;
+  let constAccesses = 0;
 
   store.db.transaction(() => {
     for (const sym of allSymbols) {
@@ -156,7 +160,7 @@ export function resolvePhpCallEdges(state: PipelineState): void {
         }
       }
 
-      // Call edges: only on methods/functions
+      // Call/access edges: only on methods/functions
       if ((sym.kind === 'method' || sym.kind === 'function') && Array.isArray(meta.callSites)) {
         const callSites = meta.callSites as PhpCallSite[];
         for (const cs of callSites) {
@@ -165,19 +169,42 @@ export function resolvePhpCallEdges(state: PipelineState): void {
           const tNode = symbolNodeMap.get(target.id);
           if (tNode == null || tNode === sourceNodeId) continue;
           if (sym.workspace !== target.workspace) continue;
-          const edgeType = cs.type === 'new' ? instType : callsType;
-          insertStmt.run(sourceNodeId, tNode, edgeType.id,
+
+          let edgeTypeId: number;
+          switch (cs.type) {
+            case 'new':
+              edgeTypeId = instType.id;
+              instantiations++;
+              break;
+            case 'this_prop':
+            case 'member_prop':
+            case 'static_prop':
+            case 'relative_static_prop':
+              edgeTypeId = propType.id;
+              propAccesses++;
+              break;
+            case 'class_const':
+            case 'relative_const':
+              edgeTypeId = constType.id;
+              constAccesses++;
+              break;
+            default:
+              edgeTypeId = callsType.id;
+              calls++;
+          }
+          insertStmt.run(sourceNodeId, tNode, edgeTypeId,
             JSON.stringify({ callee: cs.callee, line: cs.line, kind: cs.type }), 0);
-          if (cs.type === 'new') instantiations++;
-          else calls++;
         }
       }
     }
   })();
 
-  const total = calls + instantiations + extendsEdges + implementsEdges + usesTraitEdges;
+  const total = calls + instantiations + extendsEdges + implementsEdges + usesTraitEdges + propAccesses + constAccesses;
   if (total > 0) {
-    logger.info({ calls, instantiations, extendsEdges, implementsEdges, usesTraitEdges }, 'PHP call/heritage edges resolved');
+    logger.info(
+      { calls, instantiations, extendsEdges, implementsEdges, usesTraitEdges, propAccesses, constAccesses },
+      'PHP call/heritage edges resolved',
+    );
   }
 }
 
@@ -329,7 +356,159 @@ function resolveCallSite(
       const byNameHit = byName.get(cs.callee)?.find((s) => s.kind === 'function');
       return byNameHit ?? null;
     }
+
+    case 'this_prop': {
+      // $this->prop — find property in containing class or ancestors
+      if (!parentClass) return null;
+      return findMemberInClassHierarchy(
+        cs.callee, 'property', parentClass,
+        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+      );
+    }
+
+    case 'relative_static_prop': {
+      // self::$prop — static property in containing class or ancestors
+      if (!parentClass) return null;
+      return findMemberInClassHierarchy(
+        cs.callee, 'property', parentClass,
+        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+      );
+    }
+
+    case 'static_prop': {
+      // Class::$prop — static property on a specific class
+      if (!cs.classRef) return null;
+      const targetClass = resolveClassRef(cs.classRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+      if (!targetClass) return null;
+      return findMemberInClassHierarchy(
+        cs.callee, 'property', targetClass,
+        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+      );
+    }
+
+    case 'relative_const': {
+      // self::FOO — constant or enum_case in containing class or ancestors
+      if (!parentClass) return null;
+      return findConstOrEnumCase(
+        cs.callee, parentClass,
+        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+      );
+    }
+
+    case 'class_const': {
+      // Class::FOO — constant or enum case on a specific class/enum
+      if (!cs.classRef) return null;
+      const targetClass = resolveClassRef(cs.classRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+      if (!targetClass) return null;
+      return findConstOrEnumCase(
+        cs.callee, targetClass,
+        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+      );
+    }
+
+    case 'member_prop':
+      // Dynamic dispatch ($obj->prop) — receiver type not tracked yet.
+      return null;
   }
+}
+
+/**
+ * Find a property in the class hierarchy (walks extends + traits).
+ */
+function findMemberInClassHierarchy(
+  memberName: string,
+  memberKind: 'property',
+  classSymbol: PhpSymbol,
+  byFqn: Map<string, PhpSymbol[]>,
+  byName: Map<string, PhpSymbol[]>,
+  symbolsByFile: Map<number, PhpSymbol[]>,
+  fileUseMap: Map<number, Map<string, string>>,
+  fileNamespaceMap: Map<number, string | null>,
+  visited = new Set<number>(),
+): PhpSymbol | null {
+  if (visited.has(classSymbol.id)) return null;
+  visited.add(classSymbol.id);
+
+  const fileSymbols = symbolsByFile.get(classSymbol.file_id) ?? [];
+  const direct = fileSymbols.find((s) =>
+    s.kind === memberKind && s.name === memberName && s.parent_id === classSymbol.id,
+  );
+  if (direct) return direct;
+
+  if (!classSymbol.metadata) return null;
+  try {
+    const meta = JSON.parse(classSymbol.metadata) as Record<string, unknown>;
+    const parents: string[] = [];
+    if (Array.isArray(meta.extends)) parents.push(...(meta.extends as string[]));
+    if (Array.isArray(meta.usesTraits)) parents.push(...(meta.usesTraits as string[]));
+
+    for (const ref of parents) {
+      const parentClass = resolveClassRef(ref, classSymbol, fileUseMap, fileNamespaceMap, byFqn, byName);
+      if (!parentClass) continue;
+      const found = findMemberInClassHierarchy(
+        memberName, memberKind, parentClass,
+        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap, visited,
+      );
+      if (found) return found;
+    }
+  } catch { /* ignore */ }
+
+  return null;
+}
+
+/**
+ * Find a constant or enum case in a class/enum or its ancestors.
+ * Class constants can be inherited via extends; enum cases cannot.
+ */
+function findConstOrEnumCase(
+  memberName: string,
+  classSymbol: PhpSymbol,
+  byFqn: Map<string, PhpSymbol[]>,
+  byName: Map<string, PhpSymbol[]>,
+  symbolsByFile: Map<number, PhpSymbol[]>,
+  fileUseMap: Map<number, Map<string, string>>,
+  fileNamespaceMap: Map<number, string | null>,
+  visited = new Set<number>(),
+): PhpSymbol | null {
+  if (visited.has(classSymbol.id)) return null;
+  visited.add(classSymbol.id);
+
+  const fileSymbols = symbolsByFile.get(classSymbol.file_id) ?? [];
+  // Enum cases live inside enums
+  if (classSymbol.kind === 'enum') {
+    const enumCase = fileSymbols.find((s) =>
+      s.kind === 'enum_case' && s.name === memberName && s.parent_id === classSymbol.id,
+    );
+    if (enumCase) return enumCase;
+  }
+
+  // Regular class constant
+  const constant = fileSymbols.find((s) =>
+    s.kind === 'constant' && s.name === memberName && s.parent_id === classSymbol.id,
+  );
+  if (constant) return constant;
+
+  // Walk ancestors for constants (enum cases don't inherit)
+  if (!classSymbol.metadata) return null;
+  try {
+    const meta = JSON.parse(classSymbol.metadata) as Record<string, unknown>;
+    const parents: string[] = [];
+    if (Array.isArray(meta.extends)) parents.push(...(meta.extends as string[]));
+    if (Array.isArray(meta.implements)) parents.push(...(meta.implements as string[]));
+    if (Array.isArray(meta.usesTraits)) parents.push(...(meta.usesTraits as string[]));
+
+    for (const ref of parents) {
+      const parentClass = resolveClassRef(ref, classSymbol, fileUseMap, fileNamespaceMap, byFqn, byName);
+      if (!parentClass) continue;
+      const found = findConstOrEnumCase(
+        memberName, parentClass,
+        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap, visited,
+      );
+      if (found) return found;
+    }
+  } catch { /* ignore */ }
+
+  return null;
 }
 
 function pickFunction(candidates: PhpSymbol[] | undefined): PhpSymbol | null {

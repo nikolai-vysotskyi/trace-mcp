@@ -338,13 +338,18 @@ export function extractUseStatements(rootNode: TSNode): { fqn: string; alias?: s
 // ════════════════════════════════════════════════════════════════════════
 
 export interface PhpCallSite {
-  /** Type of call site */
-  type: 'this' | 'self' | 'parent' | 'static' | 'member' | 'new' | 'function';
-  /** Name of the method/function being called */
+  /** Type of reference. Call types: 'this'|'self'|'parent'|'static'|'member'|'new'|'function'.
+   *  Access types: 'this_prop'|'member_prop'|'class_const'|'relative_const'|'static_prop'|'relative_static_prop'. */
+  type:
+    | 'this' | 'self' | 'parent' | 'static' | 'member' | 'new' | 'function'
+    | 'this_prop' | 'member_prop'
+    | 'class_const' | 'relative_const'
+    | 'static_prop' | 'relative_static_prop';
+  /** Name of the method/property/constant being accessed */
   callee: string;
-  /** For 'static' and 'new': the class name reference */
+  /** For 'static'/'new'/'class_const'/'static_prop': the class name reference */
   classRef?: string;
-  /** For 'member': the receiver variable name (e.g., "user" for $user->save()) */
+  /** For 'member'/'member_prop': the receiver variable name */
   receiver?: string;
   /** Line number (1-based) */
   line: number;
@@ -480,6 +485,71 @@ export function extractCallSites(bodyNode: TSNode): PhpCallSite[] {
             type: 'function',
             callee: first.text,
             line: first.startPosition.row + 1,
+          });
+        }
+        break;
+      }
+
+      case 'member_access_expression': {
+        // $obj->prop or $this->prop (standalone property access).
+        const children = node.namedChildren;
+        if (children.length < 2) break;
+        const receiver = children[0];
+        const nameNode = children[1];
+        if (nameNode.type !== 'name') break;
+
+        const line = nameNode.startPosition.row + 1;
+        if (receiver.type === 'variable_name') {
+          const varNameNode = receiver.namedChildren.find((c) => c.type === 'name');
+          if (varNameNode?.text === 'this') {
+            calls.push({ type: 'this_prop', callee: nameNode.text, line });
+          } else {
+            calls.push({
+              type: 'member_prop', callee: nameNode.text,
+              receiver: varNameNode?.text, line,
+            });
+          }
+        }
+        break;
+      }
+
+      case 'class_constant_access_expression': {
+        // Class::CONST, self::CONST, or enum-case Class::Case
+        const children = node.namedChildren;
+        if (children.length < 2) break;
+        const scope = children[0];
+        const nameNode = children[1];
+        if (nameNode.type !== 'name') break;
+
+        const line = nameNode.startPosition.row + 1;
+        if (scope.type === 'relative_scope') {
+          calls.push({ type: 'relative_const', callee: nameNode.text, line });
+        } else if (scope.type === 'name' || scope.type === 'qualified_name') {
+          calls.push({
+            type: 'class_const', callee: nameNode.text,
+            classRef: scope.text, line,
+          });
+        }
+        break;
+      }
+
+      case 'scoped_property_access_expression': {
+        // Class::$prop, self::$prop, $obj::$prop
+        const children = node.namedChildren;
+        if (children.length < 2) break;
+        const scope = children[0];
+        const propNode = children[1];
+        if (propNode.type !== 'variable_name') break;
+        const nameNode = propNode.namedChildren.find((c) => c.type === 'name');
+        if (!nameNode) break;
+
+        const line = nameNode.startPosition.row + 1;
+        if (scope.type === 'relative_scope') {
+          calls.push({ type: 'relative_static_prop', callee: nameNode.text, line });
+        } else if (scope.type === 'name' || scope.type === 'qualified_name') {
+          calls.push({
+            type: 'static_prop', callee: nameNode.text,
+            classRef: scope.text, line,
           });
         }
         break;
