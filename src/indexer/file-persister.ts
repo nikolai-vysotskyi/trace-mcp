@@ -48,6 +48,9 @@ export class FilePersister {
         this.state.changedFileIds.add(fileId);
         store.updateFileHash(fileId, ext.hash, ext.contentSize, ext.mtimeMs);
         if (ext.gitignored) store.updateFileGitignored(fileId, true);
+        // Workspace may change between indexing runs (e.g., after monorepo
+        // detection logic was fixed). Update even on fast path.
+        if (ext.workspace) store.updateFileWorkspace(fileId, ext.workspace);
         if (ext.importEdges.length > 0) {
           store.deleteOutgoingImportEdges(fileId);
           this.state.pendingImports.set(fileId, ext.importEdges);

@@ -192,13 +192,17 @@ export const TraceMcpConfigSchema = z.object({
   include: z.array(z.string()).default([
     'src/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php,vue,svelte}',
     'lib/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php}',
-    'app/**/*.{ts,tsx,js,jsx,php,rb}',
+    'app/**/*.{ts,tsx,js,jsx,php,rb,vue,svelte}',
     'test/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php}',
     'tests/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php}',
     'routes/**/*.{ts,js,php}',
     'database/migrations/**/*.php',
     'resources/js/**/*.{vue,ts,tsx,js,jsx}',
     'resources/views/**/*.blade.php',
+    'pages/**/*.{vue,ts,tsx,js,jsx}',
+    'components/**/*.{vue,ts,tsx,js,jsx}',
+    'composables/**/*.{ts,tsx,js,jsx}',
+    'server/**/*.{ts,tsx,js,jsx}',
   ]),
   exclude: z.array(z.string()).default([
     '**/vendor/**', '**/node_modules/**', '**/.git/**',
