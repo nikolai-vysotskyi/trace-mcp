@@ -829,6 +829,8 @@
       line-height: 1.8;
       color: var(--text-primary);
       overflow-x: auto;
+      white-space: pre;
+      tab-size: 2;
     }
     .terminal-body .cmt { color: var(--text-disabled); }
     .terminal-body .pmt { color: var(--text-disabled); }
@@ -998,7 +1000,7 @@
     </a>
     <div class="nav-status">
       <span class="status-dot"></span>
-      <span>v1.23.1 / online</span>
+      <span>v<span data-version>&hellip;</span> / online</span>
     </div>
     <div class="nav-links">
       <a href="#what">What it is</a>
@@ -1019,7 +1021,7 @@
       <div class="hero-meta">
         <span class="label">/ Model Context Protocol Server</span>
         <span class="divider"></span>
-        <span class="label label-disabled">v1.23.1 / mit license</span>
+        <span class="label label-disabled">v<span data-version>&hellip;</span> / mit license</span>
       </div>
 
       <div class="hero-grid">
@@ -1775,7 +1777,7 @@
     <div class="footer-bottom">
       <div class="footer-serial">
         <span class="item">trace-mcp</span>
-        <span class="item">v1.23.1</span>
+        <span class="item">v<span data-version>&hellip;</span></span>
         <span class="item">mit</span>
         <span class="item">2026</span>
       </div>
@@ -1847,6 +1849,38 @@
     }, { threshold: 0.4 });
     segObs.observe(container);
   });
+
+  // Fetch latest version from npm registry
+  (function fetchVersion() {
+    const cacheKey = 'trace-mcp-version';
+    const cacheTTL = 60 * 60 * 1000; // 1 hour
+    const setVersion = (v) => {
+      document.querySelectorAll('[data-version]').forEach(el => { el.textContent = v; });
+    };
+
+    // Use cached version if fresh
+    try {
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+      if (cached && Date.now() - cached.ts < cacheTTL && cached.v) {
+        setVersion(cached.v);
+      }
+    } catch (e) {}
+
+    fetch('https://registry.npmjs.org/trace-mcp/latest')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        if (data && data.version) {
+          setVersion(data.version);
+          try { localStorage.setItem(cacheKey, JSON.stringify({ v: data.version, ts: Date.now() })); } catch (e) {}
+        }
+      })
+      .catch(() => {
+        // Fallback if offline and no cache
+        document.querySelectorAll('[data-version]').forEach(el => {
+          if (el.textContent === '…' || el.textContent === '') el.textContent = 'latest';
+        });
+      });
+  })();
 
   // Copy install
   function copyInstall(el) {
