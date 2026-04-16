@@ -886,13 +886,12 @@ export class TopologyStore {
         const sourceGroup = repoGroup.get(call.source_repo_id);
 
         // Filter endpoints to same project_group when group is known
-        const candidateEndpoints = sourceGroup
-          ? endpoints.filter((ep) => {
-            const epGroup = serviceGroup.get(ep.service_id);
-            // Match if: same group, or either has no group (ungrouped services)
-            return epGroup === sourceGroup || !epGroup || !sourceGroup;
-          })
-          : endpoints;
+        // Strict group isolation: only match endpoints from the same group.
+        // Ungrouped sources only match ungrouped endpoints.
+        const candidateEndpoints = endpoints.filter((ep) => {
+          const epGroup = serviceGroup.get(ep.service_id) ?? null;
+          return epGroup === sourceGroup;
+        });
 
         const match = findBestEndpointMatch(call.url_pattern, call.method, candidateEndpoints);
         if (match) {
