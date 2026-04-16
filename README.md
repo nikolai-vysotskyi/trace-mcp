@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <strong>Framework-aware code intelligence MCP server — 14 frameworks, 7 ORMs, 12 UI libraries, 20+ other integrations (53 total) across 68 languages. Up to 99% token reduction.</strong>
+  <strong>Framework-aware code intelligence MCP server — 15 frameworks, 7 ORMs, 13 UI libraries, 23 other integrations (58 total) across 81 languages. Up to 99% token reduction.</strong>
 </p>
 
 > Your AI agent reads `UserController.php` and sees a class.
@@ -35,7 +35,7 @@
 
 **Three things no other tool does:**
 
-1. **Framework-aware edges** — trace-mcp understands that `Inertia::render('Users/Show')` connects PHP to Vue, that `@Injectable()` creates a DI dependency, that `$user->posts()` means a `posts` table from migrations. 53 integrations across 14 frameworks, 7 ORMs, 12 UI libraries.
+1. **Framework-aware edges** — trace-mcp understands that `Inertia::render('Users/Show')` connects PHP to Vue, that `@Injectable()` creates a DI dependency, that `$user->posts()` means a `posts` table from migrations. 58 integrations across 15 frameworks, 7 ORMs, 13 UI libraries.
 
 2. **Code-linked decision memory** — when you record "chose PostgreSQL for JSONB support", it's linked to `src/db/connection.ts::Pool#class`. When someone runs `get_change_impact` on that symbol, they see the decision. MemPalace stores decisions as text; trace-mcp ties them to the dependency graph.
 
@@ -78,10 +78,10 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp | cymbal |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **GitHub stars** | — | 23K | 6.6K | 5.1K | 1.5K | 1.3K | 137 |
-| Tree-sitter AST parsing | ✅ 68 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ | ✅ ~40 languages | ✅ 66 languages | ✅ 22 languages |
+| Tree-sitter AST parsing | ✅ 81 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ | ✅ ~40 languages | ✅ 66 languages | ✅ 22 languages |
 | Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output | ✅ | ✅ core focus | ✅ | ✅ outline/show/context |
 | Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
-| Framework-aware edges | ✅ 53 integrations (14 frameworks, 7 ORMs, 12 UI libs) | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
+| Framework-aware edges | ✅ 58 integrations (15 frameworks, 7 ORMs, 13 UI libs) | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
 | Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ❌ | ✅ blast radius + decorator filter | ✅ detect_changes | ✅ impact command |
 | Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ❌ | ✅ AST-based, bidirectional | ✅ trace_call_path | ✅ refs/importers |
 | Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ | ❌ |
@@ -138,10 +138,10 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Capability | trace-mcp | Serena | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **GitHub stars** | — | 22.6K | 5.1K | 1.3K | — | — | — |
-| Languages | 68 | ~20 (via LSP) | ~10 | 66 | ~15 | 32 | ~10 |
-| Framework integrations | 53 (14 fw + 7 ORM + 12 UI + 20 other) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Languages | 81 | ~20 (via LSP) | ~10 | 66 | ~15 | 32 | ~10 |
+| Framework integrations | 58 (15 fw + 7 ORM + 13 UI + 23 other) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Cross-language edges | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| MCP tools | 120+ | ~35 | ~15 | ~20 | ~25 | 90 | 139 |
+| MCP tools | 138 | ~35 | ~15 | ~20 | ~25 | 90 | 139 |
 | Session memory | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Multi-repo subprojects | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -234,7 +234,7 @@ trace-mcp benchmark /path/to/project
 
 ### Supported stack
 
-**Languages (68):** PHP, TypeScript/JavaScript, Python, Go, Java, Kotlin, Ruby, Rust, C, C++, C#, Swift, Objective-C, Dart, Scala, Groovy, Elixir, Erlang, Haskell, Gleam, Bash, Lua, Perl, GDScript, R, Julia, Nix, SQL, HCL/Terraform, Protocol Buffers, Vue SFC, HTML, CSS/SCSS/SASS/LESS, XML/XUL/XSD, YAML, JSON, TOML, Assembly, Fortran, AutoHotkey, Verse, AL, Blade, EJS, Zig, OCaml, Clojure, F#, Elm, CUDA, COBOL, Verilog/SystemVerilog, GLSL, Meson, Vim Script, Common Lisp, Emacs Lisp, Dockerfile, Makefile, CMake, INI, Svelte, Markdown, MATLAB, Lean 4, FORM, Magma, Wolfram/Mathematica
+**Languages (81):** PHP, TypeScript, JavaScript, Python, Go, Java, Kotlin, Ruby, Rust, C, C++, C#, Swift, Objective-C, Objective-C++, Dart, Scala, Groovy, Elixir, Erlang, Haskell, Gleam, Bash, Lua, Perl, GDScript, R, Julia, Nix, SQL, PL/SQL, HCL/Terraform, Protocol Buffers, GraphQL, Prisma, Vue SFC, HTML, CSS/SCSS/SASS/LESS, XML/XUL/XSD, YAML, JSON, TOML, Assembly, Fortran, AutoHotkey, Verse, AL, Blade, EJS, Zig, OCaml, Clojure, F#, Elm, CUDA, COBOL, Verilog/SystemVerilog, GLSL, Meson, Vim Script, Common Lisp, Emacs Lisp, Dockerfile, Makefile, CMake, INI, Svelte, Markdown, MATLAB, Lean 4, FORM, Magma, Wolfram/Mathematica, Ada, Apex, D, Nim, Pascal, PowerShell, Solidity, Tcl
 
 **Frameworks:** Laravel (+ Livewire, Nova, Filament, Pennant), Django (+ DRF), FastAPI, Flask, Express, NestJS, Fastify, Hono, Next.js, Nuxt, Rails, Spring, tRPC
 
