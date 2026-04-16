@@ -283,15 +283,20 @@ function findBestEndpointMatch(
 export class TopologyStore {
   public readonly db: Database.Database;
 
-  constructor(dbPath: string) {
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('foreign_keys = ON');
-    this.db.pragma('busy_timeout = 5000');
-    this.preMigrate();
-    this.db.exec(TOPOLOGY_DDL);
-    this.migrate();
-    logger.debug({ dbPath }, 'Topology database initialized');
+  constructor(dbPath: string, opts?: { readonly?: boolean }) {
+    this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
+    if (opts?.readonly) {
+      this.db.pragma('busy_timeout = 5000');
+      logger.debug({ dbPath, readonly: true }, 'Topology database opened (readonly)');
+    } else {
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('foreign_keys = ON');
+      this.db.pragma('busy_timeout = 5000');
+      this.preMigrate();
+      this.db.exec(TOPOLOGY_DDL);
+      this.migrate();
+      logger.debug({ dbPath }, 'Topology database initialized');
+    }
   }
 
   /**
@@ -406,6 +411,38 @@ export class TopologyStore {
         logger.info({ deleted: result.changes }, 'Migration: cleared stale cross-service edges for rebuild');
       }
     });
+
+    // Migration: rebuild client_calls table to fix FK references.
+    // Legacy table referenced federated_repos(id) which no longer exists.
+    // Must recreate with subprojects(id) references.
+    this.runOnce('fix_client_calls_fk_v1', () => {
+      const hasLegacyFk = (this.db.prepare(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='client_calls'",
+      ).get() as { sql: string } | undefined)?.sql?.includes('federated_repos');
+
+      if (hasLegacyFk) {
+        this.db.exec(`
+          DROP TABLE IF EXISTS client_calls;
+          CREATE TABLE client_calls (
+            id              INTEGER PRIMARY KEY,
+            source_repo_id  INTEGER NOT NULL REFERENCES subprojects(id) ON DELETE CASCADE,
+            target_repo_id  INTEGER REFERENCES subprojects(id),
+            file_path       TEXT NOT NULL,
+            line            INTEGER,
+            call_type       TEXT NOT NULL,
+            method          TEXT,
+            url_pattern     TEXT NOT NULL,
+            matched_endpoint_id INTEGER REFERENCES api_endpoints(id),
+            confidence      REAL NOT NULL DEFAULT 0.5,
+            metadata        TEXT
+          );
+          CREATE INDEX IF NOT EXISTS idx_client_calls_source ON client_calls(source_repo_id);
+          CREATE INDEX IF NOT EXISTS idx_client_calls_target ON client_calls(target_repo_id);
+          CREATE INDEX IF NOT EXISTS idx_client_calls_endpoint ON client_calls(matched_endpoint_id);
+        `);
+        logger.info('Migration: rebuilt client_calls with correct FK references (subprojects instead of federated_repos)');
+      }
+    });
   }
 
   /** Run a migration block exactly once, tracked by key in topology_meta. */
@@ -466,7 +503,15 @@ export class TopologyStore {
     this.db.prepare('UPDATE services SET project_group = ? WHERE id = ?').run(projectGroup, serviceId);
   }
 
-  getServicesWithEndpointCounts(): Array<ServiceRow & { endpoint_count: number }> {
+  getServicesWithEndpointCounts(projectRoot?: string): Array<ServiceRow & { endpoint_count: number }> {
+    if (projectRoot) {
+      return this.db.prepare(`
+        SELECT s.*, (SELECT COUNT(*) FROM api_endpoints WHERE service_id = s.id) as endpoint_count
+        FROM services s
+        WHERE s.repo_root IN (SELECT repo_root FROM subprojects WHERE project_root = ?)
+        ORDER BY s.project_group NULLS LAST, s.name
+      `).all(projectRoot) as Array<ServiceRow & { endpoint_count: number }>;
+    }
     return this.db.prepare(`
       SELECT s.*, (SELECT COUNT(*) FROM api_endpoints WHERE service_id = s.id) as endpoint_count
       FROM services s ORDER BY s.project_group NULLS LAST, s.name

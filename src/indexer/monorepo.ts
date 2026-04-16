@@ -174,8 +174,10 @@ function detectImplicitWorkspaces(rootPath: string): WorkspaceInfo[] {
       if (hasPackageJson || hasComposerJson) {
         if (!seen.has(relChild)) {
           seen.add(relChild);
-          const name = resolveWorkspaceName(rootPath, relChild);
-          workspaces.push({ name, path: relChild });
+          // Use directory path as name for implicit workspaces — package names
+          // are often generic ("laravel/laravel", "nuxt-app") and collide
+          // across independent projects under a common root.
+          workspaces.push({ name: relChild, path: relChild });
         }
         // Don't recurse into detected workspaces (they're leaf projects)
       } else {
@@ -242,6 +244,6 @@ function resolveWorkspaceName(rootPath: string, relPath: string): string {
     }
   } catch { /* ignore */ }
 
-  // Fallback to directory name
-  return path.basename(relPath);
+  // Fallback to directory path
+  return relPath;
 }

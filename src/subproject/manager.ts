@@ -209,7 +209,7 @@ export class SubprojectManager {
         metadata: svc.metadata,
       });
       this.topoStore.deleteContractsByService(serviceId);
-      this.registerContracts(serviceId, svc.repoRoot, svc.repoRoot, opts?.contractPaths);
+      this.registerContracts(serviceId, svc.repoRoot, absProjectRoot, opts?.contractPaths);
 
       const clientCalls = this.scanAndLinkClientCalls(repoId, svc.repoRoot);
       this.topoStore.updateSubprojectSyncTime(repoId);
@@ -367,7 +367,7 @@ export class SubprojectManager {
         for (const contract of contracts) {
           endpointsUpdated += contract.endpoints.length;
         }
-        this.registerContracts(serviceId, svc.repoRoot);
+        this.registerContracts(serviceId, svc.repoRoot, repo.project_root);
       }
 
       const calls = this.scanAndLinkClientCalls(repo.id, repo.repo_root);
@@ -462,9 +462,11 @@ export class SubprojectManager {
       // 2. If service was indexed as part of a parent monorepo (common case when
       //    the user runs `trace-mcp index the/`), the DB lives at the parent root.
       //    Filter routes to this service's subdirectory using pathPrefix.
+      //    The prefix must be relative to the parent root (file paths in DB are relative).
       if (!fromDb && repoRoot && repoRoot !== serviceRoot) {
         const parentDbPath = getDbPath(repoRoot);
-        fromDb = extractRoutesFromDb(parentDbPath, serviceRoot);
+        const relPrefix = path.relative(repoRoot, serviceRoot);
+        fromDb = extractRoutesFromDb(parentDbPath, relPrefix);
       }
 
       if (fromDb) contracts.push(fromDb);
