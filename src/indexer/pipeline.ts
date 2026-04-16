@@ -239,6 +239,7 @@ export class IndexingPipeline {
     edgeResolver.resolvePythonImportEdges();
     edgeResolver.resolvePhpImportEdges();
     edgeResolver.resolvePhpCallEdges();
+    edgeResolver.resolveMemberOfEdges();
     edgeResolver.resolvePythonHeritageEdges();
     edgeResolver.resolvePythonCallEdges();
     edgeResolver.resolveTestCoversEdges();
