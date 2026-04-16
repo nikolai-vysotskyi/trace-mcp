@@ -355,6 +355,7 @@ const SEED_NODE_TYPES = ['symbol', 'file', 'route', 'component', 'migration', 'o
 const SEED_EDGE_TYPES = [
   // Core edges (added in v2 migration, must also be in seed for fresh DBs)
   { name: 'calls', category: 'core', description: 'Direct function/method call' },
+  { name: 'instantiates', category: 'core', description: 'Class instantiation via `new`' },
   { name: 'references', category: 'core', description: 'Symbol reference (read/write)' },
   { name: 'unresolved', category: 'core', description: 'Phantom edge for unresolved targets' },
   { name: 'test_covers', category: 'core', description: 'Test file covers a symbol or file' },
