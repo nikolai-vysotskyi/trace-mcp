@@ -380,25 +380,26 @@ function resolveCallSite(
       return null;
 
     case 'function': {
-      // Top-level function call — resolve by name in same namespace or global
+      // Top-level function call — resolve by name in same namespace or global.
+      // Workspace-aware to avoid cross-project leakage when helper names collide.
       const ns = fileNamespaceMap.get(source.file_id);
       if (ns) {
-        const nsHit = pickFunction(byFqn.get(`${ns}\\${cs.callee}`));
+        const nsHit = pickFunction(byFqn.get(`${ns}\\${cs.callee}`), source.workspace);
         if (nsHit) return nsHit;
       }
-      // Via use statements (function imports are rare but possible)
       const uses = fileUseMap.get(source.file_id);
       const viaUse = uses?.get(cs.callee);
       if (viaUse) {
-        const hit = pickFunction(byFqn.get(viaUse));
+        const hit = pickFunction(byFqn.get(viaUse), source.workspace);
         if (hit) return hit;
       }
-      // Global function
-      const global = pickFunction(byFqn.get(cs.callee));
+      // Global function — prefer same-workspace match.
+      const global = pickFunction(byFqn.get(cs.callee), source.workspace);
       if (global) return global;
-      // Any function with that name
-      const byNameHit = byName.get(cs.callee)?.find((s) => s.kind === 'function');
-      return byNameHit ?? null;
+      // Any function with that name in same workspace first.
+      const candidates = byName.get(cs.callee)?.filter((s) => s.kind === 'function') ?? [];
+      const sameWs = candidates.find((c) => c.workspace === source.workspace);
+      return sameWs ?? candidates[0] ?? null;
     }
 
     case 'this_prop': {
@@ -624,9 +625,20 @@ function findConstOrEnumCase(
   return null;
 }
 
-function pickFunction(candidates: PhpSymbol[] | undefined): PhpSymbol | null {
+function pickFunction(
+  candidates: PhpSymbol[] | undefined,
+  preferWorkspace: string | null = null,
+): PhpSymbol | null {
   if (!candidates) return null;
-  return candidates.find((c) => c.kind === 'function') ?? null;
+  const fns = candidates.filter((c) => c.kind === 'function');
+  if (fns.length === 0) return null;
+  // Prefer same-workspace function to avoid cross-project leakage when a
+  // helper name (like hasDatabaseConnection) exists in multiple projects.
+  if (preferWorkspace !== null) {
+    const sameWs = fns.find((c) => c.workspace === preferWorkspace);
+    if (sameWs) return sameWs;
+  }
+  return fns[0];
 }
 
 /**
