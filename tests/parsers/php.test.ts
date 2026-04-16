@@ -527,6 +527,73 @@ function f() {
     expect(calls[0].line).toBe(3);
     expect(calls[1].line).toBe(5);
   });
+
+  it('extracts $this->prop property access', async () => {
+    const body = await parseBody(`<?php function f() { echo $this->name; $this->email = 'x'; }`);
+    const refs = extractCallSites(body);
+    const props = refs.filter((r) => r.type === 'this_prop');
+    expect(props).toHaveLength(2);
+    expect(props.map((p) => p.callee).sort()).toEqual(['email', 'name']);
+  });
+
+  it('extracts $obj->prop as member_prop', async () => {
+    const body = await parseBody(`<?php function f() { echo $user->name; }`);
+    const refs = extractCallSites(body);
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({ type: 'member_prop', callee: 'name', receiver: 'user' });
+  });
+
+  it('extracts Class::CONST class constant access', async () => {
+    const body = await parseBody(`<?php function f() { echo User::STATUS_ACTIVE; echo App\\Config::DEFAULT; }`);
+    const refs = extractCallSites(body);
+    const consts = refs.filter((r) => r.type === 'class_const');
+    expect(consts).toHaveLength(2);
+    expect(consts[0]).toMatchObject({ callee: 'STATUS_ACTIVE', classRef: 'User' });
+    expect(consts[1]).toMatchObject({ callee: 'DEFAULT', classRef: 'App\\Config' });
+  });
+
+  it('extracts self::CONST as relative_const', async () => {
+    const body = await parseBody(`<?php function f() { echo self::FOO; }`);
+    const refs = extractCallSites(body);
+    expect(refs[0]).toMatchObject({ type: 'relative_const', callee: 'FOO' });
+  });
+
+  it('extracts enum case access as class_const', async () => {
+    // PHP treats enum cases as class constants in the AST.
+    // Resolver decides whether the target class is an enum and picks enum_case.
+    const body = await parseBody(`<?php function f() { return Status::Active; }`);
+    const refs = extractCallSites(body);
+    expect(refs[0]).toMatchObject({ type: 'class_const', callee: 'Active', classRef: 'Status' });
+  });
+
+  it('extracts Class::$static static property access', async () => {
+    const body = await parseBody(`<?php function f() { echo self::$static_prop; echo User::$tableName; }`);
+    const refs = extractCallSites(body);
+    const rel = refs.filter((r) => r.type === 'relative_static_prop');
+    const st = refs.filter((r) => r.type === 'static_prop');
+    expect(rel).toHaveLength(1);
+    expect(rel[0].callee).toBe('static_prop');
+    expect(st).toHaveLength(1);
+    expect(st[0]).toMatchObject({ callee: 'tableName', classRef: 'User' });
+  });
+
+  it('does not duplicate prop access for $this->method() call', async () => {
+    // $this->save() is a call — should NOT also produce a this_prop for "save".
+    const body = await parseBody(`<?php function f() { $this->save(); }`);
+    const refs = extractCallSites(body);
+    expect(refs).toHaveLength(1);
+    expect(refs[0].type).toBe('this');
+    expect(refs[0].callee).toBe('save');
+  });
+
+  it('captures inner prop access for chained $this->foo->bar()', async () => {
+    // $this->foo->bar() — we can't statically type $this->foo, so the ->bar()
+    // call is a dynamic dispatch we skip. But the inner ->foo access is captured.
+    const body = await parseBody(`<?php function f() { $this->service->save(); }`);
+    const refs = extractCallSites(body);
+    const prop = refs.find((r) => r.type === 'this_prop' && r.callee === 'service');
+    expect(prop).toBeDefined();
+  });
 });
 
 // ---------- method symbol emits callSites metadata ----------
