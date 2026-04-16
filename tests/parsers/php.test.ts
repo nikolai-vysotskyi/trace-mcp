@@ -566,6 +566,12 @@ function f() {
     expect(refs[0]).toMatchObject({ type: 'class_const', callee: 'Active', classRef: 'Status' });
   });
 
+  it('extracts Class::class magic constant as class_ref (not constant)', async () => {
+    const body = await parseBody(`<?php function f() { return User::class; }`);
+    const refs = extractCallSites(body);
+    expect(refs[0]).toMatchObject({ type: 'class_ref', callee: 'class', classRef: 'User' });
+  });
+
   it('extracts Class::$static static property access', async () => {
     const body = await parseBody(`<?php function f() { echo self::$static_prop; echo User::$tableName; }`);
     const refs = extractCallSites(body);

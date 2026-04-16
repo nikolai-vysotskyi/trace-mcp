@@ -39,7 +39,8 @@ export function resolvePhpCallEdges(state: PipelineState): void {
   const usesTraitType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('uses_trait') as { id: number } | undefined;
   const propType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('accesses_property') as { id: number } | undefined;
   const constType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('accesses_constant') as { id: number } | undefined;
-  if (!callsType || !instType || !extendsType || !implementsType || !usesTraitType || !propType || !constType) return;
+  const refType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('references') as { id: number } | undefined;
+  if (!callsType || !instType || !extendsType || !implementsType || !usesTraitType || !propType || !constType || !refType) return;
 
   // Load all PHP symbols once
   const allSymbols = store.db.prepare(`
@@ -109,6 +110,23 @@ export function resolvePhpCallEdges(state: PipelineState): void {
   let usesTraitEdges = 0;
   let propAccesses = 0;
   let constAccesses = 0;
+  let typeRefs = 0;
+
+  /** Helper to emit a reference edge to a class if the ref resolves. */
+  function emitRef(
+    sourceNodeId: number,
+    source: PhpSymbol,
+    classRef: string,
+    refKind: string,
+  ): void {
+    const target = resolveClassRef(classRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+    if (!target) return;
+    const tNode = symbolNodeMap.get(target.id);
+    if (tNode == null || tNode === sourceNodeId) return;
+    if (source.workspace !== target.workspace) return;
+    insertStmt.run(sourceNodeId, tNode, refType!.id, JSON.stringify({ ref: classRef, kind: refKind }), 0);
+    typeRefs++;
+  }
 
   store.db.transaction(() => {
     for (const sym of allSymbols) {
@@ -160,6 +178,25 @@ export function resolvePhpCallEdges(state: PipelineState): void {
         }
       }
 
+      // Type reference edges — connect symbols to classes used as type hints.
+      // This turns type-hint-only classes from disconnected into connected.
+      if (sym.kind === 'method' || sym.kind === 'function') {
+        // Parameter types
+        const paramTypes = meta.paramTypes as Record<string, string> | undefined;
+        if (paramTypes) {
+          for (const type of Object.values(paramTypes)) {
+            emitRef(sourceNodeId, sym, type, 'param_type');
+          }
+        }
+        // Return type
+        const retType = meta.returnType as string | undefined;
+        if (retType) emitRef(sourceNodeId, sym, retType, 'return_type');
+      }
+      if (sym.kind === 'property') {
+        const propType = meta.type as string | undefined;
+        if (propType) emitRef(sourceNodeId, sym, propType, 'property_type');
+      }
+
       // Call/access edges: only on methods/functions
       if ((sym.kind === 'method' || sym.kind === 'function') && Array.isArray(meta.callSites)) {
         const callSites = meta.callSites as PhpCallSite[];
@@ -188,6 +225,10 @@ export function resolvePhpCallEdges(state: PipelineState): void {
               edgeTypeId = constType.id;
               constAccesses++;
               break;
+            case 'class_ref':
+              edgeTypeId = refType.id;
+              typeRefs++;
+              break;
             default:
               edgeTypeId = callsType.id;
               calls++;
@@ -199,10 +240,10 @@ export function resolvePhpCallEdges(state: PipelineState): void {
     }
   })();
 
-  const total = calls + instantiations + extendsEdges + implementsEdges + usesTraitEdges + propAccesses + constAccesses;
+  const total = calls + instantiations + extendsEdges + implementsEdges + usesTraitEdges + propAccesses + constAccesses + typeRefs;
   if (total > 0) {
     logger.info(
-      { calls, instantiations, extendsEdges, implementsEdges, usesTraitEdges, propAccesses, constAccesses },
+      { calls, instantiations, extendsEdges, implementsEdges, usesTraitEdges, propAccesses, constAccesses, typeRefs },
       'PHP call/heritage edges resolved',
     );
   }
@@ -409,6 +450,85 @@ function resolveCallSite(
     case 'member_prop':
       // Dynamic dispatch ($obj->prop) — receiver type not tracked yet.
       return null;
+
+    case 'class_ref': {
+      // Class::class magic constant — resolves to the class itself, not a constant.
+      if (!cs.classRef) return null;
+      return resolveClassRef(cs.classRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+    }
+
+    case 'this_member_call': {
+      // $this->prop->method() — resolve prop type via class hierarchy, then find method on type
+      if (!parentClass || !cs.propChain || cs.propChain.length === 0) return null;
+      let currentClass: PhpSymbol | null = parentClass;
+      // Walk the property chain: each step resolves a property, get its type,
+      // then find the class for that type to continue.
+      for (const propName of cs.propChain) {
+        if (!currentClass) return null;
+        const prop = findMemberInClassHierarchy(
+          propName, 'property', currentClass,
+          byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        );
+        if (!prop || !prop.metadata) return null;
+        try {
+          const propMeta = JSON.parse(prop.metadata) as Record<string, unknown>;
+          const typeRef = propMeta.type as string | undefined;
+          if (!typeRef) return null;
+          // Resolve type using property's file context (not source's — property may
+          // have been defined in a parent class with different use statements).
+          const classOwner = prop.parent_id != null ? symbolById.get(prop.parent_id) ?? null : null;
+          currentClass = resolveClassRef(typeRef, classOwner ?? prop, fileUseMap, fileNamespaceMap, byFqn, byName);
+        } catch { return null; }
+      }
+      if (!currentClass) return null;
+      return findMethodInClassHierarchy(
+        cs.callee, currentClass,
+        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+      );
+    }
+
+    case 'param_call': {
+      // $param->method() where $param is a typed parameter
+      if (!cs.receiver || !source.metadata) return null;
+      try {
+        const meta = JSON.parse(source.metadata) as Record<string, unknown>;
+        const paramTypes = meta.paramTypes as Record<string, string> | undefined;
+        if (!paramTypes) return null;
+        const typeRef = paramTypes[cs.receiver];
+        if (!typeRef) return null;
+        const targetClass = resolveClassRef(typeRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+        if (!targetClass) return null;
+        return findMethodInClassHierarchy(
+          cs.callee, targetClass,
+          byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        );
+      } catch { return null; }
+    }
+
+    case 'local_call': {
+      // $local->method() where $local = new X() — type tracked at extract time.
+      // We stored the receiver name; now use paramTypes-like mechanism.
+      // Local types aren't persisted in metadata currently — they're in-memory
+      // during extraction. The call is already type-resolved into something
+      // the resolver can handle here only if we persist them. For now, we
+      // persist the local type alongside the receiver name in metadata at
+      // extraction time (handled in PHP plugin — see upcoming changes).
+      // Fallback: skip if we can't resolve.
+      if (!cs.receiver || !source.metadata) return null;
+      try {
+        const meta = JSON.parse(source.metadata) as Record<string, unknown>;
+        const localTypes = meta.localTypes as Record<string, string> | undefined;
+        if (!localTypes) return null;
+        const typeRef = localTypes[cs.receiver];
+        if (!typeRef) return null;
+        const targetClass = resolveClassRef(typeRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+        if (!targetClass) return null;
+        return findMethodInClassHierarchy(
+          cs.callee, targetClass,
+          byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        );
+      } catch { return null; }
+    }
   }
 }
 

@@ -16,6 +16,8 @@ import {
   extractClassHeritage,
   extractInterfaceExtends,
   extractCallSites,
+  extractTypeRef,
+  extractParamTypes,
   makeSymbolId,
   makeFqn,
   extractSignature,
@@ -30,6 +32,34 @@ import {
   collectNodeTypes,
 } from './helpers.js';
 import { detectMinPhpVersion } from './version-features.js';
+
+/**
+ * Walk a method/function body and collect local variable types from simple
+ * assignment patterns:
+ *   $x = new Foo();        → $x : Foo
+ *   $x = new App\Bar();    → $x : App\Bar
+ * Re-assignments may override earlier types (last-write-wins).
+ */
+function collectLocalTypes(bodyNode: TSNode, out: Map<string, string>): void {
+  function visit(node: TSNode): void {
+    if (node.type === 'assignment_expression') {
+      const children = node.namedChildren;
+      const lhs = children[0];
+      const rhs = children[1];
+      if (lhs?.type === 'variable_name' && rhs?.type === 'object_creation_expression') {
+        const varNameNode = lhs.namedChildren.find((c) => c.type === 'name');
+        const classNode = rhs.namedChildren.find(
+          (c) => c.type === 'name' || c.type === 'qualified_name',
+        );
+        if (varNameNode?.text && classNode?.text) {
+          out.set(varNameNode.text, classNode.text);
+        }
+      }
+    }
+    for (const c of node.namedChildren) visit(c);
+  }
+  visit(bodyNode);
+}
 
 export class PhpLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
@@ -313,11 +343,40 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     if (mods.final) metadata.final = true;
     if (vis) metadata.visibility = vis;
 
-    // Extract call sites from method body for symbol-level call graph
+    // Extract typed parameters for type-aware call resolution
+    const paramsNode = node.namedChildren.find((c) => c.type === 'formal_parameters');
+    const { params: paramTypes, promoted: promotedProps } = extractParamTypes(paramsNode);
+    if (paramTypes.size > 0) {
+      metadata.paramTypes = Object.fromEntries(paramTypes);
+    }
+
+    // Extract return type for chained call resolution
+    // Return type is after formal_parameters, before compound_statement
+    let sawParams = false;
+    for (const child of node.namedChildren) {
+      if (child.type === 'formal_parameters') { sawParams = true; continue; }
+      if (!sawParams) continue;
+      if (child.type === 'compound_statement') break;
+      const retType = extractTypeRef(child);
+      if (retType) { metadata.returnType = retType; break; }
+    }
+
+    // Extract call sites + local variable types from method body
     const body = node.childForFieldName('body');
     if (body) {
-      const callSites = extractCallSites(body);
+      // Pre-pass: track simple `$x = new Class()` assignments as local types
+      const localTypes = new Map<string, string>();
+      collectLocalTypes(body, localTypes);
+      // Include promoted constructor properties as locals within __construct
+      // (so calls like `$cache->get()` resolve within the constructor body).
+      for (const [k, v] of promotedProps) localTypes.set(k, v);
+
+      const callSites = extractCallSites(body, paramTypes, localTypes);
       if (callSites.length > 0) metadata.callSites = callSites;
+      // Persist local types so the resolver can resolve 'local_call' sites.
+      if (localTypes.size > 0) {
+        metadata.localTypes = Object.fromEntries(localTypes);
+      }
     }
 
     symbols.push({
