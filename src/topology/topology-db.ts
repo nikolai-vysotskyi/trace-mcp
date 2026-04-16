@@ -872,12 +872,12 @@ export class TopologyStore {
       serviceGroup.set(svc.id, svc.project_group ?? null);
     }
 
-    // Build source_repo_id → project_group lookup (via repo_root → service match)
-    const repoGroup = new Map<number, string | null>();
+    // Build source_repo_id → { projectGroup, serviceId } lookup
+    const repoInfo = new Map<number, { group: string | null; serviceId: number | null }>();
     const allRepos = this.getAllSubprojects();
     for (const repo of allRepos) {
       const svc = services.find((s) => s.repo_root === repo.repo_root);
-      repoGroup.set(repo.id, svc?.project_group ?? null);
+      repoInfo.set(repo.id, { group: svc?.project_group ?? null, serviceId: svc?.id ?? null });
     }
 
     let linked = 0;
@@ -888,17 +888,29 @@ export class TopologyStore {
 
     this.db.transaction(() => {
       for (const call of unlinked) {
-        const sourceGroup = repoGroup.get(call.source_repo_id);
+        const info = repoInfo.get(call.source_repo_id);
+        const sourceGroup = info?.group ?? null;
+        const sourceServiceId = info?.serviceId ?? null;
 
-        // Filter endpoints to same project_group when group is known
-        // Strict group isolation: only match endpoints from the same group.
-        // Ungrouped sources only match ungrouped endpoints.
-        const candidateEndpoints = endpoints.filter((ep) => {
+        // Filter endpoints to same project_group (strict isolation).
+        const groupEndpoints = endpoints.filter((ep) => {
           const epGroup = serviceGroup.get(ep.service_id) ?? null;
           return epGroup === sourceGroup;
         });
 
-        const match = findBestEndpointMatch(call.url_pattern, call.method, candidateEndpoints);
+        // Self-first matching: prefer endpoints from the SAME service as the client call.
+        // This prevents cross-project false positives when multiple services share
+        // identical route paths (e.g., copy-pasted Nova components across Laravel apps).
+        let match = sourceServiceId != null
+          ? findBestEndpointMatch(call.url_pattern, call.method,
+              groupEndpoints.filter((ep) => ep.service_id === sourceServiceId))
+          : null;
+
+        // Fall back to other services in the same group only if no self-match found.
+        if (!match) {
+          match = findBestEndpointMatch(call.url_pattern, call.method,
+            groupEndpoints.filter((ep) => ep.service_id !== sourceServiceId));
+        }
         if (match) {
           // Find the repo for this service
           const svc = this.db.prepare('SELECT repo_root FROM services WHERE id = ?')
