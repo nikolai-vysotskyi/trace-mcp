@@ -8,6 +8,7 @@ declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { initializeDatabase } from './db/schema.js';
 import { Store } from './db/store.js';
 import { PluginRegistry } from './plugin-api/registry.js';
@@ -451,33 +452,51 @@ program
       subscribeToProjectProgress(p.root);
     }
 
-    // Per-project MCP transports (created on demand)
-    const transports = new Map<string, StreamableHTTPServerTransport>();
+    // Per-session MCP transports: sessionId → transport
+    // Multiple clients can connect to the same project simultaneously.
+    const sessionTransports = new Map<string, StreamableHTTPServerTransport>();
+    // Reverse lookup: projectRoot → Set<sessionId> (for cleanup)
+    const projectSessions = new Map<string, Set<string>>();
 
-    async function getOrCreateTransport(projectRoot: string): Promise<StreamableHTTPServerTransport | null> {
+    async function createSessionTransport(projectRoot: string): Promise<StreamableHTTPServerTransport | null> {
       const managed = projectManager.getProject(projectRoot);
       if (!managed) return null;
 
-      let transport = transports.get(projectRoot);
-      if (!transport) {
-        transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-        });
-        await managed.server.connect(transport);
-        transports.set(projectRoot, transport);
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+      });
 
-        // Track client connection
-        const clientId = randomUUID();
-        clients.set(clientId, {
-          id: clientId,
-          project: projectRoot,
-          transport: 'http',
-          connectedAt: new Date().toISOString(),
-          lastSeen: new Date().toISOString(),
-        });
-        broadcastEvent({ type: 'client_connect', clientId, project: projectRoot });
-      }
+      // Each session needs its own Server instance connected to its own transport.
+      // The managed.server is a factory-style object that supports multiple connections.
+      // However, the MCP SDK's Server only supports one transport at a time,
+      // so we create a lightweight proxy server for each session.
+      const sessionServer = managed.createSessionServer();
+      await sessionServer.connect(transport);
+
+      transport.onclose = () => {
+        const sid = transport.sessionId;
+        if (sid) {
+          sessionTransports.delete(sid);
+          projectSessions.get(projectRoot)?.delete(sid);
+        }
+      };
+
+      // Track client connection
+      const clientId = randomUUID();
+      clients.set(clientId, {
+        id: clientId,
+        project: projectRoot,
+        transport: 'http',
+        connectedAt: new Date().toISOString(),
+        lastSeen: new Date().toISOString(),
+      });
+      broadcastEvent({ type: 'client_connect', clientId, project: projectRoot });
+
       return transport;
+    }
+
+    function getTransportBySessionId(sessionId: string): StreamableHTTPServerTransport | undefined {
+      return sessionTransports.get(sessionId);
     }
 
     const port = parseInt(opts.port, 10);
@@ -558,19 +577,12 @@ program
 
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
-      // MCP endpoint — route to project via ?project= query param
+      // MCP endpoint — route by session ID, create new session on initialize
       if (url.pathname === '/mcp') {
         const projectRoot = url.searchParams.get('project') ?? projectManager.listProjects()[0]?.root;
         if (!projectRoot) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'No projects registered' }));
-          return;
-        }
-
-        const transport = await getOrCreateTransport(projectRoot);
-        if (!transport) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
           return;
         }
 
@@ -580,7 +592,43 @@ program
             const body = await collectBody(req);
             parsedBody = JSON.parse(body.toString());
           }
+
+          // Route by session ID for existing sessions
+          const sessionId = req.headers['mcp-session-id'] as string | undefined;
+          let transport: StreamableHTTPServerTransport | undefined;
+
+          if (sessionId) {
+            transport = getTransportBySessionId(sessionId);
+            if (!transport) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Session not found' }, id: null }));
+              return;
+            }
+          } else if (req.method === 'POST' && isInitializeRequest(parsedBody)) {
+            // New session: create transport + server
+            transport = await createSessionTransport(projectRoot) ?? undefined;
+            if (!transport) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+              return;
+            }
+          } else {
+            // No session ID and not an initialize — reject
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32600, message: 'Missing session ID' }, id: null }));
+            return;
+          }
+
           await transport.handleRequest(req, res, parsedBody);
+
+          // After handling initialize, store the transport by its new session ID
+          if (isInitializeRequest(parsedBody) && transport.sessionId) {
+            sessionTransports.set(transport.sessionId, transport);
+            if (!projectSessions.has(projectRoot)) {
+              projectSessions.set(projectRoot, new Set());
+            }
+            projectSessions.get(projectRoot)!.add(transport.sessionId);
+          }
         } catch (e: any) {
           if (e?.message === 'BODY_TOO_LARGE') {
             if (!res.headersSent) {
@@ -1600,10 +1648,10 @@ program
 program
   .command('index')
   .description('Index a project directory')
-  .argument('<dir>', 'Directory to index')
+  .argument('[dir]', 'Directory to index (default: current directory)')
   .option('-f, --force', 'Force reindex all files')
-  .action(async (dir: string, opts: { force?: boolean }) => {
-    const resolvedDir = path.resolve(dir);
+  .action(async (dir: string | undefined, opts: { force?: boolean }) => {
+    const resolvedDir = path.resolve(dir ?? '.');
     if (!fs.existsSync(resolvedDir)) {
       logger.error({ dir: resolvedDir }, 'Directory does not exist');
       process.exit(1);
