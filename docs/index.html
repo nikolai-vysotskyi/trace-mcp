@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>trace-mcp / framework-aware code intelligence</title>
-  <meta name="description" content="MCP server. 79 languages. 58 framework integrations. Up to 99% token reduction.">
+  <title>trace-mcp / framework-aware code intelligence for AI agents</title>
+  <meta name="description" content="An MCP server that gives AI agents structural understanding of your codebase. 79 languages, 58 framework integrations, up to 99% token reduction.">
   <meta name="theme-color" content="#000000">
 
   <meta property="og:title" content="trace-mcp / framework-aware code intelligence">
@@ -20,7 +20,6 @@
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      /* Color */
       --black: #000000;
       --surface: #111111;
       --surface-raised: #1A1A1A;
@@ -35,17 +34,6 @@
       --success: #4A9E5C;
       --warning: #D4A843;
 
-      /* Spacing */
-      --space-xs: 4px;
-      --space-sm: 8px;
-      --space-md: 16px;
-      --space-lg: 24px;
-      --space-xl: 32px;
-      --space-2xl: 48px;
-      --space-3xl: 64px;
-      --space-4xl: 96px;
-
-      /* Type */
       --font-display: 'Doto', 'Space Mono', monospace;
       --font-body: 'Space Grotesk', system-ui, sans-serif;
       --font-mono: 'Space Mono', 'JetBrains Mono', monospace;
@@ -65,11 +53,9 @@
 
     a { color: inherit; text-decoration: none; }
 
-    /* ── Subtle dot-grid background ── */
     body::before {
       content: '';
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       background-image: radial-gradient(circle, var(--border) 0.5px, transparent 0.5px);
       background-size: 24px 24px;
       pointer-events: none;
@@ -78,17 +64,9 @@
     }
     main, nav, footer { position: relative; z-index: 1; }
 
-    /* ── Container ── */
-    .container {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 0 32px;
-    }
-    @media (max-width: 600px) {
-      .container { padding: 0 20px; }
-    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+    @media (max-width: 600px) { .container { padding: 0 20px; } }
 
-    /* ── Typography utilities ── */
     .label {
       font-family: var(--font-mono);
       font-size: 11px;
@@ -99,19 +77,8 @@
     }
     .label-display { color: var(--text-display); }
     .label-disabled { color: var(--text-disabled); }
+    .label-success { color: var(--success); }
     .label-accent { color: var(--accent); }
-
-    .caption {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-secondary);
-      letter-spacing: 0.04em;
-    }
-
-    .num {
-      font-family: var(--font-mono);
-      font-feature-settings: 'tnum';
-    }
 
     /* ── Nav ── */
     nav {
@@ -149,10 +116,7 @@
       box-shadow: 0 0 8px var(--accent);
       animation: pulse 2s ease-in-out infinite;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .nav-links {
       display: flex; align-items: center; gap: 28px;
       font-family: var(--font-mono);
@@ -164,10 +128,9 @@
       color: var(--text-secondary);
       transition: color 200ms ease-out;
     }
-    .nav-links a:hover { color: var(--text-display); }
-    .nav-links a.active { color: var(--text-display); }
+    .nav-links a:hover, .nav-links a.active { color: var(--text-display); }
 
-    @media (max-width: 700px) {
+    @media (max-width: 800px) {
       .nav-links { gap: 16px; font-size: 10px; }
       .nav-links a:not(.primary) { display: none; }
       .nav-status { display: none; }
@@ -188,38 +151,27 @@
       min-height: 44px;
       white-space: nowrap;
     }
-    .btn-primary {
-      background: var(--text-display);
-      color: var(--black);
-    }
-    .btn-primary:hover {
-      background: var(--text-primary);
-    }
+    .btn-primary { background: var(--text-display); color: var(--black); }
+    .btn-primary:hover { background: var(--text-primary); }
     .btn-secondary {
       background: transparent;
       color: var(--text-display);
       border: 1px solid var(--border-visible);
     }
-    .btn-secondary:hover {
-      border-color: var(--text-display);
-    }
-    .btn .arrow {
-      display: inline-block; transition: transform 200ms ease-out;
-    }
+    .btn-secondary:hover { border-color: var(--text-display); }
+    .btn .arrow { display: inline-block; transition: transform 200ms ease-out; }
     .btn:hover .arrow { transform: translateX(3px); }
 
     /* ── Hero ── */
     .hero {
-      padding: 140px 0 96px;
+      padding: 128px 0 80px;
       position: relative;
     }
     .hero-meta {
       display: flex; align-items: center; gap: 16px;
-      margin-bottom: 64px;
+      margin-bottom: 56px;
     }
-    .hero-meta .divider {
-      flex: 1; height: 1px; background: var(--border-visible);
-    }
+    .hero-meta .divider { flex: 1; height: 1px; background: var(--border-visible); }
     .hero-grid {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -228,26 +180,22 @@
     }
     .hero-headline {
       font-family: var(--font-body);
-      font-size: clamp(40px, 7vw, 88px);
+      font-size: clamp(36px, 6vw, 76px);
       font-weight: 300;
-      line-height: 0.95;
+      line-height: 1.0;
       letter-spacing: -0.03em;
       color: var(--text-display);
+      max-width: 820px;
     }
-    .hero-headline .em {
-      font-weight: 700;
-    }
-    .hero-headline .accent-text {
-      color: var(--accent);
-    }
+    .hero-headline .em { font-weight: 700; }
     .hero-side {
       display: flex; flex-direction: column; align-items: flex-end;
-      gap: 24px;
-      min-width: 280px;
+      gap: 16px;
+      min-width: 260px;
     }
     .hero-massive {
       font-family: var(--font-display);
-      font-size: clamp(120px, 18vw, 220px);
+      font-size: clamp(120px, 17vw, 200px);
       font-weight: 700;
       line-height: 0.85;
       letter-spacing: -0.04em;
@@ -258,7 +206,6 @@
       font-family: var(--font-mono);
       font-size: 0.4em;
       vertical-align: top;
-      margin-left: -0.05em;
       color: var(--text-secondary);
     }
     .hero-side-label {
@@ -268,25 +215,45 @@
     }
     .hero-desc {
       margin-top: 48px;
-      max-width: 640px;
-      font-size: 18px;
+      max-width: 720px;
+      font-size: 19px;
       line-height: 1.5;
       color: var(--text-secondary);
       font-weight: 400;
     }
+    .hero-desc .accent-text { color: var(--text-display); }
     .hero-cta {
-      margin-top: 64px;
+      margin-top: 56px;
       display: flex; gap: 12px; flex-wrap: wrap;
       align-items: center;
     }
+    .hero-install {
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 14px 24px;
+      border: 1px dashed var(--border-visible);
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 200ms ease-out;
+    }
+    .hero-install:hover { border-color: var(--text-display); color: var(--text-display); border-style: solid; }
+    .hero-install code { color: var(--text-display); }
+    .hero-install .copy {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+    }
     @media (max-width: 900px) {
-      .hero-grid { grid-template-columns: 1fr; gap: 48px; }
+      .hero-grid { grid-template-columns: 1fr; gap: 32px; }
       .hero-side { align-items: flex-start; min-width: 0; }
       .hero-massive { text-align: left; }
       .hero-side-label { text-align: left; }
     }
 
-    /* ── Section ── */
+    /* ── Sections ── */
     section {
       padding: 96px 0;
       border-top: 1px solid var(--border);
@@ -298,9 +265,7 @@
       margin-bottom: 64px;
       align-items: start;
     }
-    .section-meta-tag {
-      padding-top: 4px;
-    }
+    .section-meta-tag { padding-top: 4px; }
     .section-title {
       font-family: var(--font-body);
       font-size: clamp(28px, 4vw, 44px);
@@ -311,6 +276,13 @@
       max-width: 720px;
     }
     .section-title .em { font-weight: 700; }
+    .section-lede {
+      max-width: 640px;
+      margin-top: 20px;
+      font-size: 17px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
     @media (max-width: 700px) {
       .section-meta { grid-template-columns: 1fr; gap: 16px; }
     }
@@ -325,7 +297,6 @@
     .stat {
       padding: 32px 24px;
       border-right: 1px solid var(--border);
-      position: relative;
     }
     .stat:last-child { border-right: none; }
     .stat-label {
@@ -369,78 +340,148 @@
       .stat:nth-child(1), .stat:nth-child(2) { border-bottom: 1px solid var(--border); }
     }
 
-    /* ── Comparison ── */
-    .compare {
+    /* ── What it is (definition box) ── */
+    .definition {
       display: grid;
-      grid-template-columns: 1fr 1px 1fr;
-      gap: 64px;
+      grid-template-columns: 1fr 1fr;
+      gap: 96px;
       align-items: start;
     }
-    .compare-divider {
-      width: 1px;
-      align-self: stretch;
-      background: var(--border-visible);
+    .def-text h3 {
+      font-family: var(--font-body);
+      font-size: 28px;
+      font-weight: 400;
+      line-height: 1.3;
+      color: var(--text-display);
+      letter-spacing: -0.02em;
+      margin-bottom: 24px;
+      max-width: 480px;
     }
-    .compare-col h3 {
+    .def-text h3 .em { font-weight: 700; }
+    .def-text p {
+      color: var(--text-secondary);
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+      max-width: 480px;
+    }
+    .def-text code {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 14px;
+      color: var(--text-display);
+      background: var(--surface-raised);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .def-diagram {
+      border: 1px solid var(--border-visible);
+      padding: 32px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .def-diagram .head {
+      font-size: 10px;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--text-disabled);
-      margin-bottom: 32px;
       padding-bottom: 16px;
-      border-bottom: 1px solid var(--border-visible);
-    }
-    .compare-col.solution h3 { color: var(--text-display); }
-    .compare-list { list-style: none; }
-    .compare-list li {
-      padding: 16px 0;
+      margin-bottom: 16px;
       border-bottom: 1px solid var(--border);
-      font-size: 15px;
-      line-height: 1.5;
-      color: var(--text-secondary);
-      display: grid;
-      grid-template-columns: 24px 1fr;
-      gap: 16px;
-      align-items: start;
     }
-    .compare-list li:last-child { border-bottom: none; }
-    .compare-list li::before {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      padding-top: 3px;
+    .def-diagram .node {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 8px 0;
+      color: var(--text-primary);
     }
-    .compare-list.problem li::before {
-      content: '×';
+    .def-diagram .node .arrow {
       color: var(--text-disabled);
-      font-size: 16px;
-      line-height: 1;
-    }
-    .compare-list.solution li::before {
-      content: '+';
-      color: var(--success);
       font-size: 14px;
     }
-    .compare-list.solution li { color: var(--text-primary); }
-    .compare-list code {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      color: var(--text-display);
-      background: var(--surface-raised);
-      padding: 1px 6px;
-      border-radius: 3px;
+    .def-diagram .node .lang {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+      padding: 2px 6px;
+      border: 1px solid var(--border-visible);
     }
-    @media (max-width: 800px) {
-      .compare { grid-template-columns: 1fr; gap: 48px; }
-      .compare-divider { display: none; }
+    .def-diagram .node .file { color: var(--text-display); }
+    .def-diagram .edge {
+      padding: 4px 0 4px 28px;
+      color: var(--success);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+    @media (max-width: 900px) {
+      .definition { grid-template-columns: 1fr; gap: 48px; }
     }
 
-    /* ── Capabilities (list, not cards) ── */
+    /* ── ASK / GET (the value table) ── */
+    .askget {
+      border-top: 1px solid var(--border-visible);
+    }
+    .askget-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 200px;
+      gap: 32px;
+      padding: 32px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: start;
+    }
+    .askget-ask {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .askget-ask .q {
+      font-family: var(--font-body);
+      font-size: 18px;
+      color: var(--text-display);
+      font-weight: 500;
+      line-height: 1.4;
+      letter-spacing: -0.01em;
+    }
+    .askget-ask .q::before {
+      content: '"';
+      color: var(--text-disabled);
+      margin-right: 4px;
+    }
+    .askget-ask .q::after {
+      content: '"';
+      color: var(--text-disabled);
+      margin-left: 4px;
+    }
+    .askget-get {
+      color: var(--text-secondary);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .askget-tool {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      color: var(--text-display);
+      display: flex; align-items: flex-start;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .askget-tool .tlabel {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+    }
+    .askget-tool .tname {
+      color: var(--text-display);
+    }
+    .askget-tool .tname::before { content: '/ '; color: var(--text-disabled); }
+    @media (max-width: 800px) {
+      .askget-row { grid-template-columns: 1fr; gap: 16px; }
+    }
+
+    /* ── Capabilities ── */
     .caps {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 0;
       border-top: 1px solid var(--border-visible);
     }
     .cap {
@@ -485,6 +526,70 @@
       .cap { border-right: none; grid-template-columns: 60px 1fr; gap: 16px; padding: 24px; }
     }
 
+    /* ── How it works pipeline ── */
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      align-items: stretch;
+      position: relative;
+    }
+    .pipe-step {
+      padding: 32px 0;
+      position: relative;
+    }
+    .pipe-step + .pipe-step::before {
+      content: '\2192';
+      position: absolute;
+      left: -24px; top: 32px;
+      color: var(--text-disabled);
+      font-size: 24px;
+      font-family: var(--font-mono);
+    }
+    .pipe-num {
+      font-family: var(--font-display);
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 0.9;
+      color: var(--text-display);
+      letter-spacing: -0.04em;
+      margin-bottom: 24px;
+    }
+    .pipe-step h4 {
+      font-family: var(--font-body);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-display);
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+    .pipe-step p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 16px;
+      max-width: 320px;
+    }
+    .pipe-step .tags {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-top: 16px;
+    }
+    .pipe-step .tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border: 1px solid var(--border-visible);
+      border-radius: 999px;
+    }
+    @media (max-width: 800px) {
+      .pipeline { grid-template-columns: 1fr; gap: 16px; }
+      .pipe-step + .pipe-step::before { display: none; }
+      .pipe-step { padding: 24px 0; border-top: 1px solid var(--border); }
+    }
+
     /* ── Benchmark instrument table ── */
     .benchmark-rows {
       display: flex;
@@ -503,21 +608,9 @@
       color: var(--text-primary);
       font-weight: 500;
     }
-    .br-bar {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .br-segments {
-      display: flex;
-      gap: 2px;
-      height: 12px;
-    }
-    .br-segment {
-      flex: 1;
-      background: var(--border);
-      transition: background 600ms ease-out;
-    }
+    .br-bar { display: flex; flex-direction: column; gap: 6px; }
+    .br-segments { display: flex; gap: 2px; height: 12px; }
+    .br-segment { flex: 1; background: var(--border); transition: background 600ms ease-out; }
     .br-segment.filled { background: var(--text-display); }
     .br-segment.peak { background: var(--accent); }
     .br-meta {
@@ -569,6 +662,61 @@
     }
     .bs-num .pct { font-size: 0.5em; color: var(--text-secondary); margin-left: 4px; }
 
+    /* ── Use cases (when to use) ── */
+    .usecase-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border: 1px solid var(--border-visible);
+    }
+    .usecase {
+      padding: 28px 24px;
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      gap: 12px;
+      transition: background 200ms ease-out;
+    }
+    .usecase:last-child { border-right: none; }
+    .usecase:hover { background: var(--surface); }
+    .usecase-when {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+    }
+    .usecase-title {
+      font-family: var(--font-body);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-display);
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    .usecase p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .usecase-tools {
+      margin-top: auto;
+      padding-top: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-disabled);
+    }
+    .usecase-tools span { color: var(--text-primary); }
+    @media (max-width: 900px) {
+      .usecase-grid { grid-template-columns: repeat(2, 1fr); }
+      .usecase:nth-child(2) { border-right: none; }
+      .usecase:nth-child(1), .usecase:nth-child(2) { border-bottom: 1px solid var(--border); }
+    }
+    @media (max-width: 600px) {
+      .usecase-grid { grid-template-columns: 1fr; }
+      .usecase { border-right: none; border-bottom: 1px solid var(--border); }
+      .usecase:last-child { border-bottom: none; }
+    }
+
     /* ── Integrations marquee ── */
     .integrations-list {
       display: flex; flex-wrap: wrap; gap: 1px;
@@ -606,10 +754,8 @@
       display: flex; align-items: center; gap: 8px;
     }
     .client::before {
-      content: '';
-      width: 8px; height: 8px;
-      background: var(--text-display);
-      border-radius: 50%;
+      content: ''; width: 8px; height: 8px;
+      background: var(--text-display); border-radius: 50%;
     }
 
     /* ── Quickstart ── */
@@ -693,7 +839,54 @@
       .qs-grid { grid-template-columns: 1fr; gap: 32px; }
     }
 
-    /* ── CTA section ── */
+    /* ── FAQ ── */
+    .faq-list { display: flex; flex-direction: column; }
+    .faq {
+      border-top: 1px solid var(--border);
+      padding: 24px 0;
+      cursor: pointer;
+    }
+    .faq:last-child { border-bottom: 1px solid var(--border); }
+    .faq summary {
+      display: flex; justify-content: space-between; align-items: start;
+      gap: 32px;
+      list-style: none;
+      cursor: pointer;
+    }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary h4 {
+      font-family: var(--font-body);
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-display);
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .faq summary .toggle {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      color: var(--text-disabled);
+      transition: transform 200ms ease-out;
+      flex-shrink: 0;
+    }
+    .faq[open] summary .toggle { transform: rotate(45deg); color: var(--text-display); }
+    .faq .answer {
+      margin-top: 16px;
+      color: var(--text-secondary);
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 720px;
+    }
+    .faq .answer code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-display);
+      background: var(--surface-raised);
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+
+    /* ── CTA ── */
     .cta {
       padding: 128px 0;
       text-align: center;
@@ -715,9 +908,7 @@
       line-height: 1;
     }
     .cta-content { position: relative; z-index: 1; }
-    .cta-label {
-      margin-bottom: 24px;
-    }
+    .cta-label { margin-bottom: 24px; }
     .cta-headline {
       font-family: var(--font-body);
       font-size: clamp(32px, 5vw, 56px);
@@ -725,15 +916,15 @@
       line-height: 1.05;
       letter-spacing: -0.02em;
       color: var(--text-display);
-      max-width: 700px;
+      max-width: 720px;
       margin: 0 auto 16px;
     }
     .cta-headline .em { font-weight: 700; }
     .cta-sub {
       color: var(--text-secondary);
-      max-width: 480px;
+      max-width: 520px;
       margin: 0 auto 48px;
-      font-size: 15px;
+      font-size: 16px;
     }
     .cta-buttons {
       display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
@@ -778,13 +969,8 @@
       text-transform: uppercase;
       color: var(--text-disabled);
     }
-    .footer-serial {
-      display: flex; gap: 16px; align-items: center;
-    }
-    .footer-serial .item::before {
-      content: '/ ';
-      color: var(--border-visible);
-    }
+    .footer-serial { display: flex; gap: 16px; align-items: center; }
+    .footer-serial .item::before { content: '/ '; color: var(--border-visible); }
     .footer-serial .item:first-child::before { content: ''; }
 
     @media (max-width: 700px) {
@@ -792,7 +978,6 @@
       .footer-bottom { flex-direction: column; gap: 16px; align-items: flex-start; }
     }
 
-    /* ── Reveal animation ── */
     .reveal {
       opacity: 0;
       transform: translateY(16px);
@@ -814,7 +999,8 @@
       <span>v1.23.1 / online</span>
     </div>
     <div class="nav-links">
-      <a href="#capabilities">Capabilities</a>
+      <a href="#what">What it is</a>
+      <a href="#examples">Examples</a>
       <a href="#benchmark">Benchmark</a>
       <a href="#install" class="primary">Install</a>
       <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="primary">Github</a>
@@ -831,16 +1017,13 @@
       <div class="hero-meta">
         <span class="label">/ Model Context Protocol Server</span>
         <span class="divider"></span>
-        <span class="label label-disabled">2026 / Index 001</span>
+        <span class="label label-disabled">v1.23.1 / mit license</span>
       </div>
 
       <div class="hero-grid">
         <div>
           <h1 class="hero-headline">
-            Your AI agent<br>
-            sees files.<br>
-            <span class="em">trace-mcp sees</span><br>
-            <span class="em">the graph.</span>
+            Code intelligence for AI agents that <span class="em">actually understand frameworks.</span>
           </h1>
         </div>
         <div class="hero-side">
@@ -848,12 +1031,12 @@
           <div class="hero-massive">
             99<span class="pct">%</span>
           </div>
-          <span class="label hero-side-label">94% average across<br>11 task categories on a<br>real 856-file codebase</span>
+          <span class="label hero-side-label">94% average across<br>11 task categories</span>
         </div>
       </div>
 
       <p class="hero-desc">
-        Framework-aware code intelligence for AI agents. Cross-language dependency graph, decision memory linked to code, 79 languages, 58 framework integrations &mdash; exposed through the Model Context Protocol.
+        Most AI agents read your code as <span class="accent-text">text</span>. trace-mcp reads it as a <span class="accent-text">graph</span> &mdash; routes connect to controllers, controllers render components, models map to migrations. Cross-language, framework-aware, exposed through MCP to any agent.
       </p>
 
       <div class="hero-cta">
@@ -863,31 +1046,35 @@
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-secondary">
           View source
         </a>
+        <span class="hero-install" onclick="copyInstall(this)">
+          <code>npm i -g trace-mcp</code>
+          <span class="copy">copy</span>
+        </span>
       </div>
 
     </div>
   </section>
 
-  <!-- ── STATS PANEL ── -->
+  <!-- ── STATS ── -->
   <section style="padding: 0;">
     <div class="container">
       <div class="stats-panel">
-        <div class="stat reveal">
+        <div class="stat">
           <div class="stat-label">Languages</div>
           <div class="stat-value" data-count="79">0</div>
-          <div class="stat-trend">+ tree-sitter / lsp</div>
+          <div class="stat-trend">tree-sitter + lsp</div>
         </div>
-        <div class="stat reveal">
+        <div class="stat">
           <div class="stat-label">Integrations</div>
           <div class="stat-value" data-count="58">0</div>
           <div class="stat-trend">15 fw / 7 orm / 13 ui / 23 other</div>
         </div>
-        <div class="stat reveal">
+        <div class="stat">
           <div class="stat-label">MCP Tools</div>
           <div class="stat-value" data-count="138">0</div>
-          <div class="stat-trend">all read-only or audited</div>
+          <div class="stat-trend">read-only or audited</div>
         </div>
-        <div class="stat reveal">
+        <div class="stat">
           <div class="stat-label">Tokens Saved</div>
           <div class="stat-value">94<span class="unit">%</span></div>
           <div class="stat-trend">vs naive read/grep</div>
@@ -896,43 +1083,184 @@
     </div>
   </section>
 
-  <!-- ── PROBLEM / SOLUTION ── -->
-  <section id="why">
+  <!-- ── WHAT IT IS ── -->
+  <section id="what">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag">
-          <span class="label">001 / Premise</span>
+        <div class="section-meta-tag"><span class="label">001 / What It Is</span></div>
+        <div>
+          <h2 class="section-title">A code graph,<br>built once, <span class="em">used by every AI agent.</span></h2>
+          <p class="section-lede">trace-mcp indexes your project into a directed graph &mdash; symbols, edges, framework-specific connections &mdash; then exposes it through 138 MCP tools. Your AI agent stops reading files and starts traversing structure.</p>
         </div>
-        <h2 class="section-title">
-          AI agents are<br>
-          language-aware but <span class="em">framework-blind.</span>
-        </h2>
       </div>
 
-      <div class="compare reveal">
-        <div class="compare-col problem">
-          <h3>Without trace-mcp</h3>
-          <ul class="compare-list problem">
-            <li>Agent reads 15+ files to understand one feature</li>
-            <li>Doesn't know which Vue page a controller renders</li>
-            <li>"What breaks if I change this?" &mdash; agent guesses</li>
-            <li>Schema requires a running database</li>
-            <li>Prop mismatch between PHP and Vue surfaces in production</li>
-            <li>Burns 600K+ tokens per exploration session</li>
-          </ul>
+      <div class="definition reveal">
+        <div class="def-text">
+          <h3>Same code. <span class="em">Two views.</span></h3>
+          <p>An AI agent reading <code>UserController.php</code> sees a class. trace-mcp sees the route that hits it, the form request that validates input, the Eloquent model it touches, the Inertia page it renders, the Vue component tree, the props each component expects.</p>
+          <p>That's not a search trick. It's structural understanding from parsing 58 framework integrations &mdash; the same connections a senior developer keeps in their head.</p>
         </div>
-        <div class="compare-divider"></div>
-        <div class="compare-col solution">
-          <h3>With trace-mcp</h3>
-          <ul class="compare-list solution">
-            <li><code>get_task_context</code> &mdash; optimal subgraph in one shot</li>
-            <li><code>routes_to &rarr; renders_component &rarr; uses_prop</code> edges</li>
-            <li><code>get_change_impact</code> traverses reverse deps across languages</li>
-            <li>Migrations parsed &mdash; schema reconstructed from code</li>
-            <li>Prop mismatch detected at index time</li>
-            <li>94% fewer tokens &mdash; ~624K saved per session</li>
-          </ul>
+        <div class="def-diagram">
+          <div class="head">/ Cross-Language Edge Trace</div>
+          <div class="node">
+            <span class="lang">PHP</span>
+            <span class="file">routes/web.php</span>
+          </div>
+          <div class="edge">&darr; routes_to</div>
+          <div class="node">
+            <span class="lang">PHP</span>
+            <span class="file">UserController@show</span>
+          </div>
+          <div class="edge">&darr; validates_with</div>
+          <div class="node">
+            <span class="lang">PHP</span>
+            <span class="file">UserShowRequest</span>
+          </div>
+          <div class="edge">&darr; queries</div>
+          <div class="node">
+            <span class="lang">SQL</span>
+            <span class="file">users · posts</span>
+          </div>
+          <div class="edge">&darr; renders_via_inertia</div>
+          <div class="node">
+            <span class="lang">VUE</span>
+            <span class="file">Pages/Users/Show.vue</span>
+          </div>
+          <div class="edge">&darr; uses_component</div>
+          <div class="node">
+            <span class="lang">VUE</span>
+            <span class="file">UserCard, PostList</span>
+          </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ASK / GET ── -->
+  <section id="examples">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">002 / Examples</span></div>
+        <div>
+          <h2 class="section-title">Ask anything. <span class="em">Get the graph.</span></h2>
+          <p class="section-lede">Eight common questions, eight tools that answer them in one call &mdash; with the right scope, the right context, and a fraction of the tokens.</p>
+        </div>
+      </div>
+
+      <div class="askget">
+
+        <div class="askget-row reveal">
+          <div class="askget-ask">
+            <span class="label label-disabled">/ You Ask</span>
+            <span class="q">What breaks if I change this model?</span>
+          </div>
+          <div class="askget-get">
+            Blast radius across languages, ranked by risk, with linked architectural decisions explaining why dependent code exists.
+          </div>
+          <div class="askget-tool">
+            <span class="tlabel">tool</span>
+            <span class="tname">get_change_impact</span>
+          </div>
+        </div>
+
+        <div class="askget-row reveal">
+          <div class="askget-ask">
+            <span class="label label-disabled">/ You Ask</span>
+            <span class="q">Why was auth implemented this way?</span>
+          </div>
+          <div class="askget-get">
+            The actual decision record &mdash; reasoning, tradeoffs, and the symbols it's linked to. Mined from past sessions automatically.
+          </div>
+          <div class="askget-tool">
+            <span class="tlabel">tool</span>
+            <span class="tname">query_decisions</span>
+          </div>
+        </div>
+
+        <div class="askget-row reveal">
+          <div class="askget-ask">
+            <span class="label label-disabled">/ You Ask</span>
+            <span class="q">Help me start a new task.</span>
+          </div>
+          <div class="askget-get">
+            Optimal code subgraph, relevant past decisions, dead-end warnings, recommended tools &mdash; routed by task intent (bugfix / feature / refactor).
+          </div>
+          <div class="askget-tool">
+            <span class="tlabel">tool</span>
+            <span class="tname">plan_turn</span>
+          </div>
+        </div>
+
+        <div class="askget-row reveal">
+          <div class="askget-ask">
+            <span class="label label-disabled">/ You Ask</span>
+            <span class="q">Show me the request flow from URL to view.</span>
+          </div>
+          <div class="askget-get">
+            Route &rarr; Middleware &rarr; Controller &rarr; Service &rarr; View, including prop mapping when frontend is involved.
+          </div>
+          <div class="askget-tool">
+            <span class="tlabel">tool</span>
+            <span class="tname">get_request_flow</span>
+          </div>
+        </div>
+
+        <div class="askget-row reveal">
+          <div class="askget-ask">
+            <span class="label label-disabled">/ You Ask</span>
+            <span class="q">Find all untested code in this module.</span>
+          </div>
+          <div class="askget-get">
+            Symbols classified as "unreached" or "imported but never called in tests" &mdash; not just file-level coverage gaps.
+          </div>
+          <div class="askget-tool">
+            <span class="tlabel">tool</span>
+            <span class="tname">get_untested_symbols</span>
+          </div>
+        </div>
+
+        <div class="askget-row reveal">
+          <div class="askget-ask">
+            <span class="label label-disabled">/ You Ask</span>
+            <span class="q">What's the impact of this API change on other services?</span>
+          </div>
+          <div class="askget-get">
+            Cross-subproject client calls with confidence scores. Find consumers of an endpoint across your monorepo or linked repos.
+          </div>
+          <div class="askget-tool">
+            <span class="tlabel">tool</span>
+            <span class="tname">get_subproject_impact</span>
+          </div>
+        </div>
+
+        <div class="askget-row reveal">
+          <div class="askget-ask">
+            <span class="label label-disabled">/ You Ask</span>
+            <span class="q">Orient me &mdash; I just opened this project.</span>
+          </div>
+          <div class="askget-get">
+            Project identity, active decisions, memory stats. Around 300 tokens of layered context to start any session.
+          </div>
+          <div class="askget-tool">
+            <span class="tlabel">tool</span>
+            <span class="tname">get_wake_up</span>
+          </div>
+        </div>
+
+        <div class="askget-row reveal">
+          <div class="askget-ask">
+            <span class="label label-disabled">/ You Ask</span>
+            <span class="q">What did we discuss about GraphQL last month?</span>
+          </div>
+          <div class="askget-get">
+            Verbatim conversation fragments with file references. Full-text search across every past session.
+          </div>
+          <div class="askget-tool">
+            <span class="tlabel">tool</span>
+            <span class="tname">search_sessions</span>
+          </div>
+        </div>
+
       </div>
     </div>
   </section>
@@ -941,12 +1269,11 @@
   <section id="capabilities">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag">
-          <span class="label">002 / Capabilities</span>
+        <div class="section-meta-tag"><span class="label">003 / Capabilities</span></div>
+        <div>
+          <h2 class="section-title">Six things <span class="em">no other tool does.</span></h2>
+          <p class="section-lede">Code graph + framework awareness + decision memory. Three categories of tools competitors solve in isolation; trace-mcp unifies them.</p>
         </div>
-        <h2 class="section-title">
-          Six things <span class="em">no other tool does.</span>
-        </h2>
       </div>
 
       <div class="caps reveal">
@@ -974,8 +1301,8 @@
         <div class="cap">
           <div class="cap-num">/ 04</div>
           <div class="cap-body">
-            <h4>Request flow tracing</h4>
-            <p>URL &rarr; Route &rarr; Middleware &rarr; Controller &rarr; Service &rarr; View, across 15 backend frameworks. One call.</p>
+            <h4>Schema from migrations</h4>
+            <p>Reconstructs the database schema by parsing migrations &mdash; no live database required. Works for Eloquent, Prisma, TypeORM, Drizzle, SQLAlchemy.</p>
           </div>
         </div>
         <div class="cap">
@@ -996,17 +1323,80 @@
     </div>
   </section>
 
+  <!-- ── HOW IT WORKS ── -->
+  <section id="how">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">004 / How It Works</span></div>
+        <div>
+          <h2 class="section-title">Three passes. <span class="em">One graph.</span></h2>
+          <p class="section-lede">trace-mcp builds the graph like a compiler &mdash; tree-sitter for parsing, framework plugins for semantics, optional LSP for compiler-grade call resolution.</p>
+        </div>
+      </div>
+
+      <div class="pipeline reveal">
+        <div class="pipe-step">
+          <div class="pipe-num">01</div>
+          <h4>Per-file extraction</h4>
+          <p>tree-sitter parses each file into symbols. Framework plugins detect routes, components, migrations, events, models, schemas.</p>
+          <div class="tags">
+            <span class="tag">tree-sitter</span>
+            <span class="tag">79 languages</span>
+            <span class="tag">58 plugins</span>
+          </div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">02</div>
+          <h4>Cross-file resolution</h4>
+          <p>Resolver walks PSR-4, ES modules, Python imports, Vue components, Inertia bridges, Blade inheritance, ORM relations &mdash; all into a unified directed edge graph.</p>
+          <div class="tags">
+            <span class="tag">imports</span>
+            <span class="tag">orm relations</span>
+            <span class="tag">framework edges</span>
+          </div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">03</div>
+          <h4>LSP enrichment</h4>
+          <p>Optional pass uses tsserver, pyright, gopls, rust-analyzer for compiler-grade call resolution with 4-tier confidence (resolved / inferred / typed / textual).</p>
+          <div class="tags">
+            <span class="tag">tsserver</span>
+            <span class="tag">pyright</span>
+            <span class="tag">gopls</span>
+            <span class="tag">opt-in</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 64px; padding: 24px; border: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px;">
+        <div>
+          <span class="label label-disabled">/ Storage</span>
+          <p style="margin-top: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--text-display);">SQLite + WAL + FTS5</p>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Bundled local ONNX embeddings &mdash; no API keys.</p>
+        </div>
+        <div>
+          <span class="label label-disabled">/ Updates</span>
+          <p style="margin-top: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--text-display);">File watcher · 300ms debounce</p>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Content-hashed incremental reindexing.</p>
+        </div>
+        <div>
+          <span class="label label-disabled">/ Output</span>
+          <p style="margin-top: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--text-display);">138 MCP tools</p>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Stdio + HTTP transport. Read-only by default.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── BENCHMARK ── -->
   <section id="benchmark">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag">
-          <span class="label">003 / Performance</span>
+        <div class="section-meta-tag"><span class="label">005 / Benchmark</span></div>
+        <div>
+          <h2 class="section-title">Token cost, <span class="em">measured.</span></h2>
+          <p class="section-lede">Real codebase: 856 files, 4,774 symbols. Tasks executed with native Read/Grep/Glob vs trace-mcp tools. Numbers from the built-in <code>benchmark_project</code> command.</p>
         </div>
-        <h2 class="section-title">
-          Token cost,<br>
-          <span class="em">measured.</span>
-        </h2>
       </div>
 
       <div class="benchmark-rows">
@@ -1016,7 +1406,7 @@
             <div class="br-segments" data-segments="20"></div>
             <div class="br-meta">
               <span><span class="from">195,717</span> &rarr; <span class="to">1,030</span> tokens</span>
-              <span>tree-walk</span>
+              <span>tree-walk vs read-all</span>
             </div>
           </div>
           <div class="br-pct">99.5<span class="small">%</span></div>
@@ -1027,7 +1417,7 @@
             <div class="br-segments" data-segments="20"></div>
             <div class="br-meta">
               <span><span class="from">44,265</span> &rarr; <span class="to">1,023</span> tokens</span>
-              <span>indexed search</span>
+              <span>indexed search vs grep</span>
             </div>
           </div>
           <div class="br-pct">97.7<span class="small">%</span></div>
@@ -1038,7 +1428,7 @@
             <div class="br-segments" data-segments="20"></div>
             <div class="br-meta">
               <span><span class="from">82,291</span> &rarr; <span class="to">2,929</span> tokens</span>
-              <span>1 call vs 10</span>
+              <span>1 call vs ~10 sequential</span>
             </div>
           </div>
           <div class="br-pct">96.4<span class="small">%</span></div>
@@ -1049,7 +1439,7 @@
             <div class="br-segments" data-segments="20"></div>
             <div class="br-meta">
               <span><span class="from">119,441</span> &rarr; <span class="to">5,976</span> tokens</span>
-              <span>graph traversal</span>
+              <span>graph traversal vs guess</span>
             </div>
           </div>
           <div class="br-pct">95.0<span class="small">%</span></div>
@@ -1071,7 +1461,7 @@
             <div class="br-segments" data-segments="20"></div>
             <div class="br-meta">
               <span><span class="from">11,430</span> &rarr; <span class="to">1,720</span> tokens</span>
-              <span>edge index</span>
+              <span>edge index vs grep</span>
             </div>
           </div>
           <div class="br-pct">85.0<span class="small">%</span></div>
@@ -1080,10 +1470,48 @@
 
       <div class="benchmark-summary">
         <div class="bs-text">
-          Average across 11 task categories on a real 856-file codebase. <br>
-          ~624,000 tokens saved per exploration session.
+          Average across 11 task categories. ~624,000 tokens saved per exploration session &mdash; more headroom for actual coding, fewer context-window evictions, lower API costs.
         </div>
         <div class="bs-num">94<span class="pct">%</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── USE CASES ── -->
+  <section id="usecases">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">006 / When To Use It</span></div>
+        <div>
+          <h2 class="section-title">Built for the real moments <span class="em">AI agents struggle.</span></h2>
+        </div>
+      </div>
+
+      <div class="usecase-grid reveal">
+        <div class="usecase">
+          <span class="usecase-when">/ When You Refactor</span>
+          <span class="usecase-title">Know the blast radius</span>
+          <p>See every dependent symbol before you change anything. Renames are graph-aware, not text-replace.</p>
+          <div class="usecase-tools"><span>get_change_impact</span> · <span>apply_rename</span></div>
+        </div>
+        <div class="usecase">
+          <span class="usecase-when">/ When You Ship</span>
+          <span class="usecase-title">PR risk in numbers</span>
+          <p>Symbol-level diff between branches, security scan, quality gates &mdash; automated comment on every PR.</p>
+          <div class="usecase-tools"><span>compare_branches</span> · <span>scan_security</span></div>
+        </div>
+        <div class="usecase">
+          <span class="usecase-when">/ When You Onboard</span>
+          <span class="usecase-title">Understand 100K LOC fast</span>
+          <p>Project map, framework detection, decision history &mdash; the architectural overview without reading every file.</p>
+          <div class="usecase-tools"><span>get_project_map</span> · <span>explain_architecture</span></div>
+        </div>
+        <div class="usecase">
+          <span class="usecase-when">/ When You Debug</span>
+          <span class="usecase-title">Trace request to bug</span>
+          <p>Follow the request flow, trace tainted data, find the test that should have caught it. Across services.</p>
+          <div class="usecase-tools"><span>get_request_flow</span> · <span>taint_analysis</span></div>
+        </div>
       </div>
     </div>
   </section>
@@ -1092,13 +1520,11 @@
   <section id="integrations">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag">
-          <span class="label">004 / Ecosystem</span>
+        <div class="section-meta-tag"><span class="label">007 / Ecosystem</span></div>
+        <div>
+          <h2 class="section-title">58 integrations. <span class="em">79 languages.</span></h2>
+          <p class="section-lede">Each integration adds framework-specific edges &mdash; routes, components, migrations, queries &mdash; not just syntax parsing. Plugin API is open: write your own for a niche framework in under a day.</p>
         </div>
-        <h2 class="section-title">
-          58 integrations.<br>
-          <span class="em">79 languages.</span>
-        </h2>
       </div>
 
       <div class="integrations-list reveal">
@@ -1154,7 +1580,7 @@
       </div>
 
       <div style="margin-top: 64px;">
-        <span class="label label-disabled">/ Compatible With</span>
+        <span class="label label-disabled">/ Compatible With Any Mcp Client</span>
         <div class="clients-row">
           <span class="client">Claude Code</span>
           <span class="client">Cursor</span>
@@ -1170,13 +1596,11 @@
   <section id="install">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag">
-          <span class="label">005 / Install</span>
+        <div class="section-meta-tag"><span class="label">008 / Install</span></div>
+        <div>
+          <h2 class="section-title">Three commands. <span class="em">No configuration.</span></h2>
+          <p class="section-lede">No API keys. No paid services. Embeddings ship with the binary &mdash; runs fully offline after first install.</p>
         </div>
-        <h2 class="section-title">
-          Three commands.<br>
-          <span class="em">No configuration.</span>
-        </h2>
       </div>
 
       <div class="qs-grid">
@@ -1186,7 +1610,7 @@
             <div class="qs-step-body">
               <h4>/ Install Globally</h4>
               <div class="qs-cmd">npm install -g trace-mcp</div>
-              <p>Single binary. No native dependencies. Runs on Node 20+.</p>
+              <p>Single binary. No native deps. Runs on Node 20+.</p>
             </div>
           </div>
           <div class="qs-step reveal">
@@ -1210,26 +1634,83 @@
         <div class="terminal reveal">
           <div class="terminal-header">
             <span>~/projects/my-app</span>
-            <span class="right"><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> session 01</span>
+            <span class="right"><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> ready</span>
           </div>
-          <div class="terminal-body"><span class="cmt"># install + initialize</span>
+          <div class="terminal-body"><span class="cmt"># 1. install + initialize</span>
 <span class="pmt">$</span> npm install -g trace-mcp
 <span class="pmt">$</span> trace-mcp init
 <span class="ok">[OK]</span> claude code configured
 <span class="ok">[OK]</span> guard hook installed
 <span class="ok">[OK]</span> claude.md updated
 
-<span class="cmt"># register project</span>
+<span class="cmt"># 2. add your project</span>
 <span class="pmt">$</span> <span class="kw">cd</span> ~/my-app
 <span class="pmt">$</span> trace-mcp add
 <span class="ok">[OK]</span> detected: laravel, vue, inertia
-<span class="ok">[OK]</span> indexed 1,247 files
+<span class="ok">[OK]</span> indexed 1,247 files in 8.2s
 <span class="ok">[OK]</span> 8,392 symbols / 14,902 edges
 
-<span class="cmt"># use in your AI agent</span>
+<span class="cmt"># 3. use in your AI agent</span>
 <span class="pmt">&gt;</span> <span class="kw">get_task_context</span>(<span class="str">"fix login bug"</span>)
-<span class="ok">[READY]</span></div>
+<span class="ok">[READY]</span> 23 symbols, 4 tests, 1 decision</div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FAQ ── -->
+  <section id="faq">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">009 / Faq</span></div>
+        <div>
+          <h2 class="section-title">Common questions.</h2>
+        </div>
+      </div>
+
+      <div class="faq-list">
+        <details class="faq">
+          <summary>
+            <h4>Do I need API keys or a cloud account?</h4>
+            <span class="toggle">+</span>
+          </summary>
+          <div class="answer">No. trace-mcp is fully local. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI &mdash; but everything else runs without external services.</div>
+        </details>
+        <details class="faq">
+          <summary>
+            <h4>Where does the index live?</h4>
+            <span class="toggle">+</span>
+          </summary>
+          <div class="answer">In <code>~/.trace-mcp/</code> &mdash; one SQLite database per project, plus shared decision and topology databases. Nothing is written into your project directory unless you opt in with <code>.traceignore</code> or <code>.trace-mcp/.config.json</code>.</div>
+        </details>
+        <details class="faq">
+          <summary>
+            <h4>Does it work for monorepos and multi-service codebases?</h4>
+            <span class="toggle">+</span>
+          </summary>
+          <div class="answer">Yes. <code>subproject_add_repo</code> links separate repositories into a unified topology. Cross-service impact analysis traces API calls across service boundaries with confidence scores.</div>
+        </details>
+        <details class="faq">
+          <summary>
+            <h4>How does it stay up-to-date?</h4>
+            <span class="toggle">+</span>
+          </summary>
+          <div class="answer">A file watcher (300ms debounce) reindexes changed files incrementally. Content-hashed &mdash; unchanged files are skipped. The graph is always current without manual reindex.</div>
+        </details>
+        <details class="faq">
+          <summary>
+            <h4>What about my framework? Is it supported?</h4>
+            <span class="toggle">+</span>
+          </summary>
+          <div class="answer">79 languages and 58 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open &mdash; write a custom plugin in TypeScript, register it via <code>~/.trace-mcp/plugins/</code>. Most plugins are ~200&ndash;500 lines.</div>
+        </details>
+        <details class="faq">
+          <summary>
+            <h4>Is it safe to run on production codebases?</h4>
+            <span class="toggle">+</span>
+          </summary>
+          <div class="answer">All MCP tools are read-only by default. Refactoring tools (<code>apply_rename</code>, <code>apply_codemod</code>) require explicit confirmation and support dry-run preview. The guard hook blocks accidental destructive operations from your AI agent.</div>
+        </details>
       </div>
     </div>
   </section>
@@ -1238,13 +1719,13 @@
   <section class="cta">
     <div class="cta-bg-num" aria-hidden="true">99%</div>
     <div class="container cta-content">
-      <span class="label cta-label">/ Open Source · MIT License · Zero Api Keys</span>
+      <span class="label cta-label">/ Open Source · Mit License · Zero Api Keys</span>
       <h2 class="cta-headline">
-        Give your AI agent<br>
-        <span class="em">framework-level vision.</span>
+        Stop reading files.<br>
+        <span class="em">Start traversing structure.</span>
       </h2>
       <p class="cta-sub">
-        Built for AI agents that actually need to understand your codebase &mdash; not just read it.
+        One install. Every project. Every AI agent that speaks MCP.
       </p>
       <div class="cta-buttons">
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-primary">
@@ -1264,9 +1745,10 @@
     <div class="footer-grid">
       <div class="footer-col">
         <h5>/ Product</h5>
+        <a href="#what">What it is</a>
+        <a href="#examples">Examples</a>
         <a href="#capabilities">Capabilities</a>
         <a href="#benchmark">Benchmark</a>
-        <a href="#integrations">Integrations</a>
         <a href="#install">Install</a>
       </div>
       <div class="footer-col">
@@ -1312,7 +1794,7 @@
   }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
   document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-  // Animate stat counters once
+  // Stat counters
   function animateNum(el) {
     const target = parseInt(el.dataset.count, 10);
     const duration = 1400;
@@ -1335,7 +1817,7 @@
   }, { threshold: 0.4 });
   document.querySelectorAll('[data-count]').forEach(el => numObserver.observe(el));
 
-  // Build segmented progress bars
+  // Segmented bars
   document.querySelectorAll('.br-segments').forEach(container => {
     const total = parseInt(container.dataset.segments, 10) || 20;
     const filled = parseInt(container.parentElement.parentElement.dataset.fill, 10) || 0;
@@ -1345,7 +1827,6 @@
       seg.className = 'br-segment';
       container.appendChild(seg);
     }
-    // Fill with stagger when in view
     const segObs = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -1364,6 +1845,16 @@
     }, { threshold: 0.4 });
     segObs.observe(container);
   });
+
+  // Copy install
+  function copyInstall(el) {
+    navigator.clipboard.writeText('npm install -g trace-mcp');
+    const c = el.querySelector('.copy');
+    const original = c.textContent;
+    c.textContent = 'copied';
+    c.style.color = 'var(--success)';
+    setTimeout(() => { c.textContent = original; c.style.color = ''; }, 1800);
+  }
 </script>
 
 </body>
