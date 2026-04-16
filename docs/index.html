@@ -59,7 +59,7 @@
       background-image: radial-gradient(circle, var(--border) 0.5px, transparent 0.5px);
       background-size: 24px 24px;
       pointer-events: none;
-      opacity: 0.4;
+      opacity: 0.25;
       z-index: 0;
     }
     main, nav, footer { position: relative; z-index: 1; }
@@ -180,10 +180,10 @@
     }
     .hero-headline {
       font-family: var(--font-body);
-      font-size: clamp(36px, 6vw, 76px);
-      font-weight: 300;
-      line-height: 1.0;
-      letter-spacing: -0.03em;
+      font-size: clamp(36px, 6vw, 72px);
+      font-weight: 400;
+      line-height: 1.05;
+      letter-spacing: -0.025em;
       color: var(--text-display);
       max-width: 820px;
     }
@@ -217,11 +217,11 @@
       margin-top: 48px;
       max-width: 720px;
       font-size: 19px;
-      line-height: 1.5;
-      color: var(--text-secondary);
+      line-height: 1.55;
+      color: var(--text-primary);
       font-weight: 400;
     }
-    .hero-desc .accent-text { color: var(--text-display); }
+    .hero-desc .accent-text { color: var(--text-display); font-weight: 500; }
     .hero-cta {
       margin-top: 56px;
       display: flex; gap: 12px; flex-wrap: wrap;
@@ -268,20 +268,21 @@
     .section-meta-tag { padding-top: 4px; }
     .section-title {
       font-family: var(--font-body);
-      font-size: clamp(28px, 4vw, 44px);
-      font-weight: 400;
+      font-size: clamp(32px, 4.2vw, 48px);
+      font-weight: 500;
       line-height: 1.1;
       letter-spacing: -0.02em;
       color: var(--text-display);
-      max-width: 720px;
+      max-width: 760px;
     }
     .section-title .em { font-weight: 700; }
     .section-lede {
-      max-width: 640px;
-      margin-top: 20px;
-      font-size: 17px;
-      line-height: 1.5;
-      color: var(--text-secondary);
+      max-width: 660px;
+      margin-top: 24px;
+      font-size: 18px;
+      line-height: 1.55;
+      color: var(--text-primary);
+      font-weight: 400;
     }
     @media (max-width: 700px) {
       .section-meta { grid-template-columns: 1fr; gap: 16px; }
@@ -349,20 +350,20 @@
     }
     .def-text h3 {
       font-family: var(--font-body);
-      font-size: 28px;
-      font-weight: 400;
-      line-height: 1.3;
+      font-size: 30px;
+      font-weight: 500;
+      line-height: 1.25;
       color: var(--text-display);
       letter-spacing: -0.02em;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
       max-width: 480px;
     }
     .def-text h3 .em { font-weight: 700; }
     .def-text p {
-      color: var(--text-secondary);
+      color: var(--text-primary);
       font-size: 16px;
-      line-height: 1.6;
-      margin-bottom: 16px;
+      line-height: 1.65;
+      margin-bottom: 18px;
       max-width: 480px;
     }
     .def-text code {
@@ -434,11 +435,11 @@
     }
     .askget-ask .q {
       font-family: var(--font-body);
-      font-size: 18px;
+      font-size: 19px;
       color: var(--text-display);
       font-weight: 500;
-      line-height: 1.4;
-      letter-spacing: -0.01em;
+      line-height: 1.35;
+      letter-spacing: -0.015em;
     }
     .askget-ask .q::before {
       content: '"';
@@ -451,9 +452,9 @@
       margin-left: 4px;
     }
     .askget-get {
-      color: var(--text-secondary);
-      font-size: 15px;
-      line-height: 1.5;
+      color: var(--text-primary);
+      font-size: 16px;
+      line-height: 1.6;
     }
     .askget-tool {
       font-family: var(--font-mono);
@@ -505,15 +506,15 @@
     }
     .cap-body h4 {
       font-family: var(--font-body);
-      font-size: 18px;
-      font-weight: 500;
+      font-size: 20px;
+      font-weight: 700;
       color: var(--text-display);
-      margin-bottom: 12px;
-      letter-spacing: -0.01em;
+      margin-bottom: 14px;
+      letter-spacing: -0.015em;
     }
     .cap-body p {
-      font-size: 14px;
-      color: var(--text-secondary);
+      font-size: 15px;
+      color: var(--text-primary);
       line-height: 1.6;
     }
     .cap-body code {
@@ -557,18 +558,18 @@
     }
     .pipe-step h4 {
       font-family: var(--font-body);
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
       color: var(--text-display);
-      margin-bottom: 12px;
-      letter-spacing: -0.01em;
+      margin-bottom: 14px;
+      letter-spacing: -0.015em;
     }
     .pipe-step p {
-      font-size: 14px;
-      color: var(--text-secondary);
+      font-size: 15px;
+      color: var(--text-primary);
       line-height: 1.6;
       margin-bottom: 16px;
-      max-width: 320px;
+      max-width: 340px;
     }
     .pipe-step .tags {
       display: flex; flex-wrap: wrap; gap: 6px;
@@ -647,9 +648,9 @@
       border-top: 1px solid var(--border-visible);
     }
     .bs-text {
-      max-width: 480px;
-      color: var(--text-secondary);
-      font-size: 14px;
+      max-width: 520px;
+      color: var(--text-primary);
+      font-size: 15px;
       line-height: 1.6;
     }
     .bs-num {
@@ -687,16 +688,16 @@
     }
     .usecase-title {
       font-family: var(--font-body);
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
       color: var(--text-display);
-      letter-spacing: -0.01em;
+      letter-spacing: -0.015em;
       line-height: 1.2;
     }
     .usecase p {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.5;
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.55;
     }
     .usecase-tools {
       margin-top: auto;
@@ -726,13 +727,13 @@
     }
     .int-item {
       flex: 1 0 auto;
-      padding: 14px 20px;
+      padding: 16px 22px;
       background: var(--black);
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 13px;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--text-secondary);
+      color: var(--text-primary);
       text-align: center;
       transition: all 200ms ease-out;
       min-width: 140px;
@@ -799,9 +800,9 @@
       font-weight: 700;
     }
     .qs-step-body p {
-      font-size: 14px;
-      color: var(--text-secondary);
-      line-height: 1.5;
+      font-size: 15px;
+      color: var(--text-primary);
+      line-height: 1.55;
     }
 
     .terminal {
@@ -856,10 +857,10 @@
     .faq summary::-webkit-details-marker { display: none; }
     .faq summary h4 {
       font-family: var(--font-body);
-      font-size: 18px;
-      font-weight: 500;
+      font-size: 20px;
+      font-weight: 600;
       color: var(--text-display);
-      letter-spacing: -0.01em;
+      letter-spacing: -0.015em;
       line-height: 1.3;
     }
     .faq summary .toggle {
@@ -872,9 +873,9 @@
     .faq[open] summary .toggle { transform: rotate(45deg); color: var(--text-display); }
     .faq .answer {
       margin-top: 16px;
-      color: var(--text-secondary);
-      font-size: 15px;
-      line-height: 1.6;
+      color: var(--text-primary);
+      font-size: 16px;
+      line-height: 1.65;
       max-width: 720px;
     }
     .faq .answer code {
@@ -921,10 +922,11 @@
     }
     .cta-headline .em { font-weight: 700; }
     .cta-sub {
-      color: var(--text-secondary);
+      color: var(--text-primary);
       max-width: 520px;
       margin: 0 auto 48px;
-      font-size: 16px;
+      font-size: 17px;
+      line-height: 1.55;
     }
     .cta-buttons {
       display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
