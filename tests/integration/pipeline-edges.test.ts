@@ -246,4 +246,18 @@ describe('PHP import edge resolution (laravel-10)', () => {
     expect(meta.from).toMatch(/\\/); // PHP FQN with backslash
     expect(meta.specifiers).toBeDefined();
   });
+
+  it('creates PHP symbol-level edges (calls, instantiates, extends, implements, uses_trait)', () => {
+    // The laravel-10 fixture has enough internal structure to produce at least
+    // some call or instantiation edges. Heritage edges may not fire if all base
+    // classes live in vendor/ (not indexed in the fixture).
+    const calls = store.getEdgesByType('calls');
+    const insts = store.getEdgesByType('instantiates');
+    const extendsE = store.getEdgesByType('extends');
+    const implementsE = store.getEdgesByType('implements');
+    const usesTrait = store.getEdgesByType('uses_trait');
+    const total = calls.length + insts.length + extendsE.length
+      + implementsE.length + usesTrait.length;
+    expect(total).toBeGreaterThan(0);
+  });
 });

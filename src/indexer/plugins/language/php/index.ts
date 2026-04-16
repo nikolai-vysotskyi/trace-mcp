@@ -13,6 +13,9 @@ import {
   type TSNode,
   extractNamespace,
   extractUseStatements,
+  extractClassHeritage,
+  extractInterfaceExtends,
+  extractCallSites,
   makeSymbolId,
   makeFqn,
   extractSignature,
@@ -58,17 +61,20 @@ export class PhpLanguagePlugin implements LanguagePlugin {
         warnings.push('Source contains syntax errors; extraction may be incomplete');
       }
 
-      this.walkTopLevel(root, filePath, namespace, symbols);
+      const edges: RawEdge[] = [];
+      this.walkTopLevel(root, filePath, namespace, symbols, edges);
 
       // Extract use statements as import edges for PSR-4 resolution
       const useStatements = extractUseStatements(root);
-      const edges: RawEdge[] = useStatements.map((u) => ({
-        edgeType: 'php_imports',
-        metadata: {
-          from: u.fqn,
-          specifiers: [u.alias ?? u.fqn.split('\\').pop() ?? u.fqn],
-        },
-      }));
+      for (const u of useStatements) {
+        edges.push({
+          edgeType: 'php_imports',
+          metadata: {
+            from: u.fqn,
+            specifiers: [u.alias ?? u.fqn.split('\\').pop() ?? u.fqn],
+          },
+        });
+      }
 
       return ok({
         language: 'php',
@@ -83,17 +89,17 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private walkTopLevel(root: TSNode, filePath: string, namespace: string | undefined, symbols: RawSymbol[]): void {
+  private walkTopLevel(root: TSNode, filePath: string, namespace: string | undefined, symbols: RawSymbol[], edges: RawEdge[]): void {
     for (const node of root.namedChildren) {
       switch (node.type) {
         case 'class_declaration':
-          this.extractClass(node, filePath, namespace, symbols);
+          this.extractClass(node, filePath, namespace, symbols, edges);
           break;
         case 'interface_declaration':
-          this.extractClassLike(node, filePath, namespace, symbols, 'interface');
+          this.extractClassLike(node, filePath, namespace, symbols, edges, 'interface');
           break;
         case 'trait_declaration':
-          this.extractClassLike(node, filePath, namespace, symbols, 'trait');
+          this.extractClassLike(node, filePath, namespace, symbols, edges, 'trait');
           break;
         case 'enum_declaration':
           this.extractEnum(node, filePath, namespace, symbols);
@@ -109,7 +115,7 @@ export class PhpLanguagePlugin implements LanguagePlugin {
           if (body) {
             const nsName = node.namedChildren.find((c) => c.type === 'namespace_name');
             const innerNs = nsName?.text ?? namespace;
-            this.walkTopLevel(body, filePath, innerNs, symbols);
+            this.walkTopLevel(body, filePath, innerNs, symbols, edges);
           }
           break;
         }
@@ -118,7 +124,7 @@ export class PhpLanguagePlugin implements LanguagePlugin {
   }
 
   private extractClass(
-    node: TSNode, filePath: string, namespace: string | undefined, symbols: RawSymbol[],
+    node: TSNode, filePath: string, namespace: string | undefined, symbols: RawSymbol[], edges: RawEdge[],
   ): void {
     const nameNode = node.childForFieldName('name');
     if (!nameNode) return;
@@ -136,6 +142,12 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     if (mods.abstract) metadata.abstract = true;
     if (mods.final) metadata.final = true;
     if (minPhpVersion) metadata.minPhpVersion = minPhpVersion;
+
+    // Extract heritage and attach unresolved refs to metadata for the resolver
+    const heritage = extractClassHeritage(node);
+    if (heritage.extends.length > 0) metadata.extends = heritage.extends;
+    if (heritage.implements.length > 0) metadata.implements = heritage.implements;
+    if (heritage.usesTraits.length > 0) metadata.usesTraits = heritage.usesTraits;
 
     symbols.push({
       symbolId,
@@ -158,12 +170,18 @@ export class PhpLanguagePlugin implements LanguagePlugin {
 
   private extractClassLike(
     node: TSNode, filePath: string, namespace: string | undefined,
-    symbols: RawSymbol[], kind: 'interface' | 'trait',
+    symbols: RawSymbol[], _edges: RawEdge[], kind: 'interface' | 'trait',
   ): void {
     const nameNode = node.childForFieldName('name');
     if (!nameNode) return;
     const name = nameNode.text;
     const symbolId = makeSymbolId(filePath, name, kind);
+
+    const metadata: Record<string, unknown> = {};
+    if (kind === 'interface') {
+      const parents = extractInterfaceExtends(node);
+      if (parents.length > 0) metadata.extends = parents;
+    }
 
     symbols.push({
       symbolId,
@@ -175,6 +193,7 @@ export class PhpLanguagePlugin implements LanguagePlugin {
       byteEnd: node.endIndex,
       lineStart: node.startPosition.row + 1,
       lineEnd: node.endPosition.row + 1,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     });
 
     // For traits and interfaces, also extract methods
@@ -236,6 +255,13 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     if (!nameNode) return;
     const name = nameNode.text;
 
+    const metadata: Record<string, unknown> = {};
+    const body = node.childForFieldName('body');
+    if (body) {
+      const callSites = extractCallSites(body);
+      if (callSites.length > 0) metadata.callSites = callSites;
+    }
+
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'function'),
       name,
@@ -246,6 +272,7 @@ export class PhpLanguagePlugin implements LanguagePlugin {
       byteEnd: node.endIndex,
       lineStart: node.startPosition.row + 1,
       lineEnd: node.endPosition.row + 1,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     });
   }
 
@@ -285,6 +312,13 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     if (mods.abstract) metadata.abstract = true;
     if (mods.final) metadata.final = true;
     if (vis) metadata.visibility = vis;
+
+    // Extract call sites from method body for symbol-level call graph
+    const body = node.childForFieldName('body');
+    if (body) {
+      const callSites = extractCallSites(body);
+      if (callSites.length > 0) metadata.callSites = callSites;
+    }
 
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'method', className),

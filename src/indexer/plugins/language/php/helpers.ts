@@ -332,3 +332,165 @@ export function extractUseStatements(rootNode: TSNode): { fqn: string; alias?: s
 
   return results;
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// CALL SITE & HERITAGE EXTRACTION
+// ════════════════════════════════════════════════════════════════════════
+
+export interface PhpCallSite {
+  /** Type of call site */
+  type: 'this' | 'self' | 'parent' | 'static' | 'member' | 'new' | 'function';
+  /** Name of the method/function being called */
+  callee: string;
+  /** For 'static' and 'new': the class name reference */
+  classRef?: string;
+  /** For 'member': the receiver variable name (e.g., "user" for $user->save()) */
+  receiver?: string;
+  /** Line number (1-based) */
+  line: number;
+}
+
+export interface PhpClassHeritage {
+  /** Names from `extends X` clause */
+  extends: string[];
+  /** Names from `implements X, Y` clause */
+  implements: string[];
+  /** Names from `use TraitA, TraitB` inside the class body */
+  usesTraits: string[];
+}
+
+/** Extract the `extends`, `implements`, and trait `use` references from a class declaration node. */
+export function extractClassHeritage(classNode: TSNode): PhpClassHeritage {
+  const result: PhpClassHeritage = { extends: [], implements: [], usesTraits: [] };
+
+  for (const child of classNode.namedChildren) {
+    if (child.type === 'base_clause') {
+      for (const c of child.namedChildren) {
+        if (c.type === 'name' || c.type === 'qualified_name') result.extends.push(c.text);
+      }
+    } else if (child.type === 'class_interface_clause') {
+      for (const c of child.namedChildren) {
+        if (c.type === 'name' || c.type === 'qualified_name') result.implements.push(c.text);
+      }
+    } else if (child.type === 'declaration_list') {
+      for (const member of child.namedChildren) {
+        if (member.type === 'use_declaration') {
+          for (const c of member.namedChildren) {
+            if (c.type === 'name' || c.type === 'qualified_name') result.usesTraits.push(c.text);
+          }
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+/** Extract the `extends` list from an interface declaration (interfaces can extend multiple). */
+export function extractInterfaceExtends(interfaceNode: TSNode): string[] {
+  const result: string[] = [];
+  for (const child of interfaceNode.namedChildren) {
+    if (child.type === 'base_clause') {
+      for (const c of child.namedChildren) {
+        if (c.type === 'name' || c.type === 'qualified_name') result.push(c.text);
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Walk a method/function body and collect all call sites.
+ * Handles member_call_expression, scoped_call_expression, object_creation_expression,
+ * and function_call_expression.
+ */
+export function extractCallSites(bodyNode: TSNode): PhpCallSite[] {
+  const calls: PhpCallSite[] = [];
+
+  function visit(node: TSNode): void {
+    switch (node.type) {
+      case 'member_call_expression': {
+        // $obj->method(args) or $this->method(args)
+        // Named children: [object, name, arguments]
+        const children = node.namedChildren;
+        if (children.length < 2) break;
+        const receiver = children[0];
+        const nameNode = children.find((c, i) => i > 0 && c.type === 'name');
+        if (!nameNode) break;
+
+        const callee = nameNode.text;
+        const line = nameNode.startPosition.row + 1;
+
+        // Detect $this receiver
+        if (receiver.type === 'variable_name') {
+          const varNameNode = receiver.namedChildren.find((c) => c.type === 'name');
+          if (varNameNode?.text === 'this') {
+            calls.push({ type: 'this', callee, line });
+          } else {
+            calls.push({ type: 'member', callee, receiver: varNameNode?.text, line });
+          }
+        }
+        break;
+      }
+
+      case 'scoped_call_expression': {
+        // Class::method() or self::/parent::/static::method()
+        const children = node.namedChildren;
+        if (children.length < 2) break;
+        const scope = children[0];
+        const nameNode = children.find((c, i) => i > 0 && c.type === 'name');
+        if (!nameNode) break;
+
+        const callee = nameNode.text;
+        const line = nameNode.startPosition.row + 1;
+
+        if (scope.type === 'relative_scope') {
+          // self::, parent::, static::
+          const kw = scope.text;
+          if (kw === 'self' || kw === 'static') calls.push({ type: 'self', callee, line });
+          else if (kw === 'parent') calls.push({ type: 'parent', callee, line });
+        } else if (scope.type === 'name' || scope.type === 'qualified_name') {
+          calls.push({ type: 'static', callee, classRef: scope.text, line });
+        }
+        break;
+      }
+
+      case 'object_creation_expression': {
+        // new Class(args)
+        const classNode = node.namedChildren.find(
+          (c) => c.type === 'name' || c.type === 'qualified_name',
+        );
+        if (classNode) {
+          calls.push({
+            type: 'new',
+            callee: '__construct',
+            classRef: classNode.text,
+            line: classNode.startPosition.row + 1,
+          });
+        }
+        break;
+      }
+
+      case 'function_call_expression': {
+        // Bare function call: functionName(args)
+        const children = node.namedChildren;
+        const first = children[0];
+        if (first && (first.type === 'name' || first.type === 'qualified_name')) {
+          calls.push({
+            type: 'function',
+            callee: first.text,
+            line: first.startPosition.row + 1,
+          });
+        }
+        break;
+      }
+    }
+
+    for (const child of node.namedChildren) {
+      visit(child);
+    }
+  }
+
+  visit(bodyNode);
+  return calls;
+}

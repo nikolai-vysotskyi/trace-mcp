@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
-import { extractUseStatements } from '../../src/indexer/plugins/language/php/helpers.js';
+import {
+  extractUseStatements,
+  extractClassHeritage,
+  extractInterfaceExtends,
+  extractCallSites,
+} from '../../src/indexer/plugins/language/php/helpers.js';
 import { getParser } from '../../src/parser/tree-sitter.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
@@ -390,5 +395,176 @@ use App\\Traits\\{HasUuid, SoftDeletes};
       'Illuminate\\Database\\Eloquent\\Model',
       'Illuminate\\Http\\Request',
     ]);
+  });
+});
+
+// ---------- class heritage extraction ----------
+
+describe('extractClassHeritage', () => {
+  async function parseClass(code: string) {
+    const parser = await getParser('php');
+    const root = parser.parse(code).rootNode;
+    function find(n: any): any {
+      if (n.type === 'class_declaration') return n;
+      for (const c of n.namedChildren) { const r = find(c); if (r) return r; }
+      return null;
+    }
+    return find(root);
+  }
+
+  it('extracts extends', async () => {
+    const node = await parseClass('<?php class User extends Model {}');
+    expect(extractClassHeritage(node)).toEqual({
+      extends: ['Model'], implements: [], usesTraits: [],
+    });
+  });
+
+  it('extracts implements (multiple)', async () => {
+    const node = await parseClass('<?php class User implements Auth, Serializable {}');
+    expect(extractClassHeritage(node)).toEqual({
+      extends: [], implements: ['Auth', 'Serializable'], usesTraits: [],
+    });
+  });
+
+  it('extracts trait usage', async () => {
+    const node = await parseClass('<?php class User { use HasRoles, CanLogin; }');
+    expect(extractClassHeritage(node)).toEqual({
+      extends: [], implements: [], usesTraits: ['HasRoles', 'CanLogin'],
+    });
+  });
+
+  it('extracts all heritage combined', async () => {
+    const node = await parseClass(`<?php
+class User extends Model implements Authenticatable, Serializable {
+  use HasRoles, Notifiable;
+}
+`);
+    const h = extractClassHeritage(node);
+    expect(h.extends).toEqual(['Model']);
+    expect(h.implements).toEqual(['Authenticatable', 'Serializable']);
+    expect(h.usesTraits).toEqual(['HasRoles', 'Notifiable']);
+  });
+
+  it('extracts interface extends (multi-inheritance)', async () => {
+    const parser = await getParser('php');
+    const root = parser.parse('<?php interface Foo extends Bar, Baz {}').rootNode;
+    const iface = root.namedChildren.find((c: any) => c.type === 'interface_declaration');
+    expect(extractInterfaceExtends(iface!)).toEqual(['Bar', 'Baz']);
+  });
+});
+
+// ---------- call site extraction ----------
+
+describe('extractCallSites', () => {
+  async function parseBody(code: string) {
+    const parser = await getParser('php');
+    const root = parser.parse(code).rootNode;
+    function find(n: any): any {
+      if (n.type === 'compound_statement') return n;
+      for (const c of n.namedChildren) { const r = find(c); if (r) return r; }
+      return null;
+    }
+    return find(root);
+  }
+
+  it('extracts $this->method() calls', async () => {
+    const body = await parseBody(`<?php function f() { $this->validate($x); $this->save(); }`);
+    const calls = extractCallSites(body);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toMatchObject({ type: 'this', callee: 'validate' });
+    expect(calls[1]).toMatchObject({ type: 'this', callee: 'save' });
+  });
+
+  it('extracts $obj->method() calls as member', async () => {
+    const body = await parseBody(`<?php function f() { $user->save(); }`);
+    const calls = extractCallSites(body);
+    expect(calls[0]).toMatchObject({ type: 'member', callee: 'save', receiver: 'user' });
+  });
+
+  it('extracts Class::method() static calls', async () => {
+    const body = await parseBody(`<?php function f() { User::query()->get(); App\\Util::helper(); }`);
+    const calls = extractCallSites(body);
+    const statics = calls.filter((c) => c.type === 'static');
+    expect(statics).toHaveLength(2);
+    expect(statics[0]).toMatchObject({ callee: 'query', classRef: 'User' });
+    expect(statics[1]).toMatchObject({ callee: 'helper', classRef: 'App\\Util' });
+  });
+
+  it('extracts self::/parent:: calls', async () => {
+    const body = await parseBody(`<?php function f() { self::sm(); parent::pm(); }`);
+    const calls = extractCallSites(body);
+    expect(calls[0]).toMatchObject({ type: 'self', callee: 'sm' });
+    expect(calls[1]).toMatchObject({ type: 'parent', callee: 'pm' });
+  });
+
+  it('extracts new Class() as instantiation', async () => {
+    const body = await parseBody(`<?php function f() { $u = new User(['n']); new App\\Model(); }`);
+    const calls = extractCallSites(body);
+    const news = calls.filter((c) => c.type === 'new');
+    expect(news).toHaveLength(2);
+    expect(news[0]).toMatchObject({ callee: '__construct', classRef: 'User' });
+    expect(news[1]).toMatchObject({ callee: '__construct', classRef: 'App\\Model' });
+  });
+
+  it('extracts bare function calls', async () => {
+    const body = await parseBody(`<?php function f() { helperFn($x); array_map('cb', $xs); }`);
+    const calls = extractCallSites(body);
+    const fns = calls.filter((c) => c.type === 'function');
+    expect(fns).toHaveLength(2);
+    expect(fns[0]).toMatchObject({ callee: 'helperFn' });
+    expect(fns[1]).toMatchObject({ callee: 'array_map' });
+  });
+
+  it('captures line numbers', async () => {
+    const body = await parseBody(`<?php
+function f() {
+  $this->a();
+
+  $this->b();
+}
+`);
+    const calls = extractCallSites(body);
+    expect(calls[0].line).toBe(3);
+    expect(calls[1].line).toBe(5);
+  });
+});
+
+// ---------- method symbol emits callSites metadata ----------
+
+describe('PHP plugin emits callSites and heritage', () => {
+  it('methods have callSites in metadata', async () => {
+    const code = `<?php
+namespace App;
+class Service extends Base {
+  public function process() {
+    $this->validate();
+    User::query();
+    new Request();
+  }
+}`;
+    const plugin = new PhpLanguagePlugin();
+    const result = await plugin.extractSymbols('app/Service.php', Buffer.from(code));
+    const parsed = result._unsafeUnwrap();
+    const method = parsed.symbols.find((s) => s.name === 'process' && s.kind === 'method');
+    expect(method).toBeDefined();
+    const sites = (method!.metadata as any)?.callSites;
+    expect(sites).toBeDefined();
+    expect(sites).toHaveLength(3);
+    expect(sites.map((s: any) => s.type).sort()).toEqual(['new', 'static', 'this']);
+  });
+
+  it('class has extends/implements/traits in metadata', async () => {
+    const code = `<?php
+class User extends Model implements Authenticatable {
+  use HasRoles;
+}`;
+    const plugin = new PhpLanguagePlugin();
+    const result = await plugin.extractSymbols('app/User.php', Buffer.from(code));
+    const parsed = result._unsafeUnwrap();
+    const cls = parsed.symbols.find((s) => s.name === 'User' && s.kind === 'class');
+    expect(cls).toBeDefined();
+    expect((cls!.metadata as any).extends).toEqual(['Model']);
+    expect((cls!.metadata as any).implements).toEqual(['Authenticatable']);
+    expect((cls!.metadata as any).usesTraits).toEqual(['HasRoles']);
   });
 });

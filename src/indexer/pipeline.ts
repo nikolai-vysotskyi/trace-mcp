@@ -238,6 +238,7 @@ export class IndexingPipeline {
     edgeResolver.resolveEsmImportEdges();
     edgeResolver.resolvePythonImportEdges();
     edgeResolver.resolvePhpImportEdges();
+    edgeResolver.resolvePhpCallEdges();
     edgeResolver.resolvePythonHeritageEdges();
     edgeResolver.resolvePythonCallEdges();
     edgeResolver.resolveTestCoversEdges();
