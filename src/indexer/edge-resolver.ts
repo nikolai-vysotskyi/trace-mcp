@@ -16,6 +16,7 @@ import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolve
 import { resolvePythonCallEdges as _resolvePyCalls } from './edge-resolvers/python-calls.js';
 import { resolvePhpImportEdges as _resolvePhpImports } from './edge-resolvers/php-imports.js';
 import { resolvePhpCallEdges as _resolvePhpCalls } from './edge-resolvers/php-calls.js';
+import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
 
 export class EdgeResolver {
@@ -93,6 +94,9 @@ export class EdgeResolver {
 
   /** Pass 2g2: PHP call/heritage edges (method calls, extends, implements, uses_trait). */
   resolvePhpCallEdges(): void { _resolvePhpCalls(this.state); }
+
+  /** Pass 2i: structural member_of edges for every nested symbol → its parent. */
+  resolveMemberOfEdges(): void { _resolveMemberOf(this.state); }
 
   /** Pass 2h: test_covers edges. */
   resolveTestCoversEdges(): void { _resolveTests(this.state); }

@@ -358,6 +358,7 @@ const SEED_EDGE_TYPES = [
   { name: 'instantiates', category: 'core', description: 'Class instantiation via `new`' },
   { name: 'accesses_property', category: 'core', description: 'Property read/write' },
   { name: 'accesses_constant', category: 'core', description: 'Class constant or enum case access' },
+  { name: 'member_of', category: 'core', description: 'Symbol is a member of a container (method/property of class, case of enum)' },
   { name: 'references', category: 'core', description: 'Symbol reference (read/write)' },
   { name: 'unresolved', category: 'core', description: 'Phantom edge for unresolved targets' },
   { name: 'test_covers', category: 'core', description: 'Test file covers a symbol or file' },

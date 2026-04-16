@@ -369,7 +369,10 @@ function resolveCallSite(
         const ctor = findMethodInClassHierarchy('__construct', targetClass, byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap);
         return ctor ?? targetClass;
       }
-      return findMethodInClassHierarchy(cs.callee, targetClass, byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap);
+      // Try to find the method; fall back to the class (e.g., inherited framework
+      // methods like Model::find that live in vendor/ — we still record the class ref).
+      const method = findMethodInClassHierarchy(cs.callee, targetClass, byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap);
+      return method ?? targetClass;
     }
 
     case 'member':
@@ -461,8 +464,6 @@ function resolveCallSite(
       // $this->prop->method() — resolve prop type via class hierarchy, then find method on type
       if (!parentClass || !cs.propChain || cs.propChain.length === 0) return null;
       let currentClass: PhpSymbol | null = parentClass;
-      // Walk the property chain: each step resolves a property, get its type,
-      // then find the class for that type to continue.
       for (const propName of cs.propChain) {
         if (!currentClass) return null;
         const prop = findMemberInClassHierarchy(
@@ -474,21 +475,19 @@ function resolveCallSite(
           const propMeta = JSON.parse(prop.metadata) as Record<string, unknown>;
           const typeRef = propMeta.type as string | undefined;
           if (!typeRef) return null;
-          // Resolve type using property's file context (not source's — property may
-          // have been defined in a parent class with different use statements).
           const classOwner = prop.parent_id != null ? symbolById.get(prop.parent_id) ?? null : null;
           currentClass = resolveClassRef(typeRef, classOwner ?? prop, fileUseMap, fileNamespaceMap, byFqn, byName);
         } catch { return null; }
       }
       if (!currentClass) return null;
-      return findMethodInClassHierarchy(
+      const method = findMethodInClassHierarchy(
         cs.callee, currentClass,
         byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
       );
+      return method ?? currentClass;
     }
 
     case 'param_call': {
-      // $param->method() where $param is a typed parameter
       if (!cs.receiver || !source.metadata) return null;
       try {
         const meta = JSON.parse(source.metadata) as Record<string, unknown>;
@@ -498,22 +497,15 @@ function resolveCallSite(
         if (!typeRef) return null;
         const targetClass = resolveClassRef(typeRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
         if (!targetClass) return null;
-        return findMethodInClassHierarchy(
+        const method = findMethodInClassHierarchy(
           cs.callee, targetClass,
           byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
         );
+        return method ?? targetClass;
       } catch { return null; }
     }
 
     case 'local_call': {
-      // $local->method() where $local = new X() — type tracked at extract time.
-      // We stored the receiver name; now use paramTypes-like mechanism.
-      // Local types aren't persisted in metadata currently — they're in-memory
-      // during extraction. The call is already type-resolved into something
-      // the resolver can handle here only if we persist them. For now, we
-      // persist the local type alongside the receiver name in metadata at
-      // extraction time (handled in PHP plugin — see upcoming changes).
-      // Fallback: skip if we can't resolve.
       if (!cs.receiver || !source.metadata) return null;
       try {
         const meta = JSON.parse(source.metadata) as Record<string, unknown>;
@@ -523,10 +515,11 @@ function resolveCallSite(
         if (!typeRef) return null;
         const targetClass = resolveClassRef(typeRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
         if (!targetClass) return null;
-        return findMethodInClassHierarchy(
+        const method = findMethodInClassHierarchy(
           cs.callee, targetClass,
           byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
         );
+        return method ?? targetClass;
       } catch { return null; }
     }
   }
