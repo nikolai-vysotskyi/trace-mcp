@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>trace-mcp &mdash; Framework-aware code intelligence for AI agents</title>
+  <meta name="description" content="MCP server that gives AI agents framework-level understanding of your codebase. 79 languages, 58 framework integrations, up to 99% token reduction.">
+  <meta name="theme-color" content="#0a0a0f">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="trace-mcp &mdash; Code intelligence MCP server">
+  <meta property="og:description" content="Framework-aware code intelligence for AI agents. 79 languages, 58 integrations, 99% token reduction.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://trace-mcp.com">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a0f;
+      --bg-card: #12121a;
+      --bg-card-hover: #181825;
+      --border: #1e1e2e;
+      --border-bright: #313147;
+      --text: #e2e2ec;
+      --text-dim: #8888a0;
+      --text-dimmer: #55556a;
+      --accent: #7c6aef;
+      --accent-bright: #9d8ffa;
+      --accent-dim: rgba(124, 106, 239, 0.15);
+      --green: #34d399;
+      --green-dim: rgba(52, 211, 153, 0.12);
+      --orange: #fb923c;
+      --red: #f87171;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── Utilities ── */
+    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+    .mono { font-family: var(--mono); }
+    .dim { color: var(--text-dim); }
+    .accent { color: var(--accent-bright); }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(10, 10, 15, 0.8);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    nav .container {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+    }
+    nav .logo {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 18px;
+      text-decoration: none; color: var(--text);
+    }
+    nav .logo-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), #5b4cc4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; color: #fff;
+    }
+    nav .links { display: flex; gap: 28px; align-items: center; }
+    nav .links a {
+      color: var(--text-dim); text-decoration: none; font-size: 14px;
+      font-weight: 500; transition: color .2s;
+    }
+    nav .links a:hover { color: var(--text); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: 10px;
+      font-weight: 600; font-size: 15px;
+      text-decoration: none; transition: all .2s;
+      border: none; cursor: pointer; font-family: var(--sans);
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 0 24px rgba(124, 106, 239, 0.3);
+    }
+    .btn-primary:hover {
+      background: var(--accent-bright);
+      box-shadow: 0 0 32px rgba(124, 106, 239, 0.5);
+      transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border-bright);
+    }
+    .btn-ghost:hover {
+      background: var(--bg-card); border-color: var(--accent);
+    }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+      position: relative;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 600px;
+      background: radial-gradient(ellipse, rgba(124, 106, 239, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 100px;
+      background: var(--accent-dim);
+      color: var(--accent-bright);
+      font-size: 13px; font-weight: 600;
+      margin-bottom: 28px;
+      border: 1px solid rgba(124, 106, 239, 0.2);
+    }
+    .hero h1 {
+      font-size: clamp(40px, 6vw, 68px);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--accent-bright), #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 19px;
+      color: var(--text-dim);
+      max-width: 640px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+    .hero-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+    .hero-install {
+      display: inline-flex; align-items: center; gap: 12px;
+      margin-top: 48px; padding: 14px 24px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; font-family: var(--mono); font-size: 15px;
+      color: var(--text-dim); cursor: pointer; transition: all .2s;
+      position: relative;
+    }
+    .hero-install:hover { border-color: var(--accent); color: var(--text); }
+    .hero-install code { color: var(--green); }
+    .hero-install .copy-hint {
+      font-family: var(--sans); font-size: 12px;
+      color: var(--text-dimmer); margin-left: 8px;
+    }
+
+    /* ── Stats ── */
+    .stats {
+      padding: 60px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 32px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 48px; font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .stat-number.accent-text { color: var(--accent-bright); }
+    .stat-number.green-text { color: var(--green); }
+    .stat-label { color: var(--text-dim); font-size: 14px; font-weight: 500; }
+
+    /* ── Section ── */
+    section { padding: 100px 0; }
+    .section-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--accent-bright);
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 800; letter-spacing: -0.02em;
+      line-height: 1.2; margin-bottom: 16px;
+    }
+    .section-desc {
+      font-size: 17px; color: var(--text-dim);
+      max-width: 600px; line-height: 1.7;
+      margin-bottom: 48px;
+    }
+
+    /* ── Problem / Solution ── */
+    .problem-solution {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .ps-card {
+      padding: 36px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+    .ps-card h3 {
+      font-size: 18px; font-weight: 700;
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .ps-card ul { list-style: none; }
+    .ps-card ul li {
+      padding: 8px 0; font-size: 15px;
+      color: var(--text-dim);
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .ps-card ul li::before { flex-shrink: 0; font-size: 16px; }
+    .ps-card.problem ul li::before { content: '\2717'; color: var(--red); }
+    .ps-card.solution ul li::before { content: '\2713'; color: var(--green); }
+    .ps-card.solution { border-color: rgba(52, 211, 153, 0.2); }
+
+    /* ── Features grid ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .feature-card {
+      padding: 32px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      transition: all .25s;
+    }
+    .feature-card:hover {
+      border-color: var(--border-bright);
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; margin-bottom: 20px;
+    }
+    .feature-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+    .feature-card p { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+
+    /* ── Token benchmark ── */
+    .benchmark-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 14px 20px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      color: var(--text-dimmer);
+      font-weight: 600; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .benchmark-table td { color: var(--text-dim); }
+    .benchmark-table td:first-child { color: var(--text); font-weight: 500; }
+    .benchmark-table .reduction {
+      color: var(--green); font-weight: 700;
+      font-family: var(--mono); font-size: 13px;
+    }
+    .benchmark-table .tokens-old { color: var(--text-dimmer); }
+    .benchmark-table .tokens-new { color: var(--accent-bright); font-family: var(--mono); }
+    .benchmark-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .benchmark-header {
+      padding: 32px 32px 0;
+    }
+    .benchmark-total {
+      display: flex; align-items: baseline; gap: 12px;
+      margin-top: 20px;
+    }
+    .benchmark-total .big { font-size: 56px; font-weight: 800; color: var(--green); }
+    .benchmark-total .label { font-size: 18px; color: var(--text-dim); }
+
+    /* ── Code block ── */
+    .code-block {
+      background: #0d0d14;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(18, 18, 26, 0.6);
+    }
+    .code-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+    }
+    .code-dot.red { background: #ff5f57; }
+    .code-dot.yellow { background: #febc2e; }
+    .code-dot.green { background: #28c840; }
+    .code-header span {
+      margin-left: 8px; font-size: 13px;
+      color: var(--text-dimmer); font-family: var(--mono);
+    }
+    .code-body {
+      padding: 20px 24px;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+    .code-body .comment { color: #555570; }
+    .code-body .keyword { color: var(--accent-bright); }
+    .code-body .string { color: var(--green); }
+    .code-body .fn { color: #e0c285; }
+    .code-body .dim { color: #55556a; }
+
+    /* ── Quick start ── */
+    .quickstart {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+    .quickstart-steps { counter-reset: step; }
+    .quickstart-step {
+      display: flex; gap: 20px; padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .quickstart-step:last-child { border-bottom: none; }
+    .step-num {
+      flex-shrink: 0;
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: var(--accent-dim);
+      color: var(--accent-bright);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px;
+    }
+    .quickstart-step h4 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .quickstart-step p { font-size: 14px; color: var(--text-dim); }
+    .quickstart-step code {
+      font-family: var(--mono); font-size: 13px;
+      background: var(--bg-card); padding: 2px 8px;
+      border-radius: 6px; color: var(--green);
+      border: 1px solid var(--border);
+    }
+
+    /* ── Integrations cloud ── */
+    .integrations-cloud {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      justify-content: center;
+      max-width: 900px; margin: 0 auto;
+    }
+    .int-tag {
+      padding: 8px 16px; border-radius: 8px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      font-size: 13px; font-weight: 500; color: var(--text-dim);
+      transition: all .2s;
+    }
+    .int-tag:hover { border-color: var(--accent); color: var(--text); }
+    .int-tag.highlight {
+      background: var(--accent-dim);
+      border-color: rgba(124, 106, 239, 0.3);
+      color: var(--accent-bright);
+    }
+
+    /* ── Clients ── */
+    .clients {
+      display: flex; gap: 32px; justify-content: center;
+      flex-wrap: wrap; margin-top: 32px;
+    }
+    .client-badge {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 20px; border-radius: 12px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      font-size: 14px; font-weight: 600;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 60px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    footer p { color: var(--text-dimmer); font-size: 14px; }
+    footer a { color: var(--accent-bright); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    footer .footer-links {
+      display: flex; gap: 24px; justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .features-grid { grid-template-columns: 1fr; }
+      .problem-solution { grid-template-columns: 1fr; }
+      .quickstart { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; gap: 24px; }
+      .stat-number { font-size: 36px; }
+      .hero { padding: 120px 0 60px; }
+      nav .links { gap: 16px; }
+      nav .links a { font-size: 13px; }
+      .benchmark-total .big { font-size: 40px; }
+    }
+
+    /* ── Animations ── */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Glow orbs ── */
+    .glow-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="container">
+    <a href="#" class="logo">
+      <div class="logo-icon">t</div>
+      trace-mcp
+    </a>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#benchmark">Benchmark</a>
+      <a href="#quickstart">Quick start</a>
+      <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank">GitHub</a>
+      <a href="https://www.npmjs.com/package/trace-mcp" class="btn btn-ghost" style="padding:8px 16px; font-size:13px;" target="_blank">npm</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container" style="position:relative;">
+    <div class="glow-orb" style="width:400px;height:400px;background:rgba(124,106,239,0.12);top:-100px;left:10%;"></div>
+    <div class="glow-orb" style="width:300px;height:300px;background:rgba(52,211,153,0.08);top:50px;right:5%;"></div>
+
+    <div class="hero-badge">MCP Server</div>
+    <h1>
+      Your AI agent sees files.<br>
+      trace-mcp sees <span class="gradient">the graph.</span>
+    </h1>
+    <p>
+      Framework-aware code intelligence that gives AI agents the same understanding a senior developer has &mdash; routes, models, components, and every edge between them.
+    </p>
+    <div class="hero-buttons">
+      <a href="#quickstart" class="btn btn-primary">Get started</a>
+      <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-ghost">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+    <div class="hero-install" onclick="copyInstall(this)" title="Click to copy">
+      <span class="dim">$</span> <code>npm install -g trace-mcp</code>
+      <span class="copy-hint">click to copy</span>
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<section class="stats">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="fade-in">
+        <div class="stat-number accent-text" data-count="79">0</div>
+        <div class="stat-label">Languages</div>
+      </div>
+      <div class="fade-in">
+        <div class="stat-number accent-text" data-count="58">0</div>
+        <div class="stat-label">Framework integrations</div>
+      </div>
+      <div class="fade-in">
+        <div class="stat-number green-text">99%</div>
+        <div class="stat-label">Token reduction (peak)</div>
+      </div>
+      <div class="fade-in">
+        <div class="stat-number accent-text" data-count="138">0</div>
+        <div class="stat-label">MCP tools</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Problem / Solution -->
+<section id="why" style="padding-top:80px;">
+  <div class="container">
+    <div class="section-label">The problem</div>
+    <h2 class="section-title">AI agents are framework-blind</h2>
+    <p class="section-desc">
+      They can parse syntax, but they can't see that a PHP controller renders a Vue page, or that a model method maps to a database migration three files away.
+    </p>
+    <div class="problem-solution fade-in">
+      <div class="ps-card problem">
+        <h3><span style="color:var(--red);">&#x2717;</span> Without trace-mcp</h3>
+        <ul>
+          <li>Agent reads 15+ files to understand one feature</li>
+          <li>Doesn't know which Vue page a controller renders</li>
+          <li>"What breaks if I change this?" &mdash; agent guesses</li>
+          <li>Schema? Needs a running database</li>
+          <li>Prop mismatch between PHP and Vue? Found in production</li>
+          <li>Burns 600K+ tokens per exploration session</li>
+        </ul>
+      </div>
+      <div class="ps-card solution">
+        <h3><span style="color:var(--green);">&#x2713;</span> With trace-mcp</h3>
+        <ul>
+          <li><code>get_task_context</code> &mdash; optimal code subgraph in one shot</li>
+          <li><code>routes_to &rarr; renders_component &rarr; uses_prop</code> edges</li>
+          <li><code>get_change_impact</code> traverses reverse deps across languages</li>
+          <li>Migrations parsed &mdash; schema reconstructed from code</li>
+          <li>Prop mismatch detected at index time</li>
+          <li>94% fewer tokens &mdash; ~624K saved per session</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <div class="section-label">Capabilities</div>
+    <h2 class="section-title">Three things no other tool does</h2>
+    <p class="section-desc">
+      Graph traversal + framework awareness + decision memory = structural understanding, not just text search.
+    </p>
+    <div class="features-grid">
+      <div class="feature-card fade-in">
+        <div class="feature-icon" style="background:var(--accent-dim);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-bright)" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><line x1="8.5" y1="7.5" x2="15.5" y2="16.5"/><line x1="8.5" y1="6" x2="15" y2="6"/></svg>
+        </div>
+        <h3>Framework-aware edges</h3>
+        <p>Understands that <code>Inertia::render('Users/Show')</code> connects PHP to Vue. 58 integrations across 15 frameworks, 7 ORMs, 13 UI libraries.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon" style="background:var(--green-dim);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3>Code-linked decision memory</h3>
+        <p>"Chose PostgreSQL for JSONB" is linked to <code>Pool#class</code>. When someone runs <code>get_change_impact</code>, the decision surfaces automatically.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon" style="background:rgba(251,146,60,0.12);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <h3>Cross-session intelligence</h3>
+        <p>Past sessions are mined for decisions and indexed for search. <code>get_wake_up</code> gives orientation in ~300 tokens.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon" style="background:var(--accent-dim);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-bright)" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <h3>Request flow tracing</h3>
+        <p>URL &rarr; Route &rarr; Middleware &rarr; Controller &rarr; Service &rarr; View, across 15 backend frameworks. One call.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon" style="background:var(--green-dim);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Security scanning</h3>
+        <p>OWASP Top-10 pattern scanning and taint analysis &mdash; traces untrusted data from source to sink across function boundaries.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <div class="feature-icon" style="background:rgba(251,146,60,0.12);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>Automated refactoring</h3>
+        <p>Rename symbols across files, extract functions, move code between modules, apply codemods &mdash; all graph-aware, all reversible.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Benchmark -->
+<section id="benchmark">
+  <div class="container">
+    <div class="section-label">Performance</div>
+    <h2 class="section-title">Up to 99% token reduction</h2>
+    <p class="section-desc">
+      Measured on a real 856-file codebase. trace-mcp returns precision context &mdash; only the symbols, edges, and signatures relevant to the query.
+    </p>
+    <div class="benchmark-card fade-in">
+      <div class="benchmark-header">
+        <div class="benchmark-total">
+          <span class="big">94%</span>
+          <span class="label">fewer tokens per exploration session &mdash; ~624K tokens saved</span>
+        </div>
+      </div>
+      <div style="padding: 0 8px 8px;">
+        <table class="benchmark-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Without trace-mcp</th>
+              <th>With trace-mcp</th>
+              <th>Reduction</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Symbol lookup</td>
+              <td class="tokens-old">44,265 tok</td>
+              <td class="tokens-new">1,023 tok</td>
+              <td class="reduction">97.7%</td>
+            </tr>
+            <tr>
+              <td>Impact analysis</td>
+              <td class="tokens-old">119,441 tok</td>
+              <td class="tokens-new">5,976 tok</td>
+              <td class="reduction">95.0%</td>
+            </tr>
+            <tr>
+              <td>Type hierarchy</td>
+              <td class="tokens-old">195,717 tok</td>
+              <td class="tokens-new">1,030 tok</td>
+              <td class="reduction">99.5%</td>
+            </tr>
+            <tr>
+              <td>Call graph</td>
+              <td class="tokens-old">115,570 tok</td>
+              <td class="tokens-new">6,937 tok</td>
+              <td class="reduction">94.0%</td>
+            </tr>
+            <tr>
+              <td>Composite task</td>
+              <td class="tokens-old">82,291 tok</td>
+              <td class="tokens-new">2,929 tok</td>
+              <td class="reduction">96.4%</td>
+            </tr>
+            <tr>
+              <td>Find usages</td>
+              <td class="tokens-old">11,430 tok</td>
+              <td class="tokens-new">1,720 tok</td>
+              <td class="reduction">85.0%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Integrations -->
+<section id="integrations" style="text-align:center;">
+  <div class="container">
+    <div class="section-label" style="justify-content:center;">Ecosystem</div>
+    <h2 class="section-title" style="margin-left:auto;margin-right:auto;">58 framework integrations</h2>
+    <p class="section-desc" style="margin-left:auto;margin-right:auto;">
+      From backend frameworks to ORMs, UI libraries, validation, state management, and testing tools.
+    </p>
+    <div class="integrations-cloud fade-in">
+      <span class="int-tag highlight">Laravel</span>
+      <span class="int-tag highlight">Django</span>
+      <span class="int-tag highlight">FastAPI</span>
+      <span class="int-tag highlight">NestJS</span>
+      <span class="int-tag highlight">Next.js</span>
+      <span class="int-tag highlight">Spring</span>
+      <span class="int-tag highlight">Rails</span>
+      <span class="int-tag">Express</span>
+      <span class="int-tag">Flask</span>
+      <span class="int-tag">Fastify</span>
+      <span class="int-tag">Hono</span>
+      <span class="int-tag">Nuxt</span>
+      <span class="int-tag">Gin</span>
+      <span class="int-tag">Echo</span>
+      <span class="int-tag">Filament</span>
+      <span class="int-tag highlight">React</span>
+      <span class="int-tag highlight">Vue</span>
+      <span class="int-tag">Angular</span>
+      <span class="int-tag">Svelte</span>
+      <span class="int-tag">Blade</span>
+      <span class="int-tag">Inertia</span>
+      <span class="int-tag">shadcn/ui</span>
+      <span class="int-tag">MUI</span>
+      <span class="int-tag">Ant Design</span>
+      <span class="int-tag">Headless UI</span>
+      <span class="int-tag">Nuxt UI</span>
+      <span class="int-tag">Tailwind</span>
+      <span class="int-tag">React Native</span>
+      <span class="int-tag highlight">Prisma</span>
+      <span class="int-tag highlight">TypeORM</span>
+      <span class="int-tag">Drizzle</span>
+      <span class="int-tag">SQLAlchemy</span>
+      <span class="int-tag">Sequelize</span>
+      <span class="int-tag">Mongoose</span>
+      <span class="int-tag">Eloquent</span>
+      <span class="int-tag">GraphQL</span>
+      <span class="int-tag">tRPC</span>
+      <span class="int-tag">DRF</span>
+      <span class="int-tag">MCP SDK</span>
+      <span class="int-tag">Socket.io</span>
+      <span class="int-tag">Pydantic</span>
+      <span class="int-tag">Zod</span>
+      <span class="int-tag">Zustand</span>
+      <span class="int-tag">Celery</span>
+      <span class="int-tag">n8n</span>
+      <span class="int-tag">Electron</span>
+      <span class="int-tag">Vitest</span>
+      <span class="int-tag">Jest</span>
+      <span class="int-tag">pytest</span>
+      <span class="int-tag">Playwright</span>
+    </div>
+  </div>
+</section>
+
+<!-- Works with -->
+<section style="text-align:center; padding-top:40px;">
+  <div class="container">
+    <p class="dim" style="font-size:14px;margin-bottom:20px;">Works with any MCP-compatible client</p>
+    <div class="clients">
+      <div class="client-badge">Claude Code</div>
+      <div class="client-badge">Cursor</div>
+      <div class="client-badge">Windsurf</div>
+      <div class="client-badge">Claude Desktop</div>
+      <div class="client-badge">VS Code (Copilot)</div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick start -->
+<section id="quickstart">
+  <div class="container">
+    <div class="quickstart">
+      <div>
+        <div class="section-label">Get started</div>
+        <h2 class="section-title">Three commands. That's it.</h2>
+        <p class="section-desc">
+          No configuration files, no API keys, no build steps. Install globally, init once, add your project.
+        </p>
+        <div class="quickstart-steps">
+          <div class="quickstart-step fade-in">
+            <div class="step-num">1</div>
+            <div>
+              <h4>Install</h4>
+              <p><code>npm install -g trace-mcp</code></p>
+            </div>
+          </div>
+          <div class="quickstart-step fade-in">
+            <div class="step-num">2</div>
+            <div>
+              <h4>Initialize</h4>
+              <p><code>trace-mcp init</code> &mdash; configures your MCP client, installs guard hook, adds tool routing to CLAUDE.md</p>
+            </div>
+          </div>
+          <div class="quickstart-step fade-in">
+            <div class="step-num">3</div>
+            <div>
+              <h4>Add a project</h4>
+              <p><code>trace-mcp add</code> &mdash; detects frameworks, creates the index. Run in each project directory.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block fade-in">
+        <div class="code-header">
+          <div class="code-dot red"></div>
+          <div class="code-dot yellow"></div>
+          <div class="code-dot green"></div>
+          <span>terminal</span>
+        </div>
+        <div class="code-body">
+<span class="comment"># Install globally</span>
+<span class="dim">$</span> <span class="fn">npm</span> install -g trace-mcp
+
+<span class="comment"># One-time setup (MCP clients, hooks, CLAUDE.md)</span>
+<span class="dim">$</span> <span class="fn">trace-mcp</span> init
+<span class="string">&#x2713; Configured Claude Code</span>
+<span class="string">&#x2713; Installed guard hook</span>
+<span class="string">&#x2713; Updated ~/.claude/CLAUDE.md</span>
+
+<span class="comment"># Register your project</span>
+<span class="dim">$</span> <span class="keyword">cd</span> ~/my-app
+<span class="dim">$</span> <span class="fn">trace-mcp</span> add
+<span class="string">&#x2713; Detected: Laravel, Vue, Inertia, Tailwind</span>
+<span class="string">&#x2713; Indexed 1,247 files, 8,392 symbols</span>
+<span class="string">&#x2713; Ready!</span>
+
+<span class="comment"># Start using in your AI agent</span>
+<span class="dim">&gt;</span> <span class="fn">get_task_context</span>(<span class="string">"fix the login bug"</span>)
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section style="text-align:center; padding: 80px 0;">
+  <div class="container">
+    <h2 class="section-title" style="margin-bottom:20px;">Give your AI agent framework-level vision</h2>
+    <p class="dim" style="font-size:17px;margin-bottom:36px;">Open source. MIT licensed. Zero API keys required.</p>
+    <div class="hero-buttons" style="margin-bottom:0;">
+      <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        Star on GitHub
+      </a>
+      <a href="https://www.npmjs.com/package/trace-mcp" target="_blank" class="btn btn-ghost">View on npm</a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="footer-links">
+      <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank">GitHub</a>
+      <a href="https://www.npmjs.com/package/trace-mcp" target="_blank">npm</a>
+      <a href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/docs/tools-reference.md" target="_blank">Docs</a>
+      <a href="https://github.com/nikolai-vysotskyi/trace-mcp/issues" target="_blank">Issues</a>
+    </div>
+    <p>MIT License &middot; Built by <a href="https://github.com/nikolai-vysotskyi">Nikolai Vysotskyi</a></p>
+  </div>
+</footer>
+
+<script>
+// Copy install command
+function copyInstall(el) {
+  navigator.clipboard.writeText('npm install -g trace-mcp');
+  const hint = el.querySelector('.copy-hint');
+  hint.textContent = 'copied!';
+  hint.style.color = 'var(--green)';
+  setTimeout(() => {
+    hint.textContent = 'click to copy';
+    hint.style.color = '';
+  }, 2000);
+}
+
+// Intersection Observer for fade-in
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// Animate stat counters
+function animateCounters() {
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count);
+    const duration = 1500;
+    const start = performance.now();
+
+    function update(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(target * eased);
+      if (progress < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+  });
+}
+
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      animateCounters();
+      statsObserver.disconnect();
+    }
+  });
+}, { threshold: 0.3 });
+
+const statsSection = document.querySelector('.stats');
+if (statsSection) statsObserver.observe(statsSection);
+</script>
+
+</body>
+</html>
