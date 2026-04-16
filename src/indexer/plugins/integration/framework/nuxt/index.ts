@@ -333,29 +333,32 @@ export class NuxtPlugin implements FrameworkPlugin {
       }
     }
 
-    // Build component name → symbol map for Nuxt auto-imported components.
-    // Nuxt registers components by filename: `components/AppBaseCard.vue` → `<AppBaseCard>`.
-    // For nested dirs, both the basename and the path-prefixed name are registered:
-    //   `components/guides/MediaBlock.vue` → `<GuidesMediaBlock>` and `<MediaBlock>`.
+    // Build component name → symbol map. Include ALL Vue files, not just
+    // `components/` — Nuxt's `components:` config can register additional
+    // directories (e.g., `app/icons/` when path is set via nuxt.config).
     const componentMap = new Map<string, { id: number; symbolId: string }>();
-    const componentFiles = allFiles.filter(
-      (f) => f.path.startsWith(componentsPrefix) && f.path.endsWith('.vue'),
-    );
-    for (const file of componentFiles) {
+    const allVueFiles = allFiles.filter((f) => f.path.endsWith('.vue'));
+    for (const file of allVueFiles) {
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSym = symbols.find((s) => s.kind === 'class');
       if (!compSym) continue;
 
       // Register by filename (basename without extension)
       const baseName = path.basename(file.path, '.vue');
-      componentMap.set(baseName, { id: compSym.id, symbolId: compSym.symbolId });
+      if (!componentMap.has(baseName)) {
+        componentMap.set(baseName, { id: compSym.id, symbolId: compSym.symbolId });
+      }
 
-      // Also register path-prefixed name: components/foo/Bar.vue → FooBar
-      const relToComponents = file.path.slice(componentsPrefix.length, -'.vue'.length);
-      const segments = relToComponents.split('/');
-      if (segments.length > 1) {
-        const prefixed = segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-        componentMap.set(prefixed, { id: compSym.id, symbolId: compSym.symbolId });
+      // For files under components/ dir: also register path-prefixed variant
+      if (file.path.startsWith(componentsPrefix)) {
+        const relToComponents = file.path.slice(componentsPrefix.length, -'.vue'.length);
+        const segments = relToComponents.split('/');
+        if (segments.length > 1) {
+          const prefixed = segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+          if (!componentMap.has(prefixed)) {
+            componentMap.set(prefixed, { id: compSym.id, symbolId: compSym.symbolId });
+          }
+        }
       }
     }
 
