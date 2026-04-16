@@ -61,12 +61,13 @@ describe('VueFrameworkPlugin', () => {
     it('returns expected edge types', () => {
       const schema = plugin.registerSchema();
       expect(schema.edgeTypes).toBeDefined();
-      expect(schema.edgeTypes!.length).toBe(3);
+      expect(schema.edgeTypes!.length).toBe(4);
 
       const names = schema.edgeTypes!.map((e) => e.name);
       expect(names).toContain('renders_component');
       expect(names).toContain('uses_composable');
       expect(names).toContain('provides_slot');
+      expect(names).toContain('references_component');
     });
 
     it('all edge types have vue category', () => {
