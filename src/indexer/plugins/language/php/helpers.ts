@@ -174,6 +174,14 @@ export function extractPromotedProperties(
       const readonly = isReadonly(param);
       const visibility = getVisibility(param);
 
+      // Extract type annotation
+      const typeNode = param.namedChildren.find(
+        (c) => c.type === 'named_type' || c.type === 'optional_type'
+          || c.type === 'primitive_type' || c.type === 'union_type'
+          || c.type === 'intersection_type',
+      );
+      const typeRef = extractTypeRef(typeNode);
+
       symbols.push({
         symbolId: makeSymbolId(relativePath, propName, 'property', className),
         name: propName,
@@ -188,6 +196,7 @@ export function extractPromotedProperties(
         metadata: {
           ...(readonly ? { readonly: true } : {}),
           ...(visibility ? { visibility } : {}),
+          ...(typeRef ? { type: typeRef } : {}),
           promoted: true,
         },
       });
@@ -210,10 +219,19 @@ export function extractPropertySymbol(
   const visibility = getVisibility(node);
   const mods = extractModifiers(node);
 
+  // Extract type annotation (typed properties)
+  const typeNode = node.namedChildren.find(
+    (c) => c.type === 'named_type' || c.type === 'optional_type'
+      || c.type === 'primitive_type' || c.type === 'union_type'
+      || c.type === 'intersection_type',
+  );
+  const typeRef = extractTypeRef(typeNode);
+
   const metadata: Record<string, unknown> = {};
   if (readonly) metadata.readonly = true;
   if (visibility) metadata.visibility = visibility;
   if (mods.static) metadata.static = true;
+  if (typeRef) metadata.type = typeRef;
 
   return {
     symbolId: makeSymbolId(filePath, name, 'property', className),
@@ -338,19 +356,25 @@ export function extractUseStatements(rootNode: TSNode): { fqn: string; alias?: s
 // ════════════════════════════════════════════════════════════════════════
 
 export interface PhpCallSite {
-  /** Type of reference. Call types: 'this'|'self'|'parent'|'static'|'member'|'new'|'function'.
-   *  Access types: 'this_prop'|'member_prop'|'class_const'|'relative_const'|'static_prop'|'relative_static_prop'. */
+  /** Type of reference.
+   *  Calls: 'this'|'self'|'parent'|'static'|'member'|'new'|'function'|'this_member_call'|'param_call'|'local_call'.
+   *  Accesses: 'this_prop'|'member_prop'|'class_const'|'relative_const'|'static_prop'|'relative_static_prop'.
+   *  Class ref: 'class_ref' (for Class::class magic constant). */
   type:
     | 'this' | 'self' | 'parent' | 'static' | 'member' | 'new' | 'function'
+    | 'this_member_call' | 'param_call' | 'local_call'
     | 'this_prop' | 'member_prop'
     | 'class_const' | 'relative_const'
-    | 'static_prop' | 'relative_static_prop';
+    | 'static_prop' | 'relative_static_prop'
+    | 'class_ref';
   /** Name of the method/property/constant being accessed */
   callee: string;
-  /** For 'static'/'new'/'class_const'/'static_prop': the class name reference */
+  /** For 'static'/'new'/'class_const'/'static_prop'/'class_ref': the class name reference */
   classRef?: string;
-  /** For 'member'/'member_prop': the receiver variable name */
+  /** For 'member'/'member_prop'/'param_call'/'local_call': the receiver variable name */
   receiver?: string;
+  /** For 'this_member_call': the property chain used to reach the receiver (e.g., ['service']) */
+  propChain?: string[];
   /** Line number (1-based) */
   line: number;
 }
@@ -391,6 +415,84 @@ export function extractClassHeritage(classNode: TSNode): PhpClassHeritage {
   return result;
 }
 
+/**
+ * Extract the canonical class name from a PHP type annotation node.
+ * Returns the class name, or null for primitive/untyped/union/intersection types
+ * that don't resolve to a single class.
+ *
+ * Handles:
+ *  - `named_type` → "ClassName"
+ *  - `optional_type` (wraps `?Type`) → "Type"
+ *  - `primitive_type` (int, string, bool, etc.) → null (not a class)
+ *  - `union_type` → null (ambiguous, no single class)
+ *  - `intersection_type` → null (same)
+ */
+export function extractTypeRef(typeNode: TSNode | null | undefined): string | null {
+  if (!typeNode) return null;
+  switch (typeNode.type) {
+    case 'named_type': {
+      const nameNode = typeNode.namedChildren.find(
+        (c) => c.type === 'name' || c.type === 'qualified_name',
+      );
+      return nameNode?.text ?? null;
+    }
+    case 'optional_type': {
+      // Wraps ?Type — unwrap and extract
+      const inner = typeNode.namedChildren[0];
+      return inner ? extractTypeRef(inner) : null;
+    }
+    case 'primitive_type':
+    case 'union_type':
+    case 'intersection_type':
+      return null;
+  }
+  return null;
+}
+
+/**
+ * Extract parameter name → class type mapping from a method's formal_parameters node.
+ * Also captures constructor-promoted properties (name → type).
+ *
+ * Returns a map of param name (without the `$` prefix) to class name reference.
+ * Primitive-typed and untyped params are omitted.
+ */
+export function extractParamTypes(
+  paramsNode: TSNode | null | undefined,
+): { params: Map<string, string>; promoted: Map<string, string> } {
+  const params = new Map<string, string>();
+  const promoted = new Map<string, string>();
+  if (!paramsNode) return { params, promoted };
+
+  for (const param of paramsNode.namedChildren) {
+    if (param.type !== 'simple_parameter' && param.type !== 'property_promotion_parameter') continue;
+
+    // Find type and variable_name among children
+    let typeNode: TSNode | null = null;
+    let varName: string | null = null;
+    for (const child of param.namedChildren) {
+      if (child.type === 'named_type' || child.type === 'optional_type'
+          || child.type === 'primitive_type' || child.type === 'union_type'
+          || child.type === 'intersection_type') {
+        typeNode = child;
+      } else if (child.type === 'variable_name') {
+        const n = child.namedChildren.find((c) => c.type === 'name');
+        varName = n?.text ?? null;
+      }
+    }
+
+    if (!varName) continue;
+    const typeRef = extractTypeRef(typeNode);
+    if (typeRef) {
+      params.set(varName, typeRef);
+      if (param.type === 'property_promotion_parameter') {
+        promoted.set(varName, typeRef);
+      }
+    }
+  }
+
+  return { params, promoted };
+}
+
 /** Extract the `extends` list from an interface declaration (interfaces can extend multiple). */
 export function extractInterfaceExtends(interfaceNode: TSNode): string[] {
   const result: string[] = [];
@@ -409,8 +511,37 @@ export function extractInterfaceExtends(interfaceNode: TSNode): string[] {
  * Handles member_call_expression, scoped_call_expression, object_creation_expression,
  * and function_call_expression.
  */
-export function extractCallSites(bodyNode: TSNode): PhpCallSite[] {
+export function extractCallSites(
+  bodyNode: TSNode,
+  paramTypes?: Map<string, string>,
+  localTypes?: Map<string, string>,
+): PhpCallSite[] {
   const calls: PhpCallSite[] = [];
+
+  /**
+   * Extract a property chain from a $this->foo or $this->foo->bar expression.
+   * Returns the chain starting with the $this property, or null if the chain
+   * doesn't start with $this.
+   */
+  function extractThisChain(node: TSNode): string[] | null {
+    if (node.type !== 'member_access_expression') return null;
+    const children = node.namedChildren;
+    if (children.length < 2) return null;
+    const obj = children[0];
+    const nameNode = children[1];
+    if (nameNode.type !== 'name') return null;
+
+    if (obj.type === 'variable_name') {
+      const n = obj.namedChildren.find((c) => c.type === 'name');
+      if (n?.text === 'this') return [nameNode.text];
+      return null;
+    }
+    if (obj.type === 'member_access_expression') {
+      const parent = extractThisChain(obj);
+      if (parent) return [...parent, nameNode.text];
+    }
+    return null;
+  }
 
   function visit(node: TSNode): void {
     switch (node.type) {
@@ -426,13 +557,25 @@ export function extractCallSites(bodyNode: TSNode): PhpCallSite[] {
         const callee = nameNode.text;
         const line = nameNode.startPosition.row + 1;
 
-        // Detect $this receiver
         if (receiver.type === 'variable_name') {
           const varNameNode = receiver.namedChildren.find((c) => c.type === 'name');
-          if (varNameNode?.text === 'this') {
+          const varName = varNameNode?.text;
+          if (varName === 'this') {
             calls.push({ type: 'this', callee, line });
+          } else if (varName && paramTypes?.has(varName)) {
+            // $param->method() where $param is a typed parameter
+            calls.push({ type: 'param_call', callee, receiver: varName, line });
+          } else if (varName && localTypes?.has(varName)) {
+            // $local->method() where $local = new X() or similar
+            calls.push({ type: 'local_call', callee, receiver: varName, line });
           } else {
-            calls.push({ type: 'member', callee, receiver: varNameNode?.text, line });
+            calls.push({ type: 'member', callee, receiver: varName, line });
+          }
+        } else if (receiver.type === 'member_access_expression') {
+          // $this->prop->method() — chained via property
+          const chain = extractThisChain(receiver);
+          if (chain && chain.length > 0) {
+            calls.push({ type: 'this_member_call', callee, propChain: chain, line });
           }
         }
         break;
@@ -514,7 +657,7 @@ export function extractCallSites(bodyNode: TSNode): PhpCallSite[] {
       }
 
       case 'class_constant_access_expression': {
-        // Class::CONST, self::CONST, or enum-case Class::Case
+        // Class::CONST, self::CONST, enum-case Class::Case, or magic Class::class
         const children = node.namedChildren;
         if (children.length < 2) break;
         const scope = children[0];
@@ -522,11 +665,23 @@ export function extractCallSites(bodyNode: TSNode): PhpCallSite[] {
         if (nameNode.type !== 'name') break;
 
         const line = nameNode.startPosition.row + 1;
+        const calleeName = nameNode.text;
+
+        // `::class` is PHP's magic constant that resolves to the class FQN.
+        // Treat as a class reference, not a constant access.
+        if (calleeName === 'class') {
+          if (scope.type === 'name' || scope.type === 'qualified_name') {
+            calls.push({ type: 'class_ref', callee: 'class', classRef: scope.text, line });
+          }
+          // `self::class` / `static::class` / `parent::class` — self-reference, skip.
+          break;
+        }
+
         if (scope.type === 'relative_scope') {
-          calls.push({ type: 'relative_const', callee: nameNode.text, line });
+          calls.push({ type: 'relative_const', callee: calleeName, line });
         } else if (scope.type === 'name' || scope.type === 'qualified_name') {
           calls.push({
-            type: 'class_const', callee: nameNode.text,
+            type: 'class_const', callee: calleeName,
             classRef: scope.text, line,
           });
         }
