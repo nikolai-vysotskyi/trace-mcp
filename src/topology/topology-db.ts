@@ -250,11 +250,16 @@ function findBestEndpointMatch(
     p.replace(/\{[^}]+\}/g, '{*}').replace(/:[\w]+/g, '{*}').replace(/\/+$/, '');
 
   const normalizedUrl = normalize(urlPattern);
+  // Skip overly generic URL patterns — they match everything and produce false positives
+  if (!normalizedUrl || normalizedUrl === '/' || normalizedUrl === '') return null;
+
   let bestMatch: (EndpointRow & { service_name: string; confidence: number }) | null = null;
   let bestScore = 0;
 
   for (const ep of endpoints) {
     const normalizedEp = normalize(ep.path);
+    // Skip root endpoints — too generic to produce meaningful matches
+    if (!normalizedEp || normalizedEp === '/' || normalizedEp === '') continue;
 
     // Exact match
     if (normalizedUrl === normalizedEp) {

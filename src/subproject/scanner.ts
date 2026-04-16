@@ -106,10 +106,11 @@ const CALL_PATTERNS: CallPattern[] = [
     extractUrl: (m) => m[1],
     confidence: 0.4,
   },
-  // GraphQL: query { ... } or mutation { ... } in template literals
+  // GraphQL: query GetUser { ... } or mutation CreatePost { ... }
+  // Require PascalCase name + opening brace to avoid matching PHP $query->method()
   {
     name: 'graphql-operation',
-    regex: /(?:query|mutation|subscription)\s+(\w+)/g,
+    regex: /(?:query|mutation|subscription)\s+([A-Z]\w+)\s*[\({]/g,
     extractMethod: (m) => 'GraphQL',
     extractUrl: (m) => m[1],
     confidence: 0.5,
@@ -119,6 +120,17 @@ const CALL_PATTERNS: CallPattern[] = [
 const EXCLUDE_DIRS = new Set([
   'node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__',
   '.next', '.nuxt', 'coverage', '.cache', 'tmp',
+  // Exclude test directories — test HTTP calls are not production API dependencies
+  'tests', 'test', 'spec', '__tests__',
+  // Exclude Laravel storage
+  'storage',
+]);
+
+// Files to skip entirely (generated stubs, IDE helpers, etc.)
+const EXCLUDE_FILES = new Set([
+  '_ide_helper.php',
+  '_ide_helper_models.php',
+  '.phpstorm.meta.php',
 ]);
 
 const CODE_EXTENSIONS = new Set([
@@ -158,7 +170,7 @@ function walkAndScan(dir: string, repoRoot: string, results: ScannedClientCall[]
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       walkAndScan(fullPath, repoRoot, results, depth + 1);
-    } else if (entry.isFile() && CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+    } else if (entry.isFile() && CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) && !EXCLUDE_FILES.has(entry.name)) {
       try {
         const content = fs.readFileSync(fullPath, 'utf-8');
         const relPath = path.relative(repoRoot, fullPath);
@@ -189,6 +201,8 @@ function scanFileContent(filePath: string, content: string, results: ScannedClie
         // For gRPC/GraphQL, method names are OK
         if (pattern.name !== 'grpc-call' && pattern.name !== 'graphql-operation') continue;
       }
+      // Skip overly generic URLs — root path '/' matches every project
+      if (url === '/' || url === '') continue;
 
       // Find line number
       const charIndex = match.index;
