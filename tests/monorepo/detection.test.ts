@@ -89,7 +89,7 @@ describe('detectWorkspaces', () => {
 
     const result = detectWorkspaces(tmpDir);
     expect(result).toHaveLength(1);
-    expect(result[0]!.name).toBe('unnamed');
+    expect(result[0]!.name).toBe('packages/unnamed');
   });
 
   it('skips directories without package.json or composer.json', () => {
