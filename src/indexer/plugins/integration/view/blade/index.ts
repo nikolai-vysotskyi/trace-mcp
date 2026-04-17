@@ -38,6 +38,107 @@ const SECTION_RE = /@section\(\s*['"]([\w.-]+)['"]/g;
 /** Detect @yield('name') */
 const YIELD_RE = /@yield\(\s*['"]([\w.-]+)['"]/g;
 
+/**
+ * Match <script src="..."> references in Blade templates.
+ * Captures literal paths + Laravel helper calls (mix/asset/Vite::asset/url/secure_asset).
+ * Non-capturing for quotes and attribute position (src can be any-position attr).
+ */
+const SCRIPT_SRC_RE = /<script\b[^>]*\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')/gi;
+
+/**
+ * Extract JS asset references from a Blade template's <script src="..."> tags.
+ * Returns a list of raw src values (may contain Blade expressions like {{ mix('...') }}).
+ */
+export interface BladeScriptRef {
+  raw: string;
+  line: number;
+}
+
+export function extractBladeScriptSrcs(source: string): BladeScriptRef[] {
+  const refs: BladeScriptRef[] = [];
+  const re = new RegExp(SCRIPT_SRC_RE.source, SCRIPT_SRC_RE.flags);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    const raw = m[1] ?? m[2] ?? '';
+    if (!raw) continue;
+    const before = source.substring(0, m.index);
+    const line = before.split('\n').length;
+    refs.push({ raw: raw.trim(), line });
+  }
+  return refs;
+}
+
+/**
+ * Resolve a Blade-rendered `src` to a candidate file path in the repo.
+ *
+ * Handles:
+ *   - Plain paths: `/js/app.js`         → `public/js/app.js`
+ *   - `{{ mix('/js/v8/manifest.js') }}` → `public/js/v8/manifest.js`
+ *   - `{{ asset('js/app.js') }}`        → `public/js/app.js`
+ *   - `{{ Vite::asset('resources/js/app.ts') }}` → `resources/js/app.ts`
+ *   - `{{ url('js/app.js') }}`          → `public/js/app.js`
+ *   - External URLs (http/https) or template vars → null (skip)
+ */
+export function resolveBladeScriptSrc(
+  raw: string,
+  bladePath: string,
+  allPaths: Set<string>,
+): string | null {
+  const trimmed = raw.trim();
+
+  // Skip external URLs
+  if (/^(https?:)?\/\//i.test(trimmed)) return null;
+  // Skip dynamic/interpolated refs that contain no recognizable path
+  if (!/[a-zA-Z0-9_\-./]/.test(trimmed)) return null;
+
+  // Extract the inner path from helper calls
+  const helperRe = /(?:mix|asset|secure_asset|url|Vite::asset)\(\s*['"]([^'"]+)['"]\s*\)/;
+  let innerPath: string | null = null;
+  const helperMatch = trimmed.match(helperRe);
+  if (helperMatch) {
+    innerPath = helperMatch[1];
+  } else {
+    // Strip {{ }} wrappers if any
+    const clean = trimmed.replace(/^\{\{\s*|\s*\}\}$/g, '');
+    // If still contains '{{' or '$' it's dynamic — skip
+    if (/\{\{|\$\{|\$[a-zA-Z_]/.test(clean)) return null;
+    innerPath = clean;
+  }
+
+  if (!innerPath) return null;
+
+  // Determine the workspace root — the Blade file lives under some workspace.
+  // Walk up until we find a folder that owns `public/` or `resources/`.
+  const bladeSegments = bladePath.split('/');
+  // Try candidate roots from deepest to shallowest
+  const candidates: string[] = [];
+  const vitePrefix = innerPath.startsWith('resources/') || innerPath.startsWith('/resources/')
+    ? innerPath.replace(/^\//, '')
+    : null;
+  const publicPath = innerPath.replace(/^\//, '');
+
+  for (let i = bladeSegments.length - 1; i >= 0; i--) {
+    const prefix = bladeSegments.slice(0, i).join('/');
+    const withSlash = prefix ? `${prefix}/` : '';
+
+    // Vite::asset('resources/...') — lives under workspace root
+    if (vitePrefix) {
+      candidates.push(`${withSlash}${vitePrefix}`);
+    }
+    // mix/asset/plain — lives under public/
+    candidates.push(`${withSlash}public/${publicPath}`);
+    // Some setups use resources/ directly (unbundled)
+    candidates.push(`${withSlash}resources/${publicPath}`);
+
+    if (!prefix) break;
+  }
+
+  for (const c of candidates) {
+    if (allPaths.has(c)) return c;
+  }
+  return null;
+}
+
 export function extractBladeDirectives(source: string): BladeDirective[] {
   const directives: BladeDirective[] = [];
 
@@ -272,6 +373,7 @@ export class BladePlugin implements FrameworkPlugin {
         { name: 'blade_extends', category: 'blade', description: '@extends directive' },
         { name: 'blade_includes', category: 'blade', description: '@include directive' },
         { name: 'blade_component', category: 'blade', description: '<x-component> or @component' },
+        { name: 'uses_asset', category: 'blade', description: '<script src> / <link href> asset reference' },
       ],
     };
   }
@@ -307,6 +409,8 @@ export class BladePlugin implements FrameworkPlugin {
     for (const f of allFiles) {
       fileMap.set(f.path, f);
     }
+    // Lazy-built set of all file paths (for fast asset resolution lookups)
+    let allPathSet: Set<string> | null = null;
 
     for (const file of allFiles) {
       if (!file.path.endsWith('.blade.php')) continue;
@@ -364,6 +468,26 @@ export class BladePlugin implements FrameworkPlugin {
           targetSymbolId: targetSym.symbolId,
           edgeType: 'calls',
           metadata: { callee: call.name, line: call.line, kind: 'blade_expr' },
+        });
+      }
+
+      // <script src="..."> asset references → file-level uses_asset edges
+      if (allPathSet === null) {
+        allPathSet = new Set(allFiles.map((f) => f.path));
+      }
+      const scriptSrcs = extractBladeScriptSrcs(source);
+      for (const ref of scriptSrcs) {
+        const resolved = resolveBladeScriptSrc(ref.raw, file.path, allPathSet);
+        if (!resolved) continue;
+        const targetFile = fileMap.get(resolved);
+        if (!targetFile) continue;
+        edges.push({
+          sourceNodeType: 'file',
+          sourceRefId: file.id,
+          targetNodeType: 'file',
+          targetRefId: targetFile.id,
+          edgeType: 'uses_asset',
+          metadata: { src: ref.raw, resolved, line: ref.line, kind: 'script' },
         });
       }
     }
