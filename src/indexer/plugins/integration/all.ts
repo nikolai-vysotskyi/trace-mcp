@@ -41,6 +41,7 @@ import { NuxtUiPlugin } from './view/nuxt-ui/index.js';
 import { AngularPlugin } from './view/angular/index.js';
 import { SveltePlugin } from './view/svelte/index.js';
 import { TailwindPlugin } from './view/tailwind/index.js';
+import { JsVisualizationPlugin } from './view/js-viz/index.js';
 
 // --- api ---
 import { GraphQLPlugin } from './api/graphql/index.js';
@@ -75,6 +76,7 @@ import { CosmiconfigPlugin } from './tooling/cosmiconfig/index.js';
 import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
 import { ClackPlugin } from './tooling/clack/index.js';
 import { ElectronPlugin } from './tooling/electron/index.js';
+import { PhpEcosystemPlugin } from './tooling/php-ecosystem/index.js';
 
 export function createAllIntegrationPlugins(): FrameworkPlugin[] {
   return [
@@ -117,6 +119,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new AngularPlugin(),
     new SveltePlugin(),
     new TailwindPlugin(),
+    new JsVisualizationPlugin(),
     // api
     new GraphQLPlugin(),
     new TrpcPlugin(),
@@ -145,5 +148,6 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new NeverthrowPlugin(),
     new ClackPlugin(),
     new ElectronPlugin(),
+    new PhpEcosystemPlugin(),
   ];
 }
