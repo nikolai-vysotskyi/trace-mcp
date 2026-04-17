@@ -236,15 +236,20 @@ END;
 export class DecisionStore {
   public readonly db: Database.Database;
 
-  constructor(dbPath: string) {
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('foreign_keys = ON');
-    this.db.pragma('busy_timeout = 5000');
-    this.preMigrate();
-    this.db.exec(DECISIONS_DDL);
-    this.migrate();
-    logger.debug({ dbPath }, 'Decision store initialized');
+  constructor(dbPath: string, opts?: { readonly?: boolean }) {
+    this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
+    if (opts?.readonly) {
+      this.db.pragma('busy_timeout = 5000');
+      logger.debug({ dbPath, readonly: true }, 'Decision store opened (readonly)');
+    } else {
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('foreign_keys = ON');
+      this.db.pragma('busy_timeout = 5000');
+      this.preMigrate();
+      this.db.exec(DECISIONS_DDL);
+      this.migrate();
+      logger.debug({ dbPath }, 'Decision store initialized');
+    }
   }
 
   /**

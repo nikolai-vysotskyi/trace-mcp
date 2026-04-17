@@ -558,4 +558,17 @@ export class SessionJournal {
     const input = `${tool}:${JSON.stringify(normalized)}`;
     return createHash('sha256').update(input).digest('hex').slice(0, 12);
   }
+
+  /** Free session memory. Flushes final snapshot before clearing. */
+  dispose(): void {
+    if (this.snapshotPath && this.entries.length > 0) {
+      try { this.flushSnapshotFile(this.snapshotPath); } catch { /* best-effort */ }
+    }
+    this.entries.length = 0;
+    this.allHashes.clear();
+    this.filesRead.clear();
+    this.zeroResultQueries.clear();
+    this.taskContextTimestamps.length = 0;
+    this.landmarkProvider = null;
+  }
 }

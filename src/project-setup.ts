@@ -7,6 +7,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { detectProject } from './init/detector.js';
 import type { DetectionResult } from './init/detector.js';
@@ -26,6 +27,37 @@ export interface ProjectSetupResult {
 }
 
 /**
+ * Reject obviously-wrong project roots: filesystem root, user home, top-level
+ * system directories. An MCP client spawned with cwd=/ would otherwise cause
+ * trace-mcp to index the entire filesystem and crash on SIP-protected paths
+ * like /Library/Bluetooth.
+ *
+ * Returns null if the path is acceptable, or a human-readable reason if it
+ * should be rejected.
+ */
+export function isDangerousProjectRoot(absRoot: string): string | null {
+  const parsed = path.parse(absRoot);
+
+  // Filesystem root: "/" on POSIX, "C:\" on Windows
+  if (absRoot === parsed.root) return 'filesystem root';
+
+  // User home directory
+  if (absRoot === os.homedir()) return 'home directory';
+
+  // Top-level system/user-container directories (POSIX + macOS)
+  const SYSTEM_DIRS = new Set([
+    '/Users', '/home', '/root',
+    '/System', '/Library', '/private',
+    '/tmp', '/var', '/etc', '/bin', '/sbin', '/usr', '/opt',
+    '/dev', '/Volumes', '/Applications', '/Network',
+    '/cores', '/proc', '/sys',
+  ]);
+  if (SYSTEM_DIRS.has(absRoot)) return 'system directory';
+
+  return null;
+}
+
+/**
  * Standard project registration pipeline:
  * 1. Detect frameworks, languages, package managers
  * 2. Generate & save per-project config
@@ -40,6 +72,16 @@ export function setupProject(
   opts?: { force?: boolean; migrateOldDb?: boolean },
 ): ProjectSetupResult {
   const absRoot = path.resolve(projectRoot);
+
+  const dangerReason = isDangerousProjectRoot(absRoot);
+  if (dangerReason) {
+    throw new Error(
+      `Refusing to register "${absRoot}" as a trace-mcp project: ${dangerReason}. ` +
+      `Projects must point to a specific source directory, not a system or root path. ` +
+      `This usually means an MCP client spawned trace-mcp with an unexpected working directory — ` +
+      `configure a "cwd" on the MCP server entry or run trace-mcp from inside your project folder.`,
+    );
+  }
 
   const existing = getProject(absRoot);
   if (existing && !opts?.force) {

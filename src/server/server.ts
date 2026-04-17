@@ -127,13 +127,33 @@ function extractCompactResult(
   }
 }
 
+/**
+ * Optional pre-created resources that can be shared across sessions.
+ * When provided, createServer() will use them instead of creating its own.
+ * The caller is responsible for their lifecycle (they won't be closed on dispose).
+ */
+export interface ServerDeps {
+  topoStore?: TopologyStore | null;
+  decisionStore?: DecisionStore | null;
+}
+
+/**
+ * Handle returned by createServer() for proper lifecycle management.
+ */
+export interface ServerHandle {
+  server: McpServer;
+  /** Flush session data and close owned resources. Safe to call multiple times. */
+  dispose: () => void;
+}
+
 export function createServer(
   store: Store,
   registry: PluginRegistry,
   config: TraceMcpConfig,
   rootPath?: string,
   progress?: ProgressState,
-): McpServer {
+  deps?: ServerDeps,
+): ServerHandle {
   const projectRoot = rootPath ?? process.cwd();
 
   // Framework detection — filter to actually-detected frameworks, not the full catalog
@@ -254,12 +274,25 @@ export function createServer(
         prefetchBoosts: journal.getPrefetchBoosts(),
       });
     }
-    // Close decision store on shutdown
-    try { decisionStore.close(); } catch { /* best-effort */ }
   };
-  process.on('SIGINT', flushAll);
-  process.on('SIGTERM', flushAll);
-  process.on('exit', flushAll);
+
+  // dispose() flushes session data, closes owned resources, and frees memory.
+  // Safe to call multiple times. Does NOT add process listeners — caller manages lifecycle.
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    flushAll();
+    // Close only resources we own (not shared via deps)
+    if (ownsDecisionStore) {
+      try { decisionStore.close(); } catch { /* best-effort */ }
+    }
+    if (ownsTopoStore && topoStore) {
+      try { topoStore.close(); } catch { /* best-effort */ }
+    }
+    // Free session memory
+    journal.dispose();
+  };
 
   // Meta-field filtering
   const metaFieldsConfig = config.tools?.meta_fields ?? true;
@@ -347,15 +380,24 @@ export function createServer(
   const explored = createExploredTracker(projectRoot);
 
   // Build topology store (shared across navigation + advanced tools)
-  let topoStore: TopologyStore | null = null;
-  if (config.topology?.enabled) {
+  // If deps provide a shared store, use it (caller manages lifecycle).
+  // Otherwise create our own (closed in dispose).
+  const ownsTopoStore = deps?.topoStore === undefined;
+  let topoStore: TopologyStore | null = deps?.topoStore ?? null;
+  if (ownsTopoStore && config.topology?.enabled) {
     ensureGlobalDirs();
     topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
   }
 
   // Build decision memory store (cross-session knowledge graph)
-  ensureGlobalDirs();
-  const decisionStore = new DecisionStore(DECISIONS_DB_PATH);
+  const ownsDecisionStore = deps?.decisionStore === undefined;
+  let decisionStore: DecisionStore;
+  if (deps?.decisionStore) {
+    decisionStore = deps.decisionStore;
+  } else {
+    ensureGlobalDirs();
+    decisionStore = new DecisionStore(DECISIONS_DB_PATH);
+  }
 
   // Build shared context and register all tools
   const ctx: ServerContext = {
@@ -384,5 +426,5 @@ export function createServer(
   registerMemoryTools(server, ctx);
   registerSessionTools(server, metaCtx);
 
-  return server;
+  return { server, dispose };
 }

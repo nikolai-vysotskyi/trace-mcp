@@ -235,6 +235,23 @@ export const TraceMcpConfigSchema = z.object({
   git: z.object({
     defaultBaseBranch: z.string().max(256).optional().describe('Default base branch for diff tools (e.g. "develop"). Auto-detects main/master if omitted.'),
   }).default({}),
+  /**
+   * Minutes of stdin silence before the stdio process releases full-mode
+   * resources (DB, indexer, watcher). The process itself stays alive and
+   * re-initializes on the next client message. Set to 0 to disable.
+   */
+  idle_timeout_minutes: z.number().min(0).max(1440).default(30),
+  /**
+   * Seconds the daemon /health state must be stable before the stdio process
+   * actually switches modes (promote/demote). Prevents flapping on a restart.
+   */
+  daemon_stability_seconds: z.number().min(0).max(600).default(30),
+  /**
+   * Milliseconds to wait for pending MCP requests to finish during a backend
+   * swap. Requests still in-flight after this are answered with a synthetic
+   * JSON-RPC error so the client doesn't hang.
+   */
+  backend_swap_drain_ms: z.number().min(0).max(60000).default(5000),
   children: z.array(z.string()).optional(),
 });
 
