@@ -20,7 +20,10 @@ export function resolveMemberOfEdges(state: PipelineState): void {
   const memberOfType = store.db.prepare(
     `SELECT id FROM edge_types WHERE name = ?`,
   ).get('member_of') as { id: number } | undefined;
-  if (!memberOfType) return;
+  if (!memberOfType) {
+    logger.warn({ edgeType: 'member_of' }, 'edge_types row missing — skipping member_of resolution. Run schema migrations.');
+    return;
+  }
 
   // Load every symbol that has a parent_id (i.e., is a member of another symbol).
   const rows = store.db.prepare(`

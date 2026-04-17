@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 19;
+const SCHEMA_VERSION = 20;
 
 const DDL = `
 -- ============================================================
@@ -400,6 +400,7 @@ const SEED_EDGE_TYPES = [
   { name: 'blade_extends', category: 'blade', description: '@extends directive' },
   { name: 'blade_includes', category: 'blade', description: '@include directive' },
   { name: 'blade_component', category: 'blade', description: '<x-component> or @component' },
+  { name: 'uses_asset', category: 'blade', description: '<script src> / <link href> asset reference' },
   // Nova edges
   { name: 'nova_resource_for', category: 'nova', description: 'Nova Resource → Eloquent Model' },
   { name: 'nova_field_relationship', category: 'nova', description: 'Nova Resource → related Nova Resource via field' },
@@ -433,6 +434,7 @@ const SEED_EDGE_TYPES = [
   { name: 'nest_message_pattern', category: 'nestjs', description: 'Microservice @MessagePattern handler' },
   { name: 'nest_event_pattern', category: 'nestjs', description: 'Microservice @EventPattern handler' },
   // Next.js edges
+  { name: 'next_entry_point', category: 'nextjs', description: 'Next.js file-based auto-loaded entry point (page, layout, route, loading, error, metadata files, etc.)' },
   { name: 'next_renders_page', category: 'nextjs', description: 'Layout renders page' },
   { name: 'next_renders_loading', category: 'nextjs', description: 'Layout renders loading boundary' },
   { name: 'next_renders_error', category: 'nextjs', description: 'Layout renders error boundary' },
@@ -989,6 +991,27 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       db.exec(`ALTER TABLE edges ADD COLUMN resolution_tier TEXT NOT NULL DEFAULT 'ast_resolved'`);
     }
     db.exec(`CREATE INDEX IF NOT EXISTS idx_edges_resolution_tier ON edges(resolution_tier)`);
+  },
+  20: (db) => {
+    // Backfill every edge type declared in SEED_EDGE_TYPES.
+    //
+    // Historical bug: `seedDatabase` only runs for fresh DBs, and several core
+    // edge types (member_of, instantiates, accesses_property, accesses_constant)
+    // were added to the seed list without a matching migration. Existing DBs
+    // never got them, so `resolveMemberOfEdges` et al. silently returned early,
+    // leaving ~1200 method→class structural edges unrecorded and symbol-level
+    // graph clustering broken.
+    //
+    // This migration idempotently inserts every seed edge type so the live
+    // `edge_types` table is always a superset of code expectations. Any future
+    // additions to SEED_EDGE_TYPES will also be picked up without needing a
+    // dedicated migration.
+    const insert = db.prepare(
+      'INSERT OR IGNORE INTO edge_types (name, category, directed, description) VALUES (?, ?, 1, ?)',
+    );
+    for (const et of SEED_EDGE_TYPES) {
+      insert.run(et.name, et.category, et.description);
+    }
   },
 };
 
