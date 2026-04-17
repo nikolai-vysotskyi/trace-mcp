@@ -13,13 +13,14 @@ import { ProgressState, writeServerPid, clearServerPid } from '../progress.js';
 import { createServer } from '../server/server.js';
 import { logger } from '../logger.js';
 import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { listProjects, getProject } from '../registry.js';
-import { setupProject } from '../project-setup.js';
+import { listProjects, getProject, unregisterProject } from '../registry.js';
+import { setupProject, isDangerousProjectRoot } from '../project-setup.js';
 import { detectGitWorktree } from '../project-root.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { SubprojectManager } from '../subproject/manager.js';
 import { TOPOLOGY_DB_PATH } from '../global.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ServerHandle } from '../server/server.js';
 import type Database from 'better-sqlite3';
 
 export interface ManagedProject {
@@ -32,6 +33,7 @@ export interface ManagedProject {
   pipeline: IndexingPipeline;
   watcher: FileWatcher;
   server: McpServer;
+  serverHandle: ServerHandle;
   status: 'starting' | 'indexing' | 'ready' | 'error';
   error?: string;
 }
@@ -131,7 +133,7 @@ export class ProjectManager {
       });
     };
 
-    const server = createServer(store, registry, config, projectRoot, progress);
+    const serverHandle = createServer(store, registry, config, projectRoot, progress);
 
     const managed: ManagedProject = {
       root: projectRoot,
@@ -142,7 +144,8 @@ export class ProjectManager {
       progress,
       pipeline,
       watcher,
-      server,
+      server: serverHandle.server,
+      serverHandle,
       status: 'starting',
     };
 
@@ -182,6 +185,7 @@ export class ProjectManager {
 
     await managed.watcher.stop();
     clearServerPid(managed.db);
+    managed.serverHandle.dispose();
     await managed.server.close();
     managed.db.close();
     this.projects.delete(root);
@@ -207,7 +211,20 @@ export class ProjectManager {
 
   /** Load all registered projects and start them. */
   async loadAllRegistered(): Promise<void> {
-    const entries = listProjects();
+    const allEntries = listProjects();
+    // Self-heal: evict any registry rows that point at dangerous roots (/, $HOME,
+    // system dirs). These usually come from an MCP client that spawned trace-mcp
+    // with cwd=/ — indexing them would walk the entire filesystem.
+    const entries = [];
+    for (const entry of allEntries) {
+      const dangerReason = isDangerousProjectRoot(entry.root);
+      if (dangerReason) {
+        logger.warn({ root: entry.root, reason: dangerReason }, 'Removing dangerous project from registry');
+        unregisterProject(entry.root);
+        continue;
+      }
+      entries.push(entry);
+    }
     const results = await Promise.allSettled(
       entries.map((entry) => this.addProject(entry.root)),
     );

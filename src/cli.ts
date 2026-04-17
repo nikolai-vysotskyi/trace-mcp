@@ -20,7 +20,7 @@ import { createAllLanguagePlugins } from './indexer/plugins/language/all.js';
 import { createAllIntegrationPlugins } from './indexer/plugins/integration/all.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import { FileWatcher } from './indexer/watcher.js';
-import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from './ai/index.js';
+import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService, aiTracker } from './ai/index.js';
 import { SummarizationPipeline } from './ai/summarization-pipeline.js';
 import { ProgressState, writeServerPid, clearServerPid } from './progress.js';
 import { detectCoverage } from './analytics/tech-detector.js';
@@ -46,12 +46,13 @@ import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH, GLOBAL_CONFIG_PATH, stripJsonComments, DAEMON_LOG_PATH } from './global.js';
 import { getProject, listProjects } from './registry.js';
-import { setupProject } from './project-setup.js';
+import { setupProject, isDangerousProjectRoot } from './project-setup.js';
 import { findProjectRoot, detectGitWorktree } from './project-root.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { SubprojectManager } from './subproject/manager.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import { isDaemonRunning } from './daemon/client.js';
+import { StdioSession } from './daemon/router/session.js';
 import { DEFAULT_DAEMON_PORT } from './global.js';
 import type { TraceMcpConfig } from './config.js';
 
@@ -189,181 +190,48 @@ program
       attachFileLogging(config.logging);
     }
 
-    // --- Lifecycle helpers (shared by proxy & full mode) ---
+    // ── Stdio session: unified proxy ⇄ full mode with zero-downtime swap ──
+    // One long-lived stdio process that hot-swaps between forwarding to the
+    // daemon (when alive) and running a local McpServer (when daemon is dead).
+    // See src/daemon/router/session.ts for the full state machine.
+    const sharedDbPath = resolveDbPath(indexRoot);
+    const idleTimeoutMs = (config.idle_timeout_minutes ?? 30) * 60_000;
+    const daemonStabilityMs = (config.daemon_stability_seconds ?? 30) * 1_000;
+    const drainTimeoutMs = config.backend_swap_drain_ms ?? 5_000;
+
+    const session = new StdioSession({
+      projectRoot,
+      indexRoot,
+      config,
+      sharedDbPath,
+      daemonPort: DEFAULT_DAEMON_PORT,
+      idleTimeoutMs,
+      daemonStabilityMs,
+      drainTimeoutMs,
+    });
+
     let shuttingDown = false;
-    const makeShutdown = (cleanup?: () => Promise<void>) => {
-      return async (reason?: string) => {
-        if (shuttingDown) return;
-        shuttingDown = true;
-        logger.info({ reason: reason ?? 'unknown' }, 'Shutting down trace-mcp server');
-        if (cleanup) await cleanup().catch(() => {});
-        process.exit(0);
-      };
-    };
-    const attachLifecycleHandlers = (shutdown: (reason?: string) => Promise<void>, idleTimeoutMs: number) => {
-      process.on('SIGINT', () => shutdown('SIGINT'));
-      process.on('SIGTERM', () => shutdown('SIGTERM'));
-      // Orphan prevention: detect parent death via stdin closure.
-      // When the MCP client (Claude Code, Cursor, etc.) exits, it closes our stdin pipe.
-      // Without this, the process stays alive forever as a zombie.
-      process.stdin.on('end', () => shutdown('stdin-end'));
-      process.stdin.on('close', () => shutdown('stdin-close'));
-      // Safety net: idle timeout — self-terminate if no MCP messages arrive.
-      let idleTimer: ReturnType<typeof setTimeout> | null = null;
-      const resetIdleTimer = () => {
-        if (idleTimer) clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => shutdown('idle-timeout'), idleTimeoutMs);
-        idleTimer.unref();
-      };
-      resetIdleTimer();
-      process.stdin.on('data', resetIdleTimer);
+    const shutdown = async (reason: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      logger.info({ reason }, 'Shutting down trace-mcp server');
+      try { await session.shutdown(reason); } catch (err) {
+        logger.warn({ err: String(err) }, 'Session shutdown errored');
+      }
+      process.exit(0);
     };
 
-    const IDLE_TIMEOUT_MS = (config as Record<string, unknown>).idle_timeout_minutes
-      ? (config as Record<string, unknown>).idle_timeout_minutes as number * 60_000
-      : 5 * 60_000;
+    process.on('SIGINT', () => { void shutdown('SIGINT'); });
+    process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+    // Orphan prevention: when the MCP client exits, stdin closes.
+    process.stdin.on('end', () => { void shutdown('stdin-end'); });
+    process.stdin.on('close', () => { void shutdown('stdin-close'); });
 
-    // ── Proxy mode: lightweight stdio↔HTTP bridge when daemon is running ──
-    // Instead of opening DB/Store/plugins (~120MB), forward MCP messages to daemon (~5MB).
-    // Each stdio session becomes a thin pipe: stdin → HTTP POST → daemon → stdout.
-    const daemonActive = await isDaemonRunning(DEFAULT_DAEMON_PORT);
-    if (daemonActive) {
-      const daemonUrl = `http://127.0.0.1:${DEFAULT_DAEMON_PORT}`;
-      const mcpUrl = `${daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
-      const clientId = randomUUID();
-
-      // Ensure project is registered with daemon (it may have started before this project was opened)
-      await fetch(`${daemonUrl}/api/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ root: projectRoot }),
-      }).catch(() => { /* daemon will 409 if already registered — fine */ });
-
-      // Register this stdio client for the menu bar app
-      fetch(`${daemonUrl}/api/clients`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: clientId, project: projectRoot, transport: 'stdio-proxy' }),
-      }).catch(() => {});
-
-      const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
-      const httpTransport = new StreamableHTTPClientTransport(new URL(mcpUrl));
-      const stdioTransport = new StdioServerTransport();
-
-      // Bridge: stdio → HTTP (client sends MCP request via stdin → forward to daemon)
-      stdioTransport.onmessage = (msg) => {
-        httpTransport.send(msg).catch((err) => {
-          logger.error({ error: err }, 'Proxy: failed to forward message to daemon');
-        });
-      };
-      // Bridge: HTTP → stdio (daemon sends MCP response → forward to client via stdout)
-      httpTransport.onmessage = (msg) => {
-        stdioTransport.send(msg).catch((err) => {
-          logger.error({ error: err }, 'Proxy: failed to forward message to client');
-        });
-      };
-
-      httpTransport.onerror = (err) => {
-        logger.error({ error: err }, 'Proxy: HTTP transport error');
-      };
-
-      const shutdown = makeShutdown(async () => {
-        await fetch(`${daemonUrl}/api/clients?id=${clientId}`, { method: 'DELETE' }).catch(() => {});
-        await httpTransport.close().catch(() => {});
-        await stdioTransport.close().catch(() => {});
-      });
-      attachLifecycleHandlers(shutdown, IDLE_TIMEOUT_MS);
-
-      await httpTransport.start();
-      await stdioTransport.start();
-
-      logger.info({ projectRoot, mode: 'proxy', daemonUrl, idleTimeoutMs: IDLE_TIMEOUT_MS }, 'trace-mcp proxy started (forwarding to daemon)');
-      return; // Proxy mode — done, event loop keeps us alive via stdin
-    }
-
-    // ── Full mode: standalone server with own DB, indexer, watcher ──
-    const dbPath = resolveDbPath(indexRoot);
-    ensureGlobalDirs();
-
-    const db = initializeDatabase(dbPath);
-    writeServerPid(db);
-    const store = new Store(db);
-    const registry = new PluginRegistry();
-    registerDefaultPlugins(registry);
-
-    const progress = new ProgressState(db);
-
-    let watcher: FileWatcher | null = null;
-
-    const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress);
-    watcher = new FileWatcher();
-
-    const aiProvider = createAIProvider(config);
-    const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
-    const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
-    const embeddingPipeline = vectorStore && embeddingService
-      ? new EmbeddingPipeline(store, embeddingService, vectorStore, progress)
-      : null;
-
-    const inferenceCache = config.ai?.enabled ? new InferenceCache(store.db) : null;
-    inferenceCache?.evictExpired();
-    const summarizationPipeline = config.ai?.enabled && config.ai.summarize_on_index !== false
-      ? new SummarizationPipeline(
-          store,
-          new CachedInferenceService(aiProvider.fastInference(), inferenceCache!, config.ai.fast_model ?? 'fast'),
-          projectRoot,
-          {
-            batchSize: config.ai.summarize_batch_size ?? 20,
-            kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
-            concurrency: config.ai.concurrency ?? 1,
-          },
-          progress,
-        )
-      : null;
-
-    const runEmbeddings = () => {
-      if (!embeddingPipeline) return;
-      embeddingPipeline.indexUnembedded().catch((err) => {
-        logger.error({ error: err }, 'Embedding indexing failed');
-      });
-    };
-
-    const runSummarization = () => {
-      if (!summarizationPipeline) return;
-      summarizationPipeline.summarizeUnsummarized().catch((err) => {
-        logger.error({ error: err }, 'Summarization failed');
-      });
-    };
-
-    // Initial index runs in background so the server starts immediately
-    pipeline.indexAll().then(() => {
-      runSummarization();
-      runEmbeddings();
-      runSubprojectAutoSync(projectRoot, config);
-    }).catch((err) => {
-      logger.error({ error: err }, 'Initial indexing failed');
-    });
-
-    await watcher.start(projectRoot, config, async (paths) => {
-      await pipeline.indexFiles(paths);
-      runSummarization();
-      runEmbeddings();
-    }, undefined, async (deleted) => {
-      pipeline.deleteFiles(deleted);
-    });
-
-    const shutdown = makeShutdown(async () => {
-      clearServerPid(db);
-      if (watcher) await watcher.stop();
-      try { db.close(); } catch { /* best-effort */ }
-    });
-    attachLifecycleHandlers(shutdown, IDLE_TIMEOUT_MS);
-
-    const server = createServer(store, registry, config, projectRoot, progress);
-    const transport = new StdioServerTransport();
-
-    logger.info({ projectRoot, indexRoot, dbPath, mode: 'full', idleTimeoutMs: IDLE_TIMEOUT_MS }, 'Starting trace-mcp MCP server...');
-    await server.connect(transport);
+    logger.info({ projectRoot, indexRoot, idleTimeoutMs, daemonStabilityMs }, 'Starting trace-mcp stdio session...');
+    await session.bootstrap();
+    // session.bootstrap() called stdio.start() which resolves when stdin closes.
+    // The process stays alive on the stdin event loop; shutdown handlers above
+    // take care of exit.
   });
 
 program
@@ -452,9 +320,17 @@ program
       subscribeToProjectProgress(p.root);
     }
 
+    // Shared project-level resources (TopologyStore, DecisionStore) — avoids per-session SQLite overhead
+    const { ProjectResourcePool } = await import('./daemon/resource-pool.js');
+    const resourcePool = new ProjectResourcePool();
+
     // Per-session MCP transports: sessionId → transport
     // Multiple clients can connect to the same project simultaneously.
     const sessionTransports = new Map<string, StreamableHTTPServerTransport>();
+    // Session handles for cleanup: sessionId → ServerHandle
+    const sessionHandles = new Map<string, import('./server/server.js').ServerHandle>();
+    // Session → client tracking: sessionId → clientId
+    const sessionClients = new Map<string, string>();
     // Reverse lookup: projectRoot → Set<sessionId> (for cleanup)
     const projectSessions = new Map<string, Set<string>>();
 
@@ -466,20 +342,17 @@ program
         sessionIdGenerator: () => randomUUID(),
       });
 
-      // Each session needs its own Server instance connected to its own transport.
-      // The managed.server is a factory-style object that supports multiple connections.
-      // However, the MCP SDK's Server only supports one transport at a time,
-      // so we create a lightweight proxy server for each session.
-      const sessionServer = managed.createSessionServer();
-      await sessionServer.connect(transport);
-
-      transport.onclose = () => {
-        const sid = transport.sessionId;
-        if (sid) {
-          sessionTransports.delete(sid);
-          projectSessions.get(projectRoot)?.delete(sid);
-        }
-      };
+      // Each session needs its own Server instance since the MCP SDK's Server
+      // only supports one transport at a time. All sessions share the same
+      // underlying Store/Pipeline/Registry via the managed project.
+      // TopologyStore and DecisionStore are shared via resource pool.
+      const deps = resourcePool.acquire(projectRoot, managed.config);
+      const handle = createServer(
+        managed.store, managed.registry, managed.config,
+        managed.root, managed.progress,
+        deps,
+      );
+      await handle.server.connect(transport);
 
       // Track client connection
       const clientId = randomUUID();
@@ -492,6 +365,38 @@ program
       });
       broadcastEvent({ type: 'client_connect', clientId, project: projectRoot });
 
+      transport.onclose = () => {
+        const sid = transport.sessionId;
+        if (sid) {
+          // Clean up session resources
+          sessionTransports.delete(sid);
+          projectSessions.get(projectRoot)?.delete(sid);
+
+          const h = sessionHandles.get(sid);
+          if (h) {
+            h.dispose();
+            h.server.close().catch(() => {});
+            sessionHandles.delete(sid);
+          }
+
+          const cid = sessionClients.get(sid);
+          if (cid) {
+            clients.delete(cid);
+            broadcastEvent({ type: 'client_disconnect', clientId: cid, project: projectRoot });
+            sessionClients.delete(sid);
+          }
+
+          // Release shared resources ref
+          resourcePool.release(projectRoot);
+        }
+      };
+
+      // Store handle and client mapping (will be registered after session ID is assigned)
+      // The session ID is set by handleRequest during initialize, so we store by transport ref
+      // and move to sessionHandles map after the initialize response.
+      (transport as any).__pendingHandle = handle;
+      (transport as any).__pendingClientId = clientId;
+
       return transport;
     }
 
@@ -502,13 +407,21 @@ program
     const port = parseInt(opts.port, 10);
     const host = opts.host;
 
-    // Simple per-IP rate limiter (token bucket: 60 requests/minute per IP)
+    // Simple per-IP rate limiter (token bucket). Localhost is exempt because
+    // the Electron app and local tooling legitimately make bursts of requests
+    // (graph refetch, theme switching, etc.) that would otherwise trip the limit.
     const RATE_WINDOW_MS = 60_000;
-    const RATE_LIMIT = 60;
+    const RATE_LIMIT = 600;
     const MAX_RATE_BUCKETS = 10_000;
     const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
+    const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1', 'localhost', 'unknown']);
+    function isLocalhost(ip: string): boolean {
+      return LOCALHOST_IPS.has(ip);
+    }
+
     function isRateLimited(ip: string): boolean {
+      if (isLocalhost(ip)) return false;
       const now = Date.now();
       const bucket = rateBuckets.get(ip);
       if (!bucket || now > bucket.resetAt) {
@@ -623,11 +536,24 @@ program
 
           // After handling initialize, store the transport by its new session ID
           if (isInitializeRequest(parsedBody) && transport.sessionId) {
-            sessionTransports.set(transport.sessionId, transport);
+            const sid = transport.sessionId;
+            sessionTransports.set(sid, transport);
             if (!projectSessions.has(projectRoot)) {
               projectSessions.set(projectRoot, new Set());
             }
-            projectSessions.get(projectRoot)!.add(transport.sessionId);
+            projectSessions.get(projectRoot)!.add(sid);
+
+            // Move pending handle/clientId to session-keyed maps
+            const pendingHandle = (transport as any).__pendingHandle;
+            const pendingClientId = (transport as any).__pendingClientId;
+            if (pendingHandle) {
+              sessionHandles.set(sid, pendingHandle);
+              delete (transport as any).__pendingHandle;
+            }
+            if (pendingClientId) {
+              sessionClients.set(sid, pendingClientId);
+              delete (transport as any).__pendingClientId;
+            }
           }
         } catch (e: any) {
           if (e?.message === 'BODY_TOO_LARGE') {
@@ -1133,7 +1059,7 @@ program
             const result = manager.list(projectRoot);
 
             // Also return services with project_group for UI grouping
-            const servicesWithCounts = topoStore.getServicesWithEndpointCounts();
+            const servicesWithCounts = topoStore.getServicesWithEndpointCounts(projectRoot);
             const services = servicesWithCounts.map((s) => ({
               id: s.id,
               name: s.name,
@@ -1320,6 +1246,19 @@ program
             res.end(JSON.stringify({ error: 'Invalid or missing root path' }));
             return;
           }
+          const absRoot = path.resolve(root);
+          const dangerReason = isDangerousProjectRoot(absRoot);
+          if (dangerReason) {
+            logger.warn(
+              { root: absRoot, reason: dangerReason, ua: req.headers['user-agent'] },
+              'Rejected dangerous project root — likely an MCP client spawned trace-mcp with cwd=/ or similar',
+            );
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: `Refusing to register "${absRoot}" as a project: ${dangerReason}. Configure a "cwd" on the MCP server entry pointing at a specific source directory.`,
+            }));
+            return;
+          }
           await projectManager.addProject(root);
           subscribeToProjectProgress(root);
           broadcastEvent({ type: 'project_status', project: root, status: 'indexing' });
@@ -1457,6 +1396,17 @@ program
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e?.message ?? 'Invalid JSON body' }));
         }
+        return;
+      }
+
+      // REST API: AI activity — recent AI requests with timing/status
+      if (req.method === 'GET' && url.pathname === '/api/ai/activity') {
+        const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1), 200);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          entries: aiTracker.getRecent(limit),
+          stats: aiTracker.getStats(),
+        }));
         return;
       }
 
@@ -1629,10 +1579,20 @@ program
       sseConnections.clear();
       // Unsubscribe progress listeners
       for (const unsub of progressUnsubscribers) unsub();
-      // Close all transports
-      for (const transport of transports.values()) {
+      // Dispose all session handles (flush journals, close owned resources)
+      for (const h of sessionHandles.values()) {
+        h.dispose();
+        h.server.close().catch(() => {});
+      }
+      sessionHandles.clear();
+      sessionClients.clear();
+      // Close all session transports
+      for (const transport of sessionTransports.values()) {
         await transport.close().catch(() => {});
       }
+      sessionTransports.clear();
+      projectSessions.clear();
+      resourcePool.disposeAll();
       await projectManager.shutdown();
       httpServer.close(() => process.exit(0));
     };
