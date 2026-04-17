@@ -6,6 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.24.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.23.1...v1.24.0) (2026-04-17)
+
+
+### Features
+
+* add landing page for trace-mcp.com ([a515c6c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a515c6c587c12388185d353d8c4899686fa88c0b))
+* **ai:** track AI request activity + rename ollama default model ([259afe4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/259afe435d6972a8891fe4f676f306e709fac1b7))
+* **app:** GPU-accelerated graph explorer (cosmos.gl) ([3ce00e2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ce00e20b67dfc53e065cfabd7c5c10e417081d1))
+* **blade:** extract script src asset references ([e250acc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e250acc5dee1192f4a7782e26f4344e639fc0126))
+* **daemon:** unified stdio session with proxy⇄full auto-switching ([52d5392](https://github.com/nikolai-vysotskyi/trace-mcp/commit/52d5392125debfa64d3999a50437d3897cae59b2))
+* **indexer:** phantom externals + file-level projection + TS call/type edges ([69ce68e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/69ce68ec4ce8b39c40b292f6896d1685ca2b46ce))
+* js-viz (Chart.js/vue-chartjs/marked) + php-ecosystem (symfony-dom-crawler/google-apiclient/laravel-ai) plugins ([cb61078](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cb61078aa1e043aeed617fdf95001e9b19778baa))
+* **landing:** add ASK/GET examples, cross-language edge diagram, FAQ, use cases ([a5418c5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a5418c5ce1753f2deb8a0f96ff9b33485692c0a8))
+* **laravel:** medialibrary + eloquent-sortable + composer Package Discovery ([35cb8b8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/35cb8b8de6908945b86c10b16fb6efaebbb2f621))
+* **nextjs:** file-based entry point edges for App/Pages Router + metadata ([deca9b4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/deca9b4f171e57ef39452d86c682df88dba7592c))
+* Nuxt 3/4 entry points, custom prefix parsing, improved detection ([a475856](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a4758563a6f5459ee356e3d1c85ce7795284c667))
+* **nuxt:** middleware/layout/plugin/route auto-registration edges ([8401327](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8401327377ecec6b9de6d649e7c5cc27378a17cf))
+* PHP call graph resolver — symbol-level calls/heritage edges ([653818f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/653818f9af4d87d1ff2549bd14b0d3a07701370f))
+* PHP property and constant access edge resolution ([8f4f66f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8f4f66f74d7828c5eefb6fc28c44bab0d28017a9))
+* PHP type-aware call resolution + class references ([f114291](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f1142918651f39283f6737a9d325b0c113edeaf0))
+* scan Blade templates for PHP function calls + workspace-aware resolution ([928fec1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/928fec19dbf9eae2f15c8e63f7d48f97411987db))
+* structural member_of edges + class-fallback for unresolved methods ([6ff4e88](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6ff4e889801b9e27059e3bc96aad25375a38cef1))
+* Vue dynamic component references via TS/JS/Vue content scanning ([fcb8112](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fcb8112097ea212f7738bcfb96e3c3df6eb3b0d0))
+* **vue:** Laravel Nova + Blade component entry points, SSR marker ([33e5f55](https://github.com/nikolai-vysotskyi/trace-mcp/commit/33e5f559d7f617c33e951fef28aa58707b3661d6))
+
+
+### Bug Fixes
+
+* **db:** schema v20 backfills seed edge types on existing DBs ([a1a5e6f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a1a5e6fe4c258d539e6988a6309a291de81ae078))
+* eliminate client call scanner false positives ([7248443](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7248443a1a6605c3415b80c946ab37fc65fb4035))
+* **init:** detect running Claude Desktop to avoid config overwrite ([6d02023](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6d02023cee31762a642a7843a2bbc84c2ee4945c))
+* **landing:** dynamic version from npm registry + terminal whitespace ([1b0911f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b0911ff4397e3d365ff9f52d9732c658ade823a))
+* **landing:** improve readability — body text uses primary, headings beefed up ([0470041](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0470041cd6268834848fa4069219264f7fadb28d))
+* make dir argument optional in index command, default to cwd ([cd7ee1e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cd7ee1e485a4b5f8abeb2eec8687eaebce6dacd5))
+* self-first endpoint matching for client calls ([227d59d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/227d59dabd75a814271a7869a5a1afbc963246e4))
+* strict project_group isolation — ungrouped services no longer leak ([5d828ee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5d828ee63e617b46525662cb8e6dcbb308331da3))
+* workspace assignment on fast path + broader default include patterns ([65d7433](https://github.com/nikolai-vysotskyi/trace-mcp/commit/65d743375e1beb7a7010a55f6cedb65d0448d17c))
+* workspace naming, parent DB route fallback, and client_calls FK migration ([42517e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/42517e0427f46245bf17a63d786bdc8d737ea8a3))
+
+
+### Refactoring
+
+* community labels show dominant dir, pack-context models/feature-scope use FTS ([a9d089e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a9d089e33ebfd2c4a9bb928781c8d0786c3cf472))
+* redesign landing page in Nothing design system ([4f4bda1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4f4bda148c17b0d72dcb85f15d9da8d6f4998512))
+
 ## [1.23.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.23.0...v1.23.1) (2026-04-15)
 
 
