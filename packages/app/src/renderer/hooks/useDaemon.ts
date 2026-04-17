@@ -251,11 +251,22 @@ export function useDaemon() {
     setRestarting(true);
     try {
       await api.restartDaemon();
-      // Give daemon a moment to boot, then re-fetch
-      await new Promise((r) => setTimeout(r, 2000));
-      await fetchProjects();
-      await fetchClients();
-      await fetchSettings();
+      // Poll until daemon is reachable (up to 10 seconds)
+      let ready = false;
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        try {
+          const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(500) });
+          if (res.ok) { ready = true; break; }
+        } catch { /* not ready yet */ }
+      }
+      if (ready) {
+        await fetchProjects();
+        await fetchClients();
+        await fetchSettings();
+      } else {
+        setConnected(false);
+      }
     } catch {
       setConnected(false);
     } finally {

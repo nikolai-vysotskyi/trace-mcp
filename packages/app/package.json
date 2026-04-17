@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cosmos.gl/graph": "^2.6.4",
     "menubar": "^9.5.0"
   },
   "devDependencies": {
