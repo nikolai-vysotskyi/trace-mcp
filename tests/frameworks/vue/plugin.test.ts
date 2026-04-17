@@ -61,7 +61,7 @@ describe('VueFrameworkPlugin', () => {
     it('returns expected edge types', () => {
       const schema = plugin.registerSchema();
       expect(schema.edgeTypes).toBeDefined();
-      expect(schema.edgeTypes!.length).toBe(5);
+      expect(schema.edgeTypes!.length).toBe(6);
 
       const names = schema.edgeTypes!.map((e) => e.name);
       expect(names).toContain('renders_component');
@@ -69,6 +69,7 @@ describe('VueFrameworkPlugin', () => {
       expect(names).toContain('provides_slot');
       expect(names).toContain('references_component');
       expect(names).toContain('nuxt_entry_point');
+      expect(names).toContain('vue_ssr_entry');
     });
 
     it('all edge types have vue category', () => {
