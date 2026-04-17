@@ -23,6 +23,10 @@ import {
   type TSNode,
   makeSymbolId,
   extractImportEdges,
+  extractCallSites,
+  collectLocalTypes,
+  extractTypeReferences,
+  extractModuleCallSites,
 } from '../typescript/helpers.js';
 import {
   componentNameFromPath,
@@ -93,6 +97,14 @@ export class VueLanguagePlugin implements LanguagePlugin {
         // Extract import edges from script setup via tree-sitter
         const setupEdges = await this.parseScriptEdges(setupContent);
         edges.push(...setupEdges);
+
+        // The whole <script setup> body is effectively module-level. Emit a
+        // `__module__` pseudo-symbol to attribute its calls. We deliberately
+        // do NOT extract individual function/variable declarations from here
+        // — they're implementation details of the component setup block and
+        // would bloat symbol counts with private locals.
+        const setupModuleSym = await this.buildModuleSymbol(setupContent, filePath, '_setup');
+        if (setupModuleSym) symbols.push(setupModuleSym);
       }
 
       // Extract from <script> (Options API or regular)
@@ -103,6 +115,9 @@ export class VueLanguagePlugin implements LanguagePlugin {
 
         const scriptEdges = await this.parseScriptEdges(scriptContent);
         edges.push(...scriptEdges);
+
+        const scriptModuleSym = await this.buildModuleSymbol(scriptContent, filePath, '_script');
+        if (scriptModuleSym) symbols.push(scriptModuleSym);
       }
 
       // Extract template components
@@ -221,6 +236,17 @@ export class VueLanguagePlugin implements LanguagePlugin {
 
     if (!kind) return;
 
+    // For function/method declarations: collect call sites, localTypes, typeRefs
+    const metadata: Record<string, unknown> = {};
+    if (kind === 'function' || kind === 'class') {
+      const callSites = extractCallSites(node);
+      if (callSites.length > 0) metadata.callSites = callSites;
+      const localTypes = collectLocalTypes(node);
+      if (Object.keys(localTypes).length > 0) metadata.localTypes = localTypes;
+      const typeRefs = extractTypeReferences(node);
+      if (typeRefs.length > 0) metadata.typeRefs = typeRefs;
+    }
+
     symbols.push({
       symbolId: makeSymbolId(filePath, name, kind),
       name,
@@ -229,6 +255,46 @@ export class VueLanguagePlugin implements LanguagePlugin {
       byteEnd: node.endIndex,
       lineStart: node.startPosition.row + 1,
       lineEnd: node.endPosition.row + 1,
+      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     });
+  }
+
+  /**
+   * Build a synthetic `__module__` pseudo-symbol representing the Vue SFC's
+   * script body. Captures module-level call sites so calls inside `<script setup>`
+   * or non-named Options-API bodies can be attributed to something in the call graph.
+   */
+  private async buildModuleSymbol(scriptContent: string, filePath: string, suffix: string = ''): Promise<RawSymbol | null> {
+    try {
+      const parser = await getParser('typescript');
+      const tree = parser.parse(scriptContent);
+      const root: TSNode = tree.rootNode;
+      // For Vue SFCs we pass skipLexicalFunctionBodies:false because local
+      // `const foo = () => {…}` declarations in <script setup> are NOT extracted
+      // as standalone symbols — their calls must be captured at module level.
+      const callSites = extractModuleCallSites(root, { skipLexicalFunctionBodies: false });
+      const typeRefs = extractTypeReferences(root);
+      if (callSites.length === 0 && typeRefs.length === 0) return null;
+      const baseName = filePath.split('/').pop()?.replace(/\.vue$/, '') ?? '__module__';
+      const tag = suffix ? `__module__${suffix}` : '__module__';
+      return {
+        symbolId: makeSymbolId(filePath, tag, 'namespace'),
+        name: `${tag}:${baseName}`,
+        kind: 'namespace',
+        signature: `(sfc ${suffix || 'script'} body) ${filePath}`,
+        byteStart: 0,
+        byteEnd: scriptContent.length,
+        lineStart: 1,
+        lineEnd: scriptContent.split('\n').length,
+        metadata: {
+          synthetic: true,
+          moduleBody: true,
+          ...(callSites.length > 0 ? { callSites } : {}),
+          ...(typeRefs.length > 0 ? { typeRefs } : {}),
+        },
+      };
+    } catch {
+      return null;
+    }
   }
 }

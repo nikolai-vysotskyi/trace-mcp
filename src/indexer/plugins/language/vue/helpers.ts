@@ -47,12 +47,18 @@ const VUE_BUILTINS = new Set([
  */
 function isCustomComponent(tag: string): boolean {
   if (VUE_BUILTINS.has(tag)) return false;
+
+  // PascalCase (starts with uppercase) is ALWAYS a custom Vue component.
+  // Vue components are conventionally PascalCase (e.g., <Button/>, <Card/>),
+  // even when their name matches a lowercase HTML element. Vue's template
+  // resolver treats PascalCase tags as components regardless of HTML overlap.
+  if (/^[A-Z]/.test(tag)) return true;
+
+  // Lowercase tags: reject HTML and SVG elements.
   if (HTML_ELEMENTS.has(tag.toLowerCase())) return false;
   if (SVG_ELEMENTS.has(tag)) return false;
 
-  // PascalCase: starts with uppercase
-  if (/^[A-Z]/.test(tag)) return true;
-  // kebab-case with hyphen (custom elements must contain a hyphen)
+  // kebab-case custom element (must contain a hyphen per spec).
   if (tag.includes('-')) return true;
 
   return false;

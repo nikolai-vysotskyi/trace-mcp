@@ -11,11 +11,10 @@ import type {
 } from '../../../../../plugin-api/types.js';
 import { resolveComponentTag, toKebabCase, toPascalCase } from './resolver.js';
 
-/** Detects Nuxt 3/4 file-based entry points. */
+/** Detects Nuxt 3/4 + Laravel Nova framework-loaded entry points. */
 export function isNuxtEntryPoint(filePath: string): boolean {
   return (
-    // Nuxt 3/4: (app/)? pages/, layouts/, error.vue, app.vue. Regex works for
-    // both project-relative and workspace-relative paths.
+    // Nuxt 3/4: (app/)? pages/, layouts/, error.vue, app.vue.
     /(?:^|\/)app\/pages\//.test(filePath)
     || /(?:^|\/)app\/layouts\//.test(filePath)
     || /(?:^|\/)app\/error\.vue$/.test(filePath)
@@ -24,14 +23,23 @@ export function isNuxtEntryPoint(filePath: string): boolean {
     || /(?:^|\/)layouts\//.test(filePath)
     || /(?:^|\/)error\.vue$/.test(filePath)
     || /(?:^|\/)app\.vue$/.test(filePath)
+    // Laravel Nova components: compiled by Laravel Mix, registered via
+    // PHP ServiceProvider::boot() using Nova::script/style/component by
+    // file path. Not referenced by name in JS/Vue code.
+    || /(?:^|\/)nova-components\/[^/]+\/resources\/js\//.test(filePath)
+    // Laravel Blade-side Vue components (resources/js/components, etc.)
+    // are typically registered globally in app.js bootstrap.
+    || /(?:^|\/)resources\/(?:js|assets\/js)\/components\//.test(filePath)
   );
 }
 
 export function classifyNuxtEntry(filePath: string): string {
-  if (/(?:^|\/)pages\//.test(filePath) || /(?:^|\/)app\/pages\//.test(filePath)) return 'page';
-  if (/(?:^|\/)layouts\//.test(filePath) || /(?:^|\/)app\/layouts\//.test(filePath)) return 'layout';
+  if (/(?:^|\/)app\/pages\//.test(filePath) || /(?:^|\/)pages\//.test(filePath)) return 'page';
+  if (/(?:^|\/)app\/layouts\//.test(filePath) || /(?:^|\/)layouts\//.test(filePath)) return 'layout';
   if (/error\.vue$/.test(filePath)) return 'error';
   if (/app\.vue$/.test(filePath)) return 'app_root';
+  if (/nova-components\//.test(filePath)) return 'nova_component';
+  if (/resources\/(?:js|assets\/js)\/components\//.test(filePath)) return 'laravel_component';
   return 'unknown';
 }
 
@@ -58,6 +66,10 @@ function isDistinctiveComponentName(name: string): boolean {
   if (!/^[A-Z]/.test(name)) return false;
   return /[a-z][A-Z]/.test(name) || name.length >= 8;
 }
+
+/** Detect @vue/server-renderer usage (SSR entry points). */
+const VUE_SSR_IMPORT_RE = /(?:from|require\()\s*['"]@vue\/server-renderer['"]/;
+const VUE_SSR_CALL_RE = /\b(?:renderToString|renderToWebStream|renderToNodeStream|renderToSimpleStream|pipeToWebWritable|pipeToNodeWritable)\s*\(/;
 
 export class VueFrameworkPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -95,12 +107,13 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
   detect(ctx: ProjectContext): boolean {
     const hasVueFramework = (deps: Record<string, string> | undefined): boolean => {
       if (!deps) return false;
-      // Direct Vue, or any framework that re-exports Vue
       return 'vue' in deps
         || 'nuxt' in deps || 'nuxt3' in deps || '@nuxt/core' in deps
-        || '@vue/compiler-sfc' in deps || 'vite-plugin-vue' in deps
+        || '@vue/compiler-sfc' in deps || '@vue/server-renderer' in deps
+        || 'vite-plugin-vue' in deps
         || 'quasar' in deps || '@quasar/app' in deps
-        || 'vitepress' in deps || 'vuepress' in deps || '@vuepress/core' in deps;
+        || 'vitepress' in deps || 'vuepress' in deps || '@vuepress/core' in deps
+        || 'laravel-nova' in deps || 'laravel-mix' in deps;
     };
 
     if (ctx.packageJson) {
@@ -108,10 +121,10 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
         ...(ctx.packageJson.dependencies as Record<string, string> | undefined),
         ...(ctx.packageJson.devDependencies as Record<string, string> | undefined),
       };
-      return hasVueFramework(deps);
+      if (hasVueFramework(deps)) return true;
     }
 
-    // Fallback: try reading package.json from rootPath
+    // Fallback 1: read package.json directly from rootPath
     try {
       const pkgPath = path.join(ctx.rootPath, 'package.json');
       const content = fs.readFileSync(pkgPath, 'utf-8');
@@ -120,10 +133,18 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
         ...(pkg.dependencies as Record<string, string> | undefined),
         ...(pkg.devDependencies as Record<string, string> | undefined),
       };
-      return hasVueFramework(deps);
-    } catch {
-      return false;
-    }
+      if (hasVueFramework(deps)) return true;
+    } catch { /* ignore */ }
+
+    // Fallback 2: presence of nova-components/ dir (Laravel Nova package)
+    // or any .vue files in the project — common for Laravel+Nova projects
+    // whose root package.json omits vue but they ship Vue bundles.
+    try {
+      const novaDir = path.join(ctx.rootPath, 'nova-components');
+      if (fs.existsSync(novaDir) && fs.statSync(novaDir).isDirectory()) return true;
+    } catch { /* ignore */ }
+
+    return false;
   }
 
   registerSchema() {
@@ -134,18 +155,29 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
         { name: 'provides_slot', category: 'vue', description: 'Component provides a named slot' },
         { name: 'references_component', category: 'vue', description: 'Dynamic reference to component (e.g., from config/TS)' },
         { name: 'nuxt_entry_point', category: 'vue', description: 'Nuxt 3/4 file-based auto-loaded entry point (pages, layouts, error.vue, app.vue, middleware, plugins)' },
+        { name: 'vue_ssr_entry', category: 'vue', description: '@vue/server-renderer SSR entry point' },
       ],
     };
   }
 
   extractNodes(
     _filePath: string,
-    _content: Buffer,
-    _language: string,
+    content: Buffer,
+    language: string,
   ): TraceMcpResult<FileParseResult> {
     // The VueLanguagePlugin already extracts symbols and components.
     // Framework-level resolution happens in resolveEdges.
-    return ok({ status: 'ok', symbols: [] });
+    const result: FileParseResult = { status: 'ok', symbols: [] };
+
+    // Lightweight marker for @vue/server-renderer entry points.
+    if (['typescript', 'javascript', 'vue'].includes(language)) {
+      const source = content.toString('utf-8');
+      if (VUE_SSR_IMPORT_RE.test(source) || VUE_SSR_CALL_RE.test(source)) {
+        result.frameworkRole = 'vue_ssr_renderer';
+      }
+    }
+
+    return ok(result);
   }
 
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
