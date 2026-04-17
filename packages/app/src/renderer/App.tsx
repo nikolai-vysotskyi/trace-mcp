@@ -4,7 +4,7 @@ import { Clients } from './tabs/Clients';
 import { Settings } from './tabs/Settings';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { AskTab } from './tabs/AskTab';
-import { GraphExplorer, GraphExplorerHandle, GraphSettings, DEFAULT_GRAPH_SETTINGS } from './tabs/GraphExplorer';
+import { GraphExplorerGPU, GraphExplorerGPUHandle, GraphGPUSettings, DEFAULT_GRAPH_GPU_SETTINGS } from './tabs/GraphExplorerGPU';
 import { WindowTabBar } from './components/WindowTabBar';
 
 // ── URL params determine window type ──────────────────────────
@@ -358,12 +358,12 @@ function MenuContent({ tab }: { tab: GlobalTab }) {
 }
 
 // ── Project content ───────────────────────────────────────────
-function ProjectContent({ root, tab, graphRef, graphSettings, onGraphSettingsChange, onNavigateToService }: {
+function ProjectContent({ root, tab, graphRef, graphGpuSettings, onGraphGpuSettingsChange, onNavigateToService }: {
   root: string;
   tab: ProjectTab;
-  graphRef: React.RefObject<GraphExplorerHandle | null>;
-  graphSettings: GraphSettings;
-  onGraphSettingsChange: (patch: Partial<GraphSettings>) => void;
+  graphRef: React.RefObject<GraphExplorerGPUHandle | null>;
+  graphGpuSettings: GraphGPUSettings;
+  onGraphGpuSettingsChange: (patch: Partial<GraphGPUSettings>) => void;
   onNavigateToService: (serviceName: string) => void;
 }) {
   return (
@@ -372,10 +372,12 @@ function ProjectContent({ root, tab, graphRef, graphSettings, onGraphSettingsCha
       {tab === 'overview' && <ProjectOverview root={root} onNavigateToService={onNavigateToService} />}
       {/* Ask — chat interface, needs flex layout */}
       {tab === 'ask' && <AskTab root={root} />}
-      {/* Graph — always mounted, hidden when inactive (preserves iframe + state) */}
-      <div className={tab === 'graph' ? 'flex-1 min-h-0 flex flex-col' : 'hidden'}>
-        <GraphExplorer ref={graphRef} root={root} settings={graphSettings} onSettingsChange={onGraphSettingsChange} />
-      </div>
+      {/* Graph — GPU-accelerated (cosmos.gl), edge-to-edge */}
+      {tab === 'graph' && (
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <GraphExplorerGPU ref={graphRef} root={root} settings={graphGpuSettings} onSettingsChange={onGraphGpuSettingsChange} />
+        </div>
+      )}
     </>
   );
 }
@@ -392,27 +394,26 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const dragging = useRef(false);
-  const graphRef = useRef<GraphExplorerHandle | null>(null);
-  const [graphSettings, setGraphSettings] = useState<GraphSettings>(DEFAULT_GRAPH_SETTINGS);
+  const graphRef = useRef<GraphExplorerGPUHandle | null>(null);
+  const [graphGpuSettings, setGraphGpuSettings] = useState<GraphGPUSettings>(DEFAULT_GRAPH_GPU_SETTINGS);
 
-  const onGraphSettingsChange = useCallback((patch: Partial<GraphSettings>) => {
-    setGraphSettings((prev) => ({ ...prev, ...patch }));
+  const onGraphGpuSettingsChange = useCallback((patch: Partial<GraphGPUSettings>) => {
+    setGraphGpuSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  // focusFile queues internally if iframe isn't ready, so no manual timeout needed
+  // Focus a file/symbol in the graph (invoked from the file explorer / project overview).
+  // Switches to the Graph tab and asks GraphExplorerGPU to zoom to that node.
   const openFileInGraph = useCallback((filePath: string) => {
-    if (projectTab !== 'graph') {
-      setProjectTab('graph');
-    }
-    // GraphExplorer is always mounted — focusFile will queue if iframe is loading
-    graphRef.current?.focusFile(filePath);
+    if (projectTab !== 'graph') setProjectTab('graph');
+    // Defer until the GPU graph has mounted (one tick is enough).
+    setTimeout(() => graphRef.current?.focusNode(filePath), 0);
   }, [projectTab]);
 
-  // Navigate to graph tab with a service scope
+  // Navigate to graph tab scoped to a service.
   const navigateToService = useCallback((serviceName: string) => {
-    onGraphSettingsChange({ scope: `subproject:${serviceName}` });
+    onGraphGpuSettingsChange({ scope: `subproject:${serviceName}` });
     setProjectTab('graph');
-  }, [onGraphSettingsChange]);
+  }, [onGraphGpuSettingsChange]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -463,6 +464,7 @@ export function App() {
 
   const isGraph = isProject && projectTab === 'graph';
   const needsFlexLayout = isProject && (projectTab === 'graph' || projectTab === 'ask');
+  const isGraphGpu = isGraph; // alias — the Graph tab *is* the GPU graph now
 
   return (
     <div className="flex flex-col h-screen" style={{ background: 'var(--bg-primary)' }}>
@@ -506,7 +508,7 @@ export function App() {
 
               {/* Divider + File explorer */}
               <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
-              <ProjectFileExplorer root={root!} scope={graphSettings.scope} onFileClick={openFileInGraph} />
+              <ProjectFileExplorer root={root!} scope={graphGpuSettings.scope} onFileClick={openFileInGraph} />
             </>
           ) : (
             <>
@@ -554,15 +556,15 @@ export function App() {
 
       {/* Main content */}
       <main
-        className={`flex-1 flex flex-col min-h-0 ${needsFlexLayout ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
+        className={`flex-1 flex flex-col min-h-0 ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div
-          className={needsFlexLayout ? 'flex-1 min-h-0 flex flex-col' : 'flex-1 flex flex-col min-h-0'}
+          className={needsFlexLayout ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'flex-1 flex flex-col min-h-0'}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {isProject ? (
-            <ProjectContent root={root!} tab={projectTab} graphRef={graphRef} graphSettings={graphSettings} onGraphSettingsChange={onGraphSettingsChange} onNavigateToService={navigateToService} />
+            <ProjectContent root={root!} tab={projectTab} graphRef={graphRef} graphGpuSettings={graphGpuSettings} onGraphGpuSettingsChange={onGraphGpuSettingsChange} onNavigateToService={navigateToService} />
           ) : (
             <MenuContent tab={globalTab} />
           )}

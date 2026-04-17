@@ -169,7 +169,10 @@ export function ProjectOverview({ root, onNavigateToService }: {
   const handleRemoveService = async (name: string) => {
     try {
       const res = await fetch(`${BASE}/api/projects/subprojects?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
-      if (res.ok) setServices((prev) => prev.filter((s) => s.name !== name));
+      if (res.ok) {
+        setServices((prev) => prev.filter((s) => s.name !== name));
+        setSvcList((prev) => prev.filter((s) => s.name !== name));
+      }
     } catch { /* optional */ }
   };
 
@@ -196,36 +199,38 @@ export function ProjectOverview({ root, onNavigateToService }: {
 
   const hasGaps = coverage && (coverage.gaps.length > 0 || coverage.unknown.filter(u => u.needs_plugin === 'likely').length > 0);
 
+  const statusLabel = status === 'indexing' ? 'Indexing…' : status === 'ready' ? 'Ready' : status === 'error' ? 'Error' : status;
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-2">
+    <div className="space-y-5 pb-4">
+      {/* ── Hero header ──────────────────────────────── */}
+      <div className="pt-1">
+        <div className="flex items-center gap-2.5">
           <StatusDot status={statusDot} />
-          <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <h2
+            className="text-[17px] font-semibold leading-tight truncate"
+            style={{ color: 'var(--text-primary)', letterSpacing: '-0.022em' }}
+            title={root.split(/[/\\]/).filter(Boolean).pop()}
+          >
             {root.split(/[/\\]/).filter(Boolean).pop()}
           </h2>
         </div>
-        <div className="text-[11px] mt-0.5 ml-5" style={{ color: 'var(--text-tertiary)' }}>
+        <div
+          className="text-[11px] mt-1 ml-[18px] truncate"
+          style={{ color: 'var(--text-tertiary)', fontFamily: 'SF Mono, Menlo, monospace' }}
+          title={root}
+        >
           {shortPath(root)}
         </div>
-      </div>
 
-      {/* Status card */}
-      <div className="px-3 py-2.5 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
-        <div className="flex items-center justify-between">
-          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Status</span>
-          <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-            {status === 'indexing' ? 'Indexing…' : status === 'ready' ? 'Ready' : status}
-          </span>
-        </div>
+        {/* Indexing progress inline under header */}
         {status === 'indexing' && progress?.percent != null && (
-          <div className="mt-2">
+          <div className="mt-3 ml-[18px]">
             <div className="flex justify-between text-[10px] mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              <span>{progress.phase}</span>
-              <span>{progress.percent}%</span>
+              <span className="truncate">{progress.phase}</span>
+              <span className="tabular-nums">{progress.percent}%</span>
             </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+            <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--bg-inset)' }}>
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{ width: `${progress.percent}%`, background: 'var(--accent)' }}
@@ -235,286 +240,427 @@ export function ProjectOverview({ root, onNavigateToService }: {
         )}
       </div>
 
-      {/* Stats card */}
+      {/* ── Primary action ───────────────────────────── */}
+      {project ? (
+        <button
+          onClick={() => reindexProject(root)}
+          disabled={status === 'indexing'}
+          className="w-full text-[13px] font-medium transition-all disabled:opacity-40 hover:brightness-110 active:brightness-95"
+          style={{
+            background: 'var(--accent)',
+            color: '#fff',
+            borderRadius: 8,
+            height: 30,
+            boxShadow: '0 0 0 0.5px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08), inset 0 0.5px 0 rgba(255,255,255,0.25)',
+            cursor: status === 'indexing' ? 'default' : 'pointer',
+            letterSpacing: '-0.005em',
+          }}
+        >
+          {status === 'indexing' ? 'Indexing…' : 'Re-index Project'}
+        </button>
+      ) : (
+        <button
+          onClick={() => addProject(root)}
+          className="w-full text-[13px] font-medium transition-all hover:brightness-110 active:brightness-95"
+          style={{
+            background: 'var(--success)',
+            color: '#fff',
+            borderRadius: 8,
+            height: 30,
+            boxShadow: '0 0 0 0.5px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08), inset 0 0.5px 0 rgba(255,255,255,0.25)',
+            letterSpacing: '-0.005em',
+          }}
+        >
+          Index Project
+        </button>
+      )}
+
+      {/* ── Index stats (grouped list) ───────────────── */}
       {stats && (
-        <div className="px-3 py-2.5 rounded-lg space-y-2" style={{ background: 'var(--bg-secondary)' }}>
-          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-            Index Stats
+        <div>
+          <div className="text-[11px] mb-1.5 px-3" style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>
+            Index
           </div>
-          <Row label="Files indexed" value={stats.files.toLocaleString()} />
-          <Row label="Symbols" value={stats.symbols.toLocaleString()} />
-          <Row label="Edges (dependencies)" value={stats.edges.toLocaleString()} />
-          {stats.lastIndexed && (
-            <Row label="Last indexed" value={new Date(stats.lastIndexed).toLocaleString()} />
-          )}
+          <div style={{ background: 'var(--bg-grouped)', borderRadius: 10, boxShadow: 'var(--shadow-grouped)', overflow: 'hidden' }}>
+            <SettingsRow label="Status" value={statusLabel} />
+            <SettingsRow label="Files indexed" value={stats.files.toLocaleString()} />
+            <SettingsRow label="Symbols" value={stats.symbols.toLocaleString()} />
+            <SettingsRow label="Edges" value={stats.edges.toLocaleString()} />
+            {stats.lastIndexed && (
+              <SettingsRow label="Last indexed" value={new Date(stats.lastIndexed).toLocaleString()} last />
+            )}
+          </div>
         </div>
       )}
 
-      {/* Technology Coverage card */}
+      {/* ── Technology Coverage (grouped list) ───────── */}
       {coverage && (
-        <div className="px-3 py-2.5 rounded-lg space-y-2.5" style={{ background: 'var(--bg-secondary)' }}>
-          <div className="flex items-center justify-between">
-            <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-              Technology Coverage
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5 px-3">
+            <div className="text-[11px]" style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>
+              Coverage
             </div>
             <span
-              className="text-[11px] font-bold tabular-nums"
+              className="text-[11px] font-semibold tabular-nums"
               style={{ color: coverageColor(coverage.coverage.coverage_pct) }}
             >
               {coverage.coverage.coverage_pct}%
             </span>
           </div>
-
-          {/* Progress bar */}
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${coverage.coverage.coverage_pct}%`,
-                background: coverageColor(coverage.coverage.coverage_pct),
-              }}
-            />
-          </div>
-
-          <Row
-            label="Significant dependencies"
-            value={`${coverage.coverage.covered} / ${coverage.coverage.total_significant} covered`}
-          />
-
-          {/* Gaps */}
-          {coverage.gaps.length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              <div className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>
-                Missing plugins
+          <div style={{ background: 'var(--bg-grouped)', borderRadius: 10, boxShadow: 'var(--shadow-grouped)', overflow: 'hidden' }}>
+            {/* Progress row */}
+            <div className="px-3 py-2.5" style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-inset)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${coverage.coverage.coverage_pct}%`,
+                    background: coverageColor(coverage.coverage.coverage_pct),
+                  }}
+                />
               </div>
-              {coverage.gaps.map((gap) => (
-                <div key={gap.name} className="flex items-center justify-between gap-2">
+              <div className="flex justify-between mt-1.5">
+                <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                  {coverage.coverage.covered} of {coverage.coverage.total_significant} covered
+                </span>
+              </div>
+            </div>
+
+            {/* Gaps */}
+            {coverage.gaps.map((gap, i) => {
+              const isLast = i === coverage.gaps.length - 1 && coverage.unknown.filter(u => u.needs_plugin === 'likely').length === 0;
+              return (
+                <div
+                  key={gap.name}
+                  className="flex items-center justify-between gap-2 px-3 py-2"
+                  style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)' }}
+                >
                   <div className="flex items-center gap-1.5 min-w-0">
                     {priorityBadge(gap.priority)}
-                    <span className="text-[11px] truncate" style={{ color: 'var(--text-primary)' }}>
+                    <span className="text-[12px] truncate" style={{ color: 'var(--text-primary)' }}>
                       {gap.name}
                     </span>
                   </div>
                   <button
                     onClick={() => window.open(buildIssueUrl(gap), '_blank')}
-                    className="shrink-0 text-[10px] px-2 py-0.5 rounded font-medium transition-colors hover:opacity-80"
-                    style={{ background: 'var(--accent)', color: '#fff' }}
+                    className="shrink-0 text-[11px] font-medium transition-colors hover:opacity-80"
+                    style={{
+                      background: 'var(--accent)',
+                      color: '#fff',
+                      borderRadius: 6,
+                      padding: '2px 10px',
+                    }}
                     title={`Request plugin support for ${gap.name}`}
                   >
                     Request
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
 
-          {/* Unknown packages that likely need plugins */}
-          {coverage.unknown.filter(u => u.needs_plugin === 'likely').length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              <div className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>
-                Not in catalog (likely needs plugin)
-              </div>
-              {coverage.unknown.filter(u => u.needs_plugin === 'likely').map((pkg) => (
-                <div key={pkg.name} className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {priorityBadge(pkg.needs_plugin)}
-                    <span className="text-[11px] truncate" style={{ color: 'var(--text-primary)' }}>
-                      {pkg.name}
-                    </span>
-                    <span className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>
-                      [{pkg.ecosystem}]
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => window.open(buildIssueUrl(pkg), '_blank')}
-                    className="shrink-0 text-[10px] px-2 py-0.5 rounded font-medium transition-colors hover:opacity-80"
-                    style={{ background: 'var(--accent)', color: '#fff' }}
-                    title={`Request catalog addition for ${pkg.name}`}
-                  >
-                    Request
-                  </button>
+            {/* Unknown packages that likely need plugins */}
+            {coverage.unknown.filter(u => u.needs_plugin === 'likely').map((pkg, i, arr) => (
+              <div
+                key={pkg.name}
+                className="flex items-center justify-between gap-2 px-3 py-2"
+                style={{ borderBottom: i === arr.length - 1 ? 'none' : '0.5px solid var(--border-row)' }}
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {priorityBadge(pkg.needs_plugin)}
+                  <span className="text-[12px] truncate" style={{ color: 'var(--text-primary)' }}>
+                    {pkg.name}
+                  </span>
+                  <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                    {pkg.ecosystem}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
+                <button
+                  onClick={() => window.open(buildIssueUrl(pkg), '_blank')}
+                  className="shrink-0 text-[11px] font-medium transition-colors hover:opacity-80"
+                  style={{
+                    background: 'var(--accent)',
+                    color: '#fff',
+                    borderRadius: 6,
+                    padding: '2px 10px',
+                  }}
+                  title={`Request catalog addition for ${pkg.name}`}
+                >
+                  Request
+                </button>
+              </div>
+            ))}
 
-          {/* All covered message */}
-          {!hasGaps && coverage.coverage.total_significant > 0 && (
-            <div className="text-[11px] text-center py-1" style={{ color: 'var(--green, #22c55e)' }}>
-              All significant dependencies are covered
-            </div>
-          )}
+            {/* All covered message */}
+            {!hasGaps && coverage.coverage.total_significant > 0 && (
+              <div
+                className="text-[12px] text-center px-3 py-2"
+                style={{ color: 'var(--success)', borderTop: '0.5px solid var(--border-row)' }}
+              >
+                All significant dependencies are covered
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {coverageLoading && !coverage && (
-        <div className="px-3 py-2.5 rounded-lg" style={{ background: 'var(--bg-secondary)' }}>
-          <div className="text-[11px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+        <div>
+          <div className="text-[11px] mb-1.5 px-3" style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>
+            Coverage
+          </div>
+          <div
+            className="px-3 py-3 text-[11px] text-center"
+            style={{
+              background: 'var(--bg-grouped)',
+              borderRadius: 10,
+              boxShadow: 'var(--shadow-grouped)',
+              color: 'var(--text-tertiary)',
+            }}
+          >
             Analyzing technology coverage…
           </div>
         </div>
       )}
 
-      {/* Services card — grouped by project_group */}
-      <div className="px-3 py-2.5 rounded-lg space-y-2" style={{ background: 'var(--bg-secondary)' }}>
-        <div className="flex items-center justify-between">
-          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-            Services
-          </div>
-          <button
-            onClick={handleAddService}
-            disabled={addingService}
-            className="text-[10px] px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--bg-active)] disabled:opacity-40"
-            style={{ color: 'var(--accent)' }}
-            title="Add external service"
-          >
-            + Add
-          </button>
-        </div>
-
-        {svcList.length === 0 && services.length === 0 ? (
-          <div className="text-[11px] py-1" style={{ color: 'var(--text-tertiary)' }}>
-            No services detected. Re-index the project or add manually.
-          </div>
-        ) : (() => {
-          // Group services by projectGroup
-          const grouped = new Map<string, ServiceInfo[]>();
-          const existingGroups: string[] = [];
-          for (const svc of svcList) {
-            const key = svc.projectGroup ?? '';
-            if (!grouped.has(key)) {
-              grouped.set(key, []);
-              existingGroups.push(key);
-            }
-            grouped.get(key)!.push(svc);
+      {/* ── Services (native grouped list with group headers) ── */}
+      {(() => {
+        // Group services by projectGroup
+        const grouped = new Map<string, ServiceInfo[]>();
+        const existingGroups: string[] = [];
+        for (const svc of svcList) {
+          const key = svc.projectGroup ?? '';
+          if (!grouped.has(key)) {
+            grouped.set(key, []);
+            existingGroups.push(key);
           }
-          const groupKeys = [...grouped.keys()].sort((a, b) => {
-            if (!a) return 1; // ungrouped last
-            if (!b) return -1;
-            return a.localeCompare(b);
-          });
+          grouped.get(key)!.push(svc);
+        }
+        const groupKeys = [...grouped.keys()].sort((a, b) => {
+          if (!a) return 1; // ungrouped last
+          if (!b) return -1;
+          return a.localeCompare(b);
+        });
 
-          return (
-            <div className="flex flex-col gap-2">
-              {groupKeys.map((groupKey) => {
-                const groupServices = grouped.get(groupKey)!;
-                return (
-                  <div key={groupKey || '__ungrouped__'}>
-                    {/* Group header */}
-                    <div
-                      className="text-[9px] font-semibold uppercase tracking-wider mb-1 px-0.5"
-                      style={{ color: groupKey ? 'var(--accent)' : 'var(--text-tertiary)' }}
-                    >
-                      {groupKey || 'Ungrouped'}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      {groupServices.map((svc) => (
-                        <div
-                          key={svc.id}
-                          className="group flex items-center gap-1.5 rounded-md transition-colors hover:bg-[var(--bg-active)] -mx-1 px-1"
-                        >
-                          <button
-                            onClick={() => onNavigateToService?.(svc.name)}
-                            className="flex-1 min-w-0 text-left py-1"
-                            title={`${svc.repoRoot}\n${svc.endpointCount} endpoints\nGroup: ${svc.projectGroup ?? 'none'}`}
-                          >
-                            <div className="text-[11px] truncate" style={{ color: 'var(--text-primary)' }}>
-                              {svc.name}
-                            </div>
-                            <div className="text-[9px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-                              {shortPath(svc.repoRoot)}
-                              {svc.endpointCount > 0 && ` · ${svc.endpointCount} endpoints`}
-                            </div>
-                          </button>
+        const totalCount = svcList.length;
 
-                          {/* Group edit button */}
-                          {editingGroup === svc.id ? (
-                            <form
-                              className="shrink-0 flex items-center gap-1"
-                              onSubmit={(e) => { e.preventDefault(); handleUpdateGroup(svc.id, groupInput); }}
-                            >
-                              <input
-                                autoFocus
-                                value={groupInput}
-                                onChange={(e) => setGroupInput(e.target.value)}
-                                onBlur={() => setEditingGroup(null)}
-                                placeholder="group"
-                                list="group-options"
-                                className="w-16 text-[10px] px-1 py-0.5 rounded border outline-none"
-                                style={{
-                                  background: 'var(--bg-primary)',
-                                  borderColor: 'var(--border)',
-                                  color: 'var(--text-primary)',
-                                }}
-                              />
-                              <datalist id="group-options">
-                                {existingGroups.filter(Boolean).map((g) => (
-                                  <option key={g} value={g} />
-                                ))}
-                              </datalist>
-                            </form>
-                          ) : (
-                            <button
-                              onClick={() => { setEditingGroup(svc.id); setGroupInput(svc.projectGroup ?? ''); }}
-                              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] px-1 py-0.5 rounded"
-                              style={{ color: 'var(--text-tertiary)' }}
-                              title="Change group"
-                            >
-                              grp
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => handleRemoveService(svc.name)}
-                            className="shrink-0 w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--bg-secondary)]"
-                            style={{ color: 'var(--text-tertiary)' }}
-                            title="Remove service"
-                          >
-                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                              <path d="M1 1l6 6M7 1l-6 6" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+        return (
+          <div>
+            {/* Section header with + Add button */}
+            <div className="flex items-baseline justify-between mb-1.5 px-3">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[11px]" style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>
+                  Services
+                </span>
+                {totalCount > 0 && (
+                  <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
+                    {totalCount}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleAddService}
+                disabled={addingService}
+                className="text-[12px] transition-colors disabled:opacity-40 flex items-center gap-1 hover:opacity-80"
+                style={{ color: 'var(--accent)' }}
+                title="Add external service"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Add
+              </button>
             </div>
-          );
-        })()}
-      </div>
 
-      {/* Actions */}
-      <div className="space-y-2">
-        {project ? (
-          <button
-            onClick={() => reindexProject(root)}
-            disabled={status === 'indexing'}
-            className="w-full text-xs px-3 py-2 rounded-lg font-medium transition-colors disabled:opacity-40"
-            style={{ background: 'var(--accent)', color: '#fff' }}
-          >
-            {status === 'indexing' ? 'Indexing…' : 'Re-index project'}
-          </button>
-        ) : (
-          <button
-            onClick={() => addProject(root)}
-            className="w-full text-xs px-3 py-2 rounded-lg font-medium transition-colors"
-            style={{ background: 'var(--green, #22c55e)', color: '#fff' }}
-          >
-            Index project
-          </button>
-        )}
-      </div>
+            {totalCount === 0 ? (
+              <div
+                className="px-3 py-3 text-[12px] text-center"
+                style={{
+                  background: 'var(--bg-grouped)',
+                  borderRadius: 10,
+                  boxShadow: 'var(--shadow-grouped)',
+                  color: 'var(--text-tertiary)',
+                }}
+              >
+                No services detected.
+                <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                  Re-index the project or add manually.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                {groupKeys.map((groupKey) => {
+                  const groupServices = grouped.get(groupKey)!;
+                  return (
+                    <div key={groupKey || '__ungrouped__'}>
+                      {/* Group sub-header */}
+                      <div
+                        className="text-[11px] font-medium mb-1 px-3"
+                        style={{
+                          color: groupKey ? 'var(--accent)' : 'var(--text-tertiary)',
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
+                        {groupKey || 'Ungrouped'}
+                      </div>
+
+                      {/* Service list card */}
+                      <div style={{ background: 'var(--bg-grouped)', borderRadius: 10, boxShadow: 'var(--shadow-grouped)', overflow: 'hidden' }}>
+                        {groupServices.map((svc, i) => {
+                          const isLast = i === groupServices.length - 1;
+                          return (
+                            <div
+                              key={svc.id}
+                              className="group flex items-center gap-2 px-3 py-2 transition-colors hover:bg-[var(--bg-active)]"
+                              style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)' }}
+                            >
+                              {/* Service icon */}
+                              <div
+                                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
+                                style={{ background: 'var(--bg-inset)', color: 'var(--text-secondary)' }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="3" y="3" width="18" height="6" rx="1" />
+                                  <rect x="3" y="15" width="18" height="6" rx="1" />
+                                  <line x1="7" y1="6" x2="7.01" y2="6" />
+                                  <line x1="7" y1="18" x2="7.01" y2="18" />
+                                </svg>
+                              </div>
+
+                              {/* Service info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[13px] truncate leading-tight" style={{ color: 'var(--text-primary)' }}>
+                                  {svc.name}
+                                </div>
+                                <div
+                                  className="text-[10px] truncate mt-0.5"
+                                  style={{ color: 'var(--text-tertiary)', fontFamily: 'SF Mono, Menlo, monospace' }}
+                                  title={svc.repoRoot}
+                                >
+                                  {shortPath(svc.repoRoot)}
+                                  {svc.endpointCount > 0 && (
+                                    <span style={{ fontFamily: 'inherit' }}>
+                                      {' · '}{svc.endpointCount} endpoints
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Group badge / editor */}
+                              {editingGroup === svc.id ? (
+                                <form
+                                  className="shrink-0 flex items-center"
+                                  onSubmit={(e) => { e.preventDefault(); handleUpdateGroup(svc.id, groupInput); }}
+                                >
+                                  <input
+                                    autoFocus
+                                    value={groupInput}
+                                    onChange={(e) => setGroupInput(e.target.value)}
+                                    onBlur={() => handleUpdateGroup(svc.id, groupInput)}
+                                    onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setEditingGroup(null); } }}
+                                    placeholder="Group name"
+                                    list={`group-options-${svc.id}`}
+                                    className="w-28 text-[12px] outline-none"
+                                    style={{
+                                      background: 'var(--bg-primary)',
+                                      border: '0.5px solid var(--accent)',
+                                      borderRadius: 6,
+                                      padding: '3px 8px',
+                                      color: 'var(--text-primary)',
+                                      boxShadow: '0 0 0 2px rgba(0,122,255,0.15)',
+                                    }}
+                                  />
+                                  <datalist id={`group-options-${svc.id}`}>
+                                    {existingGroups.filter(Boolean).map((g) => (
+                                      <option key={g} value={g} />
+                                    ))}
+                                  </datalist>
+                                </form>
+                              ) : (
+                                <button
+                                  onClick={() => { setEditingGroup(svc.id); setGroupInput(svc.projectGroup ?? ''); }}
+                                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-medium flex items-center gap-1"
+                                  style={{
+                                    color: svc.projectGroup ? 'var(--accent)' : 'var(--text-secondary)',
+                                    background: 'var(--fill-control)',
+                                    border: '0.5px solid var(--border)',
+                                    borderRadius: 6,
+                                    padding: '2px 8px',
+                                    boxShadow: 'var(--shadow-control)',
+                                  }}
+                                  title={svc.projectGroup ? `Group: ${svc.projectGroup} · click to change` : 'Assign to a group'}
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
+                                    <line x1="7" y1="7" x2="7.01" y2="7" />
+                                  </svg>
+                                  {svc.projectGroup || 'Group'}
+                                </button>
+                              )}
+
+                              {/* Graph button */}
+                              {onNavigateToService && (
+                                <button
+                                  onClick={() => onNavigateToService(svc.name)}
+                                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-[26px] h-[22px] flex items-center justify-center"
+                                  style={{
+                                    color: 'var(--text-secondary)',
+                                    background: 'var(--fill-control)',
+                                    border: '0.5px solid var(--border)',
+                                    borderRadius: 6,
+                                    boxShadow: 'var(--shadow-control)',
+                                  }}
+                                  title="Open in graph"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="6" cy="6" r="2.5" />
+                                    <circle cx="18" cy="18" r="2.5" />
+                                    <circle cx="18" cy="6" r="2.5" />
+                                    <path d="M8.5 8.5l7 7M8.5 6H15" />
+                                  </svg>
+                                </button>
+                              )}
+
+                              {/* Remove button */}
+                              <button
+                                onClick={() => handleRemoveService(svc.name)}
+                                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-[22px] h-[22px] flex items-center justify-center rounded-full"
+                                style={{ color: 'var(--text-tertiary)' }}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--destructive)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-tertiary)'; }}
+                                title="Remove service"
+                              >
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+                                  <path d="M2 2l6 6M8 2l-6 6" />
+                                </svg>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function SettingsRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-      <span className="text-[11px] font-medium tabular-nums" style={{ color: 'var(--text-primary)' }}>{value}</span>
+    <div
+      className="flex items-center justify-between px-3"
+      style={{
+        borderBottom: last ? 'none' : '0.5px solid var(--border-row)',
+        minHeight: 32,
+      }}
+    >
+      <span className="text-[13px]" style={{ color: 'var(--text-primary)' }}>{label}</span>
+      <span className="text-[13px] tabular-nums truncate ml-2" style={{ color: 'var(--text-secondary)' }}>{value}</span>
     </div>
   );
 }
