@@ -29,6 +29,7 @@ export class TraceignoreMatcher {
   static readonly DEFAULT_SKIP_DIRS = new Set([
     'node_modules', '.git', 'dist', 'build', '.next', '__pycache__',
     '.venv', 'vendor', '.trace-mcp', 'coverage', '.turbo',
+    '.claude', '.cursor', '.windsurf', '.codeium', '.aider', '.copilot',
   ]);
 
   constructor(rootPath: string, config: TraceignoreConfig = {}) {

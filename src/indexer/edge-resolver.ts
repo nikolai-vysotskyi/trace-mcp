@@ -16,8 +16,11 @@ import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolve
 import { resolvePythonCallEdges as _resolvePyCalls } from './edge-resolvers/python-calls.js';
 import { resolvePhpImportEdges as _resolvePhpImports } from './edge-resolvers/php-imports.js';
 import { resolvePhpCallEdges as _resolvePhpCalls } from './edge-resolvers/php-calls.js';
+import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/typescript-calls.js';
+import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/typescript-types.js';
 import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
+import { resolveFileProjectionEdges as _resolveFileProjection } from './edge-resolvers/file-projection.js';
 
 export class EdgeResolver {
   constructor(private state: PipelineState) {}
@@ -95,11 +98,20 @@ export class EdgeResolver {
   /** Pass 2g2: PHP call/heritage edges (method calls, extends, implements, uses_trait). */
   resolvePhpCallEdges(): void { _resolvePhpCalls(this.state); }
 
+  /** Pass 2g3: TypeScript/JavaScript call edges (function/method calls → definitions). */
+  resolveTypeScriptCallEdges(): void { _resolveTsCalls(this.state); }
+
+  /** Pass 2g4: TypeScript/JavaScript type-reference edges (types used in annotations). */
+  resolveTypeScriptTypeEdges(): void { _resolveTsTypes(this.state); }
+
   /** Pass 2i: structural member_of edges for every nested symbol → its parent. */
   resolveMemberOfEdges(): void { _resolveMemberOf(this.state); }
 
   /** Pass 2h: test_covers edges. */
   resolveTestCoversEdges(): void { _resolveTests(this.state); }
+
+  /** Pass 2j: file-level projection of cross-file symbol edges. */
+  resolveFileProjectionEdges(): void { _resolveFileProjection(this.state); }
 
   /** Store raw edges from framework/language plugins into the graph. */
   storeRawEdges(edges: RawEdge[]): void {

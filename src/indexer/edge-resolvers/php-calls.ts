@@ -15,6 +15,7 @@
 import type { PipelineState } from '../pipeline-state.js';
 import type { PhpCallSite } from '../plugins/language/php/helpers.js';
 import { logger } from '../../logger.js';
+import { PhantomSymbolFactory } from './phantom-externals.js';
 
 interface PhpSymbol {
   id: number;
@@ -103,6 +104,12 @@ export function resolvePhpCallEdges(state: PipelineState): void {
      VALUES (?, ?, ?, 1, ?, ?, 'ast_resolved')`,
   );
 
+  // Phantom factory: creates synthetic symbol nodes for vendor classes
+  // (Migration, Model, Controller, etc.) so framework-base edges still land
+  // somewhere and cluster descendants together in the graph.
+  const phantoms = new PhantomSymbolFactory(state, 'php');
+  let phantomNodesCreated = 0;
+
   let calls = 0;
   let instantiations = 0;
   let extendsEdges = 0;
@@ -120,11 +127,22 @@ export function resolvePhpCallEdges(state: PipelineState): void {
     refKind: string,
   ): void {
     const target = resolveClassRef(classRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
-    if (!target) return;
-    const tNode = symbolNodeMap.get(target.id);
-    if (tNode == null || tNode === sourceNodeId) return;
-    if (source.workspace !== target.workspace) return;
-    insertStmt.run(sourceNodeId, tNode, refType!.id, JSON.stringify({ ref: classRef, kind: refKind }), 0);
+    if (target) {
+      const tNode = symbolNodeMap.get(target.id);
+      if (tNode == null || tNode === sourceNodeId) return;
+      if (source.workspace !== target.workspace) return;
+      insertStmt.run(sourceNodeId, tNode, refType!.id, JSON.stringify({ ref: classRef, kind: refKind }), 0);
+      typeRefs++;
+      return;
+    }
+    // Fallback: phantom external class (vendor/framework base)
+    const phantomFqn = resolveFqnForRef(classRef, source, fileUseMap, fileNamespaceMap);
+    if (!phantomFqn) return;
+    const before = phantoms.peek(phantomFqn, source.workspace);
+    const phantom = phantoms.ensure(phantomFqn, source.workspace, 'class');
+    if (!before) phantomNodesCreated++;
+    if (phantom.node_id === sourceNodeId) return;
+    insertStmt.run(sourceNodeId, phantom.node_id, refType!.id, JSON.stringify({ ref: classRef, kind: refKind, external: true }), 0);
     typeRefs++;
   }
 
@@ -137,45 +155,41 @@ export function resolvePhpCallEdges(state: PipelineState): void {
       const sourceNodeId = symbolNodeMap.get(sym.id);
       if (sourceNodeId == null) continue;
 
-      // Heritage edges: only on classes/interfaces
+      // Heritage edges: only on classes/interfaces.
+      //
+      // For each ref (extends/implements/uses trait), we first try to resolve
+      // against the indexed project. On miss (common case: the parent is a
+      // framework class in vendor/ — Migration, Model, Controller, Resource,
+      // ServiceProvider, etc.) we emit the edge to a phantom external node.
+      // This is what clusters all N Laravel migrations into one community,
+      // every Nova resource into another, and so on.
       if (sym.kind === 'class' || sym.kind === 'interface' || sym.kind === 'trait') {
-        const ext = meta.extends as string[] | undefined;
-        if (Array.isArray(ext)) {
-          for (const ref of ext) {
+        const emitHeritage = (refs: string[] | undefined, edgeTypeId: number, phantomKind: 'class' | 'interface' | 'trait', counter: () => void): void => {
+          if (!Array.isArray(refs)) return;
+          for (const ref of refs) {
             const target = resolveClassRef(ref, sym, fileUseMap, fileNamespaceMap, byFqn, byName);
-            if (!target) continue;
-            const tNode = symbolNodeMap.get(target.id);
-            if (tNode == null || tNode === sourceNodeId) continue;
-            const isCrossWs = sym.workspace !== target.workspace ? 1 : 0;
-            if (isCrossWs) continue; // strict workspace isolation
-            insertStmt.run(sourceNodeId, tNode, extendsType.id, JSON.stringify({ ref }), 0);
-            extendsEdges++;
+            if (target) {
+              const tNode = symbolNodeMap.get(target.id);
+              if (tNode == null || tNode === sourceNodeId) continue;
+              if (sym.workspace !== target.workspace) continue; // strict workspace isolation
+              insertStmt.run(sourceNodeId, tNode, edgeTypeId, JSON.stringify({ ref }), 0);
+              counter();
+              continue;
+            }
+            // Phantom fallback — synthesize a node for the unresolved class
+            const phantomFqn = resolveFqnForRef(ref, sym, fileUseMap, fileNamespaceMap);
+            if (!phantomFqn) continue;
+            const before = phantoms.peek(phantomFqn, sym.workspace);
+            const phantom = phantoms.ensure(phantomFqn, sym.workspace, phantomKind);
+            if (!before) phantomNodesCreated++;
+            if (phantom.node_id === sourceNodeId) continue;
+            insertStmt.run(sourceNodeId, phantom.node_id, edgeTypeId, JSON.stringify({ ref, external: true }), 0);
+            counter();
           }
-        }
-        const impl = meta.implements as string[] | undefined;
-        if (Array.isArray(impl)) {
-          for (const ref of impl) {
-            const target = resolveClassRef(ref, sym, fileUseMap, fileNamespaceMap, byFqn, byName);
-            if (!target) continue;
-            const tNode = symbolNodeMap.get(target.id);
-            if (tNode == null || tNode === sourceNodeId) continue;
-            if (sym.workspace !== target.workspace) continue;
-            insertStmt.run(sourceNodeId, tNode, implementsType.id, JSON.stringify({ ref }), 0);
-            implementsEdges++;
-          }
-        }
-        const traits = meta.usesTraits as string[] | undefined;
-        if (Array.isArray(traits)) {
-          for (const ref of traits) {
-            const target = resolveClassRef(ref, sym, fileUseMap, fileNamespaceMap, byFqn, byName);
-            if (!target) continue;
-            const tNode = symbolNodeMap.get(target.id);
-            if (tNode == null || tNode === sourceNodeId) continue;
-            if (sym.workspace !== target.workspace) continue;
-            insertStmt.run(sourceNodeId, tNode, usesTraitType.id, JSON.stringify({ ref }), 0);
-            usesTraitEdges++;
-          }
-        }
+        };
+        emitHeritage(meta.extends as string[] | undefined, extendsType.id, 'class', () => { extendsEdges++; });
+        emitHeritage(meta.implements as string[] | undefined, implementsType.id, 'interface', () => { implementsEdges++; });
+        emitHeritage(meta.usesTraits as string[] | undefined, usesTraitType.id, 'trait', () => { usesTraitEdges++; });
       }
 
       // Type reference edges — connect symbols to classes used as type hints.
@@ -243,10 +257,50 @@ export function resolvePhpCallEdges(state: PipelineState): void {
   const total = calls + instantiations + extendsEdges + implementsEdges + usesTraitEdges + propAccesses + constAccesses + typeRefs;
   if (total > 0) {
     logger.info(
-      { calls, instantiations, extendsEdges, implementsEdges, usesTraitEdges, propAccesses, constAccesses, typeRefs },
+      { calls, instantiations, extendsEdges, implementsEdges, usesTraitEdges, propAccesses, constAccesses, typeRefs, phantomNodesCreated },
       'PHP call/heritage edges resolved',
     );
   }
+}
+
+/**
+ * Resolve a short or dotted class reference to its FQN without requiring the
+ * class to be in the index. Used to derive a stable identity for phantom
+ * external symbols so edges from different files land on the same node.
+ */
+function resolveFqnForRef(
+  ref: string,
+  source: PhpSymbol,
+  fileUseMap: Map<number, Map<string, string>>,
+  fileNamespaceMap: Map<number, string | null>,
+): string | null {
+  if (!ref) return null;
+  const normalized = ref.startsWith('\\') ? ref.slice(1) : ref;
+  if (!normalized) return null;
+
+  // Already an FQN
+  if (normalized.includes('\\')) {
+    const uses = fileUseMap.get(source.file_id);
+    if (uses) {
+      const firstSeg = normalized.split('\\')[0];
+      const firstResolved = uses.get(firstSeg);
+      if (firstResolved) return firstResolved + normalized.slice(firstSeg.length);
+    }
+    return normalized;
+  }
+
+  // Short name — consult use map for alias resolution
+  const uses = fileUseMap.get(source.file_id);
+  if (uses) {
+    const viaUse = uses.get(normalized);
+    if (viaUse) return viaUse;
+  }
+
+  // Assume same-namespace resolution as a last resort. This matches PHP's
+  // own name resolution rules when no `use` statement shadows it.
+  const ns = fileNamespaceMap.get(source.file_id);
+  if (ns) return `${ns}\\${normalized}`;
+  return normalized;
 }
 
 /**
