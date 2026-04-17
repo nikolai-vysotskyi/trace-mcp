@@ -1139,6 +1139,20 @@ for (const d of DATA.nodes) {
   const agg = communityAgg.get(d.community);
   if (agg) agg.nodes.push(d);
 }
+// Compute dominant directory label for each community (top 2 levels = subproject name)
+for (const [, agg] of communityAgg) {
+  if (agg.nodes.length === 0) continue;
+  const freq = new Map();
+  for (const n of agg.nodes) {
+    const dir = getDirGroup(n.id);
+    freq.set(dir, (freq.get(dir) || 0) + 1);
+  }
+  let bestDir = '', bestCount = 0;
+  for (const [dir, count] of freq) {
+    if (count > bestCount) { bestCount = count; bestDir = dir; }
+  }
+  agg.dirLabel = bestDir || agg.label;
+}
 function updateCommunityAgg() {
   for (const [, agg] of communityAgg) {
     if (agg.nodes.length === 0) continue;
@@ -1320,13 +1334,18 @@ function draw() {
       ctx.strokeStyle = IS_LIGHT ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)';
       ctx.lineWidth = 1 / tk;
       ctx.stroke();
-      // Label
+      // Label — show dominant directory name + count
       const fs = Math.max(6, Math.min(14, agg.r * 0.6)) / tk;
       ctx.font = '600 ' + fs + 'px -apple-system, BlinkMacSystemFont, sans-serif';
       ctx.globalAlpha = 0.9;
       ctx.fillStyle = TH.text;
       ctx.textAlign = 'center';
-      ctx.fillText(agg.nodes.length + '', agg.cx, agg.cy + fs * 0.35);
+      const dirName = (agg.dirLabel || '').replace(/\\//g, ' / ');
+      ctx.fillText(dirName, agg.cx, agg.cy - fs * 0.2);
+      const smallFs = fs * 0.7;
+      ctx.font = '400 ' + smallFs + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.globalAlpha = 0.6;
+      ctx.fillText(agg.nodes.length + ' files', agg.cx, agg.cy + fs * 0.7);
     }
     ctx.textAlign = 'start';
     ctx.restore();
