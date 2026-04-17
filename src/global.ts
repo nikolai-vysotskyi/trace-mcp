@@ -84,8 +84,8 @@ export const DEFAULT_CONFIG_JSONC = `{
     "provider": "onnx",                          // "onnx" (local, zero-config) | "ollama" | "openai"
     // "base_url": "http://localhost:11434",     // custom endpoint (ollama/openai)
     // "api_key": "",                            // required for openai; or set OPENAI_API_KEY env
-    // "inference_model": "gemma4-e4b",          // ollama: "gemma4-e4b", openai: "gpt-4o-mini"
-    // "fast_model": "gemma4-e4b",               // ollama: "gemma4-e4b", openai: "gpt-4o-mini"
+    // "inference_model": "gemma4:e4b",          // ollama: "gemma4:e4b", openai: "gpt-4o-mini"
+    // "fast_model": "gemma4:e4b",               // ollama: "gemma4:e4b", openai: "gpt-4o-mini"
     // "embedding_model": "",                    // onnx: "Xenova/all-MiniLM-L6-v2", ollama: "qwen3-embedding:0.6b", openai: "text-embedding-3-small"
     // "embedding_dimensions": 384,              // onnx: 384, openai: 1536
     "summarize_on_index": false,

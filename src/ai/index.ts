@@ -6,7 +6,7 @@
  * all reuse OpenAIProvider with different default base URLs and models.
  */
 import type { TraceMcpConfig } from '../config.js';
-import type { AIProvider } from './interfaces.js';
+import type { AIProvider, EmbeddingService, InferenceService, ChatMessage } from './interfaces.js';
 import { FallbackProvider } from './fallback.js';
 import { OllamaProvider } from './ollama.js';
 import { OpenAIProvider } from './openai.js';
@@ -14,6 +14,7 @@ import { OnnxProvider } from './onnx.js';
 import { GeminiProvider } from './gemini.js';
 import { AnthropicProvider } from './anthropic.js';
 import { logger } from '../logger.js';
+import { aiTracker, type AIRequestType } from './tracker.js';
 
 /** Default configurations for OpenAI-compatible providers. */
 const OPENAI_COMPAT_DEFAULTS: Record<string, {
@@ -82,6 +83,97 @@ const OPENAI_COMPAT_DEFAULTS: Record<string, {
   },
 };
 
+// ── Tracked wrappers ─────────────────────────────────────────────────
+class TrackedEmbeddingService implements EmbeddingService {
+  constructor(private inner: EmbeddingService, private provider: string, private model: string, private url: string) {}
+
+  async embed(text: string): Promise<number[]> {
+    const entry = aiTracker.start('embed', this.provider, this.model, this.url, text.length);
+    const t0 = Date.now();
+    try {
+      const result = await this.inner.embed(text);
+      aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
+      return result;
+    } catch (err: any) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+      throw err;
+    }
+  }
+
+  async embedBatch(texts: string[]): Promise<number[][]> {
+    const entry = aiTracker.start('embed_batch', this.provider, this.model, this.url, texts.length);
+    const t0 = Date.now();
+    try {
+      const result = await this.inner.embedBatch(texts);
+      aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
+      return result;
+    } catch (err: any) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+      throw err;
+    }
+  }
+
+  dimensions(): number { return this.inner.dimensions(); }
+}
+
+class TrackedInferenceService implements InferenceService {
+  constructor(private inner: InferenceService, private provider: string, private model: string, private url: string) {}
+
+  async generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string> {
+    const entry = aiTracker.start('generate', this.provider, this.model, this.url, prompt.length);
+    const t0 = Date.now();
+    try {
+      const result = await this.inner.generate(prompt, options);
+      aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
+      return result;
+    } catch (err: any) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+      throw err;
+    }
+  }
+
+  async *generateStream(messages: ChatMessage[], options?: { maxTokens?: number; temperature?: number }): AsyncIterable<string> {
+    if (!this.inner.generateStream) {
+      throw new Error('generateStream not supported');
+    }
+    const totalInput = messages.reduce((n, m) => n + m.content.length, 0);
+    const entry = aiTracker.start('generate_stream', this.provider, this.model, this.url, totalInput);
+    const t0 = Date.now();
+    let outputLen = 0;
+    try {
+      for await (const chunk of this.inner.generateStream(messages, options)) {
+        outputLen += chunk.length;
+        yield chunk;
+      }
+      aiTracker.finish(entry, 'ok', Date.now() - t0, outputLen);
+    } catch (err: any) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, outputLen, err?.message ?? String(err));
+      throw err;
+    }
+  }
+}
+
+class TrackedAIProvider implements AIProvider {
+  constructor(private inner: AIProvider, private providerName: string, private url: string) {}
+  isAvailable(): Promise<boolean> { return this.inner.isAvailable(); }
+  embedding(): EmbeddingService {
+    const svc = this.inner.embedding();
+    return new TrackedEmbeddingService(svc, this.providerName, '(embedding)', this.url);
+  }
+  inference(): InferenceService {
+    const svc = this.inner.inference();
+    return new TrackedInferenceService(svc, this.providerName, '(inference)', this.url);
+  }
+  fastInference(): InferenceService {
+    const svc = this.inner.fastInference();
+    return new TrackedInferenceService(svc, this.providerName, '(fast)', this.url);
+  }
+}
+
+function wrapWithTracking(provider: AIProvider, name: string, url: string): AIProvider {
+  return new TrackedAIProvider(provider, name, url);
+}
+
 export function createAIProvider(config: TraceMcpConfig): AIProvider {
   if (!config.ai?.enabled) {
     return new FallbackProvider();
@@ -90,20 +182,21 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
   const provider = config.ai.provider;
 
   if (provider === 'onnx') {
-    return new OnnxProvider({
+    return wrapWithTracking(new OnnxProvider({
       model: config.ai.embedding_model,
       dimensions: config.ai.embedding_dimensions,
-    });
+    }), 'onnx', 'local');
   }
 
   if (provider === 'ollama') {
-    return new OllamaProvider({
-      baseUrl: config.ai.base_url ?? 'http://localhost:11434',
+    const url = config.ai.base_url ?? 'http://localhost:11434';
+    return wrapWithTracking(new OllamaProvider({
+      baseUrl: url,
       embeddingModel: config.ai.embedding_model ?? 'qwen3-embedding:0.6b',
-      inferenceModel: config.ai.inference_model ?? 'gemma4-e4b',
-      fastModel: config.ai.fast_model ?? 'gemma4-e4b',
+      inferenceModel: config.ai.inference_model ?? 'gemma4:e4b',
+      fastModel: config.ai.fast_model ?? 'gemma4:e4b',
       embeddingDimensions: config.ai.embedding_dimensions,
-    });
+    }), 'ollama', url);
   }
 
   if (provider === 'gemini') {
@@ -112,13 +205,13 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       logger.warn('Gemini provider selected but no api_key configured — falling back');
       return new FallbackProvider();
     }
-    return new GeminiProvider({
+    return wrapWithTracking(new GeminiProvider({
       apiKey,
       embeddingModel: config.ai.embedding_model ?? 'text-embedding-004',
       embeddingDimensions: config.ai.embedding_dimensions ?? 768,
       inferenceModel: config.ai.inference_model ?? 'gemini-2.0-flash',
       fastModel: config.ai.fast_model ?? 'gemini-2.0-flash',
-    });
+    }), 'gemini', 'https://generativelanguage.googleapis.com');
   }
 
   if (provider === 'anthropic') {
@@ -127,11 +220,11 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       logger.warn('Anthropic provider selected but no api_key configured — falling back');
       return new FallbackProvider();
     }
-    return new AnthropicProvider({
+    return wrapWithTracking(new AnthropicProvider({
       apiKey,
       inferenceModel: config.ai.inference_model ?? 'claude-sonnet-4-20250514',
       fastModel: config.ai.fast_model ?? 'claude-haiku-4-5-20251001',
-    });
+    }), 'anthropic', 'https://api.anthropic.com');
   }
 
   // All OpenAI-compatible providers
@@ -143,14 +236,15 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       logger.warn(`${provider} provider selected but no api_key configured — falling back`);
       return new FallbackProvider();
     }
-    return new OpenAIProvider({
+    const url = config.ai.base_url ?? defaults.baseUrl;
+    return wrapWithTracking(new OpenAIProvider({
       apiKey,
-      baseUrl: config.ai.base_url ?? defaults.baseUrl,
+      baseUrl: url,
       embeddingModel: config.ai.embedding_model ?? defaults.embeddingModel,
       embeddingDimensions: config.ai.embedding_dimensions ?? defaults.embeddingDimensions,
       inferenceModel: config.ai.inference_model ?? defaults.inferenceModel,
       fastModel: config.ai.fast_model ?? defaults.fastModel,
-    });
+    }), provider, url);
   }
 
   return new FallbackProvider();
@@ -175,3 +269,5 @@ export { parseOpenAIStream, parseAnthropicStream, parseOllamaChatStream } from '
 export { resolveProvider, gatherContext, buildSystemPrompt, stripContextFromMessage } from './ask-shared.js';
 export type { LLMProvider } from './ask-shared.js';
 export type { PromptTemplate } from './prompts.js';
+export { aiTracker } from './tracker.js';
+export type { AIRequestEntry, AIActivityStats } from './tracker.js';
