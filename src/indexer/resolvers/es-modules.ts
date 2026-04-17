@@ -33,35 +33,32 @@ function detectViteSrcDir(projectRoot: string): string | null {
   return null;
 }
 
-/** Try to find the nearest valid tsconfig.json walking up from `startDir` but not above `stopDir`. */
+/** Try to find the nearest valid tsconfig.json or jsconfig.json (Next.js JS projects). */
 function findTsconfig(startDir: string, stopDir: string): string | undefined {
   let dir = startDir;
   while (dir.startsWith(stopDir)) {
-    const candidate = path.join(dir, 'tsconfig.json');
-    if (fs.existsSync(candidate)) {
-      // Validate: if it extends a missing file, skip it
+    // Check tsconfig.json first, then jsconfig.json (Next.js pure JS convention)
+    for (const fileName of ['tsconfig.json', 'jsconfig.json']) {
+      const candidate = path.join(dir, fileName);
+      if (!fs.existsSync(candidate)) continue;
       try {
         const raw = JSON.parse(fs.readFileSync(candidate, 'utf-8')) as { extends?: string };
         if (raw.extends) {
           const extendsPath = path.resolve(path.dirname(candidate), raw.extends);
           if (!fs.existsSync(extendsPath)) {
             logger.debug({ tsconfig: candidate, extends: raw.extends }, 'Skipping tsconfig with missing extends');
-            // Don't return this tsconfig, keep walking up
-            dir = path.dirname(dir);
-            if (dir === path.dirname(dir)) break;
             continue;
           }
         }
         return candidate;
       } catch {
         // JSON parse error — skip this tsconfig
-        dir = path.dirname(dir);
-        if (dir === path.dirname(dir)) break;
         continue;
       }
     }
-    dir = path.dirname(dir);
-    if (dir === path.dirname(dir)) break; // filesystem root
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // filesystem root
+    dir = parent;
   }
   return undefined;
 }

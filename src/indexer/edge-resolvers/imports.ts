@@ -3,6 +3,25 @@ import path from 'node:path';
 import type { PipelineState } from '../pipeline-state.js';
 import { EsModuleResolver } from '../resolvers/es-modules.js';
 import { logger } from '../../logger.js';
+import { PhantomPackageFactory } from './phantom-externals.js';
+
+/**
+ * Derive a package-bucket name from an npm specifier. Scoped packages
+ * (`@vue/reactivity/...`) collapse to `@vue/reactivity`; plain packages
+ * (`lodash/fp/pipe`) collapse to `lodash`.
+ */
+function npmBucketFor(specifier: string): string | null {
+  if (!specifier) return null;
+  if (specifier.startsWith('.') || specifier.startsWith('/')) return null;
+  if (specifier.startsWith('@/') || specifier.startsWith('~') || specifier.startsWith('#')) return null;
+  if (specifier.startsWith('node:')) return specifier.split('/')[0];
+  if (specifier.startsWith('@')) {
+    const parts = specifier.split('/');
+    if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+    return parts[0];
+  }
+  return specifier.split('/')[0];
+}
 
 export function resolveEsmImportEdges(state: PipelineState): void {
   const { store } = state;
@@ -18,10 +37,28 @@ export function resolveEsmImportEdges(state: PipelineState): void {
   }
 
   let created = 0;
+  let phantomEdges = 0;
+  const phantomPackages = new PhantomPackageFactory(state, 'typescript');
+  const phantomEdgesSeen = new Set<string>();
 
   const pendingFileIds = Array.from(state.pendingImports.keys());
   const fileMap = store.getFilesByIds(pendingFileIds);
   const fileNodeMap = store.getNodeIdsBatch('file', pendingFileIds);
+
+  // Workspace lookup for pending source files (needed to scope phantom packages)
+  const fileWorkspace = new Map<number, string | null>();
+  {
+    const ids = pendingFileIds;
+    const CHUNK = 500;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = store.db.prepare(
+        `SELECT id, workspace FROM files WHERE id IN (${ph})`,
+      ).all(...chunk) as Array<{ id: number; workspace: string | null }>;
+      for (const r of rows) fileWorkspace.set(r.id, r.workspace);
+    }
+  }
 
   const targetFileCache = new Map<string, { id: number; nodeId: number } | null>();
   const resolveTargetFile = (relPath: string): { id: number; nodeId: number } | null => {
@@ -46,10 +83,17 @@ export function resolveEsmImportEdges(state: PipelineState): void {
      DO UPDATE SET metadata = excluded.metadata`,
   );
 
+  const TS_JS_LANGS = new Set(['typescript', 'javascript', 'tsx', 'jsx', 'vue']);
+
   store.db.transaction(() => {
     for (const [fileId, imports] of state.pendingImports) {
       const file = fileMap.get(fileId);
       if (!file) continue;
+      // Skip non-JS/TS files — PHP/Python imports are handled by their own
+      // resolvers. Without this guard, PHP `use` entries (PHP FQNs like
+      // `App\Actions\Foo`) get run through npm bucketing and pollute the
+      // phantom graph.
+      if (!TS_JS_LANGS.has(file.language ?? '')) continue;
 
       const absSource = path.resolve(state.rootPath, file.path);
       const sourceNodeId = fileNodeMap.get(fileId);
@@ -65,28 +109,54 @@ export function resolveEsmImportEdges(state: PipelineState): void {
         }
       }
 
+      const sourceWs = fileWorkspace.get(fileId) ?? null;
+
       for (const [from, specifiers] of consolidated) {
-        if (!from.startsWith('.') && !from.startsWith('/') && !from.startsWith('@/') && !from.startsWith('~')) continue;
+        const isRelative = from.startsWith('.') || from.startsWith('/') || from.startsWith('@/') || from.startsWith('~');
+        if (isRelative) {
+          const resolved = resolver.resolve(from, absSource);
+          if (resolved) {
+            const relTarget = path.relative(state.rootPath, resolved);
+            const target = resolveTargetFile(relTarget);
+            if (target) {
+              insertStmt.run(
+                sourceNodeId,
+                target.nodeId,
+                importsEdgeType.id,
+                JSON.stringify({ from, specifiers }),
+              );
+              created++;
+              continue;
+            }
+          }
+          // Unresolved relative import — likely points outside the indexed
+          // source tree or into a generated file. Skip rather than phantom
+          // (would pollute the bucket view with per-file noise).
+          continue;
+        }
 
-        const resolved = resolver.resolve(from, absSource);
-        if (!resolved) continue;
+        // Bare specifier — npm package, node: builtin, etc. Anchor to a
+        // phantom package bucket so consumers of the same library cluster.
+        const bucket = npmBucketFor(from);
+        if (!bucket) continue;
+        const dedupKey = `${sourceNodeId}\0${sourceWs ?? ''}\0${bucket}`;
+        if (phantomEdgesSeen.has(dedupKey)) continue;
+        phantomEdgesSeen.add(dedupKey);
 
-        const relTarget = path.relative(state.rootPath, resolved);
-        const target = resolveTargetFile(relTarget);
-        if (!target) continue;
-
+        const pkg = phantomPackages.ensure(bucket, sourceWs);
+        if (pkg.node_id === sourceNodeId) continue;
         insertStmt.run(
           sourceNodeId,
-          target.nodeId,
+          pkg.node_id,
           importsEdgeType.id,
-          JSON.stringify({ from, specifiers }),
+          JSON.stringify({ from, specifiers, external: true, bucket }),
         );
-        created++;
+        phantomEdges++;
       }
     }
   })();
 
-  if (created > 0) {
-    logger.info({ edges: created }, 'ES module import edges resolved');
+  if (created > 0 || phantomEdges > 0) {
+    logger.info({ edges: created, phantomEdges }, 'ES module import edges resolved');
   }
 }

@@ -21,6 +21,10 @@ import {
   extractClassMethods,
   extractDecorators,
   collectNodeTypes,
+  extractCallSites,
+  collectLocalTypes,
+  extractTypeReferences,
+  extractModuleCallSites,
 } from './helpers.js';
 import {
   detectMinNodeVersion,
@@ -46,9 +50,14 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
   async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const ext = filePath.substring(filePath.lastIndexOf('.'));
-      const useTsx = TSX_EXTENSIONS.has(ext);
-      const parser = await getParser(useTsx ? 'tsx' : 'typescript');
       const sourceCode = content.toString('utf-8');
+      // Detect JSX syntax in .js/.mjs/.cjs files (common in Next.js/React apps).
+      // If the file contains JSX (< followed by uppercase identifier or "<>" / "</>"),
+      // fall back to the TSX parser to avoid losing all symbols on parse failure.
+      const isJsExt = ext === '.js' || ext === '.mjs' || ext === '.cjs';
+      const hasJsx = isJsExt && /(?:^|[\s(=,;>])<(?:[A-Z][A-Za-z0-9]*|>|\/>)/.test(sourceCode);
+      const useTsx = TSX_EXTENSIONS.has(ext) || hasJsx;
+      const parser = await getParser(useTsx ? 'tsx' : 'typescript');
       const tree = parser.parse(sourceCode);
       const root: TSNode = tree.rootNode;
 
@@ -61,6 +70,29 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       }
 
       this.walkTopLevel(root, filePath, symbols);
+
+      // Extract module-body call sites (code that runs at load time, not inside
+      // any named function/class). Emit as a `__module__` pseudo-symbol so the
+      // call graph can attribute these calls to something.
+      const moduleCallSites = extractModuleCallSites(root);
+      if (moduleCallSites.length > 0) {
+        const moduleName = filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? '__module__';
+        symbols.push({
+          symbolId: makeSymbolId(filePath, '__module__', 'namespace'),
+          name: `__module__:${moduleName}`,
+          kind: 'namespace',
+          signature: `(module body) ${filePath}`,
+          byteStart: 0,
+          byteEnd: root.endIndex,
+          lineStart: 1,
+          lineEnd: root.endPosition.row + 1,
+          metadata: {
+            synthetic: true,
+            moduleBody: true,
+            callSites: moduleCallSites,
+          },
+        });
+      }
 
       const edges = extractImportEdges(root);
 
@@ -166,6 +198,13 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
     };
     if (decorators.length > 0) metadata.decorators = decorators;
     this.attachVersionInfo(node, metadata);
+
+    const callSites = extractCallSites(node);
+    if (callSites.length > 0) metadata.callSites = callSites;
+    const localTypes = collectLocalTypes(node);
+    if (Object.keys(localTypes).length > 0) metadata.localTypes = localTypes;
+    const typeRefs = extractTypeReferences(node);
+    if (typeRefs.length > 0) metadata.typeRefs = typeRefs;
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'function'),
       name,
@@ -195,6 +234,9 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
     };
     this.attachVersionInfo(node, metadata);
 
+    const classTypeRefs = extractTypeReferences(node);
+    if (classTypeRefs.length > 0) metadata.typeRefs = classTypeRefs;
+
     symbols.push({
       symbolId,
       name,
@@ -215,25 +257,54 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
 
   private extractVariable(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
     const exported = isExported(node);
-    if (!exported) return; // Only extract exported variables
 
     for (const child of node.namedChildren) {
       if (child.type === 'variable_declarator') {
         const name = getNodeName(child);
         if (!name) continue;
+
+        // Detect `const foo = () => {}` or `const foo = function() {}` — treat
+        // as functions so they participate in the call graph. These are often
+        // re-exported via `export { foo }` statements at module bottom.
+        const valueNode = child.childForFieldName('value');
+        const isFunctionLike = !!valueNode && (
+          valueNode.type === 'arrow_function'
+          || valueNode.type === 'function_expression'
+          || valueNode.type === 'generator_function'
+        );
+
+        // Skip non-exported non-function variables — they're usually constants
+        // or local state that would only bloat symbol counts.
+        if (!exported && !isFunctionLike) continue;
+
+        const metadata: Record<string, unknown> = {
+          exported,
+          default: isDefaultExport(node),
+        };
+
+        if (isFunctionLike && valueNode) {
+          const callSites = extractCallSites(valueNode);
+          if (callSites.length > 0) metadata.callSites = callSites;
+          const localTypes = collectLocalTypes(valueNode);
+          if (Object.keys(localTypes).length > 0) metadata.localTypes = localTypes;
+          const typeRefs = extractTypeReferences(valueNode);
+          if (typeRefs.length > 0) metadata.typeRefs = typeRefs;
+        } else {
+          // For non-function exported consts, collect type annotations
+          const typeRefs = extractTypeReferences(child);
+          if (typeRefs.length > 0) metadata.typeRefs = typeRefs;
+        }
+
         symbols.push({
-          symbolId: makeSymbolId(filePath, name, 'variable'),
+          symbolId: makeSymbolId(filePath, name, isFunctionLike ? 'function' : 'variable'),
           name,
-          kind: 'variable',
+          kind: isFunctionLike ? 'function' : 'variable',
           signature: getFullSignature(node),
           byteStart: node.startIndex,
           byteEnd: node.endIndex,
           lineStart: node.startPosition.row + 1,
           lineEnd: node.endPosition.row + 1,
-          metadata: {
-            exported: true,
-            default: isDefaultExport(node),
-          },
+          metadata,
         });
       }
     }
@@ -242,6 +313,13 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
   private extractType(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
     const name = getNodeName(node);
     if (!name) return;
+    const metadata: Record<string, unknown> = {
+      exported: isExported(node),
+      default: isDefaultExport(node),
+    };
+    const typeRefs = extractTypeReferences(node);
+    if (typeRefs.length > 0) metadata.typeRefs = typeRefs;
+
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'type'),
       name,
@@ -251,10 +329,7 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       byteEnd: node.endIndex,
       lineStart: node.startPosition.row + 1,
       lineEnd: node.endPosition.row + 1,
-      metadata: {
-        exported: isExported(node),
-        default: isDefaultExport(node),
-      },
+      metadata,
     });
   }
 
@@ -263,6 +338,15 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
     if (!name) return;
 
     const heritage = this.extractHeritage(node);
+
+    const metadata: Record<string, unknown> = {
+      exported: isExported(node),
+      default: isDefaultExport(node),
+      ...(heritage.extends ? { extends: heritage.extends } : {}),
+      ...(heritage.implements.length > 0 ? { implements: heritage.implements } : {}),
+    };
+    const typeRefs = extractTypeReferences(node);
+    if (typeRefs.length > 0) metadata.typeRefs = typeRefs;
 
     symbols.push({
       symbolId: makeSymbolId(filePath, name, 'interface'),
@@ -273,12 +357,7 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       byteEnd: node.endIndex,
       lineStart: node.startPosition.row + 1,
       lineEnd: node.endPosition.row + 1,
-      metadata: {
-        exported: isExported(node),
-        default: isDefaultExport(node),
-        ...(heritage.extends ? { extends: heritage.extends } : {}),
-        ...(heritage.implements.length > 0 ? { implements: heritage.implements } : {}),
-      },
+      metadata,
     });
   }
 

@@ -239,10 +239,15 @@ export class IndexingPipeline {
     edgeResolver.resolvePythonImportEdges();
     edgeResolver.resolvePhpImportEdges();
     edgeResolver.resolvePhpCallEdges();
+    edgeResolver.resolveTypeScriptCallEdges();
+    edgeResolver.resolveTypeScriptTypeEdges();
     edgeResolver.resolveMemberOfEdges();
     edgeResolver.resolvePythonHeritageEdges();
     edgeResolver.resolvePythonCallEdges();
     edgeResolver.resolveTestCoversEdges();
+    // Must run last — projects cross-file symbol edges to file-level `imports`
+    // edges so the file dependency graph is as rich as the symbol graph.
+    edgeResolver.resolveFileProjectionEdges();
   }
 
   /** Pass 3: LSP enrichment — upgrade call graph edges with compiler-grade resolution. */

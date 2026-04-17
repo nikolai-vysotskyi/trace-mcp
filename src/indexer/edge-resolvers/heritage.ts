@@ -1,6 +1,7 @@
 /** Pass 2c: Resolve TypeScript extends/implements into graph edges. */
 import type { PipelineState } from '../pipeline-state.js';
 import { logger } from '../../logger.js';
+import { PhantomSymbolFactory } from './phantom-externals.js';
 
 export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
   const { store } = state;
@@ -9,6 +10,27 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
     : undefined;
   const symbolsWithHeritage = store.getSymbolsWithHeritage(changedFileIds);
   if (symbolsWithHeritage.length === 0) return;
+
+  // Look up workspace per source file so phantoms are created per-workspace
+  // (matches the isolation semantics used by ts_extends resolution itself —
+  // a TS monorepo workspace and another workspace referencing `BaseService`
+  // should each get their own phantom, not share one).
+  const fileWorkspaceMap = new Map<number, string | null>();
+  const fileIds = new Set<number>(symbolsWithHeritage.map((s) => s.file_id));
+  if (fileIds.size > 0) {
+    const ids = Array.from(fileIds);
+    const CHUNK = 500;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = store.db.prepare(
+        `SELECT id, workspace FROM files WHERE id IN (${ph})`,
+      ).all(...chunk) as Array<{ id: number; workspace: string | null }>;
+      for (const r of rows) fileWorkspaceMap.set(r.id, r.workspace);
+    }
+  }
+  const phantoms = new PhantomSymbolFactory(state, 'typescript');
+  let phantomNodesCreated = 0;
 
   // Collect all target names referenced by heritage metadata
   const neededNames = new Set<string>();
@@ -73,33 +95,53 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
       const sourceNodeId = symbolNodeMap.get(sym.id);
       if (sourceNodeId == null) continue;
 
+      const sourceWs = fileWorkspaceMap.get(sym.file_id) ?? null;
+
+      const emitPhantomEdge = (targetName: string, edgeTypeId: number, phantomKind: 'class' | 'interface'): void => {
+        const before = phantoms.peek(targetName, sourceWs);
+        const phantom = phantoms.ensure(targetName, sourceWs, phantomKind);
+        if (!before) phantomNodesCreated++;
+        if (phantom.node_id === sourceNodeId) return;
+        insertStmt.run(sourceNodeId, phantom.node_id, edgeTypeId);
+        created++;
+      };
+
       const ext = meta['extends'];
       const extNames = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
       for (const targetName of extNames) {
+        if (typeof targetName !== 'string' || !targetName) continue;
         const targets = nameIndex.get(targetName);
-        if (!targets?.length) continue;
-        const targetNodeId = symbolNodeMap.get(targets[0].id);
-        if (targetNodeId == null) continue;
-        insertStmt.run(sourceNodeId, targetNodeId, tsExtendsType.id);
-        created++;
+        if (targets?.length) {
+          const targetNodeId = symbolNodeMap.get(targets[0].id);
+          if (targetNodeId == null) continue;
+          insertStmt.run(sourceNodeId, targetNodeId, tsExtendsType.id);
+          created++;
+          continue;
+        }
+        // Phantom fallback — external class (React.Component, Error, EventEmitter, etc.)
+        emitPhantomEdge(targetName, tsExtendsType.id, 'class');
       }
 
       const impl = meta['implements'];
       if (Array.isArray(impl)) {
         for (const targetName of impl as string[]) {
+          if (typeof targetName !== 'string' || !targetName) continue;
           const targets = nameIndex.get(targetName);
-          if (!targets?.length) continue;
-          const target = targets.find((t) => t.kind === 'interface') ?? targets[0];
-          const targetNodeId = symbolNodeMap.get(target.id);
-          if (targetNodeId == null) continue;
-          insertStmt.run(sourceNodeId, targetNodeId, tsImplementsType.id);
-          created++;
+          if (targets?.length) {
+            const target = targets.find((t) => t.kind === 'interface') ?? targets[0];
+            const targetNodeId = symbolNodeMap.get(target.id);
+            if (targetNodeId == null) continue;
+            insertStmt.run(sourceNodeId, targetNodeId, tsImplementsType.id);
+            created++;
+            continue;
+          }
+          emitPhantomEdge(targetName, tsImplementsType.id, 'interface');
         }
       }
     }
   })();
 
   if (created > 0) {
-    logger.info({ edges: created }, 'TypeScript heritage edges resolved');
+    logger.info({ edges: created, phantomNodesCreated }, 'TypeScript heritage edges resolved');
   }
 }

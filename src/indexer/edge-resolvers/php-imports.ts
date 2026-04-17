@@ -13,6 +13,7 @@ import * as fs from 'node:fs';
 import type { PipelineState } from '../pipeline-state.js';
 import { Psr4Resolver } from '../resolvers/psr4.js';
 import { logger } from '../../logger.js';
+import { PhantomPackageFactory, packageBucketFor } from './phantom-externals.js';
 
 /**
  * Resolve PHP import edges from pendingImports into file→file edges.
@@ -114,6 +115,9 @@ export function resolvePhpImportEdges(state: PipelineState): void {
   }
 
   let created = 0;
+  let phantomEdges = 0;
+  const phantomPackages = new PhantomPackageFactory(state, 'php');
+  const phantomEdgesSeen = new Set<string>(); // dedupe per source+bucket
 
   store.db.transaction(() => {
     for (const [fileId, imports] of state.pendingImports) {
@@ -135,28 +139,50 @@ export function resolvePhpImportEdges(state: PipelineState): void {
 
       for (const [fqn, specifiers] of consolidated) {
         const target = resolvePhpFqn(fqn, sourceWs, fqnToFile, psr4Resolvers, pathToFile, state.rootPath);
-        if (!target) continue;
+        if (target) {
+          const targetNodeId = fileNodeMap.get(target.id);
+          if (targetNodeId == null) continue;
+          if (sourceNodeId === targetNodeId) continue;
 
-        const targetNodeId = fileNodeMap.get(target.id);
-        if (targetNodeId == null) continue;
-        if (sourceNodeId === targetNodeId) continue;
+          const isCrossWs = sourceWs !== target.workspace ? 1 : 0;
 
-        const isCrossWs = sourceWs !== target.workspace ? 1 : 0;
+          insertStmt.run(
+            sourceNodeId,
+            targetNodeId,
+            importsEdgeType.id,
+            JSON.stringify({ from: fqn, specifiers }),
+            isCrossWs,
+          );
+          created++;
+          continue;
+        }
 
+        // Unresolved FQN: likely a vendor class not indexed. Emit a file→file
+        // edge to a phantom package bucket so framework-dependent files (e.g.
+        // Laravel migrations, Nova resources, Symfony bundles) cluster around
+        // their shared external anchor instead of sitting as disconnected dots.
+        const bucket = packageBucketFor(fqn);
+        if (!bucket) continue;
+        const dedupKey = `${sourceNodeId}\0${sourceWs ?? ''}\0${bucket}`;
+        if (phantomEdgesSeen.has(dedupKey)) continue;
+        phantomEdgesSeen.add(dedupKey);
+
+        const pkg = phantomPackages.ensure(bucket, sourceWs);
+        if (pkg.node_id === sourceNodeId) continue;
         insertStmt.run(
           sourceNodeId,
-          targetNodeId,
+          pkg.node_id,
           importsEdgeType.id,
-          JSON.stringify({ from: fqn, specifiers }),
-          isCrossWs,
+          JSON.stringify({ from: fqn, specifiers, external: true, bucket }),
+          0,
         );
-        created++;
+        phantomEdges++;
       }
     }
   })();
 
-  if (created > 0) {
-    logger.info({ edges: created }, 'PHP import edges resolved');
+  if (created > 0 || phantomEdges > 0) {
+    logger.info({ edges: created, phantomEdges }, 'PHP import edges resolved');
   }
 }
 
