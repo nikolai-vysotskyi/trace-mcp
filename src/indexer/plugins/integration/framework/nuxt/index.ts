@@ -217,6 +217,11 @@ export class NuxtPlugin implements FrameworkPlugin {
         { name: 'api_calls', category: 'nuxt', description: 'fetch/useFetch API call' },
         { name: 'nuxt_shared_import', category: 'nuxt', description: 'Auto-imported shared utility or type' },
         { name: 'renders_component', category: 'nuxt', description: 'Vue template renders component' },
+        { name: 'nuxt_uses_middleware', category: 'nuxt', description: 'Page declares middleware via definePageMeta' },
+        { name: 'nuxt_uses_layout', category: 'nuxt', description: 'Page declares layout via definePageMeta' },
+        { name: 'nuxt_global_middleware', category: 'nuxt', description: '.global.ts middleware auto-applied to every page' },
+        { name: 'nuxt_plugin_registered', category: 'nuxt', description: 'Nuxt plugin auto-loaded at boot' },
+        { name: 'nuxt_server_route', category: 'nuxt', description: 'Server route auto-registered by Nuxt' },
       ],
     };
   }
@@ -422,6 +427,274 @@ export class NuxtPlugin implements FrameworkPlugin {
               metadata: { shared: name },
             });
           }
+        }
+      }
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    // Nuxt file-based auto-registration
+    //
+    // Nuxt runtime auto-loads several directories by convention, not by
+    // explicit imports. Without synthetic edges these files look orphaned
+    // even though they're architecturally central (every page/layout uses
+    // them). We generate edges that reflect the runtime wiring:
+    //
+    //   middleware:    definePageMeta({ middleware: ['auth'] }) → middleware/auth.ts
+    //                  *.global.ts                              → every page
+    //   layouts:       definePageMeta({ layout: 'admin' })       → layouts/admin.vue
+    //   plugins:       app/plugins/*.ts                          → every page (entry point)
+    //   server routes: server/api/*.ts + server/routes/*.ts      → marked as entry points
+    //                  also: $fetch('/api/foo') / useFetch()     → server/api/foo.ts
+    // ───────────────────────────────────────────────────────────────────
+    const middlewarePrefix = srcDir === '.' ? 'middleware/' : `${srcDir}/middleware/`;
+    const layoutsPrefix = srcDir === '.' ? 'layouts/' : `${srcDir}/layouts/`;
+    const pluginsPrefix = srcDir === '.' ? 'plugins/' : `${srcDir}/plugins/`;
+    const pagesPrefix = srcDir === '.' ? 'pages/' : `${srcDir}/pages/`;
+
+    // Build name → file maps for middleware and layouts.
+    // Middleware: auth.ts → "auth", kebab-case-name.ts → "kebab-case-name"
+    // Global middleware: foo.global.ts → name "foo" + global flag
+    const middlewareByName = new Map<string, { id: number; isGlobal: boolean }>();
+    const globalMiddlewareFiles: { id: number; path: string }[] = [];
+    for (const f of allFiles) {
+      if (!f.path.startsWith(middlewarePrefix)) continue;
+      if (!/\.(ts|js|mjs)$/.test(f.path)) continue;
+      const base = path.basename(f.path).replace(/\.(ts|js|mjs)$/, '');
+      const isGlobal = base.endsWith('.global');
+      const name = isGlobal ? base.slice(0, -'.global'.length) : base;
+      middlewareByName.set(name, { id: f.id, isGlobal });
+      if (isGlobal) globalMiddlewareFiles.push({ id: f.id, path: f.path });
+    }
+
+    // Layouts: default.vue → "default"
+    const layoutByName = new Map<string, { id: number }>();
+    for (const f of allFiles) {
+      if (!f.path.startsWith(layoutsPrefix)) continue;
+      if (!f.path.endsWith('.vue')) continue;
+      const base = path.basename(f.path, '.vue');
+      layoutByName.set(base, { id: f.id });
+    }
+
+    // Nuxt plugins + server routes — collected for entry-point marking.
+    // Nuxt 3 places `server/` at the project root, but Nuxt 4 with a custom
+    // srcDir (e.g. `app/`) may put it under `{srcDir}/server/`. Accept both.
+    const serverPrefixes = srcDir === '.'
+      ? ['server/api/', 'server/routes/']
+      : ['server/api/', 'server/routes/', `${srcDir}/server/api/`, `${srcDir}/server/routes/`];
+    const pluginFiles: { id: number }[] = [];
+    const serverRouteFiles: { id: number; path: string }[] = [];
+    for (const f of allFiles) {
+      if (f.path.startsWith(pluginsPrefix) && /\.(ts|js|mjs)$/.test(f.path)) {
+        pluginFiles.push({ id: f.id });
+      }
+      if (serverPrefixes.some((p) => f.path.startsWith(p)) && /\.(ts|js|mjs)$/.test(f.path)) {
+        serverRouteFiles.push({ id: f.id, path: f.path });
+      }
+    }
+
+    // Pages collected once — needed for global-middleware and plugin fan-out
+    const pageFiles: { id: number; path: string }[] = [];
+    for (const f of allFiles) {
+      if (f.path.startsWith(pagesPrefix) && f.path.endsWith('.vue')) {
+        pageFiles.push({ id: f.id, path: f.path });
+      }
+    }
+
+    // Parse each page's definePageMeta for middleware/layout references.
+    // Regex-based — full AST parsing would be overkill for a tiny string
+    // table that's strictly enclosed in a definePageMeta() call.
+    const MIDDLEWARE_BLOCK_RE = /definePageMeta\s*\(\s*\{[\s\S]*?\bmiddleware\s*:\s*(\[[^\]]*\]|['"][^'"]+['"])/;
+    const LAYOUT_BLOCK_RE = /definePageMeta\s*\(\s*\{[\s\S]*?\blayout\s*:\s*(['"][^'"]+['"]|false)/;
+    for (const page of pageFiles) {
+      let source: string | undefined;
+      try { source = ctx.readFile(page.path); } catch { /* ignore */ }
+      if (!source) continue;
+
+      const mw = MIDDLEWARE_BLOCK_RE.exec(source);
+      if (mw) {
+        const raw = mw[1];
+        const names: string[] = [];
+        if (raw.startsWith('[')) {
+          const inner = raw.slice(1, -1);
+          for (const part of inner.split(',')) {
+            const m = /['"]([^'"]+)['"]/.exec(part);
+            if (m) names.push(m[1]);
+          }
+        } else {
+          const m = /['"]([^'"]+)['"]/.exec(raw);
+          if (m) names.push(m[1]);
+        }
+        for (const name of names) {
+          const target = middlewareByName.get(name);
+          if (!target) continue;
+          edges.push({
+            sourceNodeType: 'file',
+            sourceRefId: page.id,
+            targetNodeType: 'file',
+            targetRefId: target.id,
+            edgeType: 'nuxt_uses_middleware',
+            metadata: { middleware: name },
+          });
+        }
+      }
+
+      const lay = LAYOUT_BLOCK_RE.exec(source);
+      if (lay && !lay[1].startsWith('false')) {
+        const nameMatch = /['"]([^'"]+)['"]/.exec(lay[1]);
+        if (nameMatch) {
+          const name = nameMatch[1];
+          const target = layoutByName.get(name);
+          if (target) {
+            edges.push({
+              sourceNodeType: 'file',
+              sourceRefId: page.id,
+              targetNodeType: 'file',
+              targetRefId: target.id,
+              edgeType: 'nuxt_uses_layout',
+              metadata: { layout: name },
+            });
+          }
+        }
+      }
+    }
+
+    // Implicit "default" layout: any page without a layout: key uses layouts/default.vue
+    // Only emit if the default layout exists.
+    const defaultLayout = layoutByName.get('default');
+    if (defaultLayout) {
+      for (const page of pageFiles) {
+        let source: string | undefined;
+        try { source = ctx.readFile(page.path); } catch { /* ignore */ }
+        if (source && LAYOUT_BLOCK_RE.test(source)) continue; // explicit layout already linked
+        edges.push({
+          sourceNodeType: 'file',
+          sourceRefId: page.id,
+          targetNodeType: 'file',
+          targetRefId: defaultLayout.id,
+          edgeType: 'nuxt_uses_layout',
+          metadata: { layout: 'default', implicit: true },
+        });
+      }
+    }
+
+    // Global middleware: applies to every page. Fan-out is expensive on
+    // large apps (O(pages × global_mw)), so we cap at a reasonable size.
+    // Even one edge per page per global middleware is enough to cluster them.
+    for (const gm of globalMiddlewareFiles) {
+      for (const page of pageFiles) {
+        edges.push({
+          sourceNodeType: 'file',
+          sourceRefId: page.id,
+          targetNodeType: 'file',
+          targetRefId: gm.id,
+          edgeType: 'nuxt_global_middleware',
+          metadata: { path: gm.path },
+        });
+      }
+    }
+
+    // Nuxt plugins are auto-loaded at boot and registered on `nuxtApp`.
+    // They're effectively "entry points" — no explicit reference to them
+    // exists in user code. Emit a link from every page to every plugin so
+    // plugins cluster with the app rather than floating alone.
+    //
+    // This is semantically weaker than middleware/layout links (plugins
+    // apply at app init, not per-page), but for graph clustering it's the
+    // correct signal: plugins belong to the same connected component as
+    // the app they configure.
+    for (const plugin of pluginFiles) {
+      for (const page of pageFiles) {
+        edges.push({
+          sourceNodeType: 'file',
+          sourceRefId: page.id,
+          targetNodeType: 'file',
+          targetRefId: plugin.id,
+          edgeType: 'nuxt_plugin_registered',
+          metadata: { plugin: 'boot' },
+        });
+      }
+    }
+
+    // Server routes: two-stage clustering.
+    //
+    // Stage 1 (strong signal): $fetch/useFetch/useAsyncData calls from client
+    //   code → resolve URL to the server route file.
+    // Stage 2 (weak fallback): any server route still unconnected gets linked
+    //   to the first page file so it doesn't float alone. File-based routing
+    //   means these files ARE architecturally connected even without explicit
+    //   references.
+    if (serverRouteFiles.length > 0) {
+      const routeByUri = new Map<string, { id: number }>();
+      const routeFileIdToUri = new Map<number, string>();
+      for (const srf of serverRouteFiles) {
+        let uri: string | null = null;
+        // Strip srcDir prefix before URI derivation
+        const stripped = srcDir !== '.' && srf.path.startsWith(`${srcDir}/`)
+          ? srf.path.slice(srcDir.length + 1)
+          : srf.path;
+        if (stripped.startsWith('server/api/')) {
+          uri = serverApiToRoute(stripped).uri;
+        } else if (stripped.startsWith('server/routes/')) {
+          uri = serverRoutesToRoute(stripped).uri;
+        }
+        if (uri) {
+          routeByUri.set(uri, { id: srf.id });
+          routeFileIdToUri.set(srf.id, uri);
+        }
+      }
+
+      const hitServerRoutes = new Set<number>();
+
+      // Stage 1: scan client files for fetch-like calls
+      const FETCH_CALL_RE = /\b(?:\$fetch|useFetch|useLazyFetch|useAsyncData|\$api)\s*[<(]?\s*[^,)]*?['"`]([^'"`]+)['"`]/g;
+      for (const file of allFiles) {
+        if (!/\.(ts|tsx|js|jsx|vue)$/.test(file.path)) continue;
+        if (file.path.includes('/server/')) continue;
+        let src: string | undefined;
+        try { src = ctx.readFile(file.path); } catch { /* ignore */ }
+        if (!src) continue;
+        let m: RegExpExecArray | null;
+        FETCH_CALL_RE.lastIndex = 0;
+        while ((m = FETCH_CALL_RE.exec(src)) != null) {
+          const uri = m[1];
+          const cleanUri = uri.split('?')[0].split('#')[0];
+          let target = routeByUri.get(cleanUri);
+          if (!target && cleanUri.endsWith('/')) target = routeByUri.get(cleanUri.slice(0, -1));
+          if (!target) {
+            for (const [rutUri, rutTarget] of routeByUri) {
+              if (!rutUri.includes('[')) continue;
+              const pattern = '^' + rutUri.replace(/\[[^\]]+\]/g, '[^/]+').replace(/\//g, '\\/') + '$';
+              if (new RegExp(pattern).test(cleanUri)) { target = rutTarget; break; }
+            }
+          }
+          if (!target) continue;
+          hitServerRoutes.add(target.id);
+          edges.push({
+            sourceNodeType: 'file',
+            sourceRefId: file.id,
+            targetNodeType: 'file',
+            targetRefId: target.id,
+            edgeType: 'api_calls',
+            metadata: { uri: cleanUri },
+          });
+        }
+      }
+
+      // Stage 2: any server route still unreferenced gets an entry-point
+      // anchor edge so it doesn't show as orphan. Nuxt auto-registers these
+      // at boot — they're always "connected" semantically.
+      if (pageFiles.length > 0) {
+        const anchor = pageFiles[0];
+        for (const srf of serverRouteFiles) {
+          if (hitServerRoutes.has(srf.id)) continue;
+          edges.push({
+            sourceNodeType: 'file',
+            sourceRefId: anchor.id,
+            targetNodeType: 'file',
+            targetRefId: srf.id,
+            edgeType: 'nuxt_server_route',
+            metadata: { uri: routeFileIdToUri.get(srf.id) ?? '', anchor: 'implicit' },
+          });
         }
       }
     }
