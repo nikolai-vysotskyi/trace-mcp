@@ -10,6 +10,7 @@
 
 import type { Store } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
+import { searchFts } from '../../db/fts.js';
 import { getPageRank } from '../analysis/graph-analysis.js';
 import { getProjectMap } from '../project/project.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
@@ -262,21 +263,18 @@ export function packContext(
 
   // --- Models (data model) ---
   if (include.includes('models')) {
-    const symbols = store.searchSymbols('', { kind: 'class' }, 200, 0);
-    const models = symbols.items.filter((s) =>
-      s.symbol.kind === 'class' && (
-        s.symbol.fqn?.includes('Model') ||
-        s.symbol.fqn?.includes('Entity') ||
-        s.symbol.fqn?.includes('Schema') ||
-        s.file.path.includes('model') ||
-        s.file.path.includes('entity') ||
-        s.file.path.includes('schema')
-      ),
-    );
+    const classRows = store.db.prepare(`
+      SELECT s.name, s.fqn, s.line_start, s.signature, f.path as file_path
+      FROM symbols s JOIN files f ON f.id = s.file_id
+      WHERE s.kind = 'class'
+        AND (s.fqn LIKE '%Model%' OR s.fqn LIKE '%Entity%' OR s.fqn LIKE '%Schema%'
+          OR f.path LIKE '%model%' OR f.path LIKE '%entity%' OR f.path LIKE '%schema%')
+      LIMIT 200
+    `).all() as { name: string; fqn: string | null; line_start: number; signature: string | null; file_path: string }[];
 
-    if (models.length > 0) {
-      const modelLines = models.slice(0, 30).map((m) =>
-        `- **${m.symbol.name}** (${m.file.path}:${m.symbol.line_start})${m.symbol.signature ? `: ${m.symbol.signature}` : ''}`,
+    if (classRows.length > 0) {
+      const modelLines = classRows.slice(0, 30).map((m) =>
+        `- **${m.name}** (${m.file_path}:${m.line_start})${m.signature ? `: ${m.signature}` : ''}`,
       );
       const section = format === 'markdown'
         ? `## Data Models\n${modelLines.join('\n')}\n`
@@ -399,15 +397,19 @@ function getScopeFiles(
   }
 
   if (scope === 'feature' && query) {
-    // Use search to find relevant files
-    const results = store.searchSymbols(query, {}, limit, 0);
+    // Use FTS search to find relevant files
+    const ftsResults = searchFts(store.db, query, limit * 2, 0);
     const fileIds = new Set<number>();
     const files: { id: number; path: string }[] = [];
-    for (const r of results.items) {
-      if (!fileIds.has(r.file.id)) {
-        fileIds.add(r.file.id);
-        files.push({ id: r.file.id, path: r.file.path });
+    for (const r of ftsResults) {
+      if (!fileIds.has(r.fileId)) {
+        const file = store.getFileById(r.fileId);
+        if (file) {
+          fileIds.add(r.fileId);
+          files.push({ id: file.id, path: file.path });
+        }
       }
+      if (files.length >= limit) break;
     }
     // core_first overrides feature relevance with structural centrality
     return strategy === 'core_first' ? rerankByPageRank(files).slice(0, limit) : files;
