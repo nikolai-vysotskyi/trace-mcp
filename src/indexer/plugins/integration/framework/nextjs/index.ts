@@ -54,6 +54,51 @@ const PAGES_SPECIAL_FILES: Record<string, string> = {
 };
 
 /**
+ * Classify a file as a Next.js entry point that is auto-loaded by the framework
+ * (not imported by user code). Returns the entry-point type or null.
+ */
+export function classifyNextEntryPoint(filePath: string): string | null {
+  const np = normalizeSrcPath(filePath);
+  const basename = path.basename(np).replace(PAGE_EXTENSIONS, '');
+
+  // App Router files (must live under app/)
+  if (np.startsWith('app/')) {
+    if ((APP_ROUTER_FILES as readonly string[]).includes(basename)) {
+      return basename; // 'page' | 'layout' | 'loading' | 'error' | 'route' | ...
+    }
+    // Metadata file conventions (sitemap.js, robots.js, opengraph-image.js, etc.)
+    if ((METADATA_FILES as readonly string[]).includes(basename)) {
+      return `metadata:${basename}`;
+    }
+    // Numbered metadata files like sitemap-0.ts, opengraph-image-1.tsx
+    for (const mf of METADATA_FILES) {
+      if (new RegExp(`^${mf}-\\d+$`).test(basename)) return `metadata:${mf}`;
+    }
+  }
+
+  // Pages Router files (must live under pages/)
+  if (np.startsWith('pages/')) {
+    // _app, _document, _error, 404, 500
+    if (basename in PAGES_SPECIAL_FILES) {
+      return PAGES_SPECIAL_FILES[basename];
+    }
+    // Any regular page file
+    if (PAGE_EXTENSIONS.test(path.basename(np))) {
+      return 'page';
+    }
+  }
+
+  // Root-level framework files
+  if (basename === 'middleware' && np.split('/').length <= 2) return 'middleware';
+  if (basename === 'instrumentation' && np.split('/').length <= 2) return 'instrumentation';
+  if (basename === 'instrumentation-client' && np.split('/').length <= 2) return 'instrumentation-client';
+  if (basename === 'mdx-components' && np.split('/').length <= 2) return 'mdx-components';
+
+  return null;
+}
+
+
+/**
  * Convert an App Router file path to a route URI.
  * app/page.tsx -> /
  * app/users/page.tsx -> /users
@@ -202,9 +247,33 @@ function extractInterceptingInfo(filePath: string): { pattern: string; intercept
   return null;
 }
 
-/** Strip src/ prefix for Next.js path normalization. */
+/**
+ * Normalize Next.js paths so downstream checks can do `np.startsWith('app/')`
+ * regardless of the project layout:
+ *   - `app/...`                    → `app/...`
+ *   - `src/app/...`                → `app/...`
+ *   - `frontend/src/app/...`       → `app/...` (nested workspace)
+ *   - `frontend/app/...`           → `app/...`
+ *   - `src/middleware.ts`          → `middleware.ts`
+ *   - `frontend/middleware.ts`     → `middleware.ts` (nested workspace root)
+ */
 function normalizeSrcPath(filePath: string): string {
-  return filePath.startsWith('src/') ? filePath.slice(4) : filePath;
+  // Case A: path contains app/ or pages/ — trim everything before it
+  const structured = filePath.match(/^(.*?)(?:(?:^|\/)(?:src\/)?(app|pages)\/)(.*)$/);
+  if (structured) {
+    return `${structured[2]}/${structured[3]}`;
+  }
+  // Case B: root-level file like `middleware.ts` or `src/middleware.ts` or
+  // `frontend/middleware.ts` — take just the basename's directory relative prefix.
+  const parts = filePath.split('/');
+  const basename = parts[parts.length - 1];
+  const ROOT_FILES = new Set([
+    'middleware', 'proxy', 'instrumentation', 'instrumentation-client',
+    'mdx-components', 'next.config', 'next-env',
+  ]);
+  const stem = basename.replace(PAGE_EXTENSIONS, '');
+  if (ROOT_FILES.has(stem)) return basename;
+  return filePath;
 }
 
 /** Extract Pages Router data fetching function names from source. */
@@ -253,6 +322,7 @@ export class NextJSPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
+        { name: 'next_entry_point', category: 'nextjs', description: 'Next.js file-based auto-loaded entry point (page, layout, route, loading, error, metadata files, etc.)' },
         { name: 'next_renders_page', category: 'nextjs', description: 'Layout renders page' },
         { name: 'next_renders_loading', category: 'nextjs', description: 'Layout renders loading boundary' },
         { name: 'next_renders_error', category: 'nextjs', description: 'Layout renders error boundary' },
@@ -534,6 +604,28 @@ export class NextJSPlugin implements FrameworkPlugin {
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
+
+    // Mark Next.js file-based auto-loaded entry points (App Router + Pages Router
+    // + metadata files + middleware). These are never imported by user code —
+    // the Next.js runtime loads them by convention. Without this edge they look
+    // disconnected in the graph.
+    for (const file of allFiles) {
+      const entryType = classifyNextEntryPoint(file.path);
+      if (!entryType) continue;
+      const symbols = ctx.getSymbolsByFile(file.id);
+      for (const sym of symbols) {
+        if (sym.kind !== 'function' && sym.kind !== 'class') continue;
+        // Skip synthetic __module__ pseudo-symbols — they're not real entry points
+        if (sym.name.startsWith('__module__')) continue;
+        edges.push({
+          sourceNodeType: 'file',
+          sourceRefId: file.id,
+          targetSymbolId: sym.symbolId,
+          edgeType: 'next_entry_point',
+          metadata: { entryType },
+        });
+      }
+    }
 
     // Find layout files and their nested pages (supports both app/ and src/app/)
     const layouts = allFiles.filter((f) => {
