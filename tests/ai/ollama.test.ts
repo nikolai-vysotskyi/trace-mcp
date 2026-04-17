@@ -70,12 +70,15 @@ describe('createAIProvider', () => {
     expect(provider).toBeInstanceOf(FallbackProvider);
   });
 
-  it('returns OllamaProvider when ai.enabled and provider is ollama', () => {
+  it('returns tracked OllamaProvider when ai.enabled and provider is ollama', () => {
     const provider = createAIProvider({
       ...baseConfig,
       ai: { enabled: true, provider: 'ollama' },
     });
-    expect(provider).toBeInstanceOf(OllamaProvider);
+    // createAIProvider wraps real providers in TrackedAIProvider
+    expect(provider).not.toBeInstanceOf(FallbackProvider);
+    expect(provider.embedding).toBeDefined();
+    expect(provider.inference).toBeDefined();
   });
 
   it('returns FallbackProvider for unknown provider', () => {

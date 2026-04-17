@@ -259,8 +259,8 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'xai-...', sensitive: true, showIf: 'provider=xai', description: 'xAI API key from console.x.ai. Or set XAI_API_KEY env var.' },
 
       // ── Model fields: Ollama ──
-      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gemma4-e4b', showIf: 'provider=ollama', description: 'LLM for summarization and intent classification.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
-      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gemma4-e4b', showIf: 'provider=ollama', description: 'Smaller/faster LLM for low-latency tasks. Falls back to inference model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gemma4:e4b', showIf: 'provider=ollama', description: 'LLM for summarization and intent classification.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gemma4:e4b', showIf: 'provider=ollama', description: 'Smaller/faster LLM for low-latency tasks. Falls back to inference model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'nomic-embed-text', showIf: 'provider=ollama', description: 'Embedding model for semantic search. Must match embedding_dimensions.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'reranker_model', label: 'Reranker model', type: 'model-select', placeholder: 'bge-reranker-v2-m3', showIf: 'provider=ollama', description: 'Cross-encoder for re-ranking search results.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       // ── Model fields: LM Studio ──

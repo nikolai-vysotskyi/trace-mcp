@@ -137,7 +137,7 @@ export function resolveProvider(opts: { model?: string; provider?: string }, con
       const baseUrl = config.ai.base_url ?? 'http://localhost:11434';
       return createOpenAICompatibleProvider(
         'ollama', `${baseUrl}/v1`, '',
-        model ?? 'gemma4-e4b',
+        model ?? 'gemma4:e4b',
       );
     }
   }
