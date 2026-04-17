@@ -6,9 +6,52 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { execSync } from 'node:child_process';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 
 const HOME = os.homedir();
+
+/**
+ * Detect whether Claude Desktop (the unified Claude.app on macOS, or the
+ * Claude Desktop binary on Windows/Linux) is currently running.
+ *
+ * Why this matters: Claude.app owns `claude_desktop_config.json` at runtime
+ * and rewrites the whole file whenever its `preferences` change, WITHOUT
+ * preserving foreign top-level keys like `mcpServers`. So if we write an
+ * mcpServers entry while the app is open, the next preferences update
+ * silently drops it.
+ */
+function isClaudeDesktopRunning(): boolean {
+  try {
+    if (process.platform === 'darwin') {
+      // Can't use `pgrep -x Claude` — on macOS ps reports the full bundle path
+      // as the comm, and `-x` needs an exact match. Can't use `pgrep Claude`
+      // either — it would also match the Claude Code CLI (lowercase `claude`
+      // binary in ~/.cursor/... or ~/Library/.../claude.app). Match the
+      // unified-app bundle path explicitly.
+      const out = execSync('ps -A -o command=', {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      return /\/Applications\/Claude\.app\/Contents\/MacOS\/Claude(?:\s|$)/m.test(out);
+    }
+    if (process.platform === 'linux') {
+      // Linux Claude Desktop binary is `claude-desktop` — distinct from Code CLI.
+      execSync('pgrep -x claude-desktop', { stdio: 'ignore' });
+      return true;
+    }
+    if (process.platform === 'win32') {
+      const out = execSync('tasklist /FI "IMAGENAME eq Claude.exe" /FO CSV /NH', {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      return /Claude\.exe/i.test(out);
+    }
+  } catch {
+    // Non-zero exit or missing tool — treat as not running.
+  }
+  return false;
+}
 
 interface McpServerEntry {
   command: string;
@@ -129,6 +172,20 @@ export function configureMcpClients(
       continue;
     }
 
+    // Claude Desktop (the unified Claude.app) rewrites claude_desktop_config.json
+    // whenever its own preferences change, dropping any foreign top-level keys.
+    // If it's running during init, our write wins briefly and then gets clobbered
+    // on the next preferences flush. Refuse to write and tell the user to quit.
+    if (name === 'claude-desktop' && !opts.dryRun && isClaudeDesktopRunning()) {
+      results.push({
+        target: configPath,
+        action: 'skipped',
+        detail:
+          'Claude.app is running — it will overwrite mcpServers. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp init`.',
+      });
+      continue;
+    }
+
     // Check if already configured
     if (fs.existsSync(configPath)) {
       try {
@@ -160,6 +217,20 @@ export function configureMcpClients(
 
     try {
       const action = writeJsonEntry(configPath, entry);
+
+      // For Claude Desktop specifically, verify the write survived. The app
+      // may have been launched between our isClaudeDesktopRunning() check
+      // and now; if it flushed preferences, our entry is already gone.
+      if (name === 'claude-desktop' && !verifyTraceMcpEntry(configPath)) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail:
+            'Write was overwritten by Claude.app. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp init`.',
+        });
+        continue;
+      }
+
       results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
     } catch (err) {
       results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
@@ -172,6 +243,19 @@ export function configureMcpClients(
 // ---------------------------------------------------------------------------
 // JSON writers (Claude Code, Claw, Claude Desktop, Cursor, Windsurf, Continue, Junie)
 // ---------------------------------------------------------------------------
+
+/**
+ * Verify that `mcpServers['trace-mcp']` is present on disk. Used after writing
+ * Claude Desktop's config to detect the Claude.app overwrite race.
+ */
+function verifyTraceMcpEntry(configPath: string): boolean {
+  try {
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    return Boolean(content?.mcpServers?.['trace-mcp']);
+  } catch {
+    return false;
+  }
+}
 
 function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
   const dir = path.dirname(configPath);
