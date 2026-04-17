@@ -399,6 +399,9 @@ export const initCommand = new Command('init')
     } else {
       const created = steps.filter((s) => s.action === 'created' || s.action === 'updated');
       const skipped = steps.filter((s) => s.action === 'already_configured');
+      // `skipped` with a detail message means something the user needs to know
+      // (e.g. Claude.app was running and overwrote our write). Surface these as warnings.
+      const warnings = steps.filter((s) => s.action === 'skipped' && s.detail);
 
       if (created.length > 0) {
         const lines = created.map((s) => `  ${shortPath(s.target)}  ${s.detail ?? s.action}`);
@@ -407,6 +410,10 @@ export const initCommand = new Command('init')
       if (skipped.length > 0) {
         const lines = skipped.map((s) => `  ${shortPath(s.target)}  ${s.detail ?? ''}`);
         p.note(lines.join('\n'), 'Already configured');
+      }
+      if (warnings.length > 0) {
+        const lines = warnings.map((s) => `  ${shortPath(s.target)}  ${s.detail}`);
+        p.note(lines.join('\n'), 'Needs attention');
       }
 
       p.outro(indexProject
