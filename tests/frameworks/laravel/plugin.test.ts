@@ -81,7 +81,7 @@ describe('LaravelPlugin', () => {
       const ALLOWED = new Set([
         'laravel', 'livewire', 'filament', 'nova', 'blade',
         'pennant', 'broadcasting', 'laravel-data',
-        'horizon', 'cashier', 'scout', 'socialite',
+        'horizon', 'cashier', 'scout', 'socialite', 'medialibrary',
       ]);
       const schema = plugin.registerSchema();
       for (const et of schema.edgeTypes!) {

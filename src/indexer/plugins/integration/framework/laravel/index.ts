@@ -49,6 +49,15 @@ import { extractBillableModel, extractCashierWebhook, buildBillableModelEdges } 
 import { extractSearchableModel, buildSearchableModelEdges, buildSearchableModelSymbols } from './scout.js';
 import { extractSocialiteUsage, buildSocialiteEdges } from './socialite.js';
 import {
+  extractMediaLibraryModel,
+  buildMediaLibraryModelEdges,
+  buildMediaLibraryModelSymbols,
+} from './medialibrary.js';
+import {
+  extractEloquentSortableModel,
+  buildEloquentSortableModelSymbols,
+} from './eloquent-sortable.js';
+import {
   extractFeatureDefinitions,
   extractFeatureUsages,
   extractFeatureBladeUsages,
@@ -66,6 +75,7 @@ import {
   resolveFormRequestEdges,
   resolveEventEdges,
   resolveDispatchEdges,
+  resolveComposerLaravelProviders,
 } from './edges.js';
 
 export class LaravelPlugin implements FrameworkPlugin {
@@ -119,6 +129,12 @@ export class LaravelPlugin implements FrameworkPlugin {
   /** Whether laravel/pennant is detected. */
   private hasPennant = false;
 
+  /** Whether spatie/laravel-medialibrary is detected. */
+  private hasMediaLibrary = false;
+
+  /** Whether spatie/eloquent-sortable is detected. */
+  private hasEloquentSortable = false;
+
   detect(ctx: ProjectContext): boolean {
     // Check if composer.json has laravel/framework in require
     let deps: Record<string, string> | undefined;
@@ -154,6 +170,8 @@ export class LaravelPlugin implements FrameworkPlugin {
     if (deps['laravel/socialite']) this.hasSocialite = true;
     if (deps['laravel/reverb'] || deps['pusher/pusher-php-server']) this.hasBroadcasting = true;
     if (deps['laravel/pennant']) this.hasPennant = true;
+    if (deps['spatie/laravel-medialibrary']) this.hasMediaLibrary = true;
+    if (deps['spatie/eloquent-sortable']) this.hasEloquentSortable = true;
 
     return true;
   }
@@ -219,6 +237,8 @@ export class LaravelPlugin implements FrameworkPlugin {
         // Socialite edges
         { name: 'socialite_uses_provider', category: 'socialite', description: 'Controller uses Socialite OAuth provider' },
         { name: 'socialite_custom_provider', category: 'socialite', description: 'Custom Socialite OAuth provider class' },
+        // Media library edges
+        { name: 'medialibrary_collection', category: 'medialibrary', description: 'Model declares a spatie media collection' },
       ],
     };
   }
@@ -404,6 +424,24 @@ export class LaravelPlugin implements FrameworkPlugin {
       }
     }
 
+    // ── Media library ────────────────────────────────────────
+    if (this.hasMediaLibrary) {
+      const mediaInfo = extractMediaLibraryModel(source, filePath);
+      if (mediaInfo) {
+        result.edges = result.edges ?? [];
+        result.edges.push(...buildMediaLibraryModelEdges(mediaInfo));
+        result.symbols.push(...buildMediaLibraryModelSymbols(mediaInfo));
+      }
+    }
+
+    // ── Eloquent sortable ────────────────────────────────────
+    if (this.hasEloquentSortable) {
+      const sortableInfo = extractEloquentSortableModel(source, filePath);
+      if (sortableInfo) {
+        result.symbols.push(...buildEloquentSortableModelSymbols(sortableInfo));
+      }
+    }
+
     // Detect event dispatches (stored for pass 2)
     detectEventDispatches(source);
 
@@ -448,6 +486,12 @@ export class LaravelPlugin implements FrameworkPlugin {
             metadata: { featureName: usage.name, filePath: file.path, line: usage.line, usageType: 'blade' },
           });
         }
+      }
+
+      // composer.json → Laravel auto-registered providers/aliases/facades.
+      // Links `extra.laravel.providers` / `aliases` to the class symbols they reference.
+      if (file.path.endsWith('composer.json')) {
+        resolveComposerLaravelProviders(source, file, ctx, edges);
       }
     }
 

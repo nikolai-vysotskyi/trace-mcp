@@ -124,3 +124,98 @@ export function resolveDispatchEdges(
     });
   }
 }
+
+/**
+ * Scan a composer.json file for Laravel Package Discovery entries.
+ * Creates `calls` edges from the composer.json FILE → the registered ServiceProvider/facade class.
+ *
+ * Supports both `extra.laravel.providers` and `extra.laravel.aliases`.
+ * These classes are auto-registered by Laravel at runtime via Package Discovery,
+ * so they otherwise appear as orphan classes in the dependency graph.
+ */
+export function resolveComposerLaravelProviders(
+  source: string,
+  file: { id: number; path: string },
+  ctx: ResolveContext,
+  edges: RawEdge[],
+): void {
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(source);
+  } catch {
+    return;
+  }
+
+  const extra = (json.extra as Record<string, unknown> | undefined)?.laravel as
+    | Record<string, unknown>
+    | undefined;
+  if (!extra) return;
+
+  const providers = Array.isArray(extra.providers) ? (extra.providers as string[]) : [];
+  const aliases = extra.aliases && typeof extra.aliases === 'object'
+    ? Object.values(extra.aliases as Record<string, unknown>).filter(
+        (v): v is string => typeof v === 'string',
+      )
+    : [];
+
+  const registrations: Array<{ fqn: string; kind: 'provider' | 'alias' }> = [
+    ...providers.map((fqn) => ({ fqn, kind: 'provider' as const })),
+    ...aliases.map((fqn) => ({ fqn, kind: 'alias' as const })),
+  ];
+
+  // Determine the composer.json's package directory (workspace-scoped prefix).
+  // For `top15/top15-laravel/nova-components/LinkGroupComponent/composer.json`,
+  // the package prefix is `top15/top15-laravel/nova-components/LinkGroupComponent/`.
+  // We prefer matches under this prefix (same package).
+  const packagePrefix = file.path.replace(/\/composer\.json$/, '/');
+
+  for (const reg of registrations) {
+    // composer.json uses backslash-escaped FQNs. Normalize.
+    const normalizedFqn = reg.fqn.replace(/\\\\/g, '\\').replace(/^\\/, '');
+
+    // Disambiguate between forks: prefer a symbol whose file sits inside the
+    // same composer package directory. Fall back to any FQN match.
+    let targetSymbol = findSymbolByFqnScoped(ctx, normalizedFqn, packagePrefix);
+    if (!targetSymbol) continue;
+
+    edges.push({
+      sourceNodeType: 'file',
+      sourceRefId: file.id,
+      targetNodeType: 'symbol',
+      targetRefId: targetSymbol.id,
+      edgeType: 'references',
+      metadata: {
+        registration: reg.kind,
+        via: 'composer_laravel_discovery',
+        fqn: normalizedFqn,
+      },
+    });
+  }
+}
+
+/**
+ * Look up a symbol by FQN, preferring matches whose file path is a descendant
+ * of `preferredPrefix`. Needed because forked Laravel packages can share
+ * identical FQNs across different workspaces.
+ */
+function findSymbolByFqnScoped(
+  ctx: ResolveContext,
+  fqn: string,
+  preferredPrefix: string,
+): { id: number; symbolId: string; name: string; kind: string; filePath: string } | null {
+  // Try all files — we need to scan because getSymbolByFqn returns only one match.
+  const allFiles = ctx.getAllFiles();
+  // Fast path: same package directory
+  for (const f of allFiles) {
+    if (!f.path.startsWith(preferredPrefix)) continue;
+    const syms = ctx.getSymbolsByFile(f.id);
+    const hit = syms.find((s) => s.fqn === fqn);
+    if (hit) return { id: hit.id, symbolId: hit.symbolId, name: hit.name, kind: hit.kind, filePath: f.path };
+  }
+  // Fallback: first match anywhere
+  const generic = ctx.getSymbolByFqn(fqn);
+  if (generic) {
+    return { id: generic.id, symbolId: generic.symbolId, name: generic.name, kind: generic.kind, filePath: '' };
+  }
+  return null;
+}
