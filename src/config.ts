@@ -198,7 +198,15 @@ export const TraceMcpConfigSchema = z.object({
     'routes/**/*.{ts,js,php}',
     'database/migrations/**/*.php',
     'resources/js/**/*.{vue,ts,tsx,js,jsx}',
-    'resources/views/**/*.blade.php',
+    'resources/assets/**/*.{vue,ts,tsx,js,jsx}',
+    'resources/views/**/*.{blade.php,js}',
+    // Laravel release-based deployments (e.g., resources/release-v8/js/...)
+    'resources/release-*/**/*.{vue,ts,tsx,js,jsx}',
+    // Public assets that are hand-written (not compiled)
+    'public/js/**/*.js',
+    // Laravel auto-registered package providers (composer.json extra.laravel)
+    'composer.json',
+    'nova-components/*/composer.json',
     'pages/**/*.{vue,ts,tsx,js,jsx}',
     'components/**/*.{vue,ts,tsx,js,jsx}',
     'composables/**/*.{ts,tsx,js,jsx}',
