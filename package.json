@@ -47,7 +47,7 @@
   ],
   "dependencies": {
     "@clack/prompts": "^1.2.0",
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@parcel/watcher": "^2.5.6",
     "@vue/compiler-sfc": "^3.5.32",
     "better-sqlite3": "^12.9.0",
@@ -73,10 +73,16 @@
     "tsup": "^8.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.1.0"
+    "vitest": "^4.1.4"
   },
   "optionalDependencies": {
     "@huggingface/transformers": "^4.0.1"
+  },
+  "overrides": {
+    "protobufjs": ">=7.5.5",
+    "hono": ">=4.12.14",
+    "@hono/node-server": ">=1.19.14",
+    "vite": ">=7.3.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
