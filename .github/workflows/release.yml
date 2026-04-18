@@ -169,12 +169,18 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: npx electron-builder --mac --${{ matrix.arch }} --publish never
 
+      # Per-asset .sha256 files only (no combined manifest) because matrix
+      # jobs run in parallel and would clobber each other's SHASUMS256.txt.
+      - name: Generate SHA-256 per-asset checksums
+        run: node scripts/generate-shasums.mjs packages/app/release .zip
+
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ needs.release-please.outputs.tag_name }}" \
             packages/app/release/*.zip \
+            packages/app/release/*.zip.sha256 \
             --clobber
 
   build-app-win:
@@ -221,6 +227,10 @@ jobs:
         working-directory: packages/app
         run: npx electron-builder --win --x64 --publish never
 
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: node scripts/generate-shasums.mjs packages/app/release .exe .zip
+
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -228,10 +238,12 @@ jobs:
         run: |
           shopt -s nullglob
           FILES=(packages/app/release/*.exe packages/app/release/*-win*.zip)
+          SUMS=(packages/app/release/*.exe.sha256 packages/app/release/*-win*.zip.sha256)
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No artifacts found to upload"
             exit 1
           fi
           gh release upload "${{ needs.release-please.outputs.tag_name }}" \
             "${FILES[@]}" \
+            "${SUMS[@]}" \
             --clobber
