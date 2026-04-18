@@ -773,16 +773,58 @@ function finalize(
     vizNodes = vizNodes.filter((n) => connectedIds.has(n.id));
   }
 
-  // Build community list
+  // Build community list with meaningful labels — group nodes by community,
+  // then derive a human-readable name from the dominant path prefix (e.g.
+  // "src/indexer" for a cluster of files under src/indexer/*).
+  const byCommunity = new Map<number, VizNode[]>();
+  for (const n of vizNodes) {
+    const arr = byCommunity.get(n.community);
+    if (arr) arr.push(n);
+    else byCommunity.set(n.community, [n]);
+  }
   const communitySet = new Set(vizNodes.map((n) => n.community));
   const COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'];
   const communities: VizCommunity[] = [...communitySet].map((id) => ({
     id,
-    label: `group-${id}`,
+    label: deriveCommunityLabel(byCommunity.get(id) ?? [], id),
     color: COLORS[id % COLORS.length],
   }));
 
   return { nodes: vizNodes, edges: dedupedEdges, communities };
+}
+
+/**
+ * Derive a human-readable label for a community from the dominant file-path
+ * prefix of its members. Tries 2-level prefixes first (e.g. "src/indexer"),
+ * falls back to 1-level ("src") if nothing is dominant, then to "group-N".
+ *
+ * For symbol-granularity graphs the node id carries a "::" suffix — we strip
+ * it so the prefix reflects the file location, not the FQN.
+ */
+function deriveCommunityLabel(nodes: VizNode[], communityId: number): string {
+  if (nodes.length === 0) return `group-${communityId}`;
+  const prefixCounts = new Map<string, number>();
+  for (const n of nodes) {
+    const filePath = n.id.split('::')[0];
+    const parts = filePath.split('/').filter(Boolean);
+    if (parts.length === 0) continue;
+    const key2 = parts.slice(0, 2).join('/');
+    const key1 = parts[0];
+    // Count both — the winner of key2 is used if dominant enough, else key1.
+    prefixCounts.set(key2, (prefixCounts.get(key2) ?? 0) + 1);
+    if (key1 !== key2) prefixCounts.set(key1, (prefixCounts.get(key1) ?? 0) + 1);
+  }
+  // Pick the longest prefix that covers at least 50% of the community.
+  let best = '';
+  let bestScore = 0;
+  const threshold = Math.ceil(nodes.length * 0.5);
+  for (const [prefix, count] of prefixCounts) {
+    if (count < threshold) continue;
+    // Prefer longer (deeper) prefix; tie-break by higher count.
+    const score = prefix.split('/').length * 1000 + count;
+    if (score > bestScore) { bestScore = score; best = prefix; }
+  }
+  return best || `group-${communityId}`;
 }
 
 // ── HTML Template ──────────────────────────────────────────────────────
