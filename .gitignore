@@ -12,3 +12,14 @@ coverage/
 plans/
 issues/
 .obsidian/
+
+# OS
+.DS_Store
+
+# Build / packaging artifacts
+packages/app/release/
+*.tgz
+
+# MCP registry publisher tokens (GitHub PAT + JWT)
+.mcpregistry_github_token
+.mcpregistry_registry_token
