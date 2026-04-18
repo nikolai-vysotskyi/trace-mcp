@@ -46,8 +46,10 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
     } catch { /* skip malformed metadata */ }
   }
 
-  // Build name → {id, kind} index
-  const nameIndex = new Map<string, { id: number; kind: string }[]>();
+  // Build name → {id, kind, workspace} index — include workspace so we can
+  // filter candidates by the source's workspace. Without this, a monorepo
+  // with N workspaces all declaring `class BaseService` would cross-link.
+  const nameIndex = new Map<string, { id: number; kind: string; workspace: string | null }[]>();
   if (neededNames.size > 0) {
     const CHUNK = 500;
     const nameArr = Array.from(neededNames);
@@ -55,11 +57,14 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
       const chunk = nameArr.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
       const rows = store.db.prepare(
-        `SELECT id, name, kind FROM symbols WHERE kind IN ('class', 'interface') AND name IN (${ph})`,
-      ).all(...chunk) as { id: number; name: string; kind: string }[];
+        `SELECT s.id, s.name, s.kind, f.workspace
+           FROM symbols s
+           JOIN files f ON f.id = s.file_id
+          WHERE s.kind IN ('class', 'interface') AND s.name IN (${ph})`,
+      ).all(...chunk) as { id: number; name: string; kind: string; workspace: string | null }[];
       for (const s of rows) {
         const list = nameIndex.get(s.name) ?? [];
-        list.push({ id: s.id, kind: s.kind });
+        list.push({ id: s.id, kind: s.kind, workspace: s.workspace });
         nameIndex.set(s.name, list);
       }
     }
@@ -106,13 +111,21 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
         created++;
       };
 
+      // Strict workspace isolation: a candidate only matches if it shares
+      // the source's workspace. Falling back to phantom externals keeps the
+      // graph dense without smearing edges across independent projects.
+      const pickSameWs = (candidates: { id: number; kind: string; workspace: string | null }[] | undefined) => {
+        if (!candidates || candidates.length === 0) return null;
+        return candidates.filter((c) => c.workspace === sourceWs);
+      };
+
       const ext = meta['extends'];
       const extNames = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
       for (const targetName of extNames) {
         if (typeof targetName !== 'string' || !targetName) continue;
-        const targets = nameIndex.get(targetName);
-        if (targets?.length) {
-          const targetNodeId = symbolNodeMap.get(targets[0].id);
+        const sameWsTargets = pickSameWs(nameIndex.get(targetName));
+        if (sameWsTargets && sameWsTargets.length > 0) {
+          const targetNodeId = symbolNodeMap.get(sameWsTargets[0].id);
           if (targetNodeId == null) continue;
           insertStmt.run(sourceNodeId, targetNodeId, tsExtendsType.id);
           created++;
@@ -126,9 +139,9 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
       if (Array.isArray(impl)) {
         for (const targetName of impl as string[]) {
           if (typeof targetName !== 'string' || !targetName) continue;
-          const targets = nameIndex.get(targetName);
-          if (targets?.length) {
-            const target = targets.find((t) => t.kind === 'interface') ?? targets[0];
+          const sameWsTargets = pickSameWs(nameIndex.get(targetName));
+          if (sameWsTargets && sameWsTargets.length > 0) {
+            const target = sameWsTargets.find((t) => t.kind === 'interface') ?? sameWsTargets[0];
             const targetNodeId = symbolNodeMap.get(target.id);
             if (targetNodeId == null) continue;
             insertStmt.run(sourceNodeId, targetNodeId, tsImplementsType.id);

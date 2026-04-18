@@ -121,7 +121,13 @@ export class PhantomSymbolFactory {
         : fqn.includes('.') ? fqn.slice(fqn.lastIndexOf('.') + 1)
           : fqn;
 
-    const symbolIdStr = `${PHANTOM_FILE_PATH_PREFIX}::${fqn}#${kind}`;
+    // Workspace-scoped symbol id: two workspaces referencing the same external
+    // class (e.g. both Laravel apps extending `Model`) must have distinct
+    // phantom nodes. Without the workspace prefix, `INSERT OR IGNORE` on
+    // `symbol_id` collapses them onto a single phantom and every edge points
+    // there — visually merging otherwise independent projects.
+    const wsPart = workspace ?? '_root';
+    const symbolIdStr = `${PHANTOM_FILE_PATH_PREFIX}/${wsPart}::${fqn}#${kind}`;
 
     // Check if phantom already persisted (e.g. from a prior indexing run)
     const existing = store.db.prepare(
