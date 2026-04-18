@@ -20,6 +20,7 @@ import { FilePersister } from './file-persister.js';
 import { EdgeResolver } from './edge-resolver.js';
 import { FileExtractor } from './file-extractor.js';
 import { EnvIndexer } from './env-indexer.js';
+import { ExtractPool, type ExtractRequest } from './extract-pool.js';
 import type { PipelineState } from './pipeline-state.js';
 export type { FileExtraction } from './pipeline-state.js';
 import type { FileExtraction } from './pipeline-state.js';
@@ -52,6 +53,7 @@ export class IndexingPipeline {
   private _traceignore: TraceignoreMatcher | undefined;
   private _changedFileIds = new Set<number>();
   private _isIncremental = false;
+  private _extractPool: ExtractPool | undefined;
 
   getPipelineState(): PipelineState {
     return {
@@ -183,6 +185,10 @@ export class IndexingPipeline {
     force: boolean,
     result: IndexingResult,
   ): Promise<void> {
+    // Preload all existing file rows in one IN-query so per-file extract()
+    // calls hit a Map instead of issuing a SELECT each.
+    const existingFiles = this.store.getFilesByPaths(relPaths);
+
     const extractor = new FileExtractor({
       store: this.store,
       registry: this.registry,
@@ -191,33 +197,70 @@ export class IndexingPipeline {
       gitignore: this._gitignore,
       fileContentCache: this._fileContentCache,
       buildProjectContext: () => this.buildProjectContext(),
+      existingFiles,
     });
 
-    disableFts5Triggers(this.store.db);
+    // FTS5 trigger disable+rebuild is only worth it on bulk indexing.
+    // For small (incremental) batches the per-row trigger fire is cheaper than
+    // rebuilding the entire FTS index from all symbols at the end.
+    const useFtsRebuild = relPaths.length > IndexingPipeline.FTS_REBUILD_THRESHOLD;
+    if (useFtsRebuild) disableFts5Triggers(this.store.db);
 
     const BATCH_SIZE = Math.min(500, Math.max(100, Math.ceil(relPaths.length / 20)));
-    const CONCURRENCY = Math.min(8, cpus().length);
+
+    // Worker pool: only worth the spawn cost (~150-300 ms × N) for bigger
+    // batches. Below the threshold or when unavailable (env disable, dev mode,
+    // tests), we fall through to in-process extraction.
+    const pool = this.maybeGetExtractPool(relPaths.length);
+    const CONCURRENCY = pool ? pool.size : Math.min(8, cpus().length);
+
+    // Single shared persister/resolver — no need to recreate per batch.
+    const state = this.getPipelineState();
+    const persistEdgeResolver = new EdgeResolver(state);
+    const persister = new FilePersister(state, (edges) => persistEdgeResolver.storeRawEdges(edges));
 
     for (let i = 0; i < relPaths.length; i += BATCH_SIZE) {
       const batch = relPaths.slice(i, i + BATCH_SIZE);
       const extractions: FileExtraction[] = [];
 
-      for (let c = 0; c < batch.length; c += CONCURRENCY) {
-        const chunk = batch.slice(c, c + CONCURRENCY);
-        const results = await Promise.all(
-          chunk.map(relPath => extractor.extract(relPath, force)),
-        );
-        for (const ext of results) {
-          if (ext === 'skipped') { result.skipped++; continue; }
-          if (ext === 'error') { result.errors++; continue; }
-          extractions.push(ext);
+      if (pool) {
+        // Continuous dispatch: spawn `pool.size` consumers that each pull
+        // from a shared queue. Keeps every worker fed without chunk barriers.
+        const queue = batch.slice();
+        await Promise.all(Array.from({ length: pool.size }, async () => {
+          while (queue.length > 0) {
+            const relPath = queue.shift();
+            if (!relPath) return;
+            const existing = existingFiles.get(relPath) ?? null;
+            const gitignored = this._gitignore?.isIgnored(relPath) ?? false;
+            const r = await pool.extract({
+              relPath,
+              rootPath: this.rootPath,
+              force,
+              existing,
+              gitignored,
+              workspaces: this.workspaces,
+            } as ExtractRequest);
+            if (r.kind === 'skipped') { result.skipped++; continue; }
+            if (r.kind === 'error') { result.errors++; continue; }
+            extractions.push(r.extraction);
+          }
+        }));
+      } else {
+        for (let c = 0; c < batch.length; c += CONCURRENCY) {
+          const chunk = batch.slice(c, c + CONCURRENCY);
+          const results = await Promise.all(
+            chunk.map(relPath => extractor.extract(relPath, force)),
+          );
+          for (const ext of results) {
+            if (ext === 'skipped') { result.skipped++; continue; }
+            if (ext === 'error') { result.errors++; continue; }
+            extractions.push(ext);
+          }
         }
       }
 
       if (extractions.length > 0) {
-        const state = this.getPipelineState();
-        const persistEdgeResolver = new EdgeResolver(state);
-        const persister = new FilePersister(state, (edges) => persistEdgeResolver.storeRawEdges(edges));
         persister.persistBatch(extractions);
         result.indexed += extractions.length;
       }
@@ -226,7 +269,7 @@ export class IndexingPipeline {
       this.progress?.update('indexing', { processed });
     }
 
-    enableFts5Triggers(this.store.db);
+    if (useFtsRebuild) enableFts5Triggers(this.store.db);
   }
 
   /** Pass 2: resolve all edge types (imports, heritage, ORM, tests). */
@@ -336,6 +379,45 @@ export class IndexingPipeline {
   }
 
   private static readonly DEFAULT_MAX_FILES = 10_000;
+
+  /**
+   * Above this batch size, we drop FTS5 triggers, bulk-insert, then rebuild
+   * the FTS index from scratch. Below it, per-row trigger fires are cheaper
+   * than scanning all symbols for a rebuild.
+   */
+  private static readonly FTS_REBUILD_THRESHOLD = 50;
+
+  /**
+   * Spawn a worker pool only when extracting at least this many files —
+   * below it, in-process is cheaper than spawn cost (~150-300 ms per worker).
+   */
+  private static readonly WORKER_THRESHOLD = 100;
+
+  /**
+   * Lazy-init the extract worker pool, gated by batch size and the
+   * `TRACE_MCP_WORKERS=0` env opt-out. Returns null when workers are
+   * unavailable in the current runtime (e.g. tsx dev, vitest) — caller must
+   * fall back to in-process extraction.
+   */
+  private maybeGetExtractPool(batchSize: number): ExtractPool | null {
+    if (batchSize < IndexingPipeline.WORKER_THRESHOLD) return null;
+    if (process.env.TRACE_MCP_WORKERS === '0') return null;
+    if (!this._extractPool) {
+      this._extractPool = new ExtractPool();
+      if (!this._extractPool.available) {
+        logger.debug('Extract worker pool unavailable in this runtime — using in-process extraction');
+      }
+    }
+    return this._extractPool.available ? this._extractPool : null;
+  }
+
+  /** Shut down the worker pool. Safe to call repeatedly. */
+  async dispose(): Promise<void> {
+    if (this._extractPool) {
+      await this._extractPool.terminate();
+      this._extractPool = undefined;
+    }
+  }
 
   private async collectFiles(): Promise<string[]> {
     const traceignoreIgnore = this._traceignore?.toFastGlobIgnore() ?? [];

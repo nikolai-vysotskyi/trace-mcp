@@ -4,7 +4,13 @@ import { readFileSync } from 'node:fs';
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/cli.ts'],
+  entry: {
+    'index': 'src/index.ts',
+    'cli': 'src/cli.ts',
+    // Worker entry. Built next to cli.js so the pool can resolve it via
+    // `new URL('./extract-worker.js', import.meta.url)`.
+    'extract-worker': 'src/indexer/extract-worker.ts',
+  },
   format: ['esm'],
   dts: true,
   sourcemap: true,
