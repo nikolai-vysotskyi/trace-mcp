@@ -12,11 +12,19 @@
 </p>
 
 <p align="center">
-  <strong>Framework-aware code intelligence MCP server — 15 frameworks, 7 ORMs, 13 UI libraries, 23 other integrations (58 total) across 81 languages. Up to 99% token reduction.</strong>
+  <strong>MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration — 80 Grep calls, 190 file reads.</strong>
 </p>
 
 > Your AI agent reads `UserController.php` and sees a class.
-> trace-mcp reads it and sees a route → controller → FormRequest → Eloquent model → Inertia render → Vue page → child components — **in one graph.**
+> trace-mcp reads it and sees a route → controller → Eloquent model → Inertia render → Vue page — **in one graph.**
+>
+> Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 58 framework integrations across 81 languages, 138 tools, up to 99% token reduction.
+
+<p align="center">
+  <img src="docs/images/app-graph.png" alt="trace-mcp desktop app — GPU graph explorer" width="820" />
+  <br/>
+  <sub>Also ships a <a href="#desktop-app">desktop app</a> with a GPU graph explorer over the same index.</sub>
+</p>
 
 ---
 
@@ -31,7 +39,6 @@
 | "Show me the request flow from URL to rendered page" | Route → Middleware → Controller → Service → View with prop mapping | `get_request_flow` — framework-aware edge traversal |
 | "Find all untested code in this module" | Symbols classified as "unreached" or "imported but never called in tests" | `get_untested_symbols` — test-to-source mapping |
 | "What's the impact of this API change on other services?" | Cross-subproject client calls with confidence scores | `get_subproject_impact` — topology graph traversal |
-| "Orient me — I just opened this project" | Project identity + active decisions + memory stats in ~300 tokens | `get_wake_up` — layered context assembly |
 
 **Three things no other tool does:**
 
@@ -53,7 +60,7 @@ So they brute-read files, guess at relationships, and miss cross-language edges 
 
 ## The solution
 
-trace-mcp builds a **cross-language dependency graph** from your source code and exposes it through the [Model Context Protocol](https://modelcontextprotocol.io). Any MCP-compatible agent (Claude Code, Cursor, Windsurf, etc.) gets framework-level understanding out of the box.
+trace-mcp builds a **cross-language dependency graph** from your source code and exposes it through the [Model Context Protocol](https://modelcontextprotocol.io) — the plugin format Claude Code, Cursor, Windsurf and other AI coding agents speak. Any MCP-compatible agent gets framework-level understanding out of the box.
 
 | Without trace-mcp | With trace-mcp |
 |---|---|
@@ -65,93 +72,45 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 
 ---
 
+<a id="desktop-app"></a>
+
+## Desktop app
+
+trace-mcp ships with an optional Electron desktop app (`packages/app`) that gives you a visual surface over the same index the MCP server uses. It manages multiple projects, wires up MCP clients, and provides a GPU-accelerated graph explorer — all without opening a terminal.
+
+<p align="center">
+  <img src="docs/images/app-projects.png" alt="trace-mcp app — Projects, MCP Clients, Settings" width="720" />
+</p>
+
+**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc).
+
+<p align="center">
+  <img src="docs/images/app-overview.png" alt="trace-mcp app — project Overview tab" width="560" />
+</p>
+
+**Per-project overview.** Each project opens in its own tabbed window: **Overview** (files, symbols, edges, coverage, linked services, re-index), **Ask** (natural-language query over the index), and **Graph**. Overview also surfaces `Most Symbols` files, last-indexed timestamp, and the dependency coverage meter.
+
+**GPU graph explorer.** The Graph tab renders the full dependency graph on the GPU via [cosmos.gl](https://cosmos.gl) — tens of thousands of nodes/edges at interactive frame rates. Filter by Files / Symbols, overlay detected communities, highlight groups, toggle labels/FPS, and step through graph depth. Good for getting a feel for coupling, hotspots, and how a codebase is actually shaped before you dive into tools.
+
+**Install:** grab the latest build from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest) —
+
+- **macOS** — `trace-mcp-<version>-arm64-mac.zip` (Apple Silicon) or `trace-mcp-<version>-mac.zip` (Intel). Unzip and drag `trace-mcp.app` into `/Applications`.
+- **Windows** — run `trace-mcp.Setup.<version>.exe`.
+
+The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP clients use, so anything you index from the app is immediately available to Claude Code / Cursor / etc.
+
+---
+
 ## How trace-mcp compares
 
-trace-mcp is not just a code intelligence server — it combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Other projects solve one of these; trace-mcp unifies all three.
+trace-mcp combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Most adjacent projects solve one of these — trace-mcp unifies all three and is the only one with **framework-aware cross-language edges** (58 integrations) and **code-linked decision memory**.
 
-_Last updated: April 2026. Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues)._
+- **vs. token-efficient exploration** (Repomix, jCodeMunch, cymbal) — trace-mcp adds framework edges, refactoring, security, and subprojects on top of symbol lookup.
+- **vs. session-memory tools** (MemPalace, claude-mem, ConPort) — trace-mcp links decisions to specific symbols/files, so they surface automatically in impact analysis.
+- **vs. RAG / doc-gen** (DeepContext, smart-coding-mcp) — trace-mcp answers "show me the execution path, deps, and tests," not "find code similar to this query."
+- **vs. code-graph MCP servers** (Serena, Roam-Code) — trace-mcp has the broadest language coverage (81) and is the only one with cross-language framework edges.
 
-### vs. token-efficient code exploration
-
-Tools that help AI agents read code with fewer tokens — AST parsing, outlines, context packing.
-
-| Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp | cymbal |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | — | 23K | 6.6K | 5.1K | 1.5K | 1.3K | 137 |
-| Tree-sitter AST parsing | ✅ 81 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ | ✅ ~40 languages | ✅ 66 languages | ✅ 22 languages |
-| Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output | ✅ | ✅ core focus | ✅ | ✅ outline/show/context |
-| Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
-| Framework-aware edges | ✅ 58 integrations (15 frameworks, 7 ORMs, 13 UI libs) | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
-| Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ❌ | ✅ blast radius + decorator filter | ✅ detect_changes | ✅ impact command |
-| Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ❌ | ✅ AST-based, bidirectional | ✅ trace_call_path | ✅ refs/importers |
-| Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ | ❌ |
-| Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Multi-repo subprojects | ✅ cross-repo API linking | ✅ remote repos | ❌ | ❌ | ✅ GitHub repos | ❌ | ❌ |
-| Session memory | ✅ built-in | ❌ | ✅ SQLite journal | ❌ | ✅ index persistence | ✅ persistent graph | ❌ |
-| Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
-
-### vs. AI session memory
-
-Tools that persist context across AI agent sessions — activity logs, knowledge graphs, memory compression.
-
-| Capability | trace-mcp | MemPalace | claude-mem | OpenMemory | engram | ConPort |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | — | 43K | 45.7K | 3.9K | 2.3K | 761 |
-| Cross-session context carryover | ✅ `get_session_resume` + decisions | ✅ wings/rooms | ✅ core focus | ✅ | ✅ | ✅ |
-| Cross-session content search | ✅ `search_sessions` FTS5 | ✅ ChromaDB semantic | ❌ | ✅ | ❌ | ❌ |
-| Decision knowledge graph | ✅ temporal, code-linked | ✅ temporal (text-only) | ❌ | ✅ temporal | ❌ | ✅ project-level |
-| Code-graph-aware memory | ✅ decisions → symbols & files | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only |
-| Auto-extraction from sessions | ✅ pattern-based (0 LLM calls) | ✅ via hooks | ✅ AI-compressed | ❌ | ❌ | ❌ |
-| Wake-up context | ✅ ~300 tok (code-linked decisions) | ✅ ~170 tok (AAAK) | ❌ | ❌ | ❌ | ❌ |
-| Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
-| Service/subproject scoping | ✅ decisions per service | ✅ wings per project | ❌ | ❌ | ❌ | ❌ |
-| Token usage analytics | ✅ per-tool cost breakdown | ❌ | partial | ❌ | ❌ | ❌ |
-| Code intelligence included | ✅ 130+ tools | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Works as standalone memory | ❌ code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
-| Written in | TypeScript | Python | TypeScript | TS + Python | Go | Python |
-
-> **Key difference:** MemPalace stores "decided to use PostgreSQL" as text in ChromaDB. trace-mcp stores the same decision **linked to `src/db/connection.ts::Pool#class`** — and when you run `get_change_impact` on that symbol, the decision shows up in `linked_decisions`. General-purpose memory tools remember *what you said*. trace-mcp remembers *what you said* AND *which code it's about*.
-
-### vs. documentation generation & RAG
-
-Tools that generate docs from code or provide embedding-based code search for AI retrieval.
-
-| Capability | trace-mcp | Repomix | DeepContext | smart-coding-mcp | mcp-local-rag¹ | knowledge-rag¹ |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | — | 23K | 274 | 193 | 204 | 44 |
-| Real-time code understanding | ✅ live graph, always current | ❌ snapshot at pack time | ❌ manual reindex | partial (opt-in watcher) | ❌ | partial (file watcher) |
-| Auto-generated project docs | ✅ `generate_docs` from graph | ❌ raw file dump | ❌ | ❌ | ❌ | ❌ |
-| Semantic code search | ✅ `search` + `query_by_intent` | ❌ no search | ✅ Jina embeddings | ✅ nomic embeddings | ✅ vector search | ✅ hybrid + reranking |
-| Framework-aware context | ✅ routes, models, components | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Task-focused context | ✅ `get_task_context` — code subgraph | ❌ packs everything | ❌ | ❌ | ❌ | ❌ |
-| No doc maintenance needed | ✅ derived from code | ✅ repacks on demand | ❌ manual reindex | partial (auto on startup) | ❌ manual ingest | partial (auto-reindex) |
-| Works offline, no API keys | ✅ graph + FTS5 + bundled ONNX embeddings | ✅ | ❌ requires cloud API | ❌ requires local embeddings | ❌ requires local embeddings | ❌ requires local embeddings |
-| Incremental updates | ✅ file watcher, content hash | ❌ full repack | ✅ SHA-256 hashing | ✅ file hash + opt-in watcher | ❌ | ✅ mtime + dedup |
-| Written in | TypeScript | TypeScript | TypeScript | JavaScript | TypeScript | Python |
-
-_¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown) — not code-specific. Included for comparison as they occupy adjacent mindshare._
-
-> **Key difference:** RAG tools answer "find code similar to this query." trace-mcp answers "show me the execution path, the dependencies, and the tests for this feature." Graph traversal finds structurally relevant code that embedding similarity misses — and never returns stale results because the graph updates incrementally with every file save.
-
-### vs. code graph MCP servers
-
-| Capability | trace-mcp | Serena | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | — | 22.6K | 5.1K | 1.3K | — | — | — |
-| Languages | 81 | ~20 (via LSP) | ~10 | 66 | ~15 | 32 | ~10 |
-| Framework integrations | 58 (15 fw + 7 ORM + 13 UI + 23 other) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Cross-language edges | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| MCP tools | 138 | ~35 | ~15 | ~20 | ~25 | 90 | 139 |
-| Session memory | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| CI/PR reports | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Multi-repo subprojects | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Security scanning | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
-| Refactoring tools | ✅ | ✅ rename, symbol editing | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Architecture governance | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Token savings tracking | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Written in | TypeScript | Python | Python | C | TypeScript | Rust | Python |
-
-> **Why framework awareness matters:** A graph that knows `UserController` exists but doesn't know it renders `Users/Show.vue` via Inertia is missing the edges that matter most. Framework integrations turn a syntax graph into a **semantic** graph — the agent sees the same connections a developer sees.
+> Full side-by-side tables with GitHub stars, languages, and per-capability coverage: [docs/comparisons.md](docs/comparisons.md).
 
 ---
 
@@ -185,18 +144,6 @@ Total                     572,444 tokens    49,997 tokens      91.3%
 
 **Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, with 90%+ token reduction.
 
-**Per-task breakdown** — what it actually costs to answer common questions:
-
-| Question | Naive approach | trace-mcp tool | Tokens (naive) | Tokens (trace-mcp) | Reduction |
-|---|---|---|---|---|---|
-| "Where is `registerTool` defined?" | Grep all .ts files | `search` | ~12,400 | ~800 | **93%** |
-| "What calls `getDeadCodeV2`?" | Grep + Read 8 files | `get_call_graph` | ~18,200 | ~1,100 | **94%** |
-| "What breaks if I rename `Store`?" | Manual trace across 40+ files | `get_change_impact` | ~62,000 | ~2,400 | **96%** |
-| "Find all tests for `extractOpenAPI`" | Glob + Read 12 test files | `get_tests_for` | ~14,800 | ~650 | **96%** |
-| "Understand the indexing pipeline" | Read 15 source files | `get_task_context` | ~89,000 | ~7,200 | **92%** |
-| "Unused exports in src/tools/" | Read + Grep all files | `get_dead_code` | ~38,000 | ~1,800 | **95%** |
-| "All OpenAPI endpoints in the project" | Find + Read all .yaml/.json | `search` (kind=function, yamlKind=endpoint) | ~22,000 | ~900 | **96%** |
-
 <details>
 <summary>Methodology</summary>
 
@@ -216,21 +163,20 @@ trace-mcp benchmark /path/to/project
 
 ## Key capabilities
 
-- **Request flow tracing** — URL → Route → Middleware → Controller → Service, across 18 backend frameworks
+- **Request flow tracing** — URL → Route → Middleware → Controller → Service, across backend frameworks
 - **Component trees** — render hierarchy with props / emits / slots (Vue, React, Blade)
 - **Schema from migrations** — no DB connection needed
 - **Event chains** — Event → Listener → Job fan-out (Laravel, Django, NestJS, Celery, Socket.io)
 - **Change impact analysis** — reverse dependency traversal across languages, enriched with linked architectural decisions
-- **Decision memory** — mine sessions for decisions, link them to code symbols/files, query with temporal validity. Decisions auto-surface in `get_change_impact`, `plan_turn`, and `get_session_resume`
-- **Cross-session search** — "what did we discuss about auth?" — FTS5 search across all past session content
 - **Graph-aware task context** — describe a dev task → get the optimal code subgraph (execution paths, tests, types) + relevant past decisions, adapted to bugfix/feature/refactor intent
-- **CI/PR change impact reports** — automated blast radius, risk scoring, test gap detection, architecture violation checks on every PR
 - **Call graph & DI tree** — bidirectional call graphs with 4-tier resolution confidence, optional LSP enrichment for compiler-grade accuracy, NestJS dependency injection
 - **ORM model context** — relationships, schema, metadata for 7 ORMs
 - **Dead code & test gap detection** — find untested exports/symbols (with "unreached" vs "imported_not_called" classification), dead code, per-symbol test reach in impact analysis
-- **Security scanning & MCP server analysis** — OWASP Top-10 pattern scanning, taint analysis (source→sink data flow), MCP security context export for [skill-scan](https://github.com/kkdub/skill-scan) enrichment (tool annotations verification, capability classification, sensitive data flows)
-- **Multi-service subprojects** — link graphs across services via API contracts; cross-service impact analysis; service-scoped decisions
-- **AI-powered analysis** — semantic search with zero-config local ONNX embeddings (no API keys needed), plus optional LLM summarization via Ollama/OpenAI
+- **Security scanning** — OWASP Top-10 pattern scanning and taint analysis (source→sink data flow). Exportable MCP-server security context for [skill-scan](https://github.com/kkdub/skill-scan)
+- **Semantic search, offline by default** — bundled ONNX embeddings work out of the box, no API keys; switch to Ollama/OpenAI for LLM-powered summarisation
+- **[Decision memory](#decision-memory)** — mine sessions for decisions, link them to symbols/files, auto-surface in impact analysis
+- **[Multi-service subprojects](#subprojects)** — link graphs across services via API contracts; cross-service impact + service-scoped decisions
+- **[CI/PR change impact reports](#cipr-change-impact-reports)** — automated blast radius, risk scoring, test-gap detection, architecture violations on every PR
 
 ### Supported stack
 
@@ -256,124 +202,22 @@ trace-mcp init        # one-time global setup (MCP clients, hooks, CLAUDE.md)
 trace-mcp add         # register current project for indexing
 ```
 
-**Step 1: `init`** — one-time global setup. Configures your MCP client (Claude Code, Cursor, Windsurf, or Claude Desktop), installs the guard hook, and adds a tool routing guide to `~/.claude/CLAUDE.md`.
+- `init` — configures your MCP client (Claude Code, Cursor, Windsurf, Claude Desktop, …), installs the guard hook, adds routing rules to `~/.claude/CLAUDE.md`.
+- `add` — detects frameworks, creates the per-project index, registers the project. Re-run in every project you want trace-mcp to understand.
 
-**Step 2: `add`** — registers a project. Detects frameworks and languages, creates the index database, and adds the project to the global registry. Run this in each project you want trace-mcp to understand.
+All state lives in `~/.trace-mcp/` — your project directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
 
-All state lives in `~/.trace-mcp/` — nothing is stored in your project directory (unless you add a `.traceignore` or `.trace-mcp/.config.json`).
+Then in your MCP client:
 
-Start your MCP client and use:
 ```
 > get_project_map to see what frameworks are detected
 > get_task_context("fix the login bug") to get full execution context for a task
 > get_change_impact on app/Models/User.php to see what depends on it
 ```
 
-### Adding more projects
+> Prefer a GUI? The [desktop app](#desktop-app) handles install, indexing, MCP-client wiring, and re-indexing without touching a terminal.
 
-```bash
-cd /path/to/another/project
-trace-mcp add
-```
-
-Or specify a path directly:
-```bash
-trace-mcp add /path/to/project
-```
-
-List all registered projects:
-```bash
-trace-mcp list
-```
-
-### Upgrading
-
-After updating trace-mcp (`npm update -g trace-mcp`), re-run init in your project directory:
-
-```bash
-trace-mcp init
-```
-
-This runs database migrations, updates MCP client configuration, and reindexes the project with the latest plugins.
-
-### Manual setup
-
-If you prefer manual control, see [Configuration](docs/configuration.md) for all options. You can skip specific init steps:
-
-```bash
-trace-mcp init --skip-hooks --skip-claude-md --skip-mcp-client
-```
-
-### Enabling semantic search
-
-Semantic search works out of the box — just enable AI in your config:
-
-```jsonc
-// ~/.trace-mcp/.config.json or project/.trace-mcp/.config.json
-{ "ai": { "enabled": true } }
-```
-
-The default provider (`onnx`) uses a bundled local model (`Xenova/all-MiniLM-L6-v2`, ~23 MB) — no API keys, no external services, fully offline after first model download. Run `embed_repo` once or just use `search` with `semantic: "on"` and embeddings will be computed on demand.
-
-For LLM-powered summarization, switch to `ollama` or `openai` provider — see [AI configuration](docs/configuration.md#ai-configuration).
-
-### Indexing details
-
-**Automatic:** `trace-mcp serve` starts background indexing immediately and launches a file watcher. The server is ready for tool calls right away — results improve as indexing progresses. If the project isn't registered yet, `serve` auto-registers it.
-
-**Manual:** index a project without starting the server:
-```bash
-trace-mcp index /path/to/project          # incremental (skips unchanged files)
-trace-mcp index /path/to/project --force   # full reindex
-```
-
-Files are content-hashed (MD5). On re-index, unchanged files are skipped. Both `serve` and `serve-http` start a file watcher that debounces rapid changes (300ms) and processes deletions immediately.
-
-### Global directory structure
-
-All trace-mcp state is centralized:
-
-```
-~/.trace-mcp/
-  .config.json              # global config + per-project settings
-  registry.json             # registered projects
-  topology.db               # cross-service topology + subproject graph
-  decisions.db              # decision memory + session content (cross-session knowledge graph)
-  index/
-    my-app-a1b2c3d4e5f6.db  # per-project databases (named by project + hash)
-```
-
-### Excluding files from indexing (.traceignore)
-
-Place a `.traceignore` file in the project root to skip files/directories from indexing entirely (gitignore syntax):
-
-```gitignore
-# Skip generated code
-generated/
-*.generated.ts
-
-# Skip protobuf output
-*_pb2.py
-*.pb.go
-
-# Negation — re-include a specific path
-!generated/keep-this.ts
-```
-
-Common directories (`node_modules`, `.git`, `dist`, `build`, `vendor`, etc.) are skipped automatically.
-
-You can also configure ignore rules in `~/.trace-mcp/.config.json` (global) or `project/.trace-mcp/.config.json` (per-project):
-
-```jsonc
-{
-  "ignore": {
-    "directories": ["proto", "generated"],
-    "patterns": ["**/fixtures/**"]
-  }
-}
-```
-
-> Details: [Configuration — .traceignore](docs/configuration.md#traceignore)
+**Going further:** [adding more projects / upgrading / manual setup](docs/configuration.md#cli) · [semantic search (local ONNX)](docs/configuration.md#ai-configuration) · [indexing & file watcher](docs/configuration.md#how-config-works) · [`.traceignore`](docs/configuration.md#traceignore).
 
 ---
 
@@ -387,47 +231,65 @@ The MCP server provides **instructions** and **tool descriptions** with routing 
 
 ### Level 2: CLAUDE.md (recommended)
 
-Add this block to your project's `CLAUDE.md` (or `~/.claude/CLAUDE.md` for global use) to reinforce tool routing:
-
-```markdown
-## Code Navigation Policy
-
-Use trace-mcp tools for code intelligence — they understand framework relationships, not just text.
-
-| Task | trace-mcp tool | Instead of |
-|------|---------------|------------|
-| Find a function/class/method | `search` | Grep |
-| Understand a file before editing | `get_outline` | Read (full file) |
-| Read one symbol's source | `get_symbol` | Read (full file) |
-| What breaks if I change X | `get_change_impact` | guessing |
-| All usages of a symbol | `find_usages` | Grep |
-| Starting work on a task | `get_task_context` | reading 15 files |
-| Quick keyword context | `get_feature_context` | reading 15 files |
-| Tests for a symbol | `get_tests_for` | Glob + Grep |
-| HTTP request flow | `get_request_flow` | reading route files |
-| DB model relationships | `get_model_context` | reading model + migrations |
-
-Use Read/Grep/Glob for non-code files (.md, .json, .yaml, config).
-Start sessions with `get_project_map` (summary_only=true).
-```
+`trace-mcp init` adds a Code Navigation Policy block to `~/.claude/CLAUDE.md` (or your project's `CLAUDE.md`) that tells the agent which trace-mcp tool to prefer over Read/Grep/Glob for each kind of task. If you skipped init, see [System prompt routing](docs/tweakcc.md) for the full block and how to tune enforcement.
 
 ### Level 3: Hook enforcement (Claude Code only)
 
-For hard enforcement, install the **PreToolUse guard hook** that blocks Read/Grep/Glob on source code files and redirects the agent to trace-mcp tools with specific suggestions. The hook is installed globally by `trace-mcp init`, or manually:
+For hard enforcement, `trace-mcp init` installs a **PreToolUse guard hook** that blocks Read/Grep/Glob on source files and redirects the agent to trace-mcp tools (non-code files, Read-before-Edit, and safe Bash commands pass through). Manage manually with `trace-mcp setup-hooks --global` / `--uninstall`. Details: [System prompt routing](docs/tweakcc.md).
+
+---
+
+<a id="decision-memory"></a>
+
+## Decision memory
+
+Decisions, tradeoffs, and discoveries from AI-agent conversations usually vanish when the session ends. trace-mcp captures them and **links each decision to the code it's about** — so when someone later runs `get_change_impact` on `src/db/connection.ts::Pool#class`, the "we chose PostgreSQL for JSONB" decision surfaces automatically.
+
+- **Mine** — `mine_sessions` scans Claude Code / Claw Code JSONL logs and extracts decisions via pattern matching (0 LLM calls). Types: architecture, tech choice, bug root cause, tradeoff, convention.
+- **Link** — each decision attaches to a symbol or file; supports service-scoped decisions for subprojects.
+- **Surface** — decisions auto-enrich `get_change_impact`, `plan_turn`, and `get_session_resume`. Temporal validity (`valid_from`/`valid_until`) makes "what was true on 2025-01-15?" queries possible.
+- **Search** — `query_decisions` (FTS5 + filters) for decisions; `search_sessions` for raw conversation content across all past sessions.
 
 ```bash
-trace-mcp setup-hooks --global    # install
-trace-mcp setup-hooks --uninstall # remove
+trace-mcp memory mine                           # extract decisions from sessions
+trace-mcp memory search "GraphQL migration"     # search past conversations
+trace-mcp memory timeline --file src/auth.ts    # decision history for a file
 ```
 
-This copies the guard script to `~/.claude/hooks/` and adds the hook to your Claude Code settings.
+> Full tool list, CLI, temporal validity, service scoping: [Decision memory](docs/decision-memory.md).
 
-**What the hook does:**
-- **Blocks** Read/Grep/Glob/Bash on source code files (`.ts`, `.py`, `.php`, `.go`, `.java`, `.rb`, etc.)
-- **Allows** non-code files (`.md`, `.json`, `.yaml`, `.env`, config)
-- **Allows** Read before Edit — first Read is blocked with a suggestion, retry on the same file is allowed (the agent needs full content for editing)
-- **Allows** safe Bash commands (git, npm, build, test, docker, etc.)
-- **Redirects** with specific trace-mcp tool suggestions in the denial message
+---
+
+<a id="subprojects"></a>
+
+## Subprojects
+
+A **subproject** is any repo in your project's ecosystem — microservice, frontend, shared lib, CLI tool. trace-mcp **links dependency graphs across subprojects**: if service A calls an endpoint in service B, changing the endpoint in B shows up as a breaking change for A.
+
+Discovery is automatic. On each index, trace-mcp detects subprojects (Docker Compose, flat/grouped workspaces, monolith fallback), parses API contracts (OpenAPI, GraphQL SDL, Protobuf/gRPC), scans code for HTTP client calls (fetch, axios, `Http::`, `requests`, `http.Get`, gRPC stubs, GraphQL ops), and links the calls to known endpoints.
+
+```bash
+cd ~/projects/my-app && trace-mcp add
+# → auto-detects user-service (openapi.yaml) and order-service
+# → links order-service → user-service via /api/users/{id}
+
+trace-mcp subproject impact --endpoint=/api/users
+# → [order-service] src/services/user-client.ts:42 (axios, confidence: 85%)
+```
+
+External subprojects can be added manually with `trace-mcp subproject add --repo=... --project=...`. MCP tools: `get_subproject_graph`, `get_subproject_impact`, `get_subproject_clients`, `subproject_add_repo`, `subproject_sync`.
+
+> Full CLI, detection modes, MCP-tool reference, topology config: [Configuration — topology & subprojects](docs/configuration.md#topology--subprojects).
+
+---
+
+<a id="cipr-change-impact-reports"></a>
+
+## CI/PR change impact reports
+
+`trace-mcp ci-report --base main --head HEAD` produces a markdown or JSON report per pull request: **summary, blast radius** (depth-2 reverse dep traversal), **test coverage gaps** (per-symbol `hasTestReach`), **risk analysis** (30% complexity + 25% churn + 25% coupling + 20% blast radius), **architecture violations** (auto-detects clean / hexagonal presets), and **new dead exports**.
+
+Use `--fail-on high` to block merges on high-risk changes. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for a ready-to-use GitHub Action that runs `build → test → impact-report` and posts a sticky PR comment on every push.
 
 ---
 
@@ -480,7 +342,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         130+ tools · 2 resources
+         138 tools · 2 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -496,217 +358,14 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 | Document | Description |
 |---|---|
 | [Supported frameworks](docs/supported-frameworks.md) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](docs/tools-reference.md) | All 130+ MCP tools with descriptions and usage examples |
+| [Tools reference](docs/tools-reference.md) | All 138 MCP tools with descriptions and usage examples |
 | [Configuration](docs/configuration.md) | Config options, AI setup, environment variables, security settings |
 | [Architecture](docs/architecture.md) | How indexing works, plugin system, project structure, tech stack |
 | [Decision memory](docs/decision-memory.md) | Decision knowledge graph, session mining, cross-session search, wake-up context |
 | [Analytics](docs/analytics.md) | Session analytics, token savings tracking, optimization reports, benchmarks |
 | [System prompt routing](docs/tweakcc.md) | Optional tweakcc integration for maximum tool routing enforcement |
+| [Comparisons](docs/comparisons.md) | Full side-by-side tables vs. other code intelligence / memory / RAG tools |
 | [Development](docs/development.md) | Building, testing, contributing, adding new plugins |
-
----
-
-## Decision memory
-
-Every conversation with an AI agent produces decisions, discoveries, and preferences that disappear when the session ends. trace-mcp's **decision memory** captures them and links them to the code they're about.
-
-### How it works
-
-1. **Mine** — `mine_sessions` scans Claude Code / Claw Code JSONL logs and extracts decisions using pattern matching (no LLM calls). Detects architecture decisions, tech choices, bug root causes, preferences, tradeoffs, discoveries, and conventions.
-
-2. **Link** — each decision can be linked to a code symbol (`src/auth/provider.ts::AuthProvider#class`) or file. When you run `get_change_impact` on that symbol, the decision shows up automatically.
-
-3. **Search** — `query_decisions` supports FTS5 full-text search, filtering by type/service/symbol/file/tag, and temporal queries ("what was true in January?"). `search_sessions` searches raw conversation content across all past sessions.
-
-4. **Surface** — decisions auto-enrich code intelligence tools:
-   - `get_change_impact` → `linked_decisions` on the target + affected files
-   - `plan_turn` → `related_decisions` matched by task description + target files
-   - `get_session_resume` → `active_decisions` for project orientation
-
-### Decision memory MCP tools
-
-| Tool | What it does |
-|---|---|
-| `mine_sessions` | Extract decisions from session logs (pattern-based, 0 LLM calls) |
-| `add_decision` | Manually record a decision with code linkage + service scoping |
-| `query_decisions` | Query by type/service/symbol/file/tag + FTS5 search |
-| `invalidate_decision` | Mark a decision as superseded (preserved for history) |
-| `get_decision_timeline` | Chronological history of decisions for a symbol/file |
-| `get_decision_stats` | Knowledge graph overview |
-| `index_sessions` | Index session content for cross-session search |
-| `search_sessions` | FTS5 search: "what did we discuss about auth?" |
-| `get_wake_up` | Compact orientation (~300 tokens): project + decisions + stats |
-
-### Decision memory CLI
-
-```bash
-trace-mcp memory mine                           # mine sessions for decisions
-trace-mcp memory index                          # index session content for search
-trace-mcp memory search "GraphQL migration"     # search past conversations
-trace-mcp memory decisions --type tech_choice   # list decisions
-trace-mcp memory stats                          # knowledge graph overview
-trace-mcp memory timeline --file src/auth.ts    # decision history for a file
-```
-
-### Temporal validity
-
-Decisions have `valid_from` / `valid_until` timestamps. When a decision is superseded, `invalidate_decision` preserves it for historical queries while excluding it from active results:
-
-```
-query_decisions()                              → only active decisions
-query_decisions(as_of="2025-01-15")            → what was true on Jan 15
-query_decisions(include_invalidated=true)       → full history
-```
-
-### Service scoping
-
-In projects with multiple services (subprojects), decisions can be scoped:
-
-```
-add_decision(title="Use JWT", service_name="auth-api")
-query_decisions(service_name="auth-api")       → only auth-api decisions
-query_decisions()                              → all project decisions
-```
-
-> Details: [Decision memory](docs/decision-memory.md)
-
----
-
-## Subprojects
-
-A **subproject** is any working repository that is part of your project's ecosystem: microservices, frontends, backends, shared libraries, CLI tools, etc.
-
-Each directory with its own root marker (`package.json`, `composer.json`, `go.mod`, etc.) is a subproject. A project contains one or more subprojects; the project itself is not a subproject.
-
-trace-mcp **links dependency graphs across subprojects** — if subproject A calls an API endpoint in subproject B, trace-mcp knows that changing that endpoint in B breaks clients in A. Subprojects can live inside the project directory or be added from outside.
-
-### How it works
-
-Subproject discovery is **automatic by default**. Every time a project is indexed (`serve`, `serve-http`, or `index`), trace-mcp:
-
-1. **Detects subprojects** within the project root:
-   - **Docker Compose** — parses `docker-compose.yml` / `compose.yml`
-   - **Flat workspace** — first-level subdirs with root markers (e.g. `project/frontend/` + `project/backend/`)
-   - **Grouped workspace** — two-level structure (e.g. `project/org/service-a/`)
-   - **Monolith fallback** — treats root as a single subproject
-2. **Registers** each subproject bound to the project in `~/.trace-mcp/topology.db`
-3. **Parses** API contracts — OpenAPI/Swagger, GraphQL SDL, Protobuf/gRPC
-4. **Scans** code for HTTP client calls (fetch, axios, Http::, requests, http.Get, gRPC stubs, GraphQL operations)
-5. **Links** discovered calls to known endpoints from other subprojects
-6. **Creates** cross-subproject dependency edges
-
-### Example
-
-```bash
-# Index a project — subprojects are auto-detected
-cd ~/projects/my-app && trace-mcp add
-# → auto-detects: my-app/user-service (has openapi.yaml)
-# →               my-app/order-service (has axios.get('/api/users/{id}'))
-# → links order-service → user-service via /api/users/{id}
-
-# Or add an external subproject manually
-trace-mcp subproject add --repo=~/projects/external-auth --project=~/projects/my-app
-
-# Check cross-subproject impact
-trace-mcp subproject impact --endpoint=/api/users
-# → "GET /api/users/{id} is called by 2 client(s) in 1 subproject(s)"
-#   [order-service] src/services/user-client.ts:42 (axios, confidence: 85%)
-```
-
-### Subproject CLI
-
-```bash
-# Add a subproject (inside or outside project dir)
-trace-mcp subproject add --repo=../service-b --project=. [--contract=openapi.yaml] [--name=my-service]
-trace-mcp subproject remove <name-or-path>
-trace-mcp subproject list [--project=.] [--json]
-trace-mcp subproject sync           # re-scan all subprojects
-trace-mcp subproject impact --endpoint=/api/users [--method=GET] [--service=user-svc]
-```
-
-### MCP tools
-
-| Tool | What it does |
-|---|---|
-| `get_subproject_graph` | All subprojects, their connections, and stats |
-| `get_subproject_impact` | Cross-subproject impact: what breaks if endpoint X changes (resolves to symbol level) |
-| `get_subproject_clients` | Find all client calls across subprojects that call a specific endpoint |
-| `subproject_add_repo` | Add a subproject via MCP (bound to current project, or specify `project`) |
-| `subproject_sync` | Re-scan all subprojects |
-
-> Subproject management builds on top of the topology system. See [Configuration](docs/configuration.md#topology--subprojects) for options.
-
----
-
-## CI/PR change impact reports
-
-trace-mcp can generate automated change impact reports for pull requests — blast radius, risk scoring, test coverage gaps, architecture violations, and dead code detection.
-
-### CLI usage
-
-```bash
-# Generate a markdown report for changes between main and HEAD
-trace-mcp ci-report --base main --head HEAD
-
-# Output to file
-trace-mcp ci-report --base main --head HEAD --format markdown --output report.md
-
-# JSON output
-trace-mcp ci-report --base main --head HEAD --format json
-
-# Fail CI if risk level >= high
-trace-mcp ci-report --base main --head HEAD --fail-on high
-
-# Index before generating (for CI environments without pre-built index)
-trace-mcp ci-report --base main --head HEAD --index
-```
-
-### GitHub Action
-
-Add this workflow to get automatic impact reports on every PR:
-
-```yaml
-# .github/workflows/ci.yml (impact-report job runs after build-and-test)
-- name: Index project
-  run: node dist/cli.js index . --force
-
-- name: Generate impact report
-  run: |
-    node dist/cli.js ci-report \
-      --base ${{ github.event.pull_request.base.sha }} \
-      --head ${{ github.event.pull_request.head.sha }} \
-      --format markdown \
-      --output report.md
-
-- name: Post PR comment
-  uses: marocchino/sticky-pull-request-comment@v2
-  with:
-    path: report.md
-```
-
-The full workflow is in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — it runs `build → test → impact-report` on every PR.
-
-### Report sections
-
-| Section | What it shows |
-|---|---|
-| **Summary** | Changed files, affected files count, risk level, gap counts |
-| **Blast Radius** | Files transitively affected by changes (depth-2 reverse dependency traversal) |
-| **Test Coverage Gaps** | Affected symbols with no matching test file. Per-symbol `hasTestReach` shows whether tests actually reference each specific symbol |
-| **Risk Analysis** | Per-file composite score: 30% complexity + 25% churn + 25% coupling + 20% blast radius |
-| **Architecture Violations** | Layer rule violations involving changed files (auto-detects clean architecture / hexagonal presets) |
-| **Dead Code** | New exports in changed files that nothing imports |
-
----
-
-## Best for
-
-- **Full-stack projects** in any supported framework combination
-- Teams using AI agents (Claude, Cursor, Windsurf) for day-to-day development
-- **Multi-language codebases** where PHP ↔ JavaScript ↔ Python boundaries create blind spots
-- **Monorepos** with multiple services and shared libraries
-- **Microservice architectures** where API changes ripple across repos
-- Large codebases where agents waste tokens re-reading files
 
 ---
 
