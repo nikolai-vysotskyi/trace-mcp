@@ -64,3 +64,28 @@ jobs:
         with:
           number: ${{ steps.pr.outputs.number }}
           path: report.md
+
+  app-typecheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: packages/app/package-lock.json
+
+      - name: Install app dependencies
+        working-directory: packages/app
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: packages/app
+        run: npm run typecheck
+
+      - name: Build (renderer + main)
+        working-directory: packages/app
+        run: npm run build
