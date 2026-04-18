@@ -18,6 +18,8 @@ export interface GraphGPUSettings {
   showFPS: boolean;
   /** How many hops of neighbors to highlight when clicking a node (1–10). */
   highlightDepth: number;
+  /** Simulation animation speed (0.25 = very slow, 1 = default, 3 = fast). */
+  simulationSpeed: number;
 }
 
 export const DEFAULT_GRAPH_GPU_SETTINGS: GraphGPUSettings = {
@@ -30,6 +32,7 @@ export const DEFAULT_GRAPH_GPU_SETTINGS: GraphGPUSettings = {
   showLabels: true,
   showFPS: false,
   highlightDepth: 2,
+  simulationSpeed: 0.5,
 };
 
 interface Props {
@@ -77,8 +80,13 @@ const THEME_LIGHT: Theme = {
   hoveredLink: [0, 0, 0, 0.9],
 };
 
+// Explicit override on <html data-theme> (set by the sidebar ThemeToggle in
+// App.tsx) wins; otherwise fall back to the system preference. Keep this in
+// sync with the logic in App.tsx's useTheme().
 function detectTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'dark';
+  const override = document.documentElement.getAttribute('data-theme');
+  if (override === 'light' || override === 'dark') return override;
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -128,7 +136,61 @@ function nodeColor01(node: VizNode, mode: GraphGPUSettings['colorBy'], commColor
 
 function nodeSize(node: VizNode): number {
   const imp = Math.max(0, Math.min(1, node.importance ?? 0));
-  return 3 + imp * 12;
+  // Base 0.5-2px. Multiplied by zoom level (scalePointsOnZoom=true), so at
+  // the fit-after-settle zoom (~2x) points sit at 1-4px and grow
+  // proportionally as the user zooms in.
+  return 0.5 + imp * 1.5;
+}
+
+/**
+ * Map user-facing "speed" slider (0.1 = near-frozen, 3 = snappy) to cosmos.gl's
+ * simulationDecay. Higher decay = slower alpha decay = longer initial settle.
+ */
+function simulationDecayFromSpeed(speed: number): number {
+  const clamped = Math.max(0.1, Math.min(3, speed));
+  return Math.round(2000 / clamped);
+}
+
+/**
+ * Initial zoom level chosen so the entire spaceSize fits comfortably inside
+ * the current viewport — so the initial random-disc of points renders near
+ * screen-center, and force expansion stays on-screen without camera chase.
+ */
+function initialZoomFromSpaceSize(spaceSize: number, container: HTMLElement): number {
+  const w = container.clientWidth || 1200;
+  const h = container.clientHeight || 800;
+  const viewport = Math.min(w, h);
+  // 0.85 ratio leaves ~7% padding on each side, matches fitViewPadding feel.
+  return Math.max(0.1, Math.min(2, (viewport * 0.85) / spaceSize));
+}
+
+/**
+ * Per-hop highlight palette. Index 0 = clicked seed, 1 = 1-hop neighbor, etc.
+ * Hot-to-cool perceptual gradient so the user can tell "how far" a node is
+ * from the click at a glance. Index >= length reuses the last entry.
+ * Values are 0-1 RGB + alpha, matching setPointColors' Float32Array format.
+ */
+const DEPTH_COLORS: [number, number, number, number][] = [
+  [1.00, 1.00, 1.00, 1.0],  // 0: seed — pure white
+  [1.00, 0.40, 0.30, 1.0],  // 1: red-orange
+  [1.00, 0.75, 0.20, 1.0],  // 2: gold
+  [0.60, 0.90, 0.40, 1.0],  // 3: green
+  [0.30, 0.70, 1.00, 1.0],  // 4: blue
+  [0.70, 0.50, 1.00, 1.0],  // 5: purple
+  [0.55, 0.55, 0.70, 1.0],  // 6+: muted slate
+];
+
+// Attach the top stack frame to an error message so the banner points at the
+// actual failing callsite (cosmos.gl internal vs our code) — invaluable for
+// diagnosing "Maximum call stack size exceeded" where the plain message says
+// nothing about WHERE it blew up. RangeError stacks can be truncated; fall
+// back to any single-line info we can extract.
+function decorateErr(err: unknown): Error {
+  const e = err instanceof Error ? err : new Error(String(err));
+  const stack = e.stack ?? '';
+  const lines = stack.split('\n').map((l) => l.trim()).filter(Boolean);
+  const frame = lines.find((l) => l.startsWith('at ')) ?? lines[1] ?? '';
+  return frame && !e.message.includes(' · ') ? new Error(`${e.message}  ·  ${frame}`) : e;
 }
 
 // Small debounce hook — defers a value update until `delay` ms of no changes.
@@ -171,14 +233,60 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelLayerRef = useRef<HTMLDivElement>(null);
+  // 2D canvas overlaid on cosmos.gl with mix-blend-mode: screen — paints a
+  // soft radial-gradient glow around each top-importance node so they read
+  // as glowing orbs instead of flat dots when zoomed in. Crowd of low-
+  // importance points stays subtle; visual hierarchy emerges naturally.
+  const haloCanvasRef = useRef<HTMLCanvasElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const nodesRef = useRef<VizNode[]>([]);
   const payloadRef = useRef<GraphPayload | null>(null);
+  // Original per-point colors — snapshot taken in renderGraph so highlight
+  // logic can restore colors after clearing a selection.
+  const origColorsRef = useRef<Float32Array | null>(null);
+  // id → previous render's index, used to carry settled positions over to
+  // the next render so toggling a filter doesn't re-trigger the settle pass.
+  const prevNodeIdsRef = useRef<Map<string, number> | null>(null);
   const indexByIdRef = useRef<Map<string, number>>(new Map());
   const labelIndicesRef = useRef<number[]>([]); // which point indices currently carry labels
+  // One representative (most-important node) per community — used as the
+  // "sections" overlay at default/zoomed-out views so we aren't dumping 20+
+  // individual filenames on top of an unreadable cloud.
+  const sectionIndicesRef = useRef<number[]>([]);
+  // Override label text for section reps → community label (dominant dir),
+  // not the representative node's own filename.
+  const sectionLabelByIndexRef = useRef<Map<number, string>>(new Map());
+  // When a highlight is active (click on a node), this holds per-node BFS depth
+  // (index → hop-distance from seed). updateLabels narrows labels to depth ≤ 1,
+  // and highlightNeighborhood uses it to colorize in-subgraph links.
+  // null when no highlight is active.
+  const highlightedDepthRef = useRef<Map<number, number> | null>(null);
+  // Last link pair buffer pushed to cosmos.gl — needed by highlightNeighborhood
+  // to recompute per-link colors based on the BFS subgraph.
+  const linkPairsRef = useRef<Float32Array | null>(null);
   const rafLabelRef = useRef<number | null>(null);
+  // Throttles per-tick camera refit during simulation (see onSimulationTick).
+  const lastTickFitRef = useRef<number>(0);
+  // Whether we've already frozen the layout on this render cycle. Set true
+  // inside onSimulationTick when alpha drops below the freeze threshold —
+  // blocks us from pausing repeatedly or resuming the settle. Reset to
+  // false at the start of each renderGraph call.
+  const frozenRef = useRef<boolean>(false);
+  // Web Worker for off-main-thread edge dedup + top-K sort on big graphs.
+  // Lazy — only instantiated when nCount > 3000.
+  const workerRef = useRef<Worker | null>(null);
+  // Monotonic token to ignore stale worker responses if a newer payload lands
+  // while an older edge-build job is in flight.
+  const renderTokenRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Auto-dismiss the error banner after 7s so transient blips (429, worker
+  // flakes, network hiccups) don't leave a stale toast hanging on screen.
+  useEffect(() => {
+    if (!error) return;
+    const t = window.setTimeout(() => setError(null), 7000);
+    return () => window.clearTimeout(t);
+  }, [error]);
   const [stats, setStats] = useState<{ nodes: number; edges: number; communities: number } | null>(null);
   const [hovered, setHovered] = useState<VizNode | null>(null);
   const [selected, setSelected] = useState<VizNode | null>(null);
@@ -187,24 +295,51 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   const [live, setLive] = useState(true);           // Live = simulation running + breathing
   const [simRunning, setSimRunning] = useState(true); // polled from cosmos.gl
   const breathTimerRef = useRef<number | null>(null);
+  // Synchronous mirror of `live` — callbacks invoked by cosmos.gl (e.g. the
+  // onSimulationEnd setTimeout) read this to decide whether to enable the
+  // continuous neuron-oscillation mode.
+  const liveRef = useRef(live);
+  useEffect(() => { liveRef.current = live; }, [live]);
 
-  const { scope, granularity, hideIsolated, symbolKinds, maxNodes, colorBy, showLabels, showFPS, highlightDepth } = settings;
+  const { scope, granularity, hideIsolated, symbolKinds, maxNodes, colorBy, showLabels, showFPS, highlightDepth, simulationSpeed } = settings;
   const highlightDepthRef = useRef(highlightDepth);
   highlightDepthRef.current = highlightDepth;
+  // Mirror `showLabels` into a ref so the RAF tick reads the latest value
+  // directly without relying on useCallback dep propagation. Belt-and-suspenders
+  // against any stale-closure scenarios in the label loop.
+  const showLabelsRef = useRef(showLabels);
+  showLabelsRef.current = showLabels;
 
   // Debounce text-input–driven refetches (symbolKinds, maxNodes) so typing
-  // doesn't spam /api/projects/graph on every keystroke.
-  const debouncedSymbolKinds = useDebounced(symbolKinds, 400);
-  const debouncedMaxNodes = useDebounced(maxNodes, 400);
+  // doesn't spam /api/projects/graph on every keystroke. 600ms is the sweet
+  // spot — responsive on paste, forgiving during typing.
+  const debouncedSymbolKinds = useDebounced(symbolKinds, 600);
+  const debouncedMaxNodes = useDebounced(maxNodes, 600);
 
   const themeSpec = theme === 'dark' ? THEME_DARK : THEME_LIGHT;
 
   // ── Theme watcher ─────────────────────────────────────────────
+  // Three sources: system preference, explicit override on <html data-theme>
+  // (same-window toggle), and cross-window storage events (toggle in another
+  // window). All three route through detectTheme() so the explicit override
+  // always wins.
   useEffect(() => {
+    const resync = () => setTheme(detectTheme());
+
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => setTheme(mq.matches ? 'dark' : 'light');
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    mq.addEventListener('change', resync);
+
+    const observer = new MutationObserver(resync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const onStorage = (e: StorageEvent) => { if (e.key === 'trace-mcp-theme') resync(); };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      mq.removeEventListener('change', resync);
+      observer.disconnect();
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   // ── focusNode (for imperative handle) ─────────────────────────
@@ -220,33 +355,120 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, []);
   useImperativeHandle(ref, () => ({ focusNode }), [focusNode]);
 
-  // ── BFS-expand a seed set to N hops, then tell cosmos.gl to select them ──
-  // When any points are "selected", cosmos.gl auto-greys everything else via
-  // linkGreyoutOpacity / pointGreyoutColor, giving us the highlight effect.
+  // ── BFS-expand seeds to N hops, tinting each layer its own palette color ──
+  // Depth 0 (clicked seed) = white, 1 = red-orange, 2 = gold, ... (DEPTH_COLORS).
+  // We overwrite per-point colors for every highlighted node, then let cosmos.gl
+  // grey-out the rest via selectPointsByIndices. This gives the user a visible
+  // "how many hops away is each neighbor" answer at a glance.
   const highlightNeighborhood = useCallback((seeds: number[]) => {
     const graph = graphRef.current;
-    if (!graph || seeds.length === 0) return;
+    const orig = origColorsRef.current;
+    if (!graph || !orig || seeds.length === 0) return;
     const depth = Math.max(1, Math.min(10, highlightDepthRef.current));
-    const visited = new Set<number>(seeds);
+
+    // BFS with per-node depth tracking. `depthMap` records the shortest hop
+    // distance we reached this node from any seed — that's what the color
+    // gradient visualizes.
+    const depthMap = new Map<number, number>();
+    for (const s of seeds) depthMap.set(s, 0);
     let frontier = [...seeds];
-    for (let d = 0; d < depth && frontier.length > 0; d++) {
+    for (let d = 1; d <= depth && frontier.length > 0; d++) {
       const next: number[] = [];
       for (const idx of frontier) {
         const adj = graph.getAdjacentIndices(idx);
         if (!adj) continue;
         for (const n of adj) {
-          if (!visited.has(n)) { visited.add(n); next.push(n); }
+          if (!depthMap.has(n)) { depthMap.set(n, d); next.push(n); }
         }
       }
       frontier = next;
     }
-    graph.selectPointsByIndices(Array.from(visited));
+
+    // Rewrite the color buffer: leave originals intact for non-highlighted
+    // nodes (cosmos.gl will grey them), overwrite RGBA per-hop for the rest.
+    const colors = new Float32Array(orig);
+    for (const [idx, d] of depthMap) {
+      const [r, g, b, a] = DEPTH_COLORS[Math.min(d, DEPTH_COLORS.length - 1)];
+      colors[idx * 4]     = r;
+      colors[idx * 4 + 1] = g;
+      colors[idx * 4 + 2] = b;
+      colors[idx * 4 + 3] = a;
+    }
+    graph.setPointColors(colors);
+    const highlighted = Array.from(depthMap.keys());
+    graph.selectPointsByIndices(highlighted);
+    highlightedDepthRef.current = new Map(depthMap);
+
+    // Colorize links: edges whose BOTH endpoints are in the 1-hop
+    // neighborhood (seed + direct neighbors) get a bright accent; everything
+    // else is dimmed so the highlighted subgraph stands out even though
+    // cosmos.gl's built-in greyout alone doesn't read as "highlighted".
+    const linkPairs = linkPairsRef.current;
+    if (linkPairs && linkPairs.length >= 2) {
+      const numLinks = Math.floor(linkPairs.length / 2);
+      const linkColors = new Float32Array(numLinks * 4);
+      const [hr, hg, hb, ha] = DEPTH_COLORS[1];
+      for (let i = 0; i < numLinks; i++) {
+        const s = linkPairs[i * 2] | 0;
+        const t = linkPairs[i * 2 + 1] | 0;
+        const sd = depthMap.get(s);
+        const td = depthMap.get(t);
+        const isOneHopEdge = sd != null && td != null && sd <= 1 && td <= 1;
+        if (isOneHopEdge) {
+          linkColors[i * 4]     = hr;
+          linkColors[i * 4 + 1] = hg;
+          linkColors[i * 4 + 2] = hb;
+          linkColors[i * 4 + 3] = ha;
+        } else {
+          linkColors[i * 4]     = 0.5;
+          linkColors[i * 4 + 1] = 0.5;
+          linkColors[i * 4 + 2] = 0.55;
+          linkColors[i * 4 + 3] = 0.04;
+        }
+      }
+      graph.setLinkColors(linkColors);
+    }
+
+    // Disable distance-based fade while highlighting — cosmos.gl fades links
+    // longer than `linkVisibilityDistanceRange[1]` pixels on screen, so zooming
+    // in makes 1-hop edges (which span >400px) go invisible. Widen the range
+    // to "virtually infinite" so all highlighted links stay fully opaque; our
+    // per-link alphas already handle dimming the non-highlighted ones.
+    graph.setConfig({ linkVisibilityDistanceRange: [100000, 200000] });
   }, []);
 
   const clearHighlight = useCallback(() => {
-    graphRef.current?.unselectPoints();
+    const graph = graphRef.current;
+    const orig = origColorsRef.current;
+    if (!graph) return;
+    graph.unselectPoints();
+    // Restore original community/language/framework colors — highlight mode
+    // had overwritten the buffer for highlighted nodes.
+    if (orig) graph.setPointColors(new Float32Array(orig));
+    // Reset link colors to uniform theme default (we overrode them per-link
+    // in highlightNeighborhood, so cosmos.gl won't revert on its own).
+    const linkPairs = linkPairsRef.current;
+    if (linkPairs && linkPairs.length >= 2) {
+      const numLinks = Math.floor(linkPairs.length / 2);
+      const linkColors = new Float32Array(numLinks * 4);
+      const lr = themeSpec.linkColor[0] / 255;
+      const lg = themeSpec.linkColor[1] / 255;
+      const lb = themeSpec.linkColor[2] / 255;
+      const la = themeSpec.linkColor[3];
+      for (let i = 0; i < numLinks; i++) {
+        linkColors[i * 4]     = lr;
+        linkColors[i * 4 + 1] = lg;
+        linkColors[i * 4 + 2] = lb;
+        linkColors[i * 4 + 3] = la;
+      }
+      graph.setLinkColors(linkColors);
+    }
+    // Restore the distance-fade range we widened in highlightNeighborhood —
+    // keep in sync with the values passed at Graph() construction.
+    graph.setConfig({ linkVisibilityDistanceRange: [100, 400] });
+    highlightedDepthRef.current = null;
     setSelected(null);
-  }, []);
+  }, [themeSpec]);
 
   // ── Label overlay rendering ───────────────────────────────────
   // Updates HTML label positions every animation frame based on point screen positions.
@@ -257,21 +479,56 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     if (!graph || !layer) return;
 
     const zoom = graph.getZoomLevel();
-    // Which indices to label: always hovered + selected + top-N importance if zoomed in,
-    // plus "top-N importance globally" regardless of zoom (to orient the user).
+    // Labels toggle is the master switch — when off, wipe any existing labels
+    // and bail before re-adding any. Reading via ref avoids any stale-closure
+    // risk if the RAF loop outlives a dep change.
+    const labelsOn = showLabelsRef.current;
+    if (!labelsOn) {
+      if (layer.children.length > 0) layer.replaceChildren();
+      return;
+    }
+    // (hovered/selected node info still appears in the side panels). When on,
+    // show hovered + selected + either the 1-hop subgraph (highlight mode) or
+    // the default two-tier (sections zoomed out, top-N zoomed in).
     const indices = new Set<number>();
-    if (hovered) {
-      const i = indexByIdRef.current.get(hovered.id);
-      if (i != null) indices.add(i);
-    }
-    if (selected) {
-      const i = indexByIdRef.current.get(selected.id);
-      if (i != null) indices.add(i);
-    }
+    const highlightedDepth = highlightedDepthRef.current;
+    const highlightActive = highlightedDepth != null && highlightedDepth.size > 0;
     if (showLabels) {
-      // Global top-N (by importance) — keep few when zoomed out, more when zoomed in
-      const cap = zoom > 3 ? 60 : zoom > 1.5 ? 20 : 10;
-      for (const idx of labelIndicesRef.current.slice(0, cap)) indices.add(idx);
+      if (hovered) {
+        const i = indexByIdRef.current.get(hovered.id);
+        if (i != null) indices.add(i);
+      }
+      if (selected) {
+        const i = indexByIdRef.current.get(selected.id);
+        if (i != null) indices.add(i);
+      }
+      if (highlightActive) {
+        // Highlight mode: show labels ONLY for the seed and its DIRECT (1-hop)
+        // neighbors, even if highlightDepth is higher. Deeper hops stay colored
+        // on the canvas but don't get labels — more than one hop of labels gets
+        // visually noisy fast.
+        for (const [idx, d] of highlightedDepth) {
+          if (d <= 1) indices.add(idx);
+        }
+      } else {
+        // Two-tier label strategy:
+        //  * Zoomed-out (default view): show ONE label per community — the
+        //    "section headings" of the graph. At this scale individual file
+        //    names are illegible anyway; users want to see the high-level
+        //    structure.
+        //  * Zoomed-in: progressively reveal top-N individual nodes by
+        //    importance, since the user is now close enough to read them.
+        if (zoom < 0.5) {
+          // nothing — too far out to read anything
+        } else if (zoom < 2) {
+          // sections only — cap to the densest groups so we don't crowd
+          const cap = zoom < 1 ? 8 : 14;
+          for (const idx of sectionIndicesRef.current.slice(0, cap)) indices.add(idx);
+        } else {
+          const cap = zoom > 3.5 ? 60 : 24;
+          for (const idx of labelIndicesRef.current.slice(0, cap)) indices.add(idx);
+        }
+      }
     }
 
     // Reuse pool of label elements
@@ -287,30 +544,104 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     }
     pool = layer.children as HTMLCollectionOf<HTMLDivElement>;
 
+    // Read positions ONCE per frame — getPointPositions() copies a buffer
+    // from WebGL to JS; calling it inside the loop cost us N×50 copies per
+    // frame when displaying 50 labels. Now: one copy, O(1) lookups.
+    const positions = graph.getPointPositions();
     for (let i = 0; i < wanted.length; i++) {
       const idx = wanted[i];
       const node = nodes[idx];
       if (!node) continue;
-      // Get current point position via the graph API
-      const positions = graph.getPointPositions(); // flat [x,y,x,y,...] array
       const sx = positions[idx * 2];
       const sy = positions[idx * 2 + 1];
       if (!Number.isFinite(sx)) continue;
       const screen = graph.spaceToScreenPosition([sx, sy]);
       const el = pool[i];
-      el.textContent = shortLabel(node);
+      const sectionText = sectionLabelByIndexRef.current.get(idx);
+      const isSection = sectionText != null && !highlightActive && hovered?.id !== node.id && selected?.id !== node.id;
+      el.textContent = isSection ? sectionText : shortLabel(node);
+      el.dataset.kind = isSection ? 'section' : 'node';
       el.style.transform = `translate(${screen[0]}px, ${screen[1]}px)`;
       // Highlight hovered/selected
       el.dataset.state = hovered?.id === node.id || selected?.id === node.id ? 'active' : 'normal';
     }
+
+    // Halo pass — soft additive glow around top-importance nodes. Uses the
+    // SAME spaceToScreenPosition + positions read from above, so cost is
+    // ~150 radial-gradient fills per frame regardless of total N.
+    const halo = haloCanvasRef.current;
+    const orig = origColorsRef.current;
+    if (halo && orig) {
+      const ctx = halo.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, halo.width, halo.height);
+        // Inside-canvas additive blending so overlapping halos brighten;
+        // outside the canvas, mix-blend-mode: screen handles the cosmos.gl
+        // composite (set on the <canvas> element style).
+        ctx.globalCompositeOperation = 'lighter';
+        const haloIndices = labelIndicesRef.current.slice(0, 150);
+        for (const idx of haloIndices) {
+          const sx = positions[idx * 2];
+          const sy = positions[idx * 2 + 1];
+          if (!Number.isFinite(sx)) continue;
+          const [hx, hy] = graph.spaceToScreenPosition([sx, sy]);
+          const r = orig[idx * 4]     * 255;
+          const g = orig[idx * 4 + 1] * 255;
+          const b = orig[idx * 4 + 2] * 255;
+          // Halo radius scales with importance × current zoom so glows track
+          // the visible point size; importance-0 still gets a small base halo.
+          const imp = nodes[idx]?.importance ?? 0;
+          const radius = (8 + imp * 18) * Math.max(0.6, Math.min(3, zoom));
+          const grad = ctx.createRadialGradient(hx, hy, 0, hx, hy, radius);
+          grad.addColorStop(0,    `rgba(${r|0}, ${g|0}, ${b|0}, 0.35)`);
+          grad.addColorStop(0.45, `rgba(${r|0}, ${g|0}, ${b|0}, 0.10)`);
+          grad.addColorStop(1,    `rgba(${r|0}, ${g|0}, ${b|0}, 0)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(hx, hy, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
   }, [hovered, selected, showLabels]);
 
-  // Keep labels updated via RAF loop (cheap — just reads positions)
+  // Halo canvas DPR-aware sizing (matches container CSS pixels).
+  useEffect(() => {
+    const canvas = haloCanvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
+
+  // Keep labels updated via RAF loop, throttled to ~30fps. Labels don't need
+  // to track the solver at 60fps — the eye can't tell, and halving the rate
+  // frees GPU→CPU buffer reads + DOM transform writes on large graphs.
   useEffect(() => {
     let running = true;
-    const tick = () => {
+    let lastTs = 0;
+    const MIN_INTERVAL = 33; // ~30fps
+    const tick = (ts: number) => {
       if (!running) return;
-      updateLabels();
+      // Skip updates when offscreen — RAF still fires in Electron but
+      // there's nothing to draw. Saves position reads + DOM writes entirely.
+      if (!offscreenPausedRef.current && ts - lastTs >= MIN_INTERVAL) {
+        updateLabels();
+        lastTs = ts;
+      }
       rafLabelRef.current = requestAnimationFrame(tick);
     };
     rafLabelRef.current = requestAnimationFrame(tick);
@@ -319,6 +650,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       if (rafLabelRef.current != null) cancelAnimationFrame(rafLabelRef.current);
     };
   }, [updateLabels]);
+
+  // Immediate cleanup when the Labels toggle turns off — don't wait for the
+  // next RAF tick (up to ~33ms delay). Wipes every label div in the overlay.
+  useEffect(() => {
+    if (!showLabels && labelLayerRef.current) {
+      labelLayerRef.current.replaceChildren();
+    }
+  }, [showLabels]);
 
   // ── Fetch + render ────────────────────────────────────────────
   const loadGraph = useCallback(async () => {
@@ -336,27 +675,98 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     if (debouncedSymbolKinds.trim()) params.set('symbolKinds', debouncedSymbolKinds.trim());
     if (debouncedMaxNodes.trim()) params.set(granularity === 'symbol' ? 'maxNodes' : 'maxFiles', debouncedMaxNodes.trim());
 
-    try {
-      const resp = await fetch(`${BASE}/api/projects/graph?${params}`);
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error(body.error ?? `Server error (${resp.status})`);
+    // Retry on 429 with exponential backoff. The daemon exempts localhost,
+    // but the limiter can still trip when the client IP resolves to something
+    // unexpected (e.g. ::ffff:… variants on some setups), or when multiple
+    // tools burst through the same endpoint. 3 attempts × (400/800/1600ms).
+    const MAX_ATTEMPTS = 3;
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const resp = await fetch(`${BASE}/api/projects/graph?${params}`);
+        if (resp.status === 429) {
+          const delay = 400 * Math.pow(2, attempt);
+          await new Promise((r) => setTimeout(r, delay));
+          lastErr = new Error('Too many requests (retrying…)');
+          continue;
+        }
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error ?? `Server error (${resp.status})`);
+        }
+        const data = (await resp.json()) as GraphPayload;
+        payloadRef.current = data;
+        try {
+          renderGraph(data);
+        } catch (renderErr) {
+          // eslint-disable-next-line no-console
+          console.error('[graph] renderGraph failed', renderErr);
+          throw decorateErr(renderErr);
+        }
+        setStats({ nodes: data.nodes.length, edges: data.edges.length, communities: data.communities.length });
+        setLoading(false);
+        return;
+      } catch (e: unknown) {
+        lastErr = e instanceof Error ? e : new Error(String(e));
+        // Don't retry on non-429 errors
+        if (!(e instanceof Error) || !e.message.includes('Too many requests')) break;
       }
-      const data = (await resp.json()) as GraphPayload;
-      payloadRef.current = data;
-      renderGraph(data);
-      setStats({ nodes: data.nodes.length, edges: data.edges.length, communities: data.communities.length });
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
     }
+    setError(lastErr ? lastErr.message : 'Failed to load graph');
+    setLoading(false);
   }, [root, scope, granularity, hideIsolated, debouncedSymbolKinds, debouncedMaxNodes]);
 
   // Render (or re-render) the graph from a payload. Reuses existing Graph instance.
   const renderGraph = useCallback((data: GraphPayload) => {
     const container = containerRef.current;
     if (!container) return;
+
+    // Adaptive perf knobs — scale detail down as the graph grows so GPU
+    // fragment-shader cost stays roughly flat across sizes.
+    const nCount = data.nodes.length;
+    const bigGraph = nCount > 3000;
+    const hugeGraph = nCount > 8000;
+    const adaptivePointSize = hugeGraph ? 3 : bigGraph ? 4 : 6;
+    const adaptiveLinkWidth = hugeGraph ? 0.5 : bigGraph ? 0.7 : 0.9;
+    const adaptiveLinkArrows = !bigGraph; // arrows are a separate pass — kill them on large graphs
+    // cosmos.gl simulates in a square "space" whose size controls the size
+    // of the force textures (position/velocity/link). Larger space = larger
+    // textures = slower simulation and more GPU memory. Nearest power-of-two
+    // that comfortably holds the node cloud keeps textures small.
+    const adaptiveSpaceSize = hugeGraph ? 8192 : bigGraph ? 4096 : 2048;
+
+    // Snapshot the previous render's settled positions BEFORE we potentially
+    // destroy the Graph instance — see carry-over loop below. cosmos.gl's
+    // internal state sometimes mis-recurses ("Maximum call stack size") when
+    // setPointPositions is called with a very different N on an existing
+    // graph, so we prefer destroy+create on re-render over in-place mutation.
+    // Invalidate cached link pairs — a new render will push fresh links
+    // through finalize. Clicking between now and finalize has no subgraph
+    // to color, which is the right behavior (old links are gone).
+    linkPairsRef.current = null;
+    // Stale highlight depth references indices into the OLD node array —
+    // updateLabels would otherwise iterate them, reading positions that no
+    // longer correspond to the same nodes. Clear before the swap.
+    highlightedDepthRef.current = null;
+    // Reset the freeze flag BEFORE the new Graph() is constructed.
+    // cosmos.gl starts its RAF/tick loop immediately on construction, so
+    // onSimulationTick can fire before finalize() runs — if frozenRef is
+    // still true from the previous render's freeze, the very first tick
+    // on the new graph pauses it instantly, leaving the layout stuck at
+    // its init-disc positions.
+    frozenRef.current = false;
+
+    const prevGraph = graphRef.current;
+    let carryPositions: number[] | Float32Array | null = null;
+    if (prevGraph) {
+      try {
+        const p = prevGraph.getPointPositions();
+        if (p && p.length > 0) carryPositions = p;
+      } catch { /* ignore — fall through to random */ }
+      try { prevGraph.destroy?.(); } catch { /* ignore */ }
+      graphRef.current = null;
+      container.innerHTML = ''; // remove the old canvas so the new Graph mounts cleanly
+    }
 
     let graph = graphRef.current;
     if (!graph) {
@@ -365,28 +775,84 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         pointDefaultColor: themeSpec.pointDefaultColor,
         linkDefaultColor: themeSpec.linkColor,
         hoveredLinkColor: themeSpec.hoveredLink,
-        pointSize: 6,
-        linkWidth: 0.9,
-        linkArrows: true,
+        pointSize: adaptivePointSize,
+        linkWidth: adaptiveLinkWidth,
+        linkArrows: adaptiveLinkArrows,
         linkArrowsSizeScale: 0.6,
-        linkVisibilityDistanceRange: [50, 150],
+        // Higher floor = fewer near-camera link fragments shaded every frame.
+        // Wider far end = distant links fade smoothly instead of pop-culling.
+        linkVisibilityDistanceRange: [100, 400],
+        linkVisibilityMinTransparency: 0.05,
+        scalePointsOnZoom: true,
+        spaceSize: adaptiveSpaceSize,
         renderHoveredPointRing: true,
         hoveredPointRingColor: themeSpec.hoveredLink,
         // Greyout — applied automatically when any points are selected.
         pointGreyoutOpacity: 0.08,
         linkGreyoutOpacity: 0.05,
-        // Simulation tuning — goal: settle in ~2s, stay centered, no drift.
-        // High gravity + centering force keeps the cloud anchored so the user's
-        // viewport doesn't suddenly become empty after a breathing tick.
-        simulationRepulsion: 0.6,
+        // Force-directed tuning. Gravity/repulsion balance governs how
+        // tightly clusters pack: too much gravity → one dense ball with
+        // no visible sub-structure; too little → cloud escapes spaceSize.
+        // 2.0 gravity + 1.2 repulsion + 16 link distance gives communities
+        // visible breathing room while keeping isolated (linkless) nodes in
+        // the main mass's halo. Link distance 16 (2× old 8) is the primary
+        // knob for inter-cluster separation — longer springs pull connected
+        // components apart into readable sub-clusters.
+        simulationGravity: 2.0,
+        simulationRepulsion: 1.2,
+        simulationFriction: 0.92,
         simulationLinkSpring: 1.0,
-        simulationLinkDistance: 6,
-        simulationGravity: 0.6,        // ↑ strong pull to center
-        simulationCenter: 0.15,        // ↑ active recentring during ticks
-        simulationFriction: 0.93,
-        simulationDecay: 300,
-        fitViewOnInit: true,
-        fitViewPadding: 0.15,
+        simulationLinkDistance: 16,
+        simulationDecay: simulationDecayFromSpeed(simulationSpeed),
+        // Start pre-zoomed-out so random-disc init is centered on screen and
+        // the whole spaceSize is visible. No auto-fit while sim runs — camera
+        // chase was jerky, better to let the cloud expand within the frame
+        // and fit smoothly ONCE at the end.
+        initialZoomLevel: initialZoomFromSpaceSize(adaptiveSpaceSize, container),
+        fitViewOnInit: false,
+        // Two jobs, both throttled against cosmos.gl's RAF-driven tick rate:
+        //   1. Live-track the expanding cloud with instant (0 ms) refits
+        //      every 500 ms so the user doesn't wait for settle to end
+        //      before the view is framed on the actual layout.
+        //   2. FREEZE the layout at alpha < 0.2, before gravity × repulsion
+        //      equilibrium compresses the cloud into a ~40-unit ball. The
+        //      equilibrium radius is alpha-invariant (both forces scale
+        //      with alpha), so if we let alpha decay all the way to 0, the
+        //      cloud has reached near-equilibrium by then. Pausing at
+        //      alpha=0.2 preserves the partially-settled spread: sub-
+        //      structure is visible, isolated nodes are in the halo, but
+        //      full compression hasn't happened.
+        // try/catch is load-bearing: this callback is invoked from inside
+        // cosmos.gl's RAF loop, outside our render-time error boundary —
+        // a throw here would otherwise escape to the host and kill the app.
+        onSimulationTick: (alpha: number) => {
+          try {
+            const g = graphRef.current;
+            if (!g) return;
+            // Freeze — once only per renderGraph cycle.
+            if (!frozenRef.current && alpha < 0.2) {
+              frozenRef.current = true;
+              g.pause();
+              g.fitView(800, 0.2); // nice final animated fit into the frozen pose
+              setSimRunning(false);
+              return;
+            }
+            if (frozenRef.current) return;
+            // Live-fit.
+            if (alpha < 0.25) return;
+            const now = performance.now();
+            if (now - lastTickFitRef.current < 500) return;
+            lastTickFitRef.current = now;
+            g.fitView(0, 0.2);
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn('[graph:onSimulationTick] tick handler skipped', err);
+          }
+        },
+        // onSimulationEnd is intentionally omitted — we freeze the layout
+        // in onSimulationTick at alpha<0.2 long before cosmos.gl's natural
+        // end (alpha<0.001), which would otherwise compress the cloud to
+        // the force-equilibrium radius (~40 units for 9000 nodes).
         showFPSMonitor: showFPS,
         hoveredPointCursor: 'pointer',
         onClick: (index: number | undefined) => {
@@ -418,14 +884,70 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const commColors = new Map<number, string>();
     for (const c of data.communities) commColors.set(c.id, c.color);
 
-    // Positions (random init)
-    const positions = new Float32Array(nodes.length * 2);
-    for (let i = 0; i < nodes.length; i++) {
-      positions[i * 2] = (Math.random() - 0.5) * 400;
-      positions[i * 2 + 1] = (Math.random() - 0.5) * 400;
+    // Positions: reuse any previously-settled positions we already have for
+    // nodes that survived a filter change (Isolated toggle, maxNodes tweak,
+    // granularity switch). Only genuinely new nodes get random-disc init.
+    // Without this, toggling any setting would re-run the big settle pass.
+    const N = nodes.length;
+    // Initial random-disc radius. Moderate spread keeps short-range
+    // repulsion in the manybody shader (which grows as c/sqrt(dist) for
+    // close pairs) from exploding at sim start — but small enough that
+    // gravity=5.0 can pull everything inward quickly. 25% of spaceSize
+    // hits the sweet spot across file/symbol density tiers.
+    const initRadius = adaptiveSpaceSize * 0.25;
+    const positions = new Float32Array(N * 2);
+    const prevIds = prevNodeIdsRef.current;
+    // cosmos.gl's coordinate space is [0, spaceSize] with origin at the
+    // corner — the position shader hard-clamps to this range. Gravity pulls
+    // toward spaceSize/2, so initialize around the same center; without this
+    // offset, half the random-disc init lands at negative coords and piles
+    // up against the x=0 / y=0 edges as visible clamp lines.
+    const cx = adaptiveSpaceSize / 2;
+    const cy = adaptiveSpaceSize / 2;
+    // Always recenter carry positions so their bbox centroid aligns with
+    // (cx, cy). The previous "only shift if out of range" variant missed
+    // cases where the old layout was nominally in [0, spaceSize] but
+    // clustered in one quadrant (e.g. carried from a smaller spaceSize, or
+    // from an earlier build that centered init on origin but all points
+    // happened to land in the positive half). Unconditional recentering
+    // handles all coordinate-system mismatches — for carry positions that
+    // are already centered, (cx - centroid) is ~0 so it's a no-op.
+    let carryDx = 0;
+    let carryDy = 0;
+    if (carryPositions && carryPositions.length >= 2) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (let i = 0; i < carryPositions.length; i += 2) {
+        const x = carryPositions[i];
+        const y = carryPositions[i + 1];
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      carryDx = cx - (minX + maxX) / 2;
+      carryDy = cy - (minY + maxY) / 2;
     }
+    for (let i = 0; i < N; i++) {
+      const prevIdx = carryPositions && prevIds ? prevIds.get(nodes[i].id) : undefined;
+      const carriedX = prevIdx != null && carryPositions ? carryPositions[prevIdx * 2] : undefined;
+      const carriedY = prevIdx != null && carryPositions ? carryPositions[prevIdx * 2 + 1] : undefined;
+      if (Number.isFinite(carriedX) && Number.isFinite(carriedY)) {
+        positions[i * 2]     = (carriedX as number) + carryDx;
+        positions[i * 2 + 1] = (carriedY as number) + carryDy;
+      } else {
+        // New node — uniform-area random disc (sqrt for uniform radial density).
+        const r = initRadius * Math.sqrt(Math.random());
+        const a = Math.random() * 2 * Math.PI;
+        positions[i * 2]     = cx + Math.cos(a) * r;
+        positions[i * 2 + 1] = cy + Math.sin(a) * r;
+      }
+    }
+    // Snapshot id → index for the NEXT re-render's carry-over lookup.
+    const newIdMap = new Map<string, number>();
+    for (let i = 0; i < N; i++) newIdMap.set(nodes[i].id, i);
+    prevNodeIdsRef.current = newIdMap;
 
-    // Colors (RGB 0-255, alpha 0-1 — per cosmos.gl convention)
+    // Colors (per-point RGBA, all channels normalized 0-1 — cosmos.gl buffer convention)
     const colors = new Float32Array(nodes.length * 4);
     for (let i = 0; i < nodes.length; i++) {
       const [r, g, b] = nodeColor01(nodes[i], colorBy, commColors);
@@ -439,29 +961,207 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const sizes = new Float32Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) sizes[i] = nodeSize(nodes[i]);
 
-    // Links
-    const validEdges = data.edges.filter((e) => indexById.has(e.source) && indexById.has(e.target));
-    const links = new Float32Array(validEdges.length * 2);
-    for (let i = 0; i < validEdges.length; i++) {
-      links[i * 2] = indexById.get(validEdges[i].source)!;
-      links[i * 2 + 1] = indexById.get(validEdges[i].target)!;
-    }
-
     // Top-N important nodes for label overlay defaults
     const topByImp = [...nodes.keys()].sort(
       (a, b) => (nodes[b].importance ?? 0) - (nodes[a].importance ?? 0),
     );
     labelIndicesRef.current = topByImp.slice(0, 60);
 
+    // Section reps: the single most-important node per community. Ordered by
+    // community size (biggest section first) so the zoomed-out cap keeps the
+    // labels the user most wants to see.
+    const bestByCommunity = new Map<number, { idx: number; imp: number }>();
+    const sizeByCommunity = new Map<number, number>();
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const imp = n.importance ?? 0;
+      sizeByCommunity.set(n.community, (sizeByCommunity.get(n.community) ?? 0) + 1);
+      const cur = bestByCommunity.get(n.community);
+      if (!cur || imp > cur.imp) bestByCommunity.set(n.community, { idx: i, imp });
+    }
+    sectionIndicesRef.current = [...bestByCommunity.entries()]
+      .sort((a, b) => (sizeByCommunity.get(b[0]) ?? 0) - (sizeByCommunity.get(a[0]) ?? 0))
+      .map(([, v]) => v.idx);
+    const commLabels = new Map<number, string>();
+    for (const c of data.communities) commLabels.set(c.id, c.label);
+    const sectionLabels = new Map<number, string>();
+    for (const [commId, v] of bestByCommunity) {
+      const lbl = commLabels.get(commId);
+      if (lbl) sectionLabels.set(v.idx, lbl);
+    }
+    sectionLabelByIndexRef.current = sectionLabels;
+
+    // Push the point data immediately — user sees nodes even before edges
+    // finish processing on big graphs.
     graph.setPointPositions(positions);
     graph.setPointColors(colors);
     graph.setPointSizes(sizes);
-    graph.setLinks(links);
-    graph.render();
-    // Lower alpha = less initial kinetic energy, shorter settle time.
-    // 0.5 is enough for random-init positions to spread meaningfully.
-    graph.start(0.5);
+    // Snapshot so highlightNeighborhood can rewrite colors per hop-distance
+    // and clearHighlight can restore them. Copy because `colors` is reused
+    // by the GPU buffer.
+    origColorsRef.current = new Float32Array(colors);
+
+    // Edge processing: dedup + top-K sort. On big graphs this can freeze
+    // the main thread for 100–300ms, so delegate to a Worker. Small graphs
+    // stay synchronous — worker hop isn't worth the latency below ~3k nodes.
+    const EDGE_BUDGET = 20000;
+    const token = ++renderTokenRef.current;
+
+    const finalize = (links: Float32Array) => {
+      // Discard stale worker responses
+      if (token !== renderTokenRef.current) return;
+      const g = graphRef.current;
+      if (!g) return;
+      try {
+        g.setLinks(links);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[graph] setLinks failed', err);
+        setError(decorateErr(err).message);
+        return;
+      }
+      // Cache pairs so highlightNeighborhood can rewrite per-link colors for
+      // the 1-hop subgraph. Copy because cosmos.gl may retain the underlying
+      // buffer for GPU upload.
+      linkPairsRef.current = new Float32Array(links);
+      // cosmos.gl auto-starts the simulation on new Graph() when
+      // enableSimulation is true (default). No manual start() needed.
+      // A redundant render() call wakes the draw loop after setLinks.
+      try {
+        g.render();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[graph] render failed', err);
+        setError(decorateErr(err).message);
+        return;
+      }
+      // Immediate fit so the user sees the layout framed from the first
+      // frame — especially valuable on re-renders with carry-over positions
+      // where the cloud is already spread. Deferred one frame so cosmos.gl
+      // has the freshly-set positions in the FBO when fitView computes the
+      // bounding box. onSimulationTick (throttled to 500 ms, re-armed below)
+      // takes over from here to track the cloud as it expands during settle.
+      requestAnimationFrame(() => {
+        const gg = graphRef.current;
+        if (gg) gg.fitView(500, 0.2);
+      });
+      // Arm onSimulationTick to fit on the first tick (throttle starts at 0).
+      lastTickFitRef.current = 0;
+      // New render cycle — unfreeze so the fresh settle pass can progress
+      // to its own freeze threshold. Without this reset, the next render
+      // would never run forces (frozenRef stays true from previous cycle).
+      frozenRef.current = false;
+    };
+
+    // Inline edge-build fallback — used directly for small graphs and as a
+    // safety net when the Worker path fails to initialize.
+    const buildEdgesInline = (): Float32Array => {
+      const seenPairs = new Set<number>();
+      const pairA: number[] = [];
+      const pairB: number[] = [];
+      const pairWeight: number[] = [];
+      for (const e of data.edges) {
+        const s = indexById.get(e.source);
+        const t = indexById.get(e.target);
+        if (s == null || t == null) continue;
+        const key = s * 0x100000 + t;
+        if (seenPairs.has(key)) continue;
+        seenPairs.add(key);
+        pairA.push(s);
+        pairB.push(t);
+        pairWeight.push((nodes[s].importance ?? 0) + (nodes[t].importance ?? 0));
+      }
+      let keepIdx: Uint32Array;
+      if (pairA.length > EDGE_BUDGET) {
+        const order = new Uint32Array(pairA.length);
+        for (let i = 0; i < order.length; i++) order[i] = i;
+        const sorted = Array.from(order).sort((a, b) => pairWeight[b] - pairWeight[a]);
+        keepIdx = Uint32Array.from(sorted.slice(0, EDGE_BUDGET));
+      } else {
+        keepIdx = new Uint32Array(pairA.length);
+        for (let i = 0; i < keepIdx.length; i++) keepIdx[i] = i;
+      }
+      const out = new Float32Array(keepIdx.length * 2);
+      for (let i = 0; i < keepIdx.length; i++) {
+        const k = keepIdx[i];
+        out[i * 2] = pairA[k];
+        out[i * 2 + 1] = pairB[k];
+      }
+      return out;
+    };
+
+    if (bigGraph) {
+      // Lazy worker — create once, reuse. Vite bundles via new URL().
+      // Guard with try/catch — in some Electron packaging modes the Worker
+      // URL resolution can fail at runtime; we fall back to inline build
+      // rather than crash the whole render.
+      try {
+        if (!workerRef.current) {
+          workerRef.current = new Worker(
+            new URL('./graph-worker.ts', import.meta.url),
+            { type: 'module' },
+          );
+          workerRef.current.addEventListener('error', (err) => {
+            // eslint-disable-next-line no-console
+            console.warn('[graph-worker] error, falling back to inline', err.message);
+            workerRef.current?.terminate();
+            workerRef.current = null;
+          });
+        }
+        const worker = workerRef.current;
+        const onMessage = (ev: MessageEvent<{ type: string; links: Float32Array }>) => {
+          if (ev.data?.type !== 'edges') return;
+          worker.removeEventListener('message', onMessage);
+          finalize(ev.data.links);
+        };
+        worker.addEventListener('message', onMessage);
+
+        const importanceArr = new Float32Array(nodes.length);
+        for (let i = 0; i < nodes.length; i++) importanceArr[i] = nodes[i].importance ?? 0;
+
+        const edgesFlat = data.edges.map((e) => ({ source: e.source, target: e.target }));
+        const nodeIds = nodes.map((n) => n.id);
+
+        worker.postMessage(
+          {
+            type: 'build-edges',
+            nodes: nodeIds,
+            edges: edgesFlat,
+            importance: importanceArr,
+            edgeBudget: EDGE_BUDGET,
+          },
+          [importanceArr.buffer],
+        );
+        // NOTE: intentionally NOT calling setLinks(empty) here — some cosmos.gl
+        // code paths misbehave with zero-length link buffers. The previous
+        // links (from the prior render, if any) stay on-screen until the
+        // worker returns fresh ones, which is fine visually.
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[graph-worker] init failed, inline fallback', err);
+        finalize(buildEdgesInline());
+      }
+    } else {
+      // Small graph — inline is faster than a worker round-trip.
+      finalize(buildEdgesInline());
+    }
   }, [themeSpec, colorBy, showFPS]);
+
+  // ── Reset edge-worker + position carry-over on granularity switch ──
+  // File-graph and symbol-graph node-id namespaces don't overlap, so carrying
+  // positions or reusing the worker's in-flight state across the switch adds
+  // risk without benefit. The previous worker may still hold a pending job
+  // whose response would race the fresh render.
+  const prevGranularityRef = useRef(granularity);
+  useEffect(() => {
+    if (prevGranularityRef.current === granularity) return;
+    prevGranularityRef.current = granularity;
+    prevNodeIdsRef.current = null;
+    if (workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
+    }
+  }, [granularity]);
 
   // ── Initial load & refetch when query params change ───────────
   useEffect(() => { loadGraph(); }, [loadGraph]);
@@ -482,6 +1182,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       colors[i * 4 + 3] = 1;
     }
     graph.setPointColors(colors);
+    // Re-snapshot — clearHighlight should restore the NEW colorBy palette,
+    // not the pre-switch one.
+    origColorsRef.current = new Float32Array(colors);
     graph.render();
   }, [colorBy]);
 
@@ -506,43 +1209,75 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     graph.setConfig({ showFPSMonitor: showFPS });
   }, [showFPS]);
 
-  // ── Live mode: keep the graph "breathing" ─────────────────────
-  // When Live is on, inject a tiny alpha kick whenever the simulation
-  // would otherwise settle. This makes the graph feel like a living
-  // organism instead of a dead snapshot. When off, pause the simulation.
+  // ── Simulation speed (slider) ─────────────────────────────────
+  // Controls simulationDecay only — how fast the initial settle pass
+  // dissipates. We intentionally do NOT push a steady-state alphaTarget
+  // anymore: at equilibrium `gravity × repulsion` pulls the cloud into a
+  // dense ball (~40 unit radius for 9000 nodes), and any positive
+  // alphaTarget drags the settled layout toward it over time — the
+  // "shrinking to a point" symptom. Static layout post-settle is what the
+  // user actually wants.
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) return;
+    graph.setConfig({ simulationDecay: simulationDecayFromSpeed(simulationSpeed) });
+  }, [simulationSpeed]);
 
-    if (breathTimerRef.current != null) {
-      clearInterval(breathTimerRef.current);
-      breathTimerRef.current = null;
-    }
+  // ── Pause simulation + label RAF when component is offscreen ───
+  // If the user switches tabs away from the graph, Electron keeps RAF
+  // firing at full rate (it's not the same as a backgrounded tab in a
+  // browser). IntersectionObserver + Page Visibility API cut that cost
+  // to zero whenever nothing is actually being looked at.
+  const offscreenPausedRef = useRef(false);
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
+    const applyVisibility = (visible: boolean) => {
+      const g = graphRef.current;
+      if (!g) return;
+      if (!visible && !offscreenPausedRef.current) {
+        g.pause();
+        offscreenPausedRef.current = true;
+      } else if (visible && offscreenPausedRef.current) {
+        // Only resume if the user hasn't manually paused via Live toggle
+        if (live) g.unpause();
+        offscreenPausedRef.current = false;
+      }
+    };
+
+    const io = new IntersectionObserver(
+      ([entry]) => applyVisibility(entry.isIntersecting && entry.intersectionRatio > 0),
+      { threshold: 0 },
+    );
+    io.observe(container);
+
+    const onDocVisibility = () => applyVisibility(!document.hidden);
+    document.addEventListener('visibilitychange', onDocVisibility);
+
+    return () => {
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onDocVisibility);
+    };
+  }, [live]);
+
+  // ── Live / Paused toggle ──────────────────────────────────────
+  // Pauses or resumes the solver. We don't re-arm a steady-state
+  // alphaTarget here (see onSimulationEnd for why) — Live just controls
+  // whether the initial settle is allowed to proceed. Once the settle
+  // finishes naturally, toggling Live is a no-op on an already-stopped
+  // simulation (pause/unpause don't restart the big alpha=1 pass).
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) return;
     if (live) {
       graph.unpause();
-      // Gentle "breathing" — tiny alpha kick every 2s only when fully settled.
-      // High gravity + small alpha means nodes jitter in place without drifting
-      // away from the center of the viewport.
-      const tick = () => {
-        const g = graphRef.current;
-        if (!g) return;
-        if (!g.isSimulationRunning) g.start(0.02);
-        setSimRunning(g.isSimulationRunning);
-      };
-      breathTimerRef.current = window.setInterval(tick, 2000);
+      setSimRunning(graph.isSimulationRunning);
     } else {
       graph.pause();
       setSimRunning(false);
     }
-
-    return () => {
-      if (breathTimerRef.current != null) {
-        clearInterval(breathTimerRef.current);
-        breathTimerRef.current = null;
-      }
-    };
-  }, [live, stats]); // re-attach when a new graph is rendered
+  }, [live, stats]);
 
   // ── Cleanup on unmount ────────────────────────────────────────
   useEffect(() => {
@@ -551,6 +1286,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         graphRef.current?.destroy?.();
       } catch { /* ignore */ }
       graphRef.current = null;
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
     };
   }, []);
 
@@ -713,6 +1452,15 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       {/* WebGL canvas — the graph surface */}
       <div ref={containerRef} className="absolute inset-0" />
 
+      {/* Halo overlay — additive radial-gradient glows around top-importance
+          nodes. mix-blend-mode: screen brightens the cosmos.gl points
+          underneath without obscuring them. */}
+      <canvas
+        ref={haloCanvasRef}
+        className="absolute inset-0 pointer-events-none"
+        style={{ mixBlendMode: 'screen' }}
+      />
+
       {/* Label overlay — HTML over canvas, clipped by root's overflow-hidden */}
       <div
         ref={labelLayerRef}
@@ -722,6 +1470,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           fontSize: 10,
           fontFamily: sysFont,
           lineHeight: 1,
+          // Belt-and-suspenders: even if updateLabels leaves stale label
+          // divs in the pool, CSS hides the entire overlay when labels are off.
+          display: showLabels ? undefined : 'none',
         }}
       />
 
@@ -744,6 +1495,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           font-weight: 600;
           z-index: 10;
           padding: 2px 6px;
+          text-shadow: none;
         }
         .cosmos-gpu-pill-btn {
           display: inline-flex; align-items: center; gap: 5px;
@@ -807,6 +1559,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           // extend beyond its pane (no overlap with sidebar).
           left: '50%',
           transform: 'translateX(-50%)',
+          width: 'max-content',
           maxWidth: 'calc(100% - 24px)',
           flexWrap: 'wrap',
           justifyContent: 'center',
@@ -948,6 +1701,25 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             className="w-16"
           />
           <span className="font-mono w-3 text-right">{highlightDepth}</span>
+        </label>
+
+        {/* Simulation speed (0.25× – 3×) */}
+        <label
+          className="flex items-center gap-1.5 px-2 py-1 text-[11px] rounded-md select-none"
+          style={inputStyle}
+          title="Animation speed — left = slower / more settled, right = snappier"
+        >
+          <span style={{ opacity: 0.7 }}>Speed</span>
+          <input
+            type="range"
+            min={0.1}
+            max={3}
+            step={0.1}
+            value={simulationSpeed}
+            onChange={(e) => onSettingsChange({ simulationSpeed: Number(e.target.value) })}
+            className="w-16"
+          />
+          <span className="font-mono w-8 text-right">{simulationSpeed.toFixed(1)}×</span>
         </label>
 
         {/* Live / Paused toggle */}

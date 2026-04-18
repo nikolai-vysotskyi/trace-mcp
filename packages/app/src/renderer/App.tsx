@@ -12,10 +12,11 @@ import { WindowTabBar } from './components/WindowTabBar';
 // ?view=project&root=/path → Project window (sidebar + Overview/Graph)
 
 type GlobalTab = 'projects' | 'clients' | 'settings';
+// Settings lives in the sidebar footer (always-visible bottom row), not the top
+// nav. Keep it in the type union so existing routing/state code keeps working.
 const GLOBAL_TABS: { id: GlobalTab; label: string }[] = [
   { id: 'projects', label: 'Projects' },
   { id: 'clients', label: 'MCP Clients' },
-  { id: 'settings', label: 'Settings' },
 ];
 
 type ProjectTab = 'overview' | 'ask' | 'graph';
@@ -248,33 +249,213 @@ function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope
   );
 }
 
-// ── Update banner ────────────────────────────────────────────
-function UpdateBanner() {
-  const [update, setUpdate] = useState<{ available: boolean; latest?: string } | null>(null);
-  const [updating, setUpdating] = useState(false);
-  const [done, setDone] = useState(false);
+// ── Theme override ────────────────────────────────────────────
+// Default = follow system (`prefers-color-scheme`). One click stores an
+// explicit preference in localStorage and sets [data-theme] on <html>; the
+// CSS in app.css gives that attribute higher specificity than the @media
+// rule, so the override wins. Cross-window: when the menu and a project
+// window are both open, a `storage` event syncs them automatically.
+const THEME_KEY = 'trace-mcp-theme';
+type Theme = 'light' | 'dark';
 
+function readStoredTheme(): Theme | null {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    return v === 'light' || v === 'dark' ? v : null;
+  } catch { return null; }
+}
+
+function systemTheme(): Theme {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function useTheme() {
+  const [override, setOverride] = useState<Theme | null>(() => readStoredTheme());
+  const [system, setSystem] = useState<Theme>(() => systemTheme());
+
+  // Apply / remove the data-theme attribute on every change.
   useEffect(() => {
-    const api = (window as any).electronAPI;
-    if (!api?.checkForUpdate) return;
+    const html = document.documentElement;
+    if (override) html.setAttribute('data-theme', override);
+    else html.removeAttribute('data-theme');
+  }, [override]);
 
-    const check = () => api.checkForUpdate().then((r: any) => { if (r?.available) setUpdate(r); });
-    // Check on mount + every 4 hours
-    check();
-    const timer = setInterval(check, 4 * 60 * 60 * 1000);
-    return () => clearInterval(timer);
+  // Track system theme for the "no override" case.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => setSystem(mq.matches ? 'dark' : 'light');
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   }, []);
 
-  if (!update?.available) return null;
+  // Cross-window sync: another window stored a new value → reflect it here.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== THEME_KEY) return;
+      setOverride(e.newValue === 'light' || e.newValue === 'dark' ? e.newValue : null);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const effective: Theme = override ?? system;
+  const toggle = useCallback(() => {
+    const next: Theme = effective === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, next); } catch {}
+    setOverride(next);
+  }, [effective]);
+
+  return { theme: effective, toggle };
+}
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  // Show the icon for the destination, not the current state — matches the
+  // user's mental model ("click moon → it gets dark").
+  const goingTo: Theme = theme === 'dark' ? 'light' : 'dark';
+  const label = goingTo === 'dark' ? 'Switch to dark mode' : 'Switch to light mode';
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className="icon-button"
+      aria-label={label}
+      title={label}
+    >
+      {goingTo === 'dark' ? (
+        // Moon (crescent) — currently light, click to go dark.
+        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M13.2 9.6A5.6 5.6 0 1 1 6.4 2.8a4.6 4.6 0 0 0 6.8 6.8z"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        // Sun (circle + rays) — currently dark, click to go light.
+        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="2.8" stroke="currentColor" strokeWidth="1.4" />
+          <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <line x1="8" y1="1.6" x2="8" y2="3.2" />
+            <line x1="8" y1="12.8" x2="8" y2="14.4" />
+            <line x1="1.6" y1="8" x2="3.2" y2="8" />
+            <line x1="12.8" y1="8" x2="14.4" y2="8" />
+            <line x1="3.5" y1="3.5" x2="4.6" y2="4.6" />
+            <line x1="11.4" y1="11.4" x2="12.5" y2="12.5" />
+            <line x1="3.5" y1="12.5" x2="4.6" y2="11.4" />
+            <line x1="11.4" y1="4.6" x2="12.5" y2="3.5" />
+          </g>
+        </svg>
+      )}
+    </button>
+  );
+}
+
+// ── Sidebar footer ───────────────────────────────────────────
+// Always-visible row at the bottom of the sidebar with Settings on the left
+// and the theme toggle on the right. In project windows, Settings opens the
+// menu window via IPC instead of in-place navigation.
+function SidebarFooter({
+  active,
+  onOpenSettingsInPlace,
+}: {
+  active: boolean;
+  onOpenSettingsInPlace?: () => void;
+}) {
+  const handleSettings = () => {
+    if (onOpenSettingsInPlace) {
+      onOpenSettingsInPlace();
+    } else {
+      const api = (window as any).electronAPI;
+      api?.openSettings?.();
+    }
+  };
+  return (
+    <div className="sidebar-footer">
+      <button
+        type="button"
+        className={`nav-button${active ? ' active' : ''}`}
+        onClick={handleSettings}
+      >
+        Settings
+      </button>
+      <ThemeToggle />
+    </div>
+  );
+}
+
+// ── Update banner ────────────────────────────────────────────
+// Always rendered at the bottom of the sidebar. Polls every 10min — the main
+// process checks the npm registry (no rate limit) with GitHub Releases as a
+// fallback. Surfaces three states: up-to-date (with last-checked timestamp),
+// update available, and update downloaded but pending restart.
+type UpdateState = {
+  available: boolean;
+  current?: string;
+  latest?: string;
+  lastChecked?: number;
+  error?: string;
+};
+
+function formatAgo(ts?: number, now: number = Date.now()): string {
+  if (!ts) return 'never';
+  const s = Math.max(0, Math.floor((now - ts) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function UpdateBanner() {
+  const [state, setState] = useState<UpdateState>({ available: false });
+  const [updating, setUpdating] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [pendingVersion, setPendingVersion] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const cancelledRef = useRef(false);
+
+  const runCheck = async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.checkForUpdate) return;
+    setChecking(true);
+    try {
+      const [upd, pend] = await Promise.all([
+        api.checkForUpdate(),
+        api.checkPendingUpdate ? api.checkPendingUpdate() : Promise.resolve({ pending: false }),
+      ]);
+      if (cancelledRef.current) return;
+      if (upd) setState(upd);
+      if (pend?.pending) setPendingVersion(pend.version || (upd?.latest ?? null));
+      else setPendingVersion(null);
+    } catch (err) {
+      if (!cancelledRef.current) setState((s) => ({ ...s, error: (err as Error).message }));
+    } finally {
+      if (!cancelledRef.current) setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    runCheck();
+    const poll = setInterval(runCheck, 600_000);
+    const tick = setInterval(() => setNow(Date.now()), 15_000);
+    return () => { cancelledRef.current = true; clearInterval(poll); clearInterval(tick); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleUpdate = async () => {
     const api = (window as any).electronAPI;
     if (!api) return;
     setUpdating(true);
-    const result = await api.applyUpdate();
-    if (result?.ok) {
-      setDone(true);
-    } else {
+    try {
+      const result = await api.applyUpdate();
+      if (result?.ok && api.checkPendingUpdate) {
+        const pend = await api.checkPendingUpdate();
+        if (pend?.pending) setPendingVersion(pend.version || state.latest || null);
+      }
+      if (!result?.ok) setState((s) => ({ ...s, error: result?.error || 'update failed' }));
+    } finally {
       setUpdating(false);
     }
   };
@@ -284,58 +465,71 @@ function UpdateBanner() {
     api?.restartApp();
   };
 
-  return (
-    <div
-      style={{
-        padding: '8px 10px',
-        borderTop: '1px solid var(--border-row)',
-        fontSize: 11,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-        WebkitAppRegion: 'no-drag',
-      } as React.CSSProperties}
-    >
-      <div style={{ color: 'var(--text-secondary)', lineHeight: 1.3 }}>
-        v{update.latest} available
+  // Pending swap takes precedence — the user's next click should restart, not redownload.
+  if (pendingVersion) {
+    return (
+      <div className="update-card" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div className="title">
+          <span className="ready-icon" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2.5 6.2l2.4 2.4 4.6-4.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          v{pendingVersion} ready
+        </div>
+        <div className="subtitle">Restart to install · v{state.current}</div>
+        <button className="btn-prominent success" onClick={handleRestart}>
+          Restart to install
+        </button>
       </div>
-      {done ? (
-        <button
-          onClick={handleRestart}
-          style={{
-            background: 'var(--success)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            padding: '4px 0',
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: 'pointer',
-            width: '100%',
-          }}
-        >
-          Restart
+    );
+  }
+
+  const refreshButton = (
+    <button
+      type="button"
+      className={`update-refresh${checking ? ' spinning' : ''}`}
+      onClick={runCheck}
+      disabled={checking}
+      title="Check for updates"
+      aria-label="Check for updates"
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M10 2.5v2.6H7.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M2 9.5V6.9h2.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M9.3 5.1A3.7 3.7 0 003 4.6M2.7 6.9a3.7 3.7 0 006.3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+
+  if (state.available) {
+    return (
+      <div className="update-card" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div className="title">
+          <span>v{state.latest} available</span>
+          {refreshButton}
+        </div>
+        <div className="subtitle">
+          Currently v{state.current} · checked {formatAgo(state.lastChecked, now)}
+        </div>
+        <button className="btn-prominent" onClick={handleUpdate} disabled={updating}>
+          {updating ? 'Updating…' : 'Update'}
         </button>
-      ) : (
-        <button
-          onClick={handleUpdate}
-          disabled={updating}
-          style={{
-            background: 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            padding: '4px 0',
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: updating ? 'wait' : 'pointer',
-            opacity: updating ? 0.7 : 1,
-            width: '100%',
-          }}
-        >
-          {updating ? 'Updating...' : 'Update'}
-        </button>
-      )}
+      </div>
+    );
+  }
+
+  // Idle: minimal status row. No card chrome — stays out of the way.
+  const isError = !!state.error;
+  return (
+    <div className={`update-idle${isError ? ' error' : ''}`} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <span className="dot" aria-hidden="true" />
+      <span className="label" title={isError ? state.error : undefined}>
+        {isError
+          ? state.error
+          : `Up to date · v${state.current ?? '—'}`}
+      </span>
+      {refreshButton}
     </div>
   );
 }
@@ -533,9 +727,13 @@ export function App() {
             </>
           )}
 
-          {/* Spacer to push update banner to bottom */}
+          {/* Spacer to push footer to bottom */}
           <div style={{ flex: 1 }} />
           <UpdateBanner />
+          <SidebarFooter
+            active={!isProject && globalTab === 'settings'}
+            onOpenSettingsInPlace={isProject ? undefined : () => setGlobalTab('settings')}
+          />
         </aside>
 
         {/* Resize handle */}
