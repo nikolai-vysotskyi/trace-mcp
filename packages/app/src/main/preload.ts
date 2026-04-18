@@ -30,9 +30,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('sidebar-width-changed', handler);
     return () => { ipcRenderer.removeListener('sidebar-width-changed', handler); };
   },
-  checkForUpdate: (): Promise<{ available: boolean; current?: string; latest?: string; error?: string }> =>
+  checkForUpdate: (): Promise<{ available: boolean; current?: string; latest?: string; lastChecked?: number; error?: string }> =>
     ipcRenderer.invoke('check-for-update'),
-  applyUpdate: (): Promise<{ ok: boolean; error?: string }> =>
+  checkPendingUpdate: (): Promise<{ pending: boolean; version?: string }> =>
+    ipcRenderer.invoke('check-pending-update'),
+  applyUpdate: (): Promise<{ ok: boolean; pending?: boolean; error?: string }> =>
     ipcRenderer.invoke('apply-update'),
   restartApp: (): Promise<void> =>
     ipcRenderer.invoke('restart-app'),

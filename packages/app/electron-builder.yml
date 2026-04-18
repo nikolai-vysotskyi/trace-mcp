@@ -8,6 +8,9 @@ files:
   - package.json
   - assets/**
   - build/icon.png
+extraResources:
+  - from: ../../scripts/apply-pending-update.mjs
+    to: scripts/apply-pending-update.mjs
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.png
