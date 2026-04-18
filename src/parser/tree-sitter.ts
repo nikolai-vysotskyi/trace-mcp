@@ -4,6 +4,14 @@
  * Provides lazy async initialization and per-language parser caching.
  * All language/integration plugins should import `getParser` from here
  * instead of loading native tree-sitter bindings directly.
+ *
+ * Note on native bindings: we evaluated `tree-sitter` (N-API) as a faster
+ * alternative for top languages (TS/JS/PHP/Python). Native parses ~2.4×
+ * faster than WASM, but every JS-side property access on a `SyntaxNode`
+ * (`type`, `children`, `text`, `startIndex`, ...) crosses the N-API
+ * boundary, which is ~2× slower than the in-process WASM↔JS path.
+ * Plugins do far more walking than parsing, so native produced a net
+ * regression on this workload (~+30% extract time). Keeping pure WASM.
  */
 import Parser from 'web-tree-sitter';
 import { createRequire } from 'node:module';

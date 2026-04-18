@@ -48,6 +48,10 @@ export class Store {
     return this.files.getFileById(id);
   }
 
+  getFilesByPaths(paths: string[]): Map<string, FileRow> {
+    return this.files.getFilesByPaths(paths);
+  }
+
   getAllFiles(): FileRow[] {
     return this.files.getAllFiles();
   }

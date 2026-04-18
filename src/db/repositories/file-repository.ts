@@ -120,4 +120,19 @@ export class FileRepository {
     }
     return map;
   }
+
+  getFilesByPaths(paths: string[]): Map<string, FileRow> {
+    const map = new Map<string, FileRow>();
+    if (paths.length === 0) return map;
+    const CHUNK = 900;
+    for (let i = 0; i < paths.length; i += CHUNK) {
+      const chunk = paths.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT * FROM files WHERE path IN (${placeholders})`,
+      ).all(...chunk) as FileRow[];
+      for (const row of rows) map.set(row.path, row);
+    }
+    return map;
+  }
 }

@@ -17,22 +17,47 @@ import { computeComplexity } from '../tools/analysis/complexity.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
 import type { FileExtraction } from './pipeline-state.js';
+import type { FileRow } from '../db/types.js';
+
 
 interface ExtractorContext {
-  store: Store;
+  /**
+   * Optional store. Only used as a fallback when `existingFiles` does not
+   * already contain the row for the file being extracted. Workers run with
+   * no store and supply `existing` directly via the per-call `opts`.
+   */
+  store?: Store;
   registry: PluginRegistry;
   rootPath: string;
   workspaces: WorkspaceInfo[];
   gitignore: GitignoreMatcher | undefined;
   fileContentCache: Map<string, string>;
   buildProjectContext: () => ProjectContext;
+  /**
+   * Pre-loaded existing file rows for the current pipeline run, indexed by
+   * relative path. Lets `extract()` skip the per-file `store.getFile()` lookup
+   * (which is the dominant DB hit during incremental reindex of a large set).
+   */
+  existingFiles?: Map<string, FileRow>;
+}
+
+/** Per-call inputs that override the context (used by the worker pool). */
+export interface ExtractCallOptions {
+  /** Pre-resolved existing FileRow (skips both the map and store lookups). */
+  existing?: FileRow | null;
+  /** Pre-resolved gitignore status (skips the matcher). */
+  gitignored?: boolean;
 }
 
 export class FileExtractor {
   constructor(private ctx: ExtractorContext) {}
 
-  async extract(relPath: string, force: boolean): Promise<FileExtraction | 'skipped' | 'error'> {
-    const { store, registry, rootPath } = this.ctx;
+  async extract(
+    relPath: string,
+    force: boolean,
+    opts: ExtractCallOptions = {},
+  ): Promise<FileExtraction | 'skipped' | 'error'> {
+    const { registry, rootPath } = this.ctx;
     const absPath = path.resolve(rootPath, relPath);
 
     // Defence-in-depth: reject paths that escape the project root
@@ -61,8 +86,13 @@ export class FileExtractor {
       return 'skipped';
     }
 
-    // Single DB lookup — reused for both mtime fast-path and hash-change check
-    const existing = store.getFile(relPath);
+    // Existing-row lookup. Resolution order:
+    //   1. caller-supplied via opts.existing (worker path)
+    //   2. context preload Map (CLI path; one IN-query upfront)
+    //   3. store.getFile fallback (single-row SELECT)
+    const existing = opts.existing
+      ?? this.ctx.existingFiles?.get(relPath)
+      ?? this.ctx.store?.getFile(relPath);
 
     // mtime fast-path: if mtime hasn't changed, the file content is identical —
     // skip the expensive read + hash computation entirely.
@@ -143,8 +173,8 @@ export class FileExtractor {
       }
     }
 
-    // Collect framework extract results (no DB writes)
-    const frameworkExtracts = await this.collectFrameworkExtracts(relPath, content, language);
+    // Collect framework extract results (no DB writes; entirely sync)
+    const frameworkExtracts = this.collectFrameworkExtracts(relPath, content, language);
 
     return {
       relPath,
@@ -153,7 +183,7 @@ export class FileExtractor {
       contentSize: content.length,
       language,
       workspace,
-      gitignored: this.ctx.gitignore?.isIgnored(relPath) ?? false,
+      gitignored: opts.gitignored ?? this.ctx.gitignore?.isIgnored(relPath) ?? false,
       status: parsed.status,
       frameworkRole: parsed.frameworkRole,
       mtimeMs: fileMtimeMs != null ? Math.floor(fileMtimeMs) : null,
@@ -201,12 +231,14 @@ export class FileExtractor {
 
   /** Cache: workspace path → detected framework plugins */
   private wsPluginCache = new Map<string, FrameworkPlugin[]>();
+  /** Cache: root-level active framework plugins (computed once per extractor). */
+  private rootPluginCache: FrameworkPlugin[] | undefined;
 
-  private async collectFrameworkExtracts(
+  private collectFrameworkExtracts(
     relPath: string,
     content: Buffer,
     language: string,
-  ): Promise<FileParseResult[]> {
+  ): FileParseResult[] {
     // Determine which plugins to run and what path to pass.
     // In a monorepo, each workspace may have its own framework (e.g. fair-front = Nuxt,
     // fair-laravel = Laravel).  We need to:
@@ -233,13 +265,15 @@ export class FileExtractor {
       }
     }
 
-    // Fallback to root-level plugins
+    // Fallback to root-level plugins. Cached: project context + active plugin
+    // list don't change mid-run, so do this work once instead of per-file.
     if (plugins.length === 0) {
-      const ctx = this.ctx.buildProjectContext();
-      const activeResult = this.ctx.registry.getActiveFrameworkPlugins(ctx);
-      if (activeResult.isOk()) {
-        plugins = activeResult.value;
+      if (this.rootPluginCache === undefined) {
+        const ctx = this.ctx.buildProjectContext();
+        const activeResult = this.ctx.registry.getActiveFrameworkPlugins(ctx);
+        this.rootPluginCache = activeResult.isOk() ? activeResult.value : [];
       }
+      plugins = this.rootPluginCache;
     }
 
     if (plugins.length === 0) return [];
@@ -247,7 +281,9 @@ export class FileExtractor {
     const results: FileParseResult[] = [];
     for (const plugin of plugins) {
       if (!plugin.extractNodes) continue;
-      const result = await executeFrameworkExtractNodes(plugin, extractPath, content, language);
+      // Synchronous — no await. `extractNodes` is typed sync and the outer
+      // extract() call already provides timeout/error containment.
+      const result = executeFrameworkExtractNodes(plugin, extractPath, content, language);
       if (result.isErr() || !result.value) continue;
       results.push(result.value);
     }

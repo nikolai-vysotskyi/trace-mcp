@@ -87,14 +87,14 @@ export class FilePersister {
     }
 
     // Persist base extraction symbols, edges, and entities
-    this.persistSymbolsAndEntities(fileId, ext.symbols, ext.otherEdges, ext);
+    this.persistSymbolsAndEntities(fileId, ext.relPath, ext.symbols, ext.otherEdges, ext);
     if (ext.importEdges.length > 0) {
       this.state.pendingImports.set(fileId, ext.importEdges);
     }
 
     // Persist framework extract results
     for (const fwResult of ext.frameworkExtracts) {
-      this.persistSymbolsAndEntities(fileId, fwResult.symbols, fwResult.edges ?? [], fwResult);
+      this.persistSymbolsAndEntities(fileId, ext.relPath, fwResult.symbols, fwResult.edges ?? [], fwResult);
       if (fwResult.frameworkRole) {
         store.updateFileStatus(fileId, fwResult.status, fwResult.frameworkRole);
       }
@@ -104,6 +104,7 @@ export class FilePersister {
   /** Insert symbols+trigrams, edges, and entities (routes/components/migrations/ORM/screens). */
   private persistSymbolsAndEntities(
     fileId: number,
+    relPath: string,
     symbols: FileExtraction['symbols'],
     edges: RawEdge[],
     entities: {
@@ -119,12 +120,11 @@ export class FilePersister {
 
     // Auto-fill missing symbolId/byteStart/byteEnd — framework plugins often
     // produce metadata-only symbols without these required fields.
-    const filePath = (store.db.prepare('SELECT path FROM files WHERE id = ?').get(fileId) as { path: string } | undefined)?.path;
     const validSymbols = symbols.map((s) => {
       if (s.symbolId && s.byteStart != null) return s;
       return {
         ...s,
-        symbolId: s.symbolId || `${filePath ?? `file:${fileId}`}::${s.name}#${s.kind}`,
+        symbolId: s.symbolId || `${relPath}::${s.name}#${s.kind}`,
         byteStart: s.byteStart ?? 0,
         byteEnd: s.byteEnd ?? 0,
       };

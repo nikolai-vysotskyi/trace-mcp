@@ -58,21 +58,23 @@ export async function executeLanguagePlugin(
   }
 }
 
-export async function executeFrameworkExtractNodes(
+/**
+ * Synchronous fast path. `FrameworkPlugin.extractNodes` is typed as a sync
+ * `TraceMcpResult` (no Promise), so awaiting it on every (file × plugin)
+ * pair was buying 10k+ microtask hops per indexing run for nothing.
+ * The outer extract() still sits inside an async function with its own
+ * timeout/error budget, so dropping the wrapper here is safe.
+ */
+export function executeFrameworkExtractNodes(
   plugin: FrameworkPlugin,
   filePath: string,
   content: Buffer,
   language: string,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-): Promise<TraceMcpResult<FileParseResult | null>> {
+): TraceMcpResult<FileParseResult | null> {
   if (!plugin.extractNodes) return ok(null);
 
   try {
-    const result = await withTimeout(
-      () => plugin.extractNodes!(filePath, content, language),
-      timeoutMs,
-      `${plugin.manifest.name}.extractNodes`,
-    );
+    const result = plugin.extractNodes(filePath, content, language);
     return result.map((r) => r as FileParseResult | null);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
