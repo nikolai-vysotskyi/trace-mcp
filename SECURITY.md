@@ -154,6 +154,34 @@ All security checks return structured `TraceMcpResult` values with a dedicated `
 
 ---
 
+## Dependency Hygiene
+
+Transitive advisories are pinned to patched versions via `overrides` in `package.json`, so fixes apply even when upstream packages have not yet released a bump:
+
+* `protobufjs >= 7.5.5` — closes the prototype-pollution RCE (GHSA-xq3m-2v4x-88gg) reachable through the optional `@huggingface/transformers` → `onnxruntime-web` chain.
+* `hono >= 4.12.14` and `@hono/node-server >= 1.19.14` — closes cookie, `ipRestriction`, `serveStatic`, and `toSSG` path-traversal advisories reachable through `@modelcontextprotocol/sdk`.
+* `vite >= 7.3.2` — closes the dev-server `fs.deny` bypass, `.map` path traversal, and WS file-read advisories reachable through `vitest`.
+
+`npm audit` is expected to report **0 vulnerabilities** on a clean install. Re-check after any lockfile change.
+
+---
+
+## Auto-Update Hardening (macOS Electron App)
+
+The npm package ships a `postinstall` hook that keeps the optional menu-bar app (`~/Applications/trace-mcp.app`) in sync with the latest GitHub release. The hook is security-hardened to prevent a compromised release or MITM from silently replacing the installed app:
+
+* **Opt-out:** Set `TRACE_MCP_NO_AUTO_UPDATE=1` to skip the hook entirely. `npm install --ignore-scripts` also disables it.
+* **Scope:** Runs only on macOS, and only if `~/Applications/trace-mcp.app` already exists. Fresh machines are never touched by the hook.
+* **SHA-256 verification:** A sibling checksum asset (`<zip>.sha256`, `SHASUMS256.txt`, or `checksums.txt`) is required in the release. The downloaded zip is hashed in-stream and compared; a missing or mismatched digest aborts the update without touching the installed app.
+* **Gatekeeper verification:** The new bundle is extracted to a temp staging directory and validated with `/usr/sbin/spctl -a -t exec` before being swapped in. An unsigned or tampered bundle fails verification and is discarded.
+* **Atomic swap with rollback:** The installed app is renamed to a backup path, the verified bundle is moved into place, and the backup is removed only on success. Any failure restores the original bundle.
+* **No shell execution:** `unzip` is invoked via `execFileSync` (no shell), and asset names are restricted to `^[A-Za-z0-9._-]+\.zip$` to prevent argument injection via hostile release metadata.
+* **Silent by design:** The hook still swallows all errors so a failed update never breaks `npm install`; the installed app is simply left at its current version.
+
+Release workflow must publish the checksum asset (e.g., `shasum -a 256 trace-mcp-arm64.zip > trace-mcp-arm64.zip.sha256`). Without it, the updater no-ops.
+
+---
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability, please report it responsibly:
@@ -182,3 +210,7 @@ If you discover a security vulnerability, please report it responsibly:
 | Secret pattern detection | 7 regex patterns | Yes (`security.secret_patterns`) |
 | SQLite WAL mode | Always enabled | No |
 | UTF-8 safe decoding | Always enabled | No |
+| Transitive CVE overrides | protobufjs, hono, vite pinned to patched | Yes (`overrides` in `package.json`) |
+| Auto-update SHA-256 verification | Required, no checksum = no update | No |
+| Auto-update Gatekeeper check | `spctl -a -t exec` on staged bundle | No |
+| Auto-update opt-out | Disabled when set | Yes (`TRACE_MCP_NO_AUTO_UPDATE=1`) |

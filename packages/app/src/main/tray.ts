@@ -1,7 +1,7 @@
 import path from 'path';
 import { Tray, nativeImage, Menu, BrowserWindow, app, shell, ipcMain, dialog, nativeTheme } from 'electron';
 import { DaemonClient } from './api-client';
-import { ensureDaemon } from './daemon-lifecycle';
+import { ensureDaemon, restartDaemon } from './daemon-lifecycle';
 
 const isMac = process.platform === 'darwin';
 
@@ -32,7 +32,24 @@ let menuWindow: BrowserWindow | null = null;
 const projectWindows = new Map<string, BrowserWindow>(); // root → window
 let healthInterval: ReturnType<typeof setInterval>;
 let daemonReachable = false;
-let daemonStartAttempted = false;
+/**
+ * Consecutive failed health checks since the daemon was last seen alive.
+ * Drives exponential-backoff restart attempts: we retry on 1st, 3rd, 6th,
+ * 12th, 24th failure, then every 24 subsequent failures (~2 min at 5s poll).
+ */
+let consecutiveFailures = 0;
+/** Ticks at which we will attempt a restart. Must match the description above. */
+const RESTART_ATTEMPT_TICKS = new Set<number>([1, 3, 6, 12, 24]);
+/** After the last explicit tick, retry every N ticks. */
+const RESTART_RETRY_EVERY = 24;
+let lastRestartAttempt = 0;
+/**
+ * Timestamp of the last daemon restart triggered by a version mismatch.
+ * Used to back off so a stuck daemon (one that comes back up still reporting
+ * the wrong version) doesn't drive us into a restart loop.
+ */
+let lastVersionMismatchRestart = 0;
+const VERSION_MISMATCH_RESTART_COOLDOWN_MS = 60_000;
 
 const daemon = new DaemonClient();
 
@@ -73,20 +90,29 @@ function createWindowOptions(extraOpts?: Partial<Electron.BrowserWindowConstruct
   return opts;
 }
 
+function safeSend(win: BrowserWindow | null, channel: string, ...args: unknown[]): void {
+  if (!win || win.isDestroyed()) return;
+  const wc = win.webContents;
+  if (!wc || wc.isDestroyed()) return;
+  try {
+    wc.send(channel, ...args);
+  } catch {
+    // webContents may be destroyed between the guard and the send call
+  }
+}
+
 function setupWindowEvents(win: BrowserWindow): void {
-  win.on('enter-full-screen', () => {
-    if (!win.isDestroyed()) win.webContents.send('fullscreen-changed', true);
-  });
-  win.on('leave-full-screen', () => {
-    if (!win.isDestroyed()) win.webContents.send('fullscreen-changed', false);
-  });
+  win.on('enter-full-screen', () => safeSend(win, 'fullscreen-changed', true));
+  win.on('leave-full-screen', () => safeSend(win, 'fullscreen-changed', false));
 
   // Auto-reload on renderer crash (GPU crash, OOM, etc.)
   win.webContents.on('render-process-gone', (_event, details) => {
     console.error(`[trace-mcp] renderer crashed in window: reason=${details.reason}`);
     if (!win.isDestroyed() && details.reason !== 'clean-exit') {
       setTimeout(() => {
-        if (!win.isDestroyed()) win.webContents.reload();
+        if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+          try { win.webContents.reload(); } catch { /* destroyed mid-reload */ }
+        }
       }, 1000);
     }
   });
@@ -94,7 +120,9 @@ function setupWindowEvents(win: BrowserWindow): void {
   // Handle unresponsive renderer
   win.on('unresponsive', () => {
     console.warn('[trace-mcp] window became unresponsive, reloading...');
-    if (!win.isDestroyed()) win.webContents.reload();
+    if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+      try { win.webContents.reload(); } catch { /* destroyed mid-reload */ }
+    }
   });
 }
 
@@ -109,9 +137,7 @@ function ensureDockVisible(): void {
 function broadcastTabBar(visible: boolean): void {
   const allWindows = [menuWindow, ...projectWindows.values()];
   for (const win of allWindows) {
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('tabbar-changed', visible);
-    }
+    safeSend(win, 'tabbar-changed', visible);
   }
 }
 
@@ -156,17 +182,16 @@ function broadcastTabList(): void {
   const focusedWin = BrowserWindow.getFocusedWindow();
   const tabs = getTabList(focusedWin?.webContents.id);
   for (const win of allWindows) {
-    if (win && !win.isDestroyed()) {
-      // Send tab list with 'active' relative to each window
-      const tabsForWin = tabs.map(t => ({
-        ...t,
-        active: win.webContents.id === (
-          t.id === 'menu' ? menuWindow?.webContents.id :
-          projectWindows.get(t.id)?.webContents.id
-        ),
-      }));
-      win.webContents.send('tab-list-changed', tabsForWin);
-    }
+    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) continue;
+    // Send tab list with 'active' relative to each window
+    const tabsForWin = tabs.map(t => ({
+      ...t,
+      active: win.webContents.id === (
+        t.id === 'menu' ? menuWindow?.webContents.id :
+        projectWindows.get(t.id)?.webContents.id
+      ),
+    }));
+    safeSend(win, 'tab-list-changed', tabsForWin);
   }
 }
 
@@ -207,7 +232,7 @@ function hideDockIfNoWindows(): void {
   }
 }
 
-function showMenuWindow(tab?: string): void {
+export function showMenuWindow(tab?: string): void {
   if (menuWindow && !menuWindow.isDestroyed()) {
     if (tab) {
       menuWindow.loadURL(getRendererUrl({ view: 'menu', tab }));
@@ -325,8 +350,8 @@ ipcMain.on('sync-sidebar-width', (event, width: number) => {
   const sender = event.sender;
   const allWindows = [menuWindow, ...projectWindows.values()];
   for (const win of allWindows) {
-    if (win && !win.isDestroyed() && win.webContents !== sender) {
-      win.webContents.send('sidebar-width-changed', width);
+    if (win && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents !== sender) {
+      safeSend(win, 'sidebar-width-changed', width);
     }
   }
 });
@@ -398,22 +423,86 @@ function setTrayIcon(reachable: boolean): void {
   tray.setToolTip(reachable ? 'trace-mcp — running' : 'trace-mcp — daemon unreachable');
 }
 
+function shouldAttemptRestart(failureTick: number): boolean {
+  if (RESTART_ATTEMPT_TICKS.has(failureTick)) return true;
+  const last = Math.max(...RESTART_ATTEMPT_TICKS);
+  if (failureTick <= last) return false;
+  return (failureTick - last) % RESTART_RETRY_EVERY === 0;
+}
+
 async function checkHealth(): Promise<void> {
   try {
-    await daemon.health();
-    daemonReachable = true;
-    daemonStartAttempted = false; // reset so we can retry if it goes down later
-    setTrayIcon(true);
-  } catch {
-    // Try to auto-start daemon once when it's unreachable
-    if (!daemonStartAttempted) {
-      daemonStartAttempted = true;
-      try {
-        ensureDaemon();
-      } catch { /* best effort */ }
+    const health = await daemon.health();
+    if (!daemonReachable || consecutiveFailures > 0) {
+      console.log('[trace-mcp] daemon reachable');
     }
+    daemonReachable = true;
+    consecutiveFailures = 0;
+    lastRestartAttempt = 0;
+    setTrayIcon(true);
+
+    // Version mismatch — npm swapped the binary on disk but the running daemon
+    // is still executing the old code from memory. Restart via launchd so the
+    // freshly-installed version takes over. 60s cooldown prevents a loop if
+    // the new daemon also reports the wrong version for any reason.
+    const daemonVersion = health.version?.replace(/^v/, '');
+    const appVersion = app.getVersion().replace(/^v/, '');
+    if (
+      daemonVersion
+      && daemonVersion !== '0.0.0-dev'
+      && daemonVersion !== appVersion
+      && Date.now() - lastVersionMismatchRestart > VERSION_MISMATCH_RESTART_COOLDOWN_MS
+    ) {
+      lastVersionMismatchRestart = Date.now();
+      console.log(`[trace-mcp] version mismatch — daemon=${daemonVersion} app=${appVersion}, restarting daemon`);
+      try {
+        const result = restartDaemon();
+        if (!result.ok) {
+          console.warn(`[trace-mcp] version-mismatch restart failed: ${result.error ?? 'unknown'}`);
+        }
+      } catch (e) {
+        console.warn(`[trace-mcp] version-mismatch restart threw: ${(e as Error).message}`);
+      }
+    }
+  } catch (err) {
+    // HTTP 429 means the daemon is alive and responding, just rate-limiting
+    // this client. Restarting would not help — repeated restarts on a
+    // healthy-but-throttled daemon produced a visible flap cycle in the
+    // past (an old daemon without the localhost rate-limit exemption would
+    // 429 the tray's polling, which was then read as "dead"). Treat as
+    // reachable.
+    if (err instanceof Error && err.message.startsWith('HTTP 429')) {
+      if (!daemonReachable || consecutiveFailures > 0) {
+        console.log('[trace-mcp] daemon reachable (throttled)');
+      }
+      daemonReachable = true;
+      consecutiveFailures = 0;
+      lastRestartAttempt = 0;
+      setTrayIcon(true);
+      tray.setContextMenu(buildContextMenu());
+      return;
+    }
+
     daemonReachable = false;
+    consecutiveFailures++;
     setTrayIcon(false);
+
+    if (shouldAttemptRestart(consecutiveFailures)) {
+      // First failure → try a soft start (noop if already running, stale PID, etc.).
+      // Later failures → force restart (kills any zombie then starts fresh).
+      const useRestart = consecutiveFailures > 1;
+      const action = useRestart ? 'restart' : 'ensure';
+      lastRestartAttempt = consecutiveFailures;
+      console.log(`[trace-mcp] daemon unreachable (fail #${consecutiveFailures}), attempting ${action}`);
+      try {
+        const result = useRestart ? restartDaemon() : ensureDaemon();
+        if (!result.ok) {
+          console.warn(`[trace-mcp] daemon ${action} failed: ${result.error ?? 'unknown'}`);
+        }
+      } catch (e) {
+        console.warn(`[trace-mcp] daemon ${action} threw: ${(e as Error).message}`);
+      }
+    }
   }
   // Rebuild menu to reflect status change
   tray.setContextMenu(buildContextMenu());

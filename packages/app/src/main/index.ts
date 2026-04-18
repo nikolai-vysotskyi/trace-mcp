@@ -1,19 +1,24 @@
 import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
-import { execSync, exec } from 'child_process';
+import { execSync, exec, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-import { createTray } from './tray';
+import { createTray, showMenuWindow } from './tray';
 
 // GPU stability — use software fallback if GPU process keeps crashing
 app.commandLine.appendSwitch('disable-gpu-compositing');
 app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
 app.commandLine.appendSwitch('disable-features', 'UseSkiaRenderer');
 
-// Prevent multiple instances
+// Prevent multiple instances. If a second launch happens, bring the existing
+// window forward instead of letting the new process die silently.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
+} else {
+  app.on('second-instance', () => {
+    showMenuWindow();
+  });
 }
 
 app.name = 'trace-mcp';
@@ -165,86 +170,244 @@ ipcMain.handle('configure-mcp-client', async (_event, clientName: string, level:
   });
 });
 
-// IPC: check for CLI update (compares installed npm version vs latest GitHub release)
-ipcMain.handle('check-for-update', async () => {
-  try {
-    // Get currently installed CLI version
-    let currentVersion: string;
-    try {
-      currentVersion = execSync('trace-mcp --version', { encoding: 'utf-8', timeout: 5000 }).trim();
-      // Strip leading 'v' if present
-      currentVersion = currentVersion.replace(/^v/, '');
-    } catch {
-      return { available: false, error: 'Could not determine current version' };
-    }
+// IPC: check for app update.
+// Primary source is the npm registry (no auth, no practical rate limit — the package
+// is published via release-please at the same time as the GitHub release). GitHub
+// Releases API is used as a fallback only (60 req/hr unauthenticated, per IP).
+const updateCache: {
+  etag?: string;
+  lastBody?: string;
+  lastChecked?: number;
+  rateLimitedUntil?: number;
+} = {};
 
-    // Fetch latest release from GitHub
-    const body = await new Promise<string>((resolve, reject) => {
-      const https = require('https');
-      https.get('https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest', {
-        timeout: 10000,
-        headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' },
-      }, (res: any) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          const loc = res.headers.location;
-          if (!loc) { reject(new Error('Redirect without location')); return; }
-          https.get(loc, { timeout: 10000, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' } }, (res2: any) => {
-            let d = ''; res2.on('data', (c: string) => { d += c; }); res2.on('end', () => resolve(d));
-          }).on('error', reject);
-          return;
-        }
+function cmpSemver(a: string, b: string): number {
+  // Returns 1 if a > b, -1 if a < b, 0 if equal. Pre-release suffix (-rc.1) sorts lower.
+  const norm = (v: string) => {
+    const [main, pre] = v.replace(/^v/, '').split('-');
+    return { parts: main.split('.').map((n) => Number(n) || 0), pre: pre || '' };
+  };
+  const A = norm(a);
+  const B = norm(b);
+  for (let i = 0; i < Math.max(A.parts.length, B.parts.length); i++) {
+    const x = A.parts[i] || 0;
+    const y = B.parts[i] || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  if (A.pre === B.pre) return 0;
+  if (!A.pre) return 1; // 1.2.3 > 1.2.3-rc.1
+  if (!B.pre) return -1;
+  return A.pre > B.pre ? 1 : -1;
+}
+
+function fetchLatestFromNpm(): Promise<{ status: number; version?: string }> {
+  return new Promise((resolve, reject) => {
+    const https = require('https');
+    const req = https.get(
+      'https://registry.npmjs.org/trace-mcp/latest',
+      { timeout: 10000, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/json' } },
+      (res: any) => {
         let data = '';
         res.on('data', (chunk: string) => { data += chunk; });
-        res.on('end', () => resolve(data));
-      }).on('error', reject);
-    });
+        res.on('end', () => {
+          if (res.statusCode !== 200 || !data) { resolve({ status: res.statusCode }); return; }
+          try {
+            const version = String(JSON.parse(data).version || '').replace(/^v/, '');
+            resolve({ status: 200, version: version || undefined });
+          } catch {
+            resolve({ status: res.statusCode });
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+  });
+}
 
-    const release = JSON.parse(body);
-    if (!release.tag_name) return { available: false };
+const OFFLINE_ERROR_CODES = new Set([
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+]);
 
-    const latestVersion = release.tag_name.replace(/^v/, '');
-    if (latestVersion === currentVersion) return { available: false, current: currentVersion, latest: latestVersion };
+function toUpdateErrorMessage(err: unknown): string {
+  const code = (err as { code?: string } | null)?.code;
+  if (code && OFFLINE_ERROR_CODES.has(code)) return 'offline';
+  if ((err as Error)?.message === 'timeout') return 'offline';
+  return (err as Error)?.message || 'unknown error';
+}
 
-    // Simple semver comparison: split, compare numerically
-    const cur = currentVersion.split('.').map(Number);
-    const lat = latestVersion.split('.').map(Number);
-    let isNewer = false;
-    for (let i = 0; i < 3; i++) {
-      if ((lat[i] || 0) > (cur[i] || 0)) { isNewer = true; break; }
-      if ((lat[i] || 0) < (cur[i] || 0)) break;
+function fetchLatestRelease(): Promise<{ status: number; body?: string; etag?: string; resetAt?: number }> {
+  return new Promise((resolve, reject) => {
+    const https = require('https');
+    const headers: Record<string, string> = {
+      'User-Agent': 'trace-mcp',
+      Accept: 'application/vnd.github.v3+json',
+    };
+    if (updateCache.etag) headers['If-None-Match'] = updateCache.etag;
+
+    const req = https.get(
+      'https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest',
+      { timeout: 10000, headers },
+      (res: any) => {
+        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+          // Follow once.
+          https
+            .get(res.headers.location, { timeout: 10000, headers }, (res2: any) => {
+              let d = '';
+              res2.on('data', (c: string) => { d += c; });
+              res2.on('end', () => resolve({ status: res2.statusCode, body: d, etag: res2.headers.etag }));
+            })
+            .on('error', reject);
+          return;
+        }
+        const remaining = Number(res.headers['x-ratelimit-remaining']);
+        const resetAt = Number(res.headers['x-ratelimit-reset']) * 1000 || undefined;
+        if (res.statusCode === 304) { resolve({ status: 304, etag: res.headers.etag, resetAt }); return; }
+        if (res.statusCode === 403 && remaining === 0) { resolve({ status: 403, resetAt }); return; }
+        let data = '';
+        res.on('data', (chunk: string) => { data += chunk; });
+        res.on('end', () => resolve({ status: res.statusCode, body: data, etag: res.headers.etag, resetAt }));
+      },
+    );
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+  });
+}
+
+ipcMain.handle('check-for-update', async () => {
+  const now = Date.now();
+  const current = app.getVersion().replace(/^v/, '');
+
+  // Try npm registry first — unauthenticated, no practical rate limit.
+  try {
+    const npm = await fetchLatestFromNpm();
+    if (npm.status === 200 && npm.version) {
+      updateCache.lastChecked = now;
+      const available = cmpSemver(npm.version, current) > 0;
+      return { available, current, latest: npm.version, lastChecked: now };
+    }
+  } catch {
+    // Fall through to GitHub fallback below.
+  }
+
+  // Honour rate-limit reset time before hitting GitHub again.
+  if (updateCache.rateLimitedUntil && now < updateCache.rateLimitedUntil) {
+    const waitS = Math.ceil((updateCache.rateLimitedUntil - now) / 1000);
+    return { available: false, current, lastChecked: updateCache.lastChecked, error: `rate limited (${waitS}s)` };
+  }
+
+  try {
+    const res = await fetchLatestRelease();
+
+    if (res.status === 304 && updateCache.lastBody) {
+      updateCache.lastChecked = now;
+      const release = JSON.parse(updateCache.lastBody);
+      const latest = String(release.tag_name || '').replace(/^v/, '');
+      const available = latest && cmpSemver(latest, current) > 0;
+      return { available, current, latest, lastChecked: now };
     }
 
-    return { available: isNewer, current: currentVersion, latest: latestVersion };
+    if (res.status === 403) {
+      updateCache.rateLimitedUntil = res.resetAt || now + 60_000;
+      return { available: false, current, lastChecked: updateCache.lastChecked, error: 'GitHub rate limit hit' };
+    }
+
+    if (res.status !== 200 || !res.body) {
+      return { available: false, current, lastChecked: updateCache.lastChecked, error: `HTTP ${res.status}` };
+    }
+
+    if (res.etag) updateCache.etag = res.etag;
+    updateCache.lastBody = res.body;
+    updateCache.lastChecked = now;
+
+    const release = JSON.parse(res.body);
+    if (!release.tag_name) return { available: false, current, lastChecked: now, error: 'no release tag' };
+
+    const latest = String(release.tag_name).replace(/^v/, '');
+    const available = cmpSemver(latest, current) > 0;
+    return { available, current, latest, lastChecked: now };
   } catch (err) {
-    return { available: false, error: (err as Error).message };
+    return { available: false, current, lastChecked: updateCache.lastChecked, error: toUpdateErrorMessage(err) };
   }
 });
 
 // IPC: apply update (runs npm update -g trace-mcp, which triggers postinstall → app update)
 ipcMain.handle('apply-update', async () => {
-  try {
-    execSync('npm update -g trace-mcp', { encoding: 'utf-8', timeout: 120000, stdio: 'pipe' });
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: (err as Error).message };
-  }
+  // Resolve npm from a login shell so GUI launches (which lack ~/.npm-global etc.) work.
+  const npmCmd = process.env.SHELL
+    ? `${process.env.SHELL} -lc 'npm update -g trace-mcp'`
+    : 'npm update -g trace-mcp';
+  return await new Promise<{ ok: boolean; error?: string; pending?: boolean }>((resolve) => {
+    exec(npmCmd, { encoding: 'utf-8', timeout: 600_000 }, (err) => {
+      if (err) { resolve({ ok: false, error: err.message }); return; }
+      resolve({ ok: true, pending: hasPendingUpdate() });
+    });
+  });
 });
 
-// IPC: restart the app after update
+// Pending update plumbing — postinstall stages a verified zip into ~/Applications/
+// when it detects this app is running, so the swap can be deferred until exit.
+const INSTALL_DIR = path.join(os.homedir(), 'Applications');
+const PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
+const PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
+// Bundled via electron-builder `extraResources` in production; falls back to the
+// repo-root scripts dir when running from `npm run dev:electron`.
+const APPLY_HELPER = app.isPackaged
+  ? path.join(process.resourcesPath, 'scripts', 'apply-pending-update.mjs')
+  : path.join(__dirname, '..', '..', '..', '..', 'scripts', 'apply-pending-update.mjs');
+
+function hasPendingUpdate(): boolean {
+  try { return fs.existsSync(PENDING_ZIP) && fs.existsSync(PENDING_VERSION); } catch { return false; }
+}
+
+ipcMain.handle('check-pending-update', () => {
+  if (!hasPendingUpdate()) return { pending: false };
+  let version: string | undefined;
+  try { version = fs.readFileSync(PENDING_VERSION, 'utf-8').trim(); } catch {}
+  return { pending: true, version };
+});
+
+// IPC: restart the app. If a staged update is waiting, spawn a detached helper
+// that swaps the bundle once this process exits, then relaunches the new app.
 ipcMain.handle('restart-app', () => {
+  if (hasPendingUpdate() && fs.existsSync(APPLY_HELPER)) {
+    try {
+      const child = spawn(process.execPath, [APPLY_HELPER, String(process.pid)], {
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      });
+      child.unref();
+      app.exit(0);
+      return;
+    } catch {
+      // Fall through to plain relaunch on spawn failure.
+    }
+  }
   app.relaunch();
   app.exit(0);
 });
 
 app.whenReady().then(() => {
-  // macOS: set custom dock icon BEFORE hiding — macOS caches it for later show()
-  if (process.platform === 'darwin') {
-    if (fs.existsSync(dockIconPath)) {
-      app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
-    }
-    app.dock?.hide();
+  // macOS: set custom dock icon so it's ready when the window shows.
+  if (process.platform === 'darwin' && fs.existsSync(dockIconPath)) {
+    app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
   }
   createTray();
+  // Open the main window straight away — the tray remains for background control.
+  // Users who close the window still have the tray; users who quit via ⌘Q shut down.
+  showMenuWindow();
+});
+
+// macOS: when the user clicks the dock icon after closing all windows, re-open.
+app.on('activate', () => {
+  showMenuWindow();
 });
 
 // GPU process crash recovery — log and continue (Chromium auto-restarts GPU process)

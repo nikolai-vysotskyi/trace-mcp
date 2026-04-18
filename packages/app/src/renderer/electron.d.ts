@@ -14,8 +14,9 @@ declare global {
       onTabBarChanged: (callback: (visible: boolean) => void) => () => void;
       syncSidebarWidth: (width: number) => void;
       onSidebarWidthChanged: (callback: (width: number) => void) => () => void;
-      checkForUpdate: () => Promise<{ available: boolean; current?: string; latest?: string; error?: string }>;
-      applyUpdate: () => Promise<{ ok: boolean; error?: string }>;
+      checkForUpdate: () => Promise<{ available: boolean; current?: string; latest?: string; lastChecked?: number; error?: string }>;
+      checkPendingUpdate: () => Promise<{ pending: boolean; version?: string }>;
+      applyUpdate: () => Promise<{ ok: boolean; pending?: boolean; error?: string }>;
       restartApp: () => Promise<void>;
       openSettings: (section?: string) => Promise<{ ok: boolean }>;
       // Tab management (Windows custom tab bar)

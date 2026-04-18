@@ -7,6 +7,8 @@ const DEFAULT_BASE = 'http://127.0.0.1:3741';
 export interface HealthResponse {
   status: 'ok';
   transport: string;
+  /** Daemon binary version. Older daemons (pre-1.24.1) may omit this field. */
+  version?: string;
   uptime: number;
   pid: number;
   projects: { root: string; status: string }[];
