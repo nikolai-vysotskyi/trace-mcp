@@ -1,6 +1,7 @@
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { logger } from '../../logger.js';
+import { resolveRegisteredAncestor } from '../../registry.js';
 import type { Backend } from './types.js';
 
 export interface ProxyBackendOptions {
@@ -32,7 +33,18 @@ export class ProxyBackend implements Backend {
 
   async start(): Promise<void> {
     if (this.started) return;
-    const { daemonUrl, projectRoot, clientId } = this.opts;
+    const { daemonUrl, clientId } = this.opts;
+    // If our cwd is a subdirectory of an already-registered project (e.g. a
+    // nested package in a monorepo), route to that parent's index instead of
+    // asking the daemon to spin up a duplicate one for this subdir.
+    const ancestor = resolveRegisteredAncestor(this.opts.projectRoot);
+    const projectRoot = ancestor?.root ?? this.opts.projectRoot;
+    if (ancestor && ancestor.root !== this.opts.projectRoot) {
+      logger.info(
+        { requested: this.opts.projectRoot, parent: ancestor.root },
+        'ProxyBackend: routing subdirectory to registered parent project',
+      );
+    }
     const mcpUrl = `${daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
 
     // Best-effort project registration (daemon returns 409 if already registered).

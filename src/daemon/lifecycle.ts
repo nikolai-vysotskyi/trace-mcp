@@ -1,0 +1,384 @@
+/**
+ * Unified daemon lifecycle management for macOS / Linux / Windows.
+ *
+ * Provides:
+ *   - ensureDaemon()     — if not running, spawn it (platform-appropriate strategy)
+ *   - restartDaemon()    — kill existing, start fresh
+ *   - stopDaemon()       — unload plist (macOS) or kill PID (Win/Linux)
+ *   - waitForDaemonUp()  — poll /health until reachable or timeout
+ *   - tryAutoSpawnDaemon() — race-safe spawn from stdio CLI: lock → recheck → spawn → wait
+ *
+ * Replaces the duplicated logic previously in src/cli/daemon.ts (macOS only)
+ * and packages/app/src/main/daemon-lifecycle.ts (electron app).
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { execSync, spawn } from 'node:child_process';
+import {
+  TRACE_MCP_HOME,
+  DEFAULT_DAEMON_PORT,
+  DAEMON_LOG_PATH,
+  LAUNCHD_PLIST_PATH,
+} from '../global.js';
+import { getDaemonHealth, isDaemonRunning } from './client.js';
+import { logger } from '../logger.js';
+
+const PLIST_LABEL = 'com.trace-mcp.server';
+const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
+
+export interface EnsureResult {
+  ok: boolean;
+  alreadyRunning?: boolean;
+  error?: string;
+  /** Informational: which strategy was used to start (if started). */
+  strategy?: 'launchd' | 'detached' | 'already-running' | 'none';
+}
+
+// ── Platform: macOS (launchd) ───────────────────────────────────────
+
+function resolveTraceMcpBinary(): string {
+  // Prefer the currently-running binary if it's the CLI.
+  const argv1 = process.argv[1];
+  if (argv1 && fs.existsSync(argv1) && /trace-mcp/.test(argv1)) {
+    return path.resolve(argv1);
+  }
+  try {
+    const cmd = isWin ? 'where trace-mcp' : 'which trace-mcp';
+    const out = execSync(cmd, { encoding: 'utf-8' }).trim();
+    return out.split(/\r?\n/)[0];
+  } catch {
+    throw new Error('Could not find trace-mcp binary in PATH');
+  }
+}
+
+function resolvePathEnv(): string {
+  // launchd doesn't inherit a shell PATH, so embed it explicitly.
+  const nodeDir = path.dirname(process.execPath);
+  const fallback = '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+  return `${nodeDir}:${fallback}`;
+}
+
+function generatePlist(binaryPath: string, port: number): string {
+  const envPath = resolvePathEnv();
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${PLIST_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${binaryPath}</string>
+    <string>serve-http</string>
+    <string>--port</string>
+    <string>${port}</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>${envPath}</string>
+    <key>TRACE_MCP_MANAGED_BY</key>
+    <string>launchd</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${DAEMON_LOG_PATH}</string>
+  <key>StandardErrorPath</key>
+  <string>${DAEMON_LOG_PATH}</string>
+  <key>WorkingDirectory</key>
+  <string>${TRACE_MCP_HOME}</string>
+</dict>
+</plist>
+`;
+}
+
+function installPlist(port: number): void {
+  const binaryPath = resolveTraceMcpBinary();
+  const plistDir = path.dirname(LAUNCHD_PLIST_PATH);
+  if (!fs.existsSync(plistDir)) fs.mkdirSync(plistDir, { recursive: true });
+  fs.writeFileSync(LAUNCHD_PLIST_PATH, generatePlist(binaryPath, port), 'utf-8');
+}
+
+function isPlistLoaded(): boolean {
+  try {
+    const out = execSync(`launchctl list ${PLIST_LABEL} 2>&1`, { encoding: 'utf-8' });
+    return !out.includes('Could not find service');
+  } catch {
+    return false;
+  }
+}
+
+function ensureDaemonMac(port: number): EnsureResult {
+  if (!fs.existsSync(LAUNCHD_PLIST_PATH)) {
+    try { installPlist(port); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+  }
+  try {
+    execSync(`launchctl load "${LAUNCHD_PLIST_PATH}" 2>/dev/null`);
+  } catch { /* already loaded — fine */ }
+  return { ok: true, strategy: 'launchd' };
+}
+
+function stopDaemonMac(): void {
+  if (!fs.existsSync(LAUNCHD_PLIST_PATH)) return;
+  try {
+    execSync(`launchctl unload "${LAUNCHD_PLIST_PATH}" 2>/dev/null`);
+  } catch { /* not loaded */ }
+}
+
+function restartDaemonMac(port: number): EnsureResult {
+  stopDaemonMac();
+  return ensureDaemonMac(port);
+}
+
+// ── Platform: Windows / Linux (detached process with PID file) ──────
+
+function getPidFilePath(): string {
+  return path.join(TRACE_MCP_HOME, 'daemon.pid');
+}
+
+function readDaemonPid(): number | null {
+  const pidFile = getPidFilePath();
+  if (!fs.existsSync(pidFile)) return null;
+  const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
+  if (isNaN(pid)) return null;
+  try {
+    process.kill(pid, 0);
+    return pid;
+  } catch {
+    try { fs.unlinkSync(pidFile); } catch { /* noop */ }
+    return null;
+  }
+}
+
+function stopDaemonByPid(): void {
+  const pid = readDaemonPid();
+  if (pid === null) return;
+  try {
+    if (isWin) {
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'pipe' });
+    } else {
+      process.kill(pid, 'SIGTERM');
+    }
+  } catch { /* already dead */ }
+  try { fs.unlinkSync(getPidFilePath()); } catch { /* noop */ }
+}
+
+function ensureDaemonGeneric(port: number): EnsureResult {
+  if (readDaemonPid() !== null) {
+    return { ok: true, alreadyRunning: true, strategy: 'already-running' };
+  }
+
+  if (!fs.existsSync(TRACE_MCP_HOME)) fs.mkdirSync(TRACE_MCP_HOME, { recursive: true });
+
+  let binaryPath: string;
+  try { binaryPath = resolveTraceMcpBinary(); }
+  catch (err) { return { ok: false, error: (err as Error).message }; }
+
+  let logFd: number;
+  try { logFd = fs.openSync(DAEMON_LOG_PATH, 'a'); }
+  catch (err) { return { ok: false, error: `Cannot open log: ${(err as Error).message}` }; }
+
+  try {
+    const child = spawn(binaryPath, ['serve-http', '--port', String(port)], {
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+      cwd: TRACE_MCP_HOME,
+      env: { ...process.env, TRACE_MCP_MANAGED_BY: 'spawn' },
+      shell: isWin,
+      windowsHide: true,
+    });
+    child.unref();
+    if (child.pid) {
+      fs.writeFileSync(getPidFilePath(), String(child.pid), 'utf-8');
+    }
+  } catch (err) {
+    return { ok: false, error: `Spawn failed: ${(err as Error).message}` };
+  } finally {
+    try { fs.closeSync(logFd); } catch { /* noop */ }
+  }
+
+  return { ok: true, strategy: 'detached' };
+}
+
+function restartDaemonGeneric(port: number): EnsureResult {
+  stopDaemonByPid();
+  return ensureDaemonGeneric(port);
+}
+
+// ── Public API ──────────────────────────────────────────────────────
+
+/**
+ * Start the daemon if it's not already running. Returns immediately; the
+ * daemon itself may still be initializing. Use waitForDaemonUp() to block
+ * until /health responds.
+ */
+export async function ensureDaemon(opts?: { port?: number }): Promise<EnsureResult> {
+  const port = opts?.port ?? DEFAULT_DAEMON_PORT;
+
+  // Fast path: already responding.
+  const health = await getDaemonHealth(port);
+  if (health) return { ok: true, alreadyRunning: true, strategy: 'already-running' };
+
+  return isMac ? ensureDaemonMac(port) : ensureDaemonGeneric(port);
+}
+
+/**
+ * Stop the daemon (best-effort).
+ */
+export function stopDaemon(): void {
+  if (isMac) stopDaemonMac();
+  else stopDaemonByPid();
+}
+
+/**
+ * Kill existing daemon then start a fresh one.
+ */
+export function restartDaemon(opts?: { port?: number }): EnsureResult {
+  const port = opts?.port ?? DEFAULT_DAEMON_PORT;
+  return isMac ? restartDaemonMac(port) : restartDaemonGeneric(port);
+}
+
+/**
+ * Poll /health until the daemon responds or the timeout elapses.
+ */
+export async function waitForDaemonUp(
+  port: number,
+  timeoutMs = 5_000,
+  pollIntervalMs = 100,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isDaemonRunning(port).catch(() => false)) return true;
+    await new Promise<void>((r) => setTimeout(r, pollIntervalMs));
+  }
+  return false;
+}
+
+// ── Race-safe auto-spawn helper for stdio sessions ──────────────────
+
+const SPAWN_LOCK_PATH = path.join(TRACE_MCP_HOME, 'daemon-spawn.lock');
+const SPAWN_LOCK_STALE_MS = 30_000;
+
+/**
+ * Acquires a PID-based advisory lock by atomic file creation. Caller MUST
+ * call releaseSpawnLock() (even on error) to remove the lock. Returns false
+ * if another process currently holds a fresh lock; true if we acquired it
+ * (either because no one else held it or the previous holder is dead/stale).
+ */
+function acquireSpawnLock(): boolean {
+  if (!fs.existsSync(TRACE_MCP_HOME)) fs.mkdirSync(TRACE_MCP_HOME, { recursive: true });
+
+  try {
+    // 'wx' = fail if file exists. Atomic on POSIX; best-effort on Windows.
+    const fd = fs.openSync(SPAWN_LOCK_PATH, 'wx');
+    fs.writeSync(fd, String(process.pid));
+    fs.closeSync(fd);
+    return true;
+  } catch {
+    // Lock file exists — check if it's stale (dead PID or older than N ms).
+    try {
+      const stat = fs.statSync(SPAWN_LOCK_PATH);
+      const age = Date.now() - stat.mtimeMs;
+      const pid = parseInt(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8').trim(), 10);
+      const dead = isNaN(pid) || !isProcessAlive(pid);
+      if (dead || age > SPAWN_LOCK_STALE_MS) {
+        fs.writeFileSync(SPAWN_LOCK_PATH, String(process.pid), 'utf-8');
+        return true;
+      }
+    } catch { /* race with another process — give up */ }
+    return false;
+  }
+}
+
+function releaseSpawnLock(): void {
+  try {
+    const pid = parseInt(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8').trim(), 10);
+    if (pid === process.pid) {
+      fs.unlinkSync(SPAWN_LOCK_PATH);
+    }
+  } catch { /* noop */ }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export interface AutoSpawnResult {
+  ok: boolean;
+  alreadyRunning?: boolean;
+  error?: string;
+}
+
+/**
+ * Race-safe daemon spawn from a stdio session. Protocol:
+ *   1. Quick /health check — if up, return immediately.
+ *   2. Acquire advisory lock. If unavailable, another stdio is spawning;
+ *      just wait up to timeoutMs for the daemon to come up.
+ *   3. After acquiring lock, recheck /health (winner may have finished).
+ *   4. If still not running, call ensureDaemon() and waitForDaemonUp().
+ *   5. Always release the lock.
+ */
+export async function tryAutoSpawnDaemon(
+  port: number = DEFAULT_DAEMON_PORT,
+  timeoutMs: number = 5_000,
+): Promise<AutoSpawnResult> {
+  // Fast path — already running.
+  if (await isDaemonRunning(port).catch(() => false)) {
+    return { ok: true, alreadyRunning: true };
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  const haveLock = acquireSpawnLock();
+
+  if (!haveLock) {
+    // Another process is spawning — just wait for /health.
+    logger.debug('tryAutoSpawnDaemon: lock held by another process, waiting');
+    const waitMs = Math.max(0, deadline - Date.now());
+    const up = await waitForDaemonUp(port, waitMs);
+    return up ? { ok: true, alreadyRunning: true } : { ok: false, error: 'timeout waiting for concurrent spawn' };
+  }
+
+  try {
+    // Recheck health now that we hold the lock — winner might have finished.
+    if (await isDaemonRunning(port).catch(() => false)) {
+      return { ok: true, alreadyRunning: true };
+    }
+
+    logger.info({ port }, 'Auto-spawning daemon');
+    const ensureResult = await ensureDaemon({ port });
+    if (!ensureResult.ok) {
+      logger.warn({ error: ensureResult.error }, 'Auto-spawn ensureDaemon failed');
+      return { ok: false, error: ensureResult.error };
+    }
+
+    const waitMs = Math.max(0, deadline - Date.now());
+    const up = await waitForDaemonUp(port, waitMs);
+    if (up) {
+      logger.info({ port, strategy: ensureResult.strategy }, 'Auto-spawned daemon is up');
+      return { ok: true };
+    }
+
+    // Daemon didn't come up in time. One retry with restart (kills zombie if any).
+    logger.warn({ port, timeoutMs }, 'Daemon did not come up in time, attempting restart');
+    const restartResult = restartDaemon({ port });
+    if (!restartResult.ok) {
+      return { ok: false, error: restartResult.error };
+    }
+    const up2 = await waitForDaemonUp(port, 3_000);
+    return up2 ? { ok: true } : { ok: false, error: 'daemon did not respond after restart' };
+  } finally {
+    releaseSpawnLock();
+  }
+}

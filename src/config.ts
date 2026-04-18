@@ -260,6 +260,23 @@ export const TraceMcpConfigSchema = z.object({
    * JSON-RPC error so the client doesn't hang.
    */
   backend_swap_drain_ms: z.number().min(0).max(60000).default(5000),
+  /**
+   * When the stdio CLI can't find a running daemon, try to spawn one instead
+   * of immediately starting in local mode. Set to false for CI / sandboxed
+   * environments where spawning detached processes is undesirable.
+   */
+  auto_spawn_daemon: z.boolean().default(true),
+  /**
+   * Seconds to wait for an auto-spawned daemon's /health to respond. If the
+   * daemon isn't up in time, the stdio session falls back to local mode.
+   */
+  daemon_spawn_timeout_seconds: z.number().min(1).max(60).default(5),
+  /**
+   * Minutes the HTTP daemon (`serve-http`) stays alive with zero connected
+   * clients before self-exiting. 0 disables (launchd-managed daemons get 0
+   * automatically via TRACE_MCP_MANAGED_BY=launchd env).
+   */
+  daemon_idle_exit_minutes: z.number().min(0).max(1440).default(15),
   children: z.array(z.string()).optional(),
 });
 

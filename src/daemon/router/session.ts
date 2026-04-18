@@ -8,6 +8,7 @@ import { MessageRouter } from './message-router.js';
 import { ProxyBackend } from './proxy-backend.js';
 import { LocalBackend } from './local-backend.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
+import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import type { Backend } from './types.js';
 
 export interface StdioSessionOptions {
@@ -23,6 +24,10 @@ export interface StdioSessionOptions {
   daemonStabilityMs: number;
   /** ms to wait for pending requests to finish during a backend swap. */
   drainTimeoutMs?: number;
+  /** If true and no daemon is running, try to spawn one before falling back to local mode. */
+  autoSpawnDaemon?: boolean;
+  /** ms to wait for an auto-spawned daemon's /health to respond. */
+  autoSpawnTimeoutMs?: number;
 }
 
 /**
@@ -78,7 +83,23 @@ export class StdioSession {
     };
 
     await this.watcher.start();
-    const daemonActive = this.watcher.getCurrentState();
+    let daemonActive = this.watcher.getCurrentState();
+
+    // Auto-spawn: if no daemon is up and we're allowed to spawn one, try it.
+    // This avoids N concurrent local-mode indexings in a multi-root workspace
+    // where N stdio sessions would otherwise each build their own DB.
+    if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
+      const spawnTimeoutMs = this.opts.autoSpawnTimeoutMs ?? 5_000;
+      logger.info({ port: this.opts.daemonPort, timeoutMs: spawnTimeoutMs }, 'StdioSession: attempting daemon auto-spawn');
+      const result = await tryAutoSpawnDaemon(this.opts.daemonPort, spawnTimeoutMs);
+      if (result.ok) {
+        daemonActive = true;
+        logger.info({ alreadyRunning: result.alreadyRunning }, 'StdioSession: daemon is reachable after auto-spawn');
+      } else {
+        logger.warn({ error: result.error }, 'StdioSession: daemon auto-spawn failed, falling back to local mode');
+      }
+    }
+
     const initialBackend = daemonActive ? this.buildProxyBackend() : this.buildLocalBackend();
     await initialBackend.start();
     this.router.setInitialBackend(initialBackend);

@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import path from 'node:path';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -45,7 +46,7 @@ import { askCommand } from './cli/ask.js';
 import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH, GLOBAL_CONFIG_PATH, stripJsonComments, DAEMON_LOG_PATH } from './global.js';
-import { getProject, listProjects } from './registry.js';
+import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
 import { setupProject, isDangerousProjectRoot } from './project-setup.js';
 import { findProjectRoot, detectGitWorktree } from './project-root.js';
 import { TopologyStore } from './topology/topology-db.js';
@@ -53,6 +54,7 @@ import { SubprojectManager } from './subproject/manager.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import { isDaemonRunning } from './daemon/client.js';
 import { StdioSession } from './daemon/router/session.js';
+import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { DEFAULT_DAEMON_PORT } from './global.js';
 import type { TraceMcpConfig } from './config.js';
 
@@ -198,6 +200,10 @@ program
     const idleTimeoutMs = (config.idle_timeout_minutes ?? 30) * 60_000;
     const daemonStabilityMs = (config.daemon_stability_seconds ?? 30) * 1_000;
     const drainTimeoutMs = config.backend_swap_drain_ms ?? 5_000;
+    const autoSpawnDaemon = process.env.TRACE_MCP_NO_DAEMON === '1'
+      ? false
+      : (config.auto_spawn_daemon ?? true);
+    const autoSpawnTimeoutMs = (config.daemon_spawn_timeout_seconds ?? 5) * 1_000;
 
     const session = new StdioSession({
       projectRoot,
@@ -208,6 +214,8 @@ program
       idleTimeoutMs,
       daemonStabilityMs,
       drainTimeoutMs,
+      autoSpawnDaemon,
+      autoSpawnTimeoutMs,
     });
 
     let shuttingDown = false;
@@ -365,17 +373,23 @@ program
       });
       broadcastEvent({ type: 'client_connect', clientId, project: projectRoot });
 
+      // Preserve the onclose handler wired by Protocol.connect() above — overwriting
+      // it would skip Protocol's own state cleanup. Chain ours after it.
+      const protocolOnClose = transport.onclose;
       transport.onclose = () => {
+        protocolOnClose?.();
         const sid = transport.sessionId;
         if (sid) {
-          // Clean up session resources
+          // Clean up session resources. Do NOT call h.server.close() here: the
+          // transport is already closing (that's why onclose fires), and
+          // server.close() → transport.close() → fires onclose synchronously
+          // again → infinite recursion → stack overflow.
           sessionTransports.delete(sid);
           projectSessions.get(projectRoot)?.delete(sid);
 
           const h = sessionHandles.get(sid);
           if (h) {
             h.dispose();
-            h.server.close().catch(() => {});
             sessionHandles.delete(sid);
           }
 
@@ -388,6 +402,7 @@ program
 
           // Release shared resources ref
           resourcePool.release(projectRoot);
+          idleMonitor.onActivity();
         }
       };
 
@@ -411,7 +426,7 @@ program
     // the Electron app and local tooling legitimately make bursts of requests
     // (graph refetch, theme switching, etc.) that would otherwise trip the limit.
     const RATE_WINDOW_MS = 60_000;
-    const RATE_LIMIT = 600;
+    const RATE_LIMIT = 2000;
     const MAX_RATE_BUCKETS = 10_000;
     const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
@@ -492,12 +507,16 @@ program
 
       // MCP endpoint — route by session ID, create new session on initialize
       if (url.pathname === '/mcp') {
-        const projectRoot = url.searchParams.get('project') ?? projectManager.listProjects()[0]?.root;
-        if (!projectRoot) {
+        const requestedRoot = url.searchParams.get('project') ?? projectManager.listProjects()[0]?.root;
+        if (!requestedRoot) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'No projects registered' }));
           return;
         }
+        // Resolve subdirectory requests to the registered parent project so we
+        // don't spin up a duplicate index per nested package.
+        const ancestor = resolveRegisteredAncestor(requestedRoot);
+        const projectRoot = ancestor?.root ?? requestedRoot;
 
         try {
           let parsedBody: unknown;
@@ -542,6 +561,7 @@ program
               projectSessions.set(projectRoot, new Set());
             }
             projectSessions.get(projectRoot)!.add(sid);
+            idleMonitor.onActivity();
 
             // Move pending handle/clientId to session-keyed maps
             const pendingHandle = (transport as any).__pendingHandle;
@@ -582,6 +602,7 @@ program
         res.end(JSON.stringify({
           status: 'ok',
           transport: 'http',
+          version: PKG_VERSION,
           uptime: Math.floor((Date.now() - startedAt) / 1000),
           pid: process.pid,
           projects,
@@ -1259,11 +1280,24 @@ program
             }));
             return;
           }
-          await projectManager.addProject(root);
-          subscribeToProjectProgress(root);
-          broadcastEvent({ type: 'project_status', project: root, status: 'indexing' });
+
+          const ancestor = resolveRegisteredAncestor(absRoot);
+          if (ancestor && ancestor.root !== absRoot) {
+            if (!projectManager.getProject(ancestor.root)) {
+              await projectManager.addProject(ancestor.root);
+              subscribeToProjectProgress(ancestor.root);
+            }
+            logger.info({ requested: absRoot, parent: ancestor.root }, 'Routing subdirectory request to registered parent project');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 'using_parent', project: ancestor.root, requested: absRoot }));
+            return;
+          }
+
+          await projectManager.addProject(absRoot);
+          subscribeToProjectProgress(absRoot);
+          broadcastEvent({ type: 'project_status', project: absRoot, status: 'indexing' });
           res.writeHead(201, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ status: 'added', project: root }));
+          res.end(JSON.stringify({ status: 'added', project: absRoot }));
         } catch (e: any) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e?.message ?? 'Failed to add project' }));
@@ -1308,6 +1342,7 @@ program
           const now = new Date().toISOString();
           clients.set(id, { id, name, project, transport: t || 'stdio', connectedAt: now, lastSeen: now });
           broadcastEvent({ type: 'client_connect', clientId: id, transport: t || 'stdio', project, name });
+          idleMonitor.onActivity();
           res.writeHead(201, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'registered' }));
         } catch (e: any) {
@@ -1344,6 +1379,7 @@ program
           const existing = clients.get(clientId);
           clients.delete(clientId);
           broadcastEvent({ type: 'client_disconnect', clientId, project: existing?.project });
+          idleMonitor.onActivity();
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'removed' }));
@@ -1593,15 +1629,84 @@ program
       sessionTransports.clear();
       projectSessions.clear();
       resourcePool.disposeAll();
+      idleMonitor.stop();
+      clearInterval(activityPoker);
       await projectManager.shutdown();
       httpServer.close(() => process.exit(0));
     };
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
 
+    httpServer.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.warn({ port }, 'Port in use — another daemon instance is already running, exiting');
+        process.exit(2);
+      }
+      logger.error({ err: String(err) }, 'httpServer error');
+      process.exit(1);
+    });
+
+    // ── Idle-exit monitor ───────────────────────────────────────
+    // When launched by launchd (KeepAlive=true), idle-exit would cause an
+    // immediate respawn loop — disable in that case. Otherwise default 15 min.
+    const managedByLaunchd = process.env.TRACE_MCP_MANAGED_BY === 'launchd';
+    const defaultIdleMinutes = managedByLaunchd ? 0 : 15;
+    const configuredIdleMinutes = typeof globalRaw.daemon_idle_exit_minutes === 'number'
+      ? globalRaw.daemon_idle_exit_minutes
+      : defaultIdleMinutes;
+    const idleMonitor = new DaemonIdleMonitor({
+      idleTimeoutMs: configuredIdleMinutes * 60_000,
+      isBusy: () => clients.size > 0 || sessionTransports.size > 0 || sseConnections.size > 0,
+      onIdle: async () => {
+        await shutdown();
+      },
+    });
+    // Track activity: wrap the client/session/SSE mutation points in-place via
+    // a ticker that re-evaluates on every /health check (cheap, idempotent).
+    // Plus explicit hook below on key mutations.
+    const activityPoker = setInterval(() => idleMonitor.onActivity(), 10_000);
+    activityPoker.unref();
+    // Arm once on startup — daemon starts idle until the first client connects.
+    idleMonitor.onActivity();
+
+    // ── Self-staleness detection ─────────────────────────────────
+    // A long-running daemon would otherwise stay on the version it booted with
+    // until someone manually kills it. checkAndInstallUpdate only runs at
+    // startup. To catch external upgrades (stdio session's npm install -g,
+    // postinstall hook, or Electron tab), periodically compare our bundled
+    // version with the installed package.json on disk. On mismatch we shut
+    // down and let the supervisor (launchd KeepAlive / tray watchdog) respawn
+    // with the fresh binary. Cheap (one fs read every 10 min, sync but tiny).
+    if (PKG_VERSION !== '0.0.0-dev') {
+      let pkgPath: string | null = null;
+      try {
+        pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
+      } catch { /* unresolvable (e.g. bundled into a single file) — skip */ }
+      if (pkgPath) {
+        const stalenessTimer = setInterval(() => {
+          try {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath!, 'utf-8')) as { version?: string };
+            if (pkg.version && pkg.version !== PKG_VERSION) {
+              logger.info(
+                { running: PKG_VERSION, installed: pkg.version },
+                'Installed version changed — shutting down so supervisor respawns with fresh binary',
+              );
+              void shutdown();
+            }
+          } catch { /* transient read error — try again next tick */ }
+        }, 10 * 60_000);
+        stalenessTimer.unref();
+      }
+    }
+
     httpServer.listen(port, host, () => {
       const projectCount = projectManager.listProjects().length;
-      logger.info({ host, port, projectCount, endpoint: `http://${host}:${port}/mcp` }, 'trace-mcp daemon started');
+      logger.info({
+        host, port, projectCount,
+        endpoint: `http://${host}:${port}/mcp`,
+        idleExitMinutes: configuredIdleMinutes,
+        managedByLaunchd,
+      }, 'trace-mcp daemon started');
     });
   });
 
@@ -1641,6 +1746,7 @@ program
     // Auto-discover subprojects: register this project, scan contracts & client calls
     runSubprojectAutoSync(resolvedDir, config);
 
+    await pipeline.dispose();
     db.close();
   });
 
@@ -1675,6 +1781,7 @@ program
 
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
     await pipeline.indexFiles([resolvedFile]);
+    await pipeline.dispose();
     db.close();
   });
 

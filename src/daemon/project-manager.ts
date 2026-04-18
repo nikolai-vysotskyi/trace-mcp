@@ -181,14 +181,15 @@ export class ProjectManager {
   /** Stop watcher and close DB for a project. */
   async removeProject(root: string): Promise<void> {
     const managed = this.projects.get(root);
-    if (!managed) return;
-
-    await managed.watcher.stop();
-    clearServerPid(managed.db);
-    managed.serverHandle.dispose();
-    await managed.server.close();
-    managed.db.close();
-    this.projects.delete(root);
+    if (managed) {
+      await managed.watcher.stop();
+      clearServerPid(managed.db);
+      managed.serverHandle.dispose();
+      await managed.server.close();
+      managed.db.close();
+      this.projects.delete(root);
+    }
+    unregisterProject(root);
     logger.info({ projectRoot: root }, 'Project removed from daemon');
   }
 
