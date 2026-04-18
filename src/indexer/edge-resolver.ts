@@ -7,6 +7,7 @@ import path from 'node:path';
 import type { ResolveContext, RawEdge, ProjectContext } from '../plugin-api/types.js';
 import { executeFrameworkResolveEdges } from '../plugin-api/executor.js';
 import { buildProjectContext } from './project-context.js';
+import { logger } from '../logger.js';
 import type { PipelineState } from './pipeline-state.js';
 import { resolveOrmAssociationEdges as _resolveOrm } from './edge-resolvers/orm.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
@@ -20,7 +21,7 @@ import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/
 import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/typescript-types.js';
 import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
-import { resolveFileProjectionEdges as _resolveFileProjection } from './edge-resolvers/file-projection.js';
+import { resolveFileProjectionEdges as _resolveFileProjection, purgeForbiddenCrossWorkspaceEdges as _purgeCrossWs } from './edge-resolvers/file-projection.js';
 
 export class EdgeResolver {
   constructor(private state: PipelineState) {}
@@ -113,6 +114,9 @@ export class EdgeResolver {
   /** Pass 2j: file-level projection of cross-file symbol edges. */
   resolveFileProjectionEdges(): void { _resolveFileProjection(this.state); }
 
+  /** Pass 2k (final sweep): remove forbidden cross-workspace edges. */
+  purgeForbiddenCrossWorkspaceEdges(): void { _purgeCrossWs(this.state); }
+
   /** Store raw edges from framework/language plugins into the graph. */
   storeRawEdges(edges: RawEdge[]): void {
     if (edges.length === 0) return;
@@ -162,38 +166,50 @@ export class EdgeResolver {
       }
     }
 
-    // 3. edgeTypeName → edgeTypeId
+    // 3. edgeTypeName → edgeTypeId (+ category for cross-workspace policy).
+    // Single IN query — used to be one SELECT per distinct edge-type.
     const edgeTypeNames = new Set<string>();
     for (const edge of edges) edgeTypeNames.add(edge.edgeType);
     const edgeTypeCache = new Map<string, number>();
-    for (const name of edgeTypeNames) {
-      const row = store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get(name) as { id: number } | undefined;
-      if (row) edgeTypeCache.set(name, row.id);
+    const edgeTypeCategoryCache = new Map<string, string>();
+    if (edgeTypeNames.size > 0) {
+      const arr = Array.from(edgeTypeNames);
+      const ph = arr.map(() => '?').join(',');
+      const rows = store.db.prepare(
+        `SELECT id, name, category FROM edge_types WHERE name IN (${ph})`,
+      ).all(...arr) as Array<{ id: number; name: string; category: string }>;
+      for (const row of rows) {
+        edgeTypeCache.set(row.name, row.id);
+        edgeTypeCategoryCache.set(row.name, row.category);
+      }
     }
 
-    // 4. Pre-load workspace info for cross-workspace detection
-    const nodeWorkspaceCache = new Map<number, string | null>();
-    if (this.state.workspaces.length > 0) {
-      const allNodeIds = new Set<number>();
-      for (const edge of edges) {
-        const src = this.resolveNodeId(edge, symbolNodeCache, typeRefCache);
-        if (src != null) allNodeIds.add(src);
-        const tgt = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache);
-        if (tgt != null) allNodeIds.add(tgt);
-      }
+    // 4. Resolve src/tgt for every edge once, reused by both the workspace
+    // pre-load and the insert loop. Previously each edge was resolved twice.
+    const hasWorkspaces = this.state.workspaces.length > 0;
+    const resolved: Array<{ src: number; tgt: number; edge: RawEdge }> = [];
+    const allNodeIds = hasWorkspaces ? new Set<number>() : null;
+    for (const edge of edges) {
+      const src = this.resolveNodeId(edge, symbolNodeCache, typeRefCache);
+      if (src == null) continue;
+      const tgt = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache) ?? src;
+      resolved.push({ src, tgt, edge });
+      if (allNodeIds) { allNodeIds.add(src); allNodeIds.add(tgt); }
+    }
 
-      if (allNodeIds.size > 0) {
-        const nodeIdArr = Array.from(allNodeIds);
-        const ph = nodeIdArr.map(() => '?').join(',');
-        const rows = store.db.prepare(`
-          SELECT n.id AS node_id, f.workspace
-          FROM nodes n
-          LEFT JOIN files f ON (n.node_type = 'file' AND n.ref_id = f.id)
-            OR (n.node_type = 'symbol' AND f.id = (SELECT file_id FROM symbols WHERE id = n.ref_id))
-          WHERE n.id IN (${ph})
-        `).all(...nodeIdArr) as Array<{ node_id: number; workspace: string | null }>;
-        for (const row of rows) nodeWorkspaceCache.set(row.node_id, row.workspace);
-      }
+    // 5. Pre-load workspace info for cross-workspace detection
+    const nodeWorkspaceCache = new Map<number, string | null>();
+    if (allNodeIds && allNodeIds.size > 0) {
+      const nodeIdArr = Array.from(allNodeIds);
+      const ph = nodeIdArr.map(() => '?').join(',');
+      const rows = store.db.prepare(`
+        SELECT n.id AS node_id, f.workspace
+        FROM nodes n
+        LEFT JOIN files f ON (n.node_type = 'file' AND n.ref_id = f.id)
+          OR (n.node_type = 'symbol' AND f.id = (SELECT file_id FROM symbols WHERE id = n.ref_id))
+        WHERE n.id IN (${ph})
+      `).all(...nodeIdArr) as Array<{ node_id: number; workspace: string | null }>;
+      for (const row of rows) nodeWorkspaceCache.set(row.node_id, row.workspace);
     }
 
     // Batch insert
@@ -202,20 +218,37 @@ export class EdgeResolver {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
 
-    const insertBatch = store.db.transaction(() => {
-      for (const edge of edges) {
-        const sourceNodeId = this.resolveNodeId(edge, symbolNodeCache, typeRefCache);
-        if (sourceNodeId == null) continue;
-        const targetNodeId = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache) ?? sourceNodeId;
+    // Cross-workspace policy: most framework edges (Laravel ORM, Nova, Events,
+    // Livewire, NestJS, etc.) resolve class references by FQN. When multiple
+    // workspaces share the same FQN (e.g. `App\Models\User` in 8 Laravel
+    // apps), resolvers return an arbitrary match, producing bogus cross-repo
+    // edges that merge visually independent projects. Drop those at insert
+    // time — the only categories that legitimately cross workspaces are:
+    //   - `workspace`   : cross_workspace_import / api_call (cross-repo HTTP)
+    //   - `runtime`     : observed runtime traces
+    // Everything else (laravel, nova, nuxt, vue, react, nestjs, php, typescript,
+    // python, core, ...) stays strictly inside its workspace.
+    const CROSS_WS_ALLOWED_CATEGORIES = new Set(['workspace', 'runtime']);
+    let droppedCrossWs = 0;
 
+    const insertBatch = store.db.transaction(() => {
+      for (const { edge, src: sourceNodeId, tgt: targetNodeId } of resolved) {
         const edgeTypeId = edgeTypeCache.get(edge.edgeType);
         if (edgeTypeId == null) continue;
 
         let isCrossWs = false;
-        if (this.state.workspaces.length > 0) {
+        if (hasWorkspaces) {
           const srcWs = nodeWorkspaceCache.get(sourceNodeId);
           const tgtWs = nodeWorkspaceCache.get(targetNodeId);
           isCrossWs = srcWs != null && tgtWs != null && srcWs !== tgtWs;
+        }
+
+        if (isCrossWs) {
+          const category = edgeTypeCategoryCache.get(edge.edgeType);
+          if (category == null || !CROSS_WS_ALLOWED_CATEGORIES.has(category)) {
+            droppedCrossWs++;
+            continue;
+          }
         }
 
         const resolutionTier = edge.resolution ?? 'ast_resolved';
@@ -230,6 +263,10 @@ export class EdgeResolver {
       }
     });
     insertBatch();
+
+    if (droppedCrossWs > 0) {
+      logger.info({ dropped: droppedCrossWs }, 'Dropped cross-workspace framework edges');
+    }
   }
 
   private resolveNodeId(

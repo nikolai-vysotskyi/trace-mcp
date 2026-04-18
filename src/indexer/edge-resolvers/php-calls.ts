@@ -364,16 +364,26 @@ function resolveClassRef(
   return null;
 }
 
-/** Pick a class/interface/trait/enum from candidates, preferring same workspace. */
+/**
+ * Pick a class/interface/trait/enum from candidates. STRICT workspace
+ * isolation — never falls back to another workspace, since each Laravel app
+ * in a monorepo has its own `App\Models\User`, `App\Http\Controllers\Controller`,
+ * etc. Returning an arbitrary match would create ghost edges between
+ * independent projects that happen to share a parent directory.
+ *
+ * When no same-workspace candidate exists, return null and let the caller
+ * emit a phantom external symbol instead.
+ */
 function pickClassLike(candidates: PhpSymbol[] | undefined, workspace: string | null): PhpSymbol | null {
   if (!candidates || candidates.length === 0) return null;
   const classKinds = new Set(['class', 'interface', 'trait', 'enum']);
   const filtered = candidates.filter((c) => classKinds.has(c.kind));
   if (filtered.length === 0) return null;
-  // Prefer same workspace
   const sameWs = filtered.find((c) => c.workspace === workspace);
   if (sameWs) return sameWs;
-  return filtered[0];
+  // No cross-workspace fallback: different workspaces have independent
+  // codebases. If the class isn't in this workspace, it's external.
+  return null;
 }
 
 /**

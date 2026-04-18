@@ -47,8 +47,13 @@ export function resolveFileProjectionEdges(state: PipelineState): void {
   // file→file `imports` edge when they differ. Dedup via INSERT OR IGNORE
   // on the (source, target, edge_type) unique key.
   //
-  // Single SQL statement: joins both endpoints' node→symbol→file chains
-  // and uses INSERT ... SELECT to bulk-insert. Runs in a single transaction.
+  // Workspace isolation: skip edges between files in different workspaces.
+  // The underlying symbol edges may already be intentionally cross-repo
+  // (e.g. `workspace_import`, `api_call`), but those live at file level to
+  // begin with — projecting to file level would be a no-op. Cross-workspace
+  // symbol edges that DO exist come from FQN-based resolvers that don't
+  // filter by workspace (Laravel ORM, etc.) — projecting them to file edges
+  // would visually merge independent projects. Drop them here.
   const stmt = store.db.prepare(`
     INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
     SELECT DISTINCT
@@ -57,7 +62,7 @@ export function resolveFileProjectionEdges(state: PipelineState): void {
       ? AS edge_type_id,
       1,
       '{"projected":true}',
-      CASE WHEN src_file.workspace IS NOT NULL AND tgt_file.workspace IS NOT NULL AND src_file.workspace <> tgt_file.workspace THEN 1 ELSE 0 END,
+      0,
       'ast_inferred'
     FROM edges e
     JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'symbol'
@@ -69,6 +74,10 @@ export function resolveFileProjectionEdges(state: PipelineState): void {
     JOIN files tgt_file ON tgt_file.id = ts.file_id
     JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
     WHERE ss.file_id <> ts.file_id
+      AND (
+        src_file.workspace IS NULL OR tgt_file.workspace IS NULL
+        OR src_file.workspace = tgt_file.workspace
+      )
       AND e.edge_type_id NOT IN (${[...excludedSet].map(() => '?').join(',') || 'SELECT -1'})
   `);
 
@@ -82,7 +91,7 @@ export function resolveFileProjectionEdges(state: PipelineState): void {
       ? AS edge_type_id,
       1,
       '{"projected":true}',
-      CASE WHEN src_file.workspace IS NOT NULL AND tgt_file.workspace IS NOT NULL AND src_file.workspace <> tgt_file.workspace THEN 1 ELSE 0 END,
+      0,
       'ast_inferred'
     FROM edges e
     JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'file'
@@ -92,6 +101,10 @@ export function resolveFileProjectionEdges(state: PipelineState): void {
     JOIN files tgt_file ON tgt_file.id = ts.file_id
     JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
     WHERE src_file.id <> tgt_file.id
+      AND (
+        src_file.workspace IS NULL OR tgt_file.workspace IS NULL
+        OR src_file.workspace = tgt_file.workspace
+      )
       AND e.edge_type_id NOT IN (${[...excludedSet].map(() => '?').join(',') || 'SELECT -1'})
   `);
 
@@ -105,5 +118,60 @@ export function resolveFileProjectionEdges(state: PipelineState): void {
   const added = after - before;
   if (added > 0) {
     logger.info({ edges: added }, 'File projection edges resolved');
+  }
+}
+
+/**
+ * Final sweep: delete every cross-workspace edge that belongs to an
+ * edge-type category outside the cross-ws allow-list.
+ *
+ * Workspace isolation is a project-level invariant: a file in
+ * `fair/fair-laravel` should never have framework-level edges to a file in
+ * `15carats/15carats-laravel`, because those are independent Laravel apps
+ * that happen to sit under one root. Resolvers that look up classes by FQN
+ * (`App\Models\User` exists in all 8 apps) will pick an arbitrary match
+ * unless they're strictly workspace-scoped, and several resolvers bypass
+ * the main `storeRawEdges` cross-ws filter by writing directly through
+ * their own prepared statements.
+ *
+ * Running this as a post-pass is the simplest, catch-all fix: regardless
+ * of how an edge got there, if it crosses workspaces and isn't in the
+ * allow-list, it's deleted.
+ *
+ * Allow-list:
+ *   - workspace (cross_workspace_import, api_call, type_import, etc.)
+ *   - runtime   (observed production traces, legitimately cross-repo)
+ */
+export function purgeForbiddenCrossWorkspaceEdges(state: PipelineState): void {
+  const { store } = state;
+
+  // Running only in multi-workspace projects
+  if (!state.workspaces || state.workspaces.length === 0) return;
+
+  const ALLOWED = ['workspace', 'runtime'];
+  const placeholders = ALLOWED.map(() => '?').join(',');
+
+  const result = store.db.prepare(`
+    DELETE FROM edges
+    WHERE id IN (
+      SELECT e.id
+      FROM edges e
+      JOIN edge_types et ON et.id = e.edge_type_id
+      JOIN nodes ns ON ns.id = e.source_node_id
+      JOIN nodes nt ON nt.id = e.target_node_id
+      LEFT JOIN symbols ssy ON ns.node_type = 'symbol' AND ssy.id = ns.ref_id
+      LEFT JOIN files sf ON sf.id = CASE WHEN ns.node_type = 'file' THEN ns.ref_id ELSE ssy.file_id END
+      LEFT JOIN symbols tsy ON nt.node_type = 'symbol' AND tsy.id = nt.ref_id
+      LEFT JOIN files tf ON tf.id = CASE WHEN nt.node_type = 'file' THEN nt.ref_id ELSE tsy.file_id END
+      WHERE sf.workspace IS NOT NULL
+        AND tf.workspace IS NOT NULL
+        AND sf.workspace <> tf.workspace
+        AND et.category NOT IN (${placeholders})
+    )
+  `).run(...ALLOWED);
+
+  const deleted = Number(result.changes ?? 0);
+  if (deleted > 0) {
+    logger.info({ deleted }, 'Purged forbidden cross-workspace edges');
   }
 }
