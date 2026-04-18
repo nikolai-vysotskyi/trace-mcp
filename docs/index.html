@@ -16,10 +16,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Doto:wght@400;700&family=Space+Grotesk:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
+  <script>
+    // Set theme before first paint to avoid flash.
+    (function () {
+      try {
+        var stored = localStorage.getItem('trace-mcp-theme');
+        var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        var theme = stored === 'light' || stored === 'dark' ? stored : (prefersLight ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-    :root {
+    :root,
+    :root[data-theme="dark"] {
       --black: #000000;
       --surface: #111111;
       --surface-raised: #1A1A1A;
@@ -34,12 +49,41 @@
       --success: #4A9E5C;
       --warning: #D4A843;
 
+      --nav-bg: rgba(0, 0, 0, 0.85);
+      --dot-color: var(--border);
+      --ghost: var(--surface);
+      --color-scheme: dark;
+
       --font-display: 'Doto', 'Space Mono', monospace;
       --font-body: 'Space Grotesk', system-ui, sans-serif;
       --font-mono: 'Space Mono', 'JetBrains Mono', monospace;
     }
 
-    html { scroll-behavior: smooth; }
+    :root[data-theme="light"] {
+      --black: #F5F5F5;
+      --surface: #FFFFFF;
+      --surface-raised: #F0F0F0;
+      --border: #E8E8E8;
+      --border-visible: #CCCCCC;
+      --text-disabled: #999999;
+      --text-secondary: #666666;
+      --text-primary: #1A1A1A;
+      --text-display: #000000;
+      --accent: #D71921;
+      --accent-subtle: rgba(215, 25, 33, 0.12);
+      --success: #2E7D3E;
+      --warning: #A8822E;
+
+      --nav-bg: rgba(245, 245, 245, 0.85);
+      --dot-color: var(--border-visible);
+      --ghost: #EBEBEB;
+      --color-scheme: light;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      color-scheme: var(--color-scheme);
+    }
 
     body {
       font-family: var(--font-body);
@@ -49,6 +93,8 @@
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
+      transition: background-color 240ms cubic-bezier(0.25, 0.1, 0.25, 1),
+                  color 240ms cubic-bezier(0.25, 0.1, 0.25, 1);
     }
 
     a { color: inherit; text-decoration: none; }
@@ -56,7 +102,7 @@
     body::before {
       content: '';
       position: fixed; inset: 0;
-      background-image: radial-gradient(circle, var(--border) 0.5px, transparent 0.5px);
+      background-image: radial-gradient(circle, var(--dot-color) 0.5px, transparent 0.5px);
       background-size: 24px 24px;
       pointer-events: none;
       opacity: 0.25;
@@ -83,10 +129,12 @@
     /* ── Nav ── */
     nav {
       position: fixed; top: 0; left: 0; right: 0;
-      background: rgba(0, 0, 0, 0.85);
+      background: var(--nav-bg);
       backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
       z-index: 100;
+      transition: background-color 240ms cubic-bezier(0.25, 0.1, 0.25, 1);
     }
     nav .container {
       display: flex; align-items: center; justify-content: space-between;
@@ -134,6 +182,64 @@
       .nav-links { gap: 16px; font-size: 10px; }
       .nav-links a:not(.primary) { display: none; }
       .nav-status { display: none; }
+    }
+
+    /* ── Theme toggle (mechanical segmented switch) ── */
+    .theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      padding: 3px;
+      background: transparent;
+      border: 1px solid var(--border-visible);
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .theme-toggle:hover { border-color: var(--text-display); }
+    .theme-toggle:focus-visible {
+      outline: 1px solid var(--text-display);
+      outline-offset: 2px;
+    }
+    .theme-seg {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      color: var(--text-secondary);
+      transition: background-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
+                  color 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    .theme-seg .seg-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: currentColor;
+      opacity: 0.35;
+      transition: opacity 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    .theme-toggle[data-active="dark"] .theme-seg[data-mode="dark"],
+    .theme-toggle[data-active="light"] .theme-seg[data-mode="light"] {
+      background: var(--text-display);
+      color: var(--black);
+    }
+    .theme-toggle[data-active="dark"] .theme-seg[data-mode="dark"] .seg-dot,
+    .theme-toggle[data-active="light"] .theme-seg[data-mode="light"] .seg-dot {
+      opacity: 1;
+    }
+    @media (max-width: 800px) {
+      .theme-toggle { font-size: 9px; padding: 2px; }
+      .theme-seg { padding: 4px 8px; gap: 5px; }
+    }
+    @media (max-width: 480px) {
+      .theme-seg .label-text { display: none; }
+      .theme-seg { padding: 5px; }
+      .theme-seg .seg-dot { width: 6px; height: 6px; }
     }
 
     /* ── Buttons ── */
@@ -904,7 +1010,7 @@
       font-family: var(--font-display);
       font-size: clamp(200px, 30vw, 400px);
       font-weight: 700;
-      color: var(--surface);
+      color: var(--ghost);
       letter-spacing: -0.05em;
       pointer-events: none;
       z-index: 0;
@@ -1008,6 +1114,14 @@
       <a href="#benchmark">Benchmark</a>
       <a href="#install" class="primary">Install</a>
       <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="primary">Github</a>
+      <button type="button" class="theme-toggle" role="switch" aria-label="Toggle color theme" data-theme-toggle>
+        <span class="theme-seg" data-mode="dark">
+          <span class="seg-dot"></span><span class="label-text">Dark</span>
+        </span>
+        <span class="theme-seg" data-mode="light">
+          <span class="seg-dot"></span><span class="label-text">Light</span>
+        </span>
+      </button>
     </div>
   </div>
 </nav>
@@ -1891,6 +2005,57 @@
     c.style.color = 'var(--success)';
     setTimeout(() => { c.textContent = original; c.style.color = ''; }, 1800);
   }
+
+  // Theme toggle
+  (function () {
+    const root = document.documentElement;
+    const toggle = document.querySelector('[data-theme-toggle]');
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const THEME_BG = { dark: '#000000', light: '#F5F5F5' };
+
+    const applyTheme = (theme, persist) => {
+      root.setAttribute('data-theme', theme);
+      if (meta) meta.setAttribute('content', THEME_BG[theme]);
+      if (toggle) {
+        toggle.setAttribute('data-active', theme);
+        toggle.setAttribute('aria-checked', theme === 'light' ? 'true' : 'false');
+      }
+      if (persist) {
+        try { localStorage.setItem('trace-mcp-theme', theme); } catch (e) {}
+      }
+    };
+
+    const initial = root.getAttribute('data-theme') || 'dark';
+    applyTheme(initial, false);
+
+    if (toggle) {
+      const segments = toggle.querySelectorAll('.theme-seg');
+      segments.forEach(seg => {
+        seg.addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyTheme(seg.dataset.mode, true);
+        });
+      });
+      toggle.addEventListener('click', (e) => {
+        if (e.target.closest('.theme-seg')) return;
+        const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        applyTheme(next, true);
+      });
+    }
+
+    // Follow OS changes unless user has explicitly chosen.
+    if (window.matchMedia) {
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      const onChange = (e) => {
+        try {
+          if (localStorage.getItem('trace-mcp-theme')) return;
+        } catch (err) {}
+        applyTheme(e.matches ? 'light' : 'dark', false);
+      };
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
+      else if (mq.addListener) mq.addListener(onChange);
+    }
+  })();
 </script>
 
 </body>
