@@ -84,6 +84,39 @@ export function findParentProject(childRoot: string): RegistryEntry | null {
   return null;
 }
 
+/**
+ * Walk up from `requestedRoot` and return the closest already-registered project.
+ * Matches `requestedRoot` itself, any registered ancestor, or a `multi-root` parent
+ * that lists `requestedRoot` (or an ancestor of it) as a child. Returns null if no
+ * registered project covers this path.
+ *
+ * Used to route subdirectory requests (e.g. `repo/packages/app`) to the parent
+ * project's index instead of registering a duplicate per nested package.
+ */
+export function resolveRegisteredAncestor(requestedRoot: string): RegistryEntry | null {
+  const absRequested = path.resolve(requestedRoot);
+  const reg = loadRegistry();
+
+  const childToParent = new Map<string, RegistryEntry>();
+  for (const entry of Object.values(reg.projects)) {
+    if (entry.type === 'multi-root' && entry.children) {
+      for (const child of entry.children) childToParent.set(child, entry);
+    }
+  }
+
+  let dir = absRequested;
+  while (true) {
+    const direct = reg.projects[dir];
+    if (direct) return direct;
+    const viaMultiRoot = childToParent.get(dir);
+    if (viaMultiRoot) return viaMultiRoot;
+
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 export function unregisterProject(root: string): void {
   const absRoot = path.resolve(root);
   const reg = loadRegistry();

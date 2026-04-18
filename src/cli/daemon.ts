@@ -1,82 +1,11 @@
 import { Command } from 'commander';
 import fs from 'node:fs';
-import path from 'node:path';
 import { execSync, spawn } from 'node:child_process';
-import { TRACE_MCP_HOME, DEFAULT_DAEMON_PORT, DAEMON_LOG_PATH, LAUNCHD_PLIST_PATH } from '../global.js';
+import { DEFAULT_DAEMON_PORT, DAEMON_LOG_PATH, LAUNCHD_PLIST_PATH } from '../global.js';
 import { getDaemonHealth } from '../daemon/client.js';
+import { ensureDaemon, stopDaemon, restartDaemon } from '../daemon/lifecycle.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
-
-function getTraceMcpBinary(): string {
-  // Prefer the resolved path of the currently running binary
-  const argv1 = process.argv[1];
-  if (argv1 && fs.existsSync(argv1)) {
-    return path.resolve(argv1);
-  }
-  // Fallback: look up in PATH
-  try {
-    return execSync('which trace-mcp', { encoding: 'utf-8' }).trim();
-  } catch {
-    throw new Error('Could not find trace-mcp binary. Ensure it is installed and in PATH.');
-  }
-}
-
-function resolveNodePath(): string {
-  // launchd doesn't inherit shell PATH, so we must embed it in the plist.
-  // Derive from the node binary running right now.
-  const nodeDir = path.dirname(process.execPath);
-  // Merge with a minimal fallback PATH so basic unix tools work too.
-  const fallback = '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
-  return `${nodeDir}:${fallback}`;
-}
-
-function generatePlist(binaryPath: string, port: number): string {
-  const envPath = resolveNodePath();
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${PLIST_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${binaryPath}</string>
-    <string>serve-http</string>
-    <string>--port</string>
-    <string>${port}</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>${envPath}</string>
-  </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>${DAEMON_LOG_PATH}</string>
-  <key>StandardErrorPath</key>
-  <string>${DAEMON_LOG_PATH}</string>
-  <key>WorkingDirectory</key>
-  <string>${TRACE_MCP_HOME}</string>
-</dict>
-</plist>
-`;
-}
-
-function installPlist(port: number): void {
-  const binaryPath = getTraceMcpBinary();
-  const plistContent = generatePlist(binaryPath, port);
-
-  // Ensure LaunchAgents directory exists
-  const plistDir = path.dirname(LAUNCHD_PLIST_PATH);
-  if (!fs.existsSync(plistDir)) {
-    fs.mkdirSync(plistDir, { recursive: true });
-  }
-
-  fs.writeFileSync(LAUNCHD_PLIST_PATH, plistContent, 'utf-8');
-}
 
 function isPlistLoaded(): boolean {
   try {
@@ -88,27 +17,13 @@ function isPlistLoaded(): boolean {
 }
 
 /**
- * Ensure the daemon is running. Installs the launchd plist if missing
- * and loads it. Returns true if daemon is (or was already) running.
- * macOS only — returns false on other platforms without error.
+ * Ensure the daemon is running. Cross-platform wrapper over
+ * `src/daemon/lifecycle.ensureDaemon`. Returns true if daemon is (or was
+ * already) reachable via /health — false on spawn failure.
  */
 export async function ensureDaemonRunning(port = DEFAULT_DAEMON_PORT): Promise<boolean> {
-  if (process.platform !== 'darwin') return false;
-
-  // Already running?
-  const health = await getDaemonHealth(port);
-  if (health) return true;
-
-  // Not loaded — install plist and load
-  if (!isPlistLoaded()) {
-    installPlist(port);
-  }
-
-  try {
-    execSync(`launchctl load "${LAUNCHD_PLIST_PATH}" 2>/dev/null`);
-  } catch { /* already loaded */ }
-
-  return true;
+  const result = await ensureDaemon({ port });
+  return result.ok;
 }
 
 export const daemonCommand = new Command('daemon')
@@ -116,59 +31,35 @@ export const daemonCommand = new Command('daemon')
 
 daemonCommand
   .command('start')
-  .description('Start the daemon (installs launchd plist and loads it)')
+  .description('Start the daemon (launchd on macOS, detached process on Win/Linux)')
   .option('-p, --port <port>', 'Port to listen on', String(DEFAULT_DAEMON_PORT))
   .action(async (opts: { port: string }) => {
     const port = parseInt(opts.port, 10);
 
-    if (process.platform !== 'darwin') {
-      console.error('Daemon management via launchd is only supported on macOS.');
-      console.log(`Run manually: trace-mcp serve-http --port ${port}`);
-      process.exit(1);
-    }
-
-    // Check if already running
     const health = await getDaemonHealth(port);
     if (health) {
       console.log(`Daemon is already running on port ${port}.`);
       return;
     }
 
-    // Stop any existing loaded plist first
-    if (isPlistLoaded()) {
-      try {
-        execSync(`launchctl unload "${LAUNCHD_PLIST_PATH}" 2>/dev/null`);
-      } catch { /* ignore */ }
+    const result = await ensureDaemon({ port });
+    if (!result.ok) {
+      console.error(`Failed to start daemon: ${result.error ?? 'unknown'}`);
+      process.exit(1);
     }
-
-    installPlist(port);
-    execSync(`launchctl load "${LAUNCHD_PLIST_PATH}"`);
-    console.log(`Daemon started on port ${port}.`);
-    console.log(`  Plist: ${LAUNCHD_PLIST_PATH}`);
+    console.log(`Daemon started on port ${port} (strategy: ${result.strategy ?? 'unknown'}).`);
+    if (process.platform === 'darwin') {
+      console.log(`  Plist: ${LAUNCHD_PLIST_PATH}`);
+    }
     console.log(`  Logs:  ${DAEMON_LOG_PATH}`);
   });
 
 daemonCommand
   .command('stop')
-  .description('Stop the daemon (unloads launchd plist)')
+  .description('Stop the daemon')
   .action(async () => {
-    if (process.platform !== 'darwin') {
-      console.error('Daemon management via launchd is only supported on macOS.');
-      process.exit(1);
-    }
-
-    if (!isPlistLoaded()) {
-      console.log('Daemon is not running.');
-      return;
-    }
-
-    try {
-      execSync(`launchctl unload "${LAUNCHD_PLIST_PATH}"`);
-      console.log('Daemon stopped.');
-    } catch (e: any) {
-      console.error(`Failed to stop daemon: ${e.message}`);
-      process.exit(1);
-    }
+    stopDaemon();
+    console.log('Daemon stopped.');
   });
 
 daemonCommand
@@ -176,24 +67,13 @@ daemonCommand
   .description('Restart the daemon')
   .option('-p, --port <port>', 'Port to listen on', String(DEFAULT_DAEMON_PORT))
   .action(async (opts: { port: string }) => {
-    if (process.platform !== 'darwin') {
-      console.error('Daemon management via launchd is only supported on macOS.');
+    const port = parseInt(opts.port, 10);
+    const result = restartDaemon({ port });
+    if (!result.ok) {
+      console.error(`Failed to restart daemon: ${result.error ?? 'unknown'}`);
       process.exit(1);
     }
-
-    const port = parseInt(opts.port, 10);
-
-    // Stop
-    if (isPlistLoaded()) {
-      try {
-        execSync(`launchctl unload "${LAUNCHD_PLIST_PATH}"`);
-      } catch { /* ignore */ }
-    }
-
-    // Start
-    installPlist(port);
-    execSync(`launchctl load "${LAUNCHD_PLIST_PATH}"`);
-    console.log(`Daemon restarted on port ${port}.`);
+    console.log(`Daemon restarted on port ${port} (strategy: ${result.strategy ?? 'unknown'}).`);
   });
 
 daemonCommand
