@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.25.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.24.0...v1.25.0) (2026-04-18)
+
+
+### Features
+
+* **app:** graph explorer expansion and renderer UI polish ([c763318](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c7633186e1dacacaa66d748f3290c01cbc8e54e5))
+* **app:** hardened staged auto-update with SHA-256 + Gatekeeper ([757061a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/757061a8bba07f56acfdcc28671fe8dd0b6b19a7))
+* **daemon:** unified lifecycle, idle auto-exit, and subdir→parent routing ([317a792](https://github.com/nikolai-vysotskyi/trace-mcp/commit/317a7923deea9b00cf274cc4e98a2e17b75d96c3))
+* **indexer:** isolate workspaces in framework and file-projection edges ([1021f5b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1021f5b785215c9a0fe0c628e6caa8d93c37a5ab))
+* **viz:** derive community labels from dominant path prefix ([b676c17](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b676c17bb30ce186ab2e7cdc041d2a8820cf0382))
+
+
+### Performance
+
+* **indexer:** parallel file extraction via worker pool ([a8f886d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a8f886df85c0503175f0c74c6cf3368d96d1d20f))
+
+
+### Documentation
+
+* README refresh, desktop app section, comparisons page ([a725773](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a725773699008e369b3350b83388d80ff458aa01))
+
 ## [1.24.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.23.1...v1.24.0) (2026-04-17)
 
 
