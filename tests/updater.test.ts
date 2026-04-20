@@ -204,6 +204,48 @@ describe('checkAndInstallUpdate', () => {
     vi.restoreAllMocks();
   });
 
+  it('skips install when previous attempt for same version failed recently', async () => {
+    const now = Date.now();
+    // Cache records a recent failed install for the exact version we'd retry.
+    setupCache({
+      lastChecked: now,
+      latestVersion: '2.0.0',
+      lastFailedInstall: now - 60 * 1000, // 1 minute ago
+      lastFailedVersion: '2.0.0',
+    });
+
+    const { spawnSync } = await import('node:child_process');
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 0, stdout: '', stderr: '', pid: 0, output: [], signal: null,
+    });
+
+    const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
+    expect(result).toBe(false);
+    // Must NOT have attempted npm install (no spawnSync call for `npm install`).
+    const installCalls = vi.mocked(spawnSync).mock.calls.filter(
+      (c) => Array.isArray(c[1]) && c[1].includes('install'),
+    );
+    expect(installCalls).toHaveLength(0);
+  });
+
+  it('records lastFailedInstall when npm install fails', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0' });
+
+    const { spawnSync } = await import('node:child_process');
+    // Every spawnSync call (npm root probe + install attempts) returns failure.
+    vi.mocked(spawnSync).mockReturnValue({
+      status: 1, stdout: '', stderr: 'npm error something broke', pid: 0, output: [], signal: null,
+    });
+
+    const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
+    expect(result).toBe(false);
+
+    const written = getWrittenCache();
+    expect(written).not.toBeNull();
+    expect(written!.lastFailedVersion).toBe('2.0.0');
+    expect(typeof written!.lastFailedInstall).toBe('number');
+  });
+
   it('saves installedVersion in cache after successful update', async () => {
     // Cache says a newer version exists and interval expired
     setupCache({ lastChecked: 0, latestVersion: '2.0.0' });
