@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { StatusDot } from '../components/StatusDot';
+import { OllamaPanel } from '../components/OllamaPanel';
 import { useDaemon } from '../hooks/useDaemon';
 import {
   CONFIG_SCHEMA,
@@ -646,6 +647,11 @@ function SectionDetail({ section, data, onUpdate, onBack, onOpenPicker }: {
 
       {/* AI Activity — only on AI section */}
       {section.key === 'ai' && <AIActivity />}
+
+      {/* Ollama control — shown when the AI section is open and provider is ollama */}
+      {section.key === 'ai' && data.provider === 'ollama' && (
+        <OllamaPanel baseUrl={typeof data.base_url === 'string' ? data.base_url : undefined} />
+      )}
     </div>
   );
 }

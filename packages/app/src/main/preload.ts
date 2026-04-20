@@ -50,4 +50,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('tab-list-changed', handler);
     return () => { ipcRenderer.removeListener('tab-list-changed', handler); };
   },
+  // Ollama control: passes baseUrl through so the renderer stays authoritative about
+  // which Ollama instance we're talking to (users can repoint in settings).
+  ollama: {
+    status: (baseUrl?: string) => ipcRenderer.invoke('ollama:status', baseUrl),
+    listInstalled: (baseUrl?: string) => ipcRenderer.invoke('ollama:list-installed', baseUrl),
+    listRunning: (baseUrl?: string) => ipcRenderer.invoke('ollama:list-running', baseUrl),
+    unload: (name: string, baseUrl?: string) => ipcRenderer.invoke('ollama:unload', name, baseUrl),
+    delete: (name: string, baseUrl?: string) => ipcRenderer.invoke('ollama:delete', name, baseUrl),
+    start: (baseUrl?: string) => ipcRenderer.invoke('ollama:start', baseUrl),
+    stop: (baseUrl?: string) => ipcRenderer.invoke('ollama:stop', baseUrl),
+  },
 });
