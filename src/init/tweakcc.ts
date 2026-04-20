@@ -17,12 +17,14 @@ import type { InitStepResult } from './types.js';
 // tweakcc config directory detection (mirrors tweakcc's own logic)
 // ---------------------------------------------------------------------------
 
+const DEFAULT_TWEAKCC_DIR = path.join(os.homedir(), '.tweakcc');
+
 function getTweakccConfigDir(): string | null {
   const envDir = process.env.TWEAKCC_CONFIG_DIR?.trim();
   if (envDir) return envDir;
 
   const candidates = [
-    path.join(os.homedir(), '.tweakcc'),
+    DEFAULT_TWEAKCC_DIR,
     path.join(os.homedir(), '.claude', 'tweakcc'),
   ];
 
@@ -40,6 +42,21 @@ function getTweakccSystemPromptsDir(): string | null {
   const configDir = getTweakccConfigDir();
   if (!configDir) return null;
   return path.join(configDir, 'system-prompts');
+}
+
+/**
+ * Resolve the target system-prompts dir, creating the default location on
+ * demand when tweakcc hasn't been run yet. Returns null only if tweakcc is
+ * not installed at all (npx can't find it).
+ */
+function resolveOrBootstrapPromptsDir(): string | null {
+  const existing = getTweakccSystemPromptsDir();
+  if (existing) return existing;
+
+  // tweakcc config dir doesn't exist yet — try to bootstrap it at the default
+  // location if the tweakcc package itself is available.
+  if (!isTweakccInstalled()) return null;
+  return path.join(DEFAULT_TWEAKCC_DIR, 'system-prompts');
 }
 
 // ---------------------------------------------------------------------------
@@ -206,13 +223,13 @@ export function installTweakccPrompts(opts: {
   dryRun?: boolean;
 }): InitStepResult[] {
   const results: InitStepResult[] = [];
-  const promptsDir = getTweakccSystemPromptsDir();
+  const promptsDir = resolveOrBootstrapPromptsDir();
 
   if (!promptsDir) {
     results.push({
       target: '~/.tweakcc/system-prompts/',
       action: 'skipped',
-      detail: 'tweakcc not found — install with `npx tweakcc` first, then re-run init',
+      detail: 'tweakcc package not available — run `npx tweakcc` manually, then re-run init',
     });
     return results;
   }
@@ -253,7 +270,7 @@ export function installTweakccPrompts(opts: {
   // Try to apply via tweakcc
   if (written > 0) {
     try {
-      execSync('npx tweakcc --apply --yes', { stdio: 'pipe', timeout: 30_000 });
+      execSync('npx tweakcc --apply', { stdio: 'pipe', timeout: 60_000 });
       results.push({
         target: 'tweakcc --apply',
         action: 'updated',
@@ -263,7 +280,7 @@ export function installTweakccPrompts(opts: {
       results.push({
         target: 'tweakcc --apply',
         action: 'skipped',
-        detail: 'Prompt files written but `npx tweakcc --apply` failed — run it manually',
+        detail: 'Prompt files written but `npx tweakcc --apply` failed — run it manually (may need Claude Code not running)',
       });
     }
   }
