@@ -17,7 +17,15 @@ export class FileRepository {
     this._stmts = {
       insertFile: db.prepare(
         `INSERT INTO files (path, language, content_hash, byte_length, indexed_at, workspace, mtime_ms)
-         VALUES (?, ?, ?, ?, datetime('now'), ?, ?)`,
+         VALUES (?, ?, ?, ?, datetime('now'), ?, ?)
+         ON CONFLICT(path) DO UPDATE SET
+           language     = COALESCE(excluded.language, files.language),
+           content_hash = COALESCE(excluded.content_hash, files.content_hash),
+           byte_length  = COALESCE(excluded.byte_length, files.byte_length),
+           indexed_at   = datetime('now'),
+           workspace    = COALESCE(excluded.workspace, files.workspace),
+           mtime_ms     = COALESCE(excluded.mtime_ms, files.mtime_ms)
+         RETURNING id`,
       ),
       getFile: db.prepare('SELECT * FROM files WHERE path = ?'),
       getFileById: db.prepare('SELECT * FROM files WHERE id = ?'),
@@ -42,8 +50,8 @@ export class FileRepository {
     mtimeMs: number | null,
     createNode: (nodeType: string, refId: number) => number,
   ): number {
-    const result = this._stmts.insertFile.run(path, language, contentHash, byteLength, workspace, mtimeMs);
-    const fileId = Number(result.lastInsertRowid);
+    const row = this._stmts.insertFile.get(path, language, contentHash, byteLength, workspace, mtimeMs) as { id: number };
+    const fileId = row.id;
     createNode('file', fileId);
     return fileId;
   }
