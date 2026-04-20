@@ -8,6 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
+import { getLauncherPath } from './launcher.js';
 
 const HOME = os.homedir();
 
@@ -60,46 +61,14 @@ interface McpServerEntry {
   env?: Record<string, string>;
 }
 
-/** Clients that launch as GUI apps and don't inherit the user's shell PATH */
-const GUI_CLIENTS: ReadonlySet<string> = new Set([
-  'claude-desktop', 'cursor', 'windsurf', 'continue', 'junie', 'codex', 'jetbrains-ai',
-]);
-
 /**
- * Resolve absolute path to the trace-mcp binary + minimal PATH env
- * so GUI apps (which don't source ~/.zshrc) can find both the binary and node.
- *
- * Returns bare 'trace-mcp' for terminal clients that inherit shell PATH.
+ * Build the MCP command entry. All clients use the stable launcher shim at
+ * ~/.trace-mcp/bin/trace-mcp — the shim resolves node + dist/cli.js at
+ * runtime from launcher.env (or probe fallback), so the MCP registration
+ * path is version-independent and survives node upgrades.
  */
-function resolveGuiCommand(): { command: string; env: Record<string, string> } {
-  const SYSTEM_PATH = '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin';
-  const nodeBinDir = path.dirname(process.execPath);
-
-  // process.argv[1] is the trace-mcp script path — absolute for global installs
-  const scriptPath = process.argv[1];
-  if (scriptPath && path.isAbsolute(scriptPath) && fs.existsSync(scriptPath)) {
-    const scriptBinDir = path.dirname(scriptPath);
-    const dirs = new Set([scriptBinDir, nodeBinDir]);
-    return {
-      command: scriptPath,
-      env: { PATH: [...dirs].join(':') + ':' + SYSTEM_PATH },
-    };
-  }
-
-  // Fallback: check if trace-mcp lives next to node (common for npm -g)
-  const candidate = path.join(nodeBinDir, 'trace-mcp');
-  if (fs.existsSync(candidate)) {
-    return {
-      command: candidate,
-      env: { PATH: nodeBinDir + ':' + SYSTEM_PATH },
-    };
-  }
-
-  // Last resort: bare command with current PATH snapshot
-  return {
-    command: 'trace-mcp',
-    env: { PATH: process.env.PATH ?? SYSTEM_PATH },
-  };
+function buildMcpEntry(): { command: string } {
+  return { command: getLauncherPath() };
 }
 
 type McpScope = 'global' | 'project';
@@ -156,8 +125,7 @@ export function configureMcpClients(
       }
 
       try {
-        const resolved = resolveGuiCommand();
-        const action = writeCodexTomlEntry(configPath, { ...resolved, args: ['serve'], cwd: projectRoot });
+        const action = writeCodexTomlEntry(configPath, { ...buildMcpEntry(), args: ['serve'], cwd: projectRoot });
         results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
       } catch (err) {
         results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
@@ -186,33 +154,29 @@ export function configureMcpClients(
       continue;
     }
 
-    // Check if already configured
-    if (fs.existsSync(configPath)) {
-      try {
-        const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        if (content?.mcpServers?.['trace-mcp']) {
-          results.push({ target: configPath, action: 'already_configured', detail: name });
-          continue;
-        }
-      } catch { /* malformed JSON — will overwrite */ }
-    }
-
     if (opts.dryRun) {
       results.push({ target: configPath, action: 'skipped', detail: `Would configure ${name} (${opts.scope})` });
       continue;
     }
 
-    // GUI clients need absolute path + env.PATH because they don't inherit shell PATH.
-    // Terminal clients (claude-code, claw-code) work fine with bare 'trace-mcp'.
-    const isGui = GUI_CLIENTS.has(name);
-    const entry: McpServerEntry = isGui
-      ? { ...resolveGuiCommand(), args: ['serve'] }
-      : { command: 'trace-mcp', args: ['serve'] };
+    // All clients point at the stable launcher shim. The shim handles all
+    // node/cli-path resolution at runtime, so the registration stays valid
+    // across node upgrades, nvm switches, and trace-mcp reinstalls.
+    const entry: McpServerEntry = { ...buildMcpEntry(), args: ['serve'] };
 
     // Global scope always needs cwd since server starts from anywhere.
     // Project scope for claude-code doesn't need cwd (.mcp.json is in project root).
     if (opts.scope === 'global' || (name !== 'claude-code' && name !== 'claw-code')) {
       entry.cwd = projectRoot;
+    }
+
+    // Refresh-in-place: if an existing entry matches what we'd write, report
+    // already_configured; otherwise overwrite. This keeps the entry current
+    // when node/bin paths change across trace-mcp upgrades without requiring
+    // --force, and heals stale bare-`trace-mcp` commands from older installs.
+    if (fs.existsSync(configPath) && entryMatches(configPath, entry)) {
+      results.push({ target: configPath, action: 'already_configured', detail: name });
+      continue;
     }
 
     try {
@@ -252,6 +216,24 @@ function verifyTraceMcpEntry(configPath: string): boolean {
   try {
     const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     return Boolean(content?.mcpServers?.['trace-mcp']);
+  } catch {
+    return false;
+  }
+}
+
+function entryMatches(configPath: string, expected: McpServerEntry): boolean {
+  try {
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const current = content?.mcpServers?.['trace-mcp'];
+    if (!current || typeof current !== 'object') return false;
+    if (current.command !== expected.command) return false;
+    if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return false;
+    // env is optional — compare only if either side has it
+    if (expected.env || current.env) {
+      if (JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})) return false;
+    }
+    return true;
   } catch {
     return false;
   }

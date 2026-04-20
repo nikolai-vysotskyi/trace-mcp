@@ -10,7 +10,11 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import { configureMcpClients } from '../init/mcp-client.js';
 import { updateClaudeMd } from '../init/claude-md.js';
-import { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook } from '../init/hooks.js';
+import { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook, cleanupLegacyHooks } from '../init/hooks.js';
+import { setupLauncher } from '../init/launcher.js';
+
+declare const PKG_VERSION_INJECTED: string;
+const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
 import { installTweakccPrompts, detectTweakccPrompts } from '../init/tweakcc.js';
 import { formatReport } from '../init/reporter.js';
@@ -134,7 +138,7 @@ export const initCommand = new Command('init')
               label: 'Max — CLAUDE.md + hooks + tweakcc',
               hint: tweakccState.installed
                 ? 'patches Claude\'s system prompts (recommended)'
-                : 'requires tweakcc — install with `npx tweakcc` first (recommended)',
+                : 'auto-installs tweakcc via npx (recommended)',
             },
           ],
           initialValue: 'max' as const,
@@ -216,6 +220,10 @@ export const initCommand = new Command('init')
       } else if (!opts.skipMcpClient) {
         selectedClients = ['claude-code'];
       }
+      // Non-interactive defaults to Max when Claude Code is the target and
+      // hooks aren't explicitly skipped — mirrors the interactive initialValue.
+      const hasClaudeCode = selectedClients.includes('claude-code') || selectedClients.includes('claw-code') || selectedClients.includes('claude-desktop');
+      installTweakcc = hasClaudeCode && !opts.skipHooks;
       // Auto-fix conflicts in non-interactive mode
       fixConflicts = true;
     }
@@ -436,6 +444,10 @@ function executeSteps(
     dryRun?: boolean;
   },
 ) {
+  // 0. Stable launcher shim + config. Must run BEFORE configureMcpClients
+  // because the MCP registration's `command` field points at the shim path.
+  steps.push(...setupLauncher({ dryRun: opts.dryRun, force: opts.force, pkgVersion: PKG_VERSION }));
+
   // 1. MCP clients (always global)
   if (opts.selectedClients.length > 0) {
     const clientResults = configureMcpClients(opts.selectedClients, process.cwd(), {
@@ -455,6 +467,9 @@ function executeSteps(
 
   // 3. PreToolUse guard hook + PostToolUse auto-reindex hook
   if (opts.installHooks) {
+    // Clean up orphaned hook entries left behind by older trace-mcp versions
+    // before installing the current ones.
+    steps.push(...cleanupLegacyHooks({ global: true, dryRun: opts.dryRun }));
     steps.push(installGuardHook({ global: true, dryRun: opts.dryRun }));
     steps.push(installReindexHook({ global: true, dryRun: opts.dryRun }));
     steps.push(installPrecompactHook({ global: true, dryRun: opts.dryRun }));

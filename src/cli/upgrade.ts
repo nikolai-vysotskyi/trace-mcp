@@ -10,6 +10,10 @@ import path from 'node:path';
 import { detectProject, detectGuardHook } from '../init/detector.js';
 import { updateClaudeMd } from '../init/claude-md.js';
 import { installGuardHook, installWorktreeHook, isHookOutdated } from '../init/hooks.js';
+import { setupLauncher } from '../init/launcher.js';
+
+declare const PKG_VERSION_INJECTED: string;
+const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
@@ -44,10 +48,6 @@ export const upgradeCommand = new Command('upgrade')
       projectRoots.push(path.resolve(dir));
     } else {
       const projects = listProjects();
-      if (projects.length === 0) {
-        console.error('No registered projects. Run `trace-mcp add` first, or specify a directory.');
-        process.exit(1);
-      }
       for (const p of projects) {
         if (fs.existsSync(p.root)) {
           projectRoots.push(p.root);
@@ -55,6 +55,9 @@ export const upgradeCommand = new Command('upgrade')
           logger.warn({ root: p.root }, 'Skipping stale project (directory not found)');
         }
       }
+      // Note: no projects is allowed — global work (launcher, hooks,
+      // CLAUDE.md) still runs so `npm i -g trace-mcp@new && trace-mcp upgrade`
+      // refreshes the shim even before any project is registered.
     }
 
     const allSteps: Array<{ projectRoot: string; steps: InitStepResult[] }> = [];
@@ -119,29 +122,38 @@ export const upgradeCommand = new Command('upgrade')
       allSteps.push({ projectRoot, steps });
     }
 
+    // Global steps run regardless of whether any projects are registered.
+    // Ensure a bucket exists so they surface in output even with no projects.
+    let globalSteps: InitStepResult[];
+    if (allSteps.length > 0) {
+      globalSteps = allSteps[0].steps;
+    } else {
+      globalSteps = [];
+      allSteps.push({ projectRoot: '(global)', steps: globalSteps });
+    }
+
+    // Refresh the stable launcher shim + config. Must run on every upgrade —
+    // launcher.env embeds absolute node + cli paths, and those change whenever
+    // trace-mcp is reinstalled under a different Node version.
+    globalSteps.push(...setupLauncher({
+      dryRun: opts.dryRun,
+      force: false,
+      pkgVersion: PKG_VERSION,
+    }));
+
     // Global: update guard hook if outdated
     if (!opts.skipHooks) {
       const { hasGuardHook, guardHookVersion } = detectGuardHook();
       if (hasGuardHook && isHookOutdated(guardHookVersion)) {
-        const hookResult = installGuardHook({ dryRun: opts.dryRun });
-        // Attach to first project's steps or create global section
-        if (allSteps.length > 0) {
-          allSteps[0].steps.push(hookResult);
-        }
+        globalSteps.push(installGuardHook({ dryRun: opts.dryRun }));
       }
       // Always ensure worktree hooks are installed (new in this version)
-      const worktreeResults = installWorktreeHook({ dryRun: opts.dryRun });
-      if (allSteps.length > 0) {
-        allSteps[0].steps.push(...worktreeResults);
-      }
+      globalSteps.push(...installWorktreeHook({ dryRun: opts.dryRun }));
     }
 
     // Global: refresh CLAUDE.md
     if (!opts.skipClaudeMd) {
-      const mdResult = updateClaudeMd(process.cwd(), { dryRun: opts.dryRun, scope: 'global' });
-      if (allSteps.length > 0) {
-        allSteps[0].steps.push(mdResult);
-      }
+      globalSteps.push(updateClaudeMd(process.cwd(), { dryRun: opts.dryRun, scope: 'global' }));
     }
 
     // Report
@@ -151,7 +163,10 @@ export const upgradeCommand = new Command('upgrade')
     } else {
       console.log(header);
       for (const { projectRoot, steps } of allSteps) {
-        console.log(`\n  Project: ${path.basename(projectRoot)} (${projectRoot})`);
+        const header = projectRoot === '(global)'
+          ? '\n  Global'
+          : `\n  Project: ${path.basename(projectRoot)} (${projectRoot})`;
+        console.log(header);
         for (const step of steps) {
           console.log(`    ${step.action}: ${step.detail ?? step.target}`);
         }
