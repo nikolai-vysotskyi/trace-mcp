@@ -92,21 +92,29 @@ export function createAnthropicProvider(apiKey: string, model: string): LLMProvi
 // Provider resolution — env vars → config fallback
 // ---------------------------------------------------------------------------
 
+/** Treat empty/whitespace strings as unset. */
+const pick = (v: unknown, fallback: string): string =>
+  typeof v === 'string' && v.trim() ? v : fallback;
+
 export function resolveProvider(opts: { model?: string; provider?: string }, config?: TraceMcpConfig): LLMProvider {
+  // Respect per-capability gates: Ask requires inference.
+  if (config?.ai?.enabled && config.ai.features && config.ai.features.inference === false) {
+    throw new Error('AI inference is disabled in settings (ai.features.inference = false). Enable it to use Ask.');
+  }
   // 1. Explicit --provider flag or env vars
   if (opts.provider === 'groq' || (!opts.provider && process.env.GROQ_API_KEY)) {
     const key = process.env.GROQ_API_KEY;
     if (!key) throw new Error('GROQ_API_KEY environment variable is required for Groq provider');
     return createOpenAICompatibleProvider(
       'groq', 'https://api.groq.com/openai/v1', key,
-      opts.model ?? 'llama-3.3-70b-versatile',
+      pick(opts.model, 'llama-3.3-70b-versatile'),
     );
   }
 
   if (opts.provider === 'anthropic' || (!opts.provider && process.env.ANTHROPIC_API_KEY)) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error('ANTHROPIC_API_KEY environment variable is required for Anthropic provider');
-    return createAnthropicProvider(key, opts.model ?? 'claude-sonnet-4-20250514');
+    return createAnthropicProvider(key, pick(opts.model, 'claude-sonnet-4-6'));
   }
 
   if (opts.provider === 'openai' || (!opts.provider && process.env.OPENAI_API_KEY)) {
@@ -114,30 +122,30 @@ export function resolveProvider(opts: { model?: string; provider?: string }, con
     if (!key) throw new Error('OPENAI_API_KEY environment variable is required for OpenAI provider');
     return createOpenAICompatibleProvider(
       'openai', 'https://api.openai.com/v1', key,
-      opts.model ?? 'gpt-4o-mini',
+      pick(opts.model, 'gpt-4o-mini'),
     );
   }
 
   // 2. Fallback: config-level AI provider
   if (config?.ai?.enabled && config.ai.provider !== 'onnx') {
     const provider = config.ai.provider;
-    const model = opts.model ?? config.ai.inference_model;
+    const model = pick(opts.model, pick(config.ai.inference_model, ''));
 
     if (provider === 'openai') {
       const key = config.ai.api_key ?? process.env.OPENAI_API_KEY ?? '';
       if (key) {
         return createOpenAICompatibleProvider(
-          'openai', config.ai.base_url ?? 'https://api.openai.com/v1', key,
-          model ?? 'gpt-4o-mini',
+          'openai', pick(config.ai.base_url, 'https://api.openai.com/v1'), key,
+          pick(model, 'gpt-4o-mini'),
         );
       }
     }
 
     if (provider === 'ollama') {
-      const baseUrl = config.ai.base_url ?? 'http://localhost:11434';
+      const baseUrl = pick(config.ai.base_url, 'http://localhost:11434');
       return createOpenAICompatibleProvider(
         'ollama', `${baseUrl}/v1`, '',
-        model ?? 'gemma4:e4b',
+        pick(model, 'llama3.2'),
       );
     }
   }
