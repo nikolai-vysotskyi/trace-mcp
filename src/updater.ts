@@ -16,6 +16,52 @@ interface UpdateCache {
   latestVersion: string;
   /** The version that was last running — used to detect post-update restarts. */
   installedVersion?: string;
+  /** Timestamp of the last failed npm install, to avoid retry storms. */
+  lastFailedInstall?: number;
+  /** Version that last failed to install — back off only for the same target. */
+  lastFailedVersion?: string;
+}
+
+/** Back-off window after a failed auto-update install. */
+const FAILED_INSTALL_RETRY_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Resolve the global npm root (`npm root -g`). Used to locate `.trace-mcp-*`
+ * scratch directories that npm leaves behind when an install is interrupted.
+ *
+ * Goes through a login shell so the GUI-launched daemon picks up the same
+ * PATH (nvm/volta/homebrew) the user has in the terminal.
+ */
+function resolveNpmRoot(): string | null {
+  const shell = process.env.SHELL;
+  const cmd = shell ? shell : 'npm';
+  const args = shell ? ['-lc', 'npm root -g'] : ['root', '-g'];
+  try {
+    const result = spawnSync(cmd, args, { encoding: 'utf-8', timeout: 30_000 });
+    if (result.status !== 0) return null;
+    const line = (result.stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
+    return line || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remove `.trace-mcp-<rand>` scratch directories left behind by a previous
+ * interrupted `npm install -g trace-mcp`. npm performs the module swap via
+ * rename-to-scratch-then-rename-back; if the process died mid-swap the scratch
+ * dir lingers and the next install fails with ENOTEMPTY.
+ */
+function cleanStaleScratchDirs(npmRoot: string): void {
+  try {
+    for (const entry of fs.readdirSync(npmRoot)) {
+      if (entry.startsWith('.trace-mcp-')) {
+        try {
+          fs.rmSync(path.join(npmRoot, entry), { recursive: true, force: true });
+        } catch {}
+      }
+    }
+  } catch {}
 }
 
 function readCache(): UpdateCache | null {
@@ -117,27 +163,69 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     return false;
   }
 
+  // Back off on repeated failures for the same target version so a broken
+  // install doesn't trigger a `npm install` storm on every MCP client respawn.
+  if (
+    cache?.lastFailedVersion === latestVersion &&
+    cache.lastFailedInstall &&
+    now - cache.lastFailedInstall < FAILED_INSTALL_RETRY_MS
+  ) {
+    logger.debug(
+      { version: latestVersion, failedAgo: now - cache.lastFailedInstall },
+      'Auto-update: skipping retry, previous install failed recently',
+    );
+    return false;
+  }
+
   logger.info(
     { current: CURRENT_VERSION, latest: latestVersion },
     'Auto-update: newer version found, installing...',
   );
 
-  const result = spawnSync('npm', ['install', '-g', `trace-mcp@${latestVersion}`], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 120_000,
-    encoding: 'utf-8',
-  });
+  // Pre-flight: wipe any `.trace-mcp-<rand>` scratch dirs from prior interrupted
+  // installs. `--force` swaps the package dir wholesale instead of relying on
+  // npm's rename dance, which is the fragile step that fails with ENOTEMPTY.
+  const npmRoot = resolveNpmRoot();
+  if (npmRoot) cleanStaleScratchDirs(npmRoot);
+
+  const runInstall = () =>
+    spawnSync('npm', ['install', '-g', `trace-mcp@${latestVersion}`, '--force'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 120_000,
+      encoding: 'utf-8',
+    });
+
+  let result = runInstall();
+
+  // ENOTEMPTY even after --force means the main `trace-mcp` dir itself is in a
+  // corrupt half-extracted state. Nuke it along with any scratches and retry once.
+  if (result.status !== 0 && /ENOTEMPTY/.test(result.stderr ?? '') && npmRoot) {
+    logger.warn('Auto-update: ENOTEMPTY detected, nuking corrupt install dir and retrying');
+    cleanStaleScratchDirs(npmRoot);
+    try {
+      fs.rmSync(path.join(npmRoot, 'trace-mcp'), { recursive: true, force: true });
+    } catch {}
+    result = runInstall();
+  }
 
   if (result.status !== 0) {
     logger.warn(
-      { stderr: (result.stderr ?? '').slice(0, 500), status: result.status },
+      { stderr: (result.stderr ?? '').slice(-500), status: result.status },
       'Auto-update: npm install failed',
     );
+    // Stamp the failure so future spawns skip retry for FAILED_INSTALL_RETRY_MS.
+    writeCache({
+      lastChecked: now,
+      latestVersion,
+      installedVersion: cache?.installedVersion,
+      lastFailedInstall: now,
+      lastFailedVersion: latestVersion,
+    });
     return false;
   }
 
   // Record the version we just installed so the restarted process can detect
-  // the upgrade and run post-update migrations.
+  // the upgrade and run post-update migrations. Clear any prior failure stamp.
   writeCache({ lastChecked: now, latestVersion, installedVersion: latestVersion });
 
   logger.info({ version: latestVersion }, 'Auto-update: installed successfully, restarting...');
