@@ -87,13 +87,19 @@ describe('launcher shim integration', () => {
     expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
   });
 
-  it('missing node anywhere → exit 127 with recovery message', () => {
+  it('missing node/cli → exit 127 with recovery message', () => {
     const { home, traceHome } = setupFakeHome();
-    // No config, no overrides, minimal PATH, fake HOME → probe finds nothing
+    // No config, no overrides, minimal PATH, fake HOME.
+    // On a fully clean system this fails at "node not found"; on CI runners
+    // with /usr/local/bin/node installed, the node probe succeeds and we
+    // fail at "trace-mcp package not found" instead. Both are legitimate
+    // outcomes of the same failure class — probe couldn't produce a working
+    // pair — so the contract we assert is: exit 127 + recovery hint, not
+    // the exact layer that tripped.
     const { status, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
 
     expect(status).toBe(127);
-    expect(stderr).toContain('node binary not found');
+    expect(stderr).toMatch(/node binary not found|trace-mcp package not found/);
     expect(stderr).toContain('npm i -g trace-mcp');
   });
 
@@ -131,10 +137,10 @@ describe('launcher shim integration', () => {
   it('stale config (broken paths) falls through to probe and still errors cleanly', () => {
     const { home, traceHome } = setupFakeHome();
     writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
-    // No probe candidates reachable in fake HOME + minimal PATH
+    // Same environment-dependent outcome as above (see "missing node/cli").
     const { status, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
 
     expect(status).toBe(127);
-    expect(stderr).toContain('node binary not found');
+    expect(stderr).toMatch(/node binary not found|trace-mcp package not found/);
   });
 });
