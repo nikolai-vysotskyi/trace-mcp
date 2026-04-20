@@ -201,6 +201,43 @@ function initialZoomFromSpaceSize(spaceSize: number, container: HTMLElement): nu
 }
 
 /**
+ * Lightweight RAF-based FPS meter. Refreshes display twice a second so the
+ * digit doesn't flicker on every frame. Tier drives the accent color —
+ * "good" green, "ok" amber, "bad" red — readable at a glance without
+ * needing to parse the number.
+ */
+function FpsBadge({ show }: { show: boolean }) {
+  const [fps, setFps] = useState(0);
+  useEffect(() => {
+    if (!show) return;
+    let raf = 0;
+    let frames = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      frames += 1;
+      const dt = now - last;
+      if (dt >= 500) {
+        setFps(Math.round((frames * 1000) / dt));
+        frames = 0;
+        last = now;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [show]);
+  if (!show) return null;
+  const tier = fps >= 50 ? 'good' : fps >= 30 ? 'ok' : 'bad';
+  return (
+    <div className="cosmos-gpu-fps" data-tier={tier}>
+      <span className="cosmos-gpu-fps-dot" />
+      <span className="cosmos-gpu-fps-num">{fps}</span>
+      <span className="cosmos-gpu-fps-unit">fps</span>
+    </div>
+  );
+}
+
+/**
  * Per-hop highlight palette. Index 0 = clicked seed, 1 = 1-hop neighbor, etc.
  * Hot-to-cool perceptual gradient so the user can tell "how far" a node is
  * from the click at a glance. Index >= length reuses the last entry.
@@ -421,7 +458,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const graph = graphRef.current;
     const idx = indexByIdRef.current.get(id);
     if (!graph || idx == null) return;
-    graph.fitViewByPointIndices([idx], 500, 80);
+    graph.fitViewByPointIndices([idx], 500, 0.3);
     const node = nodesRef.current[idx];
     if (node) setSelected(node);
     // Also apply neighborhood highlight
@@ -939,7 +976,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         onZoomStart: (_e: unknown, userDriven: boolean) => {
           if (userDriven) userInteractedRef.current = true;
         },
-        showFPSMonitor: showFPS,
+        showFPSMonitor: false,
         hoveredPointCursor: 'pointer',
         onClick: (index: number | undefined) => {
           if (index == null) {
@@ -1349,12 +1386,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     graph.render();
   }, [themeSpec]);
 
-  // ── FPS toggle ────────────────────────────────────────────────
-  useEffect(() => {
-    const graph = graphRef.current;
-    if (!graph) return;
-    graph.setConfig({ showFPSMonitor: showFPS });
-  }, [showFPS]);
+  // FPS is rendered by the custom <FpsBadge/> overlay below — cosmos.gl's
+  // built-in Stats.js panel is intentionally off (see showFPSMonitor: false).
 
   // ── Pause simulation + label RAF when component is offscreen ───
   // If the user switches tabs away from the graph, Electron keeps RAF
@@ -1611,13 +1644,15 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       {/* WebGL canvas — the graph surface */}
       <div ref={containerRef} className="absolute inset-0" />
 
-      {/* Halo overlay — additive radial-gradient glows around top-importance
-          nodes. mix-blend-mode: screen brightens the cosmos.gl points
-          underneath without obscuring them. */}
+      <FpsBadge show={showFPS} />
+
+      {/* A/B PROBE: halo overlay disabled. mix-blend-mode:screen forces
+          Chromium into software compositing for the whole stacking context;
+          testing if removal lifts FPS. Revert if halos are wanted visually. */}
       <canvas
         ref={haloCanvasRef}
         className="absolute inset-0 pointer-events-none"
-        style={{ mixBlendMode: 'screen' }}
+        style={{ display: 'none' }}
       />
 
       {/* Label overlay — HTML over canvas, clipped by root's overflow-hidden */}
@@ -1706,6 +1741,45 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           border-radius: 3px;
           opacity: 0.55;
         }
+        .cosmos-gpu-fps {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 30;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 9px 4px 8px;
+          border-radius: 999px;
+          font: 500 11px/1 "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+          letter-spacing: -0.01em;
+          color: ${isDark ? 'rgba(235,237,242,0.92)' : 'rgba(20,22,26,0.92)'};
+          background: ${isDark ? 'rgba(20,22,26,0.55)' : 'rgba(255,255,255,0.65)'};
+          border: 0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'};
+          backdrop-filter: blur(10px) saturate(160%);
+          -webkit-backdrop-filter: blur(10px) saturate(160%);
+          box-shadow: 0 1px 2px rgba(0,0,0,0.15), 0 4px 14px rgba(0,0,0,0.18);
+          user-select: none;
+          pointer-events: none;
+          font-variant-numeric: tabular-nums;
+        }
+        .cosmos-gpu-fps-dot {
+          width: 6px; height: 6px; border-radius: 999px;
+          background: currentColor;
+          box-shadow: 0 0 6px currentColor;
+          opacity: 0.9;
+        }
+        .cosmos-gpu-fps-num { font-weight: 600; font-size: 12px; }
+        .cosmos-gpu-fps-unit { opacity: 0.55; font-size: 10px; }
+        .cosmos-gpu-fps[data-tier="good"] { color: #42d392; }
+        .cosmos-gpu-fps[data-tier="ok"]   { color: #f5b84a; }
+        .cosmos-gpu-fps[data-tier="bad"]  { color: #ff6a6a; }
+        .cosmos-gpu-fps[data-tier="good"] .cosmos-gpu-fps-num,
+        .cosmos-gpu-fps[data-tier="ok"]   .cosmos-gpu-fps-num,
+        .cosmos-gpu-fps[data-tier="bad"]  .cosmos-gpu-fps-num { color: ${isDark ? '#f5f6fa' : '#141618'}; }
+        .cosmos-gpu-fps[data-tier="good"] .cosmos-gpu-fps-unit,
+        .cosmos-gpu-fps[data-tier="ok"]   .cosmos-gpu-fps-unit,
+        .cosmos-gpu-fps[data-tier="bad"]  .cosmos-gpu-fps-unit { color: ${isDark ? 'rgba(235,237,242,0.5)' : 'rgba(20,22,26,0.5)'}; }
       `}</style>
 
       {/* ── Floating toolbar — constrained to card width, wraps if needed ── */}
