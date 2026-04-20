@@ -10,5 +10,13 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'dist/renderer'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-dom/client'],
+          cosmos: ['@cosmos.gl/graph'],
+        },
+      },
+    },
   },
 });

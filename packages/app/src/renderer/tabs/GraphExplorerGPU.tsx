@@ -16,10 +16,6 @@ export interface GraphGPUSettings {
   colorBy: 'community' | 'language' | 'framework_role';
   showLabels: boolean;
   showFPS: boolean;
-  /** How many hops of neighbors to highlight when clicking a node (1–10). */
-  highlightDepth: number;
-  /** Simulation animation speed (0.25 = very slow, 1 = default, 3 = fast). */
-  simulationSpeed: number;
 }
 
 export const DEFAULT_GRAPH_GPU_SETTINGS: GraphGPUSettings = {
@@ -31,8 +27,6 @@ export const DEFAULT_GRAPH_GPU_SETTINGS: GraphGPUSettings = {
   colorBy: 'community',
   showLabels: true,
   showFPS: false,
-  highlightDepth: 2,
-  simulationSpeed: 0.5,
 };
 
 interface Props {
@@ -134,21 +128,41 @@ function nodeColor01(node: VizNode, mode: GraphGPUSettings['colorBy'], commColor
   return hexToRgb01(c);
 }
 
+/**
+ * Per-link RGBA tinted as a shade of the source node's color — lerped toward
+ * the background so edges read as an atmospheric halo of their source node
+ * instead of competing with it. Saturation ceiling in dense clusters is the
+ * tint itself, not white → no more pure-white blowout.
+ */
+function computeTintedLinkColors(
+  pointColors: Float32Array,
+  linkPairs: Float32Array,
+  bgRgb01: [number, number, number],
+  mix: number,
+  alpha: number,
+): Float32Array {
+  const numLinks = Math.floor(linkPairs.length / 2);
+  const out = new Float32Array(numLinks * 4);
+  const [br, bgc, bb] = bgRgb01;
+  for (let i = 0; i < numLinks; i++) {
+    const si = (linkPairs[i * 2] | 0) * 4;
+    out[i * 4]     = br  + (pointColors[si]     - br)  * mix;
+    out[i * 4 + 1] = bgc + (pointColors[si + 1] - bgc) * mix;
+    out[i * 4 + 2] = bb  + (pointColors[si + 2] - bb)  * mix;
+    out[i * 4 + 3] = alpha;
+  }
+  return out;
+}
+
+const LINK_TINT_MIX = 0.55;
+const LINK_TINT_ALPHA = 0.3;
+
 function nodeSize(node: VizNode): number {
   const imp = Math.max(0, Math.min(1, node.importance ?? 0));
   // Base 0.5-2px. Multiplied by zoom level (scalePointsOnZoom=true), so at
   // the fit-after-settle zoom (~2x) points sit at 1-4px and grow
   // proportionally as the user zooms in.
   return 0.5 + imp * 1.5;
-}
-
-/**
- * Map user-facing "speed" slider (0.1 = near-frozen, 3 = snappy) to cosmos.gl's
- * simulationDecay. Higher decay = slower alpha decay = longer initial settle.
- */
-function simulationDecayFromSpeed(speed: number): number {
-  const clamped = Math.max(0.1, Math.min(3, speed));
-  return Math.round(2000 / clamped);
 }
 
 /**
@@ -264,6 +278,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // Last link pair buffer pushed to cosmos.gl — needed by highlightNeighborhood
   // to recompute per-link colors based on the BFS subgraph.
   const linkPairsRef = useRef<Float32Array | null>(null);
+  // Cached per-link tinted color buffer (shade of source node, lerped toward
+  // background). Applied on render, on colorBy change, and on theme change.
+  // clearHighlight restores from this instead of a flat theme-default color.
+  const defaultLinkColorsRef = useRef<Float32Array | null>(null);
   const rafLabelRef = useRef<number | null>(null);
   // Throttles per-tick camera refit during simulation (see onSimulationTick).
   const lastTickFitRef = useRef<number>(0);
@@ -272,6 +290,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // blocks us from pausing repeatedly or resuming the settle. Reset to
   // false at the start of each renderGraph call.
   const frozenRef = useRef<boolean>(false);
+  // Set true as soon as the user zooms or pans the view. Suppresses the
+  // throttled live-fit inside onSimulationTick so the user's camera isn't
+  // fought by the auto-framing loop. Reset on each new renderGraph cycle
+  // so the freshly-loaded graph gets its one initial fit.
+  const userInteractedRef = useRef<boolean>(false);
   // Web Worker for off-main-thread edge dedup + top-K sort on big graphs.
   // Lazy — only instantiated when nCount > 3000.
   const workerRef = useRef<Worker | null>(null);
@@ -294,16 +317,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   const [searchQuery, setSearchQuery] = useState('');
   const [live, setLive] = useState(true);           // Live = simulation running + breathing
   const [simRunning, setSimRunning] = useState(true); // polled from cosmos.gl
-  const breathTimerRef = useRef<number | null>(null);
-  // Synchronous mirror of `live` — callbacks invoked by cosmos.gl (e.g. the
-  // onSimulationEnd setTimeout) read this to decide whether to enable the
-  // continuous neuron-oscillation mode.
+  // Synchronous mirror of `live` — onSimulationTick (fired from cosmos.gl's
+  // RAF loop) reads this to decide whether to seamlessly re-heat alpha when
+  // it decays; skipped when the user has paused via the Live toggle.
   const liveRef = useRef(live);
   useEffect(() => { liveRef.current = live; }, [live]);
 
-  const { scope, granularity, hideIsolated, symbolKinds, maxNodes, colorBy, showLabels, showFPS, highlightDepth, simulationSpeed } = settings;
-  const highlightDepthRef = useRef(highlightDepth);
-  highlightDepthRef.current = highlightDepth;
+  const { scope, granularity, hideIsolated, symbolKinds, maxNodes, colorBy, showLabels, showFPS } = settings;
+  const HIGHLIGHT_DEPTH = 1;
   // Mirror `showLabels` into a ref so the RAF tick reads the latest value
   // directly without relying on useCallback dep propagation. Belt-and-suspenders
   // against any stale-closure scenarios in the label loop.
@@ -364,7 +385,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const graph = graphRef.current;
     const orig = origColorsRef.current;
     if (!graph || !orig || seeds.length === 0) return;
-    const depth = Math.max(1, Math.min(10, highlightDepthRef.current));
+    const depth = HIGHLIGHT_DEPTH;
 
     // BFS with per-node depth tracking. `depthMap` records the shortest hop
     // distance we reached this node from any seed — that's what the color
@@ -399,10 +420,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     graph.selectPointsByIndices(highlighted);
     highlightedDepthRef.current = new Map(depthMap);
 
-    // Colorize links: edges whose BOTH endpoints are in the 1-hop
-    // neighborhood (seed + direct neighbors) get a bright accent; everything
-    // else is dimmed so the highlighted subgraph stands out even though
-    // cosmos.gl's built-in greyout alone doesn't read as "highlighted".
+    // Colorize links: only BFS tree edges (one endpoint at hop d, the other at
+    // d+1, up to the selected depth) get the accent. Same-depth "cross" edges
+    // between siblings are NOT a relationship at the current depth — e.g. at
+    // depth=1, an edge between two direct neighbors of the seed is actually a
+    // 2-hop relationship (seed→A→B), so it must stay dimmed.
     const linkPairs = linkPairsRef.current;
     if (linkPairs && linkPairs.length >= 2) {
       const numLinks = Math.floor(linkPairs.length / 2);
@@ -413,20 +435,24 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         const t = linkPairs[i * 2 + 1] | 0;
         const sd = depthMap.get(s);
         const td = depthMap.get(t);
-        const isOneHopEdge = sd != null && td != null && sd <= 1 && td <= 1;
-        if (isOneHopEdge) {
+        const isTreeEdge = sd != null && td != null && sd !== td && Math.max(sd, td) <= depth;
+        if (isTreeEdge) {
           linkColors[i * 4]     = hr;
           linkColors[i * 4 + 1] = hg;
           linkColors[i * 4 + 2] = hb;
           linkColors[i * 4 + 3] = ha;
         } else {
-          linkColors[i * 4]     = 0.5;
-          linkColors[i * 4 + 1] = 0.5;
-          linkColors[i * 4 + 2] = 0.55;
-          linkColors[i * 4 + 3] = 0.04;
+          // Non-tree edge (incl. sibling cross-edges between two neighbors at the
+          // same BFS depth). Render fully transparent — we only want edges that
+          // physically connect seed→neighbor to show at depth=1.
+          linkColors[i * 4]     = 0;
+          linkColors[i * 4 + 1] = 0;
+          linkColors[i * 4 + 2] = 0;
+          linkColors[i * 4 + 3] = 0;
         }
       }
       graph.setLinkColors(linkColors);
+      graph.render();
     }
 
     // Disable distance-based fade while highlighting — cosmos.gl fades links
@@ -445,27 +471,16 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // Restore original community/language/framework colors — highlight mode
     // had overwritten the buffer for highlighted nodes.
     if (orig) graph.setPointColors(new Float32Array(orig));
-    // Reset link colors to uniform theme default (we overrode them per-link
+    // Reset link colors to the cached per-link tints (we overrode them per-link
     // in highlightNeighborhood, so cosmos.gl won't revert on its own).
-    const linkPairs = linkPairsRef.current;
-    if (linkPairs && linkPairs.length >= 2) {
-      const numLinks = Math.floor(linkPairs.length / 2);
-      const linkColors = new Float32Array(numLinks * 4);
-      const lr = themeSpec.linkColor[0] / 255;
-      const lg = themeSpec.linkColor[1] / 255;
-      const lb = themeSpec.linkColor[2] / 255;
-      const la = themeSpec.linkColor[3];
-      for (let i = 0; i < numLinks; i++) {
-        linkColors[i * 4]     = lr;
-        linkColors[i * 4 + 1] = lg;
-        linkColors[i * 4 + 2] = lb;
-        linkColors[i * 4 + 3] = la;
-      }
-      graph.setLinkColors(linkColors);
+    const tinted = defaultLinkColorsRef.current;
+    if (tinted) {
+      graph.setLinkColors(new Float32Array(tinted));
     }
     // Restore the distance-fade range we widened in highlightNeighborhood —
     // keep in sync with the values passed at Graph() construction.
     graph.setConfig({ linkVisibilityDistanceRange: [100, 400] });
+    graph.render();
     highlightedDepthRef.current = null;
     setSelected(null);
   }, [themeSpec]);
@@ -503,10 +518,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         if (i != null) indices.add(i);
       }
       if (highlightActive) {
-        // Highlight mode: show labels ONLY for the seed and its DIRECT (1-hop)
-        // neighbors, even if highlightDepth is higher. Deeper hops stay colored
-        // on the canvas but don't get labels — more than one hop of labels gets
-        // visually noisy fast.
+        // Highlight mode: show labels for seed + 1-hop neighbors.
         for (const [idx, d] of highlightedDepth) {
           if (d <= 1) indices.add(idx);
         }
@@ -566,9 +578,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       el.dataset.state = hovered?.id === node.id || selected?.id === node.id ? 'active' : 'normal';
     }
 
-    // Halo pass — soft additive glow around top-importance nodes. Uses the
-    // SAME spaceToScreenPosition + positions read from above, so cost is
-    // ~150 radial-gradient fills per frame regardless of total N.
+    // Halo pass — soft additive glow around top-importance nodes. Reads
+    // SPACE coords from the tracked-positions FBO (populated by a
+    // dedicated GPU pass sampled from currentPositionFbo every tick), so
+    // halos stay in lock-step with the rendered dots even while the
+    // simulation is continuously re-heated. Using getPointPositions()
+    // here caused visible halo/point drift: that path copies the whole
+    // position FBO via readPixels on demand, whose timing can fall out
+    // of phase with the swap between current/previousPositionFbo during
+    // an active simulation step. Tracked positions also scale to O(K)
+    // GPU→CPU bytes instead of O(N), so the per-frame cost is bounded
+    // by the halo count regardless of graph size.
     const halo = haloCanvasRef.current;
     const orig = origColorsRef.current;
     if (halo && orig) {
@@ -579,10 +599,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         // outside the canvas, mix-blend-mode: screen handles the cosmos.gl
         // composite (set on the <canvas> element style).
         ctx.globalCompositeOperation = 'lighter';
-        const haloIndices = labelIndicesRef.current.slice(0, 150);
-        for (const idx of haloIndices) {
-          const sx = positions[idx * 2];
-          const sy = positions[idx * 2 + 1];
+        const tracked = graph.getTrackedPointPositionsMap();
+        for (const [idx, pos] of tracked) {
+          const sx = pos[0];
+          const sy = pos[1];
           if (!Number.isFinite(sx)) continue;
           const [hx, hy] = graph.spaceToScreenPosition([sx, sy]);
           const r = orig[idx * 4]     * 255;
@@ -748,13 +768,13 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // updateLabels would otherwise iterate them, reading positions that no
     // longer correspond to the same nodes. Clear before the swap.
     highlightedDepthRef.current = null;
-    // Reset the freeze flag BEFORE the new Graph() is constructed.
+    // Reset the fit-done flag BEFORE the new Graph() is constructed.
     // cosmos.gl starts its RAF/tick loop immediately on construction, so
     // onSimulationTick can fire before finalize() runs — if frozenRef is
-    // still true from the previous render's freeze, the very first tick
-    // on the new graph pauses it instantly, leaving the layout stuck at
-    // its init-disc positions.
+    // stale from the previous render, the freshly-built graph would skip
+    // its one initial fit-view pass.
     frozenRef.current = false;
+    userInteractedRef.current = false;
 
     const prevGraph = graphRef.current;
     let carryPositions: number[] | Float32Array | null = null;
@@ -799,29 +819,44 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         // knob for inter-cluster separation — longer springs pull connected
         // components apart into readable sub-clusters.
         simulationGravity: 2.0,
-        simulationRepulsion: 1.2,
-        simulationFriction: 0.92,
+        // Repulsion shader grows as ~c/sqrt(dist) at close range, so any
+        // initial cluster of near-neighbors gets huge first-tick deltas —
+        // the visible "jumping". Holding repulsion at 0.9 (down from 1.2)
+        // keeps sub-community structure readable (gravity still wins at
+        // large distances) while capping the short-range force spike that
+        // makes individual points pop between frames.
+        simulationRepulsion: 0.9,
+        // Friction is a per-tick velocity retention multiplier (higher = less
+        // damping). 0.85 keeps motion visibly dynamic but filters the big
+        // first-tick kicks that made points "teleport" — the rendered frame
+        // delta is ~15% smaller than at 0.92, enough to read as smooth flow
+        // instead of snapping.
+        simulationFriction: 0.85,
         simulationLinkSpring: 1.0,
         simulationLinkDistance: 16,
-        simulationDecay: simulationDecayFromSpeed(simulationSpeed),
+        // Fixed gentle decay — no user slider. Higher value = alpha decays
+        // slower = longer, gentler settle. 2500 gives ~5s of visible motion
+        // on a laptop before the alpha<0.2 freeze kicks in; earlier 0.5×
+        // slider default mapped to 4000 which was unnecessarily long.
+        simulationDecay: 2500,
         // Start pre-zoomed-out so random-disc init is centered on screen and
         // the whole spaceSize is visible. No auto-fit while sim runs — camera
         // chase was jerky, better to let the cloud expand within the frame
         // and fit smoothly ONCE at the end.
         initialZoomLevel: initialZoomFromSpaceSize(adaptiveSpaceSize, container),
         fitViewOnInit: false,
-        // Two jobs, both throttled against cosmos.gl's RAF-driven tick rate:
+        // Three jobs, all throttled against cosmos.gl's RAF-driven tick rate:
         //   1. Live-track the expanding cloud with instant (0 ms) refits
         //      every 500 ms so the user doesn't wait for settle to end
         //      before the view is framed on the actual layout.
-        //   2. FREEZE the layout at alpha < 0.2, before gravity × repulsion
-        //      equilibrium compresses the cloud into a ~40-unit ball. The
-        //      equilibrium radius is alpha-invariant (both forces scale
-        //      with alpha), so if we let alpha decay all the way to 0, the
-        //      cloud has reached near-equilibrium by then. Pausing at
-        //      alpha=0.2 preserves the partially-settled spread: sub-
-        //      structure is visible, isolated nodes are in the halo, but
-        //      full compression hasn't happened.
+        //   2. Fit-and-mark at alpha < 0.15 (frozenRef flips true) — one
+        //      smooth final fit once the cloud has mostly settled. The
+        //      simulation keeps running; frozenRef just gates further fits.
+        // Continuous motion is handled in a separate wall-clock interval
+        // (see the breathing useEffect below) — not here — because
+        // onSimulationTick stops firing once cosmos.gl considers the sim
+        // ended (alpha < ALPHA_MIN), so a callback-driven re-heat can
+        // never recover from a full decay.
         // try/catch is load-bearing: this callback is invoked from inside
         // cosmos.gl's RAF loop, outside our render-time error boundary —
         // a throw here would otherwise escape to the host and kill the app.
@@ -829,16 +864,15 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           try {
             const g = graphRef.current;
             if (!g) return;
-            // Freeze — once only per renderGraph cycle.
-            if (!frozenRef.current && alpha < 0.2) {
+            // One-shot final fit when the initial settle is "done enough".
+            if (!frozenRef.current && alpha < 0.15) {
               frozenRef.current = true;
-              g.pause();
-              g.fitView(800, 0.2); // nice final animated fit into the frozen pose
-              setSimRunning(false);
-              return;
+              if (!userInteractedRef.current) g.fitView(800, 0.2);
             }
             if (frozenRef.current) return;
-            // Live-fit.
+            // Live-fit — disabled after any user zoom/pan so scroll-to-zoom
+            // isn't clobbered by the next throttled refit.
+            if (userInteractedRef.current) return;
             if (alpha < 0.25) return;
             const now = performance.now();
             if (now - lastTickFitRef.current < 500) return;
@@ -849,10 +883,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             console.warn('[graph:onSimulationTick] tick handler skipped', err);
           }
         },
-        // onSimulationEnd is intentionally omitted — we freeze the layout
-        // in onSimulationTick at alpha<0.2 long before cosmos.gl's natural
-        // end (alpha<0.001), which would otherwise compress the cloud to
-        // the force-equilibrium radius (~40 units for 9000 nodes).
+        onZoomStart: (_e: unknown, userDriven: boolean) => {
+          if (userDriven) userInteractedRef.current = true;
+        },
         showFPSMonitor: showFPS,
         hoveredPointCursor: 'pointer',
         onClick: (index: number | undefined) => {
@@ -889,12 +922,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // granularity switch). Only genuinely new nodes get random-disc init.
     // Without this, toggling any setting would re-run the big settle pass.
     const N = nodes.length;
-    // Initial random-disc radius. Moderate spread keeps short-range
-    // repulsion in the manybody shader (which grows as c/sqrt(dist) for
-    // close pairs) from exploding at sim start — but small enough that
-    // gravity=5.0 can pull everything inward quickly. 25% of spaceSize
-    // hits the sweet spot across file/symbol density tiers.
-    const initRadius = adaptiveSpaceSize * 0.25;
+    // Initial random-disc radius. Short-range repulsion in the manybody
+    // shader spikes as c/sqrt(dist) for close pairs — the visible "jumping"
+    // at sim start came from this: thousands of points in a tight cluster
+    // produce giant first-tick deltas. Seeding across 40% of spaceSize
+    // thins initial density ~2.5×, so alpha=1.0 forces stay bounded and the
+    // opening frames look like flow rather than snap. Gravity still pulls
+    // the cloud back to center within a few seconds.
+    const initRadius = adaptiveSpaceSize * 0.4;
     const positions = new Float32Array(N * 2);
     const prevIds = prevNodeIdsRef.current;
     // cosmos.gl's coordinate space is [0, spaceSize] with origin at the
@@ -996,10 +1031,27 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     graph.setPointPositions(positions);
     graph.setPointColors(colors);
     graph.setPointSizes(sizes);
+    // Register the subset the halo pass wants. cosmos.gl then runs a
+    // per-tick GPU copy of just these indices into trackedPositionsFbo,
+    // which the halo pass reads via getTrackedPointPositionsMap(). The
+    // subset is re-registered on every renderGraph cycle because
+    // labelIndicesRef is rebuilt from the new nodes array (indices only
+    // stay valid within a single cycle).
+    graph.trackPointPositionsByIndices(labelIndicesRef.current);
     // Snapshot so highlightNeighborhood can rewrite colors per hop-distance
     // and clearHighlight can restore them. Copy because `colors` is reused
     // by the GPU buffer.
     origColorsRef.current = new Float32Array(colors);
+
+    // Cap the opening alpha. cosmos.gl auto-starts at alpha=1.0 — per-tick
+    // forces `delta = alpha × force` are then at full magnitude and
+    // close-pair repulsion spikes make individual points visibly pop.
+    // Called AFTER setPointPositions/Colors/Sizes so the first processed
+    // render tick already has the freshly-uploaded point data; calling
+    // it before the data is set caused cosmos.gl to advance a zero-point
+    // simulation and leave internal scale/force state in an intermediate
+    // configuration that didn't match what the halo pass expected.
+    graph.start(0.4);
 
     // Edge processing: dedup + top-K sort. On big graphs this can freeze
     // the main thread for 100–300ms, so delegate to a Worker. Small graphs
@@ -1024,6 +1076,20 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       // the 1-hop subgraph. Copy because cosmos.gl may retain the underlying
       // buffer for GPU upload.
       linkPairsRef.current = new Float32Array(links);
+      // Compute & push per-link tints (shade of source node's color). Falls
+      // back silently to linkDefaultColor if point colors aren't ready yet.
+      const srcPointColors = origColorsRef.current;
+      if (srcPointColors) {
+        const tinted = computeTintedLinkColors(
+          srcPointColors,
+          linkPairsRef.current,
+          hexToRgb01(themeSpec.background),
+          LINK_TINT_MIX,
+          LINK_TINT_ALPHA,
+        );
+        defaultLinkColorsRef.current = tinted;
+        g.setLinkColors(new Float32Array(tinted));
+      }
       // cosmos.gl auto-starts the simulation on new Graph() when
       // enableSimulation is true (default). No manual start() needed.
       // A redundant render() call wakes the draw loop after setLinks.
@@ -1185,6 +1251,20 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // Re-snapshot — clearHighlight should restore the NEW colorBy palette,
     // not the pre-switch one.
     origColorsRef.current = new Float32Array(colors);
+    // Rebuild per-link tints against the new node palette so edges stay in
+    // sync with their source nodes (e.g. community → language recolor).
+    const linkPairs = linkPairsRef.current;
+    if (linkPairs && linkPairs.length >= 2) {
+      const tinted = computeTintedLinkColors(
+        colors,
+        linkPairs,
+        hexToRgb01(themeSpec.background),
+        LINK_TINT_MIX,
+        LINK_TINT_ALPHA,
+      );
+      defaultLinkColorsRef.current = tinted;
+      graph.setLinkColors(new Float32Array(tinted));
+    }
     graph.render();
   }, [colorBy]);
 
@@ -1199,6 +1279,20 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       hoveredLinkColor: themeSpec.hoveredLink,
       hoveredPointRingColor: themeSpec.hoveredLink,
     });
+    // Tints lerp toward background, so background change ⇒ recompute tints.
+    const pointColors = origColorsRef.current;
+    const linkPairs = linkPairsRef.current;
+    if (pointColors && linkPairs && linkPairs.length >= 2) {
+      const tinted = computeTintedLinkColors(
+        pointColors,
+        linkPairs,
+        hexToRgb01(themeSpec.background),
+        LINK_TINT_MIX,
+        LINK_TINT_ALPHA,
+      );
+      defaultLinkColorsRef.current = tinted;
+      graph.setLinkColors(new Float32Array(tinted));
+    }
     graph.render();
   }, [themeSpec]);
 
@@ -1208,20 +1302,6 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     if (!graph) return;
     graph.setConfig({ showFPSMonitor: showFPS });
   }, [showFPS]);
-
-  // ── Simulation speed (slider) ─────────────────────────────────
-  // Controls simulationDecay only — how fast the initial settle pass
-  // dissipates. We intentionally do NOT push a steady-state alphaTarget
-  // anymore: at equilibrium `gravity × repulsion` pulls the cloud into a
-  // dense ball (~40 unit radius for 9000 nodes), and any positive
-  // alphaTarget drags the settled layout toward it over time — the
-  // "shrinking to a point" symptom. Static layout post-settle is what the
-  // user actually wants.
-  useEffect(() => {
-    const graph = graphRef.current;
-    if (!graph) return;
-    graph.setConfig({ simulationDecay: simulationDecayFromSpeed(simulationSpeed) });
-  }, [simulationSpeed]);
 
   // ── Pause simulation + label RAF when component is offscreen ───
   // If the user switches tabs away from the graph, Electron keeps RAF
@@ -1261,17 +1341,43 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     };
   }, [live]);
 
+  // ── Breathing interval ────────────────────────────────────────
+  // Wall-clock re-heat: every 2.5 s, if the user hasn't paused via Live,
+  // bump alpha back up with `graph.start(0.15)`. This has to be a plain
+  // setInterval — not a callback from onSimulationTick — because cosmos.gl
+  // stops invoking the tick callback once alpha decays below ALPHA_MIN
+  // (0.001), so a tick-driven re-heat can never recover from full decay.
+  // `isSimulationRunning`-guarded unpause handles the "resumed from a full
+  // stop" case that pause/unpause alone can't restart.
+  useEffect(() => {
+    if (!live) return;
+    const id = window.setInterval(() => {
+      const g = graphRef.current;
+      if (!g) return;
+      if (!liveRef.current) return;
+      try {
+        g.start(0.15);
+        if (!simRunning) setSimRunning(true);
+      } catch {
+        /* graph destroyed between ticks — next interval is a no-op */
+      }
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [live, simRunning]);
+
   // ── Live / Paused toggle ──────────────────────────────────────
-  // Pauses or resumes the solver. We don't re-arm a steady-state
-  // alphaTarget here (see onSimulationEnd for why) — Live just controls
-  // whether the initial settle is allowed to proceed. Once the settle
-  // finishes naturally, toggling Live is a no-op on an already-stopped
-  // simulation (pause/unpause don't restart the big alpha=1 pass).
+  // Pauses or resumes the solver. The breathing interval above keeps the
+  // simulation continuously re-heated while live=true; when live flips
+  // false we pause cosmos.gl and the interval effect tears itself down.
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) return;
     if (live) {
-      graph.unpause();
+      // If alpha has decayed past the re-heat threshold and the sim has
+      // naturally stopped, bump it back up so the toggle takes visible
+      // effect. Otherwise a simple unpause is enough.
+      if (!graph.isSimulationRunning) graph.start(0.12);
+      else graph.unpause();
       setSimRunning(graph.isSimulationRunning);
     } else {
       graph.pause();
@@ -1328,7 +1434,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const graph = graphRef.current;
     if (!graph) return;
     const visited = new Set<number>(indices);
-    const depth = Math.max(1, Math.min(10, highlightDepthRef.current));
+    const depth = HIGHLIGHT_DEPTH;
     let frontier = [...indices];
     for (let d = 0; d < depth && frontier.length > 0; d++) {
       const next: number[] = [];
@@ -1683,44 +1789,6 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         )}
 
         <div className="w-px h-4 mx-0.5" style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} />
-
-        {/* Highlight depth slider (1–10 hops) */}
-        <label
-          className="flex items-center gap-1.5 px-2 py-1 text-[11px] rounded-md select-none"
-          style={inputStyle}
-          title="How many hops of neighbors to highlight when clicking a node"
-        >
-          <span style={{ opacity: 0.7 }}>Depth</span>
-          <input
-            type="range"
-            min={1}
-            max={10}
-            step={1}
-            value={highlightDepth}
-            onChange={(e) => onSettingsChange({ highlightDepth: Number(e.target.value) })}
-            className="w-16"
-          />
-          <span className="font-mono w-3 text-right">{highlightDepth}</span>
-        </label>
-
-        {/* Simulation speed (0.25× – 3×) */}
-        <label
-          className="flex items-center gap-1.5 px-2 py-1 text-[11px] rounded-md select-none"
-          style={inputStyle}
-          title="Animation speed — left = slower / more settled, right = snappier"
-        >
-          <span style={{ opacity: 0.7 }}>Speed</span>
-          <input
-            type="range"
-            min={0.1}
-            max={3}
-            step={0.1}
-            value={simulationSpeed}
-            onChange={(e) => onSettingsChange({ simulationSpeed: Number(e.target.value) })}
-            className="w-16"
-          />
-          <span className="font-mono w-8 text-right">{simulationSpeed.toFixed(1)}×</span>
-        </label>
 
         {/* Live / Paused toggle */}
         <button
