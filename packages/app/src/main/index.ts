@@ -41,11 +41,31 @@ ipcMain.handle('open-in-editor', async (_event, filePath: string) => {
 });
 
 import { restartDaemon } from './daemon-lifecycle';
+import {
+  getStatus as ollamaStatus,
+  listInstalled as ollamaListInstalled,
+  listRunning as ollamaListRunning,
+  unloadModel as ollamaUnload,
+  deleteModel as ollamaDelete,
+  startDaemon as ollamaStart,
+  stopDaemon as ollamaStop,
+} from './ollama-control';
 
 // IPC: restart daemon (kill old, create plist if needed, start new via launchd)
 ipcMain.handle('restart-daemon', async () => {
   return restartDaemon();
 });
+
+// IPC: Ollama control surface — HTTP status + model listing + daemon lifecycle.
+// baseUrl is always passed from the renderer because users can repoint Ollama
+// to a remote host in settings; we don't assume localhost here.
+ipcMain.handle('ollama:status', async (_e, baseUrl?: string) => ollamaStatus(baseUrl));
+ipcMain.handle('ollama:list-installed', async (_e, baseUrl?: string) => ollamaListInstalled(baseUrl));
+ipcMain.handle('ollama:list-running', async (_e, baseUrl?: string) => ollamaListRunning(baseUrl));
+ipcMain.handle('ollama:unload', async (_e, name: string, baseUrl?: string) => ollamaUnload(name, baseUrl));
+ipcMain.handle('ollama:delete', async (_e, name: string, baseUrl?: string) => ollamaDelete(name, baseUrl));
+ipcMain.handle('ollama:start', async (_e, baseUrl?: string) => ollamaStart(baseUrl));
+ipcMain.handle('ollama:stop', async (_e, baseUrl?: string) => ollamaStop(baseUrl));
 
 // IPC: detect which MCP clients have trace-mcp configured
 ipcMain.handle('detect-mcp-clients', async () => {

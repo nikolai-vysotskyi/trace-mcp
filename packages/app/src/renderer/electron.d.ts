@@ -23,6 +23,32 @@ declare global {
       getPlatform: () => Promise<string>;
       focusTab: (tabId: string) => Promise<{ ok: boolean }>;
       onTabListChanged: (callback: (tabs: { id: string; title: string; type: string; active: boolean }[]) => void) => () => void;
+      ollama: {
+        status: (baseUrl?: string) => Promise<{ running: boolean; version?: string; baseUrl: string; error?: string }>;
+        listInstalled: (baseUrl?: string) => Promise<{ models: OllamaInstalledModel[] }>;
+        listRunning: (baseUrl?: string) => Promise<{ models: OllamaRunningModel[] }>;
+        unload: (name: string, baseUrl?: string) => Promise<{ ok: boolean; error?: string }>;
+        delete: (name: string, baseUrl?: string) => Promise<{ ok: boolean; error?: string }>;
+        start: (baseUrl?: string) => Promise<{ ok: boolean; method?: string; error?: string }>;
+        stop: (baseUrl?: string) => Promise<{ ok: boolean; method?: string; error?: string }>;
+      };
     };
+  }
+
+  interface OllamaInstalledModel {
+    name: string;
+    size: number;
+    modified_at?: string;
+    digest?: string;
+    details?: { parameter_size?: string; quantization_level?: string; family?: string };
+  }
+
+  interface OllamaRunningModel {
+    name: string;
+    size: number;
+    size_vram: number;
+    expires_at?: string;
+    digest?: string;
+    details?: { parameter_size?: string; quantization_level?: string; family?: string };
   }
 }
