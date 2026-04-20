@@ -545,9 +545,19 @@ program
               return;
             }
           } else {
-            // No session ID and not an initialize — reject
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32600, message: 'Missing session ID' }, id: null }));
+            // No session ID and not an initialize. This most commonly happens
+            // when the daemon restarted and a client is still trying to reuse
+            // its in-memory state. Return 404 with a clear "reinitialize"
+            // message so MCP clients that follow the spec's recovery path
+            // (re-run `initialize`) can do so automatically. Previously we
+            // returned 400 "Missing session ID" which some clients treat as
+            // a hard protocol error rather than recoverable session loss.
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32000, message: 'Session expired, reinitialize required' },
+              id: null,
+            }));
             return;
           }
 

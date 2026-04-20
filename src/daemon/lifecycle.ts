@@ -26,8 +26,26 @@ import { getDaemonHealth, isDaemonRunning } from './client.js';
 import { logger } from '../logger.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
+// Bump when the plist contents (env vars, args, KeepAlive policy, throttle) change.
+// ensureDaemonMac regenerates the plist when the marker below is absent.
+const PLIST_VERSION = 2;
+const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
+
+function getLaunchdDomain(): string {
+  // gui/<uid> is the correct per-user agent domain for bootstrap/kickstart.
+  return `gui/${process.getuid?.() ?? ''}`;
+}
+
+function runQuiet(cmd: string): { ok: boolean; stderr?: string } {
+  try {
+    execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'] });
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, stderr: err?.stderr?.toString?.() ?? String(err) };
+  }
+}
 
 export interface EnsureResult {
   ok: boolean;
@@ -64,6 +82,7 @@ function resolvePathEnv(): string {
 function generatePlist(binaryPath: string, port: number): string {
   const envPath = resolvePathEnv();
   return `<?xml version="1.0" encoding="UTF-8"?>
+<!-- ${PLIST_MARKER} -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -87,6 +106,8 @@ function generatePlist(binaryPath: string, port: number): string {
   <true/>
   <key>KeepAlive</key>
   <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
   <key>StandardOutPath</key>
   <string>${DAEMON_LOG_PATH}</string>
   <key>StandardErrorPath</key>
@@ -96,6 +117,15 @@ function generatePlist(binaryPath: string, port: number): string {
 </dict>
 </plist>
 `;
+}
+
+function isPlistCurrent(): boolean {
+  try {
+    const contents = fs.readFileSync(LAUNCHD_PLIST_PATH, 'utf-8');
+    return contents.includes(PLIST_MARKER);
+  } catch {
+    return false;
+  }
 }
 
 function installPlist(port: number): void {
@@ -114,27 +144,80 @@ function isPlistLoaded(): boolean {
   }
 }
 
-function ensureDaemonMac(port: number): EnsureResult {
-  if (!fs.existsSync(LAUNCHD_PLIST_PATH)) {
-    try { installPlist(port); }
-    catch (err) { return { ok: false, error: (err as Error).message }; }
+function bootoutPlist(): void {
+  // Modern replacement for `launchctl unload`. Errors ignored — plist may
+  // not currently be bootstrapped, which is fine.
+  const domain = getLaunchdDomain();
+  runQuiet(`launchctl bootout ${domain} "${LAUNCHD_PLIST_PATH}"`);
+  // Fall back to deprecated unload as well, in case bootstrap/bootout isn't
+  // available (very old macOS) — harmless if it fails.
+  runQuiet(`launchctl unload "${LAUNCHD_PLIST_PATH}"`);
+}
+
+function bootstrapPlist(): { ok: boolean; error?: string } {
+  const domain = getLaunchdDomain();
+  const result = runQuiet(`launchctl bootstrap ${domain} "${LAUNCHD_PLIST_PATH}"`);
+  if (result.ok) return { ok: true };
+  // bootstrap fails if the service is already loaded (exit 37 / "Service
+  // already loaded"). That's success from our perspective.
+  if (result.stderr?.includes('already loaded') || result.stderr?.includes('17: File exists')) {
+    return { ok: true };
+  }
+  // Fall back to legacy `load` for old macOS.
+  const legacy = runQuiet(`launchctl load "${LAUNCHD_PLIST_PATH}"`);
+  if (legacy.ok) return { ok: true };
+  return { ok: false, error: result.stderr ?? 'bootstrap failed' };
+}
+
+function kickstartPlist(): { ok: boolean; error?: string } {
+  // -k kills the running instance first (if any) and resets the throttle,
+  // which `launchctl load/unload` does not do. This is the key to reliable
+  // restart when launchd has given up on a crash-looping service.
+  const domain = getLaunchdDomain();
+  const result = runQuiet(`launchctl kickstart -k ${domain}/${PLIST_LABEL}`);
+  if (result.ok) return { ok: true };
+  return { ok: false, error: result.stderr ?? 'kickstart failed' };
+}
+
+function ensurePlistInstalled(port: number): { ok: boolean; error?: string; regenerated: boolean } {
+  const exists = fs.existsSync(LAUNCHD_PLIST_PATH);
+  const current = exists && isPlistCurrent();
+  if (current) return { ok: true, regenerated: false };
+  if (exists) {
+    // Stale plist — bootout the old definition before overwriting so launchd
+    // picks up the new ProgramArguments / env / throttle on next bootstrap.
+    bootoutPlist();
   }
   try {
-    execSync(`launchctl load "${LAUNCHD_PLIST_PATH}" 2>/dev/null`);
-  } catch { /* already loaded — fine */ }
+    installPlist(port);
+  } catch (err) {
+    return { ok: false, error: (err as Error).message, regenerated: false };
+  }
+  return { ok: true, regenerated: true };
+}
+
+function ensureDaemonMac(port: number): EnsureResult {
+  const install = ensurePlistInstalled(port);
+  if (!install.ok) return { ok: false, error: install.error };
+  const boot = bootstrapPlist();
+  if (!boot.ok) return { ok: false, error: boot.error };
   return { ok: true, strategy: 'launchd' };
 }
 
 function stopDaemonMac(): void {
   if (!fs.existsSync(LAUNCHD_PLIST_PATH)) return;
-  try {
-    execSync(`launchctl unload "${LAUNCHD_PLIST_PATH}" 2>/dev/null`);
-  } catch { /* not loaded */ }
+  bootoutPlist();
 }
 
 function restartDaemonMac(port: number): EnsureResult {
-  stopDaemonMac();
-  return ensureDaemonMac(port);
+  // Regenerate stale plist first, then ensure it's loaded, then force kickstart.
+  const install = ensurePlistInstalled(port);
+  if (!install.ok) return { ok: false, error: install.error };
+  const boot = bootstrapPlist();
+  if (!boot.ok) return { ok: false, error: boot.error };
+  const kick = kickstartPlist();
+  if (!kick.ok) return { ok: false, error: kick.error };
+  return { ok: true, strategy: 'launchd' };
 }
 
 // ── Platform: Windows / Linux (detached process with PID file) ──────
