@@ -102,13 +102,20 @@ export function AskTab({ root }: { root: string }) {
             if (ev.type === 'phase' && ev.phase === 'streaming') setPhase('streaming');
             else if (ev.type === 'chunk' && ev.content) { acc += ev.content; setStreaming(acc); setPhase('streaming'); }
             else if (ev.type === 'done') {
-              setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', content: acc, ts: Date.now() }]);
-              setStreaming(''); setPhase('idle'); acc = '';
+              const finalContent = acc;
+              acc = '';
+              setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', content: finalContent, ts: Date.now() }]);
+              setStreaming(''); setPhase('idle');
             } else if (ev.type === 'error') throw new Error(ev.message);
           } catch (e) { if ((e as Error).message && !(e as Error).message.includes('JSON')) throw e; }
         }
       }
-      if (acc) { setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', content: acc, ts: Date.now() }]); setStreaming(''); setPhase('idle'); }
+      if (acc) {
+        const finalContent = acc;
+        acc = '';
+        setMessages(p => [...p, { id: crypto.randomUUID(), role: 'assistant', content: finalContent, ts: Date.now() }]);
+        setStreaming(''); setPhase('idle');
+      }
     } catch (e: any) {
       if (e?.name === 'AbortError') { setPhase('idle'); return; }
       setError(e?.message ?? 'Unknown error'); setPhase('error'); setStreaming('');
@@ -223,11 +230,13 @@ export function AskTab({ root }: { root: string }) {
           </div>
         )}
 
-        {/* Retrieving */}
-        {phase === 'retrieving' && (
+        {/* Retrieving / waiting for first chunk */}
+        {busy && !streaming && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px' }}>
             <Dots />
-            <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Searching codebase...</span>
+            <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+              {phase === 'retrieving' ? 'Searching codebase...' : 'Thinking...'}
+            </span>
           </div>
         )}
 
