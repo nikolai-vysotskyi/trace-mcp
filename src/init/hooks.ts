@@ -13,16 +13,18 @@ const HOME = os.homedir();
 const IS_WINDOWS = process.platform === 'win32';
 const HOOK_EXT = IS_WINDOWS ? '.cmd' : '.sh';
 
-/** Build the hook command string with inline env var — platform-aware. */
+/**
+ * Build the hook command string — platform-aware.
+ * Claude Code does not substitute {{tool_name}} in hook commands; tool info
+ * is delivered to the hook via stdin JSON. Hooks read `tool_name` from stdin
+ * via jq, so no env var prefix is needed.
+ */
 function hookCommand(hookPath: string): string {
-  return IS_WINDOWS
-    ? `cmd /c "set CLAUDE_TOOL_NAME={{tool_name}}&& "${hookPath}""`
-    : `CLAUDE_TOOL_NAME={{tool_name}} ${hookPath}`;
+  return IS_WINDOWS ? `cmd /c "${hookPath}"` : hookPath;
 }
 
-/** Build a plain hook command (no env vars — for hooks like PreCompact). */
 function plainHookCommand(hookPath: string): string {
-  return IS_WINDOWS ? `cmd /c "${hookPath}"` : hookPath;
+  return hookCommand(hookPath);
 }
 
 // --- Client directories (Claude + Claw) ---
@@ -167,19 +169,25 @@ function addHookEntry(
   const hooks = settings.hooks as Record<string, unknown[]> | undefined ?? {};
   settings.hooks = hooks;
   if (!hooks[desc.settingsKey]) hooks[desc.settingsKey] = [];
-  const entries = hooks[desc.settingsKey] as { hooks?: { command?: string }[] }[];
+  const entries = hooks[desc.settingsKey] as { matcher?: string; hooks?: { type?: string; command?: string }[] }[];
 
-  const alreadyExists = entries.some(
-    (h) => h.hooks?.some((hh) => hh.command?.includes(desc.scriptName)),
-  );
-  if (!alreadyExists) {
-    const cmd = desc.plainCommand ? plainHookCommand(dest) : hookCommand(dest);
-    const entry: Record<string, unknown> = {
-      hooks: [{ type: 'command' as const, command: cmd }],
-    };
-    if (desc.matcher) entry.matcher = desc.matcher;
-    entries.push(entry as unknown as { hooks?: { command?: string }[] });
+  const expectedCmd = desc.plainCommand ? plainHookCommand(dest) : hookCommand(dest);
+
+  const existing = entries.find((h) => h.hooks?.some((hh) => hh.command?.includes(desc.scriptName)));
+  if (existing) {
+    // Refresh command (e.g. after removing the obsolete {{tool_name}} template)
+    // and matcher in case the schema changed between versions.
+    existing.hooks = [{ type: 'command', command: expectedCmd }];
+    if (desc.matcher) existing.matcher = desc.matcher;
+    else delete existing.matcher;
+    return;
   }
+
+  const entry: Record<string, unknown> = {
+    hooks: [{ type: 'command' as const, command: expectedCmd }],
+  };
+  if (desc.matcher) entry.matcher = desc.matcher;
+  entries.push(entry as unknown as { hooks?: { command?: string }[] });
 }
 
 function removeHookEntry(settings: Record<string, unknown>, desc: HookDescriptor): void {
@@ -329,4 +337,94 @@ function uninstallWorktreeHook(opts: { global?: boolean }): InitStepResult[] {
     uninstallHook(WORKTREE_HOOK, opts),
     uninstallHook(WORKTREE_REMOVE_HOOK, opts),
   ];
+}
+
+/**
+ * Legacy hook script names that past trace-mcp versions installed but the
+ * current version no longer ships. init must clean these up so settings.json
+ * doesn't accumulate orphaned entries pointing at unmanaged scripts (which
+ * in turn means the {{tool_name}} template fix never reaches them).
+ */
+const LEGACY_HOOK_SCRIPTS = [
+  'trace-mcp-precommit',
+  'trace-mcp-edit-guard',
+] as const;
+
+const LEGACY_HOOK_EVENTS = [
+  'PreToolUse',
+  'PostToolUse',
+  'PreCompact',
+  'WorktreeCreate',
+  'WorktreeRemove',
+  'Stop',
+  'Notification',
+] as const;
+
+export function cleanupLegacyHooks(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+}): InitStepResult[] {
+  const results: InitStepResult[] = [];
+
+  for (const client of CLIENTS) {
+    if (!clientExists(client)) continue;
+    const sPath = settingsPath(client, !!opts.global);
+    if (!fs.existsSync(sPath)) continue;
+
+    const settings = readSettings(sPath);
+    const hooks = settings.hooks as Record<string, unknown[]> | undefined;
+
+    let changed = false;
+    const removedNames = new Set<string>();
+
+    if (hooks) {
+      for (const event of LEGACY_HOOK_EVENTS) {
+        const entries = hooks[event];
+        if (!Array.isArray(entries)) continue;
+        const filtered = entries.filter((h) => {
+          const entry = h as { hooks?: { command?: string }[] };
+          const matches = entry.hooks?.some((hh) =>
+            LEGACY_HOOK_SCRIPTS.some((name) => hh.command?.includes(name)),
+          );
+          if (matches) {
+            for (const name of LEGACY_HOOK_SCRIPTS) {
+              if (entry.hooks?.some((hh) => hh.command?.includes(name))) removedNames.add(name);
+            }
+          }
+          return !matches;
+        });
+        if (filtered.length !== entries.length) {
+          changed = true;
+          if (filtered.length === 0) delete hooks[event];
+          else hooks[event] = filtered;
+        }
+      }
+      if (hooks && Object.keys(hooks).length === 0) delete settings.hooks;
+    }
+
+    if (changed && !opts.dryRun) writeSettings(sPath, settings);
+
+    // Also delete the orphaned script files
+    const hooksDir = path.join(HOME, client.hooksSubdir);
+    for (const name of LEGACY_HOOK_SCRIPTS) {
+      for (const ext of ['.sh', '.cmd', '.ps1']) {
+        const scriptPath = path.join(hooksDir, `${name}${ext}`);
+        if (fs.existsSync(scriptPath)) {
+          if (!opts.dryRun) fs.unlinkSync(scriptPath);
+          removedNames.add(name);
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      results.push({
+        target: sPath,
+        action: 'updated',
+        detail: `Removed legacy hooks: ${[...removedNames].join(', ')}`,
+      });
+    }
+  }
+
+  return results;
 }
