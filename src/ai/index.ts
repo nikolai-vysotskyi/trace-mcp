@@ -16,6 +16,10 @@ import { AnthropicProvider } from './anthropic.js';
 import { logger } from '../logger.js';
 import { aiTracker, type AIRequestType } from './tracker.js';
 
+/** Treat empty/whitespace strings as unset — settings UI persists cleared fields as "". */
+const pick = (v: unknown, fallback: string): string =>
+  typeof v === 'string' && v.trim() ? v : fallback;
+
 /** Default configurations for OpenAI-compatible providers. */
 const OPENAI_COMPAT_DEFAULTS: Record<string, {
   baseUrl: string;
@@ -75,10 +79,10 @@ const OPENAI_COMPAT_DEFAULTS: Record<string, {
   },
   xai: {
     baseUrl: 'https://api.x.ai/v1',
-    embeddingModel: 'grok-2',
+    embeddingModel: 'grok-4',
     embeddingDimensions: 1536,
-    inferenceModel: 'grok-2',
-    fastModel: 'grok-2',
+    inferenceModel: 'grok-4',
+    fastModel: 'grok-4',
     envKey: 'XAI_API_KEY',
   },
 };
@@ -174,29 +178,56 @@ function wrapWithTracking(provider: AIProvider, name: string, url: string): AIPr
   return new TrackedAIProvider(provider, name, url);
 }
 
+/** Gates individual capabilities based on `ai.features`. A disabled capability returns
+ *  the fallback service (empty embeddings / empty inference strings), so callers need no
+ *  changes — they already handle the "AI disabled" case. */
+class GatedAIProvider implements AIProvider {
+  private readonly fallback = new FallbackProvider();
+  constructor(
+    private inner: AIProvider,
+    private features: { embedding: boolean; inference: boolean; fast_inference: boolean },
+  ) {}
+  isAvailable(): Promise<boolean> { return this.inner.isAvailable(); }
+  embedding(): EmbeddingService {
+    return this.features.embedding ? this.inner.embedding() : this.fallback.embedding();
+  }
+  inference(): InferenceService {
+    return this.features.inference ? this.inner.inference() : this.fallback.inference();
+  }
+  fastInference(): InferenceService {
+    return this.features.fast_inference ? this.inner.fastInference() : this.fallback.fastInference();
+  }
+}
+
 export function createAIProvider(config: TraceMcpConfig): AIProvider {
   if (!config.ai?.enabled) {
+    return new FallbackProvider();
+  }
+
+  const features = config.ai.features ?? { embedding: true, inference: true, fast_inference: true };
+  // If everything is off there's no point instantiating a real provider.
+  if (!features.embedding && !features.inference && !features.fast_inference) {
     return new FallbackProvider();
   }
 
   const provider = config.ai.provider;
 
   if (provider === 'onnx') {
-    return wrapWithTracking(new OnnxProvider({
+    return new GatedAIProvider(wrapWithTracking(new OnnxProvider({
       model: config.ai.embedding_model,
       dimensions: config.ai.embedding_dimensions,
-    }), 'onnx', 'local');
+    }), 'onnx', 'local'), features);
   }
 
   if (provider === 'ollama') {
-    const url = config.ai.base_url ?? 'http://localhost:11434';
-    return wrapWithTracking(new OllamaProvider({
+    const url = pick(config.ai.base_url, 'http://localhost:11434');
+    return new GatedAIProvider(wrapWithTracking(new OllamaProvider({
       baseUrl: url,
-      embeddingModel: config.ai.embedding_model ?? 'qwen3-embedding:0.6b',
-      inferenceModel: config.ai.inference_model ?? 'gemma4:e4b',
-      fastModel: config.ai.fast_model ?? 'gemma4:e4b',
+      embeddingModel: pick(config.ai.embedding_model, 'nomic-embed-text'),
+      inferenceModel: pick(config.ai.inference_model, 'llama3.2'),
+      fastModel: pick(config.ai.fast_model, 'llama3.2'),
       embeddingDimensions: config.ai.embedding_dimensions,
-    }), 'ollama', url);
+    }), 'ollama', url), features);
   }
 
   if (provider === 'gemini') {
@@ -205,13 +236,13 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       logger.warn('Gemini provider selected but no api_key configured — falling back');
       return new FallbackProvider();
     }
-    return wrapWithTracking(new GeminiProvider({
+    return new GatedAIProvider(wrapWithTracking(new GeminiProvider({
       apiKey,
-      embeddingModel: config.ai.embedding_model ?? 'text-embedding-004',
+      embeddingModel: pick(config.ai.embedding_model, 'text-embedding-004'),
       embeddingDimensions: config.ai.embedding_dimensions ?? 768,
-      inferenceModel: config.ai.inference_model ?? 'gemini-2.0-flash',
-      fastModel: config.ai.fast_model ?? 'gemini-2.0-flash',
-    }), 'gemini', 'https://generativelanguage.googleapis.com');
+      inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-flash'),
+      fastModel: pick(config.ai.fast_model, 'gemini-2.5-flash'),
+    }), 'gemini', 'https://generativelanguage.googleapis.com'), features);
   }
 
   if (provider === 'anthropic') {
@@ -220,11 +251,11 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       logger.warn('Anthropic provider selected but no api_key configured — falling back');
       return new FallbackProvider();
     }
-    return wrapWithTracking(new AnthropicProvider({
+    return new GatedAIProvider(wrapWithTracking(new AnthropicProvider({
       apiKey,
-      inferenceModel: config.ai.inference_model ?? 'claude-sonnet-4-20250514',
-      fastModel: config.ai.fast_model ?? 'claude-haiku-4-5-20251001',
-    }), 'anthropic', 'https://api.anthropic.com');
+      inferenceModel: pick(config.ai.inference_model, 'claude-sonnet-4-6'),
+      fastModel: pick(config.ai.fast_model, 'claude-haiku-4-5-20251001'),
+    }), 'anthropic', 'https://api.anthropic.com'), features);
   }
 
   // All OpenAI-compatible providers
@@ -236,15 +267,15 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       logger.warn(`${provider} provider selected but no api_key configured — falling back`);
       return new FallbackProvider();
     }
-    const url = config.ai.base_url ?? defaults.baseUrl;
-    return wrapWithTracking(new OpenAIProvider({
+    const url = pick(config.ai.base_url, defaults.baseUrl);
+    return new GatedAIProvider(wrapWithTracking(new OpenAIProvider({
       apiKey,
       baseUrl: url,
-      embeddingModel: config.ai.embedding_model ?? defaults.embeddingModel,
+      embeddingModel: pick(config.ai.embedding_model, defaults.embeddingModel),
       embeddingDimensions: config.ai.embedding_dimensions ?? defaults.embeddingDimensions,
-      inferenceModel: config.ai.inference_model ?? defaults.inferenceModel,
-      fastModel: config.ai.fast_model ?? defaults.fastModel,
-    }), provider, url);
+      inferenceModel: pick(config.ai.inference_model, defaults.inferenceModel),
+      fastModel: pick(config.ai.fast_model, defaults.fastModel),
+    }), provider, url), features);
   }
 
   return new FallbackProvider();

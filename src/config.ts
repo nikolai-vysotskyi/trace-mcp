@@ -27,6 +27,13 @@ const FrameworkConfigSchema = z.object({
 const AiConfigSchema = z.object({
   enabled: z.boolean().default(false),
   provider: z.enum(['onnx', 'ollama', 'openai', 'anthropic', 'lmstudio', 'gemini', 'mistral', 'deepseek', 'groq', 'together', 'xai']).default('onnx'),
+  /** Per-capability enable flags. Lets users disable inference while keeping embeddings (or vice versa)
+   *  without switching provider. Disabled capabilities return fallback services (empty results). */
+  features: z.object({
+    embedding: z.boolean().default(true),
+    inference: z.boolean().default(true),
+    fast_inference: z.boolean().default(true),
+  }).default({}),
   base_url: z.string().optional(),
   api_key: z.string().optional(),
   inference_model: z.string().optional(),

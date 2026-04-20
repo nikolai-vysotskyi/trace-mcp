@@ -231,6 +231,13 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
       { key: 'provider', label: 'Provider', type: 'select', options: ['onnx', 'ollama', 'lmstudio', 'openai', 'anthropic', 'gemini', 'mistral', 'groq', 'together', 'deepseek', 'xai'], defaultValue: 'onnx', showIf: 'enabled', description: 'onnx = local zero-config. ollama/lmstudio = local with model choice. Others = cloud APIs.' },
 
+      // ── Per-capability enable flags ──
+      // Lets users run embeddings without inference (or vice versa) without switching provider.
+      // Disabled capabilities short-circuit to no-op services; no other code changes required.
+      { key: 'embedding', label: 'Use embeddings', type: 'boolean', nested: 'features', defaultValue: true, showIf: 'enabled', description: 'Generate vector embeddings for semantic search and reranking. Turn off to disable semantic search while keeping inference.' },
+      { key: 'inference', label: 'Use inference', type: 'boolean', nested: 'features', defaultValue: true, showIf: 'enabled', description: 'Call the LLM for summarization, intent classification, and Ask. Turn off to skip all LLM calls while keeping embeddings.' },
+      { key: 'fast_inference', label: 'Use fast inference', type: 'boolean', nested: 'features', defaultValue: true, showIf: 'enabled', description: 'Use the fast model for low-latency tasks. When off, fast-path callers receive empty responses — leave on unless debugging.' },
+
       // ── Connection: Ollama ──
       { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'http://localhost:11434', showIf: 'provider=ollama', description: 'Ollama server endpoint. Change if running on a different host or port.' },
       // ── Connection: LM Studio ──
@@ -259,8 +266,8 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'xai-...', sensitive: true, showIf: 'provider=xai', description: 'xAI API key from console.x.ai. Or set XAI_API_KEY env var.' },
 
       // ── Model fields: Ollama ──
-      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gemma4:e4b', showIf: 'provider=ollama', description: 'LLM for summarization and intent classification.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
-      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gemma4:e4b', showIf: 'provider=ollama', description: 'Smaller/faster LLM for low-latency tasks. Falls back to inference model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'llama3.2', showIf: 'provider=ollama', description: 'LLM for summarization and intent classification.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'llama3.2', showIf: 'provider=ollama', description: 'Smaller/faster LLM for low-latency tasks. Falls back to inference model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'nomic-embed-text', showIf: 'provider=ollama', description: 'Embedding model for semantic search. Must match embedding_dimensions.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'reranker_model', label: 'Reranker model', type: 'model-select', placeholder: 'bge-reranker-v2-m3', showIf: 'provider=ollama', description: 'Cross-encoder for re-ranking search results.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       // ── Model fields: LM Studio ──
@@ -272,11 +279,11 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gpt-4o-mini', showIf: 'provider=openai', description: 'Faster/cheaper LLM. Falls back to inference model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'text-embedding-3-small', showIf: 'provider=openai', description: 'text-embedding-3-small (cheap) or text-embedding-3-large (accurate).', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       // ── Model fields: Anthropic (inference only — no embeddings API) ──
-      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'claude-sonnet-4-20250514', showIf: 'provider=anthropic', description: 'Claude model for summarization and reasoning.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'claude-sonnet-4-6', showIf: 'provider=anthropic', description: 'Claude model for summarization and reasoning.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'claude-haiku-4-5-20251001', showIf: 'provider=anthropic', description: 'Fastest Claude model for low-latency tasks.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       // ── Model fields: Gemini ──
-      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gemini-2.0-flash', showIf: 'provider=gemini', description: 'Gemini model for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
-      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gemini-2.0-flash', showIf: 'provider=gemini', description: 'Fast Gemini model for low-latency tasks.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gemini-2.5-flash', showIf: 'provider=gemini', description: 'Gemini model for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gemini-2.5-flash', showIf: 'provider=gemini', description: 'Fast Gemini model for low-latency tasks.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'text-embedding-004', showIf: 'provider=gemini', description: 'Gemini embedding model. text-embedding-004 (768d) is recommended.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       // ── Model fields: Mistral ──
       { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'mistral-small-latest', showIf: 'provider=mistral', description: 'Mistral LLM for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
@@ -294,8 +301,8 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'deepseek-chat', showIf: 'provider=deepseek', description: 'DeepSeek V3 for summarization and reasoning.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'deepseek-chat', showIf: 'provider=deepseek', description: 'DeepSeek fast model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       // ── Model fields: xAI ──
-      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'grok-2', showIf: 'provider=xai', description: 'Grok model for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
-      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'grok-2', showIf: 'provider=xai', description: 'Fast Grok model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'grok-4', showIf: 'provider=xai', description: 'Grok model for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'grok-4', showIf: 'provider=xai', description: 'Fast Grok model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       // ── Model fields: ONNX ──
       { key: 'embedding_model', label: 'Embedding model', type: 'string', placeholder: 'Xenova/all-MiniLM-L6-v2', showIf: 'provider=onnx', description: 'ONNX model for local embeddings. Default works out of the box.' },
 
