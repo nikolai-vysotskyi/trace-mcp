@@ -3,6 +3,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
   openInEditor: (filePath: string): Promise<void> => ipcRenderer.invoke('open-in-editor', filePath),
+  detectIdeApps: (): Promise<{ id: string; name: string; bundlePath: string }[]> =>
+    ipcRenderer.invoke('detect-ide-apps'),
+  openInIde: (bundlePath: string, filePath: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('open-in-ide', bundlePath, filePath),
   restartDaemon: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('restart-daemon'),
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),

@@ -40,6 +40,57 @@ ipcMain.handle('open-in-editor', async (_event, filePath: string) => {
   await shell.openPath(filePath);
 });
 
+// IPC: detect installed IDEs (macOS-first; Windows/Linux return []).
+// Scans /Applications and ~/Applications for well-known IDE .app bundles.
+ipcMain.handle('detect-ide-apps', async () => {
+  if (process.platform !== 'darwin') return [];
+  const candidates: { id: string; name: string; bundles: string[] }[] = [
+    { id: 'cursor',   name: 'Cursor',       bundles: ['Cursor.app'] },
+    { id: 'vscode',   name: 'VS Code',      bundles: ['Visual Studio Code.app', 'Visual Studio Code - Insiders.app'] },
+    { id: 'zed',      name: 'Zed',          bundles: ['Zed.app'] },
+    { id: 'phpstorm', name: 'PhpStorm',     bundles: ['PhpStorm.app'] },
+    { id: 'webstorm', name: 'WebStorm',     bundles: ['WebStorm.app'] },
+    { id: 'pycharm',  name: 'PyCharm',      bundles: ['PyCharm.app', 'PyCharm Professional Edition.app', 'PyCharm CE.app', 'PyCharm Community Edition.app'] },
+    { id: 'intellij', name: 'IntelliJ IDEA', bundles: ['IntelliJ IDEA.app', 'IntelliJ IDEA Ultimate.app', 'IntelliJ IDEA CE.app', 'IntelliJ IDEA Community Edition.app'] },
+    { id: 'goland',   name: 'GoLand',       bundles: ['GoLand.app'] },
+    { id: 'rubymine', name: 'RubyMine',     bundles: ['RubyMine.app'] },
+    { id: 'rider',    name: 'Rider',        bundles: ['Rider.app'] },
+    { id: 'clion',    name: 'CLion',        bundles: ['CLion.app'] },
+    { id: 'fleet',    name: 'Fleet',        bundles: ['Fleet.app'] },
+  ];
+  const roots = [
+    '/Applications',
+    path.join(os.homedir(), 'Applications'),
+    path.join(os.homedir(), 'Applications', 'JetBrains Toolbox'),
+  ];
+  const installed: { id: string; name: string; bundlePath: string }[] = [];
+  for (const c of candidates) {
+    for (const b of c.bundles) {
+      let found: string | null = null;
+      for (const r of roots) {
+        const p = path.join(r, b);
+        if (fs.existsSync(p)) { found = p; break; }
+      }
+      if (found) { installed.push({ id: c.id, name: c.name, bundlePath: found }); break; }
+    }
+  }
+  return installed;
+});
+
+// IPC: open a specific file in a chosen IDE via `open -a <bundle> <file>`.
+ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: string) => {
+  if (process.platform !== 'darwin') {
+    return { ok: false, error: 'open-in-ide currently supported on macOS only' };
+  }
+  return await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+    const child = spawn('open', ['-a', bundlePath, filePath], { detached: true, stdio: 'ignore' });
+    let settled = false;
+    child.on('error', (err) => { if (!settled) { settled = true; resolve({ ok: false, error: err.message }); } });
+    child.on('exit', (code) => { if (!settled) { settled = true; resolve(code === 0 ? { ok: true } : { ok: false, error: `open exited with code ${code}` }); } });
+    child.unref();
+  });
+});
+
 import { restartDaemon } from './daemon-lifecycle';
 import {
   getStatus as ollamaStatus,

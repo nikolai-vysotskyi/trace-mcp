@@ -166,6 +166,28 @@ function nodeSize(node: VizNode): number {
 }
 
 /**
+ * Pull a resolvable file path out of a node id.
+ * - File nodes: id IS the (relative) path.
+ * - Symbol nodes: id is "relPath::name#kind" — slice before the first "::".
+ * - Synthetic ids (e.g. "node:path.synthetic") have no real file on disk; we
+ *   return them verbatim so the UI can still display/copy, but isRealFileId
+ *   gates IDE-open actions.
+ */
+function extractFilePath(node: VizNode): string {
+  const id = node.id ?? '';
+  const sep = id.indexOf('::');
+  return sep === -1 ? id : id.slice(0, sep);
+}
+
+function isRealFileId(node: VizNode): boolean {
+  const id = node.id ?? '';
+  if (!id) return false;
+  if (id.endsWith('.synthetic')) return false;
+  if (id.startsWith('node:')) return false;
+  return true;
+}
+
+/**
  * Initial zoom level chosen so the entire spaceSize fits comfortably inside
  * the current viewport — so the initial random-disc of points renders near
  * screen-center, and force expansion stays on-screen without camera chase.
@@ -313,6 +335,37 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   const [stats, setStats] = useState<{ nodes: number; edges: number; communities: number } | null>(null);
   const [hovered, setHovered] = useState<VizNode | null>(null);
   const [selected, setSelected] = useState<VizNode | null>(null);
+  // Toolbar-height tracking so popups offset past a wrapped 2-row pill.
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const [toolbarHeight, setToolbarHeight] = useState<number>(44);
+  // IDE integration — populated once from main process; last-used remembered.
+  const [ides, setIdes] = useState<{ id: string; name: string; bundlePath: string }[]>([]);
+  const [lastIdeId, setLastIdeId] = useState<string>(() => {
+    try { return localStorage.getItem('trace-mcp.lastIde') ?? ''; } catch { return ''; }
+  });
+  const [copied, setCopied] = useState<boolean>(false);
+
+  // Measure toolbar height so overlays (selected popup, error banner) anchor
+  // below it even when the pill wraps to 2 rows on narrow panes. Hardcoded
+  // top-14 was the old bug: worked for 1 row, collided with row 2.
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    const update = () => setToolbarHeight(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Detect installed IDEs once. Quietly no-op outside Electron (dev in browser).
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.detectIdeApps) return;
+    let alive = true;
+    api.detectIdeApps().then((list) => { if (alive) setIdes(list); }).catch(() => { if (alive) setIdes([]); });
+    return () => { alive = false; };
+  }, []);
   const [theme, setTheme] = useState<'light' | 'dark'>(detectTheme());
   const [searchQuery, setSearchQuery] = useState('');
   const [live, setLive] = useState(true);           // Live = simulation running + breathing
@@ -1657,6 +1710,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 
       {/* ── Floating toolbar — constrained to card width, wraps if needed ── */}
       <div
+        ref={toolbarRef}
         className="absolute top-2.5 z-30 flex items-center gap-1 px-2 py-1.5"
         style={{
           ...pillStyle,
@@ -1859,8 +1913,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 
       {error && (
         <div
-          className="absolute top-14 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 text-[11px]"
-          style={{ ...pillStyle, background: 'rgba(239,68,68,0.9)', color: '#fff', border: 'none', borderRadius: 999 }}
+          className="absolute left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 text-[11px]"
+          style={{ ...pillStyle, background: 'rgba(239,68,68,0.9)', color: '#fff', border: 'none', borderRadius: 999, top: toolbarHeight + 18 }}
         >
           {error}
         </div>
@@ -1879,27 +1933,96 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         </div>
       )}
 
-      {/* Selected info (right) */}
-      {selected && (
-        <div
-          className="absolute top-14 right-3 z-20 px-3 py-2 text-[11px] max-w-sm"
-          style={{ ...pillStyle, borderRadius: 12 }}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="font-mono break-all">{selected.label}</div>
-              <div style={{ opacity: 0.6 }} className="mt-0.5 text-[10px]">
-                {selected.type} · {selected.language ?? '—'} · community {selected.community} · imp {selected.importance.toFixed(3)}
+      {/* Selected info (right) — anchors below toolbar (measured), shows full
+          path with start-side ellipsis, plus Copy + per-IDE Open buttons. */}
+      {selected && (() => {
+        const relPath = extractFilePath(selected);
+        const rootClean = (root ?? '').replace(/\/+$/, '');
+        const absPath = relPath
+          ? (relPath.startsWith('/') ? relPath : rootClean ? `${rootClean}/${relPath}` : relPath)
+          : '';
+        const canOpen = isRealFileId(selected) && !!absPath;
+        // Last-used IDE sorts to the front so the primary button is the one
+        // the user keeps reaching for; others follow for quick switch.
+        const orderedIdes = canOpen
+          ? [...ides.filter((i) => i.id === lastIdeId), ...ides.filter((i) => i.id !== lastIdeId)]
+          : [];
+        return (
+          <div
+            className="absolute right-3 z-20 px-3 py-2 text-[11px] max-w-sm"
+            style={{ ...pillStyle, borderRadius: 12, top: toolbarHeight + 18 }}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="font-mono break-all font-semibold">{selected.label}</div>
+                {relPath && (
+                  // direction:rtl + unicode-bidi:plaintext keeps LTR path
+                  // characters in natural order but puts the ellipsis on the
+                  // left so the filename at the tail stays visible.
+                  <div
+                    className="mt-1 font-mono text-[10px]"
+                    style={{
+                      opacity: 0.75,
+                      direction: 'rtl',
+                      textAlign: 'left',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      unicodeBidi: 'plaintext',
+                    }}
+                    title={absPath || relPath}
+                  >
+                    {absPath || relPath}
+                  </div>
+                )}
+                <div style={{ opacity: 0.6 }} className="mt-1 text-[10px]">
+                  {selected.type} · {selected.language ?? '—'} · community {selected.community} · imp {selected.importance.toFixed(3)}
+                </div>
+                {relPath && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <button
+                      className="cosmos-gpu-pill-btn"
+                      title="Copy full path"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(absPath || relPath);
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 1200);
+                        } catch { /* clipboard blocked — ignore */ }
+                      }}
+                    >
+                      {copied ? '✓ Copied' : 'Copy path'}
+                    </button>
+                    {canOpen && orderedIdes.map((ide) => (
+                      <button
+                        key={ide.id}
+                        className={`cosmos-gpu-pill-btn ${ide.id === lastIdeId ? 'active' : ''}`}
+                        title={`Open in ${ide.name}`}
+                        onClick={async () => {
+                          const api = window.electronAPI;
+                          if (!api?.openInIde) return;
+                          const res = await api.openInIde(ide.bundlePath, absPath);
+                          if (res?.ok) {
+                            setLastIdeId(ide.id);
+                            try { localStorage.setItem('trace-mcp.lastIde', ide.id); } catch { /* storage blocked */ }
+                          }
+                        }}
+                      >
+                        {ide.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+              <button
+                onClick={() => setSelected(null)}
+                className="cosmos-gpu-pill-btn"
+                style={{ padding: '2px 6px', opacity: 0.7 }}
+              >×</button>
             </div>
-            <button
-              onClick={() => setSelected(null)}
-              className="cosmos-gpu-pill-btn"
-              style={{ padding: '2px 6px', opacity: 0.7 }}
-            >×</button>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 });

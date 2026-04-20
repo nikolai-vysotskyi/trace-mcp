@@ -5,6 +5,8 @@ declare global {
     electronAPI?: {
       selectFolder: () => Promise<string | null>;
       openInEditor: (filePath: string) => Promise<void>;
+      detectIdeApps: () => Promise<{ id: string; name: string; bundlePath: string }[]>;
+      openInIde: (bundlePath: string, filePath: string) => Promise<{ ok: boolean; error?: string }>;
       restartDaemon: () => Promise<{ ok: boolean }>;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
       configureMcpClient: (clientName: string, level: string) => Promise<{ ok: boolean; error?: string }>;
