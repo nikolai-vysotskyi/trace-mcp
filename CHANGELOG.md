@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.27.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.26.0...v1.27.0) (2026-04-20)
+
+
+### Features
+
+* **app:** open selected graph node in installed IDE ([4ca5e22](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4ca5e22ff0dbe966c392f38e0a25712dff8e31c9))
+
+
+### Bug Fixes
+
+* **app:** robust Update button with scratch cleanup, --force, and visible errors ([9028793](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9028793c9a0eae2a5b5dc839403e08c765bb0d1f))
+* **build:** bundle deps via createRequire to survive spaced install paths ([65e9f3f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/65e9f3f3f4c0ff622371c6d0de138b52038aa29f))
+* **postinstall:** match new release asset naming (-arm64-mac.zip / -mac.zip) ([27200ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/27200bad183f1e425b4f6fa4f5c80ed7ce03412d))
+* **updater:** pre-clean scratch dirs and back off on repeated failures ([b7a647c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b7a647c092450784013946f13e5110ad016cf70f))
+
 ## [1.26.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.25.0...v1.26.0) (2026-04-20)
 
 
