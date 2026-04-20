@@ -5,10 +5,12 @@ import path from 'path';
 import fs from 'fs';
 import { createTray, showMenuWindow } from './tray';
 
-// GPU stability — use software fallback if GPU process keeps crashing
-app.commandLine.appendSwitch('disable-gpu-compositing');
+// SharedArrayBuffer needed for cosmos.gl workers. GPU compositing + Skia
+// renderer are kept ON — disabling them forces a per-frame CPU readback of
+// the WebGL canvas (proportional to CSS pixels), which tanked graph FPS
+// from 60 to ~20 on full-window views. Re-enable the defensive flags only
+// if GPU process crashes resurface.
 app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
-app.commandLine.appendSwitch('disable-features', 'UseSkiaRenderer');
 
 // Prevent multiple instances. If a second launch happens, bring the existing
 // window forward instead of letting the new process die silently.
