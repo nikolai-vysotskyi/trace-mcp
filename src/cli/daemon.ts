@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { execSync, spawn } from 'node:child_process';
 import { DEFAULT_DAEMON_PORT, DAEMON_LOG_PATH, LAUNCHD_PLIST_PATH } from '../global.js';
 import { getDaemonHealth } from '../daemon/client.js';
-import { ensureDaemon, stopDaemon, restartDaemon } from '../daemon/lifecycle.js';
+import { ensureDaemon, stopDaemon, restartDaemon, waitForDaemonUp } from '../daemon/lifecycle.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 
@@ -47,6 +47,12 @@ daemonCommand
       console.error(`Failed to start daemon: ${result.error ?? 'unknown'}`);
       process.exit(1);
     }
+    const up = await waitForDaemonUp(port, 10_000);
+    if (!up) {
+      console.error(`Daemon start issued but /health did not respond on port ${port} within 10s.`);
+      console.error(`Check logs: trace-mcp daemon logs`);
+      process.exit(1);
+    }
     console.log(`Daemon started on port ${port} (strategy: ${result.strategy ?? 'unknown'}).`);
     if (process.platform === 'darwin') {
       console.log(`  Plist: ${LAUNCHD_PLIST_PATH}`);
@@ -71,6 +77,15 @@ daemonCommand
     const result = restartDaemon({ port });
     if (!result.ok) {
       console.error(`Failed to restart daemon: ${result.error ?? 'unknown'}`);
+      process.exit(1);
+    }
+    // Block until /health responds — callers (the menu bar app's "Restart
+    // Daemon" button, scripts, humans) need to know the daemon is actually
+    // reachable, not just that launchd accepted the kickstart.
+    const up = await waitForDaemonUp(port, 10_000);
+    if (!up) {
+      console.error(`Daemon restart issued but /health did not respond on port ${port} within 10s.`);
+      console.error(`Check logs: trace-mcp daemon logs`);
       process.exit(1);
     }
     console.log(`Daemon restarted on port ${port} (strategy: ${result.strategy ?? 'unknown'}).`);
