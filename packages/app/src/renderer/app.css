@@ -242,6 +242,12 @@ body {
   line-height: 1.25;
   letter-spacing: -0.005em;
 }
+.update-card .subtitle.error {
+  color: var(--warning);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .update-card .ready-icon {
   display: inline-flex;
   align-items: center;

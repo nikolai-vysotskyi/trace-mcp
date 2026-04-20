@@ -448,6 +448,7 @@ function UpdateBanner() {
     const api = (window as any).electronAPI;
     if (!api) return;
     setUpdating(true);
+    setState((s) => ({ ...s, error: undefined }));
     try {
       const result = await api.applyUpdate();
       if (result?.ok && api.checkPendingUpdate) {
@@ -512,6 +513,9 @@ function UpdateBanner() {
         <div className="subtitle">
           Currently v{state.current} · checked {formatAgo(state.lastChecked, now)}
         </div>
+        {state.error && (
+          <div className="subtitle error" title={state.error}>{state.error}</div>
+        )}
         <button className="btn-prominent" onClick={handleUpdate} disabled={updating}>
           {updating ? 'Updating…' : 'Update'}
         </button>

@@ -358,17 +358,60 @@ ipcMain.handle('check-for-update', async () => {
 });
 
 // IPC: apply update (runs npm update -g trace-mcp, which triggers postinstall → app update)
-ipcMain.handle('apply-update', async () => {
-  // Resolve npm from a login shell so GUI launches (which lack ~/.npm-global etc.) work.
-  const npmCmd = process.env.SHELL
-    ? `${process.env.SHELL} -lc 'npm update -g trace-mcp'`
-    : 'npm update -g trace-mcp';
-  return await new Promise<{ ok: boolean; error?: string; pending?: boolean }>((resolve) => {
-    exec(npmCmd, { encoding: 'utf-8', timeout: 600_000 }, (err) => {
-      if (err) { resolve({ ok: false, error: err.message }); return; }
-      resolve({ ok: true, pending: hasPendingUpdate() });
+function resolveNpmRoot(): Promise<string | null> {
+  const cmd = process.env.SHELL ? `${process.env.SHELL} -lc 'npm root -g'` : 'npm root -g';
+  return new Promise((resolve) => {
+    exec(cmd, { encoding: 'utf-8', timeout: 30_000 }, (err, stdout) => {
+      if (err) { resolve(null); return; }
+      const line = (stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
+      resolve(line || null);
     });
   });
+}
+
+// Remove any `.trace-mcp-<rand>` scratch directories npm left behind from a
+// prior interrupted install — they cause ENOTEMPTY on the next rename-swap.
+function cleanStaleScratchDirs(npmRoot: string): void {
+  try {
+    for (const entry of fs.readdirSync(npmRoot)) {
+      if (entry.startsWith('.trace-mcp-')) {
+        try { fs.rmSync(path.join(npmRoot, entry), { recursive: true, force: true }); } catch {}
+      }
+    }
+  } catch {}
+}
+
+ipcMain.handle('apply-update', async () => {
+  // `install --force` is the robust swap: it replaces the package directory
+  // wholesale rather than relying on `update`'s rename dance, which breaks when
+  // the prior install left trace-mcp in a partially-extracted state.
+  const npmCmd = process.env.SHELL
+    ? `${process.env.SHELL} -lc 'npm install -g trace-mcp@latest --force'`
+    : 'npm install -g trace-mcp@latest --force';
+
+  const npmRoot = await resolveNpmRoot();
+  if (npmRoot) cleanStaleScratchDirs(npmRoot);
+
+  const runOnce = () => new Promise<{ err?: Error; stderr: string }>((resolve) => {
+    exec(npmCmd, { encoding: 'utf-8', timeout: 600_000 }, (err, _stdout, stderr) => {
+      resolve({ err: err ?? undefined, stderr: stderr ?? '' });
+    });
+  });
+
+  let result = await runOnce();
+  // ENOTEMPTY after --force means the main `trace-mcp` dir itself is in a
+  // corrupt half-extracted state. Nuke it along with any scratches and retry.
+  if (result.err && /ENOTEMPTY/.test(result.stderr) && npmRoot) {
+    cleanStaleScratchDirs(npmRoot);
+    try { fs.rmSync(path.join(npmRoot, 'trace-mcp'), { recursive: true, force: true }); } catch {}
+    result = await runOnce();
+  }
+
+  if (result.err) {
+    const tail = result.stderr.trim().split('\n').slice(-3).join(' ').slice(-240);
+    return { ok: false, error: tail ? `${result.err.message}: ${tail}` : result.err.message };
+  }
+  return { ok: true, pending: hasPendingUpdate() };
 });
 
 // Pending update plumbing — postinstall stages a verified zip into ~/Applications/
