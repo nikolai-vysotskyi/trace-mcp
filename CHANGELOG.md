@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.26.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.25.0...v1.26.0) (2026-04-20)
+
+
+### Features
+
+* **ai:** per-capability gates and empty-string config hygiene ([ad7f5e8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ad7f5e857d6e1bbb2d0fde048cedf4e02a13dae7))
+* **app:** Ollama control panel in Settings ([2e5d374](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2e5d37435ad62f892e45ea7018eb92f16e6b0076))
+* **app:** tinted edge colors and camera-interaction lock in graph explorer ([7ca42db](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7ca42db50710837ce28d222da4795ed843c8b036))
+* **init:** stable launcher shim for MCP registration ([1b6eb25](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b6eb25ac1e8820afeb914c47e82747680425614))
+
+
+### Bug Fixes
+
+* **app:** capture streaming buffer before setState in AskTab ([558ebc7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/558ebc78235749b94332c45bc6714e9482512d5e))
+* **daemon:** launchd bootstrap/kickstart + startup health wait ([c78115a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c78115a03b0722cdf7ac753e3e1c93e13d5d19f6))
+* **db:** idempotent file upsert via ON CONFLICT ([1440d9f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1440d9fcc9f00edbd38d1fb3eaadbaf1c8688b53))
+* **init:** drop stale {{tool_name}} template and clean up legacy hooks ([250d586](https://github.com/nikolai-vysotskyi/trace-mcp/commit/250d586d87606df03b7e403300d0b9df3c98d275))
+
+
+### Documentation
+
+* add dark-mode graph screenshot and refresh app images ([e3ab628](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e3ab6284bd6740edf1935736d191447db8812f61))
+
+
+### Tests
+
+* **launcher:** accept either probe failure on CI ([d83d14c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d83d14c16a671f02d77e738a206057558c5ba996))
+
 ## [1.25.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.24.0...v1.25.0) (2026-04-18)
 
 
