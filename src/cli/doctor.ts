@@ -4,11 +4,15 @@
  * artifacts that may conflict with trace-mcp. Optionally fixes them.
  */
 
+import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { Command } from 'commander';
 import * as p from '@clack/prompts';
 import { detectConflicts, type Conflict, type ConflictSeverity } from '../init/conflict-detector.js';
 import { fixConflict, fixAllConflicts, type FixResult } from '../init/conflict-resolver.js';
 import { findProjectRoot } from '../project-root.js';
+import { getLauncherPath, getLauncherConfigPath, getLauncherDir, readInstalledLauncherVersion, readLauncherConfig } from '../init/launcher.js';
+import { LAUNCHER_VERSION } from '../init/types.js';
 
 const SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',
@@ -28,12 +32,18 @@ export const doctorCommand = new Command('doctor')
   .option('--fix-interactive', 'Fix conflicts interactively (ask for each)')
   .option('--dry-run', 'Show what --fix would do without making changes')
   .option('--json', 'Output results as JSON')
+  .option('--launcher', 'Diagnose the stable-launcher shim instead of scanning conflicts')
   .action(async (opts: {
     fix?: boolean;
     fixInteractive?: boolean;
     dryRun?: boolean;
     json?: boolean;
+    launcher?: boolean;
   }) => {
+    if (opts.launcher) {
+      const code = diagnoseLauncher({ json: opts.json });
+      process.exit(code);
+    }
     // Detect project root (optional — doctor works without it)
     let projectRoot: string | undefined;
     try {
@@ -195,4 +205,93 @@ function shortPath(p: string): string {
   const cwd = process.cwd();
   if (p.startsWith(cwd)) return p.slice(cwd.length + 1) || '.';
   return p;
+}
+
+interface LauncherReport {
+  launcherDir: string;
+  launcherPath: string;
+  configPath: string;
+  installedVersion: string | null;
+  shippedVersion: string;
+  upToDate: boolean;
+  configExists: boolean;
+  config: Partial<ReturnType<typeof readLauncherConfig>>;
+  nodeExists: boolean;
+  cliExists: boolean;
+  executionCheck: { ok: boolean; detail: string };
+  ok: boolean;
+}
+
+function diagnoseLauncher(opts: { json?: boolean }): 0 | 1 {
+  const launcherPath = getLauncherPath();
+  const configPath = getLauncherConfigPath();
+  const installedVersion = readInstalledLauncherVersion();
+  const config = readLauncherConfig();
+
+  const nodeExists = !!config.node && fs.existsSync(config.node);
+  const cliExists = !!config.cli && fs.existsSync(config.cli);
+
+  let executionCheck: LauncherReport['executionCheck'] = { ok: false, detail: 'launcher not installed' };
+  if (fs.existsSync(launcherPath)) {
+    const run = spawnSync(launcherPath, ['--version'], { encoding: 'utf-8', timeout: 10_000 });
+    if (run.status === 0) {
+      executionCheck = { ok: true, detail: `trace-mcp ${run.stdout.trim()}` };
+    } else {
+      const err = (run.stderr ?? '').trim() || `exit ${run.status}`;
+      executionCheck = { ok: false, detail: err };
+    }
+  }
+
+  const report: LauncherReport = {
+    launcherDir: getLauncherDir(),
+    launcherPath,
+    configPath,
+    installedVersion,
+    shippedVersion: LAUNCHER_VERSION,
+    upToDate: installedVersion === LAUNCHER_VERSION,
+    configExists: fs.existsSync(configPath),
+    config,
+    nodeExists,
+    cliExists,
+    executionCheck,
+    ok: false,
+  };
+  report.ok =
+    installedVersion === LAUNCHER_VERSION &&
+    report.configExists &&
+    nodeExists &&
+    cliExists &&
+    executionCheck.ok;
+
+  if (opts.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return report.ok ? 0 : 1;
+  }
+
+  p.intro('trace-mcp doctor --launcher');
+
+  const lines: string[] = [
+    `Launcher dir:       ${shortPath(report.launcherDir)}`,
+    `Launcher path:      ${shortPath(report.launcherPath)}`,
+    `Installed version:  ${installedVersion ?? '(not installed)'}`,
+    `Shipped version:    ${LAUNCHER_VERSION}`,
+    `Up-to-date:         ${report.upToDate ? 'yes' : 'NO — run `trace-mcp init` to upgrade'}`,
+    '',
+    `Config file:        ${shortPath(report.configPath)}`,
+    `Config exists:      ${report.configExists ? 'yes' : 'NO'}`,
+    `  TRACE_MCP_NODE    ${config.node ?? '(unset)'}${config.node && !nodeExists ? ' — MISSING' : ''}`,
+    `  TRACE_MCP_CLI     ${config.cli ?? '(unset)'}${config.cli && !cliExists ? ' — MISSING' : ''}`,
+    `  TRACE_MCP_VERSION ${config.version ?? '(unset)'}`,
+    '',
+    `Execution check:    ${executionCheck.ok ? 'OK' : 'FAIL'}`,
+    `  ${executionCheck.detail}`,
+  ];
+  p.note(lines.join('\n'), report.ok ? 'Launcher healthy' : 'Launcher issues detected');
+
+  if (report.ok) {
+    p.outro('MCP clients can spawn trace-mcp via the stable shim.');
+  } else {
+    p.outro('Fix: run `trace-mcp init` to reinstall the launcher and refresh config.');
+  }
+  return report.ok ? 0 : 1;
 }

@@ -48,3 +48,4 @@ export const GUARD_HOOK_VERSION = '0.6.0';
 export const REINDEX_HOOK_VERSION = '0.1.0';
 export const PRECOMPACT_HOOK_VERSION = '0.2.0';
 export const WORKTREE_HOOK_VERSION = '0.2.0';
+export const LAUNCHER_VERSION = '0.2.0';
