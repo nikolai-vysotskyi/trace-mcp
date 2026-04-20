@@ -160,8 +160,13 @@ function trustNotDowngraded(stagedApp, currentApp) {
 }
 
 async function main() {
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
-  const zipPattern = new RegExp(`trace-mcp.*${arch}\\.zip$`, 'i');
+  // macOS release naming: `trace-mcp-<ver>-arm64-mac.zip` (Apple silicon) or
+  // `trace-mcp-<ver>-mac.zip` (Intel, no arch marker). The x64 matcher must
+  // exclude arm64 to avoid picking the wrong zip when both exist.
+  const isArm64 = process.arch === 'arm64';
+  const zipPattern = isArm64
+    ? /^trace-mcp-.*-arm64-mac\.zip$/i
+    : /^trace-mcp-(?!.*-arm64-).*-mac\.zip$/i;
 
   const body = await httpGet(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
   const release = JSON.parse(body);
