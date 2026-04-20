@@ -92,6 +92,10 @@ trace-mcp ships with an optional Electron desktop app (`packages/app`) that give
 
 **GPU graph explorer.** The Graph tab renders the full dependency graph on the GPU via [cosmos.gl](https://cosmos.gl) — tens of thousands of nodes/edges at interactive frame rates. Filter by Files / Symbols, overlay detected communities, highlight groups, toggle labels/FPS, and step through graph depth. Good for getting a feel for coupling, hotspots, and how a codebase is actually shaped before you dive into tools.
 
+<p align="center">
+  <img src="docs/images/app-dark-graph.png" alt="trace-mcp app — GPU graph explorer in dark mode" width="720" />
+</p>
+
 **Install:** grab the latest build from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest) —
 
 - **macOS** — `trace-mcp-<version>-arm64-mac.zip` (Apple Silicon) or `trace-mcp-<version>-mac.zip` (Intel). Unzip and drag `trace-mcp.app` into `/Applications`.
