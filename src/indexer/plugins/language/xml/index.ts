@@ -421,15 +421,18 @@ export class XmlLanguagePlugin implements LanguagePlugin {
       }
 
       // ── Import edges ──
+      // Note: use `from` (not `module`) — file-extractor classifies import
+      // edges by reading `metadata.from`. Without it, these edges get empty
+      // paths and the resolver drops them, leaving XML/SVG files isolated.
       const href = getAttr(attrs, 'href');
       if (href && importTags.has(ll)) {
-        edges.push({ edgeType: 'imports', metadata: { module: href, tag, dialect } });
+        edges.push({ edgeType: 'imports', metadata: { from: href, tag, dialect } });
       }
 
       // .NET PackageReference / ProjectReference
       if (dialect === 'dotnet-project' && (ll === 'packagereference' || ll === 'projectreference')) {
         const inc = getAttr(attrs, 'Include');
-        if (inc) edges.push({ edgeType: 'imports', metadata: { module: inc, tag, dialect } });
+        if (inc) edges.push({ edgeType: 'imports', metadata: { from: inc, tag, dialect } });
       }
 
       // Maven dependency
@@ -443,7 +446,7 @@ export class XmlLanguagePlugin implements LanguagePlugin {
       if (schemaLoc) {
         for (const p of schemaLoc.trim().split(/\s+/)) {
           if (p.endsWith('.xsd') || p.endsWith('.wsdl') || p.startsWith('http')) {
-            edges.push({ edgeType: 'imports', metadata: { module: p, tag } });
+            edges.push({ edgeType: 'imports', metadata: { from: p, tag } });
           }
         }
       }
@@ -451,15 +454,32 @@ export class XmlLanguagePlugin implements LanguagePlugin {
       // script src
       if (ll === 'script') {
         const src = getAttr(attrs, 'src');
-        if (src) edges.push({ edgeType: 'imports', metadata: { module: src, tag: 'script' } });
+        if (src) edges.push({ edgeType: 'imports', metadata: { from: src, tag: 'script' } });
       }
 
       // link[rel=stylesheet] href
       if (ll === 'link') {
         const rel = getAttr(attrs, 'rel');
         if (rel === 'stylesheet' && href) {
-          edges.push({ edgeType: 'imports', metadata: { module: href, tag: 'link' } });
+          edges.push({ edgeType: 'imports', metadata: { from: href, tag: 'link' } });
         }
+      }
+
+      // SVG <use href="sprite.svg#id"> / xlink:href
+      if (dialect === 'svg' && ll === 'use') {
+        const useHref = href ?? getAttr(attrs, 'xlink:href');
+        if (useHref) {
+          // Strip fragment (`sprite.svg#icon` → `sprite.svg`). A bare `#id`
+          // references the current document — not an external edge.
+          const hashIdx = useHref.indexOf('#');
+          const target = hashIdx < 0 ? useHref : useHref.slice(0, hashIdx);
+          if (target) edges.push({ edgeType: 'imports', metadata: { from: target, tag: 'use', dialect } });
+        }
+      }
+      // SVG <image href="...">
+      if (dialect === 'svg' && ll === 'image') {
+        const imgHref = href ?? getAttr(attrs, 'xlink:href');
+        if (imgHref) edges.push({ edgeType: 'imports', metadata: { from: imgHref, tag: 'image', dialect } });
       }
     }
 

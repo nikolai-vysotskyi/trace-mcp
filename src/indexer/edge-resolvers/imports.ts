@@ -83,7 +83,14 @@ export function resolveEsmImportEdges(state: PipelineState): void {
      DO UPDATE SET metadata = excluded.metadata`,
   );
 
-  const TS_JS_LANGS = new Set(['typescript', 'javascript', 'tsx', 'jsx', 'vue']);
+  // Languages whose `imports` edges carry filesystem-path specifiers (vs FQNs
+   // like PHP's `use`). CSS/HTML/XML/SVG `@import`/href/src targets resolve via
+   // the same oxc-resolver pass — without this, asset files stay isolated.
+   const TS_JS_LANGS = new Set([
+    'typescript', 'javascript', 'tsx', 'jsx', 'vue',
+    'css', 'scss', 'sass', 'less', 'stylus',
+    'html', 'xml', 'svg',
+  ]);
 
   store.db.transaction(() => {
     for (const [fileId, imports] of state.pendingImports) {
@@ -112,11 +119,23 @@ export function resolveEsmImportEdges(state: PipelineState): void {
       const sourceWs = fileWorkspace.get(fileId) ?? null;
 
       for (const [from, specifiers] of consolidated) {
+        if (!from) continue;
+        // External URL (HTML/CSS href to CDN) — not a file nor an npm package.
+        if (from.startsWith('http://') || from.startsWith('https://') || from.startsWith('//')
+            || from.startsWith('data:')) continue;
         const isRelative = from.startsWith('.') || from.startsWith('/') || from.startsWith('@/') || from.startsWith('~');
-        if (isRelative) {
-          const resolved = resolver.resolve(from, absSource);
-          if (resolved) {
-            const relTarget = path.relative(state.rootPath, resolved);
+
+        // Always try the path resolver first. Bare specifiers may still be
+        // local — tsconfig/jsconfig `baseUrl` or `paths` can turn something
+        // like `static/svg/Logo.svg` into a file inside the repo. Only fall
+        // back to npm phantom when resolution lands outside the project root.
+        const resolved = resolver.resolve(from, absSource);
+        if (resolved) {
+          const relTarget = path.relative(state.rootPath, resolved);
+          // `path.relative` returns something starting with `..` when the
+          // target is outside rootPath — those are real npm deps under
+          // node_modules, handled by the bucket fallback below.
+          if (!relTarget.startsWith('..') && !path.isAbsolute(relTarget)) {
             const target = resolveTargetFile(relTarget);
             if (target) {
               insertStmt.run(
@@ -129,6 +148,9 @@ export function resolveEsmImportEdges(state: PipelineState): void {
               continue;
             }
           }
+        }
+
+        if (isRelative) {
           // Unresolved relative import — likely points outside the indexed
           // source tree or into a generated file. Skip rather than phantom
           // (would pollute the bucket view with per-file noise).

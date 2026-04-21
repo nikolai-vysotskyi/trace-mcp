@@ -99,7 +99,7 @@ describe('XmlLanguagePlugin', () => {
 
     it('extracts xs:import schemaLocation', () => {
       const r = parse('<xs:schema><xs:import schemaLocation="common.xsd" /></xs:schema>', 'types.xsd');
-      expect(r.edges!.some(e => (e.metadata as any).module === 'common.xsd')).toBe(true);
+      expect(r.edges!.some(e => (e.metadata as any).from === 'common.xsd')).toBe(true);
     });
   });
 
@@ -141,7 +141,7 @@ describe('XmlLanguagePlugin', () => {
   <xsl:import href="base.xsl" />
   <xsl:include href="helpers.xsl" />
 </xsl:stylesheet>`, 'main.xsl');
-      const modules = r.edges!.map(e => (e.metadata as any).module);
+      const modules = r.edges!.map(e => (e.metadata as any).from);
       expect(modules).toContain('base.xsl');
       expect(modules).toContain('helpers.xsl');
     });
@@ -221,8 +221,8 @@ describe('XmlLanguagePlugin', () => {
       expect(r.symbols.some(s => s.name === 'Newtonsoft.Json' && s.metadata?.xmlKind === 'nuget')).toBe(true);
       expect(r.symbols.some(s => s.name === '../Core/Core.csproj' && s.metadata?.xmlKind === 'projectRef')).toBe(true);
       // Also as import edges
-      expect(r.edges!.some(e => (e.metadata as any).module === 'Newtonsoft.Json')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).module === '../Core/Core.csproj')).toBe(true);
+      expect(r.edges!.some(e => (e.metadata as any).from === 'Newtonsoft.Json')).toBe(true);
+      expect(r.edges!.some(e => (e.metadata as any).from === '../Core/Core.csproj')).toBe(true);
     });
   });
 
@@ -376,12 +376,12 @@ describe('XmlLanguagePlugin', () => {
   describe('import edges', () => {
     it('extracts script src', () => {
       const r = parse('<root><script src="app.js" /></root>');
-      expect(r.edges!.some(e => (e.metadata as any).module === 'app.js')).toBe(true);
+      expect(r.edges!.some(e => (e.metadata as any).from === 'app.js')).toBe(true);
     });
 
     it('extracts stylesheet link', () => {
       const r = parse('<root><link rel="stylesheet" href="style.css" /></root>');
-      expect(r.edges!.some(e => (e.metadata as any).module === 'style.css')).toBe(true);
+      expect(r.edges!.some(e => (e.metadata as any).from === 'style.css')).toBe(true);
     });
 
     it('does not extract anchor href as import', () => {
