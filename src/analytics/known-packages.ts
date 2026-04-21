@@ -1100,7 +1100,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'turndown':                       { category: 'utility',   priority: 'none',   plugin: null },
 
   // --- JavaScript / npm: AI / ML ---
-  'openai':                         { category: 'infra',     priority: 'medium', plugin: null },
+  'openai':                         { category: 'infra',     priority: 'medium', plugin: 'openai-py' },
   '@anthropic-ai/sdk':              { category: 'infra',     priority: 'medium', plugin: null },
   '@google/generative-ai':          { category: 'infra',     priority: 'medium', plugin: null },
   'ai':                             { category: 'infra',     priority: 'medium', plugin: null },
@@ -1129,7 +1129,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'litestar':                       { category: 'framework', priority: 'high',   plugin: null },
   'sanic':                          { category: 'framework', priority: 'medium', plugin: null },
   'tornado':                        { category: 'framework', priority: 'medium', plugin: null },
-  'aiohttp':                        { category: 'framework', priority: 'medium', plugin: null },
+  'aiohttp':                        { category: 'framework', priority: 'medium', plugin: 'python-http' },
   'bottle':                         { category: 'framework', priority: 'low',    plugin: null },
   'falcon':                         { category: 'framework', priority: 'medium', plugin: null },
   'pyramid':                        { category: 'framework', priority: 'low',    plugin: null },
@@ -1252,8 +1252,8 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'tox':                            { category: 'testing',   priority: 'none',   plugin: null },
   'nox':                            { category: 'testing',   priority: 'none',   plugin: null },
   // Python HTTP / API clients
-  'requests':                       { category: 'utility',   priority: 'low',    plugin: null },
-  'httpx':                          { category: 'utility',   priority: 'medium', plugin: null },
+  'requests':                       { category: 'utility',   priority: 'low',    plugin: 'python-http' },
+  'httpx':                          { category: 'utility',   priority: 'medium', plugin: 'python-http' },
   'urllib3':                        { category: 'utility',   priority: 'none',   plugin: null },
   'httpcore':                       { category: 'utility',   priority: 'none',   plugin: null },
   // Python CLI
@@ -1261,7 +1261,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'typer':                          { category: 'infra',     priority: 'medium', plugin: null },
   'rich':                           { category: 'ui',        priority: 'medium', plugin: null },
   'textual':                        { category: 'ui',        priority: 'medium', plugin: null },
-  'tqdm':                           { category: 'utility',   priority: 'low',    plugin: null },
+  'tqdm':                           { category: 'utility',   priority: 'low',    plugin: 'tqdm-py' },
   'argparse':                       { category: 'utility',   priority: 'none',   plugin: null },
   // Python config
   'python-dotenv':                  { category: 'utility',   priority: 'none',   plugin: null },
@@ -1270,7 +1270,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   // Python serialization / validation
   'marshmallow':                    { category: 'framework', priority: 'medium', plugin: null },
   'cattrs':                         { category: 'utility',   priority: 'low',    plugin: null },
-  'attrs':                          { category: 'utility',   priority: 'low',    plugin: null },
+  'attrs':                          { category: 'utility',   priority: 'low',    plugin: 'attrs-py' },
   'msgpack':                        { category: 'utility',   priority: 'none',   plugin: null },
   'orjson':                         { category: 'utility',   priority: 'none',   plugin: null },
   'ujson':                          { category: 'utility',   priority: 'none',   plugin: null },
@@ -1284,7 +1284,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'itsdangerous':                   { category: 'utility',   priority: 'none',   plugin: null },
   'cryptography':                   { category: 'utility',   priority: 'low',    plugin: null },
   // Python async / server
-  'anyio':                          { category: 'infra',     priority: 'medium', plugin: null },
+  'anyio':                          { category: 'infra',     priority: 'medium', plugin: 'python-async' },
   'trio':                           { category: 'infra',     priority: 'low',    plugin: null },
   'uvloop':                         { category: 'infra',     priority: 'medium', plugin: null },
   'uvicorn':                        { category: 'infra',     priority: 'high',   plugin: null },
@@ -1319,14 +1319,14 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'betterproto':                    { category: 'framework', priority: 'low',    plugin: null },
 
   // --- Python / pip: AI / ML Core ---
-  'torch':                          { category: 'framework', priority: 'high',   plugin: null },
+  'torch':                          { category: 'framework', priority: 'high',   plugin: 'python-ml' },
   'pytorch':                        { category: 'framework', priority: 'high',   plugin: null },
   'tensorflow':                     { category: 'framework', priority: 'high',   plugin: null },
   'keras':                          { category: 'framework', priority: 'high',   plugin: null },
   'jax':                            { category: 'framework', priority: 'high',   plugin: null },
   'jaxlib':                         { category: 'framework', priority: 'medium', plugin: null },
   'flax':                           { category: 'framework', priority: 'medium', plugin: null },
-  'scikit-learn':                   { category: 'framework', priority: 'high',   plugin: null },
+  'scikit-learn':                   { category: 'framework', priority: 'high',   plugin: 'python-ml' },
   'sklearn':                        { category: 'framework', priority: 'high',   plugin: null },
   'xgboost':                        { category: 'framework', priority: 'medium', plugin: null },
   'lightgbm':                       { category: 'framework', priority: 'medium', plugin: null },
@@ -1343,7 +1343,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'stanza':                         { category: 'framework', priority: 'low',    plugin: null },
 
   // --- Python / pip: Hugging Face ecosystem ---
-  'transformers':                   { category: 'framework', priority: 'high',   plugin: null },
+  'transformers':                   { category: 'framework', priority: 'high',   plugin: 'python-ml' },
   'huggingface-hub':                { category: 'infra',     priority: 'high',   plugin: null },
   'diffusers':                      { category: 'framework', priority: 'high',   plugin: null },
   'accelerate':                     { category: 'infra',     priority: 'high',   plugin: null },
@@ -1434,10 +1434,10 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'ctransformers':                  { category: 'infra',     priority: 'low',    plugin: null },
 
   // --- Python / pip: Data science ---
-  'numpy':                          { category: 'framework', priority: 'high',   plugin: null },
+  'numpy':                          { category: 'framework', priority: 'high',   plugin: 'python-scientific' },
   'pandas':                         { category: 'framework', priority: 'high',   plugin: null },
   'polars':                         { category: 'framework', priority: 'high',   plugin: null },
-  'scipy':                          { category: 'framework', priority: 'medium', plugin: null },
+  'scipy':                          { category: 'framework', priority: 'medium', plugin: 'python-scientific' },
   'pyarrow':                        { category: 'infra',     priority: 'medium', plugin: null },
   'dask':                           { category: 'framework', priority: 'medium', plugin: null },
   'vaex':                           { category: 'framework', priority: 'low',    plugin: null },
@@ -1464,11 +1464,11 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'nbformat':                       { category: 'utility',   priority: 'none',   plugin: null },
 
   // --- Python / pip: Image / Video / Audio ---
-  'pillow':                         { category: 'utility',   priority: 'medium', plugin: null },
-  'opencv-python':                  { category: 'framework', priority: 'high',   plugin: null },
-  'opencv-python-headless':         { category: 'framework', priority: 'high',   plugin: null },
-  'imageio':                        { category: 'utility',   priority: 'low',    plugin: null },
-  'scikit-image':                   { category: 'framework', priority: 'medium', plugin: null },
+  'pillow':                         { category: 'utility',   priority: 'medium', plugin: 'python-imaging' },
+  'opencv-python':                  { category: 'framework', priority: 'high',   plugin: 'python-imaging' },
+  'opencv-python-headless':         { category: 'framework', priority: 'high',   plugin: 'python-imaging' },
+  'imageio':                        { category: 'utility',   priority: 'low',    plugin: 'python-imaging' },
+  'scikit-image':                   { category: 'framework', priority: 'medium', plugin: 'python-scientific' },
   'librosa':                        { category: 'framework', priority: 'medium', plugin: null },
   'soundfile':                      { category: 'utility',   priority: 'low',    plugin: null },
   'audioread':                      { category: 'utility',   priority: 'none',   plugin: null },
@@ -1492,9 +1492,9 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'pyyaml':                         { category: 'utility',   priority: 'none',   plugin: null },
   'toml':                           { category: 'utility',   priority: 'none',   plugin: null },
   'tomli':                          { category: 'utility',   priority: 'none',   plugin: null },
-  'aiofiles':                       { category: 'utility',   priority: 'low',    plugin: null },
+  'aiofiles':                       { category: 'utility',   priority: 'low',    plugin: 'python-async' },
   'python-multipart':               { category: 'utility',   priority: 'none',   plugin: null },
-  'jinja2':                         { category: 'ui',        priority: 'medium', plugin: null },
+  'jinja2':                         { category: 'ui',        priority: 'medium', plugin: 'jinja2' },
   'mako':                           { category: 'ui',        priority: 'low',    plugin: null },
 
   // --- Ruby / Gemfile ---
