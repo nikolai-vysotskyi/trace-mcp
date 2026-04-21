@@ -83,9 +83,16 @@ export function getNodeName(node: TSNode): string | undefined {
 export function extractImportEdges(root: TSNode): RawEdge[] {
   const edges: RawEdge[] = [];
 
-  // Pass 1: top-level ES import statements
+  // Pass 1: top-level ES import statements + re-exports (`export … from '…'`).
+  // Barrel files (static/svg/furniture/index.js, design-system index.ts, etc.)
+  // often consist entirely of `export { X } from '…'` — without handling those
+  // here, the barrel looks like a leaf node and the re-exported modules appear
+  // isolated in the graph.
   for (const node of root.namedChildren) {
-    if (node.type !== 'import_statement') continue;
+    const isImport = node.type === 'import_statement';
+    const isReExport = node.type === 'export_statement'
+      && !!node.childForFieldName('source');
+    if (!isImport && !isReExport) continue;
     const source = node.childForFieldName('source');
     if (!source) continue;
     const from = source.text.replace(/^['"]|['"]$/g, '');
@@ -109,6 +116,18 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
           } else if (inner.type === 'namespace_import') {
             const id = inner.namedChildren.find((c) => c.type === 'identifier');
             if (id) specifiers.push(`* as ${id.text}`);
+          }
+        }
+      } else if (isReExport) {
+        // `export { Foo } from '…'` → export_specifier children inside an
+        // export_clause. `export * from '…'` → has no specifiers (leave empty).
+        // `export { Foo as Bar } from '…'` → track the original exported name.
+        if (child.type === 'export_clause') {
+          for (const spec of child.namedChildren) {
+            if (spec.type === 'export_specifier') {
+              const name = spec.childForFieldName('name');
+              specifiers.push(name?.text ?? spec.text);
+            }
           }
         }
       }
