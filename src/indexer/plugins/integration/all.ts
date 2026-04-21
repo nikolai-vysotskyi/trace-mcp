@@ -77,6 +77,15 @@ import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
 import { ClackPlugin } from './tooling/clack/index.js';
 import { ElectronPlugin } from './tooling/electron/index.js';
 import { PhpEcosystemPlugin } from './tooling/php-ecosystem/index.js';
+import { PythonHttpClientsPlugin } from './tooling/python-http/index.js';
+import { OpenAIPythonPlugin } from './tooling/openai-py/index.js';
+import { PythonMLPlugin } from './tooling/python-ml/index.js';
+import { PythonScientificPlugin } from './tooling/python-scientific/index.js';
+import { PythonImagingPlugin } from './tooling/python-imaging/index.js';
+import { PythonAsyncPlugin } from './tooling/python-async/index.js';
+import { AttrsPyPlugin } from './tooling/attrs-py/index.js';
+import { TqdmPyPlugin } from './tooling/tqdm-py/index.js';
+import { Jinja2Plugin } from './view/jinja2/index.js';
 
 export function createAllIntegrationPlugins(): FrameworkPlugin[] {
   return [
@@ -149,5 +158,15 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new ClackPlugin(),
     new ElectronPlugin(),
     new PhpEcosystemPlugin(),
+    new PythonHttpClientsPlugin(),
+    new OpenAIPythonPlugin(),
+    new PythonMLPlugin(),
+    new PythonScientificPlugin(),
+    new PythonImagingPlugin(),
+    new PythonAsyncPlugin(),
+    new AttrsPyPlugin(),
+    new TqdmPyPlugin(),
+    // view
+    new Jinja2Plugin(),
   ];
 }
