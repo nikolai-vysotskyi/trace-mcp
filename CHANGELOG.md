@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.28.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.27.0...v1.28.0) (2026-04-21)
+
+
+### Features
+
+* **plugins:** add Python ecosystem integration plugins ([741b092](https://github.com/nikolai-vysotskyi/trace-mcp/commit/741b092910ed074a6add0a2a27696c30b649786e))
+
+
+### Bug Fixes
+
+* **indexer:** resolve asset imports and TS re-exports across the graph ([6f76025](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6f76025c8028347c3ce7329e7deb0be08028b131))
+
+
+### Performance
+
+* **app:** custom FPS overlay + disable halo to lift graph FPS ([3fa4038](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3fa4038cab5379608017bbbe0b1c1a936f499d17))
+* **app:** re-enable GPU compositing for graph explorer ([6633456](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6633456805e9eddff7ea21fd90b52181d5ee4431))
+* **app:** upgrade cosmos.gl to 3.0 beta and rework label placement ([601e069](https://github.com/nikolai-vysotskyi/trace-mcp/commit/601e0690ab94f328ee45ca0ba3bf98c3a62cb1a7))
+
 ## [1.27.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.26.0...v1.27.0) (2026-04-20)
 
 
