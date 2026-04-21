@@ -17,8 +17,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cosmos.gl/graph": "^2.6.4",
+    "@cosmos.gl/graph": "3.0.0-beta.7",
     "menubar": "^9.5.0"
+  },
+  "overrides": {
+    "@luma.gl/core": "9.2.6",
+    "@luma.gl/engine": "9.2.6",
+    "@luma.gl/webgl": "9.2.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.4",
