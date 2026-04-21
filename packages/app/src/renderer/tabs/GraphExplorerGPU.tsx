@@ -321,7 +321,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // the next render so toggling a filter doesn't re-trigger the settle pass.
   const prevNodeIdsRef = useRef<Map<string, number> | null>(null);
   const indexByIdRef = useRef<Map<string, number>>(new Map());
-  const labelIndicesRef = useRef<number[]>([]); // which point indices currently carry labels
+  const labelIndicesRef = useRef<number[]>([]); // which point indices currently carry labels (also drives halo tracking subset)
+  // ALL node indices sorted by importance descending. Used by the label
+  // collision pass so we can pick whatever fits the current viewport
+  // instead of being capped to the top-60 halo subset, which routinely
+  // left zero candidates when the user zoomed into a low-importance corner.
+  const nodesByImpRef = useRef<number[]>([]);
   // One representative (most-important node) per community — used as the
   // "sections" overlay at default/zoomed-out views so we aren't dumping 20+
   // individual filenames on top of an unreadable cloud.
@@ -550,7 +555,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // in makes 1-hop edges (which span >400px) go invisible. Widen the range
     // to "virtually infinite" so all highlighted links stay fully opaque; our
     // per-link alphas already handle dimming the non-highlighted ones.
-    graph.setConfig({ linkVisibilityDistanceRange: [100000, 200000] });
+    graph.setConfigPartial({ linkVisibilityDistanceRange: [100000, 200000] });
   }, []);
 
   const clearHighlight = useCallback(() => {
@@ -569,7 +574,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     }
     // Restore the distance-fade range we widened in highlightNeighborhood —
     // keep in sync with the values passed at Graph() construction.
-    graph.setConfig({ linkVisibilityDistanceRange: [100, 400] });
+    graph.setConfigPartial({ linkVisibilityDistanceRange: [100, 400] });
     graph.render();
     highlightedDepthRef.current = null;
     setSelected(null);
@@ -592,43 +597,99 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       if (layer.children.length > 0) layer.replaceChildren();
       return;
     }
-    // (hovered/selected node info still appears in the side panels). When on,
-    // show hovered + selected + either the 1-hop subgraph (highlight mode) or
-    // the default two-tier (sections zoomed out, top-N zoomed in).
+    // Read positions ONCE per frame — getPointPositions() copies a buffer
+    // from WebGL to JS; calling it inside the loop cost us N×50 copies per
+    // frame when displaying 50 labels. Now: one copy, used by both the
+    // index-selection pass and the per-label transform writes.
+    const positions = graph.getPointPositions();
+    // Unified label-placement pass: prioritise hovered/selected → highlight
+    // subgraph (if active) → section reps → all nodes by importance, with
+    // viewport culling and screen-space collision detection. Replaces the
+    // old zoom-tier branches, which fell apart when the actual cosmos zoom
+    // value didn't match what the user perceived as "zoom-out" (e.g. a
+    // small cluster fitted to a large canvas reports zoom ≥ 2 and dropped
+    // straight into the top-N file branch, hiding section headings).
     const indices = new Set<number>();
     const highlightedDepth = highlightedDepthRef.current;
     const highlightActive = highlightedDepth != null && highlightedDepth.size > 0;
+    const cw = containerRef.current?.clientWidth ?? 0;
+    const ch = containerRef.current?.clientHeight ?? 0;
+    // Collision rectangle around each placed label. Approximates a typical
+    // 6–10 char label rendered at the overlay's ~11px / 13px line-height;
+    // tighter values let labels stack into an unreadable mush at zoom-out.
+    const HCLEAR = 70;
+    const VCLEAR = 16;
+    const HARD_CAP = 80;
+    const placed: Array<{ x: number; y: number }> = [];
+    const screenOf = (idx: number): [number, number] | null => {
+      const sx = positions[idx * 2];
+      const sy = positions[idx * 2 + 1];
+      if (!Number.isFinite(sx)) return null;
+      return graph.spaceToScreenPosition([sx, sy]) as [number, number];
+    };
+    const collides = (x: number, y: number) => {
+      for (const p of placed) {
+        if (Math.abs(p.x - x) < HCLEAR && Math.abs(p.y - y) < VCLEAR) return true;
+      }
+      return false;
+    };
+    const tryPlace = (idx: number, allowOffscreen = false, allowOverlap = false): boolean => {
+      if (indices.has(idx) || indices.size >= HARD_CAP) return false;
+      const s = screenOf(idx);
+      if (!s) return false;
+      const [px, py] = s;
+      if (!allowOffscreen && (px < 0 || px > cw || py < 0 || py > ch)) return false;
+      if (!allowOverlap && collides(px, py)) return false;
+      placed.push({ x: px, y: py });
+      indices.add(idx);
+      return true;
+    };
     if (showLabels) {
-      if (hovered) {
-        const i = indexByIdRef.current.get(hovered.id);
-        if (i != null) indices.add(i);
-      }
-      if (selected) {
-        const i = indexByIdRef.current.get(selected.id);
-        if (i != null) indices.add(i);
-      }
-      if (highlightActive) {
-        // Highlight mode: show labels for seed + 1-hop neighbors.
-        for (const [idx, d] of highlightedDepth) {
-          if (d <= 1) indices.add(idx);
+      if (zoom >= 0.5) {
+        // Hovered/selected: always shown, ignoring overlap — the user is
+        // explicitly interrogating these and expects to see the name.
+        if (hovered) {
+          const i = indexByIdRef.current.get(hovered.id);
+          if (i != null) tryPlace(i, true, true);
         }
-      } else {
-        // Two-tier label strategy:
-        //  * Zoomed-out (default view): show ONE label per community — the
-        //    "section headings" of the graph. At this scale individual file
-        //    names are illegible anyway; users want to see the high-level
-        //    structure.
-        //  * Zoomed-in: progressively reveal top-N individual nodes by
-        //    importance, since the user is now close enough to read them.
-        if (zoom < 0.5) {
-          // nothing — too far out to read anything
-        } else if (zoom < 2) {
-          // sections only — cap to the densest groups so we don't crowd
-          const cap = zoom < 1 ? 8 : 14;
-          for (const idx of sectionIndicesRef.current.slice(0, cap)) indices.add(idx);
+        if (selected) {
+          const i = indexByIdRef.current.get(selected.id);
+          if (i != null) tryPlace(i, true, true);
+        }
+        if (highlightActive) {
+          // Highlight subgraph: rank seed + 1-hop neighbours by importance,
+          // place with collision so a hub click doesn't paint a wall of
+          // overlapping filenames over the connected neighbourhood.
+          const ranked: number[] = [];
+          for (const [idx, d] of highlightedDepth) {
+            if (d <= 1) ranked.push(idx);
+          }
+          ranked.sort((a, b) => (nodes[b]?.importance ?? 0) - (nodes[a]?.importance ?? 0));
+          for (const idx of ranked) tryPlace(idx);
         } else {
-          const cap = zoom > 3.5 ? 60 : 24;
-          for (const idx of labelIndicesRef.current.slice(0, cap)) indices.add(idx);
+          // Sections first — community headings dominate the zoomed-out view.
+          // We always TRY all sections; collision drops the ones whose reps
+          // overlap each other in a tight cluster (extreme zoom-out → 1-2
+          // survive; fit → ~all 8 survive).
+          for (const idx of sectionIndicesRef.current) {
+            if (!sectionLabelByIndexRef.current.has(idx)) continue;
+            tryPlace(idx);
+          }
+          // File labels live on a zoom-scaled budget. At fit (~zoom 6) the
+          // budget is 0 → only sections survive, matching the user's mental
+          // model that fit = "show me the map, not the streets". The slope
+          // is intentionally gentle (~3 slots per zoom level) so the next
+          // zoom step after fit reveals only the *most* important files,
+          // not a wall of medium-importance hubs. HARD_CAP is hit naturally
+          // around zoom ≈ 30, by which point the user is reading individual
+          // identifiers anyway.
+          const fileBudget = Math.max(0, Math.floor((zoom - 6) * 3));
+          let fileAdded = 0;
+          for (const idx of nodesByImpRef.current) {
+            if (fileAdded >= fileBudget) break;
+            if (sectionLabelByIndexRef.current.has(idx)) continue;
+            if (tryPlace(idx)) fileAdded++;
+          }
         }
       }
     }
@@ -646,10 +707,6 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     }
     pool = layer.children as HTMLCollectionOf<HTMLDivElement>;
 
-    // Read positions ONCE per frame — getPointPositions() copies a buffer
-    // from WebGL to JS; calling it inside the loop cost us N×50 copies per
-    // frame when displaying 50 labels. Now: one copy, O(1) lookups.
-    const positions = graph.getPointPositions();
     for (let i = 0; i < wanted.length; i++) {
       const idx = wanted[i];
       const node = nodes[idx];
@@ -885,9 +942,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         pointDefaultColor: themeSpec.pointDefaultColor,
         linkDefaultColor: themeSpec.linkColor,
         hoveredLinkColor: themeSpec.hoveredLink,
-        pointSize: adaptivePointSize,
-        linkWidth: adaptiveLinkWidth,
-        linkArrows: adaptiveLinkArrows,
+        pointDefaultSize: adaptivePointSize,
+        linkDefaultWidth: adaptiveLinkWidth,
+        linkDefaultArrows: adaptiveLinkArrows,
         linkArrowsSizeScale: 0.6,
         // Higher floor = fewer near-camera link fragments shaded every frame.
         // Wider far end = distant links fade smoothly instead of pop-culling.
@@ -1090,7 +1147,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const topByImp = [...nodes.keys()].sort(
       (a, b) => (nodes[b].importance ?? 0) - (nodes[a].importance ?? 0),
     );
+    // labelIndicesRef stays capped — it's the halo-tracking subset (each
+    // tracked index costs a per-tick GPU→CPU copy in trackedPositionsFbo).
+    // nodesByImpRef holds the full ranking so the label collision pass
+    // can keep walking when the top 60 are all off-screen.
     labelIndicesRef.current = topByImp.slice(0, 60);
+    nodesByImpRef.current = topByImp;
 
     // Section reps: the single most-important node per community. Ordered by
     // community size (biggest section first) so the zoomed-out cap keeps the
@@ -1116,32 +1178,37 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     }
     sectionLabelByIndexRef.current = sectionLabels;
 
-    // Push the point data immediately — user sees nodes even before edges
-    // finish processing on big graphs.
-    graph.setPointPositions(positions);
-    graph.setPointColors(colors);
-    graph.setPointSizes(sizes);
-    // Register the subset the halo pass wants. cosmos.gl then runs a
-    // per-tick GPU copy of just these indices into trackedPositionsFbo,
-    // which the halo pass reads via getTrackedPointPositionsMap(). The
-    // subset is re-registered on every renderGraph cycle because
-    // labelIndicesRef is rebuilt from the new nodes array (indices only
-    // stay valid within a single cycle).
-    graph.trackPointPositionsByIndices(labelIndicesRef.current);
     // Snapshot so highlightNeighborhood can rewrite colors per hop-distance
     // and clearHighlight can restore them. Copy because `colors` is reused
     // by the GPU buffer.
     origColorsRef.current = new Float32Array(colors);
 
-    // Cap the opening alpha. cosmos.gl auto-starts at alpha=1.0 — per-tick
-    // forces `delta = alpha × force` are then at full magnitude and
-    // close-pair repulsion spikes make individual points visibly pop.
-    // Called AFTER setPointPositions/Colors/Sizes so the first processed
-    // render tick already has the freshly-uploaded point data; calling
-    // it before the data is set caused cosmos.gl to advance a zero-point
-    // simulation and leave internal scale/force state in an intermediate
-    // configuration that didn't match what the halo pass expected.
-    graph.start(0.4);
+    // cosmos.gl 3.0 made device/canvas init asynchronous. Data-setters
+    // invoked before `graph.ready` resolves silently no-op, leaving the
+    // canvas empty. Gate every initial data push on the ready promise.
+    // See cosmos.gl v3 notes: `readonly ready: Promise<void>` + `isReady`.
+    const applyPointData = () => {
+      // Push the point data immediately — user sees nodes even before edges
+      // finish processing on big graphs.
+      graph.setPointPositions(positions);
+      graph.setPointColors(colors);
+      graph.setPointSizes(sizes);
+      // Register the subset the halo pass wants. cosmos.gl then runs a
+      // per-tick GPU copy of just these indices into trackedPositionsFbo,
+      // which the halo pass reads via getTrackedPointPositionsMap(). The
+      // subset is re-registered on every renderGraph cycle because
+      // labelIndicesRef is rebuilt from the new nodes array.
+      graph.trackPointPositionsByIndices(labelIndicesRef.current);
+      // Cap the opening alpha — per-tick forces `delta = alpha × force`
+      // would otherwise be at full magnitude and close-pair repulsion
+      // spikes make individual points visibly pop.
+      graph.start(0.4);
+    };
+    if (graph.isReady) applyPointData();
+    else graph.ready.then(applyPointData).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[graph] init ready failed', err);
+    });
 
     // Edge processing: dedup + top-K sort. On big graphs this can freeze
     // the main thread for 100–300ms, so delegate to a Worker. Small graphs
@@ -1154,12 +1221,22 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       if (token !== renderTokenRef.current) return;
       const g = graphRef.current;
       if (!g) return;
+      // Re-gate: a small worker job may still return before cosmos.gl's
+      // async device init has resolved. setLinks before ready is a no-op
+      // (same silent failure as the point-data path above).
+      if (!g.isReady) {
+        g.ready.then(() => finalize(links)).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[graph] finalize ready failed', err);
+        });
+        return;
+      }
       try {
         g.setLinks(links);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[graph] setLinks failed', err);
-        setError(decorateErr(err).message);
+        setError('setLinks: ' + decorateErr(err).message);
         return;
       }
       // Cache pairs so highlightNeighborhood can rewrite per-link colors for
@@ -1178,7 +1255,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           LINK_TINT_ALPHA,
         );
         defaultLinkColorsRef.current = tinted;
-        g.setLinkColors(new Float32Array(tinted));
+        try {
+          g.setLinkColors(new Float32Array(tinted));
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[graph] setLinkColors failed', err);
+          setError('setLinkColors: ' + decorateErr(err).message);
+          return;
+        }
       }
       // cosmos.gl auto-starts the simulation on new Graph() when
       // enableSimulation is true (default). No manual start() needed.
@@ -1188,7 +1272,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[graph] render failed', err);
-        setError(decorateErr(err).message);
+        setError('render: ' + decorateErr(err).message);
         return;
       }
       // Immediate fit so the user sees the layout framed from the first
@@ -1362,7 +1446,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) return;
-    graph.setConfig({
+    graph.setConfigPartial({
       backgroundColor: themeSpec.background,
       linkDefaultColor: themeSpec.linkColor,
       pointDefaultColor: themeSpec.pointDefaultColor,
@@ -1646,13 +1730,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 
       <FpsBadge show={showFPS} />
 
-      {/* A/B PROBE: halo overlay disabled. mix-blend-mode:screen forces
-          Chromium into software compositing for the whole stacking context;
-          testing if removal lifts FPS. Revert if halos are wanted visually. */}
+      {/* Halo overlay — additive radial-gradient glows around top-importance
+          nodes. `plus-lighter` is GPU-accelerated in Chromium (unlike
+          `screen`, which previously forced software compositing and cost
+          us ~12 FPS on full-window views). */}
       <canvas
         ref={haloCanvasRef}
         className="absolute inset-0 pointer-events-none"
-        style={{ display: 'none' }}
+        style={{ mixBlendMode: 'plus-lighter' }}
       />
 
       {/* Label overlay — HTML over canvas, clipped by root's overflow-hidden */}
@@ -1741,10 +1826,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           border-radius: 3px;
           opacity: 0.55;
         }
-        .cosmos-gpu-fps {
+        .cosmos-gpu-fps,
+        .cosmos-gpu-stats {
           position: absolute;
-          top: 10px;
-          right: 10px;
+          right: 12px;
           z-index: 30;
           display: inline-flex;
           align-items: center;
@@ -1763,6 +1848,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           pointer-events: none;
           font-variant-numeric: tabular-nums;
         }
+        .cosmos-gpu-fps   { bottom: 43px; }
+        .cosmos-gpu-stats { bottom: 10px; }
         .cosmos-gpu-fps-dot {
           width: 6px; height: 6px; border-radius: 999px;
           background: currentColor;
@@ -1966,12 +2053,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         }
       `}</style>
 
-      {/* Stats — bottom-right, minimal */}
+      {/* Stats — bottom-right, glass pill matching the FPS badge. */}
       {stats && (
-        <div
-          className="absolute bottom-3 right-3 z-20 px-3 py-1 text-[10px] font-mono"
-          style={{ ...pillStyle, borderRadius: 999, opacity: 0.85 }}
-        >
+        <div className="cosmos-gpu-stats">
           {stats.nodes.toLocaleString()} · {stats.edges.toLocaleString()} edges · {stats.communities} groups
         </div>
       )}
@@ -2029,26 +2113,30 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="font-mono break-all font-semibold">{selected.label}</div>
-                {relPath && (
-                  // direction:rtl + unicode-bidi:plaintext keeps LTR path
-                  // characters in natural order but puts the ellipsis on the
-                  // left so the filename at the tail stays visible.
-                  <div
-                    className="mt-1 font-mono text-[10px]"
-                    style={{
-                      opacity: 0.75,
-                      direction: 'rtl',
-                      textAlign: 'left',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      unicodeBidi: 'plaintext',
-                    }}
-                    title={absPath || relPath}
-                  >
-                    {absPath || relPath}
-                  </div>
-                )}
+                {relPath && (() => {
+                  // Truncate from the LEFT so the filename at the tail stays
+                  // visible. CSS `direction: rtl` + `text-overflow: ellipsis`
+                  // did not clip the start reliably for pure-LTR ASCII paths
+                  // in this Electron build, so we slice in JS.
+                  const full = absPath || relPath;
+                  const maxChars = 52;
+                  const shown = full.length > maxChars
+                    ? '…' + full.slice(-(maxChars - 1))
+                    : full;
+                  return (
+                    <div
+                      className="mt-1 font-mono text-[10px]"
+                      style={{
+                        opacity: 0.75,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                      }}
+                      title={full}
+                    >
+                      {shown}
+                    </div>
+                  );
+                })()}
                 <div style={{ opacity: 0.6 }} className="mt-1 text-[10px]">
                   {selected.type} · {selected.language ?? '—'} · community {selected.community} · imp {selected.importance.toFixed(3)}
                 </div>
