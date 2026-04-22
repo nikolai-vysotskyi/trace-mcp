@@ -213,7 +213,9 @@ async function main() {
       fs.copyFileSync(zipPath, partial);
       fs.renameSync(partial, PENDING_ZIP);
       fs.writeFileSync(PENDING_CHECKSUM, expectedDigest, 'utf-8');
-      fs.writeFileSync(PENDING_VERSION, release.tag_name, 'utf-8');
+      // Normalize — renderer prepends its own `v`, so `tag_name` raw would
+      // display as `vv1.28.0`.
+      fs.writeFileSync(PENDING_VERSION, release.tag_name.replace(/^v/, ''), 'utf-8');
       cleanup();
       console.log(`  trace-mcp ${release.tag_name} downloaded — restart the app to install`);
       return;

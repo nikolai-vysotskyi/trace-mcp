@@ -33,6 +33,15 @@ const PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
 const PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
 const VERSION_MARKER = path.join(INSTALL_DIR, '.trace-mcp-version');
 const DAEMON_PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', 'com.trace-mcp.server.plist');
+const LOG_DIR = path.join(os.homedir(), 'Library', 'Logs', 'trace-mcp');
+const LOG_FILE = path.join(LOG_DIR, 'apply-update.log');
+
+function log(msg) {
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch {}
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -101,24 +110,26 @@ function restartDaemon() {
 }
 
 async function main() {
-  if (process.platform !== 'darwin') return;
-  if (!fs.existsSync(PENDING_ZIP) || !fs.existsSync(PENDING_VERSION)) return;
-  if (!fs.existsSync(APP_PATH)) return;
+  log(`start pid=${process.pid} argv=${JSON.stringify(process.argv.slice(2))}`);
+  if (process.platform !== 'darwin') { log('abort: not darwin'); return; }
+  if (!fs.existsSync(PENDING_ZIP) || !fs.existsSync(PENDING_VERSION)) { log('abort: no pending zip/version'); return; }
+  if (!fs.existsSync(APP_PATH)) { log(`abort: APP_PATH missing ${APP_PATH}`); return; }
 
   const parentPid = Number(process.argv[2]);
-  await waitForExit(parentPid);
+  const exited = await waitForExit(parentPid);
+  log(`parent pid=${parentPid} exited=${exited}`);
 
   // Belt-and-suspenders: if any other instance is still running, bail and let
   // the next exit retry. We never want to swap under a live process.
-  if (appIsRunning()) return;
+  if (appIsRunning()) { log('abort: app still running after parent exit'); return; }
 
   // Re-verify the staged zip against the staged checksum. This catches both
   // bit-rot on disk and any tampering between download and apply.
   let expected = '';
-  try { expected = fs.readFileSync(PENDING_CHECKSUM, 'utf-8').trim().toLowerCase(); } catch { return; }
-  if (!/^[a-f0-9]{64}$/.test(expected)) return;
+  try { expected = fs.readFileSync(PENDING_CHECKSUM, 'utf-8').trim().toLowerCase(); } catch { log('abort: cannot read checksum'); return; }
+  if (!/^[a-f0-9]{64}$/.test(expected)) { log(`abort: bad checksum format ${expected.slice(0, 16)}`); return; }
   const actual = sha256File(PENDING_ZIP).toLowerCase();
-  if (actual !== expected) { clearPending(); return; }
+  if (actual !== expected) { log(`abort: checksum mismatch expected=${expected} actual=${actual}`); clearPending(); return; }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-apply-'));
   const cleanup = () => { try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {} };
@@ -126,26 +137,38 @@ async function main() {
   try {
     const stagingDir = path.join(tmpDir, 'staging');
     fs.mkdirSync(stagingDir, { recursive: true });
-    execFileSync('/usr/bin/unzip', ['-q', '-o', PENDING_ZIP, '-d', stagingDir], { stdio: 'pipe' });
+    try {
+      execFileSync('/usr/bin/unzip', ['-q', '-o', PENDING_ZIP, '-d', stagingDir], { stdio: 'pipe' });
+    } catch (err) {
+      log(`abort: unzip failed: ${err?.message ?? err}`);
+      return;
+    }
 
     const stagedApp = path.join(stagingDir, APP_NAME);
-    if (!fs.existsSync(stagedApp)) return;
-    if (!trustNotDowngraded(stagedApp, APP_PATH)) return;
+    if (!fs.existsSync(stagedApp)) { log(`abort: staged app missing ${stagedApp}`); return; }
+    if (!trustNotDowngraded(stagedApp, APP_PATH)) { log('abort: gatekeeper trust downgrade'); return; }
 
     const backupPath = `${APP_PATH}.bak-${process.pid}`;
-    fs.renameSync(APP_PATH, backupPath);
+    try {
+      fs.renameSync(APP_PATH, backupPath);
+    } catch (err) {
+      log(`abort: rename APP_PATH -> backup failed: ${err?.message ?? err}`);
+      return;
+    }
     try {
       fs.renameSync(stagedApp, APP_PATH);
     } catch (err) {
-      try { fs.renameSync(backupPath, APP_PATH); } catch {}
-      throw err;
+      log(`rollback: rename staged -> APP_PATH failed: ${err?.message ?? err}`);
+      try { fs.renameSync(backupPath, APP_PATH); } catch (e2) { log(`rollback also failed: ${e2?.message ?? e2}`); }
+      return;
     }
     fs.rmSync(backupPath, { recursive: true, force: true });
+    log(`swapped bundle to ${APP_PATH}`);
 
     let pendingVersion = '';
     try { pendingVersion = fs.readFileSync(PENDING_VERSION, 'utf-8').trim(); } catch {}
     if (pendingVersion) {
-      try { fs.writeFileSync(VERSION_MARKER, pendingVersion, 'utf-8'); } catch {}
+      try { fs.writeFileSync(VERSION_MARKER, pendingVersion, 'utf-8'); } catch (err) { log(`warn: version marker write failed: ${err?.message ?? err}`); }
     }
     clearPending();
 
@@ -158,10 +181,13 @@ async function main() {
     try {
       const child = spawn('/usr/bin/open', ['-a', APP_PATH], { detached: true, stdio: 'ignore' });
       child.unref();
-    } catch {}
+      log(`relaunch spawned`);
+    } catch (err) {
+      log(`relaunch spawn failed: ${err?.message ?? err}`);
+    }
   } finally {
     cleanup();
   }
 }
 
-main().catch(() => {});
+main().catch((err) => { log(`unhandled: ${err?.stack ?? err}`); });
