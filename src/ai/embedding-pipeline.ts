@@ -10,6 +10,8 @@ import { logger } from '../logger.js';
 const DEFAULT_BATCH_SIZE = 50;
 
 export class EmbeddingPipeline {
+  private consistent = false;
+
   constructor(
     private store: Store,
     private embeddingService: EmbeddingService,
@@ -17,7 +19,37 @@ export class EmbeddingPipeline {
     private progress?: ProgressState,
   ) {}
 
+  /**
+   * Verify the stored vectors match the current embedding model + dimensionality.
+   * On mismatch, drops the vector table and re-stamps the meta. The follow-up
+   * indexUnembedded call will repopulate. Idempotent and cached after first run.
+   */
+  private ensureConsistent(): void {
+    if (this.consistent) return;
+    const dim = this.embeddingService.dimensions();
+    const model = this.embeddingService.modelName();
+    // Skip for fallback/no-op services — they produce no vectors.
+    if (dim === 0) { this.consistent = true; return; }
+
+    const meta = this.vectorStore.getMeta();
+    if (!meta) {
+      // Post-migration or first run: stamp without reindexing. Any existing
+      // vectors are assumed to match the current config (the invariant starts
+      // being enforced from this point forward).
+      this.vectorStore.setMeta(model, dim);
+    } else if (meta.model !== model || meta.dim !== dim) {
+      logger.warn(
+        { old: meta, new: { model, dim } },
+        'Embedding model/dim changed — dropping vector index for reindex',
+      );
+      this.vectorStore.clear();
+      this.vectorStore.setMeta(model, dim);
+    }
+    this.consistent = true;
+  }
+
   async indexSymbol(symbolId: number, text: string): Promise<void> {
+    this.ensureConsistent();
     const embedding = await this.embeddingService.embed(text);
     if (embedding.length > 0) {
       this.vectorStore.insert(symbolId, embedding);
@@ -29,6 +61,7 @@ export class EmbeddingPipeline {
    * Reports progress and returns the total number of newly embedded symbols.
    */
   async indexUnembedded(batchSize = DEFAULT_BATCH_SIZE): Promise<number> {
+    this.ensureConsistent();
     const totalToEmbed = this.store.countUnembeddedSymbols();
     if (totalToEmbed === 0) return 0;
 
@@ -104,10 +137,16 @@ export class EmbeddingPipeline {
 
   /**
    * Re-embed all symbols (deletes existing embeddings first).
-   * Returns the number of embedded symbols.
+   * Also re-stamps meta with the current model + dimensionality so the invariant
+   * holds going forward. Returns the number of embedded symbols.
    */
   async reindexAll(): Promise<number> {
-    this.store.db.exec('DELETE FROM symbol_embeddings');
+    this.vectorStore.clear();
+    const dim = this.embeddingService.dimensions();
+    if (dim > 0) {
+      this.vectorStore.setMeta(this.embeddingService.modelName(), dim);
+    }
+    this.consistent = true;
     return this.indexUnembedded(DEFAULT_BATCH_SIZE);
   }
 }

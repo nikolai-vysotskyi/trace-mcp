@@ -10,11 +10,27 @@ const CREATE_TABLE = `
 CREATE TABLE IF NOT EXISTS symbol_embeddings (
   symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
   embedding BLOB NOT NULL
-)`;
+);
+CREATE TABLE IF NOT EXISTS embedding_meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);`;
+
+export class DimensionMismatchError extends Error {
+  constructor(expected: number, got: number) {
+    super(`Vector dimension mismatch: expected ${expected}, got ${got}. Run embed_repo with force=true to re-embed.`);
+    this.name = 'DimensionMismatchError';
+  }
+}
 
 export class BlobVectorStore implements VectorStore {
+  /** Cached expected dim — null until first getMeta() or setMeta(). */
+  private cachedDim: number | null = null;
+
   constructor(private db: Database.Database) {
     this.ensureTable();
+    const meta = this.getMeta();
+    if (meta) this.cachedDim = meta.dim;
   }
 
   private ensureTable(): void {
@@ -22,6 +38,9 @@ export class BlobVectorStore implements VectorStore {
   }
 
   insert(id: number, vector: number[]): void {
+    if (this.cachedDim !== null && vector.length !== this.cachedDim) {
+      throw new DimensionMismatchError(this.cachedDim, vector.length);
+    }
     const buf = Buffer.from(new Float32Array(vector).buffer);
     this.db.prepare(
       'INSERT OR REPLACE INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)',
@@ -29,6 +48,8 @@ export class BlobVectorStore implements VectorStore {
   }
 
   search(query: number[], limit: number): { id: number; score: number }[] {
+    if (this.cachedDim !== null && query.length !== this.cachedDim) return [];
+
     const queryArr = new Float32Array(query);
     const queryNorm = vecNorm(queryArr);
     if (queryNorm === 0) return [];
@@ -71,6 +92,36 @@ export class BlobVectorStore implements VectorStore {
   count(): number {
     const row = this.db.prepare('SELECT COUNT(*) as cnt FROM symbol_embeddings').get() as { cnt: number };
     return row.cnt;
+  }
+
+  clear(): void {
+    this.db.exec('DELETE FROM symbol_embeddings');
+  }
+
+  setMeta(model: string, dim: number): void {
+    const upsert = this.db.prepare(
+      'INSERT OR REPLACE INTO embedding_meta (key, value) VALUES (?, ?)',
+    );
+    const tx = this.db.transaction(() => {
+      upsert.run('model', model);
+      upsert.run('dim', String(dim));
+    });
+    tx();
+    this.cachedDim = dim;
+  }
+
+  getMeta(): { model: string; dim: number } | null {
+    const rows = this.db.prepare(
+      "SELECT key, value FROM embedding_meta WHERE key IN ('model', 'dim')",
+    ).all() as { key: string; value: string }[];
+    if (rows.length < 2) return null;
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    const model = map.get('model');
+    const dimStr = map.get('dim');
+    if (model === undefined || dimStr === undefined) return null;
+    const dim = parseInt(dimStr, 10);
+    if (!Number.isFinite(dim) || dim <= 0) return null;
+    return { model, dim };
   }
 }
 

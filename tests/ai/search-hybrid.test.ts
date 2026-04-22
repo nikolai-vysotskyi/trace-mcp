@@ -47,6 +47,7 @@ function makeMockEmbedding(): EmbeddingService {
     dimensions() {
       return 8;
     },
+    modelName() { return 'mock-model'; },
   };
 }
 

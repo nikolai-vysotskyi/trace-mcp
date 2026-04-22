@@ -6,6 +6,8 @@ export interface EmbeddingService {
   embed(text: string): Promise<number[]>;
   embedBatch(texts: string[]): Promise<number[][]>;
   dimensions(): number;
+  /** Identifier of the embedding model in use (empty for no-op/fallback). */
+  modelName(): string;
 }
 
 export interface ChatMessage {
@@ -25,6 +27,12 @@ export interface VectorStore {
   insert(id: number, vector: number[]): void;
   search(query: number[], limit: number): { id: number; score: number }[];
   delete(id: number): void;
+  /** Wipe all vectors. Used when the embedding space changes. */
+  clear(): void;
+  /** Stamp the producing model + dimensionality for the current vectors. */
+  setMeta(model: string, dim: number): void;
+  /** Returns the stamped meta, or null if vectors have never been written. */
+  getMeta(): { model: string; dim: number } | null;
 }
 
 export interface RerankerService {

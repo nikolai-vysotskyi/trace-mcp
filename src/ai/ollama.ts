@@ -47,6 +47,10 @@ class OllamaEmbeddingService implements EmbeddingService {
   dimensions(): number {
     return this.dims;
   }
+
+  modelName(): string {
+    return this.model;
+  }
 }
 
 class OllamaInferenceService implements InferenceService {
