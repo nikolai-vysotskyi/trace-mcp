@@ -412,8 +412,9 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       symbol_kinds: z.array(z.string()).optional().describe('Filter symbol kinds when granularity=symbol (e.g. ["function","class","method"])'),
       max_files: z.number().int().min(1).max(100000).optional().describe('Max seed files for file-level graph (default 10000)'),
       max_nodes: z.number().int().min(1).max(100000).optional().describe('Max viz nodes for symbol-level graph (default 100000)'),
+      include_bottlenecks: z.boolean().optional().describe('Annotate edges with bottleneckScore/isBridge and nodes with isArticulation (file granularity only). Default false.'),
     },
-    async ({ scope, depth, layout, color_by, include_edges, output, hide_isolated, granularity, symbol_kinds, max_files, max_nodes }) => {
+    async ({ scope, depth, layout, color_by, include_edges, output, hide_isolated, granularity, symbol_kinds, max_files, max_nodes, include_bottlenecks }) => {
       const result = visualizeGraph(store, {
         scope,
         depth,
@@ -428,6 +429,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         maxNodes: max_nodes,
         topoStore: ctx.topoStore ?? undefined,
         projectRoot,
+        includeBottlenecks: include_bottlenecks,
       });
       if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
       return { content: [{ type: 'text', text: j(result.value) }] };

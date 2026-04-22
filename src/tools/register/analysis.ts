@@ -1,8 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServerContext } from '../../server/types.js';
+import { formatToolError } from '../../errors.js';
 import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, getUntestedSymbols, selfAudit } from '../analysis/introspect.js';
 import { getCouplingMetrics, getDependencyCycles, getPageRank, getExtractionCandidates, getRepoHealth } from '../analysis/graph-analysis.js';
+import { getEdgeBottlenecks } from '../analysis/bottlenecks.js';
 import { getHotspots } from '../git/git-analysis.js';
 import { getLayerViolations, detectLayerPreset, type LayerDefinition } from '../analysis/layer-violations.js';
 import { getFileOwnership, getSymbolOwnership } from '../git/git-ownership.js';
@@ -200,6 +202,23 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     async ({ limit }) => {
       const results = getPageRank(store);
       return { content: [{ type: 'text', text: jh('get_page_rank', results.slice(0, limit ?? 50)) }] };
+    },
+  );
+
+  server.tool(
+    'get_edge_bottlenecks',
+    'Find architectural bottleneck edges in the import graph: edges sitting on many shortest paths (edge betweenness, Brandes), edges whose removal would disconnect the graph (bridges, Tarjan), and nodes that are single points of failure (articulation points). Score combines structural centrality with co-change weight (bottleneckScore = betweenness × (1 + coChangeWeight)). Use to identify edges to monitor during refactoring and to prioritize decoupling work. For general importance use get_pagerank instead. Read-only. Returns JSON: { edges: [{ sourceFile, targetFile, betweenness, coChangeWeight, bottleneckScore, isBridge }], articulationPoints: [...], stats }.',
+    {
+      top_n: z.number().int().min(0).max(1000).optional().describe('Max ranked edges (default: 50; 0 = return all)'),
+      min_score: z.number().min(0).max(10).optional().describe('Filter edges with bottleneckScore < min_score (default: 0)'),
+      sampling: z.enum(['auto', 'full']).optional().describe('auto (default): √V source sampling for graphs >500 nodes; full: always compute exactly'),
+    },
+    async ({ top_n, min_score, sampling }) => {
+      const result = getEdgeBottlenecks(store, { topN: top_n, minScore: min_score, sampling });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+      }
+      return { content: [{ type: 'text', text: jh('get_edge_bottlenecks', result.value) }] };
     },
   );
 
