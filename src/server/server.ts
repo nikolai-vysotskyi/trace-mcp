@@ -168,9 +168,10 @@ export function createServer(
 
   // Create server with instructions
   const instructionsVerbosity = config.tools?.instructions_verbosity ?? 'full';
+  const agentBehavior = config.tools?.agent_behavior ?? 'off';
   const server = new McpServer(
     { name: 'trace-mcp', version: PKG_VERSION },
-    { instructions: buildInstructions(detectedFrameworks, instructionsVerbosity) },
+    { instructions: buildInstructions(detectedFrameworks, instructionsVerbosity, agentBehavior) },
   );
 
   // Session tracking

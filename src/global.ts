@@ -176,6 +176,7 @@ export const DEFAULT_CONFIG_JSONC = `{
     // "descriptions": {},                       // override tool descriptions
     "description_verbosity": "full",             // "full" | "minimal" | "none"
     "instructions_verbosity": "full",            // "full" | "minimal" | "none"
+    "agent_behavior": "off",                     // "strict" | "minimal" | "off" — behavior rules (anti-sycophancy, goal-driven, etc.). Max-tier init sets to "strict".
     "meta_fields": true                          // true | false | ["_hints", "_budget_warning", ...]
   },
 

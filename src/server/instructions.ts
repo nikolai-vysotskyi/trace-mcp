@@ -2,17 +2,21 @@
 export function buildInstructions(
   detectedFrameworks: string,
   verbosity: 'full' | 'minimal' | 'none',
+  agentBehavior: 'strict' | 'minimal' | 'off' = 'off',
 ): string {
-  if (verbosity === 'none') return '';
+  const behaviorBlock = buildBehaviorBlock(agentBehavior);
+
+  if (verbosity === 'none') return behaviorBlock;
 
   if (verbosity === 'minimal') {
-    return [
+    const core = [
       `trace-mcp: framework-aware code intelligence. Detected: ${detectedFrameworks}.`,
       'Use trace-mcp tools instead of Read/Grep/Glob for source code.',
       'Key tools: search, get_outline, get_symbol, get_task_context, get_change_impact, find_usages, batch.',
       'Use batch for 2+ independent queries. Use get_task_context to start tasks.',
       'Use Read/Grep only for non-code files (.md, .json, .yaml) or before Edit.',
     ].join(' ');
+    return behaviorBlock ? `${core}\n\n${behaviorBlock}` : core;
   }
 
   return [
@@ -92,5 +96,29 @@ export function buildInstructions(
     '- Finding files by name pattern → Glob',
     '',
     'Start with `get_project_map` (summary_only=true) to orient yourself.',
+    ...(behaviorBlock ? ['', behaviorBlock] : []),
+  ].join('\n');
+}
+
+function buildBehaviorBlock(level: 'strict' | 'minimal' | 'off'): string {
+  if (level === 'off') return '';
+
+  if (level === 'minimal') {
+    return [
+      'Agent Behavior:',
+      '- Never fabricate file paths, symbols, APIs, signatures, or test output. Call `search` / `get_symbol` / run the command. "I don\'t know, let me check" beats a plausible guess.',
+    ].join('\n');
+  }
+
+  return [
+    'Agent Behavior (applies to all tasks, not just code exploration):',
+    '- No flattery, no filler. Skip openers like "Great question", "You\'re absolutely right", "Excellent idea", "I\'d be happy to". Start with the answer or the action.',
+    '- Disagree when the user\'s premise is wrong. Agreeing to be polite produces worse outcomes than pushback — say so before doing the work.',
+    '- Never fabricate paths, symbols, APIs, signatures, or test output. Call `search` / `get_symbol` / run the command. "I don\'t know, let me check" beats a plausible guess.',
+    '- When a task has two plausible interpretations that materially change the diff — ask, don\'t pick silently. For trivial/reversible tasks (typo, local rename), proceed.',
+    '- Rewrite vague asks into verifiable goals before coding: "Fix the bug" → write a failing test reproducing the symptom, then fix. "Make it faster" → benchmark first, identify bottleneck, show benchmark improved.',
+    '- Never report "done" based on a plausible-looking diff. Run the test/build/typecheck. Plausibility is not correctness.',
+    '- After two failed attempts at the same issue, stop. Summarize what was tried and suggest a fresh session — polluted context + third attempt is worse than fresh context + sharper prompt.',
+    '- Touch only what the request requires. No drive-by refactors, reformatting, or cleanups of unrelated code while you\'re in the file.',
   ].join('\n');
 }
