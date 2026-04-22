@@ -82,7 +82,7 @@ trace-mcp ships with an optional Electron desktop app (`packages/app`) that give
   <img src="docs/images/app-projects.png" alt="trace-mcp app — Projects, MCP Clients, Settings" width="720" />
 </p>
 
-**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc).
+**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules).
 
 <p align="center">
   <img src="docs/images/app-overview.png" alt="trace-mcp app — project Overview tab" width="560" />
@@ -240,6 +240,15 @@ The MCP server provides **instructions** and **tool descriptions** with routing 
 ### Level 3: Hook enforcement (Claude Code only)
 
 For hard enforcement, `trace-mcp init` installs a **PreToolUse guard hook** that blocks Read/Grep/Glob on source files and redirects the agent to trace-mcp tools (non-code files, Read-before-Edit, and safe Bash commands pass through). Manage manually with `trace-mcp setup-hooks --global` / `--uninstall`. Details: [System prompt routing](docs/tweakcc.md).
+
+### Level 4: Max tier — system prompt rewrites + agent behavior rules
+
+Picking **Max** during `trace-mcp init` (the default) layers on two more amplifiers:
+
+- **tweakcc system-prompt rewrites** patch Claude Code's core tool descriptions so the model internalizes "use trace-mcp search" instead of "use Grep" from the start. Claude Code only.
+- **`agent_behavior: "strict"`** ships a compact set of discipline rules via MCP instructions — no flattery, disagree on wrong premises, never fabricate, goal-driven execution, 2-strike session hygiene, no drive-by refactors. Cross-client (Claude Code, Cursor, Codex, Windsurf) and auto-updates on `npm upgrade trace-mcp` without re-running `init`.
+
+This is the "make every teammate's agent behave like a senior engineer by default" setup. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](docs/configuration.md#tool-exposure--agent-behavior).
 
 ---
 

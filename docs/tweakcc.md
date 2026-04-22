@@ -14,9 +14,13 @@ trace-mcp has three enforcement layers:
 |-------|-----------|----------|
 | **Base** — CLAUDE.md policy | Soft rules in project instructions | Weakest — ignored under cognitive load or after context compression |
 | **Standard** — hooks | PreToolUse guards intercept tool calls at runtime | Medium — stderr warnings, allows Read for edits, catches violations |
-| **Max** — system prompt rewrites (this doc) | Patch Claude's core tool descriptions via tweakcc | Strongest — model internalizes the preference from the start |
+| **Max** — system prompt rewrites (this doc) + agent behavior rules | Patch Claude's core tool descriptions via tweakcc; inject anti-sycophancy + goal-driven discipline rules via MCP instructions | Strongest — model internalizes the preference from the start, behaves like a senior engineer by default |
 
 Each layer **adds on top** of the previous ones — nothing gets removed. tweakcc is an optional amplifier, not a replacement.
+
+Picking **Max** during `trace-mcp init` does two things beyond Standard:
+1. Installs tweakcc system-prompt rewrites (the 8 files below).
+2. Writes `tools.agent_behavior: "strict"` to your global config — this is delivered via MCP instructions to every client (Claude Code, Cursor, Codex, Windsurf), not just CC. See [Agent behavior rules](configuration.md#agent-behavior-rules).
 
 ---
 
@@ -41,15 +45,16 @@ CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse reindex (auto)
                       injects session snapshot    registers new worktrees
 ```
 
-### Max (Standard + tweakcc)
+### Max (Standard + tweakcc + agent_behavior rules)
 
 ```
-System prompts (deep)  →  CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse/PreCompact/Worktree (auto)
-  routing built into       full policy          catches remaining 5%        unchanged
-  core tool descriptions   (reinforcement)
+System prompts (deep)   →  MCP instructions (every session)  →  CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse/PreCompact/Worktree (auto)
+  routing built into        tool routing + agent_behavior=       full policy          catches remaining 5%        unchanged
+  core tool descriptions    "strict" (anti-sycophancy,            (reinforcement)
+                            goal-driven, 2-strike rule)
 ```
 
-All existing hooks stay. tweakcc adds the deepest layer — the model never sees "use Grep for code search" in its tool descriptions; it sees "use trace-mcp search" from the start.
+All existing hooks stay. tweakcc adds the deepest layer — the model never sees "use Grep for code search" in its tool descriptions; it sees "use trace-mcp search" from the start. `agent_behavior: "strict"` runs in parallel via MCP instructions, making the agent behave like a senior engineer by default: no flattery, disagreement on wrong premises, no fabrication, no drive-by refactors, verification before reporting "done".
 
 ---
 
