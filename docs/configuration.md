@@ -297,6 +297,55 @@ trace-mcp can optionally use Language Server Protocol (LSP) servers to enrich ca
 
 Servers are only started if the corresponding language has files in the index AND the server binary is available on PATH.
 
+---
+
+## Tool exposure & agent behavior
+
+The `tools.*` section controls what the MCP server injects into every session — tool set, instruction verbosity, and optional agent behavior rules.
+
+```jsonc
+{
+  "tools": {
+    "preset": "full",                    // "full" | "minimal" | custom preset
+    "description_verbosity": "full",     // "full" | "minimal" | "none"
+    "instructions_verbosity": "full",    // "full" | "minimal" | "none" — controls the tool-routing block
+    "agent_behavior": "off",             // "strict" | "minimal" | "off" — see below
+    "meta_fields": true,                 // true | false | ["_hints", "_budget_warning", ...]
+    "compact_schemas": false             // strip advanced params from tool schemas (saves tokens)
+  }
+}
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `tools.preset` | `"full"` | Tool preset (`full`, `minimal`, or custom name from `~/.trace-mcp/presets/`) |
+| `tools.include` | — | Whitelist specific tools by name |
+| `tools.exclude` | — | Blacklist specific tools by name |
+| `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
+| `tools.instructions_verbosity` | `"full"` | Server-level instructions (the tool-routing block). `full` ~2K tokens, `minimal` ~200 |
+| `tools.agent_behavior` | `"off"` | Behavior rules appended to instructions — see [Agent behavior rules](#agent-behavior-rules) |
+| `tools.meta_fields` | `true` | Meta fields in responses (`_hints`, `_budget_warning`, etc.). Set `false` or list to narrow |
+| `tools.compact_schemas` | `false` | Strip advanced/optional params from tool schemas. Cuts schema size 40–60% |
+
+### Agent behavior rules
+
+`tools.agent_behavior` appends generic discipline rules (anti-sycophancy, anti-fabrication, goal-driven execution, 2-strike session hygiene, no drive-by refactors) to the server instructions. These are client-agnostic — every MCP-compatible client (Claude Code, Cursor, Codex, Windsurf, …) receives them.
+
+| Value | What ships | When to use |
+|---|---|---|
+| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere ([internal record], tweakcc), or don't want opinionated rules |
+| `"minimal"` | One rule: never fabricate paths/symbols/APIs — call `search`/`get_symbol`/run the command | Minimal nudge tied to trace-mcp tool use, no personality prescription |
+| `"strict"` | 8 rules: no flattery, disagree on wrong premises, never fabricate, stop when confused, goal-driven execution, verify before reporting "done", 2-strike rule, surgical changes only | Max-tier default — aligns agent behavior across a team |
+
+**Auto-set by `trace-mcp init`:** picking the **Max** enforcement level writes `"agent_behavior": "strict"` to your global config. Picking Base/Standard writes `"off"`. Re-run `init` to change tiers — the value updates idempotently.
+
+**Why it lives in MCP instructions (not [internal record] or tweakcc):**
+- Cross-client — Cursor/Codex/Windsurf users get the same behavior without CC-specific setup.
+- Auto-updates on `npm upgrade trace-mcp` — no re-init required to pull new rule wording.
+- Single source of truth alongside the tool-routing block.
+
+If you want to override in one project without affecting others, put `"agent_behavior": "off"` (or any other value) in that project's `.trace-mcp/.config.json` — per-project config takes precedence over global.
+
 ### 4-tier resolution system
 
 Every edge in the call graph carries a `resolution_tier` indicating how it was resolved:

@@ -1088,6 +1088,53 @@
       .footer-bottom { flex-direction: column; gap: 16px; align-items: flex-start; }
     }
 
+    /* ── App banner + gallery ── */
+    .app-banner {
+      padding: 0 0 96px;
+      border-top: none;
+    }
+    .app-frame {
+      position: relative;
+      border: 1px solid var(--border-visible);
+      background: var(--surface);
+      padding: 20px;
+      overflow: hidden;
+      transition: border-color 200ms ease-out;
+    }
+    .app-frame:hover { border-color: var(--text-display); }
+    .app-frame-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+      gap: 16px;
+    }
+    .app-frame-meta .tag { color: var(--text-display); }
+    .app-frame-meta .divider { flex: 1; height: 1px; background: var(--border); }
+    .app-frame img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: var(--ghost);
+    }
+    .theme-dark-only { display: none; }
+    [data-theme="dark"] .theme-dark-only { display: block; }
+    [data-theme="dark"] .theme-light-only { display: none; }
+
+    .app-gallery {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 800px) {
+      .app-gallery { grid-template-columns: 1fr; gap: 16px; }
+    }
+
     .reveal {
       opacity: 0;
       transform: translateY(16px);
@@ -1111,6 +1158,7 @@
     <div class="nav-links">
       <a href="#what">What it is</a>
       <a href="#examples">Examples</a>
+      <a href="#app">App</a>
       <a href="#benchmark">Benchmark</a>
       <a href="#install" class="primary">Install</a>
       <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="primary">Github</a>
@@ -1170,6 +1218,21 @@
         </span>
       </div>
 
+    </div>
+  </section>
+
+  <!-- ── APP BANNER (graph hero) ── -->
+  <section class="app-banner">
+    <div class="container">
+      <figure class="app-frame reveal">
+        <div class="app-frame-meta">
+          <span><span class="tag">trace-mcp</span> / graph explorer</span>
+          <span class="divider"></span>
+          <span>symbols &middot; edges &middot; live</span>
+        </div>
+        <img class="theme-light-only" src="images/app-graph.png" alt="trace-mcp graph explorer visualizing symbol connections, light theme" loading="lazy" width="2134" height="1662">
+        <img class="theme-dark-only" src="images/app-dark-graph.png" alt="trace-mcp graph explorer visualizing symbol connections, dark theme" loading="lazy" width="3456" height="2168">
+      </figure>
     </div>
   </section>
 
@@ -1506,11 +1569,43 @@
     </div>
   </section>
 
+  <!-- ── DESKTOP APP ── -->
+  <section id="app">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">005 / Desktop App</span></div>
+        <div>
+          <h2 class="section-title">Or skip the CLI. <span class="em">See the graph directly.</span></h2>
+          <p class="section-lede">An optional desktop companion bundles the MCP server with a GPU-accelerated graph explorer. Inspect projects, watch incremental indexing in real time, browse the exact structure your AI agents see.</p>
+        </div>
+      </div>
+
+      <div class="app-gallery reveal">
+        <figure class="app-frame">
+          <div class="app-frame-meta">
+            <span><span class="tag">overview</span></span>
+            <span class="divider"></span>
+            <span>index &middot; coverage &middot; services</span>
+          </div>
+          <img src="images/app-overview.png" alt="Project overview screen showing indexing status, file and symbol counts, and coverage" loading="lazy" width="2134" height="1662">
+        </figure>
+        <figure class="app-frame">
+          <div class="app-frame-meta">
+            <span><span class="tag">projects</span></span>
+            <span class="divider"></span>
+            <span>multi-repo &middot; mcp clients</span>
+          </div>
+          <img src="images/app-projects.png" alt="Projects list with a repository indexing in progress" loading="lazy" width="2134" height="1662">
+        </figure>
+      </div>
+    </div>
+  </section>
+
   <!-- ── BENCHMARK ── -->
   <section id="benchmark">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">005 / Benchmark</span></div>
+        <div class="section-meta-tag"><span class="label">006 / Benchmark</span></div>
         <div>
           <h2 class="section-title">Token cost, <span class="em">measured.</span></h2>
           <p class="section-lede">Real codebase: 856 files, 4,774 symbols. Tasks executed with native Read/Grep/Glob vs trace-mcp tools. Numbers from the built-in <code>benchmark_project</code> command.</p>
@@ -1599,7 +1694,7 @@
   <section id="usecases">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">006 / When To Use It</span></div>
+        <div class="section-meta-tag"><span class="label">007 / When To Use It</span></div>
         <div>
           <h2 class="section-title">Built for the real moments <span class="em">AI agents struggle.</span></h2>
         </div>
@@ -1638,7 +1733,7 @@
   <section id="integrations">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">007 / Ecosystem</span></div>
+        <div class="section-meta-tag"><span class="label">008 / Ecosystem</span></div>
         <div>
           <h2 class="section-title">58 integrations. <span class="em">81 languages.</span></h2>
           <p class="section-lede">Each integration adds framework-specific edges &mdash; routes, components, migrations, queries &mdash; not just syntax parsing. Plugin API is open: write your own for a niche framework in under a day.</p>
@@ -1714,7 +1809,7 @@
   <section id="install">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">008 / Install</span></div>
+        <div class="section-meta-tag"><span class="label">009 / Install</span></div>
         <div>
           <h2 class="section-title">Three commands. <span class="em">No configuration.</span></h2>
           <p class="section-lede">No API keys. No paid services. Embeddings ship with the binary &mdash; runs fully offline after first install.</p>
@@ -1780,7 +1875,7 @@
   <section id="faq">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">009 / Faq</span></div>
+        <div class="section-meta-tag"><span class="label">010 / Faq</span></div>
         <div>
           <h2 class="section-title">Common questions.</h2>
         </div>
