@@ -374,6 +374,143 @@ const apiKey = 'sk-1234567890abcdef';
       expect(data.summary.todo_comment).toBe(3);
       expect(data.summary.empty_function).toBe(0);
       expect(data.summary.hardcoded_value).toBe(0);
+      expect(data.summary.debug_artifact).toBe(0);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Debug artifacts
+  // -------------------------------------------------------------------
+
+  describe('debug_artifact', () => {
+    test('detects console.log / debugger in TypeScript', () => {
+      writeFile(store, 'src/app.ts', `
+function handler(req) {
+  console.log('got request', req);
+  debugger;
+  return { ok: true };
+}
+`, 'typescript');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const tags = data.findings.map((f) => f.tag);
+      expect(tags).toContain('console_log');
+      expect(tags).toContain('debugger_statement');
+      expect(data.findings.find((f) => f.tag === 'debugger_statement')?.priority).toBe('high');
+    });
+
+    test('detects Python pdb / breakpoint', () => {
+      writeFile(store, 'src/debug.py', `
+import pdb
+
+def run():
+    breakpoint()
+    pdb.set_trace()
+    return 1
+`, 'python');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const tags = data.findings.map((f) => f.tag);
+      expect(tags).toContain('breakpoint_call');
+      expect(tags).toContain('pdb_set_trace');
+      expect(tags).toContain('import_pdb');
+    });
+
+    test('detects PHP var_dump / dd / xdebug_break', () => {
+      writeFile(store, 'src/debug.php', `<?php
+function handle($x) {
+    var_dump($x);
+    dd($x);
+    xdebug_break();
+    return $x;
+}
+`, 'php');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const tags = data.findings.map((f) => f.tag);
+      expect(tags).toContain('php_var_dump');
+      expect(tags).toContain('laravel_dd_dump');
+      expect(tags).toContain('php_xdebug_break');
+    });
+
+    test('detects Ruby binding.pry and byebug', () => {
+      writeFile(store, 'app/debug.rb', `
+class Service
+  def call
+    binding.pry
+    byebug
+  end
+end
+`, 'ruby');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const tags = data.findings.map((f) => f.tag);
+      expect(tags).toContain('ruby_pry_irb');
+      expect(tags).toContain('ruby_byebug');
+    });
+
+    test('detects Rust dbg! macro', () => {
+      writeFile(store, 'src/lib.rs', `
+fn compute(x: i32) -> i32 {
+    dbg!(x);
+    x * 2
+}
+`, 'rust');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      expect(data.findings.some((f) => f.tag === 'rust_dbg')).toBe(true);
+    });
+
+    test('ignores debug artifacts inside comments', () => {
+      writeFile(store, 'src/safe.ts', `
+// console.log('old debug line, now commented out')
+function legit() {
+  return 1;
+}
+`, 'typescript');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      expect(data.findings).toHaveLength(0);
+    });
+
+    test('ignores debug artifacts in test files by default', () => {
+      writeFile(store, 'src/app.test.ts', `
+function runTest() {
+  console.log('testing', 123);
+  debugger;
+}
+`, 'typescript');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
+
+    test('includes artifacts in test files when include_tests=true', () => {
+      writeFile(store, 'src/app.test.ts', `
+function runTest() {
+  debugger;
+}
+`, 'typescript');
+
+      const result = scanCodeSmells(store, TEST_DIR, {
+        category: ['debug_artifact'],
+        include_tests: true,
+      });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings.length).toBeGreaterThan(0);
     });
   });
 });

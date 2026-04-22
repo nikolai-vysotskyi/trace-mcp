@@ -61,7 +61,7 @@ describe('Antipattern Detection', () => {
   // -------------------------------------------------------------------
 
   describe('n_plus_one_risk', () => {
-    test('detects hasMany without eager loading', () => {
+    test('detects hasMany without eager loading (low severity without handler evidence)', () => {
       const fId = insertFile(store, 'src/models/User.ts');
       const userId = insertModel(store, fId, 'User');
       const postId = insertModel(store, fId, 'Post');
@@ -74,7 +74,10 @@ describe('Antipattern Detection', () => {
       const data = result._unsafeUnwrap();
       expect(data.findings.length).toBeGreaterThanOrEqual(1);
       expect(data.findings[0].category).toBe('n_plus_one_risk');
-      expect(data.findings[0].severity).toBe('high');
+      // Without a handler accessor, severity is 'low' (weak evidence that
+      // the model is ever loaded in bulk). See "confidence increases when
+      // model accessed from handler" for the high-severity path.
+      expect(data.findings[0].severity).toBe('low');
       expect(data.findings[0].title).toContain('User');
       expect(data.findings[0].title).toContain('Post');
       expect(data.findings[0].fix).toBeTruthy();
@@ -315,11 +318,12 @@ describe('Antipattern Detection', () => {
       const fId = insertFile(store, 'src/components/Widget.ts');
       store.insertSymbol(fId, {
         symbolId: 'widget::setup#function',
-        name: 'setupListeners_addEventListener',
+        name: 'setupListeners',
         kind: 'function',
         byteStart: 0,
         byteEnd: 100,
-        signature: 'function setupListeners() { window.addEventListener("resize", handler) }',
+        signature: 'function setupListeners()',
+        metadata: { callSites: [{ calleeName: 'addEventListener', line: 2, receiver: 'window' }] },
       });
 
       const result = detectAntipatterns(store, TEST_DIR, {
@@ -335,19 +339,21 @@ describe('Antipattern Detection', () => {
       const fId = insertFile(store, 'src/components/Widget.ts');
       store.insertSymbol(fId, {
         symbolId: 'widget::setup#function',
-        name: 'setup_addEventListener',
+        name: 'setup',
         kind: 'function',
         byteStart: 0,
         byteEnd: 100,
-        signature: 'function setup() { el.addEventListener("click", handler) }',
+        signature: 'function setup()',
+        metadata: { callSites: [{ calleeName: 'addEventListener', line: 2, receiver: 'el' }] },
       });
       store.insertSymbol(fId, {
         symbolId: 'widget::teardown#function',
-        name: 'teardown_removeEventListener',
+        name: 'teardown',
         kind: 'function',
         byteStart: 100,
         byteEnd: 200,
-        signature: 'function teardown() { el.removeEventListener("click", handler) }',
+        signature: 'function teardown()',
+        metadata: { callSites: [{ calleeName: 'removeEventListener', line: 5, receiver: 'el' }] },
       });
 
       const result = detectAntipatterns(store, TEST_DIR, {
@@ -361,11 +367,12 @@ describe('Antipattern Detection', () => {
       const fId = insertFile(store, 'src/services/Poller.ts');
       store.insertSymbol(fId, {
         symbolId: 'poller::start#function',
-        name: 'startPolling_setInterval',
+        name: 'startPolling',
         kind: 'function',
         byteStart: 0,
         byteEnd: 100,
-        signature: 'function startPolling() { setInterval(poll, 5000) }',
+        signature: 'function startPolling()',
+        metadata: { callSites: [{ calleeName: 'setInterval', line: 2 }] },
       });
 
       const result = detectAntipatterns(store, TEST_DIR, {
@@ -381,11 +388,12 @@ describe('Antipattern Detection', () => {
       const fId = insertFile(store, 'src/services/EventBus.ts');
       store.insertSymbol(fId, {
         symbolId: 'bus::listen#function',
-        name: 'listen_subscribe',
+        name: 'listen',
         kind: 'function',
         byteStart: 0,
         byteEnd: 100,
-        signature: 'function listen() { observable.subscribe(handler) }',
+        signature: 'function listen()',
+        metadata: { callSites: [{ calleeName: 'subscribe', line: 2, receiver: 'observable' }] },
       });
 
       const result = detectAntipatterns(store, TEST_DIR, {
@@ -432,22 +440,24 @@ describe('Antipattern Detection', () => {
       const fA = insertFile(store, 'src/components/Setup.ts');
       store.insertSymbol(fA, {
         symbolId: 'setup::init#function',
-        name: 'init_addEventListener',
+        name: 'init',
         kind: 'function',
         byteStart: 0,
         byteEnd: 100,
-        signature: 'function init() { window.addEventListener("resize", handler) }',
+        signature: 'function init()',
+        metadata: { callSites: [{ calleeName: 'addEventListener', line: 2, receiver: 'window' }] },
       });
 
       // File B: imports A and has cleanup
       const fB = insertFile(store, 'src/components/Teardown.ts');
       store.insertSymbol(fB, {
         symbolId: 'teardown::cleanup#function',
-        name: 'cleanup_removeEventListener',
+        name: 'cleanup',
         kind: 'function',
         byteStart: 0,
         byteEnd: 100,
-        signature: 'function cleanup() { window.removeEventListener("resize", handler) }',
+        signature: 'function cleanup()',
+        metadata: { callSites: [{ calleeName: 'removeEventListener', line: 2, receiver: 'window' }] },
       });
 
       // B imports A
@@ -487,7 +497,8 @@ describe('Antipattern Detection', () => {
         kind: 'function',
         byteStart: 50,
         byteEnd: 150,
-        signature: 'function cacheResponse(key: string, value: Response) { responseCache.set(key, value) }',
+        signature: 'function cacheResponse(key: string, value: Response)',
+        metadata: { callSites: [{ calleeName: 'set', line: 2, receiver: 'responseCache' }] },
       });
 
       const result = detectAntipatterns(store, TEST_DIR, {
@@ -517,7 +528,8 @@ describe('Antipattern Detection', () => {
         kind: 'function',
         byteStart: 50,
         byteEnd: 100,
-        signature: 'function setEntry(k: string, v: CacheEntry) { cache.set(k, v) }',
+        signature: 'function setEntry(k: string, v: CacheEntry)',
+        metadata: { callSites: [{ calleeName: 'set', line: 2, receiver: 'cache' }] },
       });
       store.insertSymbol(fId, {
         symbolId: 'mc::evict#function',
@@ -525,7 +537,8 @@ describe('Antipattern Detection', () => {
         kind: 'function',
         byteStart: 100,
         byteEnd: 150,
-        signature: 'function evict(k: string) { cache.delete(k) }',
+        signature: 'function evict(k: string)',
+        metadata: { callSites: [{ calleeName: 'delete', line: 2, receiver: 'cache' }] },
       });
 
       const result = detectAntipatterns(store, TEST_DIR, {
@@ -670,11 +683,29 @@ describe('Antipattern Detection', () => {
       expect(result._unsafeUnwrap().findings).toHaveLength(0);
     });
 
-    test('does not flag association without foreignKey option', () => {
+    test('infers FK from ORM convention when no foreignKey option (lower confidence)', () => {
       const fModel = insertFile(store, 'src/models/Post.ts');
       const postId = insertModel(store, fModel, 'Post', 'sequelize', { table: 'posts' });
       const userId = insertModel(store, fModel, 'User', 'sequelize', { table: 'users' });
-      insertAssoc(store, postId, userId, 'User', 'belongsTo'); // no foreignKey
+      insertAssoc(store, postId, userId, 'User', 'belongsTo'); // no foreignKey — inferred as user_id
+
+      const result = detectAntipatterns(store, TEST_DIR, {
+        category: ['missing_index'],
+      });
+      expect(result.isOk()).toBe(true);
+      const findings = result._unsafeUnwrap().findings;
+      expect(findings).toHaveLength(1);
+      expect(findings[0].title).toContain('user_id');
+      expect(findings[0].title).toContain('inferred');
+      expect(findings[0].confidence).toBeLessThan(0.5);
+    });
+
+    test('does not flag inverse-side associations (hasMany/hasOne) without foreignKey', () => {
+      // hasMany FK lives on the target table, not this model — so nothing to report here.
+      const fModel = insertFile(store, 'src/models/User.ts');
+      const userId = insertModel(store, fModel, 'User', 'sequelize', { table: 'users' });
+      const postId = insertModel(store, fModel, 'Post', 'sequelize', { table: 'posts' });
+      insertAssoc(store, userId, postId, 'Post', 'hasMany');
 
       const result = detectAntipatterns(store, TEST_DIR, {
         category: ['missing_index'],
@@ -688,6 +719,263 @@ describe('Antipattern Detection', () => {
   // Combined / Options
   // -------------------------------------------------------------------
 
+  // -------------------------------------------------------------------
+  // Size / complexity detectors (god_class, long_method, long_parameter_list, deep_nesting)
+  // -------------------------------------------------------------------
+
+  describe('god_class', () => {
+    test('flags class with too many methods', () => {
+      const fId = insertFile(store, 'src/Huge.ts');
+      const classDbId = store.insertSymbol(fId, {
+        symbolId: 'Huge#class',
+        name: 'HugeService',
+        kind: 'class' as any,
+        byteStart: 0,
+        byteEnd: 5000,
+        lineStart: 1,
+        lineEnd: 120,
+      });
+      for (let i = 0; i < 30; i++) {
+        store.insertSymbol(fId, {
+          symbolId: `Huge#m${i}`,
+          name: `method${i}`,
+          kind: 'method' as any,
+          byteStart: 100 + i * 100,
+          byteEnd: 100 + i * 100 + 50,
+          lineStart: 2 + i * 2,
+          lineEnd: 2 + i * 2 + 1,
+        }, classDbId);
+      }
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['god_class'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      expect(data.findings.length).toBe(1);
+      expect(data.findings[0].category).toBe('god_class');
+      expect(data.findings[0].title).toContain('HugeService');
+    });
+
+    test('flags class with excessive line count even without many methods', () => {
+      const fId = insertFile(store, 'src/Big.ts');
+      store.insertSymbol(fId, {
+        symbolId: 'Big#class',
+        name: 'BigBlob',
+        kind: 'class' as any,
+        byteStart: 0,
+        byteEnd: 100000,
+        lineStart: 1,
+        lineEnd: 800,
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['god_class'] });
+      expect(result.isOk()).toBe(true);
+      const findings = result._unsafeUnwrap().findings;
+      expect(findings.length).toBe(1);
+      expect(findings[0].title).toContain('BigBlob');
+    });
+
+    test('does NOT flag small classes', () => {
+      const fId = insertFile(store, 'src/Small.ts');
+      store.insertSymbol(fId, {
+        symbolId: 'Small#class',
+        name: 'Tiny',
+        kind: 'class' as any,
+        byteStart: 0,
+        byteEnd: 200,
+        lineStart: 1,
+        lineEnd: 15,
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['god_class'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings.length).toBe(0);
+    });
+  });
+
+  describe('long_method', () => {
+    test('flags function spanning many lines', () => {
+      const fId = insertFile(store, 'src/long.ts');
+      store.insertSymbol(fId, {
+        symbolId: 'long#fn',
+        name: 'bigFunction',
+        kind: 'function' as any,
+        byteStart: 0,
+        byteEnd: 5000,
+        lineStart: 10,
+        lineEnd: 85,
+        signature: 'function bigFunction()',
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['long_method'] });
+      expect(result.isOk()).toBe(true);
+      const findings = result._unsafeUnwrap().findings;
+      expect(findings.length).toBe(1);
+      expect(findings[0].title).toContain('bigFunction');
+      expect(findings[0].title).toContain('75 lines');
+    });
+
+    test('does NOT flag short functions', () => {
+      const fId = insertFile(store, 'src/short.ts');
+      store.insertSymbol(fId, {
+        symbolId: 'short#fn',
+        name: 'tinyFn',
+        kind: 'function' as any,
+        byteStart: 0,
+        byteEnd: 100,
+        lineStart: 1,
+        lineEnd: 30,
+        signature: 'function tinyFn()',
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['long_method'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings.length).toBe(0);
+    });
+
+    test('severity scales with length', () => {
+      const fId = insertFile(store, 'src/huge.ts');
+      store.insertSymbol(fId, {
+        symbolId: 'huge#fn',
+        name: 'epicFn',
+        kind: 'function' as any,
+        byteStart: 0,
+        byteEnd: 100000,
+        lineStart: 1,
+        lineEnd: 300,
+        signature: 'function epicFn()',
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['long_method'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings[0].severity).toBe('high');
+    });
+  });
+
+  describe('long_parameter_list', () => {
+    test('flags function with many parameters', () => {
+      const fId = insertFile(store, 'src/many.ts');
+      store.insertSymbol(fId, {
+        symbolId: 'many#fn',
+        name: 'tooManyParams',
+        kind: 'function' as any,
+        byteStart: 0,
+        byteEnd: 200,
+        lineStart: 1,
+        lineEnd: 10,
+        signature: 'function tooManyParams(a: string, b: number, c: boolean, d: Date, e: object, f: string, g: number)',
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['long_parameter_list'] });
+      expect(result.isOk()).toBe(true);
+      const findings = result._unsafeUnwrap().findings;
+      expect(findings.length).toBe(1);
+      expect(findings[0].title).toContain('7 params');
+    });
+
+    test('handles nested generics without counting internal commas', () => {
+      const fId = insertFile(store, 'src/generics.ts');
+      store.insertSymbol(fId, {
+        symbolId: 'gen#fn',
+        name: 'hasGenerics',
+        kind: 'function' as any,
+        byteStart: 0,
+        byteEnd: 200,
+        lineStart: 1,
+        lineEnd: 10,
+        signature: 'function hasGenerics(a: Map<string, number>, b: Record<string, Array<number>>)',
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['long_parameter_list'] });
+      expect(result.isOk()).toBe(true);
+      // Only 2 real params despite 3 commas in generics
+      expect(result._unsafeUnwrap().findings.length).toBe(0);
+    });
+
+    test('does NOT flag functions with 5 or fewer parameters', () => {
+      const fId = insertFile(store, 'src/ok.ts');
+      store.insertSymbol(fId, {
+        symbolId: 'ok#fn',
+        name: 'okFn',
+        kind: 'function' as any,
+        byteStart: 0,
+        byteEnd: 200,
+        lineStart: 1,
+        lineEnd: 10,
+        signature: 'function okFn(a: string, b: number, c: boolean, d: Date, e: object)',
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['long_parameter_list'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings.length).toBe(0);
+    });
+  });
+
+  describe('deep_nesting', () => {
+    test('flags function with deep indentation', () => {
+      const content = `function deeplyNested() {
+  if (a) {
+    if (b) {
+      if (c) {
+        if (d) {
+          if (e) {
+            doSomething();
+          }
+        }
+      }
+    }
+  }
+}
+`;
+      const absPath = path.join(TEST_DIR, 'src/deep.ts');
+      mkdirSync(path.dirname(absPath), { recursive: true });
+      writeFileSync(absPath, content);
+      const fId = store.insertFile('src/deep.ts', 'typescript', 'hash-deep', content.length);
+      store.insertSymbol(fId, {
+        symbolId: 'deep#fn',
+        name: 'deeplyNested',
+        kind: 'function' as any,
+        byteStart: 0,
+        byteEnd: content.length,
+        lineStart: 1,
+        lineEnd: content.split('\n').length,
+        signature: 'function deeplyNested()',
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['deep_nesting'] });
+      expect(result.isOk()).toBe(true);
+      const findings = result._unsafeUnwrap().findings;
+      expect(findings.length).toBe(1);
+      expect(findings[0].category).toBe('deep_nesting');
+    });
+
+    test('does NOT flag flat functions', () => {
+      const content = `function flat() {
+  const a = 1;
+  const b = 2;
+  return a + b;
+}
+`;
+      const absPath = path.join(TEST_DIR, 'src/flat.ts');
+      mkdirSync(path.dirname(absPath), { recursive: true });
+      writeFileSync(absPath, content);
+      const fId = store.insertFile('src/flat.ts', 'typescript', 'hash-flat', content.length);
+      store.insertSymbol(fId, {
+        symbolId: 'flat#fn',
+        name: 'flat',
+        kind: 'function' as any,
+        byteStart: 0,
+        byteEnd: content.length,
+        lineStart: 1,
+        lineEnd: content.split('\n').length,
+        signature: 'function flat()',
+      });
+
+      const result = detectAntipatterns(store, TEST_DIR, { category: ['deep_nesting'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings.length).toBe(0);
+    });
+  });
+
   describe('options', () => {
     test('runs all categories by default', () => {
       const fId = insertFile(store, 'src/models/User.ts');
@@ -699,7 +987,7 @@ describe('Antipattern Detection', () => {
       const result = detectAntipatterns(store, TEST_DIR);
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      expect(data.categories_checked.length).toBe(7);
+      expect(data.categories_checked.length).toBe(11);
     });
 
     test('filters by severity threshold', () => {
