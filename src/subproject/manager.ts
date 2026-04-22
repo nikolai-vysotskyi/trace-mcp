@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import { TopologyStore, type SubprojectRow, type ClientCallRow } from '../topology/topology-db.js';
 import { parseContracts, extractRoutesFromDb } from '../topology/contract-parser.js';
 import { detectServices } from '../topology/service-detector.js';
-import { scanClientCalls } from './scanner.js';
+import { scanClientCalls, scanEndpointLiterals } from './scanner.js';
 import { diffEndpoints, type EndpointSchemaDiff } from './schema-diff.js';
 import { getDbPath } from '../global.js';
 import { Store } from '../db/store.js';
@@ -186,6 +186,14 @@ export class SubprojectManager {
 
     const detected = detectServices([absProjectRoot]);
     const results: SubprojectAddResult[] = [];
+    // Track registered repos for the post-pass that scans cross-service endpoint literals.
+    // We defer that scan to the end so every service's endpoints are already in the DB.
+    const registered: Array<{
+      repoId: number;
+      serviceId: number;
+      repoRoot: string;
+      projectGroup: string | null;
+    }> = [];
 
     for (const svc of detected) {
       const repoName = svc.name;
@@ -213,6 +221,7 @@ export class SubprojectManager {
 
       const clientCalls = this.scanAndLinkClientCalls(repoId, svc.repoRoot);
       this.topoStore.updateSubprojectSyncTime(repoId);
+      registered.push({ repoId, serviceId, repoRoot: svc.repoRoot, projectGroup: svc.projectGroup ?? null });
 
       const stats = this.topoStore.getTopologyStats();
       results.push({
@@ -226,7 +235,56 @@ export class SubprojectManager {
       });
     }
 
+    this.scanCrossServiceEndpointLiterals(registered);
+
     return { services: results };
+  }
+
+  /**
+   * Post-pass: for each repo, scan source files for URL literals that match endpoint paths
+   * of OTHER services in the same project_group. Captures calls routed through factory
+   * helpers / composables where the inline fetcher syntax would miss the URL
+   * (e.g. Nuxt `useApiFetch(API.home())` with the path table in `useAppRoutes.ts`).
+   */
+  private scanCrossServiceEndpointLiterals(
+    registered: Array<{ repoId: number; serviceId: number; repoRoot: string; projectGroup: string | null }>,
+  ): void {
+    if (registered.length < 2) return;
+
+    const allEndpoints = this.topoStore.getAllEndpoints();
+    let totalInserted = 0;
+
+    for (const repo of registered) {
+      const crossServiceEndpoints = allEndpoints.filter((ep) => {
+        if (ep.service_id === repo.serviceId) return false; // exclude own service
+        const epService = registered.find((r) => r.serviceId === ep.service_id);
+        // Only match against same-group services we registered in this run
+        return epService != null && epService.projectGroup === repo.projectGroup;
+      });
+      if (crossServiceEndpoints.length === 0) continue;
+
+      const literalCalls = scanEndpointLiterals(repo.repoRoot, crossServiceEndpoints);
+      if (literalCalls.length === 0) continue;
+
+      this.topoStore.insertClientCalls(literalCalls.map((c) => ({
+        sourceRepoId: repo.repoId,
+        filePath: c.filePath,
+        line: c.line,
+        callType: c.callType,
+        method: c.method == null ? undefined : c.method,
+        urlPattern: c.urlPattern,
+        confidence: c.confidence,
+      })));
+      totalInserted += literalCalls.length;
+    }
+
+    if (totalInserted === 0) return;
+
+    // Re-link with the expanded client-call set and rebuild cross-service edges.
+    this.topoStore.linkClientCallsToEndpoints();
+    this.buildCrossServiceEdges();
+
+    logger.info({ inserted: totalInserted }, 'Cross-service endpoint-literal scan completed');
   }
 
   /**
@@ -525,7 +583,7 @@ export class SubprojectManager {
         filePath: c.filePath,
         line: c.line,
         callType: c.callType,
-        method: c.method,
+        method: c.method == null ? undefined : c.method,
         urlPattern: c.urlPattern,
         confidence: c.confidence,
       })));

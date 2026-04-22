@@ -549,7 +549,16 @@ export class TopologyStore {
   }
 
   deleteContractsByService(serviceId: number): void {
-    this.db.prepare('DELETE FROM api_contracts WHERE service_id = ?').run(serviceId);
+    // client_calls.matched_endpoint_id references api_endpoints(id) without ON DELETE CASCADE/SET NULL,
+    // so cascading the contract delete would hit an FK violation. Null out those matches first —
+    // linkClientCallsToEndpoints() will re-resolve them after fresh endpoints are inserted.
+    this.db.transaction(() => {
+      this.db.prepare(`
+        UPDATE client_calls SET matched_endpoint_id = NULL
+        WHERE matched_endpoint_id IN (SELECT id FROM api_endpoints WHERE service_id = ?)
+      `).run(serviceId);
+      this.db.prepare('DELETE FROM api_contracts WHERE service_id = ?').run(serviceId);
+    })();
   }
 
   // ── Endpoints ────────────────────────────────────────────────────────

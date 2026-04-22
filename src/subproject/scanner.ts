@@ -34,13 +34,30 @@ interface CallPattern {
 }
 
 const CALL_PATTERNS: CallPattern[] = [
-  // fetch('url') / fetch(`url`)
+  // fetch('url') / fetch(`url`) — also matches $fetch('url') (Nuxt) since regex isn't anchored.
   {
     name: 'fetch',
     regex: /fetch\s*\(\s*['"`]([^'"`\s]+)['"`]/g,
     extractMethod: () => null,
     extractUrl: (m) => m[1],
     confidence: 0.8,
+  },
+  // Nuxt composables: useFetch / useLazyFetch / useAsyncData / useLazyAsyncData / useApiFetch(Mounted)
+  // Also catches project-specific wrappers that match `use*Fetch*` / `use*Api*`.
+  {
+    name: 'nuxt-composable',
+    regex: /\buse(?:Lazy)?(?:Async)?(?:[A-Z]\w*)?(?:Fetch|Api)(?:Mounted)?\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`\s${}]+)['"`]/g,
+    extractMethod: () => null,
+    extractUrl: (m) => m[1],
+    confidence: 0.7,
+  },
+  // Next.js Route Handlers / server actions — fetch is covered above. Also `NextResponse.rewrite('/url')`.
+  {
+    name: 'nextjs-rewrite',
+    regex: /NextResponse\.(?:rewrite|redirect)\s*\(\s*['"`]([^'"`\s]+)['"`]/g,
+    extractMethod: () => null,
+    extractUrl: (m) => m[1],
+    confidence: 0.7,
   },
   // axios.get/post/put/patch/delete('url')
   {
@@ -74,13 +91,37 @@ const CALL_PATTERNS: CallPattern[] = [
     extractUrl: (m) => m[2],
     confidence: 0.6,
   },
-  // requests.get/post('url') (Python)
+  // requests.get/post('url') (Python) — also matches requests.Session().get(...) via the suffix.
   {
     name: 'python-requests',
     regex: /requests\.(get|post|put|patch|delete|head)\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
     extractMethod: (m) => m[1].toUpperCase(),
     extractUrl: (m) => m[2],
     confidence: 0.85,
+  },
+  // httpx.get/post (Python sync) and httpx.AsyncClient().get/post (async)
+  {
+    name: 'python-httpx',
+    regex: /httpx\.(?:Async)?(?:Client\s*\([^)]*\)\.)?(get|post|put|patch|delete|head)\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
+    extractMethod: (m) => m[1].toUpperCase(),
+    extractUrl: (m) => m[2],
+    confidence: 0.8,
+  },
+  // aiohttp: session.get/post, ClientSession().get/post (Python async)
+  {
+    name: 'python-aiohttp',
+    regex: /\b(?:aiohttp\.ClientSession\s*\([^)]*\)\.|session\.)(get|post|put|patch|delete|head)\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
+    extractMethod: (m) => m[1].toUpperCase(),
+    extractUrl: (m) => m[2],
+    confidence: 0.6,
+  },
+  // urllib: urllib.request.urlopen('url') / urllib.request.Request('url')
+  {
+    name: 'python-urllib',
+    regex: /urllib\.request\.(?:urlopen|Request)\s*\(\s*['"`]([^'"`\s]+)['"`]/g,
+    extractMethod: () => null,
+    extractUrl: (m) => m[1],
+    confidence: 0.7,
   },
   // http.Get/Post/Do (Go)
   {
@@ -149,12 +190,82 @@ const CODE_EXTENSIONS = new Set([
  */
 export function scanClientCalls(repoRoot: string): ScannedClientCall[] {
   const results: ScannedClientCall[] = [];
-  walkAndScan(repoRoot, repoRoot, results, 0);
+  walkRepo(repoRoot, (relPath, content) => scanFileContent(relPath, content, results));
   logger.debug({ repoRoot, calls: results.length }, 'Client call scan completed');
   return results;
 }
 
-function walkAndScan(dir: string, repoRoot: string, results: ScannedClientCall[], depth: number): void {
+/**
+ * Scan a repository for URL-like string literals that match known endpoint paths.
+ * Used as a post-step to capture calls made through factory helpers / composables
+ * where the URL string sits in a lookup table rather than inline with the fetcher.
+ *
+ * @param repoRoot         Repo to scan.
+ * @param knownEndpoints   Endpoints to match against (pre-filter to cross-service
+ *                         endpoints in the same project_group for best results).
+ */
+export function scanEndpointLiterals(
+  repoRoot: string,
+  knownEndpoints: Array<{ method: string | null; path: string }>,
+): ScannedClientCall[] {
+  if (knownEndpoints.length === 0) return [];
+
+  // Normalize endpoint path: strip params, collapse trailing slashes. Matches the
+  // normalization used by findBestEndpointMatch() so hits line up downstream.
+  const normalize = (p: string): string =>
+    p.replace(/\{[^}]+\}/g, '{*}').replace(/:\w+/g, '{*}').replace(/\[[^\]]+\]/g, '{*}').replace(/\/+$/, '');
+
+  const endpointSet = new Set<string>();
+  for (const ep of knownEndpoints) {
+    const norm = normalize(ep.path);
+    if (norm && norm !== '/' && norm.length > 1) endpointSet.add(norm);
+  }
+  if (endpointSet.size === 0) return [];
+
+  // Literal URL regex: '/path', "/path", `/path` — must start with `/` and contain
+  // characters typical for URL paths (not arbitrary text).
+  const urlLiteralRegex = /['"`](\/[a-zA-Z0-9_\-./{}:$[\]]+)['"`]/g;
+
+  const results: ScannedClientCall[] = [];
+  walkRepo(repoRoot, (relPath, content) => {
+    urlLiteralRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = urlLiteralRegex.exec(content)) !== null) {
+      const literal = match[1];
+      const norm = normalize(literal);
+      if (!endpointSet.has(norm)) continue;
+
+      // Line number
+      let lineNum = 1;
+      for (let i = 0; i < match.index && i < content.length; i++) {
+        if (content[i] === '\n') lineNum++;
+      }
+
+      results.push({
+        filePath: relPath,
+        line: lineNum,
+        callType: 'literal-match',
+        method: null,
+        urlPattern: literal,
+        confidence: 0.5,
+      });
+    }
+  });
+
+  logger.debug({ repoRoot, calls: results.length }, 'Endpoint literal scan completed');
+  return results;
+}
+
+function walkRepo(repoRoot: string, onFile: (relPath: string, content: string) => void): void {
+  walkAndInvoke(repoRoot, repoRoot, onFile, 0);
+}
+
+function walkAndInvoke(
+  dir: string,
+  repoRoot: string,
+  onFile: (relPath: string, content: string) => void,
+  depth: number,
+): void {
   if (depth > 10) return;
 
   let entries: fs.Dirent[];
@@ -169,12 +280,12 @@ function walkAndScan(dir: string, repoRoot: string, results: ScannedClientCall[]
 
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      walkAndScan(fullPath, repoRoot, results, depth + 1);
+      walkAndInvoke(fullPath, repoRoot, onFile, depth + 1);
     } else if (entry.isFile() && CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) && !EXCLUDE_FILES.has(entry.name)) {
       try {
         const content = fs.readFileSync(fullPath, 'utf-8');
         const relPath = path.relative(repoRoot, fullPath);
-        scanFileContent(relPath, content, results);
+        onFile(relPath, content);
       } catch {
         // skip unreadable files
       }
