@@ -88,6 +88,28 @@ interface SubprojectInfo {
   endpoints: number;
 }
 
+interface SmellFinding {
+  category: 'todo_comment' | 'empty_function' | 'hardcoded_value' | 'debug_artifact';
+  priority: 'high' | 'medium' | 'low';
+  tag?: string;
+  file: string;
+  line: number;
+  snippet: string;
+  description: string;
+}
+
+interface SmellReport {
+  files_scanned: number;
+  findings: SmellFinding[];
+  summary: {
+    todo_comment: number;
+    empty_function: number;
+    hardcoded_value: number;
+    debug_artifact: number;
+  };
+  total: number;
+}
+
 interface ServiceInfo {
   id: number;
   name: string;
@@ -114,6 +136,9 @@ export function ProjectOverview({ root, onNavigateToService }: {
   const [addingService, setAddingService] = useState(false);
   const [editingGroup, setEditingGroup] = useState<number | null>(null);
   const [groupInput, setGroupInput] = useState('');
+  const [smells, setSmells] = useState<SmellReport | null>(null);
+  const [smellsLoading, setSmellsLoading] = useState(false);
+  const [smellsCategory, setSmellsCategory] = useState<SmellFinding['category']>('debug_artifact');
 
   const fetchStats = useCallback(async () => {
     try {
@@ -143,11 +168,26 @@ export function ProjectOverview({ root, onNavigateToService }: {
     } catch { /* optional */ }
   }, [root]);
 
+  const fetchSmells = useCallback(async (category: SmellFinding['category']) => {
+    setSmellsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        project: root,
+        category,
+        limit: '500',
+      });
+      const res = await fetch(`${BASE}/api/projects/smells?${params}`);
+      if (res.ok) setSmells(await res.json());
+    } catch { /* optional */ }
+    setSmellsLoading(false);
+  }, [root]);
+
   useEffect(() => {
     fetchStats();
     fetchCoverage();
     fetchServices();
-  }, [fetchStats, fetchCoverage, fetchServices, status]);
+    fetchSmells(smellsCategory);
+  }, [fetchStats, fetchCoverage, fetchServices, fetchSmells, smellsCategory, status]);
 
   const handleAddService = async () => {
     const api = (window as any).electronAPI;
@@ -418,6 +458,99 @@ export function ProjectOverview({ root, onNavigateToService }: {
             }}
           >
             Analyzing technology coverage…
+          </div>
+        </div>
+      )}
+
+      {/* ── Quality (debug artifacts, TODOs, hardcoded values, empty functions) ── */}
+      {(smells || smellsLoading) && (
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5 px-3">
+            <div className="text-[11px]" style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>
+              Quality
+            </div>
+            {smells && (
+              <span
+                className="text-[11px] font-semibold tabular-nums"
+                style={{ color: smells.total === 0 ? 'var(--green, #22c55e)' : smells.total > 20 ? 'var(--red, #ef4444)' : 'var(--yellow, #eab308)' }}
+              >
+                {smells.total} finding{smells.total === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+
+          {/* Category tabs */}
+          <div className="flex gap-1 px-3 mb-2">
+            {([
+              { key: 'debug_artifact', label: 'Debug' },
+              { key: 'todo_comment', label: 'TODOs' },
+              { key: 'hardcoded_value', label: 'Hardcoded' },
+              { key: 'empty_function', label: 'Stubs' },
+            ] as const).map((tab) => {
+              const active = smellsCategory === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setSmellsCategory(tab.key)}
+                  className="text-[11px] px-2 py-1 rounded transition-all"
+                  style={{
+                    background: active ? 'var(--accent)' : 'var(--bg-inset)',
+                    color: active ? '#fff' : 'var(--text-secondary)',
+                    fontWeight: active ? 600 : 400,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ background: 'var(--bg-grouped)', borderRadius: 10, boxShadow: 'var(--shadow-grouped)', overflow: 'hidden' }}>
+            {smellsLoading && !smells && (
+              <div className="px-3 py-3 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+                Scanning…
+              </div>
+            )}
+            {smells && smells.findings.length === 0 && (
+              <div className="px-3 py-3 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+                No {smellsCategory.replace('_', ' ')} findings
+              </div>
+            )}
+            {smells && smells.findings.slice(0, 25).map((f, i) => {
+              const isLast = i === Math.min(smells.findings.length, 25) - 1;
+              return (
+                <button
+                  key={`${f.file}:${f.line}:${i}`}
+                  onClick={() => {
+                    const api = (window as any).electronAPI;
+                    if (api?.openInEditor) api.openInEditor(`${root}/${f.file}:${f.line}`);
+                  }}
+                  className="flex items-start justify-between gap-2 px-3 py-2 w-full text-left hover:brightness-110"
+                  style={{
+                    borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                    {priorityBadge(f.priority)}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] truncate" style={{ color: 'var(--text-primary)', fontFamily: 'SF Mono, Menlo, monospace' }}>
+                        {f.snippet}
+                      </div>
+                      <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-tertiary)' }}>
+                        {f.file}:{f.line}{f.tag ? ` · ${f.tag}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+            {smells && smells.findings.length > 25 && (
+              <div className="px-3 py-1.5 text-[10px] text-center" style={{ color: 'var(--text-tertiary)', borderTop: '0.5px solid var(--border-row)' }}>
+                + {smells.findings.length - 25} more
+              </div>
+            )}
           </div>
         </div>
       )}

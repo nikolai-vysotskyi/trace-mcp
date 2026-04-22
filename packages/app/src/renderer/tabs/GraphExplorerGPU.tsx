@@ -16,6 +16,8 @@ export interface GraphGPUSettings {
   colorBy: 'community' | 'language' | 'framework_role';
   showLabels: boolean;
   showFPS: boolean;
+  bottlenecks: boolean;
+  stressTest: boolean;
 }
 
 export const DEFAULT_GRAPH_GPU_SETTINGS: GraphGPUSettings = {
@@ -27,6 +29,8 @@ export const DEFAULT_GRAPH_GPU_SETTINGS: GraphGPUSettings = {
   colorBy: 'community',
   showLabels: true,
   showFPS: false,
+  bottlenecks: false,
+  stressTest: false,
 };
 
 interface Props {
@@ -44,12 +48,15 @@ interface VizNode {
   community: number;
   importance: number;
   repo?: string;
+  isArticulation?: boolean;
 }
 interface VizEdge {
   source: string;
   target: string;
   type: string;
   weight: number;
+  bottleneckScore?: number;
+  isBridge?: boolean;
 }
 interface VizCommunity { id: number; label: string; color: string; }
 interface GraphPayload { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[]; }
@@ -156,6 +163,60 @@ function computeTintedLinkColors(
 
 const LINK_TINT_MIX = 0.55;
 const LINK_TINT_ALPHA = 0.3;
+
+/**
+ * Map a normalized bottleneck score [0..1] to an RGB color on a 3-stop gradient:
+ * blue (#3b82f6) → amber (#f59e0b) → red (#ef4444). Returns 0..1 components.
+ */
+function bottleneckColor01(score: number): [number, number, number] {
+  const s = Math.max(0, Math.min(1, score));
+  if (s < 0.5) {
+    const t = s * 2;
+    return [(59 + 186 * t) / 255, (130 + 28 * t) / 255, (246 - 235 * t) / 255];
+  }
+  const t = (s - 0.5) * 2;
+  return [(245 - 6 * t) / 255, (158 - 90 * t) / 255, (11 + 57 * t) / 255];
+}
+
+/**
+ * Override link colors by bottleneckScore. Edges without a score fade into
+ * the background so the hot path reads clearly. Bridges get alpha boost so
+ * they pop even at low score.
+ */
+function computeBottleneckLinkColors(
+  linkPairs: Float32Array,
+  nodes: VizNode[],
+  edgeScoreByPair: Map<string, { score: number; isBridge: boolean }>,
+): Float32Array {
+  const numLinks = Math.floor(linkPairs.length / 2);
+  const out = new Float32Array(numLinks * 4);
+  for (let i = 0; i < numLinks; i++) {
+    const si = linkPairs[i * 2] | 0;
+    const ti = linkPairs[i * 2 + 1] | 0;
+    const info = edgeScoreByPair.get(nodes[si].id + '|' + nodes[ti].id);
+    const score = info?.score ?? 0;
+    const [r, g, b] = bottleneckColor01(score);
+    out[i * 4] = r;
+    out[i * 4 + 1] = g;
+    out[i * 4 + 2] = b;
+    const isBridge = info?.isBridge === true;
+    const baseAlpha = score < 0.05 ? 0.08 : 0.35 + score * 0.55;
+    out[i * 4 + 3] = isBridge ? Math.max(baseAlpha, 0.9) : baseAlpha;
+  }
+  return out;
+}
+
+function buildEdgeScoreMap(edges: VizEdge[]): Map<string, { score: number; isBridge: boolean }> {
+  const map = new Map<string, { score: number; isBridge: boolean }>();
+  for (const e of edges) {
+    if (e.bottleneckScore == null && e.isBridge !== true) continue;
+    map.set(e.source + '|' + e.target, {
+      score: e.bottleneckScore ?? 0,
+      isBridge: e.isBridge === true,
+    });
+  }
+  return map;
+}
 
 function nodeSize(node: VizNode): number {
   const imp = Math.max(0, Math.min(1, node.importance ?? 0));
@@ -339,6 +400,13 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // and highlightNeighborhood uses it to colorize in-subgraph links.
   // null when no highlight is active.
   const highlightedDepthRef = useRef<Map<number, number> | null>(null);
+  // Set of indices cosmos.gl currently has selected via group-highlight or
+  // "Select all N matches". cosmos.gl already greys out the rendered points,
+  // but the HTML label overlay is independent — without this ref, section
+  // reps and importance-ranked file labels from non-selected clusters would
+  // keep rendering on top of the greyed-out cloud. null when no selection
+  // filter is active; updateLabels restricts candidates to this set otherwise.
+  const selectedIndicesRef = useRef<Set<number> | null>(null);
   // Last link pair buffer pushed to cosmos.gl — needed by highlightNeighborhood
   // to recompute per-link colors based on the BFS subgraph.
   const linkPairsRef = useRef<Float32Array | null>(null);
@@ -387,6 +455,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   });
   const [copied, setCopied] = useState<boolean>(false);
 
+  // ── Stress Test state ────────────────────────────────────────────
+  // Edges the user has "broken" in Stress Test mode (keyed "source|target").
+  // When non-empty, the graph re-renders without these edges so the user
+  // can watch the network fragment as load-bearing connections are removed.
+  const [brokenEdgeKeys, setBrokenEdgeKeys] = useState<Set<string>>(new Set());
+  // Component stats for the HUD — recomputed via union-find whenever
+  // brokenEdgeKeys changes. Fractions are relative to total node count.
+  const [componentStats, setComponentStats] = useState<{ count: number; largestFrac: number; isolated: number }>({
+    count: 1, largestFrac: 1, isolated: 0,
+  });
+
   // Measure toolbar height so overlays (selected popup, error banner) anchor
   // below it even when the pill wraps to 2 rows on narrow panes. Hardcoded
   // top-14 was the old bug: worked for 1 row, collided with row 2.
@@ -418,7 +497,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   const liveRef = useRef(live);
   useEffect(() => { liveRef.current = live; }, [live]);
 
-  const { scope, granularity, hideIsolated, symbolKinds, maxNodes, colorBy, showLabels, showFPS } = settings;
+  const { scope, granularity, hideIsolated, symbolKinds, maxNodes, colorBy, showLabels, showFPS, bottlenecks, stressTest } = settings;
   const HIGHLIGHT_DEPTH = 1;
   // Mirror `showLabels` into a ref so the RAF tick reads the latest value
   // directly without relying on useCallback dep propagation. Belt-and-suspenders
@@ -577,6 +656,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     graph.setConfigPartial({ linkVisibilityDistanceRange: [100, 400] });
     graph.render();
     highlightedDepthRef.current = null;
+    selectedIndicesRef.current = null;
     setSelected(null);
   }, [themeSpec]);
 
@@ -667,12 +747,18 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           ranked.sort((a, b) => (nodes[b]?.importance ?? 0) - (nodes[a]?.importance ?? 0));
           for (const idx of ranked) tryPlace(idx);
         } else {
+          // When a group/search selection filter is active, restrict label
+          // candidates to the selected set — otherwise non-selected clusters
+          // keep their section headers and importance-ranked file labels
+          // floating over the greyed-out cloud.
+          const selectedSet = selectedIndicesRef.current;
           // Sections first — community headings dominate the zoomed-out view.
           // We always TRY all sections; collision drops the ones whose reps
           // overlap each other in a tight cluster (extreme zoom-out → 1-2
           // survive; fit → ~all 8 survive).
           for (const idx of sectionIndicesRef.current) {
             if (!sectionLabelByIndexRef.current.has(idx)) continue;
+            if (selectedSet && !selectedSet.has(idx)) continue;
             tryPlace(idx);
           }
           // File labels live on a zoom-scaled budget. At fit (~zoom 6) the
@@ -688,6 +774,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           for (const idx of nodesByImpRef.current) {
             if (fileAdded >= fileBudget) break;
             if (sectionLabelByIndexRef.current.has(idx)) continue;
+            if (selectedSet && !selectedSet.has(idx)) continue;
             if (tryPlace(idx)) fileAdded++;
           }
         }
@@ -841,6 +928,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     });
     if (debouncedSymbolKinds.trim()) params.set('symbolKinds', debouncedSymbolKinds.trim());
     if (debouncedMaxNodes.trim()) params.set(granularity === 'symbol' ? 'maxNodes' : 'maxFiles', debouncedMaxNodes.trim());
+    if (settings.bottlenecks || settings.stressTest) params.set('includeBottlenecks', 'true');
 
     // Retry on 429 with exponential backoff. The daemon exempts localhost,
     // but the limiter can still trip when the client IP resolves to something
@@ -881,7 +969,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     }
     setError(lastErr ? lastErr.message : 'Failed to load graph');
     setLoading(false);
-  }, [root, scope, granularity, hideIsolated, debouncedSymbolKinds, debouncedMaxNodes]);
+  }, [root, scope, granularity, hideIsolated, debouncedSymbolKinds, debouncedMaxNodes, settings.bottlenecks, settings.stressTest]);
 
   // Render (or re-render) the graph from a payload. Reuses existing Graph instance.
   const renderGraph = useCallback((data: GraphPayload) => {
@@ -1130,18 +1218,31 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     prevNodeIdsRef.current = newIdMap;
 
     // Colors (per-point RGBA, all channels normalized 0-1 — cosmos.gl buffer convention)
+    // In bottleneck mode, articulation points are painted red — they stand out against
+    // the blue→amber edge gradient so single-points-of-failure are instantly visible.
+    const useBottleneckColors = settings.bottlenecks || settings.stressTest;
     const colors = new Float32Array(nodes.length * 4);
     for (let i = 0; i < nodes.length; i++) {
-      const [r, g, b] = nodeColor01(nodes[i], colorBy, commColors);
-      colors[i * 4] = r;
-      colors[i * 4 + 1] = g;
-      colors[i * 4 + 2] = b;
+      const n = nodes[i];
+      if (useBottleneckColors && n.isArticulation) {
+        colors[i * 4] = 0.937;     // #ef4444
+        colors[i * 4 + 1] = 0.267;
+        colors[i * 4 + 2] = 0.267;
+      } else {
+        const [r, g, b] = nodeColor01(n, colorBy, commColors);
+        colors[i * 4] = r;
+        colors[i * 4 + 1] = g;
+        colors[i * 4 + 2] = b;
+      }
       colors[i * 4 + 3] = 1;
     }
 
-    // Sizes
+    // Sizes — articulation points get a +60% bump so they're visually larger than normal nodes.
     const sizes = new Float32Array(nodes.length);
-    for (let i = 0; i < nodes.length; i++) sizes[i] = nodeSize(nodes[i]);
+    for (let i = 0; i < nodes.length; i++) {
+      const base = nodeSize(nodes[i]);
+      sizes[i] = useBottleneckColors && nodes[i].isArticulation ? base * 1.6 : base;
+    }
 
     // Top-N important nodes for label overlay defaults
     const topByImp = [...nodes.keys()].sort(
@@ -1245,18 +1346,24 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       linkPairsRef.current = new Float32Array(links);
       // Compute & push per-link tints (shade of source node's color). Falls
       // back silently to linkDefaultColor if point colors aren't ready yet.
+      // When bottleneck mode is active, colors come from the bottleneck
+      // palette instead (blue → amber → red by score) so hot-path edges
+      // read immediately even in dense clusters.
       const srcPointColors = origColorsRef.current;
       if (srcPointColors) {
-        const tinted = computeTintedLinkColors(
-          srcPointColors,
-          linkPairsRef.current,
-          hexToRgb01(themeSpec.background),
-          LINK_TINT_MIX,
-          LINK_TINT_ALPHA,
-        );
-        defaultLinkColorsRef.current = tinted;
+        const useBottleneck = settings.bottlenecks || settings.stressTest;
+        const linkColors = useBottleneck
+          ? computeBottleneckLinkColors(linkPairsRef.current, nodes, buildEdgeScoreMap(data.edges))
+          : computeTintedLinkColors(
+              srcPointColors,
+              linkPairsRef.current,
+              hexToRgb01(themeSpec.background),
+              LINK_TINT_MIX,
+              LINK_TINT_ALPHA,
+            );
+        defaultLinkColorsRef.current = linkColors;
         try {
-          g.setLinkColors(new Float32Array(tinted));
+          g.setLinkColors(new Float32Array(linkColors));
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('[graph] setLinkColors failed', err);
@@ -1385,7 +1492,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       // Small graph — inline is faster than a worker round-trip.
       finalize(buildEdgesInline());
     }
-  }, [themeSpec, colorBy, showFPS]);
+  }, [themeSpec, colorBy, showFPS, settings.bottlenecks, settings.stressTest]);
 
   // ── Reset edge-worker + position carry-over on granularity switch ──
   // File-graph and symbol-graph node-id namespaces don't overlap, so carrying
@@ -1411,14 +1518,22 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const graph = graphRef.current;
     const data = payloadRef.current;
     if (!graph || !data) return;
+    const useBottleneckColors = settings.bottlenecks || settings.stressTest;
     const commColors = new Map<number, string>();
     for (const c of data.communities) commColors.set(c.id, c.color);
     const colors = new Float32Array(data.nodes.length * 4);
     for (let i = 0; i < data.nodes.length; i++) {
-      const [r, g, b] = nodeColor01(data.nodes[i], colorBy, commColors);
-      colors[i * 4] = r;
-      colors[i * 4 + 1] = g;
-      colors[i * 4 + 2] = b;
+      const n = data.nodes[i];
+      if (useBottleneckColors && n.isArticulation) {
+        colors[i * 4] = 0.937;
+        colors[i * 4 + 1] = 0.267;
+        colors[i * 4 + 2] = 0.267;
+      } else {
+        const [r, g, b] = nodeColor01(n, colorBy, commColors);
+        colors[i * 4] = r;
+        colors[i * 4 + 1] = g;
+        colors[i * 4 + 2] = b;
+      }
       colors[i * 4 + 3] = 1;
     }
     graph.setPointColors(colors);
@@ -1429,18 +1544,20 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // sync with their source nodes (e.g. community → language recolor).
     const linkPairs = linkPairsRef.current;
     if (linkPairs && linkPairs.length >= 2) {
-      const tinted = computeTintedLinkColors(
-        colors,
-        linkPairs,
-        hexToRgb01(themeSpec.background),
-        LINK_TINT_MIX,
-        LINK_TINT_ALPHA,
-      );
-      defaultLinkColorsRef.current = tinted;
-      graph.setLinkColors(new Float32Array(tinted));
+      const linkColors = useBottleneckColors
+        ? computeBottleneckLinkColors(linkPairs, data.nodes, buildEdgeScoreMap(data.edges))
+        : computeTintedLinkColors(
+            colors,
+            linkPairs,
+            hexToRgb01(themeSpec.background),
+            LINK_TINT_MIX,
+            LINK_TINT_ALPHA,
+          );
+      defaultLinkColorsRef.current = linkColors;
+      graph.setLinkColors(new Float32Array(linkColors));
     }
     graph.render();
-  }, [colorBy]);
+  }, [colorBy, settings.bottlenecks, settings.stressTest]);
 
   // ── Theme change → update config live ─────────────────────────
   useEffect(() => {
@@ -1454,21 +1571,118 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       hoveredPointRingColor: themeSpec.hoveredLink,
     });
     // Tints lerp toward background, so background change ⇒ recompute tints.
+    // Bottleneck mode uses a theme-independent palette, so we skip the recompute.
     const pointColors = origColorsRef.current;
     const linkPairs = linkPairsRef.current;
+    const data = payloadRef.current;
+    const useBottleneckColors = (settings.bottlenecks || settings.stressTest) && data != null;
     if (pointColors && linkPairs && linkPairs.length >= 2) {
-      const tinted = computeTintedLinkColors(
-        pointColors,
-        linkPairs,
-        hexToRgb01(themeSpec.background),
-        LINK_TINT_MIX,
-        LINK_TINT_ALPHA,
-      );
-      defaultLinkColorsRef.current = tinted;
-      graph.setLinkColors(new Float32Array(tinted));
+      const linkColors = useBottleneckColors && data
+        ? computeBottleneckLinkColors(linkPairs, data.nodes, buildEdgeScoreMap(data.edges))
+        : computeTintedLinkColors(
+            pointColors,
+            linkPairs,
+            hexToRgb01(themeSpec.background),
+            LINK_TINT_MIX,
+            LINK_TINT_ALPHA,
+          );
+      defaultLinkColorsRef.current = linkColors;
+      graph.setLinkColors(new Float32Array(linkColors));
     }
     graph.render();
-  }, [themeSpec]);
+  }, [themeSpec, settings.bottlenecks, settings.stressTest]);
+
+  // ── Stress Test: break next edge, reset, and recompute components ──────
+  // Edge keys are "source|target" — same format used in buildEdgeScoreMap.
+  // "Break next" picks the highest-bottleneckScore edge not yet in the set.
+  const breakNextEdge = useCallback(() => {
+    const data = payloadRef.current;
+    if (!data) return;
+    let best: VizEdge | null = null;
+    let bestScore = -1;
+    for (const e of data.edges) {
+      const k = e.source + '|' + e.target;
+      if (brokenEdgeKeys.has(k)) continue;
+      const s = e.bottleneckScore ?? 0;
+      if (s > bestScore) { bestScore = s; best = e; }
+    }
+    if (!best || bestScore <= 0) return;
+    const next = new Set(brokenEdgeKeys);
+    next.add(best.source + '|' + best.target);
+    setBrokenEdgeKeys(next);
+  }, [brokenEdgeKeys]);
+
+  const resetStressTest = useCallback(() => setBrokenEdgeKeys(new Set()), []);
+
+  // Auto-reset the broken set when Stress Test turns off so toggling back on
+  // starts from a clean slate instead of showing a half-destroyed graph.
+  useEffect(() => {
+    if (!stressTest && brokenEdgeKeys.size > 0) setBrokenEdgeKeys(new Set());
+  }, [stressTest, brokenEdgeKeys.size]);
+
+  // Rebuild link buffer excluding broken edges + recompute component stats.
+  // Uses a union-find pass — O(E α(V)) which is effectively linear.
+  useEffect(() => {
+    const graph = graphRef.current;
+    const data = payloadRef.current;
+    if (!graph || !data || !stressTest) return;
+
+    const indexById = new Map<string, number>();
+    for (let i = 0; i < data.nodes.length; i++) indexById.set(data.nodes[i].id, i);
+
+    const pairs: number[] = [];
+    for (const e of data.edges) {
+      if (brokenEdgeKeys.has(e.source + '|' + e.target)) continue;
+      const s = indexById.get(e.source);
+      const t = indexById.get(e.target);
+      if (s == null || t == null) continue;
+      pairs.push(s, t);
+    }
+    const links = new Float32Array(pairs);
+    linkPairsRef.current = links;
+    try {
+      graph.setLinks(links);
+      const linkColors = computeBottleneckLinkColors(links, data.nodes, buildEdgeScoreMap(data.edges));
+      graph.setLinkColors(new Float32Array(linkColors));
+      graph.render();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[stress-test] setLinks failed', err);
+      return;
+    }
+
+    // Union-find over undirected remaining edges
+    const n = data.nodes.length;
+    const parent = new Int32Array(n);
+    for (let i = 0; i < n; i++) parent[i] = i;
+    const find = (x: number): number => {
+      while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+      return x;
+    };
+    for (let i = 0; i < pairs.length; i += 2) {
+      const a = pairs[i];
+      const b = pairs[i + 1];
+      const ra = find(a);
+      const rb = find(b);
+      if (ra !== rb) parent[ra] = rb;
+    }
+    const sizeByRoot = new Map<number, number>();
+    for (let i = 0; i < n; i++) {
+      const r = find(i);
+      sizeByRoot.set(r, (sizeByRoot.get(r) ?? 0) + 1);
+    }
+    let largest = 0;
+    let isolated = 0;
+    for (const s of sizeByRoot.values()) {
+      if (s > largest) largest = s;
+      if (s === 1) isolated++;
+    }
+    setComponentStats({
+      count: sizeByRoot.size,
+      largestFrac: n > 0 ? largest / n : 0,
+      isolated,
+    });
+  }, [brokenEdgeKeys, stressTest]);
 
   // FPS is rendered by the custom <FpsBadge/> overlay below — cosmos.gl's
   // built-in Stats.js panel is intentionally off (see showFPSMonitor: false).
@@ -1617,9 +1831,15 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       }
       frontier = next;
     }
+    // Wipe any active click-highlight (BFS colors, depth map, widened link
+    // fade) before overlaying the group/search selection — otherwise the
+    // previous click's subgraph labels and tinted edges stick around on top
+    // of the new cosmos.gl selection.
+    if (highlightedDepthRef.current) clearHighlight();
     graph.selectPointsByIndices(Array.from(visited));
+    selectedIndicesRef.current = new Set(visited);
     setSearchQuery('');
-  }, [searchQuery]);
+  }, [searchQuery, clearHighlight]);
 
   // ── Workspace/group list (for "highlight group" dropdown) ────
   const workspaceList = useMemo(() => {
@@ -1644,8 +1864,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     if (indices.length === 0) return;
     const graph = graphRef.current;
     if (!graph) return;
+    // Wipe any active click-highlight (BFS colors, depth map, widened link
+    // fade) before overlaying the group selection — see doSelectAllMatches.
+    if (highlightedDepthRef.current) clearHighlight();
     graph.selectPointsByIndices(indices);
-  }, []);
+    selectedIndicesRef.current = new Set(indices);
+  }, [clearHighlight]);
 
   // ── Fit + pause Live (user-requested) ─────────────────────────
   const doFit = useCallback(() => {
@@ -1729,6 +1953,51 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       <div ref={containerRef} className="absolute inset-0" />
 
       <FpsBadge show={showFPS} />
+
+      {/* Stress Test HUD — shown only when Stress Test is active. Controls
+          live here instead of the main toolbar to avoid cluttering the pill
+          in normal mode, and to sit right next to the metrics they drive. */}
+      {stressTest && (
+        <div
+          className="absolute right-3 z-30 px-3 py-2.5"
+          style={{
+            ...pillStyle,
+            top: toolbarHeight + 18,
+            minWidth: 200,
+            fontFamily: sysFont,
+          }}
+        >
+          <div
+            className="text-[10px] uppercase tracking-wider mb-2"
+            style={{ opacity: 0.6, letterSpacing: '0.08em' }}
+          >
+            Stress Test
+          </div>
+          <div className="flex gap-1.5 mb-2.5">
+            <button
+              onClick={breakNextEdge}
+              className="cosmos-gpu-pill-btn active"
+              title="Remove the highest-bottleneckScore remaining edge"
+            >
+              Break next
+            </button>
+            <button
+              onClick={resetStressTest}
+              className="cosmos-gpu-pill-btn"
+              title="Restore all broken edges"
+              disabled={brokenEdgeKeys.size === 0}
+            >
+              Reset
+            </button>
+          </div>
+          <div className="text-[11px] leading-relaxed" style={{ opacity: 0.85 }}>
+            <div className="flex justify-between"><span>Broken</span><span>{brokenEdgeKeys.size}</span></div>
+            <div className="flex justify-between"><span>Components</span><span>{componentStats.count}</span></div>
+            <div className="flex justify-between"><span>Largest</span><span>{Math.round(componentStats.largestFrac * 100)}%</span></div>
+            <div className="flex justify-between"><span>Isolated</span><span>{componentStats.isolated}</span></div>
+          </div>
+        </div>
+      )}
 
       {/* Halo overlay — additive radial-gradient glows around top-importance
           nodes. `plus-lighter` is GPU-accelerated in Chromium (unlike
@@ -1938,6 +2207,24 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           title="Show FPS counter"
         >
           FPS
+        </button>
+
+        <div className="w-px h-4 mx-0.5" style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} />
+
+        {/* Bottleneck analysis — color edges by betweenness+co-change, highlight bridges & articulation points */}
+        <button
+          onClick={() => onSettingsChange({ bottlenecks: !bottlenecks, stressTest: stressTest && !bottlenecks ? false : stressTest })}
+          className={`cosmos-gpu-pill-btn ${bottlenecks ? 'active' : ''}`}
+          title="Highlight architectural bottlenecks: edge betweenness × co-change, with bridges & articulation points"
+        >
+          Bottlenecks
+        </button>
+        <button
+          onClick={() => onSettingsChange({ stressTest: !stressTest, bottlenecks: !stressTest ? true : bottlenecks })}
+          className={`cosmos-gpu-pill-btn ${stressTest ? 'active' : ''}`}
+          title="Stress Test: interactively remove top-bottleneck edges and watch the graph fragment"
+        >
+          Stress Test
         </button>
 
         <div className="w-px h-4 mx-0.5" style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} />

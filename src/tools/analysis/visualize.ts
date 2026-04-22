@@ -14,6 +14,7 @@ import { Store, type FileRow, type SymbolRow, type EdgeRow } from '../../db/stor
 import { initializeDatabase } from '../../db/schema.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
 import { logger } from '../../logger.js';
+import { getEdgeBottlenecks } from './bottlenecks.js';
 // @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
 
@@ -34,6 +35,7 @@ export interface VisualizeGraphOptions {
   topoStore?: TopologyStore; // topology store — when set, merges connected subproject repos
   projectRoot?: string;      // current project root — used to scope subprojects to connected repos only
   highlightDepth?: number;   // BFS depth for click-highlight (default: 1)
+  includeBottlenecks?: boolean; // annotate edges/nodes with bottleneck scores, bridges, and articulation points (file granularity only)
 }
 
 interface VizNode {
@@ -46,6 +48,7 @@ interface VizNode {
   symbolCount?: number;
   importance: number;
   repo?: string;  // set when merging subproject repos
+  isArticulation?: boolean; // single point of failure — removal disconnects the graph
 }
 
 interface VizEdge {
@@ -53,6 +56,8 @@ interface VizEdge {
   target: string;
   type: string;
   weight: number;
+  bottleneckScore?: number; // normalized [0..1]; only set when includeBottlenecks=true
+  isBridge?: boolean;       // true if removing this edge would disconnect the (undirected) graph
 }
 
 interface VizCommunity {
@@ -141,16 +146,25 @@ export function buildGraphData(
   const hideIsolated = opts.hideIsolated === true; // default false
 
   // Subproject layer: when scope='project' and topoStore is available, merge all subproject repos
+  let result: { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } | null = null;
   if (scope === 'project' && opts.topoStore) {
     try {
       const subResult = buildSubprojectGraph(store, opts);
-      if (subResult) return subResult;
+      if (subResult) result = subResult;
     } catch (e) {
       logger.warn({ error: e }, 'Subproject graph merge failed, falling back to single-project');
     }
   }
 
-  return buildSingleProjectGraph(store, opts, scope, depth, granularity, hideIsolated);
+  if (!result) {
+    result = buildSingleProjectGraph(store, opts, scope, depth, granularity, hideIsolated);
+  }
+
+  if (opts.includeBottlenecks) {
+    enrichWithBottlenecks(store, result.nodes, result.edges);
+  }
+
+  return result;
 }
 
 /** Directories that should never appear in graph visualizations (safety net for stale indexes). */
@@ -889,6 +903,7 @@ export function generateHtml(
 const DATA = ${data};
 const LAYOUT = ${JSON.stringify(layout)};
 const N = DATA.nodes.length;
+const BOTTLENECKS_PRESENT = DATA.edges.some(function(e){return e.bottleneckScore != null;});
 // Send stats to parent iframe host (Electron app reads these)
 if (window.parent !== window) {
   window.parent.postMessage({ type: 'graphStats', nodes: DATA.nodes.length, edges: DATA.edges.length, communities: DATA.communities.length }, '*');
@@ -1452,6 +1467,42 @@ function draw() {
   }
   ctx.stroke();
 
+  // ── Bottleneck overlay — draw high-score edges thicker and colored by score ──
+  // Only active when visualize_graph was called with includeBottlenecks=true.
+  if (BOTTLENECKS_PRESENT && !highlightId) {
+    function bottleneckColor(s) {
+      // 3-stop gradient: blue (0) → amber (0.5) → red (1)
+      if (s < 0.5) {
+        const t = s * 2;
+        return 'rgb(' + Math.round(59 + 186 * t) + ',' + Math.round(130 + 28 * t) + ',' + Math.round(246 - 235 * t) + ')';
+      }
+      const t = (s - 0.5) * 2;
+      return 'rgb(' + Math.round(245 - 6 * t) + ',' + Math.round(158 - 90 * t) + ',' + Math.round(11 + 57 * t) + ')';
+    }
+    ctx.globalAlpha = 0.85;
+    for (const e of visibleEdges) {
+      const score = e.bottleneckScore;
+      if (score == null || score < 0.05) continue;
+      ctx.strokeStyle = bottleneckColor(score);
+      ctx.lineWidth = (1 + Math.sqrt(score) * 4) / tk;
+      ctx.beginPath();
+      ctx.moveTo(e.source.x, e.source.y);
+      ctx.lineTo(e.target.x, e.target.y);
+      ctx.stroke();
+    }
+    // Bridges get an outline in the theme's contrast color
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = IS_LIGHT ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 0.8 / tk;
+    ctx.beginPath();
+    for (const e of visibleEdges) {
+      if (!e.isBridge) continue;
+      ctx.moveTo(e.source.x, e.source.y);
+      ctx.lineTo(e.target.x, e.target.y);
+    }
+    ctx.stroke();
+  }
+
   // Highlighted edges — draw all edges in the highlight subgraph, colored by depth
   if (highlightId && highlightSet) {
     const depthColors = ['#ff2050', '#ff8c00', '#ffe000', '#00e050', '#00c8ff', '#6060ff', '#c040ff', '#ff40a0', '#ff6060', '#aaaaaa'];
@@ -1535,6 +1586,16 @@ function draw() {
     ctx.strokeStyle = IS_LIGHT ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)';
     ctx.lineWidth = 0.5 / tk;
     ctx.stroke();
+
+    // Articulation point ring — single point of failure
+    if (d.isArticulation && BOTTLENECKS_PRESENT) {
+      ctx.globalAlpha = 0.9 * a;
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.5 / tk;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r + 2 / tk, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     // Collect label candidates (drawn in second pass)
     const labelZoomThreshold = 0.15 + (1 - normImp) * 1.8;
@@ -1864,6 +1925,40 @@ window.addEventListener('message', (evt) => {
 </script>
 </body>
 </html>`;
+}
+
+// ── Bottleneck Enrichment ──────────────────────────────────────────────
+
+/**
+ * Annotate edges with bottleneckScore + isBridge, and nodes with isArticulation.
+ * File-granularity only: symbol-level edges cannot be mapped to file-level bottleneck data.
+ */
+function enrichWithBottlenecks(store: Store, nodes: VizNode[], edges: VizEdge[]): void {
+  if (nodes.length === 0 || nodes[0].type !== 'file') return;
+
+  const result = getEdgeBottlenecks(store, { topN: 0, sampling: 'auto' });
+  if (result.isErr()) return;
+  const { edges: bottleneckEdges, articulationPoints } = result.value;
+
+  const edgeScore = new Map<string, { score: number; isBridge: boolean }>();
+  for (const e of bottleneckEdges) {
+    edgeScore.set(`${e.sourceFile}|${e.targetFile}`, {
+      score: e.bottleneckScore,
+      isBridge: e.isBridge,
+    });
+  }
+  for (const e of edges) {
+    const m = edgeScore.get(`${e.source}|${e.target}`);
+    if (m) {
+      e.bottleneckScore = m.score;
+      e.isBridge = m.isBridge;
+    }
+  }
+
+  const articulationSet = new Set(articulationPoints.map((p) => p.file));
+  for (const n of nodes) {
+    if (articulationSet.has(n.id)) n.isArticulation = true;
+  }
 }
 
 // ── Tool Entry Points ──────────────────────────────────────────────────

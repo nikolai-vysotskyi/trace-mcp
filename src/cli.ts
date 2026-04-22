@@ -24,7 +24,7 @@ import { FileWatcher } from './indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService, aiTracker } from './ai/index.js';
 import { SummarizationPipeline } from './ai/summarization-pipeline.js';
 import { ProgressState, writeServerPid, clearServerPid } from './progress.js';
-import { detectCoverage } from './analytics/tech-detector.js';
+import { detectCoverageRecursive } from './analytics/tech-detector.js';
 import http from 'node:http';
 import { initCommand } from './cli/init.js';
 import { upgradeCommand } from './cli/upgrade.js';
@@ -40,6 +40,7 @@ import { removeCommand } from './cli/remove.js';
 import { statusCommand } from './cli/status.js';
 import { visualizeCommand } from './cli/visualize.js';
 import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
+import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { daemonCommand } from './cli/daemon.js';
 import { installAppCommand } from './cli/install-app.js';
 import { askCommand } from './cli/ask.js';
@@ -759,6 +760,7 @@ program
           const symbolKinds = url.searchParams.get('symbolKinds')?.split(',').filter(Boolean);
           const maxFiles = url.searchParams.has('maxFiles') ? parseInt(url.searchParams.get('maxFiles')!, 10) : undefined;
           const maxNodes = url.searchParams.has('maxNodes') ? parseInt(url.searchParams.get('maxNodes')!, 10) : undefined;
+          const includeBottlenecks = url.searchParams.get('includeBottlenecks') === 'true';
 
           // Open topoStore for subproject support (best-effort)
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
@@ -768,7 +770,7 @@ program
 
           try {
             const { nodes, edges, communities } = buildGraphData(managed.store, {
-              scope, depth, granularity, layout, hideIsolated, symbolKinds, maxFiles, maxNodes, topoStore, projectRoot,
+              scope, depth, granularity, layout, hideIsolated, symbolKinds, maxFiles, maxNodes, topoStore, projectRoot, includeBottlenecks,
             });
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -928,7 +930,49 @@ program
         return;
       }
 
+      // REST API: quality findings (code smells incl. debug artifacts)
+      if (req.method === 'GET' && url.pathname === '/api/projects/smells') {
+        const projectRoot = url.searchParams.get('project');
+        if (!projectRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
+          return;
+        }
+        const managed = projectManager.getProject(projectRoot);
+        if (!managed) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+          return;
+        }
+        const categoryParam = url.searchParams.get('category');
+        const categories = categoryParam
+          ? categoryParam.split(',').map((c) => c.trim()).filter(Boolean)
+          : undefined;
+        const priorityThreshold = url.searchParams.get('priority_threshold') ?? undefined;
+        const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '500', 10), 2000);
+        try {
+          const result = scanCodeSmells(managed.store, projectRoot, {
+            category: categories as any,
+            priority_threshold: priorityThreshold as any,
+            limit,
+          });
+          if (result.isErr()) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: String(result.error) }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result.value));
+        } catch (e: any) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e?.message ?? 'Failed to scan code smells' }));
+        }
+        return;
+      }
+
       // REST API: technology coverage analysis for a project
+      // Recursively walks sub-projects so monorepo / multi-service containers
+      // (whose root has no manifest) aggregate coverage from all children.
       if (req.method === 'GET' && url.pathname === '/api/projects/coverage') {
         const projectRoot = url.searchParams.get('project');
         if (!projectRoot) {
@@ -937,9 +981,48 @@ program
           return;
         }
         try {
-          const report = detectCoverage(projectRoot);
+          const multi = detectCoverageRecursive(projectRoot);
+
+          // Deduplicate gaps across sub-projects by package name, keeping highest priority.
+          const gapPrio = { high: 0, medium: 1, low: 2 } as const;
+          const gapMap = new Map<string, (typeof multi.projects)[number]['gaps'][number]>();
+          for (const p of multi.projects) {
+            for (const g of p.gaps) {
+              const existing = gapMap.get(g.name);
+              if (!existing || (gapPrio[g.priority] ?? 3) < (gapPrio[existing.priority] ?? 3)) {
+                gapMap.set(g.name, g);
+              }
+            }
+          }
+          const gaps = [...gapMap.values()].sort(
+            (a, b) => (gapPrio[a.priority] ?? 3) - (gapPrio[b.priority] ?? 3),
+          );
+
+          // Deduplicate unknown packages by name, keeping strongest signal (likely > maybe > no).
+          const needPrio = { likely: 0, maybe: 1, no: 2 } as const;
+          const unknownMap = new Map<string, (typeof multi.projects)[number]['unknown'][number]>();
+          for (const p of multi.projects) {
+            for (const u of p.unknown) {
+              const existing = unknownMap.get(u.name);
+              if (!existing || (needPrio[u.needs_plugin] ?? 3) < (needPrio[existing.needs_plugin] ?? 3)) {
+                unknownMap.set(u.name, u);
+              }
+            }
+          }
+          const unknown = [...unknownMap.values()].sort(
+            (a, b) => (needPrio[a.needs_plugin] ?? 3) - (needPrio[b.needs_plugin] ?? 3),
+          );
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(report));
+          res.end(JSON.stringify({
+            coverage: {
+              total_significant: multi.aggregate.total_significant,
+              covered: multi.aggregate.covered,
+              coverage_pct: multi.aggregate.coverage_pct,
+            },
+            gaps,
+            unknown,
+          }));
         } catch (e: any) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: e?.message ?? 'Failed to detect coverage' }));
