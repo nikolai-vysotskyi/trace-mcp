@@ -14,6 +14,12 @@ import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { logger } from '../logger.js';
 
 const ENV_GLOB = ['.env', '.env.*', '.env.local', '**/.env', '**/.env.*'];
+const ENV_FILE_BASENAME = /^\.env(\.[^/]*)?$/;
+
+function isEnvFilePattern(pattern: string): boolean {
+  const basename = pattern.split('/').pop() ?? pattern;
+  return ENV_FILE_BASENAME.test(basename);
+}
 
 export class EnvIndexer {
   private traceignore: TraceignoreMatcher;
@@ -28,9 +34,14 @@ export class EnvIndexer {
   }
 
   async indexEnvFiles(force: boolean): Promise<void> {
+    // Default config.exclude contains `**/.env` / `**/.env.*` to keep env files out of
+    // the code index. EnvIndexer only records keys + inferred types/formats (no values),
+    // so those patterns would wrongly hide our input — filter them before globbing.
+    const ignore = this.config.exclude.filter((p) => !isEnvFilePattern(p));
+
     const envPaths = await fg(ENV_GLOB, {
       cwd: this.rootPath,
-      ignore: this.config.exclude,
+      ignore,
       dot: true,
       absolute: false,
       onlyFiles: true,
