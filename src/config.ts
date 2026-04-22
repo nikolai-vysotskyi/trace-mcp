@@ -128,6 +128,8 @@ const ToolsConfigSchema = z.object({
   description_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
   /** Server instructions verbosity: full (default ~2K tokens), minimal (~200 tokens), none (empty) */
   instructions_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
+  /** Agent behavior rules appended to server instructions. strict = full discipline rules (anti-sycophancy, goal-driven execution, 2-strike rule), minimal = anti-fabrication only, off = no behavior rules. Auto-set to "strict" by Max-tier init. */
+  agent_behavior: z.enum(['strict', 'minimal', 'off']).default('off'),
   /** Control which meta fields appear in responses. true = all (default), false = none, or list specific fields to include */
   meta_fields: z.union([
     z.boolean(),

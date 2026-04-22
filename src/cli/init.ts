@@ -19,7 +19,8 @@ import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
 import { installTweakccPrompts, detectTweakccPrompts } from '../init/tweakcc.js';
 import { formatReport } from '../init/reporter.js';
 import { ensureGlobalDirs, getDbPath, GLOBAL_CONFIG_PATH } from '../global.js';
-import { migrateGlobalConfig } from '../config-jsonc.js';
+import { migrateGlobalConfig, modifyGlobalConfigJsonc, readGlobalConfigText } from '../config-jsonc.js';
+import { parse as parseJsonc } from 'jsonc-parser';
 import type { DetectedMcpClient, InitStepResult, InitReport } from '../init/types.js';
 import { detectMcpClients, detectGuardHook, detectProject } from '../init/detector.js';
 import { detectConflicts } from '../init/conflict-detector.js';
@@ -85,6 +86,7 @@ export const initCommand = new Command('init')
     let installHooks = !opts.skipHooks;
     let claudeMdScope: 'global' | 'skip' = opts.skipClaudeMd ? 'skip' : 'global';
     let installTweakcc = false;
+    let agentBehavior: 'strict' | 'off' = 'off';
     let indexProject = opts.index ?? false;
     let fixConflicts = false;
     let installApp = false;
@@ -148,11 +150,13 @@ export const initCommand = new Command('init')
         claudeMdScope = 'global';
         installHooks = levelResult === 'standard' || levelResult === 'max';
         installTweakcc = levelResult === 'max';
+        agentBehavior = levelResult === 'max' ? 'strict' : 'off';
       } else {
         // Non-CC clients: always install CLAUDE.md, no hooks/tweakcc
         claudeMdScope = opts.skipClaudeMd ? 'skip' : 'global';
         installHooks = false;
         installTweakcc = false;
+        agentBehavior = 'off';
       }
 
       // Q4: Index current project
@@ -224,6 +228,7 @@ export const initCommand = new Command('init')
       // hooks aren't explicitly skipped — mirrors the interactive initialValue.
       const hasClaudeCode = selectedClients.includes('claude-code') || selectedClients.includes('claw-code') || selectedClients.includes('claude-desktop');
       installTweakcc = hasClaudeCode && !opts.skipHooks;
+      agentBehavior = installTweakcc ? 'strict' : 'off';
       // Auto-fix conflicts in non-interactive mode
       fixConflicts = true;
     }
@@ -236,7 +241,7 @@ export const initCommand = new Command('init')
       const spin = p.spinner();
       spin.start('Setting up trace-mcp');
       try {
-        executeSteps(steps, { selectedClients, installHooks, installTweakcc, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
+        executeSteps(steps, { selectedClients, installHooks, installTweakcc, agentBehavior, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
       } catch (err) {
         spin.stop('Failed');
         p.log.error(`Setup failed: ${(err as Error).message}`);
@@ -244,7 +249,7 @@ export const initCommand = new Command('init')
       }
       spin.stop('Done');
     } else {
-      executeSteps(steps, { selectedClients, installHooks, installTweakcc, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
+      executeSteps(steps, { selectedClients, installHooks, installTweakcc, agentBehavior, claudeMdScope, force: opts.force, dryRun: opts.dryRun });
     }
 
     // --- Fix competing tools ---
@@ -439,6 +444,7 @@ function executeSteps(
     selectedClients: DetectedMcpClient['name'][];
     installHooks: boolean;
     installTweakcc: boolean;
+    agentBehavior: 'strict' | 'off';
     claudeMdScope: 'global' | 'skip';
     force?: boolean;
     dryRun?: boolean;
@@ -488,6 +494,45 @@ function executeSteps(
   // 5. tweakcc system prompt rewrites
   if (opts.installTweakcc) {
     steps.push(...installTweakccPrompts({ dryRun: opts.dryRun }));
+  }
+
+  // 6. agent_behavior in global config (strict for Max tier, off otherwise)
+  steps.push(applyAgentBehavior(opts.agentBehavior, { dryRun: opts.dryRun }));
+}
+
+function applyAgentBehavior(
+  target: 'strict' | 'off',
+  opts: { dryRun?: boolean },
+): InitStepResult {
+  if (opts.dryRun) {
+    return {
+      target: GLOBAL_CONFIG_PATH,
+      action: 'skipped',
+      detail: `Would set tools.agent_behavior = "${target}"`,
+    };
+  }
+  try {
+    const parsed = parseJsonc(readGlobalConfigText()) as { tools?: { agent_behavior?: string } } | null;
+    const current = parsed?.tools?.agent_behavior ?? 'off';
+    if (current === target) {
+      return {
+        target: GLOBAL_CONFIG_PATH,
+        action: 'already_configured',
+        detail: `tools.agent_behavior = "${target}"`,
+      };
+    }
+    modifyGlobalConfigJsonc(['tools', 'agent_behavior'], target);
+    return {
+      target: GLOBAL_CONFIG_PATH,
+      action: 'updated',
+      detail: `tools.agent_behavior: "${current}" → "${target}"`,
+    };
+  } catch (err) {
+    return {
+      target: GLOBAL_CONFIG_PATH,
+      action: 'skipped',
+      detail: `Failed to set agent_behavior: ${(err as Error).message}`,
+    };
   }
 }
 
