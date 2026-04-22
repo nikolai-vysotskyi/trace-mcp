@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.29.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.28.0...v1.29.0) (2026-04-22)
+
+
+### Features
+
+* **analysis:** edge bottlenecks + app Quality tab + bottleneck graph overlay ([872d535](https://github.com/nikolai-vysotskyi/trace-mcp/commit/872d5357217910f2403432b36d36052fb7fcf75f))
+* **plugins:** add ioredis, jose, nodemailer, redis-py, gunicorn, uvicorn plugins ([522c43c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/522c43c931f9c455f695098332e037087fc146d9))
+* **plugins:** expand php-ecosystem coverage to 12 more packages ([d87e621](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d87e621868739397ac0aeafba48c2eed9c10aba1))
+* **quality:** add debug-artifact smell, size/complexity antipatterns, AST clone detector ([c05ac2b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c05ac2b5a2ae365320dd590acb24d1be7fa2c1a3))
+* **server:** add tools.agent_behavior config for discipline rules ([8984118](https://github.com/nikolai-vysotskyi/trace-mcp/commit/89841185d684f1320e8bd36ceebcf5911845ac80))
+* **subproject:** cross-service endpoint literal scan + Nuxt/httpx/aiohttp/urllib ([21537e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/21537e0ec2c4819ecddca443935f55a4fb43437e))
+
+
+### Bug Fixes
+
+* **ai:** stamp embedding model+dim and reindex on mismatch ([2f2d923](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2f2d9237a43095f61bae9378c8233a518d71b7fe))
+* **app:** harden pending-update lifecycle ([cd998d3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cd998d362b49c65351ebdcb5416262ea17336bcc))
+* **env-indexer:** strip **/.env* patterns from fast-glob ignore list ([d057ffe](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d057ffe6cb78cd8437a4d2c96a6582f6d93372f6))
+* **hooks:** exempt .env.example/.env.sample templates from guard ([217e9ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/217e9eca95f0c9930a43a3812b1e28e41c968f91))
+
+
+### Documentation
+
+* add Max-tier agent behavior, app gallery, and refreshed comparisons ([10f29b7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/10f29b7041ec9d3c6aed4317b5db3580b2e819f3))
+
 ## [1.28.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.27.0...v1.28.0) (2026-04-21)
 
 
