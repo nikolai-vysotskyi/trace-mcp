@@ -95,7 +95,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'laravel/nightwatch':             { category: 'infra',     priority: 'low',    plugin: 'laravel' },
   // Spatie ecosystem
   'spatie/eloquent-sortable':       { category: 'orm',       priority: 'low',    plugin: 'laravel' },
-  'spatie/laravel-translation-loader': { category: 'framework', priority: 'low', plugin: null },
+  'spatie/laravel-translation-loader': { category: 'framework', priority: 'low', plugin: 'php-ecosystem' },
   'spatie/laravel-sitemap':         { category: 'infra',     priority: 'none',   plugin: null },
   'spatie/laravel-query-builder':   { category: 'orm',       priority: 'medium', plugin: null },
   'spatie/laravel-tags':            { category: 'orm',       priority: 'low',    plugin: null },
@@ -156,7 +156,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'murdercode/nova4-tinymce-editor': { category: 'ui',       priority: 'low',    plugin: 'nova' },
   'maatwebsite/laravel-nova-excel': { category: 'infra',     priority: 'low',    plugin: 'nova' },
   // PHP ORM / DB
-  'doctrine/dbal':                  { category: 'orm',       priority: 'medium', plugin: null },
+  'doctrine/dbal':                  { category: 'orm',       priority: 'medium', plugin: 'php-ecosystem' },
   'doctrine/orm':                   { category: 'orm',       priority: 'high',   plugin: null },
   'doctrine/migrations':            { category: 'orm',       priority: 'medium', plugin: null },
   // PHP Core infra
@@ -181,20 +181,20 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'squizlabs/php_codesniffer':      { category: 'utility',   priority: 'none',   plugin: null },
   'friendsofphp/php-cs-fixer':     { category: 'utility',   priority: 'none',   plugin: null },
   // PHP HTTP / API clients
-  'guzzlehttp/guzzle':             { category: 'infra',     priority: 'medium', plugin: null },
+  'guzzlehttp/guzzle':             { category: 'infra',     priority: 'medium', plugin: 'php-ecosystem' },
   'guzzlehttp/psr7':               { category: 'utility',   priority: 'none',   plugin: null },
   'guzzlehttp/promises':           { category: 'utility',   priority: 'none',   plugin: null },
   'symfony/http-client':            { category: 'infra',     priority: 'medium', plugin: null },
-  'amocrm/amocrm-api-library':     { category: 'infra',     priority: 'low',    plugin: null },
+  'amocrm/amocrm-api-library':     { category: 'infra',     priority: 'low',    plugin: 'php-ecosystem' },
   'dotzero/amocrm':                 { category: 'infra',     priority: 'low',    plugin: null, deprecated: true, successor: 'amocrm/amocrm-api-library' },
   // PHP Search
-  'meilisearch/meilisearch-php':    { category: 'infra',     priority: 'medium', plugin: null },
+  'meilisearch/meilisearch-php':    { category: 'infra',     priority: 'medium', plugin: 'php-ecosystem' },
   'teamtnt/laravel-scout-tntsearch-driver': { category: 'infra', priority: 'low', plugin: 'laravel' },
   'algolia/algoliasearch-client-php': { category: 'infra',   priority: 'medium', plugin: null },
   'elasticsearch/elasticsearch':    { category: 'infra',     priority: 'medium', plugin: null },
   'typesense/typesense-php':        { category: 'infra',     priority: 'low',    plugin: null },
   // PHP Image processing
-  'intervention/image':             { category: 'infra',     priority: 'low',    plugin: null },
+  'intervention/image':             { category: 'infra',     priority: 'low',    plugin: 'php-ecosystem' },
   'intervention/image-laravel':     { category: 'infra',     priority: 'low',    plugin: null },
   'spatie/laravel-image-optimizer': { category: 'infra',     priority: 'none',   plugin: null },
   // PHP HTML / parsing / PDF
@@ -209,13 +209,13 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   // PHP User agent / browser
   'jenssegers/agent':               { category: 'utility',   priority: 'none',   plugin: null },
   // PHP Excel / Spreadsheet
-  'maatwebsite/excel':              { category: 'infra',     priority: 'medium', plugin: null },
+  'maatwebsite/excel':              { category: 'infra',     priority: 'medium', plugin: 'php-ecosystem' },
   'phpoffice/phpspreadsheet':       { category: 'infra',     priority: 'medium', plugin: null },
   'phpoffice/phpword':              { category: 'infra',     priority: 'low',    plugin: null },
   'openspout/openspout':            { category: 'infra',     priority: 'low',    plugin: null },
   // PHP File storage
   'league/flysystem':               { category: 'infra',     priority: 'medium', plugin: null },
-  'league/flysystem-aws-s3-v3':     { category: 'infra',     priority: 'low',    plugin: null },
+  'league/flysystem-aws-s3-v3':     { category: 'infra',     priority: 'low',    plugin: 'php-ecosystem' },
   'league/flysystem-path-prefixing': { category: 'infra',    priority: 'none',   plugin: null },
   'league/flysystem-sftp-v3':       { category: 'infra',     priority: 'none',   plugin: null },
   'league/flysystem-ftp':           { category: 'infra',     priority: 'none',   plugin: null },
@@ -226,7 +226,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'paypal/paypal-checkout-sdk':     { category: 'infra',     priority: 'low',    plugin: null },
   'paypal/paypal-server-sdk':       { category: 'infra',     priority: 'low',    plugin: null },
   'yandex-money/yandex-checkout-sdk-php': { category: 'infra', priority: 'low',  plugin: null, deprecated: true, successor: 'yoomoney/yookassa-sdk-php' },
-  'yoomoney/yookassa-sdk-php':      { category: 'infra',     priority: 'low',    plugin: null },
+  'yoomoney/yookassa-sdk-php':      { category: 'infra',     priority: 'low',    plugin: 'php-ecosystem' },
   'stripe/stripe-php':              { category: 'infra',     priority: 'medium', plugin: null },
   'mollie/mollie-api-php':          { category: 'infra',     priority: 'low',    plugin: null },
   'braintree/braintree_php':        { category: 'infra',     priority: 'low',    plugin: null },
@@ -239,8 +239,8 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'socialiteproviders/manager':     { category: 'framework', priority: 'low',    plugin: null },
   'tymon/jwt-auth':                 { category: 'framework', priority: 'medium', plugin: null },
   // PHP Google / Cloud
-  'google/analytics-data':          { category: 'infra',     priority: 'low',    plugin: null },
-  'google/auth':                    { category: 'infra',     priority: 'low',    plugin: null },
+  'google/analytics-data':          { category: 'infra',     priority: 'low',    plugin: 'php-ecosystem' },
+  'google/auth':                    { category: 'infra',     priority: 'low',    plugin: 'php-ecosystem' },
   'google/cloud':                   { category: 'infra',     priority: 'medium', plugin: null },
   'google/cloud-storage':           { category: 'infra',     priority: 'low',    plugin: null },
   'google/apiclient':               { category: 'infra',     priority: 'medium', plugin: 'php-ecosystem' },
@@ -313,11 +313,11 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'webpatser/laravel-uuid':         { category: 'utility',   priority: 'none',   plugin: null, deprecated: true, successor: 'ramsey/uuid' },
   'dniccum/phone-number':           { category: 'utility',   priority: 'none',   plugin: null },
   'propaganistas/laravel-phone':    { category: 'utility',   priority: 'low',    plugin: null },
-  'reinink/advanced-eloquent':      { category: 'orm',       priority: 'low',    plugin: null },
+  'reinink/advanced-eloquent':      { category: 'orm',       priority: 'low',    plugin: 'php-ecosystem' },
   'rumenx/php-sitemap':             { category: 'utility',   priority: 'none',   plugin: null },
   'laravelium/sitemap':             { category: 'infra',     priority: 'none',   plugin: null },
   'rpj/daterangepicker':            { category: 'ui',        priority: 'none',   plugin: null },
-  'titasgailius/search-relations':  { category: 'orm',       priority: 'low',    plugin: null },
+  'titasgailius/search-relations':  { category: 'orm',       priority: 'low',    plugin: 'php-ecosystem' },
   'cviebrock/eloquent-sluggable':   { category: 'orm',       priority: 'low',    plugin: null },
   'owen-it/laravel-auditing':       { category: 'infra',     priority: 'low',    plugin: null },
   'spatie/laravel-translatable':    { category: 'framework', priority: 'low',    plugin: null },
@@ -909,8 +909,8 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'bullmq':                         { category: 'infra',     priority: 'medium', plugin: null },
 
   // --- JavaScript / npm: jQuery ecosystem ---
-  'jquery':                         { category: 'ui',        priority: 'low',    plugin: null },
-  'jquery-ui':                      { category: 'ui',        priority: 'low',    plugin: null },
+  'jquery':                         { category: 'ui',        priority: 'none',   plugin: null },
+  'jquery-ui':                      { category: 'ui',        priority: 'none',   plugin: null },
   'jquery-bridget':                 { category: 'ui',        priority: 'none',   plugin: null },
   'jquery-mask-plugin':             { category: 'ui',        priority: 'none',   plugin: null },
   'jquery-touch-events':            { category: 'ui',        priority: 'none',   plugin: null },
@@ -923,7 +923,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
 
   // --- JavaScript / npm: CSS / UI frameworks ---
   'bootstrap':                      { category: 'ui',        priority: 'low',    plugin: null },
-  'bootstrap-sass':                 { category: 'ui',        priority: 'low',    plugin: null },
+  'bootstrap-sass':                 { category: 'ui',        priority: 'none',   plugin: null },
   'bootstrap-vue':                  { category: 'ui',        priority: 'low',    plugin: null },
   'font-awesome':                   { category: 'ui',        priority: 'none',   plugin: null },
   '@fortawesome/fontawesome-free':  { category: 'ui',        priority: 'none',   plugin: null },
@@ -931,25 +931,25 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
 
   // --- JavaScript / npm: Image / Gallery / Lightbox ---
   'glightbox':                      { category: 'ui',        priority: 'low',    plugin: null },
-  'cropperjs':                      { category: 'ui',        priority: 'low',    plugin: null },
+  'cropperjs':                      { category: 'ui',        priority: 'none',   plugin: null },
   '@fancyapps/ui':                  { category: 'ui',        priority: 'low',    plugin: null },
-  '@fancyapps/fancybox':            { category: 'ui',        priority: 'low',    plugin: null, deprecated: true, successor: '@fancyapps/ui' },
-  'masonry-layout':                 { category: 'ui',        priority: 'low',    plugin: null },
+  '@fancyapps/fancybox':            { category: 'ui',        priority: 'none',   plugin: null, deprecated: true, successor: '@fancyapps/ui' },
+  'masonry-layout':                 { category: 'ui',        priority: 'none',   plugin: null },
   'justifiedGallery':               { category: 'ui',        priority: 'none',   plugin: null },
 
   // --- JavaScript / npm: Carousel / Slider ---
-  'owl.carousel':                   { category: 'ui',        priority: 'low',    plugin: null },
+  'owl.carousel':                   { category: 'ui',        priority: 'none',   plugin: null },
   'owl.carousel2':                  { category: 'ui',        priority: 'low',    plugin: null },
-  'slick':                          { category: 'ui',        priority: 'low',    plugin: null },
-  'slick-carousel':                 { category: 'ui',        priority: 'low',    plugin: null },
+  'slick':                          { category: 'ui',        priority: 'none',   plugin: null },
+  'slick-carousel':                 { category: 'ui',        priority: 'none',   plugin: null },
   'swiper':                         { category: 'ui',        priority: 'low',    plugin: null },
   'bxslider':                       { category: 'ui',        priority: 'none',   plugin: null },
   'flexslider':                     { category: 'ui',        priority: 'none',   plugin: null },
 
   // --- JavaScript / npm: Lazy loading ---
   'lazysizes':                      { category: 'ui',        priority: 'low',    plugin: null },
-  'lazyload':                       { category: 'ui',        priority: 'low',    plugin: null },
-  'vanilla-lazyload':               { category: 'ui',        priority: 'low',    plugin: null },
+  'lazyload':                       { category: 'ui',        priority: 'none',   plugin: null },
+  'vanilla-lazyload':               { category: 'ui',        priority: 'none',   plugin: null },
 
   // --- JavaScript / npm: Animation / Scroll ---
   'animejs':                        { category: 'ui',        priority: 'low',    plugin: null },
@@ -960,8 +960,8 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'hammerjs':                       { category: 'ui',        priority: 'low',    plugin: null },
 
   // --- JavaScript / npm: Form / Input ---
-  'imask':                          { category: 'ui',        priority: 'low',    plugin: null },
-  'inputmask':                      { category: 'ui',        priority: 'low',    plugin: null },
+  'imask':                          { category: 'ui',        priority: 'none',   plugin: null },
+  'inputmask':                      { category: 'ui',        priority: 'none',   plugin: null },
   'maska':                          { category: 'ui',        priority: 'low',    plugin: null },
 
   // --- JavaScript / npm: Toast / Notification ---
