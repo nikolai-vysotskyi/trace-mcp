@@ -3,6 +3,7 @@
  * - TODO / FIXME / HACK / XXX comments
  * - Empty functions / stub implementations
  * - Hardcoded values (magic numbers, IPs, URLs, credentials, feature flags)
+ * - Debug artifacts (console.log, debugger, var_dump, binding.pry, dbg!, ...)
  *
  * Scans indexed files in batches using regex + symbol metadata.
  * Follows the same pattern as security-scan.ts.
@@ -21,12 +22,14 @@ import { validationError } from '../../errors.js';
 export type SmellCategory =
   | 'todo_comment'
   | 'empty_function'
-  | 'hardcoded_value';
+  | 'hardcoded_value'
+  | 'debug_artifact';
 
 const ALL_CATEGORIES: SmellCategory[] = [
   'todo_comment',
   'empty_function',
   'hardcoded_value',
+  'debug_artifact',
 ];
 
 export type SmellPriority = 'high' | 'medium' | 'low';
@@ -372,6 +375,266 @@ function detectHardcodedValues(
 }
 
 // ---------------------------------------------------------------------------
+// Debug artifact detection
+// ---------------------------------------------------------------------------
+
+interface DebugPattern {
+  name: string;
+  languages: Set<string> | null; // null = all languages
+  regex: RegExp;
+  priority: SmellPriority;
+  description: string;
+  falsePositives: RegExp[];
+}
+
+const JS_LANGS = new Set(['typescript', 'javascript', 'tsx', 'jsx']);
+const PY_LANGS = new Set(['python']);
+const PHP_LANGS = new Set(['php']);
+const RUBY_LANGS = new Set(['ruby']);
+const JAVA_LANGS = new Set(['java', 'kotlin', 'scala']);
+const CS_LANGS = new Set(['csharp']);
+const RUST_LANGS = new Set(['rust']);
+const GO_LANGS = new Set(['go']);
+
+const COMMON_FP: RegExp[] = [
+  /(?:\/\/|#|--|\/\*|\*)\s*(?:eslint-disable|tslint-disable|noqa|phpcs:ignore|rubocop:disable)/i,
+];
+
+const DEBUG_PATTERNS: DebugPattern[] = [
+  // JavaScript / TypeScript
+  {
+    name: 'console_log',
+    languages: JS_LANGS,
+    regex: /\bconsole\.(?:log|debug|trace|dir|table|group|groupEnd|time|timeEnd|count)\s*\(/g,
+    priority: 'medium',
+    description: 'Debug console statement — remove before production',
+    falsePositives: [
+      ...COMMON_FP,
+      /(?:logger|log)\.(?:log|debug|trace)/, // real loggers
+    ],
+  },
+  {
+    name: 'debugger_statement',
+    languages: JS_LANGS,
+    regex: /^[^'"`]*?\bdebugger\b\s*;?\s*(?:\/\/.*)?$/,
+    priority: 'high',
+    description: 'debugger statement left in code',
+    falsePositives: [...COMMON_FP, /(?:\/\/|\*)\s*debugger/i],
+  },
+  {
+    name: 'alert_statement',
+    languages: JS_LANGS,
+    regex: /(?<![.\w])alert\s*\(/g,
+    priority: 'low',
+    description: 'alert() call — likely a debug leftover',
+    falsePositives: [...COMMON_FP, /window\.alert|\.on\(['"`]alert/i],
+  },
+
+  // Python
+  {
+    name: 'pdb_set_trace',
+    languages: PY_LANGS,
+    regex: /\b(?:pdb|ipdb|pudb|web_pdb|remote_pdb)\.set_trace\s*\(/g,
+    priority: 'high',
+    description: 'pdb.set_trace() breakpoint left in code',
+    falsePositives: COMMON_FP,
+  },
+  {
+    name: 'breakpoint_call',
+    languages: PY_LANGS,
+    regex: /(?<![.\w])breakpoint\s*\(\s*\)/g,
+    priority: 'high',
+    description: 'breakpoint() left in code',
+    falsePositives: COMMON_FP,
+  },
+  {
+    name: 'import_pdb',
+    languages: PY_LANGS,
+    regex: /^\s*import\s+(?:pdb|ipdb|pudb)\b/,
+    priority: 'medium',
+    description: 'Debugger import — remove if no longer needed',
+    falsePositives: COMMON_FP,
+  },
+
+  // PHP
+  {
+    name: 'php_var_dump',
+    languages: PHP_LANGS,
+    regex: /(?<![\w>:])\b(?:var_dump|print_r|var_export)\s*\(/g,
+    priority: 'high',
+    description: 'PHP debug dump — remove before production',
+    falsePositives: COMMON_FP,
+  },
+  {
+    name: 'laravel_dd_dump',
+    languages: PHP_LANGS,
+    regex: /(?<![\w>:])\b(?:dd|dump|ddd)\s*\(/g,
+    priority: 'high',
+    description: 'Laravel dd()/dump() — remove before production',
+    falsePositives: [
+      ...COMMON_FP,
+      /(?:function|method|class)\s+(?:dd|dump)\s*\(/i,
+    ],
+  },
+  {
+    name: 'php_die_exit',
+    languages: PHP_LANGS,
+    regex: /(?<![\w>:])\b(?:die|exit)\s*\(\s*(?:['"`]|\d)/g,
+    priority: 'medium',
+    description: 'die()/exit() with debug argument — review usage',
+    falsePositives: [...COMMON_FP, /exit\s*\(\s*0\s*\)/],
+  },
+  {
+    name: 'php_xdebug_break',
+    languages: PHP_LANGS,
+    regex: /\bxdebug_break\s*\(/g,
+    priority: 'high',
+    description: 'xdebug_break() breakpoint left in code',
+    falsePositives: COMMON_FP,
+  },
+
+  // Ruby
+  {
+    name: 'ruby_pry_irb',
+    languages: RUBY_LANGS,
+    regex: /\bbinding\.(?:pry|irb|remote_pry|break)\b/g,
+    priority: 'high',
+    description: 'binding.pry/irb breakpoint left in code',
+    falsePositives: COMMON_FP,
+  },
+  {
+    name: 'ruby_byebug',
+    languages: RUBY_LANGS,
+    regex: /^\s*(?:byebug|debugger)\s*$/,
+    priority: 'high',
+    description: 'byebug/debugger left in code',
+    falsePositives: COMMON_FP,
+  },
+  {
+    name: 'ruby_pp',
+    languages: RUBY_LANGS,
+    regex: /^\s*pp\s+[^=]/,
+    priority: 'low',
+    description: 'pp (pretty-print) — likely a debug leftover',
+    falsePositives: COMMON_FP,
+  },
+
+  // Java / Kotlin / Scala
+  {
+    name: 'java_print_stacktrace',
+    languages: JAVA_LANGS,
+    regex: /\.printStackTrace\s*\(\s*\)/g,
+    priority: 'medium',
+    description: 'printStackTrace() — use a proper logger instead',
+    falsePositives: COMMON_FP,
+  },
+  {
+    name: 'java_system_out',
+    languages: JAVA_LANGS,
+    regex: /\bSystem\.(?:out|err)\.(?:println|print|printf)\s*\(/g,
+    priority: 'low',
+    description: 'System.out/err println — use a logger in production code',
+    falsePositives: [
+      ...COMMON_FP,
+      /public\s+static\s+void\s+main\s*\(/, // main method can legitimately use stdout
+    ],
+  },
+
+  // C#
+  {
+    name: 'cs_console_write',
+    languages: CS_LANGS,
+    regex: /\bConsole\.(?:Write|WriteLine)\s*\(/g,
+    priority: 'low',
+    description: 'Console.Write — use a logger in production code',
+    falsePositives: [...COMMON_FP, /static\s+void\s+Main\s*\(/],
+  },
+  {
+    name: 'cs_debug_write',
+    languages: CS_LANGS,
+    regex: /\bDebug\.(?:Write|WriteLine|Print)\s*\(/g,
+    priority: 'medium',
+    description: 'Debug.Write left in code',
+    falsePositives: COMMON_FP,
+  },
+
+  // Rust
+  {
+    name: 'rust_dbg',
+    languages: RUST_LANGS,
+    regex: /\bdbg!\s*\(/g,
+    priority: 'high',
+    description: 'dbg!() macro — remove before production',
+    falsePositives: COMMON_FP,
+  },
+  {
+    name: 'rust_todo_unimpl',
+    languages: RUST_LANGS,
+    regex: /\b(?:todo|unimplemented)!\s*\(/g,
+    priority: 'medium',
+    description: 'todo!() / unimplemented!() macro — placeholder implementation',
+    falsePositives: COMMON_FP,
+  },
+
+  // Go (conservative — fmt.Println is often legitimate)
+  {
+    name: 'go_println_debug',
+    languages: GO_LANGS,
+    regex: /\bfmt\.Println\s*\(\s*['"`](?:DEBUG|TRACE|TODO|HERE|XXX|TEST|\d+|[^'"`\n]*=)/gi,
+    priority: 'medium',
+    description: 'fmt.Println with debug-like label — remove before production',
+    falsePositives: COMMON_FP,
+  },
+];
+
+function detectDebugArtifacts(
+  lines: string[],
+  filePath: string,
+  language: string,
+): CodeSmellFinding[] {
+  const findings: CodeSmellFinding[] = [];
+  const lang = (language || '').toLowerCase();
+
+  const applicable = DEBUG_PATTERNS.filter((p) => !p.languages || p.languages.has(lang));
+  if (applicable.length === 0) return findings;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Skip pure comment lines quickly — debug artifacts in comments aren't real
+    if (/^\s*(?:\/\/|#|--|\*|\/\*)/.test(line)) continue;
+
+    for (const pattern of applicable) {
+      const re = new RegExp(pattern.regex.source, pattern.regex.flags);
+      re.lastIndex = 0;
+      const m = re.exec(line);
+      if (!m) continue;
+
+      let isFP = false;
+      for (const fp of pattern.falsePositives) {
+        if (fp.test(line) || fp.test(filePath)) {
+          isFP = true;
+          break;
+        }
+      }
+      if (isFP) continue;
+
+      findings.push({
+        category: 'debug_artifact',
+        priority: pattern.priority,
+        tag: pattern.name,
+        file: filePath,
+        line: i + 1,
+        snippet: line.trim().slice(0, 200),
+        description: pattern.description,
+      });
+      break; // one finding per line is enough
+    }
+  }
+
+  return findings;
+}
+
+// ---------------------------------------------------------------------------
 // Priority helpers
 // ---------------------------------------------------------------------------
 
@@ -466,6 +729,16 @@ export function scanCodeSmells(
           allFindings.push(f);
         }
       }
+
+      // 4. Debug artifacts
+      if (categories.has('debug_artifact')) {
+        const artifacts = detectDebugArtifacts(lines, file.path, file.language ?? '');
+        for (const f of artifacts) {
+          if (priorityRank(f.priority) > thresholdRank) continue;
+          if (tagFilter && f.tag && !tagFilter.has(f.tag.toUpperCase())) continue;
+          allFindings.push(f);
+        }
+      }
     }
   }
 
@@ -480,6 +753,7 @@ export function scanCodeSmells(
     todo_comment: 0,
     empty_function: 0,
     hardcoded_value: 0,
+    debug_artifact: 0,
   };
   for (const f of allFindings) {
     summary[f.category]++;
