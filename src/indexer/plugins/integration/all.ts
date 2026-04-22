@@ -74,6 +74,12 @@ import { GithubActionsPlugin } from './tooling/github-actions/index.js';
 import { PinoPlugin } from './tooling/pino/index.js';
 import { CosmiconfigPlugin } from './tooling/cosmiconfig/index.js';
 import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
+import { IoredisPlugin } from './tooling/ioredis/index.js';
+import { JosePlugin } from './tooling/jose/index.js';
+import { NodemailerPlugin } from './tooling/nodemailer/index.js';
+import { UvicornPlugin } from './tooling/uvicorn/index.js';
+import { GunicornPlugin } from './tooling/gunicorn/index.js';
+import { RedisPyPlugin } from './tooling/redis-py/index.js';
 import { ClackPlugin } from './tooling/clack/index.js';
 import { ElectronPlugin } from './tooling/electron/index.js';
 import { PhpEcosystemPlugin } from './tooling/php-ecosystem/index.js';
@@ -155,6 +161,12 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new PinoPlugin(),
     new CosmiconfigPlugin(),
     new NeverthrowPlugin(),
+    new IoredisPlugin(),
+    new JosePlugin(),
+    new NodemailerPlugin(),
+    new UvicornPlugin(),
+    new GunicornPlugin(),
+    new RedisPyPlugin(),
     new ClackPlugin(),
     new ElectronPlugin(),
     new PhpEcosystemPlugin(),

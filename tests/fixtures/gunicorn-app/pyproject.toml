@@ -1,0 +1,7 @@
+[project]
+name = "gunicorn-fixture"
+version = "0.0.0"
+dependencies = [
+    "gunicorn>=22.0.0",
+    "flask>=3.0.0",
+]

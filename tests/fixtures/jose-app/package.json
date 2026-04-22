@@ -1,0 +1,7 @@
+{
+  "name": "jose-fixture",
+  "dependencies": {
+    "jose": "^5.9.6",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

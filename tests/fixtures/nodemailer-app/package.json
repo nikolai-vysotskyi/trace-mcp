@@ -1,0 +1,8 @@
+{
+  "name": "nodemailer-fixture",
+  "dependencies": {
+    "nodemailer": "^6.9.16",
+    "resend": "^4.0.0",
+    "@sendgrid/mail": "^8.1.0"
+  }
+}
