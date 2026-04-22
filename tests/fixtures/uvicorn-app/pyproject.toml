@@ -1,0 +1,7 @@
+[project]
+name = "uvicorn-fixture"
+version = "0.0.0"
+dependencies = [
+    "uvicorn>=0.30.0",
+    "fastapi>=0.115.0",
+]

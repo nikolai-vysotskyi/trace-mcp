@@ -1,0 +1,6 @@
+[project]
+name = "redis-py-fixture"
+version = "0.0.0"
+dependencies = [
+    "redis>=5.0.0",
+]

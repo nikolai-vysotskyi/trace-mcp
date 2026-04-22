@@ -1,0 +1,7 @@
+{
+  "name": "ioredis-fixture",
+  "dependencies": {
+    "ioredis": "^5.4.2",
+    "bullmq": "^5.0.0"
+  }
+}
