@@ -34,12 +34,15 @@ if /i not "%TOOL_NAME%"=="Read" goto :check_grep
 
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.file_path"`) do set "FILE_PATH=%%i"
 
-REM Block .env files
-echo "%FILE_PATH%" | findstr /i /r "\.env" >nul 2>&1
-if %errorlevel%==0 (
-    set "REL_PATH=%FILE_PATH%"
-    call :deny "Use get_env_vars for .env files - it masks sensitive values (passwords, API keys, tokens)." "trace-mcp alternatives: get_env_vars to list keys + types without exposing secrets."
-    goto :cleanup
+REM Block .env files (example/template variants are exempt - placeholders only)
+call :is_env_example "%FILE_PATH%"
+if "%ENV_EXAMPLE%"=="0" (
+    echo "%FILE_PATH%" | findstr /i /r "\.env" >nul 2>&1
+    if !errorlevel!==0 (
+        set "REL_PATH=%FILE_PATH%"
+        call :deny "Use get_env_vars for .env files - it masks sensitive values (passwords, API keys, tokens)." "trace-mcp alternatives: get_env_vars to list keys + types without exposing secrets. Template files like .env.example/.env.sample are allowed."
+        goto :cleanup
+    )
 )
 
 REM Allow non-code files
@@ -117,16 +120,23 @@ for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content 
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.glob"`) do set "GREP_GLOB=%%i"
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.type"`) do set "GREP_TYPE=%%i"
 
-REM Block grep on .env files
-echo "%GREP_GLOB%" | findstr /i /r "\.env" >nul 2>&1
-if %errorlevel%==0 (
-    call :deny "Use get_env_vars for .env files - it masks sensitive values." "trace-mcp alternatives: get_env_vars with pattern filter."
-    goto :cleanup
+REM Block grep on .env files (example/template variants are exempt)
+call :is_env_example "%GREP_GLOB%"
+set "GLOB_IS_EXAMPLE=%ENV_EXAMPLE%"
+if "%GLOB_IS_EXAMPLE%"=="0" (
+    echo "%GREP_GLOB%" | findstr /i /r "\.env" >nul 2>&1
+    if !errorlevel!==0 (
+        call :deny "Use get_env_vars for .env files - it masks sensitive values." "trace-mcp alternatives: get_env_vars with pattern filter. Template files like .env.example/.env.sample are allowed."
+        goto :cleanup
+    )
 )
-echo "%GREP_PATH%" | findstr /i /r "\.env" >nul 2>&1
-if %errorlevel%==0 (
-    call :deny "Use get_env_vars for .env files - it masks sensitive values." "trace-mcp alternatives: get_env_vars with pattern filter."
-    goto :cleanup
+call :is_env_example "%GREP_PATH%"
+if "%ENV_EXAMPLE%"=="0" (
+    echo "%GREP_PATH%" | findstr /i /r "\.env" >nul 2>&1
+    if !errorlevel!==0 (
+        call :deny "Use get_env_vars for .env files - it masks sensitive values." "trace-mcp alternatives: get_env_vars with pattern filter. Template files like .env.example/.env.sample are allowed."
+        goto :cleanup
+    )
 )
 
 REM Allow grep on non-code file types
@@ -156,11 +166,14 @@ if /i not "%TOOL_NAME%"=="Glob" goto :check_bash
 
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.pattern"`) do set "GLOB_PATTERN=%%i"
 
-REM Block glob on .env patterns
-echo "%GLOB_PATTERN%" | findstr /i /r "\.env" >nul 2>&1
-if %errorlevel%==0 (
-    call :deny "Use get_env_vars for .env files - it masks sensitive values." "trace-mcp alternatives: get_env_vars to list all env vars across all .env files."
-    goto :cleanup
+REM Block glob on .env patterns (example/template variants are exempt)
+call :is_env_example "%GLOB_PATTERN%"
+if "%ENV_EXAMPLE%"=="0" (
+    echo "%GLOB_PATTERN%" | findstr /i /r "\.env" >nul 2>&1
+    if !errorlevel!==0 (
+        call :deny "Use get_env_vars for .env files - it masks sensitive values." "trace-mcp alternatives: get_env_vars to list all env vars across all .env files. Template files like .env.example/.env.sample are allowed."
+        goto :cleanup
+    )
 )
 
 REM Allow glob for non-code patterns
@@ -206,11 +219,15 @@ REM Allow safe commands
 echo "%COMMAND%" | findstr /i /r /c:"^git " /c:"^npm " /c:"^npx " /c:"^pnpm " /c:"^yarn " /c:"^bun " /c:"^node " /c:"^deno " /c:"^cargo " /c:"^go " /c:"^make " /c:"^mvn " /c:"^gradle " /c:"^docker " /c:"^kubectl " /c:"^helm " /c:"^terraform " /c:"^pip " /c:"^poetry " /c:"^uv " /c:"^pytest " /c:"^vitest " /c:"^jest " /c:"^phpunit " /c:"^composer " /c:"^artisan " /c:"^rails " /c:"^bundle " /c:"^mix " /c:"^dotnet " /c:"^cmake " >nul 2>&1
 if %errorlevel%==0 goto :allow
 
-REM Block bash commands targeting .env files - prevent secret leakage
-echo "%COMMAND%" | findstr /i /r "\.env" >nul 2>&1
-if %errorlevel%==0 (
-    call :deny "Use get_env_vars for .env files - it masks sensitive values (passwords, API keys, tokens)." "trace-mcp alternatives: get_env_vars to list keys + types without exposing secrets. Never access .env files via shell."
-    goto :cleanup
+REM Block bash commands targeting .env files - prevent secret leakage.
+REM Example/template variants are exempt (placeholders only).
+call :is_env_example "%COMMAND%"
+if "%ENV_EXAMPLE%"=="0" (
+    echo "%COMMAND%" | findstr /i /r "\.env" >nul 2>&1
+    if !errorlevel!==0 (
+        call :deny "Use get_env_vars for .env files - it masks sensitive values (passwords, API keys, tokens)." "trace-mcp alternatives: get_env_vars to list keys + types without exposing secrets. Never access .env files via shell. Template files like .env.example/.env.sample are allowed."
+        goto :cleanup
+    )
 )
 
 REM Block code exploration via bash
@@ -230,6 +247,15 @@ if "%HAS_EXPLORE%"=="1" if "%HAS_CODE%"=="1" (
 goto :allow
 
 REM --- Helpers ---
+
+:is_env_example
+REM Sets ENV_EXAMPLE=1 if %1 contains a template-style env filename
+REM (.env.example, .env.sample, .env.template, .env.dist, .env.defaults, .env.docs).
+REM These are committed to git with placeholders and must not be blocked.
+set "ENV_EXAMPLE=0"
+echo %~1| findstr /i /c:".env.example" /c:".env.examples" /c:".env.sample" /c:".env.samples" /c:".env.template" /c:".env.templates" /c:".env.dist" /c:".env.defaults" /c:".env.default" /c:".env.docs" /c:".env.doc" >nul 2>&1
+if not errorlevel 1 set "ENV_EXAMPLE=1"
+goto :eof
 
 :deny
 set "REASON=%~1"

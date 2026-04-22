@@ -29,6 +29,18 @@ NONCODE_EXT_RE='\.(md|json|jsonc|yaml|yml|toml|ini|cfg|txt|html|xml|csv|svg|lock
 # .env files — always route through trace-mcp to prevent secret leakage
 ENV_FILE_RE='\.env(\.[a-zA-Z0-9._-]+)?$'
 
+# Example/template env files — committed to git, contain placeholders (no real secrets).
+# Exempt from the env-file block: these are documentation, safe to read/edit directly.
+ENV_EXAMPLE_RE='\.env\.(example|examples|sample|samples|template|templates|dist|defaults?|docs?)$'
+
+# Returns 0 (true) if the given path is a sensitive env file that should be blocked.
+is_sensitive_env_file() {
+  local p="$1"
+  echo "$p" | grep -qiE "$ENV_FILE_RE" || return 1
+  echo "$p" | grep -qiE "$ENV_EXAMPLE_RE" && return 1
+  return 0
+}
+
 # Safe bash command prefixes — never block
 SAFE_BASH_RE='^(git |npm |npx |pnpm |yarn |bun |node |deno |cargo |go |make |mvn |gradle |docker |kubectl |helm |terraform |pip |poetry |uv |pytest |vitest |jest |phpunit |composer |artisan |rails |bundle |mix |dotnet |cmake |ninja |meson )'
 
@@ -88,12 +100,13 @@ file_mtime() {
 if [[ "$TOOL_NAME" == "Read" ]]; then
   FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
-  # Block .env files — prevent secret leakage to AI model context
-  if echo "$FILE_PATH" | grep -qiE "$ENV_FILE_RE"; then
+  # Block .env files — prevent secret leakage to AI model context.
+  # Example/template variants (.env.example, .env.sample, ...) are exempt — placeholders only.
+  if is_sensitive_env_file "$FILE_PATH"; then
     REL_PATH=$(echo "$FILE_PATH" | sed "s|^$(pwd)/||")
     deny \
       "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
-      "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context."
+      "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
   fi
 
   # Allow non-code files
@@ -173,11 +186,19 @@ if [[ "$TOOL_NAME" == "Grep" ]]; then
   GREP_GLOB=$(echo "$INPUT" | jq -r '.tool_input.glob // empty')
   GREP_TYPE=$(echo "$INPUT" | jq -r '.tool_input.type // empty')
 
-  # Block grep on .env files — prevent secret leakage
-  if echo "$GREP_GLOB" | grep -qiE '\.env' || echo "$GREP_PATH" | grep -qiE "$ENV_FILE_RE"; then
+  # Block grep on .env files — prevent secret leakage.
+  # Example/template variants are exempt (placeholders only).
+  GREP_BLOCK_ENV=0
+  if echo "$GREP_GLOB" | grep -qiE '\.env' && ! echo "$GREP_GLOB" | grep -qiE "$ENV_EXAMPLE_RE"; then
+    GREP_BLOCK_ENV=1
+  fi
+  if is_sensitive_env_file "$GREP_PATH"; then
+    GREP_BLOCK_ENV=1
+  fi
+  if (( GREP_BLOCK_ENV == 1 )); then
     deny \
       "Use get_env_vars for .env files — it masks sensitive values." \
-      "trace-mcp alternatives:\\n- get_env_vars { \\\"pattern\\\": \\\"search_term\\\" } — find env vars by key pattern without exposing values"
+      "trace-mcp alternatives:\\n- get_env_vars { \\\"pattern\\\": \\\"search_term\\\" } — find env vars by key pattern without exposing values\\n(Template files like .env.example/.env.sample are allowed — grep those directly.)"
   fi
 
   # Allow grep on non-code file types
@@ -206,11 +227,11 @@ fi
 if [[ "$TOOL_NAME" == "Glob" ]]; then
   GLOB_PATTERN=$(echo "$INPUT" | jq -r '.tool_input.pattern // empty')
 
-  # Block glob on .env patterns
-  if echo "$GLOB_PATTERN" | grep -qiE '\.env'; then
+  # Block glob on .env patterns. Example/template variants are exempt.
+  if echo "$GLOB_PATTERN" | grep -qiE '\.env' && ! echo "$GLOB_PATTERN" | grep -qiE "$ENV_EXAMPLE_RE"; then
     deny \
       "Use get_env_vars for .env files — it masks sensitive values." \
-      "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files"
+      "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files\\n(Template files like .env.example/.env.sample are allowed — glob those directly.)"
   fi
 
   # Allow glob for non-code patterns
@@ -233,11 +254,12 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
     exit 0
   fi
 
-  # Block bash commands targeting .env files — prevent secret leakage
-  if echo "$COMMAND" | grep -qiE "$ENV_FILE_RE"; then
+  # Block bash commands targeting .env files — prevent secret leakage.
+  # Example/template variants are exempt (placeholders only).
+  if echo "$COMMAND" | grep -qiE "$ENV_FILE_RE" && ! echo "$COMMAND" | grep -qiE "$ENV_EXAMPLE_RE"; then
     deny \
       "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
-      "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever access .env files via shell — secrets will leak into AI model context."
+      "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever access .env files via shell — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
   fi
 
   # Block code exploration via bash (grep, find, cat, head, tail on code files)
