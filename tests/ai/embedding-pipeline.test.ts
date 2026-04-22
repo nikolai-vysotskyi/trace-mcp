@@ -6,7 +6,7 @@ import type { Store } from '../../src/db/store.js';
 import type { EmbeddingService } from '../../src/ai/interfaces.js';
 import type Database from 'better-sqlite3';
 
-function createMockEmbedding(dims = 3): EmbeddingService {
+function createMockEmbedding(dims = 3, model = 'mock-model'): EmbeddingService {
   return {
     async embed(_text: string) {
       return Array.from({ length: dims }, () => Math.random());
@@ -16,6 +16,9 @@ function createMockEmbedding(dims = 3): EmbeddingService {
     },
     dimensions() {
       return dims;
+    },
+    modelName() {
+      return model;
     },
   };
 }
@@ -90,6 +93,7 @@ describe('EmbeddingPipeline', () => {
       async embed() { throw new Error('network error'); },
       async embedBatch() { throw new Error('network error'); },
       dimensions() { return 3; },
+      modelName() { return 'mock-failing'; },
     };
 
     const pipeline = new EmbeddingPipeline(store, failingService, vectorStore);

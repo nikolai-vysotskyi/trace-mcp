@@ -76,6 +76,7 @@ describe('hybridSearch', () => {
       async embed(_text: string) { return [1, 0, 0]; },
       async embedBatch(texts: string[]) { return texts.map(() => [1, 0, 0]); },
       dimensions() { return 3; },
+    modelName() { return 'mock-model'; },
     };
 
     const results = await hybridSearch(db, 'User', vectorStore, mockEmbedding, 20);

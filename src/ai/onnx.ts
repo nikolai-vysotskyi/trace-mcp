@@ -63,6 +63,10 @@ class OnnxEmbeddingService implements EmbeddingService {
   dimensions(): number {
     return this.dims;
   }
+
+  modelName(): string {
+    return this.model;
+  }
 }
 
 /**

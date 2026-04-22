@@ -116,6 +116,7 @@ export class ProjectManager {
             concurrency: config.ai.concurrency ?? 1,
           },
           progress,
+          vectorStore,
         )
       : null;
 

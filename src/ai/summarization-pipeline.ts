@@ -3,7 +3,7 @@
  * Runs after indexing to populate the symbols.summary column using the fast inference model.
  * Uses CachedInferenceService to avoid redundant LLM calls across re-indexes.
  */
-import type { InferenceService } from './interfaces.js';
+import type { InferenceService, VectorStore } from './interfaces.js';
 import type { Store } from '../db/store.js';
 import type { ProgressState } from '../progress.js';
 import { PROMPTS } from './prompts.js';
@@ -27,6 +27,9 @@ export class SummarizationPipeline {
     private rootPath: string,
     private config: SummarizationConfig,
     private progress?: ProgressState,
+    /** When provided, stale embeddings are invalidated on summary rewrite so
+     *  the next EmbeddingPipeline run picks them up. */
+    private vectorStore?: VectorStore | null,
   ) {}
 
   async summarizeUnsummarized(): Promise<number> {
@@ -48,6 +51,9 @@ export class SummarizationPipeline {
         const results = await this.summarizeBatch(batch);
         for (const { id, summary } of results) {
           this.store.updateSymbolSummary(id, summary);
+          // Summary feeds buildEmbeddingText — drop any stale vector so the
+          // next indexUnembedded cycle re-embeds this symbol.
+          this.vectorStore?.delete(id);
           totalSummarized++;
         }
 

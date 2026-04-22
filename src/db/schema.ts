@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 20;
+const SCHEMA_VERSION = 21;
 
 const DDL = `
 -- ============================================================
@@ -231,6 +231,14 @@ END;
 CREATE TABLE IF NOT EXISTS symbol_embeddings (
     symbol_id INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
     embedding BLOB NOT NULL
+);
+
+-- Tracks which embedding model + dimensionality produced the vectors in
+-- symbol_embeddings. EmbeddingPipeline checks this on every run; a mismatch
+-- with the current AI config triggers reindexAll so we never mix spaces.
+CREATE TABLE IF NOT EXISTS embedding_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 
 -- ============================================================
@@ -1012,6 +1020,14 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     for (const et of SEED_EDGE_TYPES) {
       insert.run(et.name, et.category, et.description);
     }
+  },
+  21: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS embedding_meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
   },
 };
 

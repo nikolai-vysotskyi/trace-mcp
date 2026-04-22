@@ -21,6 +21,7 @@ class NoEmbeddingService implements EmbeddingService {
   async embed(_text: string): Promise<number[]> { return []; }
   async embedBatch(_texts: string[]): Promise<number[][]> { return []; }
   dimensions(): number { return 0; }
+  modelName(): string { return ''; }
 }
 
 class AnthropicInferenceService implements InferenceService {

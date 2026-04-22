@@ -16,6 +16,10 @@ class FallbackEmbeddingService implements EmbeddingService {
   dimensions(): number {
     return 0;
   }
+
+  modelName(): string {
+    return '';
+  }
 }
 
 class FallbackInferenceService implements InferenceService {

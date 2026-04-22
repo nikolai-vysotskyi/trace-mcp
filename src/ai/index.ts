@@ -118,6 +118,7 @@ class TrackedEmbeddingService implements EmbeddingService {
   }
 
   dimensions(): number { return this.inner.dimensions(); }
+  modelName(): string { return this.inner.modelName(); }
 }
 
 class TrackedInferenceService implements InferenceService {
