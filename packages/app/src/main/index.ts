@@ -422,16 +422,37 @@ function resolveNpmRoot(): Promise<string | null> {
   });
 }
 
+function forceRemove(p: string): boolean {
+  try {
+    fs.rmSync(p, { recursive: true, force: true });
+    return true;
+  } catch (err) {
+    console.error(`[trace-mcp] failed to remove ${p}:`, err);
+    return false;
+  }
+}
+
 // Remove any `.trace-mcp-<rand>` scratch directories npm left behind from a
 // prior interrupted install — they cause ENOTEMPTY on the next rename-swap.
 function cleanStaleScratchDirs(npmRoot: string): void {
+  let entries: string[];
   try {
-    for (const entry of fs.readdirSync(npmRoot)) {
-      if (entry.startsWith('.trace-mcp-')) {
-        try { fs.rmSync(path.join(npmRoot, entry), { recursive: true, force: true }); } catch {}
-      }
-    }
-  } catch {}
+    entries = fs.readdirSync(npmRoot);
+  } catch (err) {
+    console.error(`[trace-mcp] cleanStaleScratchDirs: readdir ${npmRoot} failed:`, err);
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.startsWith('.trace-mcp-')) forceRemove(path.join(npmRoot, entry));
+  }
+}
+
+// Extract the rename source/dest from npm's failure output. Works for both
+// `npm error` (v10+) and the legacy `npm ERR!` prefix.
+function parseNpmRenamePaths(stderr: string): { src?: string; dest?: string } {
+  const src = stderr.match(/^npm (?:error|ERR!) path (.+)$/m)?.[1]?.trim();
+  const dest = stderr.match(/^npm (?:error|ERR!) dest (.+)$/m)?.[1]?.trim();
+  return { src, dest };
 }
 
 ipcMain.handle('apply-update', async () => {
@@ -452,11 +473,20 @@ ipcMain.handle('apply-update', async () => {
   });
 
   let result = await runOnce();
-  // ENOTEMPTY after --force means the main `trace-mcp` dir itself is in a
-  // corrupt half-extracted state. Nuke it along with any scratches and retry.
-  if (result.err && /ENOTEMPTY/.test(result.stderr) && npmRoot) {
-    cleanStaleScratchDirs(npmRoot);
-    try { fs.rmSync(path.join(npmRoot, 'trace-mcp'), { recursive: true, force: true }); } catch {}
+  // ENOTEMPTY means the main `trace-mcp` dir or its scratch twin is in a
+  // corrupt half-extracted state from a prior interrupted install. Parse the
+  // rename paths directly from npm's error and nuke them before retrying —
+  // this path works even when resolveNpmRoot() came back null (e.g. a
+  // GUI-launched Electron whose login shell didn't put npm on PATH).
+  const haystack = `${result.err?.message ?? ''}\n${result.stderr}`;
+  if (result.err && /ENOTEMPTY/.test(haystack)) {
+    const { src, dest } = parseNpmRenamePaths(haystack);
+    const recoveredRoot = npmRoot ?? (src ? path.dirname(src) : dest ? path.dirname(dest) : null);
+    console.error(`[trace-mcp] ENOTEMPTY recovery: npmRoot=${npmRoot} src=${src} dest=${dest}`);
+    if (recoveredRoot) cleanStaleScratchDirs(recoveredRoot);
+    if (src) forceRemove(src);
+    if (dest) forceRemove(dest);
+    if (recoveredRoot) forceRemove(path.join(recoveredRoot, 'trace-mcp'));
     result = await runOnce();
   }
 
@@ -482,10 +512,27 @@ function hasPendingUpdate(): boolean {
   try { return fs.existsSync(PENDING_ZIP) && fs.existsSync(PENDING_VERSION); } catch { return false; }
 }
 
+const PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
+
+function clearPendingFiles(): void {
+  for (const p of [PENDING_ZIP, PENDING_CHECKSUM, PENDING_VERSION]) {
+    try { fs.unlinkSync(p); } catch {}
+  }
+}
+
 ipcMain.handle('check-pending-update', () => {
   if (!hasPendingUpdate()) return { pending: false };
   let version: string | undefined;
-  try { version = fs.readFileSync(PENDING_VERSION, 'utf-8').trim(); } catch {}
+  try { version = fs.readFileSync(PENDING_VERSION, 'utf-8').trim().replace(/^v/, ''); } catch {}
+  // Drop stale pending artefacts: when the bundle has already been swapped
+  // (e.g. postinstall ran while the app wasn't running) the marker files
+  // stick around and produce a zombie "Restart to install" banner for a
+  // version we are already on.
+  const current = app.getVersion().replace(/^v/, '');
+  if (version && cmpSemver(version, current) <= 0) {
+    clearPendingFiles();
+    return { pending: false };
+  }
   return { pending: true, version };
 });
 
@@ -500,10 +547,11 @@ ipcMain.handle('restart-app', () => {
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       });
       child.unref();
+      console.error(`[trace-mcp] spawned apply-pending-update helper pid=${child.pid}`);
       app.exit(0);
       return;
-    } catch {
-      // Fall through to plain relaunch on spawn failure.
+    } catch (err) {
+      console.error(`[trace-mcp] spawn apply-pending-update failed, falling back to relaunch:`, err);
     }
   }
   app.relaunch();
