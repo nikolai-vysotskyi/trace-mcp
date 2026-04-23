@@ -34,6 +34,17 @@ describe('JsVisualizationPlugin', () => {
       expect(plugin.detect(ctxWithDeps({ 'vue-sonner': '^1.0' }))).toBe(true);
     });
 
+    it.each([
+      ['sonner', '^1.4'],
+      ['recharts', '^2.10'],
+      ['framer-motion', '^11.0'],
+      ['react-hook-form', '^7.50'],
+      ['cmdk', '^1.0'],
+      ['@vuepic/vue-datepicker', '^8.0'],
+    ])('detects %s', (pkg, version) => {
+      expect(plugin.detect(ctxWithDeps({ [pkg]: version }))).toBe(true);
+    });
+
     it('detects when only in devDependencies', () => {
       const ctx: ProjectContext = {
         rootPath: '/tmp/nonexistent-trace-mcp-fixture-jsviz',
@@ -56,6 +67,12 @@ describe('JsVisualizationPlugin', () => {
           'vue-chartjs': '^5.0',
           marked: '^11.0',
           'vue-sonner': '^1.0',
+          sonner: '^1.4',
+          recharts: '^2.10',
+          'framer-motion': '^11.0',
+          'react-hook-form': '^7.50',
+          cmdk: '^1.0',
+          '@vuepic/vue-datepicker': '^8.0',
         }),
       );
     });
@@ -86,6 +103,49 @@ toast.success('done');`);
 export const html = marked.parse(md);`);
       const result = plugin.extractNodes('src/render.ts', source, 'typescript');
       expect(result._unsafeUnwrap().frameworkRole).toBe('markdown_render');
+    });
+
+    it('tags sonner toast usage', () => {
+      const source = Buffer.from(`import { toast } from 'sonner';
+toast.success('done');`);
+      const result = plugin.extractNodes('src/utils/notify.ts', source, 'typescript');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('toast_invocation');
+    });
+
+    it('tags recharts chart component', () => {
+      const source = Buffer.from(`import { LineChart, Line } from 'recharts';
+export const Chart = () => <LineChart data={[]}><Line /></LineChart>;`);
+      const result = plugin.extractNodes('src/charts/Revenue.tsx', source, 'typescript');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('chart_component');
+    });
+
+    it('tags framer-motion animation usage', () => {
+      const source = Buffer.from(`import { motion } from 'framer-motion';
+export const Fade = () => <motion.div animate={{ opacity: 1 }} />;`);
+      const result = plugin.extractNodes('src/anim/Fade.tsx', source, 'typescript');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('animation_component');
+    });
+
+    it('tags react-hook-form form component', () => {
+      const source = Buffer.from(`import { useForm } from 'react-hook-form';
+export function LoginForm() { const { register } = useForm(); return null; }`);
+      const result = plugin.extractNodes('src/forms/Login.tsx', source, 'typescript');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('form_component');
+    });
+
+    it('tags cmdk command palette usage', () => {
+      const source = Buffer.from(`import { Command } from 'cmdk';
+export const Palette = () => <Command />;`);
+      const result = plugin.extractNodes('src/ui/Palette.tsx', source, 'typescript');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('command_palette');
+    });
+
+    it('tags @vuepic/vue-datepicker usage', () => {
+      const source = Buffer.from(`<script setup>
+import VueDatePicker from '@vuepic/vue-datepicker';
+</script>`);
+      const result = plugin.extractNodes('src/forms/Date.vue', source, 'vue');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('datepicker_component');
     });
 
     it('ignores non-js/ts/vue languages', () => {

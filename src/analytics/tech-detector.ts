@@ -280,7 +280,10 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
     }
   }
 
-  // Significant = not 'none' priority
+  // Significant = not 'none' priority. Pure UI widgets (datepickers, lightboxes,
+  // chart libs, etc.) that gain nothing from a dedicated plugin are set to
+  // `priority: 'none'` directly in KNOWN_PACKAGES so they drop out of both the
+  // gap list and the coverage denominator.
   const significant = allDeps.filter(d => d.priority !== 'none');
   const covered = significant.filter(d => d.coveredByPlugin !== null);
   const gaps = significant

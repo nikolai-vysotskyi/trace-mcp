@@ -48,6 +48,8 @@ const TRACKED_PACKAGES = [
   'maatwebsite/excel',
   'meilisearch/meilisearch-php',
   'intervention/image',
+  'intervention/image-laravel',
+  'league/csv',
   'league/flysystem-aws-s3-v3',
   'amocrm/amocrm-api-library',
   'reinink/advanced-eloquent',
@@ -146,7 +148,18 @@ const DETECTORS: DetectorRule[] = [
   },
   {
     role: 'intervention_image_usage',
+    // Covers both `intervention/image` core (`Intervention\Image\`) and the
+    // Laravel bridge (`intervention/image-laravel`, which exposes the same FQN
+    // plus its Laravel `ImageManager` facade resolver).
     patterns: [/\bIntervention\\Image\\/],
+  },
+  {
+    role: 'league_csv_usage',
+    patterns: [
+      /\bLeague\\Csv\\/,
+      // Common static constructors distinctive to league/csv
+      /\b(?:Reader|Writer)::(?:createFromPath|createFromString|createFromStream|createFromFileObject)\s*\(/,
+    ],
   },
   {
     role: 'flysystem_s3_adapter_usage',

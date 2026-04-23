@@ -42,6 +42,7 @@ import { AngularPlugin } from './view/angular/index.js';
 import { SveltePlugin } from './view/svelte/index.js';
 import { TailwindPlugin } from './view/tailwind/index.js';
 import { JsVisualizationPlugin } from './view/js-viz/index.js';
+import { SortablePlugin } from './view/sortable/index.js';
 
 // --- api ---
 import { GraphQLPlugin } from './api/graphql/index.js';
@@ -72,6 +73,8 @@ import { TreeSitterPlugin } from './tooling/tree-sitter/index.js';
 import { BuildToolsPlugin } from './tooling/build-tools/index.js';
 import { GithubActionsPlugin } from './tooling/github-actions/index.js';
 import { PinoPlugin } from './tooling/pino/index.js';
+import { AwsS3Plugin } from './tooling/aws-s3/index.js';
+import { SupabasePlugin } from './tooling/supabase/index.js';
 import { CosmiconfigPlugin } from './tooling/cosmiconfig/index.js';
 import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
 import { IoredisPlugin } from './tooling/ioredis/index.js';
@@ -135,6 +138,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new SveltePlugin(),
     new TailwindPlugin(),
     new JsVisualizationPlugin(),
+    new SortablePlugin(),
     // api
     new GraphQLPlugin(),
     new TrpcPlugin(),
@@ -159,6 +163,8 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new BuildToolsPlugin(),
     new GithubActionsPlugin(),
     new PinoPlugin(),
+    new AwsS3Plugin(),
+    new SupabasePlugin(),
     new CosmiconfigPlugin(),
     new NeverthrowPlugin(),
     new IoredisPlugin(),

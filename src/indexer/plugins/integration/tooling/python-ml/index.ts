@@ -1,11 +1,13 @@
 /**
- * PythonMLPlugin — detects PyTorch, HuggingFace Transformers, and scikit-learn.
+ * PythonMLPlugin — detects PyTorch, HuggingFace Transformers, scikit-learn,
+ * and sentence-transformers.
  *
  * Extracts:
  * - Model definitions: classes that subclass nn.Module
- * - Model loading: AutoModel.from_pretrained / torch.load / joblib.load
+ * - Model loading: AutoModel.from_pretrained / torch.load / joblib.load /
+ *   SentenceTransformer('...') / CrossEncoder('...')
  * - Training hooks: .fit(), .train(), model.compile()
- * - Inference hooks: .predict(), .forward(), pipeline()
+ * - Inference hooks: .predict(), .forward(), pipeline(), .encode()
  */
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
@@ -18,10 +20,14 @@ import type {
 } from '../../../../../plugin-api/types.js';
 import { hasAnyPythonDep } from '../../_shared/python-deps.js';
 
-const PACKAGES = ['torch', 'transformers', 'scikit-learn'] as const;
+const PACKAGES = ['torch', 'transformers', 'scikit-learn', 'sentence-transformers'] as const;
 
 const IMPORT_RE =
-  /^\s*(?:from\s+(?:torch|transformers|sklearn)(?:\.\w+)*\s+import|import\s+(?:torch|transformers|sklearn))\b/m;
+  /^\s*(?:from\s+(?:torch|transformers|sklearn|sentence_transformers)(?:\.\w+)*\s+import|import\s+(?:torch|transformers|sklearn|sentence_transformers))\b/m;
+
+// SentenceTransformer('all-MiniLM-L6-v2') / CrossEncoder('...')
+const SENTENCE_TRANSFORMER_RE =
+  /\b(SentenceTransformer|CrossEncoder)\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
 
 // class Foo(nn.Module): | class Foo(torch.nn.Module): | class Foo(PreTrainedModel):
 const MODULE_SUBCLASS_RE =
@@ -98,6 +104,13 @@ export class PythonMLPlugin implements FrameworkPlugin {
       result.edges!.push({
         edgeType: 'ml_model_load',
         metadata: { loader: m[1], model: m[2], kind: 'from_pretrained', filePath, line: findLine(m.index ?? 0) },
+      });
+    }
+
+    for (const m of source.matchAll(SENTENCE_TRANSFORMER_RE)) {
+      result.edges!.push({
+        edgeType: 'ml_model_load',
+        metadata: { loader: m[1], model: m[2], kind: 'sentence_transformer', filePath, line: findLine(m.index ?? 0) },
       });
     }
 

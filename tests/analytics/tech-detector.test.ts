@@ -133,5 +133,33 @@ describe('tech-detector', () => {
       const unknownNames = report.unknown.map(u => u.name);
       expect(unknownNames).toContain('my-custom-internal-lib');
     });
+
+    it('excludes pure UI widgets (priority none) from gaps and from the coverage denominator', () => {
+      const projDir = path.join(tmpDir, 'proj-ui-widgets');
+      fs.mkdirSync(projDir, { recursive: true });
+      fs.writeFileSync(path.join(projDir, 'package.json'), JSON.stringify({
+        name: 'test-ui-widgets',
+        dependencies: {
+          // Known UI widgets set to `priority: 'none'` in KNOWN_PACKAGES — a dedicated
+          // plugin would add no architectural value, so they drop out of both `gaps`
+          // and the coverage denominator.
+          'glightbox': '^3.3.0',
+          '@fancyapps/ui': '^5.0.0',
+          'chartist': '^1.3.0',
+        },
+      }));
+
+      const report = detectCoverage(projDir);
+      const gapNames = report.gaps.map(g => g.name);
+      expect(gapNames).not.toContain('glightbox');
+      expect(gapNames).not.toContain('@fancyapps/ui');
+      expect(gapNames).not.toContain('chartist');
+
+      // None of the three packages is significant, so they don't appear in the
+      // coverage figures at all. With zero significant deps, coverage_pct = 100.
+      expect(report.coverage.total_significant).toBe(0);
+      expect(report.coverage.covered).toBe(0);
+      expect(report.coverage.coverage_pct).toBe(100);
+    });
   });
 });
