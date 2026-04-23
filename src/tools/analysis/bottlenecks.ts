@@ -379,3 +379,149 @@ function scoreAndRankEdges(
 function round3(x: number): number {
   return Math.round(x * 1000) / 1000;
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// VIZ-GRAPH VARIANT — works on in-memory string-keyed graphs (any granularity)
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Bottleneck computation for an arbitrary string-keyed directed graph — e.g.
+ * the visualizer's VizNode/VizEdge pairs at either file OR symbol granularity.
+ *
+ * The file-level `getEdgeBottlenecks` path is still the MCP API surface; this
+ * entrypoint exists so visualize.ts can enrich its own in-memory graph without
+ * a second DB pass and without being limited to file granularity.
+ *
+ * Reuses the existing Brandes + Tarjan primitives by mapping string IDs to
+ * local numeric handles, then translating results back. Returned keys use
+ * `${source}|${target}` (the same format VizEdge lookups use downstream).
+ */
+export function computeBottlenecksForVizGraph(
+  nodes: Array<{ id: string }>,
+  edges: Array<{ source: string; target: string }>,
+  opts: { sampling?: 'auto' | 'full'; coChangeByEdge?: Map<string, number> } = {},
+): {
+  edgeScores: Map<string, number>;
+  bridges: Set<string>;
+  articulations: Set<string>;
+} {
+  const { sampling = 'auto', coChangeByEdge } = opts;
+
+  const strToNum = new Map<string, number>();
+  const numToStr = new Map<number, string>();
+  let nextId = 0;
+  for (const n of nodes) {
+    if (!strToNum.has(n.id)) {
+      strToNum.set(n.id, nextId);
+      numToStr.set(nextId, n.id);
+      nextId++;
+    }
+  }
+
+  const forward = new Map<number, Set<number>>();
+  const reverse = new Map<number, Set<number>>();
+  const allIds = new Set<number>([...strToNum.values()]);
+  for (const e of edges) {
+    const sn = strToNum.get(e.source);
+    const tn = strToNum.get(e.target);
+    if (sn == null || tn == null || sn === tn) continue;
+    let f = forward.get(sn);
+    if (!f) { f = new Set(); forward.set(sn, f); }
+    f.add(tn);
+    let r = reverse.get(tn);
+    if (!r) { r = new Set(); reverse.set(tn, r); }
+    r.add(sn);
+  }
+
+  if (allIds.size === 0 || forward.size === 0) {
+    return { edgeScores: new Map(), bridges: new Set(), articulations: new Set() };
+  }
+
+  const synthetic: FileGraph = {
+    forward,
+    reverse,
+    pathMap: new Map(),
+    allFileIds: allIds,
+  };
+
+  const N = allIds.size;
+  const shouldSample = sampling === 'auto' && N > SAMPLING_THRESHOLD;
+  const sampleSize = shouldSample ? Math.max(MIN_SAMPLE_SIZE, Math.ceil(Math.sqrt(N))) : N;
+
+  const betweenness = computeEdgeBetweenness(synthetic, shouldSample ? sampleSize : null);
+  const undirected = toUndirectedAdj(synthetic);
+  const { bridges: brNumKeys, articulations: artNums } = tarjanBridgesAndArticulations(undirected, allIds);
+
+  // Translate caller's string-keyed co-change map (key = "src|tgt") into the
+  // numeric edgeKey format used by Brandes output.
+  const coChangeNum = new Map<string, number>();
+  if (coChangeByEdge && coChangeByEdge.size > 0) {
+    for (const [k, w] of coChangeByEdge) {
+      const sep = k.indexOf('|');
+      if (sep < 0) continue;
+      const srcStr = k.slice(0, sep);
+      const tgtStr = k.slice(sep + 1);
+      const sn = strToNum.get(srcStr);
+      const tn = strToNum.get(tgtStr);
+      if (sn != null && tn != null) coChangeNum.set(`${sn}>${tn}`, w);
+    }
+  }
+
+  let bcMax = 0;
+  for (const v of betweenness.values()) if (v > bcMax) bcMax = v;
+  let ccMax = 0;
+  for (const v of coChangeNum.values()) if (v > ccMax) ccMax = v;
+
+  // Raw scores first, then normalize to [0..1] so the frontend gradient
+  // palette lights up consistently across datasets of different sizes.
+  const raw = new Map<string, number>();
+  let scoreMax = 0;
+  for (const [numKey, bc] of betweenness) {
+    const bcNorm = bcMax > 0 ? bc / bcMax : 0;
+    const cc = coChangeNum.get(numKey) ?? 0;
+    const ccNorm = ccMax > 0 ? cc / ccMax : 0;
+    const score = bcNorm * (1 + ccNorm);
+    if (score > 0) {
+      raw.set(numKey, score);
+      if (score > scoreMax) scoreMax = score;
+    }
+  }
+
+  const edgeScores = new Map<string, number>();
+  if (scoreMax > 0) {
+    for (const [numKey, score] of raw) {
+      const gt = numKey.indexOf('>');
+      if (gt < 0) continue;
+      const srcNum = Number(numKey.slice(0, gt));
+      const tgtNum = Number(numKey.slice(gt + 1));
+      const srcStr = numToStr.get(srcNum);
+      const tgtStr = numToStr.get(tgtNum);
+      if (srcStr != null && tgtStr != null) {
+        edgeScores.set(`${srcStr}|${tgtStr}`, round3(score / scoreMax));
+      }
+    }
+  }
+
+  // Tarjan stores both directions of each bridge (`a>b` AND `b>a`). Keep
+  // only the direction that actually exists in the forward graph — matches
+  // the direction VizEdge stores on the frontend.
+  const bridges = new Set<string>();
+  for (const numKey of brNumKeys) {
+    const gt = numKey.indexOf('>');
+    if (gt < 0) continue;
+    const srcNum = Number(numKey.slice(0, gt));
+    const tgtNum = Number(numKey.slice(gt + 1));
+    if (!forward.get(srcNum)?.has(tgtNum)) continue;
+    const srcStr = numToStr.get(srcNum);
+    const tgtStr = numToStr.get(tgtNum);
+    if (srcStr != null && tgtStr != null) bridges.add(`${srcStr}|${tgtStr}`);
+  }
+
+  const articulations = new Set<string>();
+  for (const num of artNums) {
+    const s = numToStr.get(num);
+    if (s != null) articulations.add(s);
+  }
+
+  return { edgeScores, bridges, articulations };
+}

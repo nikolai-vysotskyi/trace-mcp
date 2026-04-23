@@ -14,7 +14,7 @@ import { Store, type FileRow, type SymbolRow, type EdgeRow } from '../../db/stor
 import { initializeDatabase } from '../../db/schema.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
 import { logger } from '../../logger.js';
-import { getEdgeBottlenecks } from './bottlenecks.js';
+import { computeBottlenecksForVizGraph } from './bottlenecks.js';
 // @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
 
@@ -1931,34 +1931,80 @@ window.addEventListener('message', (evt) => {
 
 /**
  * Annotate edges with bottleneckScore + isBridge, and nodes with isArticulation.
- * File-granularity only: symbol-level edges cannot be mapped to file-level bottleneck data.
+ * Works for BOTH granularities — file and symbol. The computation is done
+ * directly over the already-built VizNode/VizEdge graph (string IDs), so we
+ * don't have to re-query the DB or worry about mapping file-level results
+ * down to symbol-level edges. Co-change weighting is only meaningful at file
+ * granularity (co-change data is per-file in git history), so we pass it
+ * only when the viz is at file level.
  */
 function enrichWithBottlenecks(store: Store, nodes: VizNode[], edges: VizEdge[]): void {
-  if (nodes.length === 0 || nodes[0].type !== 'file') return;
+  if (nodes.length === 0 || edges.length === 0) return;
 
-  const result = getEdgeBottlenecks(store, { topN: 0, sampling: 'auto' });
-  if (result.isErr()) return;
-  const { edges: bottleneckEdges, articulationPoints } = result.value;
-
-  const edgeScore = new Map<string, { score: number; isBridge: boolean }>();
-  for (const e of bottleneckEdges) {
-    edgeScore.set(`${e.sourceFile}|${e.targetFile}`, {
-      score: e.bottleneckScore,
-      isBridge: e.isBridge,
-    });
+  // File-level co-change: pull weights for the pairs (a, b) where both are
+  // file-path IDs present in the viz graph. Symbol mode skips this — there's
+  // no symbol-level co-change store, and deriving per-symbol co-change from
+  // per-file data would amplify noise across every symbol in the file pair.
+  let coChangeByEdge: Map<string, number> | undefined;
+  if (nodes[0].type === 'file') {
+    coChangeByEdge = fetchVizCoChangeWeights(store, nodes, edges);
   }
+
+  const { edgeScores, bridges, articulations } = computeBottlenecksForVizGraph(nodes, edges, {
+    sampling: 'auto',
+    coChangeByEdge,
+  });
+
   for (const e of edges) {
-    const m = edgeScore.get(`${e.source}|${e.target}`);
-    if (m) {
-      e.bottleneckScore = m.score;
-      e.isBridge = m.isBridge;
-    }
+    const key = `${e.source}|${e.target}`;
+    const score = edgeScores.get(key);
+    if (score !== undefined) e.bottleneckScore = score;
+    if (bridges.has(key)) e.isBridge = true;
+  }
+  for (const n of nodes) {
+    if (articulations.has(n.id)) n.isArticulation = true;
+  }
+}
+
+/**
+ * Pull co-change weights for edge pairs that appear in the viz graph. File
+ * paths are the viz node IDs at file granularity, so the lookup is a direct
+ * path → confidence map join over the `co_changes` table.
+ */
+function fetchVizCoChangeWeights(
+  store: Store,
+  nodes: VizNode[],
+  edges: VizEdge[],
+): Map<string, number> {
+  const out = new Map<string, number>();
+
+  const tableExists = store.db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='co_changes'")
+    .get();
+  if (!tableExists) return out;
+
+  const pathSet = new Set<string>();
+  for (const n of nodes) pathSet.add(n.id);
+
+  interface Row { file_a: string; file_b: string; confidence: number }
+  const rows = store.db
+    .prepare('SELECT file_a, file_b, confidence FROM co_changes WHERE confidence > 0')
+    .all() as Row[];
+
+  const coChangePaths = new Map<string, number>();
+  for (const r of rows) {
+    if (!pathSet.has(r.file_a) || !pathSet.has(r.file_b)) continue;
+    coChangePaths.set(`${r.file_a}|${r.file_b}`, r.confidence);
+    coChangePaths.set(`${r.file_b}|${r.file_a}`, r.confidence);
   }
 
-  const articulationSet = new Set(articulationPoints.map((p) => p.file));
-  for (const n of nodes) {
-    if (articulationSet.has(n.id)) n.isArticulation = true;
+  // Keep only the directions that actually appear as edges in the viz graph.
+  for (const e of edges) {
+    const w = coChangePaths.get(`${e.source}|${e.target}`);
+    if (w !== undefined) out.set(`${e.source}|${e.target}`, w);
   }
+
+  return out;
 }
 
 // ── Tool Entry Points ──────────────────────────────────────────────────

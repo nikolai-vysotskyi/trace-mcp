@@ -179,9 +179,41 @@ function bottleneckColor01(score: number): [number, number, number] {
 }
 
 /**
- * Override link colors by bottleneckScore. Edges without a score fade into
- * the background so the hot path reads clearly. Bridges get alpha boost so
- * they pop even at low score.
+ * Node color in bottleneck mode. Cold nodes drop to a dim grey so the hot
+ * neighborhoods (nodes touching a high-score edge) pop as red/amber islands
+ * instead of drowning in a blue fog.
+ */
+function bottleneckNodeColor01(score: number): [number, number, number] {
+  if (score < 0.05) return [0.18, 0.20, 0.24];
+  return bottleneckColor01(score);
+}
+
+/**
+ * Per-node "heat": the max bottleneckScore of any adjacent edge. Lets us paint
+ * nodes touching hot edges by the intensity of their hottest connection, so
+ * clusters of bottlenecks read as spatial hotspots.
+ */
+function computeNodeBottleneckScores(nodes: VizNode[], edges: VizEdge[]): Float32Array {
+  const idx = new Map<string, number>();
+  for (let i = 0; i < nodes.length; i++) idx.set(nodes[i].id, i);
+  const scores = new Float32Array(nodes.length);
+  for (const e of edges) {
+    const s = e.bottleneckScore ?? 0;
+    if (s <= 0) continue;
+    const si = idx.get(e.source);
+    const ti = idx.get(e.target);
+    if (si != null && scores[si] < s) scores[si] = s;
+    if (ti != null && scores[ti] < s) scores[ti] = s;
+  }
+  return scores;
+}
+
+/**
+ * Override link colors by bottleneckScore. Strategy: only edges that carry a
+ * meaningful bottleneck signal are drawn visibly — everything else fades to
+ * near-invisible atmospheric fog so the hot path reads cleanly against it.
+ * Cold edges also get a desaturated grey instead of the gradient's blue
+ * endpoint, so 16k routine imports don't paint the whole graph blue.
  */
 function computeBottleneckLinkColors(
   linkPairs: Float32Array,
@@ -195,13 +227,20 @@ function computeBottleneckLinkColors(
     const ti = linkPairs[i * 2 + 1] | 0;
     const info = edgeScoreByPair.get(nodes[si].id + '|' + nodes[ti].id);
     const score = info?.score ?? 0;
-    const [r, g, b] = bottleneckColor01(score);
-    out[i * 4] = r;
-    out[i * 4 + 1] = g;
-    out[i * 4 + 2] = b;
     const isBridge = info?.isBridge === true;
-    const baseAlpha = score < 0.05 ? 0.08 : 0.35 + score * 0.55;
-    out[i * 4 + 3] = isBridge ? Math.max(baseAlpha, 0.9) : baseAlpha;
+    if (score < 0.05 && !isBridge) {
+      out[i * 4] = 0.35;
+      out[i * 4 + 1] = 0.38;
+      out[i * 4 + 2] = 0.42;
+      out[i * 4 + 3] = 0.015;
+    } else {
+      const [r, g, b] = bottleneckColor01(score);
+      out[i * 4] = r;
+      out[i * 4 + 1] = g;
+      out[i * 4 + 2] = b;
+      const baseAlpha = 0.55 + score * 0.4;
+      out[i * 4 + 3] = isBridge ? Math.max(baseAlpha, 0.95) : baseAlpha;
+    }
   }
   return out;
 }
@@ -445,15 +484,28 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   const [stats, setStats] = useState<{ nodes: number; edges: number; communities: number } | null>(null);
   const [hovered, setHovered] = useState<VizNode | null>(null);
   const [selected, setSelected] = useState<VizNode | null>(null);
+  // When the user clicks a specific edge row in the hotspots sidebar we also
+  // remember which edge that was, so the AI prompt in the popup can describe
+  // the dependency (src → tgt) rather than just the source node. Cleared on
+  // node-only clicks and on Esc / clearHighlight.
+  const [selectedEdge, setSelectedEdge] = useState<VizEdge | null>(null);
   // Toolbar-height tracking so popups offset past a wrapped 2-row pill.
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState<number>(44);
+  // Stress Test HUD measurement — both the HUD and the selected-node popup
+  // anchor at top-right, so without this the popup overlaps the HUD whenever
+  // Stress Test is active. We push the popup down by the HUD's real height
+  // when both are visible. ResizeObserver rather than a hardcoded offset
+  // because the HUD height depends on the decay curve + metrics layout.
+  const stressHudRef = useRef<HTMLDivElement | null>(null);
+  const [stressHudHeight, setStressHudHeight] = useState<number>(0);
   // IDE integration — populated once from main process; last-used remembered.
   const [ides, setIdes] = useState<{ id: string; name: string; bundlePath: string }[]>([]);
   const [lastIdeId, setLastIdeId] = useState<string>(() => {
     try { return localStorage.getItem('trace-mcp.lastIde') ?? ''; } catch { return ''; }
   });
   const [copied, setCopied] = useState<boolean>(false);
+  const [promptCopied, setPromptCopied] = useState<boolean>(false);
 
   // ── Stress Test state ────────────────────────────────────────────
   // Edges the user has "broken" in Stress Test mode (keyed "source|target").
@@ -465,6 +517,29 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   const [componentStats, setComponentStats] = useState<{ count: number; largestFrac: number; isolated: number }>({
     count: 1, largestFrac: 1, isolated: 0,
   });
+  // Edge currently being broken — set by breakNextEdge, cleared when the
+  // pre-break flash animation commits the removal. Non-null = an animation
+  // is in flight; UI disables the break button to prevent rapid-fire clicks.
+  const [pendingBreak, setPendingBreak] = useState<VizEdge | null>(null);
+  // The last edge we flashed. Unlike pendingBreak (which clears when the
+  // flash commits), this sticks around across the gap between breaks so the
+  // "⚡ src → tgt" caption stays legible during a long auto-play run instead
+  // of blinking on/off every cycle. Cleared only on Reset / Stress Test off.
+  const [lastPendingBreak, setLastPendingBreak] = useState<VizEdge | null>(null);
+  // Remaining breaks in the active auto-play sequence. 0 = not auto-playing.
+  // Decrements once per scheduled break; user can stop by clicking the Stop
+  // button, which sets this to 0.
+  const [autoSteps, setAutoSteps] = useState<number>(0);
+  // How many edges to queue up when the user clicks the Auto button. Users
+  // pick from a preset list (×5 through ×100) — there's no real benefit to
+  // free-form numbers, and the preset snap makes the control feel decisive.
+  const [autoStepsCount, setAutoStepsCount] = useState<number>(10);
+  // Decay history — one point per `brokenEdgeKeys.size` value observed. The
+  // first point is "0 breaks / 100% connected" so the curve always anchors
+  // at the top-left. Appended in lockstep with componentStats updates.
+  const [breakHistory, setBreakHistory] = useState<Array<{ broken: number; largestFrac: number }>>([
+    { broken: 0, largestFrac: 1 },
+  ]);
 
   // Measure toolbar height so overlays (selected popup, error banner) anchor
   // below it even when the pill wraps to 2 rows on narrow panes. Hardcoded
@@ -478,6 +553,25 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Track Stress Test HUD height so the selected-node popup can slot in below
+  // it instead of overlapping. Runs only while the HUD is mounted (stressTest
+  // on); the ref becomes null when it unmounts and we reset the height to 0
+  // so the popup snaps back to its normal top offset. Uses `settings.stressTest`
+  // directly — destructured `stressTest` isn't declared until further down,
+  // referencing it here would hit the TDZ at render time.
+  useEffect(() => {
+    const el = stressHudRef.current;
+    if (!el) {
+      if (stressHudHeight !== 0) setStressHudHeight(0);
+      return;
+    }
+    const update = (): void => setStressHudHeight(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [settings.stressTest, pendingBreak, brokenEdgeKeys.size, stressHudHeight]);
 
   // Detect installed IDEs once. Quietly no-op outside Electron (dev in browser).
   useEffect(() => {
@@ -537,6 +631,166 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     };
   }, []);
 
+  // ── Single-edge highlight ─────────────────────────────────────
+  // Pinpoint a specific bottleneck edge (source → target). Used when the
+  // user clicks a sidebar row — each row IS one edge, so they expect that
+  // exact edge to be highlighted, not every hot link from the source node.
+  const highlightSingleEdge = useCallback((srcIdx: number, tgtIdx: number) => {
+    const graph = graphRef.current;
+    const data = payloadRef.current;
+    const orig = origColorsRef.current;
+    const linkPairs = linkPairsRef.current;
+    if (!graph || !data || !orig || !linkPairs) return;
+
+    // Source = white-hot anchor, target = hot-red (same red we use for the
+    // edge itself, so the gradient reads "flow starts white, ends red").
+    const colors = new Float32Array(orig);
+    colors[srcIdx * 4]     = 1.0;
+    colors[srcIdx * 4 + 1] = 1.0;
+    colors[srcIdx * 4 + 2] = 1.0;
+    colors[srcIdx * 4 + 3] = 1.0;
+    colors[tgtIdx * 4]     = 1.0;
+    colors[tgtIdx * 4 + 1] = 0.38;
+    colors[tgtIdx * 4 + 2] = 0.38;
+    colors[tgtIdx * 4 + 3] = 1.0;
+    graph.setPointColors(colors);
+    graph.selectPointsByIndices([srcIdx, tgtIdx]);
+
+    // Only the specific edge is drawn; everything else goes to alpha 0.
+    // Direction-agnostic match (src→tgt OR tgt→src) because cosmos.gl link
+    // buffers don't guarantee the orientation we stored.
+    const numLinks = Math.floor(linkPairs.length / 2);
+    const linkColors = new Float32Array(numLinks * 4);
+    for (let i = 0; i < numLinks; i++) {
+      const s = linkPairs[i * 2] | 0;
+      const t = linkPairs[i * 2 + 1] | 0;
+      if ((s === srcIdx && t === tgtIdx) || (s === tgtIdx && t === srcIdx)) {
+        linkColors[i * 4]     = 1.0;
+        linkColors[i * 4 + 1] = 0.38;
+        linkColors[i * 4 + 2] = 0.38;
+        linkColors[i * 4 + 3] = 1.0;
+      } else {
+        linkColors[i * 4 + 3] = 0;
+      }
+    }
+    graph.setLinkColors(linkColors);
+    graph.setConfigPartial({ linkVisibilityDistanceRange: [100000, 200000] });
+
+    const depthMap = new Map<number, number>();
+    depthMap.set(srcIdx, 0);
+    depthMap.set(tgtIdx, 1);
+    highlightedDepthRef.current = depthMap;
+    graph.render();
+  }, []);
+
+  // Focus + highlight a specific bottleneck edge from its node-id pair.
+  // Fits BOTH endpoints in view so the zoom level is natural (fitting to a
+  // single point zooms to the max pixel size, which is what felt "too
+  // strong"). Used by the hotspots sidebar.
+  const focusBottleneckEdge = useCallback((edge: VizEdge) => {
+    const graph = graphRef.current;
+    const indexById = indexByIdRef.current;
+    if (!graph) return;
+    const srcIdx = indexById.get(edge.source);
+    const tgtIdx = indexById.get(edge.target);
+    if (srcIdx == null || tgtIdx == null) return;
+    graph.fitViewByPointIndices([srcIdx, tgtIdx], 500, 0.3);
+    const node = nodesRef.current[srcIdx];
+    if (node) setSelected(node);
+    setSelectedEdge(edge);
+    highlightSingleEdge(srcIdx, tgtIdx);
+  }, [highlightSingleEdge]);
+
+  // ── Bottleneck-only highlight (node-scoped) ────────────────────
+  // Unlike highlightNeighborhood (which paints every 1-hop neighbor), this
+  // shows ONLY the edges that carry a bottleneck signal from/to the seed.
+  // In bottleneck mode the user cares about architectural chokepoints, not
+  // routine imports — so clicking a red node should surface just the hot
+  // connections that earned it that color, not its whole import fan-out.
+  const highlightBottleneckEdgesFor = useCallback((seedIdx: number) => {
+    const graph = graphRef.current;
+    const data = payloadRef.current;
+    const orig = origColorsRef.current;
+    const linkPairs = linkPairsRef.current;
+    if (!graph || !data || !orig || !linkPairs) return;
+
+    const seed = data.nodes[seedIdx];
+    if (!seed) return;
+
+    const indexById = new Map<string, number>();
+    for (let i = 0; i < data.nodes.length; i++) indexById.set(data.nodes[i].id, i);
+
+    // Collect hot edges touching the seed, regardless of direction. A node
+    // can be hot because of an incoming dep (many callers) or outgoing (it
+    // depends on something critical) — both are relevant to the user's
+    // mental model of "why is this a bottleneck?".
+    const hotEdgeKeys = new Set<string>();
+    const otherEnds = new Set<number>();
+    for (const e of data.edges) {
+      const score = e.bottleneckScore ?? 0;
+      const isHot = score > 0 || e.isBridge === true;
+      if (!isHot) continue;
+      if (e.source === seed.id) {
+        hotEdgeKeys.add(e.source + '|' + e.target);
+        const ti = indexById.get(e.target);
+        if (ti != null) otherEnds.add(ti);
+      } else if (e.target === seed.id) {
+        hotEdgeKeys.add(e.source + '|' + e.target);
+        const si = indexById.get(e.source);
+        if (si != null) otherEnds.add(si);
+      }
+    }
+
+    // No hot edges on this node — fall back to the normal 1-hop highlight
+    // so clicks still do *something*. Example: articulation-only nodes that
+    // happen to have no high-score edges themselves.
+    if (hotEdgeKeys.size === 0) {
+      highlightNeighborhood([seedIdx]);
+      return;
+    }
+
+    // Seed = bright white-hot; endpoints keep their existing heat color so
+    // the gradient signal survives (red vs amber other ends still readable).
+    const highlighted = [seedIdx, ...otherEnds];
+    const colors = new Float32Array(orig);
+    colors[seedIdx * 4]     = 1.0;
+    colors[seedIdx * 4 + 1] = 1.0;
+    colors[seedIdx * 4 + 2] = 1.0;
+    colors[seedIdx * 4 + 3] = 1.0;
+    graph.setPointColors(colors);
+    graph.selectPointsByIndices(highlighted);
+
+    // Link pass: only hot edges on this node get drawn, everything else goes
+    // invisible. Alpha 0 on non-hot is OK even with linkVisibilityMinTransparency
+    // — we widen the distance range below so cosmos.gl stops fading anything.
+    const numLinks = Math.floor(linkPairs.length / 2);
+    const linkColors = new Float32Array(numLinks * 4);
+    for (let i = 0; i < numLinks; i++) {
+      const s = linkPairs[i * 2] | 0;
+      const t = linkPairs[i * 2 + 1] | 0;
+      const srcId = data.nodes[s]?.id;
+      const tgtId = data.nodes[t]?.id;
+      if (srcId == null || tgtId == null) continue;
+      if (hotEdgeKeys.has(srcId + '|' + tgtId)) {
+        linkColors[i * 4]     = 1.0;
+        linkColors[i * 4 + 1] = 0.38;
+        linkColors[i * 4 + 2] = 0.38;
+        linkColors[i * 4 + 3] = 1.0;
+      } else {
+        linkColors[i * 4 + 3] = 0;
+      }
+    }
+    graph.setLinkColors(linkColors);
+    graph.setConfigPartial({ linkVisibilityDistanceRange: [100000, 200000] });
+
+    // Same bookkeeping clearHighlight reads — ensures Esc restores correctly.
+    const depthMap = new Map<number, number>();
+    depthMap.set(seedIdx, 0);
+    for (const idx of otherEnds) depthMap.set(idx, 1);
+    highlightedDepthRef.current = depthMap;
+    graph.render();
+  }, []);
+
   // ── focusNode (for imperative handle) ─────────────────────────
   const focusNode = useCallback((id: string) => {
     const graph = graphRef.current;
@@ -545,9 +799,15 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     graph.fitViewByPointIndices([idx], 500, 0.3);
     const node = nodesRef.current[idx];
     if (node) setSelected(node);
-    // Also apply neighborhood highlight
-    highlightNeighborhood([idx]);
-  }, []);
+    setSelectedEdge(null);
+    // In bottleneck mode, show only the hot edges of this node. Otherwise
+    // fall back to the normal 1-hop BFS neighborhood highlight.
+    if (settings.bottlenecks || settings.stressTest) {
+      highlightBottleneckEdgesFor(idx);
+    } else {
+      highlightNeighborhood([idx]);
+    }
+  }, [settings.bottlenecks, settings.stressTest, highlightBottleneckEdgesFor]);
   useImperativeHandle(ref, () => ({ focusNode }), [focusNode]);
 
   // ── BFS-expand seeds to N hops, tinting each layer its own palette color ──
@@ -658,7 +918,23 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     highlightedDepthRef.current = null;
     selectedIndicesRef.current = null;
     setSelected(null);
+    setSelectedEdge(null);
   }, [themeSpec]);
+
+  // Mode-aware highlight picker used by the cosmos.gl onClick callback.
+  // That callback is captured once at Graph() construction and can't see
+  // `settings` directly without rebuilding the instance on every toggle —
+  // so we funnel through a ref that's re-pointed whenever the mode flips.
+  const highlightByModeRef = useRef<(idx: number) => void>(() => {});
+  useEffect(() => {
+    highlightByModeRef.current = (idx: number) => {
+      if (settings.bottlenecks || settings.stressTest) {
+        highlightBottleneckEdgesFor(idx);
+      } else {
+        highlightNeighborhood([idx]);
+      }
+    };
+  }, [settings.bottlenecks, settings.stressTest, highlightBottleneckEdgesFor, highlightNeighborhood]);
 
   // ── Label overlay rendering ───────────────────────────────────
   // Updates HTML label positions every animation frame based on point screen positions.
@@ -1131,7 +1407,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           }
           const node = nodesRef.current[index];
           if (node) setSelected(node);
-          highlightNeighborhood([index]);
+          setSelectedEdge(null);
+          // Route through the mode-aware highlight picker. Bottleneck mode
+          // shows only hot adjacent edges; normal mode shows the full 1-hop
+          // neighborhood. The ref avoids rebuilding the Graph() instance
+          // every time the mode flips — cosmos.gl resolves it lazily here.
+          highlightByModeRef.current(index);
         },
         onPointMouseOver: (index: number) => {
           const node = nodesRef.current[index];
@@ -1218,9 +1499,13 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     prevNodeIdsRef.current = newIdMap;
 
     // Colors (per-point RGBA, all channels normalized 0-1 — cosmos.gl buffer convention)
-    // In bottleneck mode, articulation points are painted red — they stand out against
-    // the blue→amber edge gradient so single-points-of-failure are instantly visible.
+    // In bottleneck mode: articulation points get bright red, other nodes are
+    // painted by the max bottleneckScore of their adjacent edges — so hot
+    // neighborhoods glow while cold parts of the graph fade to dim grey.
     const useBottleneckColors = settings.bottlenecks || settings.stressTest;
+    const nodeScores = useBottleneckColors
+      ? computeNodeBottleneckScores(nodes, data.edges)
+      : null;
     const colors = new Float32Array(nodes.length * 4);
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
@@ -1228,6 +1513,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         colors[i * 4] = 0.937;     // #ef4444
         colors[i * 4 + 1] = 0.267;
         colors[i * 4 + 2] = 0.267;
+      } else if (useBottleneckColors && nodeScores) {
+        const [r, g, b] = bottleneckNodeColor01(nodeScores[i]);
+        colors[i * 4] = r;
+        colors[i * 4 + 1] = g;
+        colors[i * 4 + 2] = b;
       } else {
         const [r, g, b] = nodeColor01(n, colorBy, commColors);
         colors[i * 4] = r;
@@ -1521,6 +1811,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const useBottleneckColors = settings.bottlenecks || settings.stressTest;
     const commColors = new Map<number, string>();
     for (const c of data.communities) commColors.set(c.id, c.color);
+    const nodeScores = useBottleneckColors
+      ? computeNodeBottleneckScores(data.nodes, data.edges)
+      : null;
     const colors = new Float32Array(data.nodes.length * 4);
     for (let i = 0; i < data.nodes.length; i++) {
       const n = data.nodes[i];
@@ -1528,6 +1821,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         colors[i * 4] = 0.937;
         colors[i * 4 + 1] = 0.267;
         colors[i * 4 + 2] = 0.267;
+      } else if (useBottleneckColors && nodeScores) {
+        const [r, g, b] = bottleneckNodeColor01(nodeScores[i]);
+        colors[i * 4] = r;
+        colors[i * 4 + 1] = g;
+        colors[i * 4 + 2] = b;
       } else {
         const [r, g, b] = nodeColor01(n, colorBy, commColors);
         colors[i * 4] = r;
@@ -1563,12 +1861,22 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) return;
+    // Bottleneck mode draws thicker links so the ~50-100 hot edges read over
+    // the ~16k near-transparent cold ones. Fog width doesn't matter (alpha
+    // ≈ 0.015 is invisible regardless of thickness). Outside bottleneck mode
+    // we revert to the adaptive width picked at construction time.
+    const nCount = payloadRef.current?.nodes.length ?? 0;
+    const bigGraph = nCount > 3000;
+    const hugeGraph = nCount > 8000;
+    const baseWidth = hugeGraph ? 0.5 : bigGraph ? 0.7 : 0.9;
+    const bottleneckActive = settings.bottlenecks || settings.stressTest;
     graph.setConfigPartial({
       backgroundColor: themeSpec.background,
       linkDefaultColor: themeSpec.linkColor,
       pointDefaultColor: themeSpec.pointDefaultColor,
       hoveredLinkColor: themeSpec.hoveredLink,
       hoveredPointRingColor: themeSpec.hoveredLink,
+      linkDefaultWidth: bottleneckActive ? baseWidth * 2.2 : baseWidth,
     });
     // Tints lerp toward background, so background change ⇒ recompute tints.
     // Bottleneck mode uses a theme-independent palette, so we skip the recompute.
@@ -1595,6 +1903,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // ── Stress Test: break next edge, reset, and recompute components ──────
   // Edge keys are "source|target" — same format used in buildEdgeScoreMap.
   // "Break next" picks the highest-bottleneckScore edge not yet in the set.
+  // Instead of committing the removal directly, we stage it in `pendingBreak`
+  // so the flash-animation effect can highlight the victim edge for ~450 ms
+  // before it disappears — turning each step into a visible event the user
+  // can track on the graph.
   const breakNextEdge = useCallback(() => {
     const data = payloadRef.current;
     if (!data) return;
@@ -1606,19 +1918,136 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       const s = e.bottleneckScore ?? 0;
       if (s > bestScore) { bestScore = s; best = e; }
     }
-    if (!best || bestScore <= 0) return;
-    const next = new Set(brokenEdgeKeys);
-    next.add(best.source + '|' + best.target);
-    setBrokenEdgeKeys(next);
+    if (!best || bestScore <= 0) {
+      // No hot edges left — stop any auto-play sequence in flight so the
+      // button flips back to Break/Auto immediately instead of a dead loop.
+      setAutoSteps(0);
+      return;
+    }
+    setPendingBreak(best);
+    setLastPendingBreak(best);
   }, [brokenEdgeKeys]);
 
-  const resetStressTest = useCallback(() => setBrokenEdgeKeys(new Set()), []);
+  const resetStressTest = useCallback(() => {
+    setBrokenEdgeKeys(new Set());
+    setAutoSteps(0);
+    setPendingBreak(null);
+    setLastPendingBreak(null);
+    setBreakHistory([{ broken: 0, largestFrac: 1 }]);
+  }, []);
 
   // Auto-reset the broken set when Stress Test turns off so toggling back on
   // starts from a clean slate instead of showing a half-destroyed graph.
   useEffect(() => {
-    if (!stressTest && brokenEdgeKeys.size > 0) setBrokenEdgeKeys(new Set());
-  }, [stressTest, brokenEdgeKeys.size]);
+    if (!stressTest) {
+      if (brokenEdgeKeys.size > 0) setBrokenEdgeKeys(new Set());
+      if (autoSteps > 0) setAutoSteps(0);
+      if (pendingBreak) setPendingBreak(null);
+      if (lastPendingBreak) setLastPendingBreak(null);
+      if (breakHistory.length > 1) setBreakHistory([{ broken: 0, largestFrac: 1 }]);
+    }
+  }, [stressTest, brokenEdgeKeys.size, autoSteps, pendingBreak, lastPendingBreak, breakHistory.length]);
+
+  // Pacing refs — read at effect start so the flash/gap timers pick up the
+  // user's current Auto ×N choice without re-running the effect on every
+  // setState (which would cancel the in-flight timer).
+  const autoStepsRef = useRef(autoSteps);
+  autoStepsRef.current = autoSteps;
+  const autoStepsCountRef = useRef(autoStepsCount);
+  autoStepsCountRef.current = autoStepsCount;
+
+  // Flash animation: highlight the victim edge in hot white for ~450 ms,
+  // then commit the removal. Runs whenever pendingBreak is set. Uses the
+  // cached defaultLinkColorsRef as a baseline so the rest of the graph
+  // keeps its bottleneck-mode palette during the flash.
+  useEffect(() => {
+    if (!pendingBreak) return;
+    const graph = graphRef.current;
+    const linkPairs = linkPairsRef.current;
+    const data = payloadRef.current;
+    const defaults = defaultLinkColorsRef.current;
+    if (!graph || !linkPairs || !data || !defaults) {
+      setPendingBreak(null);
+      return;
+    }
+    const indexById = new Map<string, number>();
+    for (let i = 0; i < data.nodes.length; i++) indexById.set(data.nodes[i].id, i);
+    const si = indexById.get(pendingBreak.source);
+    const ti = indexById.get(pendingBreak.target);
+    const flash = new Float32Array(defaults);
+    if (si != null && ti != null) {
+      const numLinks = Math.floor(linkPairs.length / 2);
+      for (let i = 0; i < numLinks; i++) {
+        const s = linkPairs[i * 2] | 0;
+        const t = linkPairs[i * 2 + 1] | 0;
+        if ((s === si && t === ti) || (s === ti && t === si)) {
+          flash[i * 4]     = 1.0;
+          flash[i * 4 + 1] = 0.96;
+          flash[i * 4 + 2] = 0.72;
+          flash[i * 4 + 3] = 1.0;
+        }
+      }
+      try {
+        graph.setLinkColors(flash);
+        graph.render();
+      } catch { /* setLinkColors race with re-render — let commit retry */ }
+    }
+    // Pacing: single breaks (or small auto runs ≤10) hold the flash long
+    // enough for the eye to catch it. Large runs (×100) compress times so
+    // the whole sequence doesn't drag into 70+ seconds of tedium.
+    const autoTarget = autoStepsRef.current > 0 ? autoStepsCountRef.current : 0;
+    const speed = autoTarget > 0
+      ? Math.max(0.4, Math.min(1.0, 10 / autoTarget))
+      : 1.0;
+    const flashMs = Math.round(450 * speed);
+    const timer = window.setTimeout(() => {
+      const key = pendingBreak.source + '|' + pendingBreak.target;
+      setBrokenEdgeKeys((prev) => {
+        if (prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+      setPendingBreak(null);
+    }, flashMs);
+    return () => window.clearTimeout(timer);
+  }, [pendingBreak]);
+
+  // Auto-play: schedule the next break after the current one finishes
+  // animating. Decrement autoSteps each time we kick off a break; when it
+  // hits 0 (or the edge pool dries up) the sequence ends naturally. Gap
+  // shrinks with the run size so ×100 completes in ~30 s instead of 70+.
+  const breakNextEdgeRef = useRef(breakNextEdge);
+  breakNextEdgeRef.current = breakNextEdge;
+  useEffect(() => {
+    if (autoSteps <= 0) return;
+    if (pendingBreak) return;
+    const speed = Math.max(0.4, Math.min(1.0, 10 / autoStepsCountRef.current));
+    const gapMs = Math.round(280 * speed);
+    const timer = window.setTimeout(() => {
+      setAutoSteps((n) => Math.max(0, n - 1));
+      breakNextEdgeRef.current();
+    }, gapMs);
+    return () => window.clearTimeout(timer);
+  }, [autoSteps, pendingBreak, brokenEdgeKeys.size]);
+
+  // History tracker: append one point per unique brokenEdgeKeys.size value,
+  // update the last point in place when componentStats shifts for the same
+  // size (the union-find effect resets stats before we land here).
+  useEffect(() => {
+    if (!stressTest) return;
+    setBreakHistory((prev) => {
+      const last = prev[prev.length - 1];
+      const point = { broken: brokenEdgeKeys.size, largestFrac: componentStats.largestFrac };
+      if (last && last.broken === point.broken) {
+        if (last.largestFrac === point.largestFrac) return prev;
+        const next = prev.slice(0, -1);
+        next.push(point);
+        return next;
+      }
+      return [...prev, point];
+    });
+  }, [brokenEdgeKeys.size, componentStats.largestFrac, stressTest]);
 
   // Rebuild link buffer excluding broken edges + recompute component stats.
   // Uses a union-find pass — O(E α(V)) which is effectively linear.
@@ -1630,20 +2059,53 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const indexById = new Map<string, number>();
     for (let i = 0; i < data.nodes.length; i++) indexById.set(data.nodes[i].id, i);
 
+    // Walk edges once; produce (a) the filtered link buffer for cosmos.gl,
+    // (b) a surviving-edge list so node-heat recomputation reflects the
+    // post-break graph (a node whose hot edges were all removed fades to
+    // dim grey instead of staying red). Without this, breaks feel inert:
+    // edges disappear but the heat map stays frozen.
     const pairs: number[] = [];
+    const survivingEdges: VizEdge[] = [];
     for (const e of data.edges) {
       if (brokenEdgeKeys.has(e.source + '|' + e.target)) continue;
       const s = indexById.get(e.source);
       const t = indexById.get(e.target);
       if (s == null || t == null) continue;
       pairs.push(s, t);
+      survivingEdges.push(e);
     }
     const links = new Float32Array(pairs);
     linkPairsRef.current = links;
     try {
       graph.setLinks(links);
-      const linkColors = computeBottleneckLinkColors(links, data.nodes, buildEdgeScoreMap(data.edges));
+      const edgeScoreMap = buildEdgeScoreMap(survivingEdges);
+      const linkColors = computeBottleneckLinkColors(links, data.nodes, edgeScoreMap);
+      defaultLinkColorsRef.current = linkColors;
       graph.setLinkColors(new Float32Array(linkColors));
+
+      // Rebuild point colors against surviving edges so node heat drops as
+      // their hot adjacencies vanish. Articulation flags stay as-is (they're
+      // a property of the original graph, not the damaged one).
+      const commColors = new Map<number, string>();
+      for (const c of data.communities) commColors.set(c.id, c.color);
+      const nodeScores = computeNodeBottleneckScores(data.nodes, survivingEdges);
+      const colors = new Float32Array(data.nodes.length * 4);
+      for (let i = 0; i < data.nodes.length; i++) {
+        const n = data.nodes[i];
+        if (n.isArticulation) {
+          colors[i * 4]     = 0.937;
+          colors[i * 4 + 1] = 0.267;
+          colors[i * 4 + 2] = 0.267;
+        } else {
+          const [r, g, b] = bottleneckNodeColor01(nodeScores[i]);
+          colors[i * 4]     = r;
+          colors[i * 4 + 1] = g;
+          colors[i * 4 + 2] = b;
+        }
+        colors[i * 4 + 3] = 1;
+      }
+      graph.setPointColors(colors);
+      origColorsRef.current = new Float32Array(colors);
       graph.render();
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -1803,6 +2265,142 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     setSearchQuery('');
   };
 
+  // Build an AI prompt for the current bottleneck selection.
+  // - If an edge is selected (sidebar click): edge-oriented prompt describing
+  //   the specific dependency src → tgt with its score and rank.
+  // - Else if a node is selected: node-oriented prompt listing the node's
+  //   hot adjacencies, same as before.
+  // Returns an empty string when there's no bottleneck signal to analyse —
+  // caller uses that to decide whether to render the AI PROMPT block.
+  const buildBottleneckPrompt = useCallback(
+    (node: VizNode, edge: VizEdge | null): string => {
+      const data = payloadRef.current;
+      if (!data) return '';
+      const rootClean = (root ?? '').replace(/\/+$/, '');
+      const toAbs = (id: string): string =>
+        id.startsWith('/') ? id : rootClean ? `${rootClean}/${id}` : id;
+
+      // Project-wide edge ranking used for "rank #N" label (score-sorted).
+      const rankedEdges = [...data.edges]
+        .filter((e) => (e.bottleneckScore ?? 0) > 0)
+        .sort((a, b) => (b.bottleneckScore ?? 0) - (a.bottleneckScore ?? 0));
+
+      // ── Edge-scoped prompt ──────────────────────────────────────────
+      if (edge) {
+        const score = edge.bottleneckScore ?? 0;
+        const isBridge = edge.isBridge === true;
+        if (score <= 0 && !isBridge) return '';
+
+        const rank = rankedEdges.findIndex(
+          (e) => e.source === edge.source && e.target === edge.target,
+        );
+        const srcAbs = toAbs(edge.source);
+        const tgtAbs = toAbs(edge.target);
+
+        const lines: string[] = [];
+        lines.push(`Analyze a specific architectural bottleneck dependency.`);
+        lines.push(``);
+        lines.push(`Source: ${srcAbs}`);
+        lines.push(`Target: ${tgtAbs}`);
+        lines.push(
+          `Bottleneck score: ${score.toFixed(2)}${rank >= 0 ? ` (rank #${rank + 1} among all edges in the project)` : ''}`,
+        );
+        if (isBridge) {
+          lines.push(
+            `Bridge: removing this single edge would disconnect the graph into separate components.`,
+          );
+        }
+        lines.push(``);
+        lines.push(`Tasks:`);
+        lines.push(
+          `1. Open both files. Explain in 2–3 bullets WHAT the source imports/uses from the target and WHY.`,
+        );
+        lines.push(
+          `2. Assess whether this dependency is essential or accidental. Specifically: does the source need the target's concrete implementation, or would an interface / narrower API suffice?`,
+        );
+        lines.push(
+          `3. Propose 2–3 options to weaken or eliminate this edge: dependency inversion via interface, moving the shared concern to a third module, inlining the imported piece, or replacing with an event/queue. For each, predict the effect on the bottleneck score and the churn cost.`,
+        );
+        lines.push(
+          `4. If this edge is a BRIDGE, explicitly flag the risk: current architecture has no alternative path between these clusters, so breaking it isolates part of the codebase.`,
+        );
+        lines.push(``);
+        lines.push(
+          `Context: bottleneck score = normalized edge betweenness × (1 + normalized co-change weight). A score near 1.0 means the vast majority of shortest dependency paths in the project pass through this one edge, AND the two files change together frequently in git history — both signals of a fragile architectural coupling.`,
+        );
+        return lines.join('\n');
+      }
+
+      // ── Node-scoped prompt (no specific edge) ──────────────────────
+      const absPath = toAbs(node.id);
+
+      type HotEdge = { other: string; score: number; isBridge: boolean; direction: 'out' | 'in' };
+      const hotEdges: HotEdge[] = [];
+      for (const e of data.edges) {
+        const score = e.bottleneckScore ?? 0;
+        const isHot = score > 0 || e.isBridge === true;
+        if (!isHot) continue;
+        if (e.source === node.id)
+          hotEdges.push({ other: e.target, score, isBridge: e.isBridge === true, direction: 'out' });
+        else if (e.target === node.id)
+          hotEdges.push({ other: e.source, score, isBridge: e.isBridge === true, direction: 'in' });
+      }
+      hotEdges.sort((a, b) => b.score - a.score);
+
+      if (hotEdges.length === 0 && !node.isArticulation) return '';
+
+      const maxScore = hotEdges[0]?.score ?? 0;
+      const rank = rankedEdges.findIndex(
+        (e) => e.source === node.id || e.target === node.id,
+      );
+
+      const lines: string[] = [];
+      lines.push(`Analyze an architectural bottleneck at this location.`);
+      lines.push(``);
+      lines.push(`File: ${absPath}`);
+      lines.push(
+        `Top bottleneck score: ${maxScore.toFixed(2)}${rank >= 0 ? ` (rank #${rank + 1} among all edges in the project)` : ''}`,
+      );
+      if (node.isArticulation) {
+        lines.push(
+          `Articulation point: removing this file from the import graph would split the graph into multiple disconnected components.`,
+        );
+      }
+      if (hotEdges.length > 0) {
+        lines.push(``);
+        lines.push(`Critical dependencies (high bottleneck score):`);
+        for (const e of hotEdges.slice(0, 10)) {
+          const arrow = e.direction === 'out' ? '→' : '←';
+          const bridge = e.isBridge ? ' [BRIDGE — removing this edge alone disconnects the graph]' : '';
+          lines.push(`  ${arrow} ${e.other} (score ${e.score.toFixed(2)}${bridge})`);
+        }
+      }
+      lines.push(``);
+      lines.push(`Tasks:`);
+      lines.push(`1. Read this file and summarise its current responsibilities in 3–5 bullets.`);
+      lines.push(`2. Investigate why it has such high coupling. Is it a god-module? A leaky abstraction? A registry/bus that collects too much?`);
+      lines.push(`3. Propose 2–3 concrete refactoring options with trade-offs. For each, predict the impact on the bottleneck score.`);
+      lines.push(`4. For each critical dependency above, classify it as: (a) invertible via interface, (b) extractable into a shared module, (c) mediatable via an event/queue, or (d) genuinely essential. Justify each call.`);
+      lines.push(``);
+      lines.push(`Context: bottleneck score = normalized edge betweenness × (1 + normalized co-change weight), computed over the import graph. High score means many shortest dependency paths cross this node AND it changes together with its neighbours in git history — a double signal for architectural fragility.`);
+      return lines.join('\n');
+    },
+    [root],
+  );
+
+  // Top hotspot edges for the bottleneck sidebar. Depends on `stats` (set after
+  // each fetch) so toggling modes — which retriggers loadGraph and repopulates
+  // payloadRef.current.edges with bottleneckScore — recomputes the list.
+  const topBottlenecks = useMemo(() => {
+    const data = payloadRef.current;
+    if (!data) return [] as VizEdge[];
+    if (!(settings.bottlenecks || settings.stressTest)) return [] as VizEdge[];
+    return [...data.edges]
+      .filter((e) => (e.bottleneckScore ?? 0) > 0 || e.isBridge === true)
+      .sort((a, b) => (b.bottleneckScore ?? 0) - (a.bottleneckScore ?? 0))
+      .slice(0, 20);
+  }, [stats, settings.bottlenecks, settings.stressTest]);
+
   // Select all nodes matching the current search query.
   // Intentionally does NOT auto-zoom — for large groups that would fling
   // the view way out. User can hit Fit explicitly if they want.
@@ -1954,50 +2552,299 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 
       <FpsBadge show={showFPS} />
 
-      {/* Stress Test HUD — shown only when Stress Test is active. Controls
-          live here instead of the main toolbar to avoid cluttering the pill
-          in normal mode, and to sit right next to the metrics they drive. */}
-      {stressTest && (
+      {/* Bottleneck hotspots panel — legend + Top-20 edges with click-to-focus.
+          Anchored top-left so it doesn't collide with the Stress Test HUD or
+          the selected-node popup on the right. Only shown when the bottleneck
+          layer is active (Bottlenecks or Stress Test pill). */}
+      {(bottlenecks || stressTest) && topBottlenecks.length > 0 && (
         <div
-          className="absolute right-3 z-30 px-3 py-2.5"
+          className="absolute left-3 z-30 px-3 py-2.5"
           style={{
             ...pillStyle,
             top: toolbarHeight + 18,
-            minWidth: 200,
+            width: 280,
             fontFamily: sysFont,
+            maxHeight: `calc(100% - ${toolbarHeight + 36}px)`,
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
           <div
-            className="text-[10px] uppercase tracking-wider mb-2"
+            className="text-[10px] uppercase tracking-wider mb-1.5"
             style={{ opacity: 0.6, letterSpacing: '0.08em' }}
           >
-            Stress Test
+            Bottleneck score
           </div>
-          <div className="flex gap-1.5 mb-2.5">
-            <button
-              onClick={breakNextEdge}
-              className="cosmos-gpu-pill-btn active"
-              title="Remove the highest-bottleneckScore remaining edge"
-            >
-              Break next
-            </button>
-            <button
-              onClick={resetStressTest}
-              className="cosmos-gpu-pill-btn"
-              title="Restore all broken edges"
-              disabled={brokenEdgeKeys.size === 0}
-            >
-              Reset
-            </button>
+          <div
+            style={{
+              height: 7,
+              borderRadius: 4,
+              background: 'linear-gradient(to right, #3b82f6, #f59e0b, #ef4444)',
+            }}
+          />
+          <div
+            className="flex justify-between text-[10px] mb-3 mt-1"
+            style={{ opacity: 0.55, fontVariantNumeric: 'tabular-nums' }}
+          >
+            <span>low</span>
+            <span style={{ color: '#ef4444' }}>● articulation point</span>
+            <span>high</span>
           </div>
-          <div className="text-[11px] leading-relaxed" style={{ opacity: 0.85 }}>
-            <div className="flex justify-between"><span>Broken</span><span>{brokenEdgeKeys.size}</span></div>
-            <div className="flex justify-between"><span>Components</span><span>{componentStats.count}</span></div>
-            <div className="flex justify-between"><span>Largest</span><span>{Math.round(componentStats.largestFrac * 100)}%</span></div>
-            <div className="flex justify-between"><span>Isolated</span><span>{componentStats.isolated}</span></div>
+
+          <div
+            className="text-[10px] uppercase tracking-wider mb-1.5"
+            style={{ opacity: 0.6, letterSpacing: '0.08em' }}
+          >
+            Top {topBottlenecks.length} hotspots
+          </div>
+          <div style={{ overflowY: 'auto', flex: 1, minHeight: 0, marginRight: -6, paddingRight: 6 }}>
+            {topBottlenecks.map((e, i) => {
+              const score = e.bottleneckScore ?? 0;
+              const [r, g, b] = bottleneckColor01(score);
+              const dotRgb = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+              const srcShort = e.source.split('/').pop() ?? e.source;
+              const tgtShort = e.target.split('/').pop() ?? e.target;
+              return (
+                <button
+                  key={`${e.source}|${e.target}|${i}`}
+                  onClick={() => focusBottleneckEdge(e)}
+                  className="cosmos-gpu-bn-row"
+                  title={`${e.source} → ${e.target}\nScore ${score.toFixed(3)}${e.isBridge ? ' (bridge)' : ''}`}
+                >
+                  <div className="cosmos-gpu-bn-row-top">
+                    <span
+                      className="cosmos-gpu-bn-dot"
+                      style={{ background: dotRgb }}
+                    />
+                    <span className="cosmos-gpu-bn-name">{srcShort}</span>
+                    {e.isBridge && <span className="cosmos-gpu-bn-bridge">BR</span>}
+                    <span className="cosmos-gpu-bn-score">{score.toFixed(2)}</span>
+                  </div>
+                  <div className="cosmos-gpu-bn-target">→ {tgtShort}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
+
+      {/* Stress Test HUD — decay curve + live metrics + controls. Runs only
+          when Stress Test is on; sits right-aligned below the toolbar so the
+          sidebar (left) and this panel (right) flank the graph without
+          overlapping the selected-node popup (which also docks right but
+          appears above this via z-index & only on selection). */}
+      {stressTest && (() => {
+        const chart = (() => {
+          const W = 240, H = 60;
+          const points = breakHistory;
+          if (points.length === 0) return null;
+          // X-axis max: during auto-play, scale to the user's chosen count so
+          // the curve physically fills left-to-right as the run progresses.
+          // Outside auto-play, just fit the current point set (min 10).
+          const lastBroken = points[points.length - 1].broken;
+          const maxBroken = autoSteps > 0
+            ? Math.max(autoStepsCount, lastBroken, 1)
+            : Math.max(10, lastBroken);
+          const mapped = points.map((p) => ({
+            x: (p.broken / maxBroken) * W,
+            y: (1 - p.largestFrac) * H,
+            broken: p.broken,
+            largestFrac: p.largestFrac,
+          }));
+          const curve = mapped
+            .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+            .join(' ');
+          // Damage area: fill the region ABOVE the curve (from y=0 down to
+          // the curve). Reads as "red damage grows from the top as breaks
+          // accumulate" — opposite of the original bottom-up fill, which
+          // painted the whole rect red while the graph was still mostly
+          // intact (curve hugs y=0 when largestFrac ~= 1).
+          const area =
+            `M 0 0 ` +
+            mapped.map((p) => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') +
+            ` L ${mapped[mapped.length - 1].x.toFixed(1)} 0 Z`;
+          const last = mapped[mapped.length - 1];
+          return { W, H, curve, area, last, maxBroken };
+        })();
+        const pct = Math.round(componentStats.largestFrac * 100);
+        return (
+          <div
+            ref={stressHudRef}
+            className="absolute right-3 z-30 px-3 py-2.5"
+            style={{
+              ...pillStyle,
+              top: toolbarHeight + 18,
+              width: 272,
+              fontFamily: sysFont,
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div
+                className="text-[10px] uppercase tracking-wider"
+                style={{ opacity: 0.6, letterSpacing: '0.08em' }}
+              >
+                What if — remove critical links
+              </div>
+              {autoSteps > 0 && (
+                <span
+                  className="text-[9px] font-bold"
+                  style={{ color: '#ef4444', opacity: 0.85 }}
+                >
+                  AUTO ×{autoSteps}
+                </span>
+              )}
+            </div>
+
+            {/* Decay curve — y: % of graph in largest component, x: # edges removed */}
+            {chart && (
+              <div style={{ position: 'relative', marginBottom: 10 }}>
+                <svg width={chart.W} height={chart.H + 12} style={{ overflow: 'visible', display: 'block' }}>
+                  {/* Gridline at 50% to eyeball the halfway mark */}
+                  <line
+                    x1={0} y1={chart.H / 2} x2={chart.W} y2={chart.H / 2}
+                    stroke="currentColor" strokeWidth={0.5} strokeDasharray="2 3" opacity={0.15}
+                  />
+                  <path d={chart.area} fill="rgba(239,68,68,0.12)" />
+                  <path d={chart.curve} fill="none" stroke="#ef4444" strokeWidth={1.5} strokeLinejoin="round" />
+                  <circle
+                    cx={chart.last.x} cy={chart.last.y} r={3}
+                    fill="#ef4444" stroke={isDark ? '#141518' : '#f5f5f7'} strokeWidth={1.5}
+                  />
+                  <text
+                    x={chart.W} y={chart.H + 10}
+                    textAnchor="end" fontSize={9} fill="currentColor" opacity={0.45}
+                    fontFamily='"SF Mono", ui-monospace, monospace'
+                  >
+                    {chart.maxBroken} breaks
+                  </text>
+                  <text
+                    x={0} y={chart.H + 10}
+                    textAnchor="start" fontSize={9} fill="currentColor" opacity={0.45}
+                    fontFamily='"SF Mono", ui-monospace, monospace'
+                  >
+                    0
+                  </text>
+                </svg>
+              </div>
+            )}
+
+            {/* Live metrics — large headline + compact secondary stats */}
+            <div className="flex items-baseline justify-between mb-1">
+              <span className="text-[11px]" style={{ opacity: 0.7 }}>Graph intact</span>
+              <span
+                className="font-semibold"
+                style={{
+                  fontFamily: '"SF Mono", ui-monospace, monospace',
+                  fontSize: 22,
+                  letterSpacing: '-0.02em',
+                  color: pct > 80 ? '#22c55e' : pct > 50 ? '#f59e0b' : '#ef4444',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {pct}%
+              </span>
+            </div>
+            <div className="text-[11px] mb-3" style={{ opacity: 0.7 }}>
+              <div className="flex justify-between">
+                <span>Fragmented into</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {componentStats.count} {componentStats.count === 1 ? 'piece' : 'pieces'}
+                </span>
+              </div>
+              <div className="flex justify-between" style={{ opacity: 0.75 }}>
+                <span>Orphaned files</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{componentStats.isolated}</span>
+              </div>
+              <div className="flex justify-between" style={{ opacity: 0.75 }}>
+                <span>Edges removed</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{brokenEdgeKeys.size}</span>
+              </div>
+            </div>
+
+            {/* Controls — Break / Auto / Stop / Reset. Disable everything
+                that would race the flash animation mid-break. */}
+            <div className="flex flex-wrap gap-1.5">
+              {autoSteps > 0 ? (
+                <button
+                  onClick={() => setAutoSteps(0)}
+                  className="cosmos-gpu-pill-btn active"
+                  title="Stop auto-destruction"
+                  style={{ color: '#ef4444' }}
+                >
+                  ⏸ Stop
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={breakNextEdge}
+                    className="cosmos-gpu-pill-btn active"
+                    title="Remove the highest-scoring remaining edge"
+                    disabled={pendingBreak != null}
+                  >
+                    Break next
+                  </button>
+                  <button
+                    onClick={() => setAutoSteps(autoStepsCount)}
+                    className="cosmos-gpu-pill-btn"
+                    title={`Auto: remove the top ${autoStepsCount} hottest edges one by one with animation`}
+                    disabled={pendingBreak != null}
+                  >
+                    ▶ Auto
+                  </button>
+                  <select
+                    value={autoStepsCount}
+                    onChange={(e) => setAutoStepsCount(parseInt(e.target.value, 10))}
+                    className={inputBase}
+                    style={{ ...inputStyle, border: 'none', padding: '2px 6px', fontSize: 11 }}
+                    title="How many edges Auto should break in this run"
+                    disabled={pendingBreak != null}
+                  >
+                    {[5, 10, 20, 30, 40, 50, 100].map((n) => (
+                      <option key={n} value={n}>×{n}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+              <button
+                onClick={resetStressTest}
+                className="cosmos-gpu-pill-btn"
+                title="Restore all broken edges and clear history"
+                disabled={brokenEdgeKeys.size === 0 && autoSteps === 0 && breakHistory.length <= 1}
+              >
+                Reset
+              </button>
+            </div>
+
+            {/* Live caption — during a single Break the current pendingBreak
+                drives it; during Auto we fall back to lastPendingBreak so the
+                caption stays visible through the ~100ms gap between breaks
+                instead of blinking on/off every cycle. Opacity dips slightly
+                during the gap so the user can still tell a flash is active. */}
+            {(() => {
+              const captionEdge = pendingBreak ?? (autoSteps > 0 ? lastPendingBreak : null);
+              if (!captionEdge) return null;
+              const live = pendingBreak != null;
+              return (
+                <div
+                  className="mt-2 text-[10px]"
+                  style={{
+                    opacity: live ? 0.9 : 0.65,
+                    color: '#fca5a5',
+                    fontFamily: '"SF Mono", ui-monospace, monospace',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    transition: 'opacity 150ms',
+                  }}
+                  title={`${captionEdge.source} → ${captionEdge.target}`}
+                >
+                  ⚡ {captionEdge.source.split('/').pop()} → {captionEdge.target.split('/').pop()}
+                </div>
+              );
+            })()}
+          </div>
+        );
+      })()}
 
       {/* Halo overlay — additive radial-gradient glows around top-importance
           nodes. `plus-lighter` is GPU-accelerated in Chromium (unlike
@@ -2094,6 +2941,68 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           border: 0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'};
           border-radius: 3px;
           opacity: 0.55;
+        }
+        .cosmos-gpu-bn-row {
+          display: block;
+          width: 100%;
+          text-align: left;
+          padding: 5px 7px;
+          margin-bottom: 2px;
+          border-radius: 6px;
+          border: 0.5px solid transparent;
+          background: transparent;
+          cursor: pointer;
+          color: inherit;
+          transition: background-color 120ms, border-color 120ms;
+        }
+        .cosmos-gpu-bn-row:hover {
+          background: ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'};
+          border-color: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'};
+        }
+        .cosmos-gpu-bn-row-top {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .cosmos-gpu-bn-dot {
+          width: 7px; height: 7px; border-radius: 999px;
+          flex-shrink: 0;
+          box-shadow: 0 0 6px currentColor;
+        }
+        .cosmos-gpu-bn-name {
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-family: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+          font-size: 10.5px;
+          letter-spacing: -0.01em;
+        }
+        .cosmos-gpu-bn-bridge {
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          color: #ef4444;
+          padding: 0 4px;
+          border: 0.5px solid rgba(239,68,68,0.5);
+          border-radius: 3px;
+        }
+        .cosmos-gpu-bn-score {
+          font-size: 10px;
+          opacity: 0.65;
+          font-variant-numeric: tabular-nums;
+          font-family: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+        }
+        .cosmos-gpu-bn-target {
+          margin-left: 13px;
+          margin-top: 1px;
+          font-family: "SF Mono", ui-monospace, Menlo, Monaco, monospace;
+          font-size: 9.5px;
+          opacity: 0.5;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .cosmos-gpu-fps,
         .cosmos-gpu-stats {
@@ -2392,10 +3301,33 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         const orderedIdes = canOpen
           ? [...ides.filter((i) => i.id === lastIdeId), ...ides.filter((i) => i.id !== lastIdeId)]
           : [];
+        // Precompute the AI prompt once per render so the container width,
+        // the inline preview, and the Copy button all read the same value.
+        const bottleneckActive = bottlenecks || stressTest;
+        const prompt = bottleneckActive ? buildBottleneckPrompt(selected, selectedEdge) : '';
+        // Both the popup and the Stress Test HUD dock top-right; stack the
+        // popup below the HUD when both are visible instead of overlapping.
+        // Measured via ResizeObserver so the popup slots right under the HUD
+        // regardless of its current height (chart + metrics + controls vary).
+        const topOffset = stressTest && stressHudHeight > 0
+          ? toolbarHeight + stressHudHeight + 30
+          : toolbarHeight + 18;
         return (
           <div
-            className="absolute right-3 z-20 px-3 py-2 text-[11px] max-w-sm"
-            style={{ ...pillStyle, borderRadius: 12, top: toolbarHeight + 18 }}
+            className="absolute right-3 z-20 px-3 py-2 text-[11px]"
+            style={{
+              ...pillStyle,
+              borderRadius: 12,
+              top: topOffset,
+              // Wider when an AI prompt is shown below — the monospace block
+              // needs room to breathe or the prompt wraps into an unreadable
+              // column. Normal selection stays compact.
+              width: prompt ? 420 : undefined,
+              maxWidth: prompt ? 'calc(100% - 24px)' : 384,
+              maxHeight: `calc(100% - ${topOffset + 18}px)`,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -2462,9 +3394,84 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                     ))}
                   </div>
                 )}
+
+                {/* Inline AI prompt — shown in bottleneck mode when the node
+                    carries a bottleneck signal. The user asked for the full
+                    prompt to be visible, not just a copy button, so they can
+                    sanity-check or tweak the text before pasting. Scrollable
+                    so long prompts don't blow out the popup height. */}
+                {prompt && (
+                  <div className="mt-3" style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span
+                        className="text-[10px] uppercase tracking-wider"
+                        style={{ opacity: 0.55, letterSpacing: '0.08em' }}
+                      >
+                        {selectedEdge ? 'AI prompt · this edge' : 'AI prompt · this file'}
+                      </span>
+                      <button
+                        className="cosmos-gpu-pill-btn"
+                        title="Copy the prompt below to your clipboard"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(prompt);
+                            setPromptCopied(true);
+                            setTimeout(() => setPromptCopied(false), 1500);
+                          } catch { /* clipboard blocked — ignore */ }
+                        }}
+                        style={{
+                          padding: '2px 8px',
+                          fontSize: 10,
+                          color: promptCopied ? '#22c55e' : '#fca5a5',
+                          borderColor: promptCopied ? 'rgba(34,197,94,0.4)' : 'rgba(252,165,165,0.35)',
+                          borderWidth: '0.5px',
+                          borderStyle: 'solid',
+                        }}
+                      >
+                        {promptCopied ? '✓ Copied' : '✨ Copy'}
+                      </button>
+                    </div>
+                    <div
+                      className="text-[10px] mb-1.5"
+                      style={{ opacity: 0.55, lineHeight: 1.4 }}
+                    >
+                      Copy this and paste into Claude / ChatGPT to investigate
+                      the bottleneck and get refactoring suggestions.
+                    </div>
+                    <pre
+                      onClick={(e) => {
+                        // Single-click selects the whole prompt so ⌘C works
+                        // even if the user doesn't want to hit the button.
+                        const range = document.createRange();
+                        range.selectNodeContents(e.currentTarget);
+                        const sel = window.getSelection();
+                        sel?.removeAllRanges();
+                        sel?.addRange(range);
+                      }}
+                      style={{
+                        maxHeight: 240,
+                        overflowY: 'auto',
+                        padding: '8px 10px',
+                        borderRadius: 6,
+                        background: isDark ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.05)',
+                        border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+                        fontSize: 10.5,
+                        fontFamily: '"SF Mono", ui-monospace, Menlo, Monaco, monospace',
+                        lineHeight: 1.45,
+                        color: isDark ? '#d4d4d8' : '#27272a',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        cursor: 'text',
+                        margin: 0,
+                      }}
+                    >
+                      {prompt}
+                    </pre>
+                  </div>
+                )}
               </div>
               <button
-                onClick={() => setSelected(null)}
+                onClick={() => { setSelected(null); setSelectedEdge(null); }}
                 className="cosmos-gpu-pill-btn"
                 style={{ padding: '2px 6px', opacity: 0.7 }}
               >×</button>
