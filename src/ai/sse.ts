@@ -86,6 +86,48 @@ export async function* parseAnthropicStream(body: ReadableStream<Uint8Array>): A
 }
 
 /**
+ * Parse an SSE stream from a Gemini-style :streamGenerateContent endpoint.
+ * Shared by both the consumer Generative Language API and Vertex AI — they
+ * emit the same payload shape (candidates[].content.parts[].text), just
+ * behind different hosts/auth.
+ */
+export async function* parseGeminiStream(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop()!;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') return;
+
+        try {
+          const chunk = JSON.parse(payload) as {
+            candidates?: { content?: { parts?: { text?: string }[] } }[];
+          };
+          const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) yield text;
+        } catch {
+          // skip malformed SSE chunks
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/**
  * Parse an NDJSON stream from Ollama's chat API.
  * Yields content strings as they arrive.
  */

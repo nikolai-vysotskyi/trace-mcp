@@ -3,7 +3,7 @@
  * Supports embeddings (text-embedding-004) and inference (gemini-2.0-flash, etc.).
  * Uses fetch directly; no SDK dependency required.
  */
-import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import type { AIProvider, ChatMessage, EmbeddingService, EmbeddingTask, InferenceService } from './interfaces.js';
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 
@@ -24,18 +24,20 @@ class GeminiEmbeddingService implements EmbeddingService {
     private dims: number,
   ) {}
 
-  async embed(text: string): Promise<number[]> {
-    const results = await this.embedBatch([text]);
+  async embed(text: string, task?: EmbeddingTask): Promise<number[]> {
+    const results = await this.embedBatch([text], task);
     return results[0] ?? [];
   }
 
-  async embedBatch(texts: string[]): Promise<number[][]> {
+  async embedBatch(texts: string[], task: EmbeddingTask = 'document'): Promise<number[][]> {
+    const taskType = task === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT';
     return withRetry(async () => {
       // Gemini batch embed API
       const requests = texts.map(text => ({
         model: `models/${this.model}`,
         content: { parts: [{ text }] },
         outputDimensionality: this.dims,
+        taskType,
       }));
 
       const resp = await fetch(

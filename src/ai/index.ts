@@ -6,13 +6,15 @@
  * all reuse OpenAIProvider with different default base URLs and models.
  */
 import type { TraceMcpConfig } from '../config.js';
-import type { AIProvider, EmbeddingService, InferenceService, ChatMessage } from './interfaces.js';
+import type { AIProvider, EmbeddingService, EmbeddingTask, InferenceService, ChatMessage } from './interfaces.js';
 import { FallbackProvider } from './fallback.js';
 import { OllamaProvider } from './ollama.js';
 import { OpenAIProvider } from './openai.js';
 import { OnnxProvider } from './onnx.js';
 import { GeminiProvider } from './gemini.js';
 import { AnthropicProvider } from './anthropic.js';
+import { VoyageProvider } from './voyage.js';
+import { VertexAIProvider } from './vertex.js';
 import { logger } from '../logger.js';
 import { aiTracker, type AIRequestType } from './tracker.js';
 
@@ -91,11 +93,11 @@ const OPENAI_COMPAT_DEFAULTS: Record<string, {
 class TrackedEmbeddingService implements EmbeddingService {
   constructor(private inner: EmbeddingService, private provider: string, private model: string, private url: string) {}
 
-  async embed(text: string): Promise<number[]> {
+  async embed(text: string, task?: EmbeddingTask): Promise<number[]> {
     const entry = aiTracker.start('embed', this.provider, this.model, this.url, text.length);
     const t0 = Date.now();
     try {
-      const result = await this.inner.embed(text);
+      const result = await this.inner.embed(text, task);
       aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
       return result;
     } catch (err: any) {
@@ -104,11 +106,11 @@ class TrackedEmbeddingService implements EmbeddingService {
     }
   }
 
-  async embedBatch(texts: string[]): Promise<number[][]> {
+  async embedBatch(texts: string[], task?: EmbeddingTask): Promise<number[][]> {
     const entry = aiTracker.start('embed_batch', this.provider, this.model, this.url, texts.length);
     const t0 = Date.now();
     try {
-      const result = await this.inner.embedBatch(texts);
+      const result = await this.inner.embedBatch(texts, task);
       aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
       return result;
     } catch (err: any) {
@@ -257,6 +259,43 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       inferenceModel: pick(config.ai.inference_model, 'claude-sonnet-4-6'),
       fastModel: pick(config.ai.fast_model, 'claude-haiku-4-5-20251001'),
     }), 'anthropic', 'https://api.anthropic.com'), features);
+  }
+
+  if (provider === 'voyage') {
+    const apiKey = config.ai.api_key ?? process.env.VOYAGE_API_KEY ?? '';
+    if (!apiKey) {
+      logger.warn('Voyage provider selected but no api_key configured — falling back');
+      return new FallbackProvider();
+    }
+    const url = pick(config.ai.base_url, 'https://api.voyageai.com/v1');
+    return new GatedAIProvider(wrapWithTracking(new VoyageProvider({
+      apiKey,
+      baseUrl: url,
+      embeddingModel: pick(config.ai.embedding_model, 'voyage-code-3'),
+      embeddingDimensions: config.ai.embedding_dimensions ?? 1024,
+    }), 'voyage', url), features);
+  }
+
+  if (provider === 'vertex') {
+    // Vertex requires a short-lived OAuth bearer token (from `gcloud auth
+    // print-access-token` or a service-account exchange). We accept it via the
+    // standard api_key slot so users don't need a new field name.
+    const accessToken = config.ai.api_key ?? process.env.GOOGLE_ACCESS_TOKEN ?? '';
+    const project = config.ai.vertex_project ?? process.env.GOOGLE_CLOUD_PROJECT ?? '';
+    const location = pick(config.ai.vertex_location, process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1');
+    if (!accessToken || !project) {
+      logger.warn('Vertex AI provider selected but api_key (access token) or vertex_project missing — falling back');
+      return new FallbackProvider();
+    }
+    return new GatedAIProvider(wrapWithTracking(new VertexAIProvider({
+      accessToken,
+      project,
+      location,
+      embeddingModel: pick(config.ai.embedding_model, 'text-embedding-005'),
+      embeddingDimensions: config.ai.embedding_dimensions ?? 768,
+      inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-flash'),
+      fastModel: pick(config.ai.fast_model, 'gemini-2.5-flash'),
+    }), 'vertex', `https://${location}-aiplatform.googleapis.com`), features);
   }
 
   // All OpenAI-compatible providers

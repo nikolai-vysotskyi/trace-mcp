@@ -22,7 +22,7 @@ class FallbackEmbeddingService implements EmbeddingService {
   }
 }
 
-class FallbackInferenceService implements InferenceService {
+export class FallbackInferenceService implements InferenceService {
   async generate(_prompt: string): Promise<string> {
     return '';
   }

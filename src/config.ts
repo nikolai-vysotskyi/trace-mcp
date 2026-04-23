@@ -26,7 +26,7 @@ const FrameworkConfigSchema = z.object({
 
 const AiConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  provider: z.enum(['onnx', 'ollama', 'openai', 'anthropic', 'lmstudio', 'gemini', 'mistral', 'deepseek', 'groq', 'together', 'xai']).default('onnx'),
+  provider: z.enum(['onnx', 'ollama', 'openai', 'anthropic', 'lmstudio', 'gemini', 'vertex', 'voyage', 'mistral', 'deepseek', 'groq', 'together', 'xai']).default('onnx'),
   /** Per-capability enable flags. Lets users disable inference while keeping embeddings (or vice versa)
    *  without switching provider. Disabled capabilities return fallback services (empty results). */
   features: z.object({
@@ -51,6 +51,10 @@ const AiConfigSchema = z.object({
    *  Or run from terminal: `OLLAMA_NUM_PARALLEL=<N> ollama serve`. */
   concurrency: z.number().int().min(1).max(32).default(1),
   reranker_model: z.string().optional(),
+  /** Vertex AI: GCP project ID hosting the models. */
+  vertex_project: z.string().optional(),
+  /** Vertex AI: GCP region routing requests (e.g. us-central1, europe-west4). */
+  vertex_location: z.string().optional(),
 }).optional();
 
 const PredictiveConfigSchema = z.object({

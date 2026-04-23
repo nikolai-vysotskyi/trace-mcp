@@ -2,9 +2,17 @@
  * AI layer interfaces — all optional, everything degrades gracefully.
  */
 
+/**
+ * Hint for providers that produce different embeddings for indexing vs retrieval
+ * (Voyage `input_type`, Vertex `task_type`). Providers that don't distinguish
+ * ignore this parameter. Default: `'document'` (indexing path) — callers
+ * embedding a search query MUST pass `'query'` to get optimal retrieval quality.
+ */
+export type EmbeddingTask = 'document' | 'query';
+
 export interface EmbeddingService {
-  embed(text: string): Promise<number[]>;
-  embedBatch(texts: string[]): Promise<number[][]>;
+  embed(text: string, task?: EmbeddingTask): Promise<number[]>;
+  embedBatch(texts: string[], task?: EmbeddingTask): Promise<number[][]>;
   dimensions(): number;
   /** Identifier of the embedding model in use (empty for no-op/fallback). */
   modelName(): string;
