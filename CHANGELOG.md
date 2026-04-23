@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.30.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.29.0...v1.30.0) (2026-04-23)
+
+
+### Features
+
+* **ai:** add Vertex AI and Voyage providers, retrieval task hint ([c566738](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c566738fc739dc5f023d13a5ee0ec957f12d3b11))
+* **analysis:** symbol-level bottlenecks + Stress Test hotspots UI ([1ea7b7a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ea7b7a5f54d2a62c5b6607733ece0808aca4369))
+* **plugins:** add aws-s3 / supabase / sortable, Laravel sub-plugins, expanded coverage ([9586790](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9586790c1f4280d7341bca07f20925959e70e663))
+
+
+### Bug Fixes
+
+* **code-smells:** skip markdown and other non-code files ([1199783](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1199783281822653615f164777ba98e71d1bb656))
+* **darwin:** prime amfid for prebuilt native modules ([f78e838](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f78e838b15b2fdf6860f7c1422e14da5d7bbd965))
+
+
+### Refactoring
+
+* **plugin-api:** add PluginRegistry.createWithDefaults factory ([e8964ac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e8964acae941d053406ad864a8731b49b29381ae))
+
+
+### Documentation
+
+* **plan:** session-providers implementation plan ([f6b4d0a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f6b4d0ae545fd173e75eee62f9924866ffd7550e))
+
 ## [1.29.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.28.0...v1.29.0) (2026-04-22)
 
 
