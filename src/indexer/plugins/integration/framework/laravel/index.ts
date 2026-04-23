@@ -58,6 +58,16 @@ import {
   buildEloquentSortableModelSymbols,
 } from './eloquent-sortable.js';
 import {
+  extractLaravelFavoriteModel,
+  buildLaravelFavoriteEdges,
+  buildLaravelFavoriteSymbols,
+} from './laravel-favorite.js';
+import {
+  extractLaravelFilemanagerConfig,
+  extractLaravelFilemanagerMacro,
+  buildLaravelFilemanagerRoutes,
+} from './laravel-filemanager.js';
+import {
   extractFeatureDefinitions,
   extractFeatureUsages,
   extractFeatureBladeUsages,
@@ -135,6 +145,12 @@ export class LaravelPlugin implements FrameworkPlugin {
   /** Whether spatie/eloquent-sortable is detected. */
   private hasEloquentSortable = false;
 
+  /** Whether overtrue/laravel-favorite is detected as a dependency. */
+  private hasLaravelFavorite = false;
+
+  /** Whether unisharp/laravel-filemanager is detected as a dependency. */
+  private hasLaravelFilemanager = false;
+
   detect(ctx: ProjectContext): boolean {
     // Check if composer.json has laravel/framework in require
     let deps: Record<string, string> | undefined;
@@ -172,6 +188,8 @@ export class LaravelPlugin implements FrameworkPlugin {
     if (deps['laravel/pennant']) this.hasPennant = true;
     if (deps['spatie/laravel-medialibrary']) this.hasMediaLibrary = true;
     if (deps['spatie/eloquent-sortable']) this.hasEloquentSortable = true;
+    if (deps['overtrue/laravel-favorite']) this.hasLaravelFavorite = true;
+    if (deps['unisharp/laravel-filemanager']) this.hasLaravelFilemanager = true;
 
     return true;
   }
@@ -439,6 +457,28 @@ export class LaravelPlugin implements FrameworkPlugin {
       const sortableInfo = extractEloquentSortableModel(source, filePath);
       if (sortableInfo) {
         result.symbols.push(...buildEloquentSortableModelSymbols(sortableInfo));
+      }
+    }
+
+    // ── overtrue/laravel-favorite ────────────────────────────
+    if (this.hasLaravelFavorite) {
+      const favoriteInfo = extractLaravelFavoriteModel(source, filePath);
+      if (favoriteInfo) {
+        result.edges = result.edges ?? [];
+        result.edges.push(...buildLaravelFavoriteEdges(favoriteInfo));
+        result.symbols.push(...buildLaravelFavoriteSymbols(favoriteInfo));
+      }
+    }
+
+    // ── unisharp/laravel-filemanager ─────────────────────────
+    if (this.hasLaravelFilemanager) {
+      const lfmConfig = extractLaravelFilemanagerConfig(source, filePath);
+      const lfmMacro = lfmConfig ? null : extractLaravelFilemanagerMacro(source, filePath);
+      const lfm = lfmConfig ?? lfmMacro;
+      if (lfm) {
+        result.routes = result.routes ?? [];
+        result.routes.push(...buildLaravelFilemanagerRoutes(lfm));
+        if (!result.frameworkRole) result.frameworkRole = 'laravel_filemanager_routes';
       }
     }
 

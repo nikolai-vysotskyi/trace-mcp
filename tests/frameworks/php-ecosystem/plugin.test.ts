@@ -62,6 +62,14 @@ describe('PhpEcosystemPlugin', () => {
       expect(plugin.detect(ctxWithRequire({ 'intervention/image': '^3.0' }))).toBe(true);
     });
 
+    it('detects intervention/image-laravel', () => {
+      expect(plugin.detect(ctxWithRequire({ 'intervention/image-laravel': '^1.0' }))).toBe(true);
+    });
+
+    it('detects league/csv', () => {
+      expect(plugin.detect(ctxWithRequire({ 'league/csv': '^9.0' }))).toBe(true);
+    });
+
     it('detects league/flysystem-aws-s3-v3', () => {
       expect(plugin.detect(ctxWithRequire({ 'league/flysystem-aws-s3-v3': '^3.0' }))).toBe(true);
     });
@@ -289,6 +297,38 @@ $manager = ImageManager::gd();
 $img = $manager->read('photo.jpg')->resize(800, 600)->save('out.jpg');`);
       const result = plugin.extractNodes('app/Services/ImageProcessor.php', source, 'php');
       expect(result._unsafeUnwrap().frameworkRole).toBe('intervention_image_usage');
+    });
+
+    it('tags Intervention Image Laravel facade usage', () => {
+      // intervention/image-laravel exposes the Laravel facade resolving to the
+      // same Intervention\Image\ImageManager — matches via the broad FQN.
+      const source = Buffer.from(`<?php
+use Intervention\\Image\\Laravel\\Facades\\Image;
+$img = Image::read($path)->resize(800, 600);`);
+      const result = plugin.extractNodes('app/Http/Controllers/UploadController.php', source, 'php');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('intervention_image_usage');
+    });
+
+    it('tags league/csv Reader usage', () => {
+      const source = Buffer.from(`<?php
+use League\\Csv\\Reader;
+$reader = Reader::createFromPath('data.csv', 'r');
+$reader->setHeaderOffset(0);`);
+      const result = plugin.extractNodes('app/Imports/LeadsImport.php', source, 'php');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('league_csv_usage');
+    });
+
+    it('tags league/csv Writer usage via static constructor (no use statement)', () => {
+      const source = Buffer.from(`<?php
+namespace App\\Exports;
+class LeadsExport {
+  public function handle(): void {
+    $writer = Writer::createFromString('');
+    $writer->insertOne(['name', 'email']);
+  }
+}`);
+      const result = plugin.extractNodes('app/Exports/LeadsExport.php', source, 'php');
+      expect(result._unsafeUnwrap().frameworkRole).toBe('league_csv_usage');
     });
 
     it('tags Flysystem S3 adapter usage (via namespace)', () => {

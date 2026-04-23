@@ -1,0 +1,8 @@
+{
+  "name": "aws-s3-fixture",
+  "dependencies": {
+    "aws-sdk": "^2.1550.0",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/lib-storage": "^3.600.0"
+  }
+}

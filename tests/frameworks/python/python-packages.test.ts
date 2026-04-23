@@ -194,6 +194,19 @@ p = clf.predict(X)
     expect(r.edges!.some(e => e.edgeType === 'ml_train')).toBe(true);
     expect(r.edges!.some(e => e.edgeType === 'ml_predict')).toBe(true);
   });
+
+  it('extracts SentenceTransformer model loads', async () => {
+    const r = await extract(plugin, `
+from sentence_transformers import SentenceTransformer, CrossEncoder
+model = SentenceTransformer("all-MiniLM-L6-v2")
+cross = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+embeddings = model.encode(["hello world"])
+`);
+    const loads = r.edges!.filter(e => e.edgeType === 'ml_model_load' && e.metadata?.kind === 'sentence_transformer');
+    expect(loads.length).toBe(2);
+    expect(loads.some(e => e.metadata?.loader === 'SentenceTransformer' && e.metadata?.model === 'all-MiniLM-L6-v2')).toBe(true);
+    expect(loads.some(e => e.metadata?.loader === 'CrossEncoder')).toBe(true);
+  });
 });
 
 describe('PythonScientificPlugin', () => {
