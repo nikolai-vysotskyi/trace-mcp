@@ -651,6 +651,16 @@ function priorityRank(p: SmellPriority): number {
 const BATCH_SIZE = 100;
 const MAX_FILE_SIZE = 512 * 1024; // 512 KB
 
+// Documentation / non-code files indexed by trace-mcp that must not be scanned
+// for code smells. Markdown headings like `### Bug Fixes` would otherwise match
+// the TODO regex (via the `#` comment-delimiter + `BUG` tag).
+const NON_CODE_EXTENSIONS = new Set([
+  '.md', '.mdx', '.markdown', '.rst', '.adoc', '.asciidoc', '.txt',
+]);
+const NON_CODE_LANGUAGES = new Set([
+  'markdown', 'mdx', 'rst', 'restructuredtext', 'asciidoc', 'text', 'plaintext',
+]);
+
 export function scanCodeSmells(
   store: Store,
   projectRoot: string,
@@ -687,6 +697,12 @@ export function scanCodeSmells(
     for (const file of batch) {
       // Skip test files unless explicitly included
       if (!includeTests && /\.(?:test|spec)\.|__tests__|\/tests?\//i.test(file.path)) continue;
+
+      // Skip documentation / non-code files — markdown headings and prose
+      // trigger false positives across every category.
+      const ext = path.extname(file.path).toLowerCase();
+      if (NON_CODE_EXTENSIONS.has(ext)) continue;
+      if (file.language && NON_CODE_LANGUAGES.has(file.language.toLowerCase())) continue;
 
       const absPath = path.resolve(projectRoot, file.path);
       let content: string;

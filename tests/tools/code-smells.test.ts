@@ -118,6 +118,20 @@ test('basic', () => {});
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap().findings).toHaveLength(1);
     });
+
+    test('skips markdown files (CHANGELOG headings must not match BUG tag)', () => {
+      writeFile(store, 'CHANGELOG.md', `
+## [1.29.0] - 2026-04-22
+
+### Bug Fixes
+
+* something was broken
+`, 'markdown');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
   });
 
   // -------------------------------------------------------------------
