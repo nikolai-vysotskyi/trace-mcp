@@ -17,8 +17,6 @@ import { getProject } from '../registry.js';
 import { findProjectRoot } from '../project-root.js';
 import { logger } from '../logger.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { exportSecurityContext } from '../tools/quality/security-context-export.js';
 
@@ -67,9 +65,7 @@ export const exportSecurityContextCommand = new Command('export-security-context
           watch: { enabled: false, debounceMs: 2000 },
         };
 
-        const registry = new PluginRegistry();
-        for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-        for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
+        const registry = PluginRegistry.createWithDefaults();
 
         logger.info('Indexing project...');
         const pipeline = new IndexingPipeline(store, registry, config, projectRoot);

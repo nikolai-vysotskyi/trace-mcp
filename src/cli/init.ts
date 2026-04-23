@@ -33,8 +33,6 @@ import { initializeDatabase } from '../db/schema.js';
 import { setupProject } from '../project-setup.js';
 import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { installGuiApp, isAppInstalled, isAppOutdated } from './install-app.js';
 import { ensureDaemonRunning } from './daemon.js';
@@ -343,9 +341,7 @@ export const initCommand = new Command('init')
             const db = initializeDatabase(dbPath);
             const store = new Store(db);
 
-            const registry = new PluginRegistry();
-            for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
-            for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
+            const registry = PluginRegistry.createWithDefaults();
 
             const pipeline = new IndexingPipeline(store, registry, configResult.value, proj.root);
             const result = await pipeline.indexAll(true);
@@ -548,9 +544,7 @@ async function runIndexingForProject(projectRoot: string): Promise<{ indexed: nu
   const dbPath = getDbPath(projectRoot);
   const db = initializeDatabase(dbPath);
   const store = new Store(db);
-  const registry = new PluginRegistry();
-  for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
-  for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
+  const registry = PluginRegistry.createWithDefaults();
 
   const pipeline = new IndexingPipeline(store, registry, configResult.value, projectRoot);
   try {
