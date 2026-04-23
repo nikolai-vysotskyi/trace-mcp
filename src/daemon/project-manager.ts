@@ -3,8 +3,6 @@ import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { loadConfig } from '../config.js';
 import type { TraceMcpConfig } from '../config.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { FileWatcher } from '../indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from '../ai/index.js';
@@ -36,11 +34,6 @@ export interface ManagedProject {
   serverHandle: ServerHandle;
   status: 'starting' | 'indexing' | 'ready' | 'error';
   error?: string;
-}
-
-function registerDefaultPlugins(registry: PluginRegistry): void {
-  for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-  for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
 }
 
 function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
@@ -88,8 +81,7 @@ export class ProjectManager {
     const db = initializeDatabase(dbPath);
     writeServerPid(db);
     const store = new Store(db);
-    const registry = new PluginRegistry();
-    registerDefaultPlugins(registry);
+    const registry = PluginRegistry.createWithDefaults();
 
     const progress = new ProgressState(db);
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress);

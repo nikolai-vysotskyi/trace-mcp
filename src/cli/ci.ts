@@ -11,8 +11,6 @@ import fs from 'node:fs';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { loadConfig } from '../config.js';
 import { getDbPath, ensureGlobalDirs } from '../global.js';
@@ -97,9 +95,7 @@ export const ciReportCommand = new Command('ci-report')
 
     // Optionally index first
     if (opts.index) {
-      const registry = new PluginRegistry();
-      for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-      for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
+      const registry = PluginRegistry.createWithDefaults();
 
       logger.info('CI report: indexing project...');
       const pipeline = new IndexingPipeline(store, registry, config, projectRoot);

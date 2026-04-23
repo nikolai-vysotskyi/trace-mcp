@@ -17,8 +17,6 @@ import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.
 import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
 import { createServer } from './server/server.js';
 import { logger, attachFileLogging } from './logger.js';
-import { createAllLanguagePlugins } from './indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from './indexer/plugins/integration/all.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import { FileWatcher } from './indexer/watcher.js';
 import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService, aiTracker } from './ai/index.js';
@@ -58,11 +56,6 @@ import { StdioSession } from './daemon/router/session.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { DEFAULT_DAEMON_PORT } from './global.js';
 import type { TraceMcpConfig } from './config.js';
-
-function registerDefaultPlugins(registry: PluginRegistry): void {
-  for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-  for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
-}
 
 /**
  * Resolve DB path for a project:
@@ -1827,8 +1820,7 @@ program
 
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
-    const registry = new PluginRegistry();
-    registerDefaultPlugins(registry);
+    const registry = PluginRegistry.createWithDefaults();
 
     logger.info({ dir: resolvedDir, dbPath, force: opts.force ?? false }, 'Indexing started');
 
@@ -1869,8 +1861,7 @@ program
 
     const db = initializeDatabase(dbPath);
     const store = new Store(db);
-    const registry = new PluginRegistry();
-    registerDefaultPlugins(registry);
+    const registry = PluginRegistry.createWithDefaults();
 
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
     await pipeline.indexFiles([resolvedFile]);

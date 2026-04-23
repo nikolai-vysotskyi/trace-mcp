@@ -1,6 +1,8 @@
 import type { LanguagePlugin, FrameworkPlugin, PluginManifest, ProjectContext } from './types.js';
 import { ok, err, type TraceMcpResult } from '../errors.js';
 import { pluginError } from '../errors.js';
+import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
+import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 
 export class PluginRegistry {
   private languagePlugins: LanguagePlugin[] = [];
@@ -17,6 +19,18 @@ export class PluginRegistry {
 
   registerFrameworkPlugin(plugin: FrameworkPlugin): void {
     this.frameworkPlugins.push(plugin);
+  }
+
+  /** Register the full set of built-in language and framework plugins. */
+  registerDefaults(): void {
+    for (const p of createAllLanguagePlugins()) this.registerLanguagePlugin(p);
+    for (const p of createAllIntegrationPlugins()) this.registerFrameworkPlugin(p);
+  }
+
+  static createWithDefaults(): PluginRegistry {
+    const registry = new PluginRegistry();
+    registry.registerDefaults();
+    return registry;
   }
 
   getLanguagePlugins(): LanguagePlugin[] {

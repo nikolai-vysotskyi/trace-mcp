@@ -21,8 +21,6 @@ import { setupProject } from '../project-setup.js';
 import { Store } from '../db/store.js';
 import { initializeDatabase } from '../db/schema.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import type { ChatMessage } from '../ai/interfaces.js';
 import {
@@ -52,13 +50,6 @@ async function resolveProject(repoArg?: string): Promise<ProjectContext> {
   return resolveLocalProject();
 }
 
-function createPluginRegistry(): PluginRegistry {
-  const registry = new PluginRegistry();
-  for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-  for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
-  return registry;
-}
-
 async function resolveLocalProject(): Promise<ProjectContext> {
   const cwd = process.cwd();
   let projectRoot: string;
@@ -86,7 +77,7 @@ async function resolveLocalProject(): Promise<ProjectContext> {
 
   const db = initializeDatabase(entry.dbPath);
   const store = new Store(db);
-  const pluginRegistry = createPluginRegistry();
+  const pluginRegistry = PluginRegistry.createWithDefaults();
 
   return { projectRoot, config, store, pluginRegistry };
 }
@@ -111,7 +102,7 @@ async function resolveRemoteRepo(repo: string): Promise<ProjectContext> {
 
   const db = initializeDatabase(entry.dbPath);
   const store = new Store(db);
-  const pluginRegistry = createPluginRegistry();
+  const pluginRegistry = PluginRegistry.createWithDefaults();
 
   process.stderr.write('Indexing...\n');
   const pipeline = new IndexingPipeline(store, pluginRegistry, config);

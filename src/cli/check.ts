@@ -15,8 +15,6 @@ import { evaluateQualityGates, formatGateReport, QualityGatesConfigSchema, type 
 import { logger } from '../logger.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import fs from 'node:fs';
 
 function resolveDbPath(projectRoot: string): string {
@@ -107,9 +105,7 @@ export const checkCommand = new Command('check')
 
     // Optionally re-index
     if (opts.index) {
-      const registry = new PluginRegistry();
-      for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-      for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
+      const registry = PluginRegistry.createWithDefaults();
       logger.info('Indexing project before quality check...');
       const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
       await pipeline.indexAll(false);

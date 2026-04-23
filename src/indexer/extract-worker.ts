@@ -8,8 +8,6 @@
  */
 import { parentPort } from 'node:worker_threads';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { createAllLanguagePlugins } from './plugins/language/all.js';
-import { createAllIntegrationPlugins } from './plugins/integration/all.js';
 import { FileExtractor } from './file-extractor.js';
 import { buildProjectContext } from './project-context.js';
 import type { ExtractRequest, ExtractResponse } from './extract-pool.js';
@@ -19,9 +17,7 @@ if (!parentPort) {
   throw new Error('extract-worker.ts must be loaded as a worker_thread');
 }
 
-const registry = new PluginRegistry();
-for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
+const registry = PluginRegistry.createWithDefaults();
 
 // Cache one FileExtractor per rootPath. The wsPluginCache + parser cache
 // live inside the extractor, so reusing it across requests is critical.

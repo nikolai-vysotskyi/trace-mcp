@@ -8,8 +8,6 @@ import path from 'node:path';
 import os from 'node:os';
 import { buildProjectContext } from '../indexer/project-context.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import Database from 'better-sqlite3';
 import type { DetectionResult, PackageManagerInfo, DetectedFramework, DetectedMcpClient } from './types.js';
 import { GUARD_HOOK_VERSION } from './types.js';
@@ -25,9 +23,7 @@ export function detectProject(dir: string): DetectionResult {
   const packageManagers = detectPackageManagers(projectRoot);
 
   // --- Frameworks via plugin registry ---
-  const registry = new PluginRegistry();
-  for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-  for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
+  const registry = PluginRegistry.createWithDefaults();
 
   const activeResult = registry.getActiveFrameworkPlugins(ctx);
   const frameworks: DetectedFramework[] = activeResult.isOk()

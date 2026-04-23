@@ -316,12 +316,10 @@ export async function runPostUpdateMigrations(): Promise<void> {
   if (projects.length > 0) {
     logger.info({ count: projects.length }, 'Post-update: reindexing registered projects...');
 
-    const [{ initializeDatabase }, { Store }, { PluginRegistry }, { createAllLanguagePlugins }, { createAllIntegrationPlugins }, { IndexingPipeline }, { loadConfig }] = await Promise.all([
+    const [{ initializeDatabase }, { Store }, { PluginRegistry }, { IndexingPipeline }, { loadConfig }] = await Promise.all([
       import('./db/schema.js'),
       import('./db/store.js'),
       import('./plugin-api/registry.js'),
-      import('./indexer/plugins/language/all.js'),
-      import('./indexer/plugins/integration/all.js'),
       import('./indexer/pipeline.js'),
       import('./config.js'),
     ]);
@@ -343,9 +341,7 @@ export async function runPostUpdateMigrations(): Promise<void> {
         const db = initializeDatabase(dbPath);
         const store = new Store(db);
 
-        const registry = new PluginRegistry();
-        for (const lp of createAllLanguagePlugins()) registry.registerLanguagePlugin(lp);
-        for (const fp of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(fp);
+        const registry = PluginRegistry.createWithDefaults();
 
         const pipeline = new IndexingPipeline(store, registry, configResult.value, proj.root);
         const result = await pipeline.indexAll(true); // force = true

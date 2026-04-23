@@ -18,8 +18,6 @@ import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
-import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { logger } from '../logger.js';
 import { listProjects, updateLastIndexed } from '../registry.js';
@@ -94,9 +92,7 @@ export const upgradeCommand = new Command('upgrade')
 
           // Force reindex
           if (!opts.skipReindex) {
-            const registry = new PluginRegistry();
-            for (const p of createAllLanguagePlugins()) registry.registerLanguagePlugin(p);
-            for (const p of createAllIntegrationPlugins()) registry.registerFrameworkPlugin(p);
+            const registry = PluginRegistry.createWithDefaults();
 
             const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
             const result = await pipeline.indexAll(true);
