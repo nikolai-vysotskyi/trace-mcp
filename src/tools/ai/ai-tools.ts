@@ -291,7 +291,7 @@ export function registerAITools(
         return { content: [{ type: 'text', text: j({ error: 'Provide symbol_id or query' }) }], isError: true };
       }
 
-      const embedding = await embeddingService.embed(queryText);
+      const embedding = await embeddingService.embed(queryText, 'query');
       if (embedding.length === 0) {
         return { content: [{ type: 'text', text: j({ results: [] }) }] };
       }

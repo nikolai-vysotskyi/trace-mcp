@@ -154,7 +154,13 @@ AI features enable semantic search (vector embeddings) and optional LLM-powered 
 |---|---|---|---|---|
 | **`onnx`** (default) | ✅ local, offline | ❌ | `@huggingface/transformers` (optional dep) | Zero-config — model auto-downloads (~23 MB) on first use |
 | **`ollama`** | ✅ via Ollama | ✅ via Ollama | Running Ollama instance | Install Ollama + pull models |
-| **`openai`** | ✅ via OpenAI API | ✅ via OpenAI API | API key | Set `api_key` or `OPENAI_API_KEY` env |
+| **`lmstudio`** | ✅ via LM Studio | ✅ via LM Studio | LM Studio server running | OpenAI-compatible, no API key |
+| **`openai`** | ✅ | ✅ | API key | `api_key` or `OPENAI_API_KEY` env |
+| **`anthropic`** | ❌ (no embeddings API) | ✅ | API key | `api_key` or `ANTHROPIC_API_KEY` env |
+| **`gemini`** | ✅ | ✅ | API key | Google Generative Language API (consumer) — `api_key` (AIza…) or `GEMINI_API_KEY` env |
+| **`vertex`** | ✅ | ✅ | OAuth token + GCP project | Google Vertex AI (GCP) — `api_key` = access token, plus `vertex_project` + `vertex_location` |
+| **`voyage`** | ✅ (code-tuned) | ❌ | API key | Voyage AI embeddings only — pair with another provider for inference |
+| **`mistral`** / **`groq`** / **`together`** / **`deepseek`** / **`xai`** | ✅ | ✅ | API key | OpenAI-compatible endpoints — per-provider `*_API_KEY` env |
 
 ### Minimal setup — local embeddings (no API keys)
 
@@ -206,14 +212,71 @@ This enables semantic/hybrid `search` and `query_by_intent` with zero configurat
 }
 ```
 
+### Full setup — Google Gemini (consumer API)
+
+Uses the Google Generative Language API (`generativelanguage.googleapis.com`) with a simple `AIza…` API key from [ai.google.dev](https://ai.google.dev). For GCP-governed workloads, use the `vertex` provider instead.
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "gemini",
+    "api_key": "AIza...",
+    "inference_model": "gemini-2.5-flash",
+    "embedding_model": "text-embedding-004",
+    "embedding_dimensions": 768
+  }
+}
+```
+
+### Full setup — Google Vertex AI (GCP)
+
+Uses Vertex AI with a short-lived OAuth2 access token (~1h TTL). Generate via `gcloud auth print-access-token` — you're responsible for refreshing it.
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "vertex",
+    "api_key": "ya29....",                // `gcloud auth print-access-token`
+    "vertex_project": "my-gcp-project",
+    "vertex_location": "us-central1",
+    "inference_model": "gemini-2.5-flash",
+    "embedding_model": "text-embedding-005",
+    "embedding_dimensions": 768
+  }
+}
+```
+
+Environment variables: `GOOGLE_ACCESS_TOKEN`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` are honored when the config fields are unset.
+
+### Full setup — Voyage AI (embeddings only)
+
+Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for source code and is the recommended default for this project. Voyage has no inference API — keep `features.inference` disabled, or layer Voyage embeddings on top of Anthropic/OpenAI/Ollama for summarization by switching providers per-capability in your own setup.
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "voyage",
+    "api_key": "pa-...",                   // or VOYAGE_API_KEY env
+    "embedding_model": "voyage-code-3",
+    "embedding_dimensions": 1024,
+    "features": { "embedding": true, "inference": false, "fast_inference": false }
+  }
+}
+```
+
 ### All options
 
 | Option | Default | Description |
 |---|---|---|
 | `ai.enabled` | `false` | Enable AI features |
-| `ai.provider` | `"onnx"` | `"onnx"` (local, zero-config), `"ollama"`, or `"openai"` |
-| `ai.base_url` | — | Custom API endpoint (ollama/openai only) |
-| `ai.api_key` | — | API key (required for openai; or set `OPENAI_API_KEY` env) |
+| `ai.provider` | `"onnx"` | `onnx`, `ollama`, `lmstudio`, `openai`, `anthropic`, `gemini`, `vertex`, `voyage`, `mistral`, `groq`, `together`, `deepseek`, `xai` |
+| `ai.base_url` | — | Custom API endpoint (providers that honor it) |
+| `ai.api_key` | — | API key, or OAuth access token for `vertex`. Env fallbacks: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_ACCESS_TOKEN`, `VOYAGE_API_KEY`, etc. |
+| `ai.vertex_project` | — | Vertex only — GCP project ID (or `GOOGLE_CLOUD_PROJECT` env) |
+| `ai.vertex_location` | `us-central1` | Vertex only — GCP region (or `GOOGLE_CLOUD_LOCATION` env) |
 | `ai.inference_model` | — | LLM for explanations and reviews (ollama/openai only) |
 | `ai.fast_model` | — | Faster LLM for lightweight tasks (ollama/openai only) |
 | `ai.embedding_model` | auto per provider | `"Xenova/all-MiniLM-L6-v2"` (onnx), `"qwen3-embedding:0.6b"` (ollama), `"text-embedding-3-small"` (openai) |

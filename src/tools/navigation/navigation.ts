@@ -366,7 +366,7 @@ async function runFusionSearch(
   let similarityResults: Array<{ id: number; score: number }> = [];
   if (useAI) {
     try {
-      const queryEmbedding = await aiOptions!.embeddingService!.embed(query);
+      const queryEmbedding = await aiOptions!.embeddingService!.embed(query, 'query');
       if (queryEmbedding.length > 0) {
         similarityResults = aiOptions!.vectorStore!.search(queryEmbedding, fetchLimit);
       }

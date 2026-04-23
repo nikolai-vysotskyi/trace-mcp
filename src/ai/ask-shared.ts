@@ -7,7 +7,7 @@ import type { TraceMcpConfig } from '../config.js';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ChatMessage } from './interfaces.js';
-import { parseOpenAIStream, parseAnthropicStream } from './sse.js';
+import { parseOpenAIStream, parseAnthropicStream, parseGeminiStream } from './sse.js';
 
 // ---------------------------------------------------------------------------
 // LLM provider interface + factories
@@ -49,6 +49,51 @@ export function createOpenAICompatibleProvider(
       }
 
       yield* parseOpenAIStream(resp.body!);
+    },
+  };
+}
+
+export function createVertexAIProvider(
+  accessToken: string,
+  project: string,
+  location: string,
+  model: string,
+): LLMProvider {
+  const host = `https://${location}-aiplatform.googleapis.com`;
+  const url = `${host}/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:streamGenerateContent?alt=sse`;
+  return {
+    name: `vertex (${model})`,
+    async *streamChat(messages, options) {
+      const systemMsg = messages.find(m => m.role === 'system');
+      const nonSystemMsgs = messages.filter(m => m.role !== 'system');
+      const contents = nonSystemMsgs.map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          contents,
+          ...(systemMsg ? { systemInstruction: { parts: [{ text: systemMsg.content }] } } : {}),
+          generationConfig: {
+            ...(options?.maxTokens ? { maxOutputTokens: options.maxTokens } : {}),
+            ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+          },
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        throw new Error(`Vertex AI API error: ${resp.status} — ${body.slice(0, 300)}`);
+      }
+
+      yield* parseGeminiStream(resp.body!);
     },
   };
 }
@@ -126,6 +171,15 @@ export function resolveProvider(opts: { model?: string; provider?: string }, con
     );
   }
 
+  if (opts.provider === 'vertex' || (!opts.provider && process.env.GOOGLE_ACCESS_TOKEN && process.env.GOOGLE_CLOUD_PROJECT)) {
+    const token = process.env.GOOGLE_ACCESS_TOKEN ?? config?.ai?.api_key ?? '';
+    const project = process.env.GOOGLE_CLOUD_PROJECT ?? config?.ai?.vertex_project ?? '';
+    const location = pick(process.env.GOOGLE_CLOUD_LOCATION, pick(config?.ai?.vertex_location, 'us-central1'));
+    if (!token) throw new Error('GOOGLE_ACCESS_TOKEN environment variable (or ai.api_key) is required for Vertex AI provider');
+    if (!project) throw new Error('GOOGLE_CLOUD_PROJECT environment variable (or ai.vertex_project) is required for Vertex AI provider');
+    return createVertexAIProvider(token, project, location, pick(opts.model, 'gemini-2.5-flash'));
+  }
+
   // 2. Fallback: config-level AI provider
   if (config?.ai?.enabled && config.ai.provider !== 'onnx') {
     const provider = config.ai.provider;
@@ -148,6 +202,15 @@ export function resolveProvider(opts: { model?: string; provider?: string }, con
         pick(model, 'llama3.2'),
       );
     }
+
+    if (provider === 'vertex') {
+      const token = config.ai.api_key ?? process.env.GOOGLE_ACCESS_TOKEN ?? '';
+      const project = config.ai.vertex_project ?? process.env.GOOGLE_CLOUD_PROJECT ?? '';
+      const location = pick(config.ai.vertex_location, pick(process.env.GOOGLE_CLOUD_LOCATION, 'us-central1'));
+      if (token && project) {
+        return createVertexAIProvider(token, project, location, pick(model, 'gemini-2.5-flash'));
+      }
+    }
   }
 
   throw new Error(
@@ -155,8 +218,9 @@ export function resolveProvider(opts: { model?: string; provider?: string }, con
     '  GROQ_API_KEY     — Groq (fast, free tier)\n' +
     '  ANTHROPIC_API_KEY — Anthropic (Claude)\n' +
     '  OPENAI_API_KEY   — OpenAI (GPT)\n' +
+    '  GOOGLE_ACCESS_TOKEN + GOOGLE_CLOUD_PROJECT — Google Vertex AI\n' +
     '\nOr configure ai.provider + ai.api_key in trace-mcp.config.json\n' +
-    'Or use --provider <groq|anthropic|openai>',
+    'Or use --provider <groq|anthropic|openai|vertex>',
   );
 }
 

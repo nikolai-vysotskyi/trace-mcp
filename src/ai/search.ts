@@ -66,7 +66,7 @@ export async function hybridSearch(
 
   if (!skipVector && vectorStore && embeddingService) {
     try {
-      const queryEmbedding = await embeddingService.embed(query);
+      const queryEmbedding = await embeddingService.embed(query, 'query');
       if (queryEmbedding.length > 0) {
         const vectorResults = vectorStore.search(queryEmbedding, limit * 3);
         for (let i = 0; i < vectorResults.length; i++) {

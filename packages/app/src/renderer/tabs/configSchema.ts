@@ -229,7 +229,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
     description: 'AI provider for semantic search, summaries, and intent classification',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
-      { key: 'provider', label: 'Provider', type: 'select', options: ['onnx', 'ollama', 'lmstudio', 'openai', 'anthropic', 'gemini', 'mistral', 'groq', 'together', 'deepseek', 'xai'], defaultValue: 'onnx', showIf: 'enabled', description: 'onnx = local zero-config. ollama/lmstudio = local with model choice. Others = cloud APIs.' },
+      { key: 'provider', label: 'Provider', type: 'select', options: ['onnx', 'ollama', 'lmstudio', 'openai', 'anthropic', 'gemini', 'vertex', 'voyage', 'mistral', 'groq', 'together', 'deepseek', 'xai'], defaultValue: 'onnx', showIf: 'enabled', description: 'onnx = local zero-config. ollama/lmstudio = local with model choice. gemini = Google Generative Language API (consumer, AIza key). vertex = Google Vertex AI (GCP, OAuth bearer token + project/location). voyage = Voyage AI embeddings only. Others = cloud APIs.' },
 
       // ── Per-capability enable flags ──
       // Lets users run embeddings without inference (or vice versa) without switching provider.
@@ -247,8 +247,15 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-...', sensitive: true, showIf: 'provider=openai', description: 'Required. Or set OPENAI_API_KEY env var.' },
       // ── Connection: Anthropic ──
       { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-ant-...', sensitive: true, showIf: 'provider=anthropic', description: 'Anthropic API key from console.anthropic.com. Or set ANTHROPIC_API_KEY env var.' },
-      // ── Connection: Gemini ──
-      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'AIza...', sensitive: true, showIf: 'provider=gemini', description: 'Google AI API key from ai.google.dev. Or set GEMINI_API_KEY env var.' },
+      // ── Connection: Gemini (Google Generative Language API — consumer endpoint) ──
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'AIza...', sensitive: true, showIf: 'provider=gemini', description: 'Google Generative Language API key from ai.google.dev (starts with AIza). Or set GEMINI_API_KEY env var. For GCP/Vertex use the "vertex" provider instead.' },
+      // ── Connection: Vertex AI (Google Cloud) ──
+      { key: 'api_key', label: 'Access Token', type: 'string', placeholder: 'ya29....', sensitive: true, showIf: 'provider=vertex', description: 'OAuth2 bearer token (short-lived, ~1h). Generate via: gcloud auth print-access-token. Or set GOOGLE_ACCESS_TOKEN env var.' },
+      { key: 'vertex_project', label: 'GCP Project', type: 'string', placeholder: 'my-gcp-project', showIf: 'provider=vertex', description: 'Google Cloud project ID hosting Vertex AI. Or set GOOGLE_CLOUD_PROJECT env var.' },
+      { key: 'vertex_location', label: 'GCP Location', type: 'string', placeholder: 'us-central1', defaultValue: 'us-central1', showIf: 'provider=vertex', description: 'Vertex AI region (e.g. us-central1, europe-west4, asia-northeast1). Or set GOOGLE_CLOUD_LOCATION env var.' },
+      // ── Connection: Voyage ──
+      { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.voyageai.com/v1', showIf: 'provider=voyage', description: 'Voyage AI endpoint. Usually the default.' },
+      { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'pa-...', sensitive: true, showIf: 'provider=voyage', description: 'Voyage API key from dash.voyageai.com. Or set VOYAGE_API_KEY env var. Embeddings only — no inference.' },
       // ── Connection: Mistral ──
       { key: 'base_url', label: 'Base URL', type: 'string', placeholder: 'https://api.mistral.ai/v1', showIf: 'provider=mistral', description: 'Mistral API endpoint.' },
       { key: 'api_key', label: 'API Key', type: 'string', placeholder: 'sk-...', sensitive: true, showIf: 'provider=mistral', description: 'Mistral API key from console.mistral.ai. Or set MISTRAL_API_KEY env var.' },
@@ -285,6 +292,12 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'gemini-2.5-flash', showIf: 'provider=gemini', description: 'Gemini model for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'gemini-2.5-flash', showIf: 'provider=gemini', description: 'Fast Gemini model for low-latency tasks.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'embedding_model', label: 'Embedding model', type: 'model-select', placeholder: 'text-embedding-004', showIf: 'provider=gemini', description: 'Gemini embedding model. text-embedding-004 (768d) is recommended.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
+      // ── Model fields: Vertex AI ──
+      { key: 'inference_model', label: 'Inference model', type: 'string', placeholder: 'gemini-2.5-flash', showIf: 'provider=vertex', description: 'Vertex-hosted model for summarization (e.g. gemini-2.5-flash, gemini-2.5-pro).' },
+      { key: 'fast_model', label: 'Fast model', type: 'string', placeholder: 'gemini-2.5-flash', showIf: 'provider=vertex', description: 'Fast Vertex model for low-latency tasks.' },
+      { key: 'embedding_model', label: 'Embedding model', type: 'string', placeholder: 'text-embedding-005', showIf: 'provider=vertex', description: 'Vertex embedding model (e.g. text-embedding-005 768d, gemini-embedding-001 3072d).' },
+      // ── Model fields: Voyage ──
+      { key: 'embedding_model', label: 'Embedding model', type: 'string', placeholder: 'voyage-code-3', showIf: 'provider=voyage', description: 'Voyage embedding model. voyage-code-3 (1024d) is tuned for source code.' },
       // ── Model fields: Mistral ──
       { key: 'inference_model', label: 'Inference model', type: 'model-select', placeholder: 'mistral-small-latest', showIf: 'provider=mistral', description: 'Mistral LLM for summarization.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
       { key: 'fast_model', label: 'Fast model', type: 'model-select', placeholder: 'mistral-small-latest', showIf: 'provider=mistral', description: 'Fast Mistral model.', modelProvider: 'provider', modelBaseUrlField: 'base_url' },
@@ -307,7 +320,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       { key: 'embedding_model', label: 'Embedding model', type: 'string', placeholder: 'Xenova/all-MiniLM-L6-v2', showIf: 'provider=onnx', description: 'ONNX model for local embeddings. Default works out of the box.' },
 
       // ── Common fields ──
-      { key: 'embedding_dimensions', label: 'Embedding dimensions', type: 'number', placeholder: '384', min: 1, showIf: 'enabled', description: 'Vector size. Must match the model (384 for MiniLM, 768 for nomic/Gemini, 1024 for Mistral, 1536 for OpenAI).' },
+      { key: 'embedding_dimensions', label: 'Embedding dimensions', type: 'number', placeholder: '384', min: 1, showIf: 'enabled', description: 'Vector size. Must match the model (384 for MiniLM, 768 for nomic/Gemini/Vertex text-embedding-005, 1024 for Mistral/voyage-code-3, 1536 for OpenAI, 3072 for gemini-embedding-001).' },
       { key: 'summarize_on_index', label: 'Summarize on index', type: 'boolean', defaultValue: false, showIf: 'enabled', description: 'Generate natural-language summaries during indexing. Requires a provider with inference model.' },
       { key: 'summarize_batch_size', label: 'Summarize batch size', type: 'number', placeholder: '20', min: 1, defaultValue: 20, showIf: 'summarize_on_index', description: 'Symbols to summarize in parallel per batch.' },
       { key: 'summarize_kinds', label: 'Summarize kinds', type: 'multiselect', options: ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type', 'variable', 'constant', 'property', 'module', 'namespace'], defaultValue: ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'], showIf: 'summarize_on_index', description: 'Which symbol kinds to generate summaries for.' },
