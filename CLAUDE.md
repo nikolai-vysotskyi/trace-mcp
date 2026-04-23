@@ -32,6 +32,9 @@ Never report "done" based on a plausible-looking diff. Run the test/build/typech
 ### 2-strike session rule
 After two failed attempts at the same issue, stop. Summarize what was tried, what was learned, and ask the user to reset the session with a sharper prompt. Do not grind through a third attempt in a polluted context — fresh session + better prompt beats long session + accumulated failures.
 
+### English only in code and content
+All text committed to the repository — UI strings, button labels, tooltips, error messages, log output, code comments, docstrings, README/docs, commit messages — MUST be in English. This is a hard rule even when the user is chatting with you in another language. If the user writes in Russian, answer them in Russian, but every string you put in a file is English. No exceptions, including ad-hoc test fixtures or TODO comments. If unsure whether a fixture counts, default to English.
+
 ## Build & Test
 
 ```bash
