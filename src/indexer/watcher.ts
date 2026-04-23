@@ -1,11 +1,70 @@
-import * as parcelWatcher from '@parcel/watcher';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import type * as parcelWatcher from '@parcel/watcher';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 
+type ParcelWatcherModule = typeof parcelWatcher;
+
 /** Debounce window in ms — coalesces rapid saves from editors. */
 const DEFAULT_DEBOUNCE_MS = 300;
+
+/**
+ * Retry delays (ms) for loading @parcel/watcher on macOS. The prebuilt
+ * ad-hoc-signed `.node` bundle can race with amfid/syspolicyd on first load
+ * (symptom: "library load disallowed by system policy"). The retry window
+ * covers the observed race; subsequent loads succeed because the signature
+ * has since been validated by the OS.
+ */
+const MAC_LOAD_RETRY_DELAYS_MS = [300, 900, 2000];
+
+let cachedWatcher: ParcelWatcherModule | null = null;
+
+function isMacSystemPolicyError(e: unknown): boolean {
+  if (process.platform !== 'darwin') return false;
+  const err = e as NodeJS.ErrnoException & { message?: string };
+  if (err?.code !== 'ERR_DLOPEN_FAILED') return false;
+  return typeof err.message === 'string'
+    && err.message.includes('library load disallowed by system policy');
+}
+
+function extractDlopenPath(e: unknown): string | null {
+  const msg = (e as { message?: string })?.message;
+  if (typeof msg !== 'string') return null;
+  const match = msg.match(/dlopen\(([^,)]+)/);
+  return match ? match[1] : null;
+}
+
+/** Ask macOS to verify the signature — forces amfid to complete first-load assessment. */
+function primeAmfid(file: string): void {
+  try {
+    execFileSync('/usr/bin/codesign', ['--verify', file], { stdio: 'ignore', timeout: 5000 });
+  } catch {
+    /* best effort — even a rejection means amfid has now assessed the file */
+  }
+}
+
+async function loadParcelWatcher(): Promise<ParcelWatcherModule> {
+  if (cachedWatcher) return cachedWatcher;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= MAC_LOAD_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      cachedWatcher = (await import('@parcel/watcher')) as ParcelWatcherModule;
+      return cachedWatcher;
+    } catch (e) {
+      lastErr = e;
+      if (!isMacSystemPolicyError(e)) throw e;
+      const file = extractDlopenPath(e);
+      logger.warn({ file, attempt }, 'macOS rejected native watcher load — retrying');
+      if (file) primeAmfid(file);
+      if (attempt < MAC_LOAD_RETRY_DELAYS_MS.length) {
+        await new Promise((r) => setTimeout(r, MAC_LOAD_RETRY_DELAYS_MS[attempt]));
+      }
+    }
+  }
+  throw lastErr;
+}
 
 export class FileWatcher {
   private subscription: parcelWatcher.AsyncSubscription | null = null;
@@ -24,10 +83,11 @@ export class FileWatcher {
     debounceMs = DEFAULT_DEBOUNCE_MS,
     onDeletes?: (paths: string[]) => Promise<void>,
   ): Promise<void> {
+    const watcher = await loadParcelWatcher();
     const traceignore = new TraceignoreMatcher(rootPath, config.ignore ?? {});
     const ignoreDirs = [...traceignore.getSkipDirs()].map((d) => path.join(rootPath, d));
 
-    this.subscription = await parcelWatcher.subscribe(
+    this.subscription = await watcher.subscribe(
       rootPath,
       async (err, events) => {
         if (err) {
@@ -94,4 +154,9 @@ export class FileWatcher {
       logger.info('File watcher stopped');
     }
   }
+}
+
+/** @internal — exported for tests to reset module-scoped cache between cases. */
+export function __resetWatcherCache(): void {
+  cachedWatcher = null;
 }
