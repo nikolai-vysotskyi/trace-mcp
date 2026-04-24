@@ -40,7 +40,7 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       min_confidence: z.number().min(0).max(1).optional().describe('Minimum confidence threshold for extracted decisions (default: 0.6)'),
     },
     async ({ project_root, force, min_confidence }) => {
-      const result = mineSessions(decisionStore, {
+      const result = await mineSessions(decisionStore, {
         projectRoot: project_root ?? projectRoot,
         force,
         minConfidence: min_confidence,
@@ -230,7 +230,7 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       const stats = decisionStore.getStats(projectRoot);
       let mineResult;
       if (shouldAutoMine && stats.total === 0) {
-        mineResult = mineSessions(decisionStore, { projectRoot });
+        mineResult = await mineSessions(decisionStore, { projectRoot });
         // Also index session content for search
         const indexResult = indexSessions(decisionStore, { projectRoot });
         mineResult = { ...mineResult, ...indexResult };

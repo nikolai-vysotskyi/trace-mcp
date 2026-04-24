@@ -1,9 +1,21 @@
 # Session Providers — Implementation Plan
 
 **Issue:** [#76 — Support for AMP, KiloCode, Cline, Cursor, Antigravity, Kimi, Warp](https://github.com/nikolai-vysotskyi/trace-mcp/issues/76)
-**Status:** Draft, awaiting sign-off
+**Status:** Partially shipped — Hermes provider landed ahead of Phase 0 (see §A3+ note below)
 **Owner:** TBD
 **Target release:** phased across 1.30 – 1.34
+
+## A3+ — Hermes Agent landed ahead of Phase 0 (2026-04-24)
+
+Phase 0 (refactor the existing Claude Code / Claw Code JSONL paths behind `SessionProvider`) is deferred. Hermes Agent support shipped first via an additive pathway that does NOT rewrite the legacy paths:
+
+- The `SessionProvider` interface (`src/session/providers/types.ts`) and `SessionProviderRegistry` (`src/session/providers/registry.ts`) exist per §4.2 – 4.3.
+- `HermesSessionProvider` implements the interface against a read-only SQLite source (`sqlite-source.ts`, plan §4.5).
+- `mineSessions` iterates the registry AFTER its existing Claude/Claw loop via `mineProviderSessions` in `src/memory/conversation-miner-providers.ts`. The legacy loop was not modified.
+- A golden-file lockdown test (`tests/analytics/list-all-sessions.snapshot.test.ts`) pins the existing `listAllSessions()` output against a committed fixture tree — the same tripwire Phase 0 would have needed.
+- No DB migration yet. The `providerId` column on session chunks remains deferred to Phase 0; for Hermes we encode provider in the `session_id` string (`hermes:<id>`) and attribute decisions to the caller-supplied `project_root`. Hermes mining is a no-op when `project_root` is absent — we do not guess.
+
+When Phase 0 lands it should collapse the Claude/Claw branches into the registry loop, drop the separate `conversation-miner-providers.ts` hook, and add the `providerId` column properly. The golden test should remain the acceptance gate.
 
 ---
 

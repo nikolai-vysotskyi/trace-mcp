@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { listAllSessions } from '../analytics/log-parser.js';
 import { logger } from '../logger.js';
 import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
+import { mineProviderSessions } from './conversation-miner-providers.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -37,7 +38,7 @@ interface ExtractedDecision {
   timestamp: string;
 }
 
-interface ConversationTurn {
+export interface ConversationTurn {
   role: 'user' | 'assistant';
   text: string;
   timestamp: string;
@@ -219,7 +220,7 @@ function extractTurnContent(
 // DECISION EXTRACTION
 // ════════════════════════════════════════════════════════════════════════
 
-function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[] {
+export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[] {
   const decisions: ExtractedDecision[] = [];
   const seen = new Set<string>();
 
@@ -313,7 +314,7 @@ function inferTags(content: string): string[] {
  * Mine all Claude Code / Claw Code sessions for decisions.
  * Skips already-mined sessions. Stores results in the decision store.
  */
-export function mineSessions(
+export async function mineSessions(
   decisionStore: DecisionStore,
   opts: {
     /** Only mine sessions for this project (default: all) */
@@ -323,7 +324,7 @@ export function mineSessions(
     /** Minimum confidence threshold (default: 0.6) */
     minConfidence?: number;
   } = {},
-): MineResult {
+): Promise<MineResult> {
   const start = Date.now();
   const sessions = listAllSessions();
   const minConfidence = opts.minConfidence ?? 0.6;
@@ -382,6 +383,18 @@ export function mineSessions(
       errors++;
     }
   }
+
+  const _providerCounters = { scanned, skipped, mined, extracted, errors };
+  await mineProviderSessions(
+    decisionStore,
+    { projectRoot: opts.projectRoot, force: opts.force, minConfidence: opts.minConfidence },
+    _providerCounters,
+  );
+  scanned = _providerCounters.scanned;
+  skipped = _providerCounters.skipped;
+  mined = _providerCounters.mined;
+  extracted = _providerCounters.extracted;
+  errors = _providerCounters.errors;
 
   return {
     sessions_scanned: scanned,

@@ -34,13 +34,13 @@ memoryCommand
   .option('--project <path>', 'Project root to mine (default: current directory)', process.cwd())
   .option('--force', 'Re-mine already processed sessions')
   .option('--min-confidence <n>', 'Minimum confidence threshold (default: 0.6)', '0.6')
-  .action((opts: { project: string; force?: boolean; minConfidence: string }) => {
+  .action(async (opts: { project: string; force?: boolean; minConfidence: string }) => {
     const store = openStore();
     try {
       const projectRoot = path.resolve(opts.project);
       console.log(`Mining sessions for: ${projectRoot}`);
 
-      const result = mineSessions(store, {
+      const result = await mineSessions(store, {
         projectRoot,
         force: opts.force,
         minConfidence: parseFloat(opts.minConfidence),

@@ -290,6 +290,24 @@ export const TraceMcpConfigSchema = z.object({
    * automatically via TRACE_MCP_MANAGED_BY=launchd env).
    */
   daemon_idle_exit_minutes: z.number().min(0).max(1440).default(15),
+  /**
+   * Hermes Agent (NousResearch) session provider.
+   *
+   * - `enabled: 'auto'` (default) registers the provider; discovery is a no-op
+   *   unless a state.db is actually found at the resolved Hermes home.
+   * - `enabled: false` skips registration entirely.
+   * - `home_override` replaces the default resolution order
+   *   ($HERMES_HOME → ~/.hermes).
+   * - `profile` scopes discovery to one profile under `<home>/profiles/<name>/`.
+   *
+   * Hermes sessions are global (no per-project binding); mining is gated
+   * on the caller supplying a `project_root` — see mineSessions semantics.
+   */
+  hermes: z.object({
+    enabled: z.union([z.literal('auto'), z.boolean()]).default('auto'),
+    home_override: z.string().optional(),
+    profile: z.string().optional(),
+  }).default({}),
   children: z.array(z.string()).optional(),
 });
 
