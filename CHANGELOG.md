@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.31.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.30.0...v1.31.0) (2026-04-24)
+
+
+### Features
+
+* **init:** Hermes Agent as a supported MCP client ([a8a19ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a8a19ef0e9e6ac39433d225f000cce8ffff22b32))
+* **session-providers:** Hermes Agent session provider + SessionProvider interface ([b44edbc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b44edbc0756566f7f5cc7fba69b3fd4d91a3fa5f))
+
+
+### Bug Fixes
+
+* **updater:** skip auto-update in dev checkouts ([a439fb6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a439fb6fde700e2dd739f1f423b8232497d8d9e4))
+
+
+### Refactoring
+
+* **init:** extract shared md-block helper from claude-md.ts ([869f42f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/869f42f1cd25b072bf5f5b8a10720ec6ce37fa8e))
+
+
+### Documentation
+
+* **benchmark:** update with v1.30 results (92.8% reduction) ([15ea976](https://github.com/nikolai-vysotskyi/trace-mcp/commit/15ea976d75dfea258b0683cf3b562e963e77954e))
+
 ## [1.30.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.29.0...v1.30.0) (2026-04-23)
 
 
