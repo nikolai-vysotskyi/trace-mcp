@@ -10,6 +10,8 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import { configureMcpClients } from '../init/mcp-client.js';
 import { updateClaudeMd } from '../init/claude-md.js';
+import { updateAgentsMd } from '../init/agents-md.js';
+import { installHermesHooks } from '../init/hermes-hooks.js';
 import { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook, cleanupLegacyHooks } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
 
@@ -43,7 +45,7 @@ export const initCommand = new Command('init')
   .option('--skip-hooks', 'Do not install guard hooks')
   .option('--skip-mcp-client', 'Do not configure MCP client')
   .option('--skip-claude-md', 'Do not add CLAUDE.md block')
-  .option('--mcp-client <name>', 'Force MCP client: claude-code | claude-desktop | cursor | windsurf | continue')
+  .option('--mcp-client <name>', 'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes')
   .option('--force', 'Overwrite existing configuration')
   .option('--dry-run', 'Show what would be done without writing files')
   .option('--json', 'Output results as JSON (implies --yes)')
@@ -95,7 +97,7 @@ export const initCommand = new Command('init')
 
       // Q1: Which MCP clients
       if (!opts.skipMcpClient && !opts.mcpClient) {
-        const allClients: DetectedMcpClient['name'][] = ['claude-code', 'claw-code', 'claude-desktop', 'cursor', 'windsurf', 'continue', 'junie', 'jetbrains-ai', 'codex'];
+        const allClients: DetectedMcpClient['name'][] = ['claude-code', 'claw-code', 'claude-desktop', 'cursor', 'windsurf', 'continue', 'junie', 'jetbrains-ai', 'codex', 'hermes'];
         const detectedNames = new Set(mcpClients.map((c) => c.name));
 
         const clientResult = await p.multiselect({
@@ -476,6 +478,15 @@ function executeSteps(
     steps.push(installReindexHook({ global: true, dryRun: opts.dryRun }));
     steps.push(installPrecompactHook({ global: true, dryRun: opts.dryRun }));
     steps.push(...installWorktreeHook({ global: true, dryRun: opts.dryRun }));
+
+    // Hermes uses its own shell-hook mechanism (config.yaml + ~/.hermes/agent-hooks/),
+    // so it doesn't share the ~/.claude/hooks/ machinery above. Gate on selection.
+    // We pre-approve only our own (event, command) pair in Hermes's allowlist
+    // rather than flipping `hooks_auto_accept: true` globally — keeping
+    // security posture unchanged for any third-party hooks the user may add.
+    if (opts.selectedClients.includes('hermes')) {
+      steps.push(...installHermesHooks({ dryRun: opts.dryRun, autoAllowlist: true }));
+    }
   }
 
   // 4. CLAUDE.md (global)
@@ -485,6 +496,14 @@ function executeSteps(
       scope: 'global',
     });
     steps.push(mdResult);
+  }
+
+  // 4b. AGENTS.md (project-scope, only when Hermes selected — Hermes only
+  // reads AGENTS.md from the current working directory, so a user-level
+  // install is meaningless).
+  if (opts.selectedClients.includes('hermes')) {
+    const agentsResult = updateAgentsMd(process.cwd(), { dryRun: opts.dryRun });
+    steps.push(agentsResult);
   }
 
   // 5. tweakcc system prompt rewrites

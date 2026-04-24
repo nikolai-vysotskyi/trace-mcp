@@ -214,6 +214,25 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
     }
   }
 
+  // Hermes Agent: always-global YAML config at ~/.hermes/config.yaml (or $HERMES_HOME).
+  // Detect by looking for an `mcp_servers:` mapping with a `trace-mcp:` child.
+  // Use regex rather than a full YAML parse so detection doesn't bring a parser
+  // onto the hot path.
+  {
+    const hermesHome = process.env.HERMES_HOME ?? path.join(HOME, '.hermes');
+    const yamlPath = path.join(hermesHome, 'config.yaml');
+    if (fs.existsSync(yamlPath)) {
+      try {
+        const content = fs.readFileSync(yamlPath, 'utf-8');
+        // Match: `mcp_servers:` (top level) then indented `trace-mcp:` entry
+        const hasTraceMcp = /^mcp_servers\s*:\s*$[\s\S]*?^\s+trace-mcp\s*:/m.test(content);
+        clients.push({ name: 'hermes', configPath: yamlPath, hasTraceMcp });
+      } catch {
+        clients.push({ name: 'hermes', configPath: yamlPath, hasTraceMcp: false });
+      }
+    }
+  }
+
   return clients;
 }
 
