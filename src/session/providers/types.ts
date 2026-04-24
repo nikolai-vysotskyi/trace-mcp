@@ -3,10 +3,9 @@
  * conversation logs into trace-mcp's session pipeline (`index_sessions`,
  * `mine_sessions`, `discover_*_sessions`, `get_session_analytics`).
  *
- * See docs/session-providers-plan.md §4.2 for rationale and phase plan.
  * The shapes here are the committed contract — provider implementations
- * MUST NOT add required fields on SessionHandle / RawMessage without a
- * corresponding plan update.
+ * MUST NOT add required fields on SessionHandle / RawMessage without
+ * first updating every consumer that iterates over the registry.
  */
 import type { TokenUsage, ParsedSession } from '../../analytics/log-parser.js';
 

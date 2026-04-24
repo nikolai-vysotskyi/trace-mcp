@@ -4,14 +4,14 @@ import type { TraceMcpConfig } from '../../config.js';
 /**
  * Registry for SessionProvider instances.
  *
- * Phase 0 of session-providers-plan.md is deferred; the two legacy providers
- * (`claude-code`, `claw-code`) are not yet wrapped behind this interface.
- * New providers (starting with Hermes) register here and are consumed by
- * consumers that iterate `enabledFor(config)` AFTER the legacy
- * Claude/Claw branches — see mineSessions / listAllSessions wiring.
+ * The two legacy providers (`claude-code`, `claw-code`) are still inlined
+ * in `listAllSessions` / `mineSessions` and not yet wrapped behind this
+ * interface. New providers (starting with Hermes) register here and are
+ * consumed AFTER the legacy branches — see mineSessions wiring.
  *
- * When Phase 0 lands, the legacy branches become providers in this registry
- * and the additive wiring collapses into a single loop.
+ * Eventually the legacy branches should collapse into a single loop that
+ * iterates the registry; when they do, this comment and the additive hook
+ * in `conversation-miner-providers.ts` go away.
  */
 export class SessionProviderRegistry {
   private providers = new Map<string, SessionProvider>();
