@@ -1,7 +1,7 @@
 /**
  * Additive Hermes-mining path used by `mineSessions`.
  *
- * Why a separate file (docs/session-providers-plan.md §A3+ roadmap):
+ * Why a separate file:
  *   - `mineSessions` stays byte-identical for its legacy claude-code/claw-code
  *     path. The golden-file lockdown test in
  *     `tests/analytics/list-all-sessions.snapshot.test.ts` guarantees we
