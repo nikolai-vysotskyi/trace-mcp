@@ -2,12 +2,37 @@ import https from 'node:https';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { TRACE_MCP_HOME, ensureGlobalDirs, getDbPath } from './global.js';
 import { logger } from './logger.js';
 
 declare const PKG_VERSION_INJECTED: string;
 const CURRENT_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+
+/**
+ * Detect a local dev install that must never be overwritten by a registry
+ * release. Two independent signals:
+ *   1. Package directory is a symlink — `npm link` places such a symlink at
+ *      `<global>/lib/node_modules/trace-mcp` pointing into the source checkout.
+ *      This covers the case where the CLI was spawned via the npm-global bin.
+ *   2. A `.git` directory sits next to package.json — i.e. we are running
+ *      straight out of a source checkout (what the launcher's TRACE_MCP_CLI
+ *      points at when `npm link` is used). `npm install`-ed trees never have
+ *      this since npm strips the repo metadata on publish.
+ */
+function isDevCheckout(): boolean {
+  try {
+    // dist/cli.js or dist/index.js → the dist dir → its parent is the pkg root.
+    const self = fileURLToPath(import.meta.url);
+    const pkgRoot = path.resolve(path.dirname(self), '..');
+    if (fs.lstatSync(pkgRoot).isSymbolicLink()) return true;
+    if (fs.existsSync(path.join(pkgRoot, '.git'))) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 const UPDATE_CACHE_PATH = path.join(TRACE_MCP_HOME, 'update-check.json');
 
@@ -137,6 +162,22 @@ export interface AutoUpdateOptions {
  */
 export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promise<boolean> {
   if (CURRENT_VERSION === '0.0.0-dev') return false;
+
+  // Explicit opt-out for users who manage their own versioning (CI, distros,
+  // vendored installs) — also used by our own tests / dev loops.
+  if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') {
+    logger.debug('Auto-update: disabled via TRACE_MCP_NO_AUTO_UPDATE=1');
+    return false;
+  }
+
+  // Dev checkout (symlinked npm-link OR `.git` next to package.json):
+  // never overwrite a source tree with a registry release. The two signals
+  // cover both invocation styles — via the npm-global bin (symlink) and via
+  // the direct source path the launcher stores in launcher.env.
+  if (isDevCheckout()) {
+    logger.debug('Auto-update: skipped — running from dev checkout');
+    return false;
+  }
 
   const intervalMs = (opts.checkIntervalHours ?? 12) * 3_600_000;
   const now = Date.now();
