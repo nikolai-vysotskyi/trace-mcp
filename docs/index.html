@@ -2,28 +2,128 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>trace-mcp / the code intelligence layer for AI agents</title>
-  <meta name="description" content="Give AI agents a map of your codebase. A framework-aware dependency graph exposed through MCP — so agents navigate, reason, and safely modify complex systems. 81 languages, 58 integrations, up to 99% token reduction.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- ── Primary Meta ── -->
+  <title>trace-mcp — the code intelligence layer for AI agents</title>
+  <meta name="description" content="Give AI agents a map of your codebase. Framework-aware dependency graph exposed through MCP — so agents navigate, reason, and safely modify complex systems. 81 languages, 58 integrations, up to 99% token reduction. Open source, local-first, zero API keys.">
+  <meta name="keywords" content="mcp, model context protocol, code intelligence, ai agents, code graph, ai coding agent, llm developer tools, code search, framework-aware indexing, claude code, cursor, windsurf, dependency graph, ast, tree-sitter, lsp">
+  <meta name="author" content="Nikolai Vysotskyi">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="googlebot" content="index, follow">
+  <meta name="color-scheme" content="dark light">
+  <meta name="application-name" content="trace-mcp">
+  <meta name="generator" content="hand-crafted">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- ── Theme color (mobile browser chrome; JS rewrites this based on active theme) ── -->
   <meta name="theme-color" content="#000000">
 
-  <meta property="og:title" content="trace-mcp / the code intelligence layer for AI agents">
-  <meta property="og:description" content="Framework-aware code graph, exposed through MCP. 81 languages. 58 integrations. Up to 99% token reduction.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://trace-mcp.com">
+  <!-- ── Canonical ── -->
+  <link rel="canonical" href="https://trace-mcp.com/">
 
+  <!-- ── Favicons ── -->
+  <!-- Legacy fallback for crawlers/tools that hardcode /favicon.ico. -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
+  <!-- Small favicons use the menubar silhouette (black for light UI, white for dark UI). -->
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" media="(prefers-color-scheme: dark)">
+  <!-- Larger icons use the full-color brand icon (iOS home screen, PWA, Android). -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512x512.png">
+  <link rel="manifest" href="/site.webmanifest">
+
+  <!-- ── iOS home-screen webapp meta ── -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="trace-mcp">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- ── Open Graph ── -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="trace-mcp">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:url" content="https://trace-mcp.com/">
+  <meta property="og:title" content="trace-mcp — the code intelligence layer for AI agents">
+  <meta property="og:description" content="Framework-aware dependency graph exposed through MCP. Give AI agents a map of your codebase. 81 languages, 58 integrations, up to 99% token reduction.">
+  <meta property="og:image" content="https://trace-mcp.com/og-image.png">
+  <meta property="og:image:secure_url" content="https://trace-mcp.com/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
+
+  <!-- ── Twitter / X Card ── -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="trace-mcp — the code intelligence layer for AI agents">
+  <meta name="twitter:description" content="Framework-aware code graph via MCP. 81 languages. 58 integrations. Up to 99% token reduction. Open source, local-first.">
+  <meta name="twitter:image" content="https://trace-mcp.com/og-image.png">
+  <meta name="twitter:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
+
+  <!-- ── Structured Data (Schema.org) ── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "trace-mcp",
+    "alternateName": "trace-mcp Code Intelligence",
+    "description": "Framework-aware code intelligence layer for AI agents. Indexes source code into a dependency graph exposed through MCP — 81 languages, 58 framework integrations, up to 99% token reduction.",
+    "url": "https://trace-mcp.com/",
+    "image": "https://trace-mcp.com/og-image.png",
+    "applicationCategory": "DeveloperApplication",
+    "applicationSubCategory": "Code Intelligence",
+    "operatingSystem": "macOS, Linux, Windows",
+    "softwareRequirements": "Node.js 20+",
+    "downloadUrl": "https://www.npmjs.com/package/trace-mcp",
+    "installUrl": "https://www.npmjs.com/package/trace-mcp",
+    "codeRepository": "https://github.com/nikolai-vysotskyi/trace-mcp",
+    "programmingLanguage": "TypeScript",
+    "license": "https://opensource.org/licenses/MIT",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "Nikolai Vysotskyi",
+      "url": "https://github.com/nikolai-vysotskyi"
+    },
+    "publisher": {
+      "@type": "Person",
+      "name": "Nikolai Vysotskyi",
+      "url": "https://github.com/nikolai-vysotskyi"
+    },
+    "featureList": [
+      "Framework-aware dependency graph (58 integrations)",
+      "81 languages via tree-sitter + LSP enrichment",
+      "138 MCP tools for navigation, impact analysis, refactoring",
+      "Up to 99% token reduction vs. naive read/grep",
+      "Local-first: SQLite + bundled ONNX embeddings, zero API keys",
+      "Native Model Context Protocol integration"
+    ]
+  }
+  </script>
+
+  <!-- ── Fonts ── -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Doto:wght@400;700&family=Space+Grotesk:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
   <script>
-    // Set theme before first paint to avoid flash.
+    // Set theme and theme-color before first paint to avoid flash.
     (function () {
       try {
         var stored = localStorage.getItem('trace-mcp-theme');
         var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
         var theme = stored === 'light' || stored === 'dark' ? stored : (prefersLight ? 'light' : 'dark');
         document.documentElement.setAttribute('data-theme', theme);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#F5F5F5');
       } catch (e) {
         document.documentElement.setAttribute('data-theme', 'dark');
       }
