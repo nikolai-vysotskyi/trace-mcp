@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
+import YAML from 'yaml';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 import { getLauncherPath } from './launcher.js';
 
@@ -97,6 +98,35 @@ export function configureMcpClients(
           ? 'Use "Import from Claude" in Settings → Tools → AI Assistant → MCP'
           : 'Add via Settings → Tools → AI Assistant → MCP → Add → Command: trace-mcp, Args: serve',
       });
+      continue;
+    }
+
+    // Hermes Agent: YAML format, always global, key `mcp_servers.trace-mcp`.
+    if (name === 'hermes') {
+      const configPath = getConfigPath(name, projectRoot, opts.scope);
+      if (!configPath) {
+        results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
+        continue;
+      }
+
+      const entry = { ...buildMcpEntry(), args: ['serve'], cwd: projectRoot };
+
+      if (fs.existsSync(configPath) && hermesEntryMatches(configPath, entry)) {
+        results.push({ target: configPath, action: 'already_configured', detail: name });
+        continue;
+      }
+
+      if (opts.dryRun) {
+        results.push({ target: configPath, action: 'skipped', detail: `Would configure ${name} (${opts.scope})` });
+        continue;
+      }
+
+      try {
+        const action = writeHermesYamlEntry(configPath, entry);
+        results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
+      } catch (err) {
+        results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
+      }
       continue;
     }
 
@@ -262,6 +292,67 @@ function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 
 }
 
 // ---------------------------------------------------------------------------
+// YAML writer (Hermes Agent)
+// ---------------------------------------------------------------------------
+
+interface HermesYamlEntry extends McpServerEntry {
+  timeout?: number;
+  connect_timeout?: number;
+}
+
+/** Parse existing config.yaml (if any) and check whether our entry already
+ *  matches. Uses a real YAML parse so comments and neighbouring keys are not
+ *  mistaken for the trace-mcp block. */
+function hermesEntryMatches(configPath: string, expected: HermesYamlEntry): boolean {
+  try {
+    const doc = YAML.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> | null;
+    const servers = doc?.mcp_servers as Record<string, unknown> | undefined;
+    const current = servers?.['trace-mcp'] as Record<string, unknown> | undefined;
+    if (!current) return false;
+    if (current.command !== expected.command) return false;
+    if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Update or append the `mcp_servers.trace-mcp` block in `~/.hermes/config.yaml`.
+ *  Preserves existing keys/comments by parsing → mutating via the Document API →
+ *  serializing back, which keeps the surrounding document shape intact. */
+function writeHermesYamlEntry(configPath: string, entry: HermesYamlEntry): 'created' | 'updated' {
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  let doc: YAML.Document;
+  let isNew = true;
+  if (fs.existsSync(configPath)) {
+    isNew = false;
+    doc = YAML.parseDocument(fs.readFileSync(configPath, 'utf-8'));
+    if (doc.errors.length > 0) {
+      // Can't trust an unparseable doc — start fresh to avoid destroying user data.
+      throw new Error(`Hermes config.yaml has parse errors: ${doc.errors[0].message}`);
+    }
+  } else {
+    doc = new YAML.Document({});
+  }
+
+  const value: Record<string, unknown> = {
+    command: entry.command,
+    args: entry.args,
+    ...(entry.cwd ? { cwd: entry.cwd } : {}),
+    // Hermes' own defaults are low — trace-mcp's first boot (indexing) can be slow.
+    timeout: entry.timeout ?? 180,
+    connect_timeout: entry.connect_timeout ?? 120,
+  };
+
+  doc.setIn(['mcp_servers', 'trace-mcp'], value);
+  fs.writeFileSync(configPath, doc.toString({ lineWidth: 0 }));
+  return isNew ? 'created' : 'updated';
+}
+
+// ---------------------------------------------------------------------------
 // TOML writer (Codex)
 // ---------------------------------------------------------------------------
 
@@ -341,6 +432,9 @@ function getConfigPath(name: DetectedMcpClient['name'], projectRoot: string, sco
         : path.join(projectRoot, '.codex', 'config.toml');
     case 'jetbrains-ai':
       return null; // Configured through IDE Settings UI, not a file we can write
+    case 'hermes':
+      // Hermes Agent is always-global; project scope is a no-op here.
+      return path.join(process.env.HERMES_HOME ?? path.join(HOME, '.hermes'), 'config.yaml');
     default:
       return null;
   }

@@ -12,7 +12,7 @@ export interface DetectedFramework {
 }
 
 export interface DetectedMcpClient {
-  name: 'claude-code' | 'claw-code' | 'claude-desktop' | 'cursor' | 'windsurf' | 'continue' | 'junie' | 'jetbrains-ai' | 'codex';
+  name: 'claude-code' | 'claw-code' | 'claude-desktop' | 'cursor' | 'windsurf' | 'continue' | 'junie' | 'jetbrains-ai' | 'codex' | 'hermes';
   configPath: string;
   hasTraceMcp: boolean;
 }
