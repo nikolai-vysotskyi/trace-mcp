@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>trace-mcp / framework-aware code intelligence for AI agents</title>
-  <meta name="description" content="An MCP server that gives AI agents structural understanding of your codebase. 81 languages, 58 framework integrations, up to 99% token reduction.">
+  <title>trace-mcp / the code intelligence layer for AI agents</title>
+  <meta name="description" content="Give AI agents a map of your codebase. A framework-aware dependency graph exposed through MCP — so agents navigate, reason, and safely modify complex systems. 81 languages, 58 integrations, up to 99% token reduction.">
   <meta name="theme-color" content="#000000">
 
-  <meta property="og:title" content="trace-mcp / framework-aware code intelligence">
-  <meta property="og:description" content="MCP server. 81 languages. 58 framework integrations. Up to 99% token reduction.">
+  <meta property="og:title" content="trace-mcp / the code intelligence layer for AI agents">
+  <meta property="og:description" content="Framework-aware code graph, exposed through MCP. 81 languages. 58 integrations. Up to 99% token reduction.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://trace-mcp.com">
 
@@ -1142,6 +1142,420 @@
                   transform 600ms cubic-bezier(0.25, 0.1, 0.25, 1);
     }
     .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── Trust strip (compact band under hero) ── */
+    .trust-strip {
+      padding: 28px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .trust-strip .container {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 32px; flex-wrap: wrap;
+    }
+    .trust-strip .clients-row { margin-top: 0; gap: 28px; }
+    @media (max-width: 700px) {
+      .trust-strip .container { gap: 20px; }
+      .trust-strip .clients-row { gap: 20px; }
+    }
+
+    /* ── Problem list ── */
+    .pain-list {
+      display: flex; flex-direction: column;
+      border-top: 1px solid var(--border-visible);
+    }
+    .pain-item {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      gap: 24px;
+      padding: 28px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: baseline;
+    }
+    .pain-num {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .pain-num::before {
+      content: '';
+      width: 8px; height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(215, 25, 33, 0.45);
+      flex-shrink: 0;
+    }
+    .pain-text {
+      font-family: var(--font-body);
+      font-size: 19px;
+      line-height: 1.35;
+      color: var(--text-display);
+      font-weight: 500;
+      letter-spacing: -0.015em;
+      max-width: 780px;
+    }
+    .pain-punchline {
+      margin-top: 48px;
+      font-family: var(--font-body);
+      font-size: clamp(24px, 3vw, 32px);
+      font-weight: 400;
+      color: var(--text-display);
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      padding-left: 88px;
+      position: relative;
+    }
+    .pain-punchline::before {
+      content: '/';
+      position: absolute;
+      left: 64px; top: 2px;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 22px;
+      line-height: 1;
+    }
+    .pain-punchline .muted { color: var(--text-disabled); }
+    @media (max-width: 700px) {
+      .pain-item { grid-template-columns: 48px 1fr; gap: 16px; padding: 22px 0; }
+      .pain-text { font-size: 17px; }
+      .pain-punchline { padding-left: 64px; }
+      .pain-punchline::before { left: 48px; }
+    }
+
+    /* ── Solution split ── */
+    .sol-block {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: start;
+    }
+    .sol-lede {
+      font-family: var(--font-body);
+      font-size: 24px;
+      line-height: 1.35;
+      font-weight: 500;
+      color: var(--text-display);
+      letter-spacing: -0.015em;
+      max-width: 480px;
+    }
+    .sol-lede .em { font-weight: 700; }
+    .sol-list { display: flex; flex-direction: column; }
+    .sol-item {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 20px;
+      padding: 20px 0;
+      border-top: 1px solid var(--border);
+      align-items: baseline;
+    }
+    .sol-item:last-child { border-bottom: 1px solid var(--border); }
+    .sol-item .sol-mark {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      color: var(--text-display);
+      line-height: 1;
+      font-weight: 700;
+    }
+    .sol-item .sol-text {
+      font-size: 16px;
+      line-height: 1.55;
+      color: var(--text-primary);
+    }
+    .sol-item .sol-text strong {
+      color: var(--text-display);
+      font-weight: 600;
+    }
+    @media (max-width: 800px) {
+      .sol-block { grid-template-columns: 1fr; gap: 32px; }
+    }
+
+    /* ── Tool rows (core tools list) ── */
+    .tool-rows {
+      display: flex; flex-direction: column;
+      border-top: 1px solid var(--border-visible);
+    }
+    .tool-row {
+      display: grid;
+      grid-template-columns: 220px 1fr 140px;
+      gap: 32px;
+      padding: 28px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      transition: padding-left 240ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    .tool-row:hover { padding-left: 12px; }
+    .tool-name {
+      font-family: var(--font-mono);
+      font-size: clamp(18px, 2.2vw, 24px);
+      font-weight: 700;
+      color: var(--text-display);
+      letter-spacing: -0.01em;
+      line-height: 1;
+    }
+    .tool-name::before {
+      content: '/ ';
+      color: var(--text-disabled);
+      font-weight: 400;
+    }
+    .tool-desc {
+      font-size: 15px;
+      color: var(--text-primary);
+      line-height: 1.55;
+      max-width: 560px;
+    }
+    .tool-tail {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+      text-align: right;
+    }
+    .tool-tail::before { content: '— '; }
+    .tool-more {
+      margin-top: 24px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+    }
+    .tool-more a { color: var(--text-display); border-bottom: 1px solid var(--border-visible); padding-bottom: 1px; }
+    .tool-more a:hover { border-color: var(--text-display); }
+    @media (max-width: 900px) {
+      .tool-row { grid-template-columns: 1fr; gap: 8px; padding: 22px 0; }
+      .tool-row:hover { padding-left: 0; }
+      .tool-tail { text-align: left; }
+      .tool-tail::before { content: ''; }
+    }
+
+    /* ── Comparison grid (vs incumbents) ── */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid var(--border-visible);
+    }
+    .compare-col {
+      padding: 32px;
+      display: flex; flex-direction: column;
+      gap: 14px;
+    }
+    .compare-col + .compare-col { border-left: 1px solid var(--border-visible); }
+    .compare-sub {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+    }
+    .compare-col.agent .compare-sub { color: var(--success); }
+    .compare-col h4 {
+      font-family: var(--font-body);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-display);
+      letter-spacing: -0.015em;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    .compare-col ul {
+      list-style: none;
+      display: flex; flex-direction: column;
+      gap: 14px;
+      margin-top: 8px;
+    }
+    .compare-col li {
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      gap: 12px;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      align-items: baseline;
+    }
+    .compare-col.human li::before {
+      content: '—';
+      color: var(--text-disabled);
+      font-family: var(--font-mono);
+    }
+    .compare-col.agent li::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+      margin-top: 7px;
+    }
+    .compare-coda {
+      margin-top: 48px;
+      font-family: var(--font-body);
+      font-size: clamp(22px, 2.8vw, 30px);
+      font-weight: 400;
+      color: var(--text-display);
+      letter-spacing: -0.02em;
+      text-align: center;
+      line-height: 1.25;
+    }
+    .compare-coda .em { font-weight: 700; }
+    @media (max-width: 700px) {
+      .compare-grid { grid-template-columns: 1fr; }
+      .compare-col + .compare-col { border-left: none; border-top: 1px solid var(--border-visible); }
+    }
+
+    /* ── Differentiation ── */
+    .diff-block {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+    .diff-list {
+      list-style: none;
+      display: flex; flex-direction: column;
+    }
+    .diff-list li {
+      padding: 18px 0;
+      border-top: 1px solid var(--border);
+      font-size: 15px;
+      color: var(--text-primary);
+      line-height: 1.5;
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 16px;
+      align-items: baseline;
+    }
+    .diff-list li:last-child { border-bottom: 1px solid var(--border); }
+    .diff-list .num {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--text-disabled);
+    }
+    .diff-list strong { color: var(--text-display); font-weight: 600; }
+    .diff-quote {
+      font-family: var(--font-body);
+      font-size: clamp(26px, 3.6vw, 40px);
+      line-height: 1.2;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      color: var(--text-display);
+    }
+    .diff-quote .neg {
+      color: var(--text-disabled);
+      text-decoration: line-through;
+      text-decoration-thickness: 1px;
+      text-decoration-color: var(--accent);
+    }
+    .diff-quote .pos {
+      color: var(--text-display);
+      font-weight: 700;
+    }
+    @media (max-width: 900px) {
+      .diff-block { grid-template-columns: 1fr; gap: 40px; }
+    }
+
+    /* ── Security ── */
+    .security-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border: 1px solid var(--border-visible);
+    }
+    .sec-item {
+      padding: 32px 28px;
+      border-right: 1px solid var(--border);
+    }
+    .sec-item:last-child { border-right: none; }
+    .sec-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--success);
+      margin-bottom: 18px;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .sec-tag::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+    }
+    .sec-item h4 {
+      font-family: var(--font-body);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-display);
+      letter-spacing: -0.015em;
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+    .sec-item p {
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.55;
+    }
+    .sec-item p code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-display);
+      background: var(--surface-raised);
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+    @media (max-width: 800px) {
+      .security-grid { grid-template-columns: 1fr; }
+      .sec-item { border-right: none; border-bottom: 1px solid var(--border); }
+      .sec-item:last-child { border-bottom: none; }
+    }
+
+    /* ── Category (VC narrative moment) ── */
+    .category {
+      padding: 128px 0;
+      border-top: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    .category-tag {
+      margin-bottom: 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding-left: 18px;
+      position: relative;
+    }
+    .category-tag::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 50%;
+      transform: translateY(-50%);
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 14px var(--accent);
+    }
+    .category-headline {
+      font-family: var(--font-body);
+      font-size: clamp(44px, 8.5vw, 120px);
+      font-weight: 400;
+      line-height: 0.98;
+      letter-spacing: -0.035em;
+      color: var(--text-display);
+      max-width: 1200px;
+      margin-bottom: 40px;
+    }
+    .category-headline .em { font-weight: 700; }
+    .category-sub {
+      font-size: 19px;
+      color: var(--text-primary);
+      max-width: 640px;
+      line-height: 1.5;
+    }
+    @media (max-width: 700px) {
+      .category { padding: 96px 0; }
+      .category-sub { font-size: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -1156,9 +1570,9 @@
       <span>v<span data-version>&hellip;</span> / online</span>
     </div>
     <div class="nav-links">
-      <a href="#what">What it is</a>
-      <a href="#examples">Examples</a>
-      <a href="#app">App</a>
+      <a href="#problem">Problem</a>
+      <a href="#product">Product</a>
+      <a href="#capabilities">Capabilities</a>
       <a href="#benchmark">Benchmark</a>
       <a href="#install" class="primary">Install</a>
       <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="primary">Github</a>
@@ -1181,7 +1595,7 @@
     <div class="container">
 
       <div class="hero-meta">
-        <span class="label">/ Model Context Protocol Server</span>
+        <span class="label">/ Code Intelligence · MCP Server</span>
         <span class="divider"></span>
         <span class="label label-disabled">v<span data-version>&hellip;</span> / mit license</span>
       </div>
@@ -1189,7 +1603,7 @@
       <div class="hero-grid">
         <div>
           <h1 class="hero-headline">
-            Code intelligence for AI agents that <span class="em">actually understand frameworks.</span>
+            Give AI agents a <span class="em">map of your codebase.</span>
           </h1>
         </div>
         <div class="hero-side">
@@ -1202,15 +1616,15 @@
       </div>
 
       <p class="hero-desc">
-        Most AI agents read your code as <span class="accent-text">text</span>. trace-mcp reads it as a <span class="accent-text">graph</span> &mdash; routes connect to controllers, controllers render components, models map to migrations. Cross-language, framework-aware, exposed through MCP to any agent.
+        Code intelligence for AI agents that <span class="accent-text">actually understand frameworks.</span> Turn your code into a dependency graph so agents can navigate, reason, and safely modify complex systems.
       </p>
 
       <div class="hero-cta">
         <a href="#install" class="btn btn-primary">
-          Get started <span class="arrow">&rarr;</span>
+          Get started in minutes <span class="arrow">&rarr;</span>
         </a>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-secondary">
-          View source
+        <a href="#product" class="btn btn-secondary">
+          View demo
         </a>
         <span class="hero-install" onclick="copyInstall(this)">
           <code>npm i -g trace-mcp</code>
@@ -1218,6 +1632,21 @@
         </span>
       </div>
 
+    </div>
+  </section>
+
+  <!-- ── TRUST STRIP ── -->
+  <section class="trust-strip">
+    <div class="container">
+      <span class="label">/ Built For Modern AI Coding Stacks</span>
+      <div class="clients-row">
+        <span class="client">MCP</span>
+        <span class="client">Claude Code</span>
+        <span class="client">Cursor</span>
+        <span class="client">Windsurf</span>
+        <span class="client">Claude Desktop</span>
+        <span class="client">VS Code</span>
+      </div>
     </div>
   </section>
 
@@ -1264,22 +1693,93 @@
     </div>
   </section>
 
-  <!-- ── WHAT IT IS ── -->
-  <section id="what">
+  <!-- ── PROBLEM ── -->
+  <section id="problem">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">001 / What It Is</span></div>
+        <div class="section-meta-tag"><span class="label">001 / Problem</span></div>
         <div>
-          <h2 class="section-title">A code graph,<br>built once, <span class="em">used by every AI agent.</span></h2>
-          <p class="section-lede">trace-mcp indexes your project into a directed graph &mdash; symbols, edges, framework-specific connections &mdash; then exposes it through 138 MCP tools. Your AI agent stops reading files and starts traversing structure.</p>
+          <h2 class="section-title">AI agents don't understand <span class="em">real codebases.</span></h2>
+          <p class="section-lede">Large repositories are unstructured, framework logic is implicit, and agents rely on shallow search inside a shrinking context window. The cost shows up as broken changes, silent failures, and hours of manual reconstruction.</p>
+        </div>
+      </div>
+
+      <div class="pain-list reveal">
+        <div class="pain-item">
+          <span class="pain-num">01</span>
+          <span class="pain-text">Large repositories are unstructured and hard to navigate.</span>
+        </div>
+        <div class="pain-item">
+          <span class="pain-num">02</span>
+          <span class="pain-text">Framework logic is implicit and inconsistent across languages.</span>
+        </div>
+        <div class="pain-item">
+          <span class="pain-num">03</span>
+          <span class="pain-text">Agents rely on shallow search and shrinking context windows.</span>
+        </div>
+        <div class="pain-item">
+          <span class="pain-num">04</span>
+          <span class="pain-text">Changes break systems because dependencies aren't understood.</span>
+        </div>
+      </div>
+
+      <p class="pain-punchline">Agents guess <span class="muted">instead of</span> reasoning.</p>
+    </div>
+  </section>
+
+  <!-- ── SOLUTION ── -->
+  <section id="solution">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">002 / Solution</span></div>
+        <div>
+          <h2 class="section-title">Give agents structured <span class="em">understanding of your code.</span></h2>
+          <p class="section-lede">trace-mcp reads your code as a system, not as text. One continuously-updated graph, exposed through MCP &mdash; every agent, every editor, every session.</p>
+        </div>
+      </div>
+
+      <div class="sol-block reveal">
+        <p class="sol-lede">From files to functions to call graphs, <span class="em">everything is connected.</span></p>
+        <div class="sol-list">
+          <div class="sol-item">
+            <span class="sol-mark">+</span>
+            <span class="sol-text"><strong>Build a dependency graph</strong> across your entire codebase.</span>
+          </div>
+          <div class="sol-item">
+            <span class="sol-mark">+</span>
+            <span class="sol-text"><strong>Capture real relationships</strong> between routes, controllers, models, migrations, components.</span>
+          </div>
+          <div class="sol-item">
+            <span class="sol-mark">+</span>
+            <span class="sol-text"><strong>Understand frameworks and conventions</strong> across 58 integrations.</span>
+          </div>
+          <div class="sol-item">
+            <span class="sol-mark">+</span>
+            <span class="sol-text"><strong>Enable safe, context-aware changes</strong> with reversible, graph-aware refactors.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PRODUCT VIEW ── -->
+  <section id="product">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">003 / Product View</span></div>
+        <div>
+          <h2 class="section-title">A structured model of your codebase <span class="em">that agents can use.</span></h2>
+          <p class="section-lede">An AI agent reading <code>UserController.php</code> sees a class. trace-mcp sees the route that hits it, the form request that validates input, the model it touches, the page it renders, the components rendered inside.</p>
         </div>
       </div>
 
       <div class="definition reveal">
         <div class="def-text">
-          <h3>Same code. <span class="em">Two views.</span></h3>
-          <p>An AI agent reading <code>UserController.php</code> sees a class. trace-mcp sees the route that hits it, the form request that validates input, the Eloquent model it touches, the Inertia page it renders, the Vue component tree, the props each component expects.</p>
-          <p>That's not a search trick. It's structural understanding from parsing 58 framework integrations &mdash; the same connections a senior developer keeps in their head.</p>
+          <h3>This is how agents move from <span class="em">guessing to reasoning.</span></h3>
+          <p><strong>Global dependency graph</strong> &mdash; every symbol, every edge, across 81 languages in one directed graph.</p>
+          <p><strong>Framework-aware parsing</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. 58 integrations, not just syntax.</p>
+          <p><strong>Real execution relationships</strong> &mdash; optional LSP enrichment with <code>tsserver</code>, <code>pyright</code>, <code>gopls</code> for compiler-grade call resolution.</p>
+          <p><strong>Continuously updated</strong> &mdash; 300ms file-watcher debounce, content-hashed incremental reindex.</p>
         </div>
         <div class="def-diagram">
           <div class="head">/ Cross-Language Edge Trace</div>
@@ -1317,254 +1817,158 @@
     </div>
   </section>
 
-  <!-- ── ASK / GET ── -->
-  <section id="examples">
-    <div class="container">
-      <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">002 / Examples</span></div>
-        <div>
-          <h2 class="section-title">Ask anything. <span class="em">Get the graph.</span></h2>
-          <p class="section-lede">Eight common questions, eight tools that answer them in one call &mdash; with the right scope, the right context, and a fraction of the tokens.</p>
-        </div>
-      </div>
-
-      <div class="askget">
-
-        <div class="askget-row reveal">
-          <div class="askget-ask">
-            <span class="label label-disabled">/ You Ask</span>
-            <span class="q">What breaks if I change this model?</span>
-          </div>
-          <div class="askget-get">
-            Blast radius across languages, ranked by risk, with linked architectural decisions explaining why dependent code exists.
-          </div>
-          <div class="askget-tool">
-            <span class="tlabel">tool</span>
-            <span class="tname">get_change_impact</span>
-          </div>
-        </div>
-
-        <div class="askget-row reveal">
-          <div class="askget-ask">
-            <span class="label label-disabled">/ You Ask</span>
-            <span class="q">Why was auth implemented this way?</span>
-          </div>
-          <div class="askget-get">
-            The actual decision record &mdash; reasoning, tradeoffs, and the symbols it's linked to. Mined from past sessions automatically.
-          </div>
-          <div class="askget-tool">
-            <span class="tlabel">tool</span>
-            <span class="tname">query_decisions</span>
-          </div>
-        </div>
-
-        <div class="askget-row reveal">
-          <div class="askget-ask">
-            <span class="label label-disabled">/ You Ask</span>
-            <span class="q">Help me start a new task.</span>
-          </div>
-          <div class="askget-get">
-            Optimal code subgraph, relevant past decisions, dead-end warnings, recommended tools &mdash; routed by task intent (bugfix / feature / refactor).
-          </div>
-          <div class="askget-tool">
-            <span class="tlabel">tool</span>
-            <span class="tname">plan_turn</span>
-          </div>
-        </div>
-
-        <div class="askget-row reveal">
-          <div class="askget-ask">
-            <span class="label label-disabled">/ You Ask</span>
-            <span class="q">Show me the request flow from URL to view.</span>
-          </div>
-          <div class="askget-get">
-            Route &rarr; Middleware &rarr; Controller &rarr; Service &rarr; View, including prop mapping when frontend is involved.
-          </div>
-          <div class="askget-tool">
-            <span class="tlabel">tool</span>
-            <span class="tname">get_request_flow</span>
-          </div>
-        </div>
-
-        <div class="askget-row reveal">
-          <div class="askget-ask">
-            <span class="label label-disabled">/ You Ask</span>
-            <span class="q">Find all untested code in this module.</span>
-          </div>
-          <div class="askget-get">
-            Symbols classified as "unreached" or "imported but never called in tests" &mdash; not just file-level coverage gaps.
-          </div>
-          <div class="askget-tool">
-            <span class="tlabel">tool</span>
-            <span class="tname">get_untested_symbols</span>
-          </div>
-        </div>
-
-        <div class="askget-row reveal">
-          <div class="askget-ask">
-            <span class="label label-disabled">/ You Ask</span>
-            <span class="q">What's the impact of this API change on other services?</span>
-          </div>
-          <div class="askget-get">
-            Cross-subproject client calls with confidence scores. Find consumers of an endpoint across your monorepo or linked repos.
-          </div>
-          <div class="askget-tool">
-            <span class="tlabel">tool</span>
-            <span class="tname">get_subproject_impact</span>
-          </div>
-        </div>
-
-        <div class="askget-row reveal">
-          <div class="askget-ask">
-            <span class="label label-disabled">/ You Ask</span>
-            <span class="q">Orient me &mdash; I just opened this project.</span>
-          </div>
-          <div class="askget-get">
-            Project identity, active decisions, memory stats. Around 300 tokens of layered context to start any session.
-          </div>
-          <div class="askget-tool">
-            <span class="tlabel">tool</span>
-            <span class="tname">get_wake_up</span>
-          </div>
-        </div>
-
-        <div class="askget-row reveal">
-          <div class="askget-ask">
-            <span class="label label-disabled">/ You Ask</span>
-            <span class="q">What did we discuss about GraphQL last month?</span>
-          </div>
-          <div class="askget-get">
-            Verbatim conversation fragments with file references. Full-text search across every past session.
-          </div>
-          <div class="askget-tool">
-            <span class="tlabel">tool</span>
-            <span class="tname">search_sessions</span>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </section>
-
-  <!-- ── CAPABILITIES ── -->
-  <section id="capabilities">
-    <div class="container">
-      <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">003 / Capabilities</span></div>
-        <div>
-          <h2 class="section-title">Six things <span class="em">no other tool does.</span></h2>
-          <p class="section-lede">Code graph + framework awareness + decision memory. Three categories of tools competitors solve in isolation; trace-mcp unifies them.</p>
-        </div>
-      </div>
-
-      <div class="caps reveal">
-        <div class="cap">
-          <div class="cap-num">/ 01</div>
-          <div class="cap-body">
-            <h4>Framework-aware edges</h4>
-            <p>Understands that <code>Inertia::render('Users/Show')</code> connects PHP to Vue. 58 integrations across 15 frameworks, 7 ORMs, 13 UI libraries.</p>
-          </div>
-        </div>
-        <div class="cap">
-          <div class="cap-num">/ 02</div>
-          <div class="cap-body">
-            <h4>Code-linked decision memory</h4>
-            <p>"Chose PostgreSQL for JSONB" is linked to <code>Pool#class</code>. When someone runs <code>get_change_impact</code>, the decision surfaces automatically.</p>
-          </div>
-        </div>
-        <div class="cap">
-          <div class="cap-num">/ 03</div>
-          <div class="cap-body">
-            <h4>Cross-session intelligence</h4>
-            <p>Past sessions are mined for decisions and indexed for search. <code>get_wake_up</code> gives orientation in ~300 tokens.</p>
-          </div>
-        </div>
-        <div class="cap">
-          <div class="cap-num">/ 04</div>
-          <div class="cap-body">
-            <h4>Schema from migrations</h4>
-            <p>Reconstructs the database schema by parsing migrations &mdash; no live database required. Works for Eloquent, Prisma, TypeORM, Drizzle, SQLAlchemy.</p>
-          </div>
-        </div>
-        <div class="cap">
-          <div class="cap-num">/ 05</div>
-          <div class="cap-body">
-            <h4>Security scanning</h4>
-            <p>OWASP Top-10 pattern scanning and taint analysis &mdash; traces untrusted data from source to sink across function boundaries.</p>
-          </div>
-        </div>
-        <div class="cap">
-          <div class="cap-num">/ 06</div>
-          <div class="cap-body">
-            <h4>Automated refactoring</h4>
-            <p>Rename across files, extract functions, move code, apply codemods &mdash; all graph-aware, all reversible, with diff preview.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <!-- ── HOW IT WORKS ── -->
   <section id="how">
     <div class="container">
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">004 / How It Works</span></div>
         <div>
-          <h2 class="section-title">Three passes. <span class="em">One graph.</span></h2>
-          <p class="section-lede">trace-mcp builds the graph like a compiler &mdash; tree-sitter for parsing, framework plugins for semantics, optional LSP for compiler-grade call resolution.</p>
+          <h2 class="section-title">Three steps. <span class="em">Setup in minutes.</span></h2>
+          <p class="section-lede">Connect. Index. Expose. After that, agents operate with full context &mdash; and the graph stays in sync automatically as you code.</p>
         </div>
       </div>
 
       <div class="pipeline reveal">
         <div class="pipe-step">
           <div class="pipe-num">01</div>
-          <h4>Per-file extraction</h4>
-          <p>tree-sitter parses each file into symbols. Framework plugins detect routes, components, migrations, events, models, schemas.</p>
+          <h4>Connect your repository</h4>
+          <p>Run <code>trace-mcp add</code> in your repo. Frameworks are detected automatically &mdash; Laravel, Django, Next.js, NestJS, Rails, 58 in total.</p>
           <div class="tags">
-            <span class="tag">tree-sitter</span>
-            <span class="tag">81 languages</span>
-            <span class="tag">58 plugins</span>
+            <span class="tag">cli</span>
+            <span class="tag">auto-detect</span>
+            <span class="tag">no api keys</span>
           </div>
         </div>
         <div class="pipe-step">
           <div class="pipe-num">02</div>
-          <h4>Cross-file resolution</h4>
-          <p>Resolver walks PSR-4, ES modules, Python imports, Vue components, Inertia bridges, Blade inheritance, ORM relations &mdash; all into a unified directed edge graph.</p>
+          <h4>Index into a graph</h4>
+          <p>Tree-sitter parses symbols, plugins resolve framework edges, optional LSP enriches with compiler-grade call data. Stored locally in SQLite + FTS5.</p>
           <div class="tags">
-            <span class="tag">imports</span>
-            <span class="tag">orm relations</span>
-            <span class="tag">framework edges</span>
+            <span class="tag">tree-sitter</span>
+            <span class="tag">138 mcp tools</span>
+            <span class="tag">local sqlite</span>
           </div>
         </div>
         <div class="pipe-step">
           <div class="pipe-num">03</div>
-          <h4>LSP enrichment</h4>
-          <p>Optional pass uses tsserver, pyright, gopls, rust-analyzer for compiler-grade call resolution with 4-tier confidence (resolved / inferred / typed / textual).</p>
+          <h4>Expose to your agents</h4>
+          <p>138 MCP tools become available in Claude Code, Cursor, Windsurf, VS Code &mdash; or any custom agent that speaks MCP over stdio or HTTP.</p>
           <div class="tags">
-            <span class="tag">tsserver</span>
-            <span class="tag">pyright</span>
-            <span class="tag">gopls</span>
-            <span class="tag">opt-in</span>
+            <span class="tag">mcp</span>
+            <span class="tag">stdio + http</span>
+            <span class="tag">read-only default</span>
           </div>
         </div>
       </div>
 
-      <div style="margin-top: 64px; padding: 24px; border: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px;">
+      <p style="margin-top: 48px; font-family: var(--font-body); font-size: 19px; color: var(--text-display); max-width: 640px;">
+        Agents can now operate with <span style="font-weight: 700;">full context.</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ── CORE CAPABILITIES ── -->
+  <section id="capabilities">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">005 / Core Capabilities</span></div>
         <div>
-          <span class="label label-disabled">/ Storage</span>
-          <p style="margin-top: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--text-display);">SQLite + WAL + FTS5</p>
-          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Bundled local ONNX embeddings &mdash; no API keys.</p>
+          <h2 class="section-title">Tools agents reach for <span class="em">first, every session.</span></h2>
+          <p class="section-lede">Five tools from a surface of 138 &mdash; the ones most called. Structure-aware, cross-file, framework-conscious. Built for programmatic consumption, not human eyes.</p>
         </div>
+      </div>
+
+      <div class="tool-rows reveal">
+        <div class="tool-row">
+          <span class="tool-name">search</span>
+          <span class="tool-desc">Structure-aware search across your codebase &mdash; by symbol kind, FQN, interface, or intent. Ranks by Signal Fusion (BM25 + PageRank + embeddings + identity).</span>
+          <span class="tool-tail">graph + fts5</span>
+        </div>
+        <div class="tool-row">
+          <span class="tool-name">get_outline</span>
+          <span class="tool-desc">Understand file and module structure instantly. Signatures only &mdash; cheaper than reading the file.</span>
+          <span class="tool-tail">~200 tok avg</span>
+        </div>
+        <div class="tool-row">
+          <span class="tool-name">find_usages</span>
+          <span class="tool-desc">Track where functions, classes, and variables are used. Semantic edges, not grep &mdash; imports, calls, renders, dispatches.</span>
+          <span class="tool-tail">edge index</span>
+        </div>
+        <div class="tool-row">
+          <span class="tool-name">get_call_graph</span>
+          <span class="tool-desc">Analyze execution paths across the system, bidirectional. LSP-enriched where available, with confidence tiers.</span>
+          <span class="tool-tail">bidirectional</span>
+        </div>
+        <div class="tool-row">
+          <span class="tool-name">apply_codemod</span>
+          <span class="tool-desc">Safely modify code with awareness of dependencies. Dry-run preview, diff review, reversible.</span>
+          <span class="tool-tail">dry-run default</span>
+        </div>
+      </div>
+
+      <p class="tool-more">+ 133 more &mdash; impact analysis, decision memory, security, architecture. <a href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/docs/tools-reference.md" target="_blank">Full reference &rarr;</a></p>
+    </div>
+  </section>
+
+  <!-- ── WHY EXISTING TOOLS FALL SHORT ── -->
+  <section id="vs">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">006 / Positioning</span></div>
         <div>
-          <span class="label label-disabled">/ Updates</span>
-          <p style="margin-top: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--text-display);">File watcher · 300ms debounce</p>
-          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Content-hashed incremental reindexing.</p>
+          <h2 class="section-title">Traditional tools were built <span class="em">for humans.</span></h2>
+          <p class="section-lede">Sourcegraph, Glean, Cursor's indexer &mdash; powerful, but optimized for developers reading code. Agents consume information differently.</p>
         </div>
+      </div>
+
+      <div class="compare-grid reveal">
+        <div class="compare-col human">
+          <span class="compare-sub">/ Human-first tools</span>
+          <h4>Code search for developers</h4>
+          <ul>
+            <li>Search optimized for developers, not agents</li>
+            <li>Context limited to files or snippets</li>
+            <li>No unified dependency graph</li>
+            <li>No native interface for agent workflows</li>
+          </ul>
+        </div>
+        <div class="compare-col agent">
+          <span class="compare-sub">/ Agent-native trace-mcp</span>
+          <h4>Code intelligence for agents</h4>
+          <ul>
+            <li>138 tools designed for programmatic consumption</li>
+            <li>Context sized per query, not per file</li>
+            <li>Single graph across every symbol and edge</li>
+            <li>Native MCP protocol, zero adapter code</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="compare-coda">Agents need a <span class="em">different layer.</span></p>
+    </div>
+  </section>
+
+  <!-- ── DIFFERENTIATION ── -->
+  <section id="differentiation">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">007 / Differentiation</span></div>
         <div>
-          <span class="label label-disabled">/ Output</span>
-          <p style="margin-top: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--text-display);">138 MCP tools</p>
-          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Stdio + HTTP transport. Read-only by default.</p>
+          <h2 class="section-title">Built for agents, <span class="em">not humans.</span></h2>
         </div>
+      </div>
+
+      <div class="diff-block reveal">
+        <ul class="diff-list">
+          <li><span class="num">/ 01</span><span><strong>Graph-based understanding</strong> of codebases &mdash; not text indexing with fuzzy ranking.</span></li>
+          <li><span class="num">/ 02</span><span><strong>Framework-aware indexing</strong> across 58 integrations &mdash; not syntax parsing alone.</span></li>
+          <li><span class="num">/ 03</span><span><strong>Native tools for agent navigation</strong> and reasoning &mdash; not a search box retrofitted to agents.</span></li>
+          <li><span class="num">/ 04</span><span><strong>Safe code modification</strong> with dependency awareness &mdash; dry-run, reversible, audited.</span></li>
+        </ul>
+        <p class="diff-quote">
+          This is <span class="neg">not code search.</span><br>
+          This is <span class="pos">code intelligence</span> for autonomous systems.
+        </p>
       </div>
     </div>
   </section>
@@ -1573,7 +1977,7 @@
   <section id="app">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">005 / Desktop App</span></div>
+        <div class="section-meta-tag"><span class="label">008 / Desktop App</span></div>
         <div>
           <h2 class="section-title">Or skip the CLI. <span class="em">See the graph directly.</span></h2>
           <p class="section-lede">An optional desktop companion bundles the MCP server with a GPU-accelerated graph explorer. Inspect projects, watch incremental indexing in real time, browse the exact structure your AI agents see.</p>
@@ -1605,7 +2009,7 @@
   <section id="benchmark">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">006 / Benchmark</span></div>
+        <div class="section-meta-tag"><span class="label">009 / Benchmark</span></div>
         <div>
           <h2 class="section-title">Token cost, <span class="em">measured.</span></h2>
           <p class="section-lede">Real codebase: 856 files, 4,774 symbols. Tasks executed with native Read/Grep/Glob vs trace-mcp tools. Numbers from the built-in <code>benchmark_project</code> command.</p>
@@ -1694,36 +2098,61 @@
   <section id="usecases">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">007 / When To Use It</span></div>
+        <div class="section-meta-tag"><span class="label">010 / Use Cases</span></div>
         <div>
-          <h2 class="section-title">Built for the real moments <span class="em">AI agents struggle.</span></h2>
+          <h2 class="section-title">Where trace-mcp <span class="em">belongs in your stack.</span></h2>
         </div>
       </div>
 
-      <div class="usecase-grid reveal">
+      <div class="usecase-grid reveal" style="grid-template-columns: repeat(3, 1fr);">
         <div class="usecase">
-          <span class="usecase-when">/ When You Refactor</span>
-          <span class="usecase-title">Know the blast radius</span>
-          <p>See every dependent symbol before you change anything. Renames are graph-aware, not text-replace.</p>
-          <div class="usecase-tools"><span>get_change_impact</span> · <span>apply_rename</span></div>
+          <span class="usecase-when">/ 01 · AI Coding Agents</span>
+          <span class="usecase-title">Navigate large repos. Make correct changes.</span>
+          <p>Graph traversal instead of file-by-file reading. Agents ship features with fewer broken changes and less context thrash.</p>
+          <div class="usecase-tools"><span>get_task_context</span> · <span>get_change_impact</span></div>
         </div>
         <div class="usecase">
-          <span class="usecase-when">/ When You Ship</span>
-          <span class="usecase-title">PR risk in numbers</span>
-          <p>Symbol-level diff between branches, security scan, quality gates &mdash; automated comment on every PR.</p>
-          <div class="usecase-tools"><span>compare_branches</span> · <span>scan_security</span></div>
+          <span class="usecase-when">/ 02 · Developer Platforms</span>
+          <span class="usecase-title">Smarter copilots and assistants.</span>
+          <p>Plug trace-mcp into internal dev tools. Your copilot answers "what calls this?" in one call instead of ten.</p>
+          <div class="usecase-tools"><span>find_usages</span> · <span>get_outline</span></div>
         </div>
         <div class="usecase">
-          <span class="usecase-when">/ When You Onboard</span>
-          <span class="usecase-title">Understand 100K LOC fast</span>
-          <p>Project map, framework detection, decision history &mdash; the architectural overview without reading every file.</p>
-          <div class="usecase-tools"><span>get_project_map</span> · <span>explain_architecture</span></div>
+          <span class="usecase-when">/ 03 · Engineering Teams</span>
+          <span class="usecase-title">Reduce risk in automated changes.</span>
+          <p>Every codemod previewed, every rename graph-verified. PR bots comment with symbol-level diff and blast radius.</p>
+          <div class="usecase-tools"><span>apply_codemod</span> · <span>compare_branches</span></div>
         </div>
-        <div class="usecase">
-          <span class="usecase-when">/ When You Debug</span>
-          <span class="usecase-title">Trace request to bug</span>
-          <p>Follow the request flow, trace tainted data, find the test that should have caught it. Across services.</p>
-          <div class="usecase-tools"><span>get_request_flow</span> · <span>taint_analysis</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECURITY ── -->
+  <section id="security">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">011 / Security</span></div>
+        <div>
+          <h2 class="section-title">Built for <span class="em">real-world environments.</span></h2>
+          <p class="section-lede">Runs fully local. No code leaves your machine. Refactors are reversible. Destructive operations require explicit confirmation.</p>
+        </div>
+      </div>
+
+      <div class="security-grid reveal">
+        <div class="sec-item">
+          <span class="sec-tag">Local-first</span>
+          <h4>Repository-level access control</h4>
+          <p>One SQLite database per project under <code>~/.trace-mcp/</code>. Nothing is written inside your repo unless you opt in.</p>
+        </div>
+        <div class="sec-item">
+          <span class="sec-tag">Zero egress</span>
+          <h4>Secure handling of code</h4>
+          <p>No API keys, no cloud services. Bundled ONNX embeddings. Fully offline after first install.</p>
+        </div>
+        <div class="sec-item">
+          <span class="sec-tag">Audited writes</span>
+          <h4>Safe modification workflows</h4>
+          <p>Every refactor has a dry-run preview and diff review. Guard hook blocks destructive operations from agents.</p>
         </div>
       </div>
     </div>
@@ -1733,7 +2162,7 @@
   <section id="integrations">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">008 / Ecosystem</span></div>
+        <div class="section-meta-tag"><span class="label">012 / Ecosystem</span></div>
         <div>
           <h2 class="section-title">58 integrations. <span class="em">81 languages.</span></h2>
           <p class="section-lede">Each integration adds framework-specific edges &mdash; routes, components, migrations, queries &mdash; not just syntax parsing. Plugin API is open: write your own for a niche framework in under a day.</p>
@@ -1792,16 +2221,6 @@
         <div class="int-item">Playwright</div>
       </div>
 
-      <div style="margin-top: 64px;">
-        <span class="label label-disabled">/ Compatible With Any Mcp Client</span>
-        <div class="clients-row">
-          <span class="client">Claude Code</span>
-          <span class="client">Cursor</span>
-          <span class="client">Windsurf</span>
-          <span class="client">Claude Desktop</span>
-          <span class="client">VS Code</span>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -1809,7 +2228,7 @@
   <section id="install">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">009 / Install</span></div>
+        <div class="section-meta-tag"><span class="label">013 / Install</span></div>
         <div>
           <h2 class="section-title">Three commands. <span class="em">No configuration.</span></h2>
           <p class="section-lede">No API keys. No paid services. Embeddings ship with the binary &mdash; runs fully offline after first install.</p>
@@ -1875,7 +2294,7 @@
   <section id="faq">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">010 / Faq</span></div>
+        <div class="section-meta-tag"><span class="label">014 / Faq</span></div>
         <div>
           <h2 class="section-title">Common questions.</h2>
         </div>
@@ -1928,24 +2347,38 @@
     </div>
   </section>
 
-  <!-- ── CTA ── -->
+  <!-- ── CATEGORY (VC narrative) ── -->
+  <section class="category">
+    <div class="container">
+      <div class="category-tag"><span class="label">/ The Category</span></div>
+      <h2 class="category-headline">
+        The code intelligence layer<br>
+        <span class="em">for AI agents.</span>
+      </h2>
+      <p class="category-sub">
+        Turn codebases into structured systems agents can understand and act on &mdash; framework-aware, graph-native, local-first.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── FINAL CTA ── -->
   <section class="cta">
     <div class="cta-bg-num" aria-hidden="true">99%</div>
     <div class="container cta-content">
       <span class="label cta-label">/ Open Source · Mit License · Zero Api Keys</span>
       <h2 class="cta-headline">
-        Stop reading files.<br>
-        <span class="em">Start traversing structure.</span>
+        Stop guessing.<br>
+        <span class="em">Start reasoning over your codebase.</span>
       </h2>
       <p class="cta-sub">
         One install. Every project. Every AI agent that speaks MCP.
       </p>
       <div class="cta-buttons">
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-primary">
-          Star on github <span class="arrow">&rarr;</span>
+        <a href="#install" class="btn btn-primary">
+          Get started in minutes <span class="arrow">&rarr;</span>
         </a>
-        <a href="https://www.npmjs.com/package/trace-mcp" target="_blank" class="btn btn-secondary">
-          npm registry
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-secondary">
+          Star on github
         </a>
       </div>
     </div>
@@ -1958,8 +2391,8 @@
     <div class="footer-grid">
       <div class="footer-col">
         <h5>/ Product</h5>
-        <a href="#what">What it is</a>
-        <a href="#examples">Examples</a>
+        <a href="#problem">Problem</a>
+        <a href="#product">Product view</a>
         <a href="#capabilities">Capabilities</a>
         <a href="#benchmark">Benchmark</a>
         <a href="#install">Install</a>
@@ -1990,7 +2423,7 @@
         <span class="item">mit</span>
         <span class="item">2026</span>
       </div>
-      <div>made with restraint</div>
+      <div>Framework-aware code intelligence for AI agents</div>
     </div>
   </div>
 </footer>
