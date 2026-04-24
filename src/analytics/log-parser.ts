@@ -5,7 +5,7 @@ import { logger } from '../logger.js';
 
 // --- Interfaces ---
 
-interface TokenUsage {
+export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -47,7 +47,7 @@ export interface ParsedSession {
   toolResults: Map<string, ToolResultEvent>;
 }
 
-type ClientType = 'claude-code' | 'claw-code';
+type ClientType = 'claude-code' | 'claw-code' | 'hermes';
 
 // --- Constants ---
 

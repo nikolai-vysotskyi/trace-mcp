@@ -7,6 +7,7 @@ import type { TopologyStore } from '../../topology/topology-db.js';
 import { getServiceMap, getCrossServiceImpact, getApiContract, getServiceDependencies, getContractDrift } from '../project/topology.js';
 import { getSubprojectGraph, getSubprojectImpact, subprojectAddRepo, subprojectSync, getSubprojectClients, getContractVersions } from '../advanced/subproject.js';
 import { discoverClaudeSessions, discoverAndRegisterSubprojects } from '../advanced/claude-sessions.js';
+import { discoverHermesSessions } from '../advanced/hermes-sessions.js';
 import { RuntimeIntelligence } from '../../runtime/lifecycle.js';
 import { getRuntimeProfile, getRuntimeCallGraph, getEndpointAnalytics, getRuntimeDependencies } from '../advanced/runtime.js';
 import { queryByIntent, getDomainMap, getDomainContext, getCrossDomainDependencies } from '../advanced/intent.js';
@@ -291,6 +292,31 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         }
         const result = getRuntimeDependencies(store, { symbolId: symbol_id, fqn, filePath: file_path });
         if (result.isErr()) return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+  }
+
+  // --- Hermes Agent session discovery ---
+
+  if (config.hermes?.enabled !== false) {
+    server.tool(
+      'discover_hermes_sessions',
+      'List Hermes Agent (NousResearch) sessions visible on this machine. Scans $HERMES_HOME (default ~/.hermes) for state.db plus any profiles/<name>/state.db. Hermes conversations are GLOBAL — results are NOT filtered by the current project. Read-only. Returns JSON: { enabled, sessions: [{ sessionId, sourcePath, profile, lastActivity, sizeBytes }], total }.',
+      {
+        home_override: z.string().max(1024).optional().describe('Override HERMES_HOME resolution (bypasses $HERMES_HOME env)'),
+        profile: z.string().max(128).optional().describe('Scope discovery to a single profile under <home>/profiles/<name>/'),
+        limit: z.number().int().min(1).max(500).optional().describe('Max sessions to return, most recently active first (default: 100)'),
+      },
+      async ({ home_override, profile, limit }) => {
+        const result = await discoverHermesSessions({
+          homeOverride: home_override ?? config.hermes?.home_override,
+          profile: profile ?? config.hermes?.profile,
+          limit,
+        });
+        if (result.isErr()) {
+          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        }
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
     );

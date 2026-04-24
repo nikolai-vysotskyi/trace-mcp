@@ -35,6 +35,8 @@ import { registerSessionTools } from '../tools/register/session.js';
 import { registerMemoryTools } from '../tools/register/memory.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { DecisionStore } from '../memory/decision-store.js';
+import { getSessionProviderRegistry } from '../session/providers/registry.js';
+import { HermesSessionProvider } from '../session/providers/hermes.js';
 
 /** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response */
 function j(value: unknown): string {
@@ -415,6 +417,15 @@ export function createServer(
   const metaCtx: MetaContext = {
     ...ctx, _originalTool, registeredToolNames, toolHandlers, presetName,
   };
+
+  // Session providers — register enabled providers into the shared singleton
+  // so downstream consumers (mineSessions, discover_hermes_sessions) find them.
+  if (config.hermes?.enabled !== false) {
+    const registry = getSessionProviderRegistry();
+    if (!registry.get('hermes')) {
+      registry.register(new HermesSessionProvider());
+    }
+  }
 
   registerCoreTools(server, ctx);
   registerNavigationTools(server, ctx);

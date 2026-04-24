@@ -517,11 +517,35 @@ The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported
 
 ---
 
+## Hermes Agent sessions
+
+Hermes Agent (NousResearch) stores conversations in a SQLite database at `$HERMES_HOME/state.db` (default `~/.hermes/state.db`) plus one DB per profile under `<home>/profiles/<name>/state.db`. trace-mcp reads these read-only and exposes them through:
+
+- `discover_hermes_sessions` — MCP tool that lists sessions without mining or indexing them.
+- `mine_sessions` — if you pass a `project_root`, the decision miner also walks every Hermes session it can see and records any decisions it finds under that project. When `project_root` is absent Hermes is skipped entirely — global conversations are deliberately not attributed to a guessed project.
+
+Hermes sessions are global (no per-project binding in the upstream schema). Do not expect project scoping on the provider side.
+
+```jsonc
+{
+  "hermes": {
+    "enabled": "auto",       // "auto" (default) | true | false
+    "home_override": null,   // override $HERMES_HOME / ~/.hermes resolution
+    "profile": null          // scope discovery to <home>/profiles/<name>/
+  }
+}
+```
+
+With `enabled: "auto"` the provider is registered at boot; discovery returns an empty list when no `state.db` exists, so there is no penalty on machines that don't use Hermes.
+
+---
+
 ## Environment variables
 
 | Variable | Description |
 |---|---|
 | `TRACE_MCP_LOG_LEVEL` | Log level (debug, info, warn, error) |
+| `HERMES_HOME` | Override for Hermes Agent storage root (default `~/.hermes`). Read by `discover_hermes_sessions` and the Hermes session provider. |
 
 ---
 
