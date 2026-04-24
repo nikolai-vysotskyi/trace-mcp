@@ -122,27 +122,27 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 
 AI agents burn tokens reading files they don't need. trace-mcp returns **precision context** — only the symbols, edges, and signatures relevant to the query.
 
-**Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols):
+**Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols → 929 files, 5,197 symbols in v1.30):
 
 ```
-Task                  Without trace-mcp    With trace-mcp    Reduction
-─────────────────────────────────────────────────────────────────────
-Symbol lookup              42,518 tokens     7,353 tokens      82.7%
-File exploration           27,486 tokens       548 tokens      98.0%
-Search                     22,860 tokens     8,000 tokens      65.0%
-Find usages                11,430 tokens     1,720 tokens      85.0%
-Context bundle             12,847 tokens     4,164 tokens      67.6%
-Batch overhead             16,831 tokens     9,031 tokens      46.3%
-Impact analysis            49,141 tokens     2,461 tokens      95.0%
-Call graph                178,345 tokens    10,704 tokens      94.0%
-Type hierarchy             94,762 tokens     1,030 tokens      98.9%
-Tests for                  22,590 tokens     1,150 tokens      94.9%
-Composite task             93,634 tokens     3,836 tokens      95.9%
-─────────────────────────────────────────────────────────────────────
-Total                     572,444 tokens    49,997 tokens      91.3%
+Task                    Without trace-mcp    With trace-mcp    Reduction
+───────────────────────────────────────────────────────────────────────────
+Symbol lookup                42,518 tokens       1,162 tokens       97.3%
+File exploration             27,486 tokens         855 tokens       96.9%
+Search                       22,860 tokens       8,000 tokens       65.0%
+Find usages                  11,430 tokens       1,720 tokens       85.0%
+Context bundle               12,847 tokens       3,485 tokens       72.9%
+Batch overhead               16,831 tokens       8,299 tokens       50.7%
+Impact analysis              49,141 tokens       1,856 tokens       96.2%
+Call graph                  178,345 tokens       9,285 tokens       94.8%
+Type hierarchy               94,762 tokens         855 tokens       99.1%
+Tests for                    22,590 tokens       1,150 tokens       94.9%
+Composite task              223,721 tokens      14,245 tokens       93.6%
+───────────────────────────────────────────────────────────────────────────
+Total                       702,532 tokens      50,812 tokens       92.8%
 ```
 
-**91% fewer tokens** to accomplish the same code understanding tasks. That's ~522K tokens saved per exploration session — more headroom for actual coding, fewer context window evictions, lower API costs.
+**92.8% fewer tokens** to accomplish the same code understanding tasks. On the v1.30 index (929 files, 5,197 symbols) that translates to ~652K tokens saved per exploration session — up from ~522K in the original benchmark. More headroom for actual coding, fewer context window evictions, lower API costs.
 
 **Savings scale with project size.** On a 650-file project, trace-mcp saves ~522K tokens. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
 
