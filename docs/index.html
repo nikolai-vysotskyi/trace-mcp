@@ -83,7 +83,9 @@
     html {
       scroll-behavior: smooth;
       color-scheme: var(--color-scheme);
+      overflow-x: hidden;
     }
+    img, svg { max-width: 100%; height: auto; }
 
     body {
       font-family: var(--font-body);
@@ -292,6 +294,7 @@
       letter-spacing: -0.025em;
       color: var(--text-display);
       max-width: 820px;
+      overflow-wrap: break-word;
     }
     .hero-headline .em { font-weight: 700; }
     .hero-side {
@@ -374,12 +377,13 @@
     .section-meta-tag { padding-top: 4px; }
     .section-title {
       font-family: var(--font-body);
-      font-size: clamp(32px, 4.2vw, 48px);
+      font-size: clamp(28px, 4.2vw, 48px);
       font-weight: 500;
       line-height: 1.1;
       letter-spacing: -0.02em;
       color: var(--text-display);
       max-width: 760px;
+      overflow-wrap: break-word;
     }
     .section-title .em { font-weight: 700; }
     .section-lede {
@@ -723,10 +727,13 @@
     .br-meta {
       display: flex;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
       font-family: var(--font-mono);
       font-size: 11px;
       color: var(--text-disabled);
       letter-spacing: 0.04em;
+      min-width: 0;
     }
     .br-meta .from { text-decoration: line-through; }
     .br-meta .to { color: var(--text-display); text-decoration: none; }
@@ -1020,13 +1027,14 @@
     .cta-label { margin-bottom: 24px; }
     .cta-headline {
       font-family: var(--font-body);
-      font-size: clamp(32px, 5vw, 56px);
+      font-size: clamp(28px, 5vw, 56px);
       font-weight: 400;
       line-height: 1.05;
       letter-spacing: -0.02em;
       color: var(--text-display);
       max-width: 720px;
       margin: 0 auto 16px;
+      overflow-wrap: break-word;
     }
     .cta-headline .em { font-weight: 700; }
     .cta-sub {
@@ -1113,6 +1121,8 @@
       text-transform: uppercase;
       color: var(--text-disabled);
       gap: 16px;
+      flex-wrap: wrap;
+      min-width: 0;
     }
     .app-frame-meta .tag { color: var(--text-display); }
     .app-frame-meta .divider { flex: 1; height: 1px; background: var(--border); }
@@ -1221,8 +1231,12 @@
     @media (max-width: 700px) {
       .pain-item { grid-template-columns: 48px 1fr; gap: 16px; padding: 22px 0; }
       .pain-text { font-size: 17px; }
-      .pain-punchline { padding-left: 64px; }
-      .pain-punchline::before { left: 48px; }
+      .pain-punchline {
+        padding-left: 32px;
+        font-size: clamp(19px, 4.6vw, 26px);
+        margin-top: 32px;
+      }
+      .pain-punchline::before { left: 10px; top: 3px; font-size: 18px; }
     }
 
     /* ── Solution split ── */
@@ -1436,11 +1450,12 @@
     .diff-list strong { color: var(--text-display); font-weight: 600; }
     .diff-quote {
       font-family: var(--font-body);
-      font-size: clamp(26px, 3.6vw, 40px);
+      font-size: clamp(22px, 3.6vw, 40px);
       line-height: 1.2;
       font-weight: 400;
       letter-spacing: -0.02em;
       color: var(--text-display);
+      overflow-wrap: break-word;
     }
     .diff-quote .neg {
       color: var(--text-disabled);
@@ -1537,13 +1552,14 @@
     }
     .category-headline {
       font-family: var(--font-body);
-      font-size: clamp(44px, 8.5vw, 120px);
+      font-size: clamp(30px, 8.5vw, 120px);
       font-weight: 400;
       line-height: 0.98;
       letter-spacing: -0.035em;
       color: var(--text-display);
       max-width: 1200px;
       margin-bottom: 40px;
+      overflow-wrap: break-word;
     }
     .category-headline .em { font-weight: 700; }
     .category-sub {
@@ -1554,6 +1570,11 @@
     }
     @media (max-width: 700px) {
       .category { padding: 96px 0; }
+      .category-headline {
+        font-size: clamp(28px, 8.5vw, 48px);
+        letter-spacing: -0.02em;
+        line-height: 1.08;
+      }
       .category-sub { font-size: 16px; }
     }
   </style>
