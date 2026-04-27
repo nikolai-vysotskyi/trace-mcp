@@ -40,17 +40,17 @@ function stripJsonComments(source: string): string {
   let result = '';
   let i = 0;
   let inString = false;
-  let escape = false;
+  let inEscape = false;
 
   while (i < source.length) {
     const ch = source[i];
 
     if (inString) {
       result += ch;
-      if (escape) {
-        escape = false;
+      if (inEscape) {
+        inEscape = false;
       } else if (ch === '\\') {
-        escape = true;
+        inEscape = true;
       } else if (ch === '"') {
         inString = false;
       }
@@ -96,11 +96,11 @@ function stripJsonComments(source: string): string {
 
 // ── Tree-sitter AST helpers ──────────────────────────────────────────────
 
-/** Get the text of a string node, stripping surrounding quotes and unescaping JSON escapes */
+/** Get the text of a string node, stripping surrounding quotes and unescaping JSON inEscapes */
 function getStringText(node: TSNode | null): string | undefined {
   if (!node || node.type !== 'string') return undefined;
   const raw = node.text; // includes surrounding quotes, e.g. "App\\"
-  // Use JSON.parse to properly unescape JSON string escapes
+  // Use JSON.parse to properly uninEscape JSON string inEscapes
   try {
     return JSON.parse(raw) as string;
   } catch {

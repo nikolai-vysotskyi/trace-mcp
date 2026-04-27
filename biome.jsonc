@@ -51,7 +51,7 @@
         "noEmptyBlockStatements": "off",
         "noConsole": "off",
         "noExplicitAny": "warn",
-        "noShadowRestrictedNames": "warn",
+        "noShadowRestrictedNames": "error",
         "noDuplicateElseIf": "warn",
         "noUselessEscapeInString": "warn",
         "noTemplateCurlyInString": "warn"
