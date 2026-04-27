@@ -49,7 +49,12 @@
         "noDebugger": "error",
         "noDoubleEquals": "error",
         "noEmptyBlockStatements": "off",
-        "noConsole": "off"
+        "noConsole": "off",
+        "noExplicitAny": "warn",
+        "noShadowRestrictedNames": "warn",
+        "noDuplicateElseIf": "warn",
+        "noUselessEscapeInString": "warn",
+        "noTemplateCurlyInString": "warn"
       },
       "complexity": {
         "useOptionalChain": "error",
