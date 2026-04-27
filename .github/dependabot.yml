@@ -58,6 +58,9 @@ updates:
       - dependency-name: "@vitejs/plugin-react"
         update-types:
           - version-update:semver-major
+      - dependency-name: "electron"
+        update-types:
+          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
