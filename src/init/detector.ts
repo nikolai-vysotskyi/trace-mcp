@@ -6,10 +6,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { parse as parseJsonc } from 'jsonc-parser';
 import { buildProjectContext } from '../indexer/project-context.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import Database from 'better-sqlite3';
-import type { DetectionResult, PackageManagerInfo, DetectedFramework, DetectedMcpClient } from './types.js';
+import type {
+  DetectionResult,
+  PackageManagerInfo,
+  DetectedFramework,
+  DetectedMcpClient,
+} from './types.js';
 import { GUARD_HOOK_VERSION } from './types.js';
 
 const HOME = os.homedir();
@@ -35,12 +41,17 @@ export function detectProject(dir: string): DetectionResult {
 
   // --- Languages from detected versions ---
   const languageMap: Record<string, string> = {
-    node: 'TypeScript', php: 'PHP', python: 'Python',
-    ruby: 'Ruby', go: 'Go', java: 'Java', rust: 'Rust',
+    node: 'TypeScript',
+    php: 'PHP',
+    python: 'Python',
+    ruby: 'Ruby',
+    go: 'Go',
+    java: 'Java',
+    rust: 'Rust',
   };
-  const languages = [...new Set(
-    ctx.detectedVersions.map((v) => languageMap[v.runtime]).filter(Boolean),
-  )];
+  const languages = [
+    ...new Set(ctx.detectedVersions.map((v) => languageMap[v.runtime]).filter(Boolean)),
+  ];
   // Add Vue if .vue files or Vue frameworks detected
   if (frameworks.some((f) => ['vue', 'nuxt', 'inertia'].includes(f.name))) {
     if (!languages.includes('Vue')) languages.push('Vue');
@@ -54,8 +65,8 @@ export function detectProject(dir: string): DetectionResult {
   const existingDb = detectExistingDb(projectRoot);
   const claudeMdPath = path.join(projectRoot, 'CLAUDE.md');
   const hasClaudeMd = fs.existsSync(claudeMdPath);
-  const claudeMdHasTraceMcpBlock = hasClaudeMd &&
-    fs.readFileSync(claudeMdPath, 'utf-8').includes('<!-- trace-mcp:start -->');
+  const claudeMdHasTraceMcpBlock =
+    hasClaudeMd && fs.readFileSync(claudeMdPath, 'utf-8').includes('<!-- trace-mcp:start -->');
 
   const { hasGuardHook, guardHookVersion } = detectGuardHook();
 
@@ -92,8 +103,12 @@ function detectPackageManagers(root: string): PackageManagerInfo[] {
   check('composer.json', 'composer', ['composer.lock']);
   check('pyproject.toml', 'poetry', ['poetry.lock', 'uv.lock']);
   if (managers.length > 0 && managers[managers.length - 1].type === 'poetry') {
-    if (managers[managers.length - 1].lockfile === 'uv.lock') managers[managers.length - 1].type = 'uv';
-    else if (!managers[managers.length - 1].lockfile && fs.existsSync(path.join(root, 'requirements.txt'))) {
+    if (managers[managers.length - 1].lockfile === 'uv.lock')
+      managers[managers.length - 1].type = 'uv';
+    else if (
+      !managers[managers.length - 1].lockfile &&
+      fs.existsSync(path.join(root, 'requirements.txt'))
+    ) {
       managers[managers.length - 1].type = 'pip';
     }
   }
@@ -102,7 +117,10 @@ function detectPackageManagers(root: string): PackageManagerInfo[] {
   check('Gemfile', 'bundler', ['Gemfile.lock']);
   check('pom.xml', 'maven', []);
   if (!managers.some((m) => m.type === 'maven')) {
-    if (fs.existsSync(path.join(root, 'build.gradle')) || fs.existsSync(path.join(root, 'build.gradle.kts'))) {
+    if (
+      fs.existsSync(path.join(root, 'build.gradle')) ||
+      fs.existsSync(path.join(root, 'build.gradle.kts'))
+    ) {
       managers.push({ type: 'gradle', lockfile: undefined });
     }
   }
@@ -142,7 +160,10 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
   // Claude Desktop
   const platform = os.platform();
   if (platform === 'darwin') {
-    checkConfig('claude-desktop', path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'));
+    checkConfig(
+      'claude-desktop',
+      path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
+    );
   } else if (platform === 'win32') {
     const appData = process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming');
     checkConfig('claude-desktop', path.join(appData, 'Claude', 'claude_desktop_config.json'));
@@ -174,11 +195,12 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
 
   // JetBrains AI Assistant: detect via IDE mcpServer.xml in JetBrains config dirs
   {
-    const jbConfigBase = platform === 'darwin'
-      ? path.join(HOME, 'Library', 'Application Support', 'JetBrains')
-      : platform === 'win32'
-        ? path.join(process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'), 'JetBrains')
-        : path.join(HOME, '.config', 'JetBrains');
+    const jbConfigBase =
+      platform === 'darwin'
+        ? path.join(HOME, 'Library', 'Application Support', 'JetBrains')
+        : platform === 'win32'
+          ? path.join(process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'), 'JetBrains')
+          : path.join(HOME, '.config', 'JetBrains');
 
     if (fs.existsSync(jbConfigBase)) {
       try {
@@ -191,7 +213,9 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
             break;
           }
         }
-      } catch { /* can't read dir */ }
+      } catch {
+        /* can't read dir */
+      }
     }
   }
 
@@ -211,6 +235,80 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
     checkToml('codex', path.join(HOME, '.codex', 'config.toml'));
     if (projectRoot && !clients.some((c) => c.name === 'codex')) {
       checkToml('codex', path.join(projectRoot, '.codex', 'config.toml'));
+    }
+  }
+
+  // AMP (Sourcegraph): JSON/JSONC at ~/.config/amp/settings.json[c],
+  // workspace at .amp/settings.json[c]. Top-level key is `amp.mcpServers`
+  // (note the literal dot in the key name — flat key, not nested under `amp`).
+  {
+    const checkAmp = (configPath: string) => {
+      if (!fs.existsSync(configPath)) return;
+      try {
+        const content = fs.readFileSync(configPath, 'utf-8');
+        const parsed = parseJsonc(content) as Record<string, unknown> | null;
+        const servers = parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
+        const hasTraceMcp = !!servers?.['trace-mcp'];
+        clients.push({ name: 'amp', configPath, hasTraceMcp });
+      } catch {
+        clients.push({ name: 'amp', configPath, hasTraceMcp: false });
+      }
+    };
+    const ampUserBase = path.join(HOME, '.config', 'amp');
+    for (const file of ['settings.jsonc', 'settings.json']) {
+      const p = path.join(ampUserBase, file);
+      if (fs.existsSync(p)) {
+        checkAmp(p);
+        break;
+      }
+    }
+    if (projectRoot && !clients.some((c) => c.name === 'amp')) {
+      const ampProjectBase = path.join(projectRoot, '.amp');
+      for (const file of ['settings.jsonc', 'settings.json']) {
+        const p = path.join(ampProjectBase, file);
+        if (fs.existsSync(p)) {
+          checkAmp(p);
+          break;
+        }
+      }
+    }
+  }
+
+  // Factory Droid: JSON at ~/.factory/mcp.json (user) or .factory/mcp.json (project).
+  // Standard `mcpServers` key, but each entry has `type: "stdio"|"http"`.
+  checkConfig('factory-droid', path.join(HOME, '.factory', 'mcp.json'));
+  if (projectRoot && !clients.some((c) => c.name === 'factory-droid')) {
+    checkConfig('factory-droid', path.join(projectRoot, '.factory', 'mcp.json'));
+  }
+
+  // Warp: configuration is stored in cloud-synced storage, not a writable file.
+  // We only detect installation presence so the UI can offer a paste-snippet flow.
+  {
+    const warpPaths =
+      platform === 'darwin'
+        ? ['/Applications/Warp.app', path.join(HOME, 'Applications', 'Warp.app')]
+        : platform === 'win32'
+          ? [
+              path.join(
+                process.env.LOCALAPPDATA ?? path.join(HOME, 'AppData', 'Local'),
+                'Programs',
+                'Warp',
+              ),
+            ]
+          : [path.join(HOME, '.local', 'share', 'warp-terminal'), '/usr/bin/warp-terminal'];
+    const installed = warpPaths.some((p) => {
+      try {
+        return fs.existsSync(p);
+      } catch {
+        return false;
+      }
+    });
+    if (installed) {
+      clients.push({
+        name: 'warp',
+        configPath: '<Warp Settings → Agents → MCP servers>',
+        hasTraceMcp: false,
+      });
     }
   }
 
@@ -251,12 +349,17 @@ function detectExistingConfig(root: string): { path: string } | null {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
       if (pkg['trace-mcp']) return { path: pkgPath };
-    } catch { /* ignore malformed package.json */ }
+    } catch {
+      /* ignore malformed package.json */
+    }
   }
   return null;
 }
 
-function detectExistingDb(root: string, globalDbPath?: string): { path: string; schemaVersion: number; fileCount: number } | null {
+function detectExistingDb(
+  root: string,
+  globalDbPath?: string,
+): { path: string; schemaVersion: number; fileCount: number } | null {
   // Check global location first, then legacy local location
   const candidates = globalDbPath
     ? [globalDbPath, path.join(root, '.trace-mcp', 'index.db')]
@@ -266,9 +369,13 @@ function detectExistingDb(root: string, globalDbPath?: string): { path: string; 
   try {
     // Open read-only — don't run migrations or log during detection
     const db = new Database(dbPath, { readonly: true });
-    const versionRow = db.prepare('SELECT value FROM schema_meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
+    const versionRow = db
+      .prepare('SELECT value FROM schema_meta WHERE key = ?')
+      .get('schema_version') as { value: string } | undefined;
     const schemaVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
-    const countRow = db.prepare('SELECT COUNT(*) as cnt FROM files').get() as { cnt: number } | undefined;
+    const countRow = db.prepare('SELECT COUNT(*) as cnt FROM files').get() as
+      | { cnt: number }
+      | undefined;
     const fileCount = countRow?.cnt ?? 0;
     db.close();
     return { path: dbPath, schemaVersion, fileCount };
@@ -281,7 +388,11 @@ export function detectGuardHook(): { hasGuardHook: boolean; guardHookVersion: st
   const ext = process.platform === 'win32' ? '.cmd' : '.sh';
   const hookPath = path.join(HOME, '.claude', 'hooks', `trace-mcp-guard${ext}`);
   const clawHookPath = path.join(HOME, '.claw', 'hooks', `trace-mcp-guard${ext}`);
-  const existingPath = fs.existsSync(hookPath) ? hookPath : fs.existsSync(clawHookPath) ? clawHookPath : null;
+  const existingPath = fs.existsSync(hookPath)
+    ? hookPath
+    : fs.existsSync(clawHookPath)
+      ? clawHookPath
+      : null;
   if (!existingPath) return { hasGuardHook: false, guardHookVersion: null };
 
   const content = fs.readFileSync(existingPath, 'utf-8');
