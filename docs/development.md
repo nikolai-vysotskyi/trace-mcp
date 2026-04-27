@@ -35,6 +35,18 @@ Formatter and linter are unified under [Biome](https://biomejs.dev). Config live
 - **Editor**: `.vscode/extensions.json` recommends the official `biomejs.biome` extension. JetBrains users can install the [Biome plugin](https://plugins.jetbrains.com/plugin/22761-biome).
 - **`git blame`**: `.git-blame-ignore-revs` lists the formatter mass-pass commit. Enable locally with `git config blame.ignoreRevsFile .git-blame-ignore-revs`. GitHub honors it on the web.
 
+### Ramping new lint rules
+
+When promoting a new rule:
+
+1. Add it to `biome.jsonc` at severity `warn` first to see the blast radius (`npx biome lint --reporter=summary`).
+2. If the rule has a safe auto-fix, run `npx biome lint --write --only=<rule-id>`. Review the diff.
+3. For unsafe fixes (e.g. `useExhaustiveDependencies` removing deps, `useButtonType` guessing `type="button"`): hand-fix or scope via `overrides` in `biome.jsonc`.
+4. Once violations hit zero, promote severity to `error`.
+5. Mass-fix commits should be added to `.git-blame-ignore-revs`.
+
+Current burndown of warnings: see `npx biome lint --reporter=summary`.
+
 ## Tests
 
 ```bash
