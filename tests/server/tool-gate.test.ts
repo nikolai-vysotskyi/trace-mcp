@@ -5,14 +5,19 @@ import { installToolGate } from '../../src/server/tool-gate.js';
 // ─── Mocks ───────────────────────────────────────────────────
 
 function createMockServer() {
-  const registered: Array<{ name: string; desc?: string; schema?: unknown; cb?: Function }> = [];
+  const registered: Array<{
+    name: string;
+    desc?: string;
+    schema?: unknown;
+    cb?: (...args: unknown[]) => unknown;
+  }> = [];
   const server = {
     tool: vi.fn((...args: unknown[]) => {
       const name = args[0] as string;
       const desc = typeof args[1] === 'string' ? (args[1] as string) : undefined;
       const schemaIdx = typeof args[1] === 'string' ? 2 : 1;
       const schema = args.length > schemaIdx + 1 ? args[schemaIdx] : undefined;
-      const cb = args[args.length - 1] as Function;
+      const cb = args[args.length - 1] as (...args: unknown[]) => unknown;
       registered.push({ name, desc, schema, cb });
     }),
   };

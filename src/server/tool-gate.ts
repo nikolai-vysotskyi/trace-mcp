@@ -164,7 +164,7 @@ export function installToolGate(
 
     // Wrap callback for savings/journal/dedup/hints
     const cbIdx = args.length - 1;
-    const originalCb = args[cbIdx] as Function;
+    const originalCb = args[cbIdx] as (...args: unknown[]) => unknown;
     if (typeof originalCb === 'function') {
       toolHandlers.set(name, async (params: Record<string, unknown>) => {
         return (await originalCb(params)) as ToolResponse;
@@ -280,7 +280,7 @@ export function installToolGate(
       args.splice(lastIdx, 0, annotations);
     }
 
-    return (_originalTool as Function)(...args);
+    return (_originalTool as (...args: unknown[]) => unknown)(...args);
   }) as typeof server.tool;
 
   // Wrap _originalTool so tools registered outside the gate (session meta-tools)
@@ -292,7 +292,7 @@ export function installToolGate(
     if (typeof oArgs[oLastIdx] === 'function') {
       oArgs.splice(oLastIdx, 0, ann);
     }
-    return (_originalTool as Function)(...oArgs);
+    return (_originalTool as (...args: unknown[]) => unknown)(...oArgs);
   }) as typeof _originalTool;
 
   return { _originalTool: annotatedOriginalTool, registeredToolNames, toolHandlers };

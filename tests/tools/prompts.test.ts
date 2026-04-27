@@ -114,7 +114,9 @@ describe('MCP Prompts', () => {
       // The review prompt callback should not analyze more than 5 files
       // We verify by checking the source code — this is a structural test
       const args = registeredPrompts.get('review') as unknown[];
-      const callback = args[3] as Function;
+      const callback = args[3] as (
+        params: unknown,
+      ) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
       // Call with a branch — git will likely fail in test env, which is fine
       const result = await callback({ branch: 'test-branch', base: 'main' });
       expect(result).toHaveProperty('messages');
@@ -125,7 +127,9 @@ describe('MCP Prompts', () => {
 
     it('pre-merge prompt limits blast radius to 5 files', async () => {
       const args = registeredPrompts.get('pre-merge') as unknown[];
-      const callback = args[3] as Function;
+      const callback = args[3] as (
+        params: unknown,
+      ) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
       const result = await callback({ branch: 'test-branch', base: 'main' });
       expect(result).toHaveProperty('messages');
       expect(result.messages[0].content.text).toContain('Pre-Merge Checklist');

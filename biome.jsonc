@@ -67,7 +67,7 @@
         "noUselessFragments": "error",
         "noUselessLoneBlockStatements": "error",
         "noUselessTernary": "error",
-        "noBannedTypes": "warn",
+        "noBannedTypes": "error",
         "noStaticOnlyClass": "warn"
       },
       "security": {
