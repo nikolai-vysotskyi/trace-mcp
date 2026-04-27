@@ -111,7 +111,7 @@ trace-mcp ships with an optional Electron desktop app (`packages/app`) that give
   <img src="docs/images/app-projects.png" alt="trace-mcp app — Projects, MCP Clients, Settings" width="720" />
 </p>
 
-**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules).
+**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex, AMP, Warp, Factory Droid) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules; Max-tier features are Claude Code–specific). Warp and JetBrains AI require manual paste in the IDE because their config storage is GUI-only.
 
 <p align="center">
   <img src="docs/images/app-overview.png" alt="trace-mcp app — project Overview tab" width="560" />

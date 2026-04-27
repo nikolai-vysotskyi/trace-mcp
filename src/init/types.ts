@@ -1,18 +1,53 @@
 /** Types for the init/upgrade detection and configuration system. */
 
 export interface PackageManagerInfo {
-  type: 'npm' | 'yarn' | 'pnpm' | 'bun' | 'composer' | 'pip' | 'poetry' | 'uv' | 'go' | 'cargo' | 'bundler' | 'maven' | 'gradle';
+  type:
+    | 'npm'
+    | 'yarn'
+    | 'pnpm'
+    | 'bun'
+    | 'composer'
+    | 'pip'
+    | 'poetry'
+    | 'uv'
+    | 'go'
+    | 'cargo'
+    | 'bundler'
+    | 'maven'
+    | 'gradle';
   lockfile?: string;
 }
 
 export interface DetectedFramework {
   name: string;
   version?: string;
-  category?: 'framework' | 'orm' | 'validation' | 'state' | 'api' | 'realtime' | 'testing' | 'tooling' | 'view';
+  category?:
+    | 'framework'
+    | 'orm'
+    | 'validation'
+    | 'state'
+    | 'api'
+    | 'realtime'
+    | 'testing'
+    | 'tooling'
+    | 'view';
 }
 
 export interface DetectedMcpClient {
-  name: 'claude-code' | 'claw-code' | 'claude-desktop' | 'cursor' | 'windsurf' | 'continue' | 'junie' | 'jetbrains-ai' | 'codex' | 'hermes';
+  name:
+    | 'claude-code'
+    | 'claw-code'
+    | 'claude-desktop'
+    | 'cursor'
+    | 'windsurf'
+    | 'continue'
+    | 'junie'
+    | 'jetbrains-ai'
+    | 'codex'
+    | 'hermes'
+    | 'amp'
+    | 'warp'
+    | 'factory-droid';
   configPath: string;
   hasTraceMcp: boolean;
 }

@@ -8,6 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
 import YAML from 'yaml';
+import { applyEdits, modify, parse as parseJsonc, type FormattingOptions } from 'jsonc-parser';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 import { getLauncherPath } from './launcher.js';
 
@@ -101,6 +102,104 @@ export function configureMcpClients(
       continue;
     }
 
+    // Warp: configuration is stored in cloud-synced storage, not a writable file.
+    // The user must paste the entry via Settings → Agents → MCP servers. If
+    // claude-code is also selected, Warp can pick our entry up automatically
+    // via "File-based MCP servers" detection.
+    if (name === 'warp') {
+      const hasClaudeCode = clientNames.includes('claude-code');
+      const launcher = getLauncherPath();
+      const snippet = JSON.stringify({
+        mcpServers: {
+          'trace-mcp': { command: launcher, args: ['serve'], working_directory: projectRoot },
+        },
+      });
+      results.push({
+        target: 'Warp',
+        action: 'skipped',
+        detail: hasClaudeCode
+          ? 'Enable Settings → Agents → MCP servers → "File-based MCP servers" to inherit trace-mcp from Claude Code, or paste: ' +
+            snippet
+          : 'Open Settings → Agents → MCP servers → + Add → paste: ' + snippet,
+      });
+      continue;
+    }
+
+    // AMP (Sourcegraph Amp): JSONC with the literal-dot key `amp.mcpServers`.
+    // Use jsonc-parser's modify()/applyEdits() so existing comments and formatting
+    // are preserved across writes.
+    if (name === 'amp') {
+      const configPath = getConfigPath(name, projectRoot, opts.scope);
+      if (!configPath) {
+        results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
+        continue;
+      }
+      const entry = { ...buildMcpEntry(), args: ['serve'], cwd: projectRoot };
+
+      if (fs.existsSync(configPath) && ampEntryMatches(configPath, entry)) {
+        results.push({ target: configPath, action: 'already_configured', detail: name });
+        continue;
+      }
+      if (opts.dryRun) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Would configure ${name} (${opts.scope})`,
+        });
+        continue;
+      }
+      try {
+        const action = writeAmpJsoncEntry(configPath, entry);
+        results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
+      } catch (err) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Error: ${(err as Error).message}`,
+        });
+      }
+      continue;
+    }
+
+    // Factory Droid: standard JSON `mcpServers`, but each entry needs `type: "stdio"`.
+    if (name === 'factory-droid') {
+      const configPath = getConfigPath(name, projectRoot, opts.scope);
+      if (!configPath) {
+        results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
+        continue;
+      }
+      const entry: McpServerEntry & { type: 'stdio' } = {
+        type: 'stdio',
+        ...buildMcpEntry(),
+        args: ['serve'],
+        cwd: projectRoot,
+      };
+
+      if (fs.existsSync(configPath) && factoryEntryMatches(configPath, entry)) {
+        results.push({ target: configPath, action: 'already_configured', detail: name });
+        continue;
+      }
+      if (opts.dryRun) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Would configure ${name} (${opts.scope})`,
+        });
+        continue;
+      }
+      try {
+        const action = writeFactoryJsonEntry(configPath, entry);
+        results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
+      } catch (err) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Error: ${(err as Error).message}`,
+        });
+      }
+      continue;
+    }
+
     // Hermes Agent: YAML format, always global, key `mcp_servers.trace-mcp`.
     if (name === 'hermes') {
       const configPath = getConfigPath(name, projectRoot, opts.scope);
@@ -117,7 +216,11 @@ export function configureMcpClients(
       }
 
       if (opts.dryRun) {
-        results.push({ target: configPath, action: 'skipped', detail: `Would configure ${name} (${opts.scope})` });
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Would configure ${name} (${opts.scope})`,
+        });
         continue;
       }
 
@@ -125,7 +228,11 @@ export function configureMcpClients(
         const action = writeHermesYamlEntry(configPath, entry);
         results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
       } catch (err) {
-        results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Error: ${(err as Error).message}`,
+        });
       }
       continue;
     }
@@ -146,19 +253,33 @@ export function configureMcpClients(
             results.push({ target: configPath, action: 'already_configured', detail: name });
             continue;
           }
-        } catch { /* malformed — will append */ }
+        } catch {
+          /* malformed — will append */
+        }
       }
 
       if (opts.dryRun) {
-        results.push({ target: configPath, action: 'skipped', detail: `Would configure ${name} (${opts.scope})` });
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Would configure ${name} (${opts.scope})`,
+        });
         continue;
       }
 
       try {
-        const action = writeCodexTomlEntry(configPath, { ...buildMcpEntry(), args: ['serve'], cwd: projectRoot });
+        const action = writeCodexTomlEntry(configPath, {
+          ...buildMcpEntry(),
+          args: ['serve'],
+          cwd: projectRoot,
+        });
         results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
       } catch (err) {
-        results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Error: ${(err as Error).message}`,
+        });
       }
       continue;
     }
@@ -185,7 +306,11 @@ export function configureMcpClients(
     }
 
     if (opts.dryRun) {
-      results.push({ target: configPath, action: 'skipped', detail: `Would configure ${name} (${opts.scope})` });
+      results.push({
+        target: configPath,
+        action: 'skipped',
+        detail: `Would configure ${name} (${opts.scope})`,
+      });
       continue;
     }
 
@@ -227,7 +352,11 @@ export function configureMcpClients(
 
       results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
     } catch (err) {
-      results.push({ target: configPath, action: 'skipped', detail: `Error: ${(err as Error).message}` });
+      results.push({
+        target: configPath,
+        action: 'skipped',
+        detail: `Error: ${(err as Error).message}`,
+      });
     }
   }
 
@@ -279,7 +408,9 @@ function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 
     try {
       config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       isNew = false;
-    } catch { /* malformed — overwrite */ }
+    } catch {
+      /* malformed — overwrite */
+    }
   }
 
   if (!config.mcpServers || typeof config.mcpServers !== 'object') {
@@ -353,6 +484,107 @@ function writeHermesYamlEntry(configPath: string, entry: HermesYamlEntry): 'crea
 }
 
 // ---------------------------------------------------------------------------
+// AMP JSONC writer (top-level key is the literal `amp.mcpServers`)
+// ---------------------------------------------------------------------------
+
+const AMP_FORMATTING: FormattingOptions = { tabSize: 2, insertSpaces: true, eol: '\n' };
+
+function ampEntryMatches(configPath: string, expected: McpServerEntry): boolean {
+  try {
+    const content = fs.readFileSync(configPath, 'utf-8');
+    const parsed = parseJsonc(content) as Record<string, unknown> | null;
+    const servers = parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
+    const current = servers?.['trace-mcp'] as Record<string, unknown> | undefined;
+    if (!current) return false;
+    if (current.command !== expected.command) return false;
+    if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeAmpJsoncEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  const value: Record<string, unknown> = {
+    command: entry.command,
+    args: entry.args,
+    ...(entry.cwd ? { cwd: entry.cwd } : {}),
+    ...(entry.env ? { env: entry.env } : {}),
+  };
+
+  let isNew = true;
+  let content = '{}';
+  // Atomic read: avoids TOCTOU between existsSync and readFileSync.
+  try {
+    content = fs.readFileSync(configPath, 'utf-8') || '{}';
+    isNew = false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+  }
+
+  // jsonc-parser preserves comments and formatting around untouched regions.
+  const edits = modify(content, ['amp.mcpServers', 'trace-mcp'], value, {
+    formattingOptions: AMP_FORMATTING,
+  });
+  const updated = applyEdits(content, edits);
+  fs.writeFileSync(configPath, updated.endsWith('\n') ? updated : updated + '\n');
+  return isNew ? 'created' : 'updated';
+}
+
+// ---------------------------------------------------------------------------
+// Factory Droid JSON writer (entries need `type: "stdio"`)
+// ---------------------------------------------------------------------------
+
+function factoryEntryMatches(
+  configPath: string,
+  expected: McpServerEntry & { type: 'stdio' },
+): boolean {
+  try {
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const current = content?.mcpServers?.['trace-mcp'];
+    if (!current || typeof current !== 'object') return false;
+    if (current.type !== expected.type) return false;
+    if (current.command !== expected.command) return false;
+    if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeFactoryJsonEntry(
+  configPath: string,
+  entry: McpServerEntry & { type: 'stdio' },
+): 'created' | 'updated' {
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  let config: Record<string, unknown> = {};
+  let isNew = true;
+  // Atomic read: avoids TOCTOU between existsSync and readFileSync.
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    isNew = false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+      // malformed JSON — overwrite
+    }
+  }
+
+  if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+    config.mcpServers = {};
+  }
+  (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  return isNew ? 'created' : 'updated';
+}
+
+// ---------------------------------------------------------------------------
 // TOML writer (Codex)
 // ---------------------------------------------------------------------------
 
@@ -395,11 +627,15 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
 // ---------------------------------------------------------------------------
 
 /** Get config file path for a client, given scope. */
-function getConfigPath(name: DetectedMcpClient['name'], projectRoot: string, scope: McpScope): string | null {
+function getConfigPath(
+  name: DetectedMcpClient['name'],
+  projectRoot: string,
+  scope: McpScope,
+): string | null {
   switch (name) {
     case 'claude-code':
       return scope === 'global'
-        ? path.join(HOME, '.claude.json')  // user-level MCP in Claude Code
+        ? path.join(HOME, '.claude.json') // user-level MCP in Claude Code
         : path.join(projectRoot, '.mcp.json');
     case 'claw-code':
       return scope === 'global'
@@ -409,7 +645,11 @@ function getConfigPath(name: DetectedMcpClient['name'], projectRoot: string, sco
       // Claude Desktop is always global
       return process.platform === 'darwin'
         ? path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
-        : path.join(process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+        : path.join(
+            process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'),
+            'Claude',
+            'claude_desktop_config.json',
+          );
     case 'cursor':
       return scope === 'global'
         ? path.join(HOME, '.cursor', 'mcp.json')
@@ -432,6 +672,22 @@ function getConfigPath(name: DetectedMcpClient['name'], projectRoot: string, sco
         : path.join(projectRoot, '.codex', 'config.toml');
     case 'jetbrains-ai':
       return null; // Configured through IDE Settings UI, not a file we can write
+    case 'warp':
+      return null; // Configured through Warp Settings UI; cloud-synced storage
+    case 'amp': {
+      const base =
+        scope === 'global' ? path.join(HOME, '.config', 'amp') : path.join(projectRoot, '.amp');
+      // Prefer existing .jsonc, fall back to .json. Otherwise create .json.
+      const jsoncPath = path.join(base, 'settings.jsonc');
+      const jsonPath = path.join(base, 'settings.json');
+      if (fs.existsSync(jsoncPath)) return jsoncPath;
+      if (fs.existsSync(jsonPath)) return jsonPath;
+      return jsonPath;
+    }
+    case 'factory-droid':
+      return scope === 'global'
+        ? path.join(HOME, '.factory', 'mcp.json')
+        : path.join(projectRoot, '.factory', 'mcp.json');
     case 'hermes':
       // Hermes Agent is always-global; project scope is a no-op here.
       return path.join(process.env.HERMES_HOME ?? path.join(HOME, '.hermes'), 'config.yaml');
