@@ -19,12 +19,12 @@ const HOME = os.homedir();
 export type ConflictSeverity = 'critical' | 'warning' | 'info';
 
 type ConflictCategory =
-  | 'mcp_server'     // Competing MCP server registered in client config
-  | 'hook'           // Competing PreToolUse / PostToolUse hooks
-  | 'hook_script'    // Physical hook script files on disk
-  | 'claude_md'      // Competing CLAUDE.md blocks / instructions
-  | 'ide_rules'      // .cursorrules, .windsurfrules, .clinerules with competing directives
-  | 'config_file'    // .jcodemunch.jsonc, .code-index/, etc.
+  | 'mcp_server' // Competing MCP server registered in client config
+  | 'hook' // Competing PreToolUse / PostToolUse hooks
+  | 'hook_script' // Physical hook script files on disk
+  | 'claude_md' // Competing CLAUDE.md blocks / instructions
+  | 'ide_rules' // .cursorrules, .windsurfrules, .clinerules with competing directives
+  | 'config_file' // .jcodemunch.jsonc, .code-index/, etc.
   | 'global_artifact'; // ~/.code-index/ and similar global state
 
 export interface Conflict {
@@ -59,21 +59,21 @@ interface ConflictReport {
 /** MCP server names that compete with trace-mcp for code intelligence. */
 const COMPETING_MCP_SERVERS: Record<string, string> = {
   // jcodemunch / code-index family
-  'jcodemunch': 'jcodemunch-mcp',
+  jcodemunch: 'jcodemunch-mcp',
   'jcodemunch-mcp': 'jcodemunch-mcp',
   'code-index': 'code-index',
   'code-index-mcp': 'code-index',
   // repomix — repo packing / context bundling
-  'repomix': 'repomix',
+  repomix: 'repomix',
   'repomix-mcp': 'repomix',
-  'repopack': 'repomix',
+  repopack: 'repomix',
   // aider
-  'aider': 'aider',
+  aider: 'aider',
   'aider-mcp': 'aider',
   // sourcegraph / cody
-  'sourcegraph': 'sourcegraph',
+  sourcegraph: 'sourcegraph',
   'sourcegraph-mcp': 'sourcegraph',
-  'cody': 'sourcegraph-cody',
+  cody: 'sourcegraph-cody',
   'cody-mcp': 'sourcegraph-cody',
   // generic code intelligence MCP servers
   'codebase-mcp': 'codebase-mcp',
@@ -81,11 +81,11 @@ const COMPETING_MCP_SERVERS: Record<string, string> = {
   'code-compass-mcp': 'code-compass',
   'repo-map': 'repo-map',
   'repo-map-mcp': 'repo-map',
-  'greptile': 'greptile',
+  greptile: 'greptile',
   'greptile-mcp': 'greptile',
-  'codegraph': 'codegraph',
+  codegraph: 'codegraph',
   'codegraph-mcp': 'codegraph',
-  'codesearch': 'codesearch',
+  codesearch: 'codesearch',
   'codesearch-mcp': 'codesearch',
 };
 
@@ -106,12 +106,22 @@ const COMPETING_HOOK_PATTERNS: { pattern: RegExp; competitor: string }[] = [
 /** CLAUDE.md content patterns that indicate competing tool injections. */
 const COMPETING_CLAUDE_MD_PATTERNS: { pattern: RegExp; competitor: string; marker?: string }[] = [
   // jcodemunch — marker blocks
-  { pattern: /<!-- ?jcodemunch:start ?-->/i, competitor: 'jcodemunch-mcp', marker: 'jcodemunch:start' },
+  {
+    pattern: /<!-- ?jcodemunch:start ?-->/i,
+    competitor: 'jcodemunch-mcp',
+    marker: 'jcodemunch:start',
+  },
   { pattern: /<!-- ?code-index:start ?-->/i, competitor: 'code-index', marker: 'code-index:start' },
   // jcodemunch — tool name references (distinctive API surface)
   { pattern: /jcodemunch|jCodeMunch/i, competitor: 'jcodemunch-mcp' },
-  { pattern: /get_file_outline|get_symbol_source|get_context_bundle|get_ranked_context/i, competitor: 'jcodemunch-mcp' },
-  { pattern: /embed_repo|get_blast_radius|get_session_stats|suggest_queries/i, competitor: 'jcodemunch-mcp' },
+  {
+    pattern: /get_file_outline|get_symbol_source|get_context_bundle|get_ranked_context/i,
+    competitor: 'jcodemunch-mcp',
+  },
+  {
+    pattern: /embed_repo|get_blast_radius|get_session_stats|suggest_queries/i,
+    competitor: 'jcodemunch-mcp',
+  },
   // repomix
   { pattern: /<!-- ?repomix:start ?-->/i, competitor: 'repomix', marker: 'repomix:start' },
   { pattern: /repomix|repopack/i, competitor: 'repomix' },
@@ -239,7 +249,8 @@ function scanMcpServerConfigs(projectRoot?: string): Conflict[] {
         category: 'mcp_server',
         severity: 'critical',
         summary: `Competing MCP server "${serverName}" registered in ${clientName}`,
-        detail: `Server "${serverName}" (${competitorName}) is registered in ${shortPath(configPath)}. ` +
+        detail:
+          `Server "${serverName}" (${competitorName}) is registered in ${shortPath(configPath)}. ` +
           `It provides overlapping code intelligence tools that will conflict with trace-mcp.`,
         target: configPath,
         competitor: competitorName,
@@ -260,7 +271,10 @@ function getMcpConfigPaths(projectRoot?: string): { clientName: string; configPa
     paths.push({ clientName: 'claude-code', configPath: path.join(projectRoot, '.mcp.json') });
   }
   paths.push({ clientName: 'claude-code', configPath: path.join(HOME, '.claude.json') });
-  paths.push({ clientName: 'claude-code', configPath: path.join(HOME, '.claude', 'settings.json') });
+  paths.push({
+    clientName: 'claude-code',
+    configPath: path.join(HOME, '.claude', 'settings.json'),
+  });
 
   // Claw Code
   if (projectRoot) {
@@ -270,10 +284,22 @@ function getMcpConfigPaths(projectRoot?: string): { clientName: string; configPa
 
   // Claude Desktop
   if (platform === 'darwin') {
-    paths.push({ clientName: 'claude-desktop', configPath: path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json') });
+    paths.push({
+      clientName: 'claude-desktop',
+      configPath: path.join(
+        HOME,
+        'Library',
+        'Application Support',
+        'Claude',
+        'claude_desktop_config.json',
+      ),
+    });
   } else if (platform === 'win32') {
     const appData = process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming');
-    paths.push({ clientName: 'claude-desktop', configPath: path.join(appData, 'Claude', 'claude_desktop_config.json') });
+    paths.push({
+      clientName: 'claude-desktop',
+      configPath: path.join(appData, 'Claude', 'claude_desktop_config.json'),
+    });
   }
 
   // Cursor
@@ -285,20 +311,44 @@ function getMcpConfigPaths(projectRoot?: string): { clientName: string; configPa
   // Windsurf
   paths.push({ clientName: 'windsurf', configPath: path.join(HOME, '.windsurf', 'mcp.json') });
   if (projectRoot) {
-    paths.push({ clientName: 'windsurf', configPath: path.join(projectRoot, '.windsurf', 'mcp.json') });
+    paths.push({
+      clientName: 'windsurf',
+      configPath: path.join(projectRoot, '.windsurf', 'mcp.json'),
+    });
   }
 
   // Continue
-  paths.push({ clientName: 'continue', configPath: path.join(HOME, '.continue', 'mcpServers', 'mcp.json') });
+  paths.push({
+    clientName: 'continue',
+    configPath: path.join(HOME, '.continue', 'mcpServers', 'mcp.json'),
+  });
 
   // Junie
   paths.push({ clientName: 'junie', configPath: path.join(HOME, '.junie', 'mcp', 'mcp.json') });
   if (projectRoot) {
-    paths.push({ clientName: 'junie', configPath: path.join(projectRoot, '.junie', 'mcp', 'mcp.json') });
+    paths.push({
+      clientName: 'junie',
+      configPath: path.join(projectRoot, '.junie', 'mcp', 'mcp.json'),
+    });
   }
 
   // Codex (TOML format — conflict scanner only checks for competing server names in JSON configs,
   // so we skip Codex here since its format differs)
+
+  // AMP: scanner expects `mcpServers` key but AMP uses `amp.mcpServers`, so cross-tool
+  // server-name collisions in AMP configs would be missed. Skipping for now keeps the
+  // scanner consistent — AMP-specific conflicts surface during init writes instead.
+
+  // Factory Droid
+  paths.push({ clientName: 'factory-droid', configPath: path.join(HOME, '.factory', 'mcp.json') });
+  if (projectRoot) {
+    paths.push({
+      clientName: 'factory-droid',
+      configPath: path.join(projectRoot, '.factory', 'mcp.json'),
+    });
+  }
+
+  // Warp: cloud-synced storage — no scannable file path.
 
   return paths;
 }
@@ -324,11 +374,15 @@ function scanHooksInSettings(): Conflict[] {
         const projDir = path.join(projectsDir, entry);
         try {
           if (!fs.statSync(projDir).isDirectory()) continue;
-        } catch { continue; }
+        } catch {
+          continue;
+        }
         settingsFiles.push(path.join(projDir, 'settings.json'));
         settingsFiles.push(path.join(projDir, 'settings.local.json'));
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   for (const settingsPath of settingsFiles) {
@@ -356,13 +410,18 @@ function scanHooksInSettings(): Conflict[] {
           for (const { pattern, competitor } of COMPETING_HOOK_PATTERNS) {
             if (pattern.test(cmd)) {
               // Extract the most distinctive part of the command for ID uniqueness
-              const scriptName = cmd.split('/').pop()?.replace(/[^a-zA-Z0-9._-]/g, '') ?? `${hi}`;
+              const scriptName =
+                cmd
+                  .split('/')
+                  .pop()
+                  ?.replace(/[^a-zA-Z0-9._-]/g, '') ?? `${hi}`;
               conflicts.push({
                 id: `hook:${event}:${competitor}:${scriptName}`,
                 category: 'hook',
                 severity: 'critical',
                 summary: `Competing ${event} hook from ${competitor}`,
-                detail: `Hook command "${truncate(cmd, 80)}" in ${shortPath(settingsPath)} ` +
+                detail:
+                  `Hook command "${truncate(cmd, 80)}" in ${shortPath(settingsPath)} ` +
                   `intercepts tool calls and may block or redirect trace-mcp operations.`,
                 target: settingsPath,
                 competitor,
@@ -385,10 +444,7 @@ function scanHooksInSettings(): Conflict[] {
 
 function scanHookScriptFiles(): Conflict[] {
   const conflicts: Conflict[] = [];
-  const hooksDirs = [
-    path.join(HOME, '.claude', 'hooks'),
-    path.join(HOME, '.claw', 'hooks'),
-  ];
+  const hooksDirs = [path.join(HOME, '.claude', 'hooks'), path.join(HOME, '.claw', 'hooks')];
 
   for (const hooksDir of hooksDirs) {
     if (!fs.existsSync(hooksDir)) continue;
@@ -412,7 +468,8 @@ function scanHookScriptFiles(): Conflict[] {
             category: 'hook_script',
             severity: 'warning',
             summary: `Competing hook script: ${file}`,
-            detail: `Hook script from ${competitor} at ${shortPath(filePath)}. ` +
+            detail:
+              `Hook script from ${competitor} at ${shortPath(filePath)}. ` +
               `Even if not registered in settings.json, it may be re-enabled later.`,
             target: filePath,
             competitor,
@@ -433,10 +490,7 @@ function scanHookScriptFiles(): Conflict[] {
 
 function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
   const conflicts: Conflict[] = [];
-  const files = [
-    path.join(HOME, '.claude', 'CLAUDE.md'),
-    path.join(HOME, '.claude', 'AGENTS.md'),
-  ];
+  const files = [path.join(HOME, '.claude', 'CLAUDE.md'), path.join(HOME, '.claude', 'AGENTS.md')];
 
   // Project-scoped CLAUDE.md files in ~/.claude/projects/*/
   const projectsDir = path.join(HOME, '.claude', 'projects');
@@ -456,17 +510,18 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
                 files.push(path.join(memDir, memFile));
               }
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   if (projectRoot) {
-    files.push(
-      path.join(projectRoot, 'CLAUDE.md'),
-      path.join(projectRoot, 'AGENTS.md'),
-    );
+    files.push(path.join(projectRoot, 'CLAUDE.md'), path.join(projectRoot, 'AGENTS.md'));
   }
 
   for (const filePath of files) {
@@ -525,12 +580,12 @@ function hasCompetitorSection(content: string, competitor: string): boolean {
 const COMPETITOR_ALIASES: Record<string, string[]> = {
   'jcodemunch-mcp': ['jcodemunch', 'jCodeMunch', 'code-index'],
   'code-index': ['code-index', 'codeindex'],
-  'repomix': ['repomix', 'repopack'],
-  'aider': ['aider'],
-  'cline': ['cline'],
+  repomix: ['repomix', 'repopack'],
+  aider: ['aider'],
+  cline: ['cline'],
   'sourcegraph-cody': ['cody', 'sourcegraph'],
-  'sourcegraph': ['sourcegraph'],
-  'greptile': ['greptile'],
+  sourcegraph: ['sourcegraph'],
+  greptile: ['greptile'],
   'code-compass': ['code-compass', 'codecompass'],
   'repo-map': ['repo-map', 'repomap'],
 };
@@ -554,7 +609,10 @@ function scanIdeRuleFiles(projectRoot?: string): Conflict[] {
     ruleFiles.push({ path: path.join(projectRoot, '.windsurfrules'), type: '.windsurfrules' });
     ruleFiles.push({ path: path.join(projectRoot, '.clinerules'), type: '.clinerules' });
     ruleFiles.push({ path: path.join(projectRoot, '.continuerules'), type: '.continuerules' });
-    ruleFiles.push({ path: path.join(projectRoot, '.github', 'copilot-instructions.md'), type: 'copilot-instructions.md' });
+    ruleFiles.push({
+      path: path.join(projectRoot, '.github', 'copilot-instructions.md'),
+      type: 'copilot-instructions.md',
+    });
 
     // Scan .clinerules/ directory if it exists (Cline uses both file and dir)
     const clineRulesDir = path.join(projectRoot, '.clinerules');
@@ -566,7 +624,9 @@ function scanIdeRuleFiles(projectRoot?: string): Conflict[] {
             ruleFiles.push({ path: path.join(clineRulesDir, file), type: `.clinerules/${file}` });
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -581,7 +641,9 @@ function scanIdeRuleFiles(projectRoot?: string): Conflict[] {
         if (!file.endsWith('.mdc') || file === 'trace-mcp.mdc') continue;
         ruleFiles.push({ path: path.join(rulesDir, file), type: `.cursor/rules/${file}` });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   for (const { path: filePath, type } of ruleFiles) {
@@ -601,7 +663,8 @@ function scanIdeRuleFiles(projectRoot?: string): Conflict[] {
           category: 'ide_rules',
           severity: 'warning',
           summary: `${type} contains ${competitor} directives`,
-          detail: `IDE rule file ${shortPath(filePath)} references ${competitor}. ` +
+          detail:
+            `IDE rule file ${shortPath(filePath)} references ${competitor}. ` +
             `This may cause the IDE agent to prefer competing tools.`,
           target: filePath,
           competitor,
@@ -630,7 +693,8 @@ function scanProjectConfigFiles(projectRoot: string): Conflict[] {
       category: 'config_file',
       severity: 'info',
       summary: `Competing config: ${file}`,
-      detail: `Project config file for ${competitor} found at ${shortPath(filePath)}. ` +
+      detail:
+        `Project config file for ${competitor} found at ${shortPath(filePath)}. ` +
         `This won't directly conflict but indicates the project was used with a competing tool.`,
       target: filePath,
       competitor,
@@ -661,7 +725,11 @@ function scanProjectConfigDirs(projectRoot: string): Conflict[] {
 
     // Only flag directories (files are handled by scanProjectConfigFiles)
     let stat;
-    try { stat = fs.statSync(fullPath); } catch { continue; }
+    try {
+      stat = fs.statSync(fullPath);
+    } catch {
+      continue;
+    }
     if (!stat.isDirectory()) continue;
 
     conflicts.push({
@@ -669,7 +737,8 @@ function scanProjectConfigDirs(projectRoot: string): Conflict[] {
       category: 'config_file',
       severity: competitor === 'continue.dev' ? 'info' : 'warning',
       summary: `Competing config directory: ${dir}/`,
-      detail: `Config directory for ${competitor} found at ${shortPath(fullPath)}/. ` +
+      detail:
+        `Config directory for ${competitor} found at ${shortPath(fullPath)}/. ` +
         `May contain rules or cache that influence AI behavior.`,
       target: fullPath,
       competitor,
@@ -708,13 +777,21 @@ function scanContinueConfigs(projectRoot?: string): Conflict[] {
   for (const mcpDir of mcpServersDirs) {
     if (!fs.existsSync(mcpDir)) continue;
     let files: string[];
-    try { files = fs.readdirSync(mcpDir); } catch { continue; }
+    try {
+      files = fs.readdirSync(mcpDir);
+    } catch {
+      continue;
+    }
 
     for (const file of files) {
       if (!file.endsWith('.json')) continue;
       const filePath = path.join(mcpDir, file);
       let content: string;
-      try { content = fs.readFileSync(filePath, 'utf-8'); } catch { continue; }
+      try {
+        content = fs.readFileSync(filePath, 'utf-8');
+      } catch {
+        continue;
+      }
 
       // Check if any competing server names appear in the config
       for (const [serverName, competitorName] of Object.entries(COMPETING_MCP_SERVERS)) {
@@ -756,7 +833,11 @@ function scanGitHooks(projectRoot: string): Conflict[] {
     if (!fs.existsSync(hookPath)) continue;
 
     let content: string;
-    try { content = fs.readFileSync(hookPath, 'utf-8'); } catch { continue; }
+    try {
+      content = fs.readFileSync(hookPath, 'utf-8');
+    } catch {
+      continue;
+    }
 
     if (/\baider\b/i.test(content)) {
       conflicts.push({
@@ -764,7 +845,8 @@ function scanGitHooks(projectRoot: string): Conflict[] {
         category: 'hook',
         severity: 'info',
         summary: `Git ${hookFile} hook references aider`,
-        detail: `Git hook ${shortPath(hookPath)} contains aider references. ` +
+        detail:
+          `Git hook ${shortPath(hookPath)} contains aider references. ` +
           `This may modify commit messages or run aider operations on commit.`,
         target: hookPath,
         competitor: 'aider',
@@ -790,14 +872,17 @@ function scanGlobalArtifacts(): Conflict[] {
     try {
       const files = fs.readdirSync(dir);
       size = files.length;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     conflicts.push({
       id: `global:${competitor}:${dir}`,
       category: 'global_artifact',
       severity: 'info',
       summary: `Global cache: ${shortPath(dir)} (${size} files)`,
-      detail: `Global index/cache directory from ${competitor}. ` +
+      detail:
+        `Global index/cache directory from ${competitor}. ` +
         `Takes disk space but doesn't directly interfere at runtime.`,
       target: dir,
       competitor,

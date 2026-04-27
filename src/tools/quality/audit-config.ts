@@ -34,17 +34,36 @@ interface AuditResult {
 
 /** Known AI agent config file patterns */
 const CONFIG_PATTERNS = [
-  'CLAUDE.md', '.claude/CLAUDE.md', '.cursorrules', '.cursor/rules',
-  '.github/copilot-instructions.md', '.aider.conf.yml', '.continue/config.json',
-  'cline_docs', '.windsurfrules',
+  'CLAUDE.md',
+  '.claude/CLAUDE.md',
+  '.cursorrules',
+  '.cursor/rules',
+  '.github/copilot-instructions.md',
+  '.aider.conf.yml',
+  '.continue/config.json',
+  'cline_docs',
+  '.windsurfrules',
+  // Generic agent rules consumed by AMP, Warp, Factory Droid, Hermes
+  'AGENTS.md',
   // Claw Code
-  '.claw.json', '.claw/settings.json', '.claw/settings.local.json',
+  '.claw.json',
+  '.claw/settings.json',
+  '.claw/settings.local.json',
+  // AMP
+  '.amp/settings.json',
+  '.amp/settings.jsonc',
+  '.amp/AGENTS.md',
+  // Factory Droid
+  '.factory/mcp.json',
 ];
 
 /** Global config locations */
 const GLOBAL_CONFIG_PATTERNS = [
   '~/.claude/CLAUDE.md',
   '~/.claw/settings.json',
+  '~/.config/amp/settings.json',
+  '~/.config/amp/settings.jsonc',
+  '~/.factory/mcp.json',
 ];
 
 export function auditConfig(
@@ -78,13 +97,17 @@ export function auditConfig(
     // --- Dead file paths ---
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const pathMatches = line.match(/(?:src|lib|app|routes|tests?|components?|pages?)\/[\w/.-]+\.\w+/g);
+      const pathMatches = line.match(
+        /(?:src|lib|app|routes|tests?|components?|pages?)\/[\w/.-]+\.\w+/g,
+      );
       if (pathMatches) {
         for (const ref of pathMatches) {
           const refPath = path.join(projectRoot, ref);
           if (!fs.existsSync(refPath) && !store.getFile(ref)) {
             issues.push({
-              file, line: i + 1, category: 'dead_path',
+              file,
+              line: i + 1,
+              category: 'dead_path',
               issue: `Dead path: \`${ref}\` — file does not exist`,
               severity: 'error',
               ...(fixSuggestions ? { fix: `Remove or update reference to ${ref}` } : {}),
@@ -110,7 +133,23 @@ export function auditConfig(
       const funcMatches = line.matchAll(/`([a-z][a-zA-Z0-9]{3,})(?:\(\))?`/g);
       for (const m of funcMatches) {
         const name = m[1];
-        const reserved = ['true', 'false', 'null', 'undefined', 'default', 'string', 'number', 'boolean', 'async', 'await', 'const', 'function', 'return', 'import', 'export'];
+        const reserved = [
+          'true',
+          'false',
+          'null',
+          'undefined',
+          'default',
+          'string',
+          'number',
+          'boolean',
+          'async',
+          'await',
+          'const',
+          'function',
+          'return',
+          'import',
+          'export',
+        ];
         if (reserved.includes(name)) continue;
         checkSymbol(store, name, file, i + 1, fixSuggestions, issues);
       }
@@ -120,10 +159,13 @@ export function auditConfig(
     const fileTokens = Math.ceil(content.length / 4);
     if (fileTokens > 2000) {
       issues.push({
-        file, category: 'bloat',
+        file,
+        category: 'bloat',
         issue: `${fileTokens} tokens — consider reducing below 2,000`,
         severity: 'warning',
-        ...(fixSuggestions ? { fix: 'Trim redundant instructions or split into focused files' } : {}),
+        ...(fixSuggestions
+          ? { fix: 'Trim redundant instructions or split into focused files' }
+          : {}),
       });
     }
 
@@ -134,10 +176,14 @@ export function auditConfig(
         const absPathMatch = line.match(/\/(?:Users|home)\/[^\s`"']+/);
         if (absPathMatch) {
           issues.push({
-            file, line: i + 1, category: 'scope_leak',
+            file,
+            line: i + 1,
+            category: 'scope_leak',
             issue: `Scope leak: absolute path \`${absPathMatch[0]}\` in global config`,
             severity: 'warning',
-            ...(fixSuggestions ? { fix: 'Use relative paths or project-local config instead' } : {}),
+            ...(fixSuggestions
+              ? { fix: 'Use relative paths or project-local config instead' }
+              : {}),
           });
         }
       }
@@ -156,7 +202,9 @@ export function auditConfig(
           const trimmed = linesA[k].trim();
           if (trimmed.length > 30 && setB.has(trimmed)) {
             issues.push({
-              file: fileA, line: k + 1, category: 'redundancy',
+              file: fileA,
+              line: k + 1,
+              category: 'redundancy',
               issue: `Duplicated in ${fileB}: "${trimmed.slice(0, 60)}..."`,
               severity: 'info',
             });
@@ -171,9 +219,10 @@ export function auditConfig(
     files_scanned: fileContents.size,
     total_tokens: totalTokens,
     issues,
-    summary: issues.length === 0
-      ? 'No issues found'
-      : `${issues.filter((i) => i.severity === 'error').length} errors, ${issues.filter((i) => i.severity === 'warning').length} warnings, ${issues.filter((i) => i.severity === 'info').length} info`,
+    summary:
+      issues.length === 0
+        ? 'No issues found'
+        : `${issues.filter((i) => i.severity === 'error').length} errors, ${issues.filter((i) => i.severity === 'warning').length} warnings, ${issues.filter((i) => i.severity === 'info').length} info`,
   };
 }
 
@@ -191,7 +240,9 @@ function checkSymbol(
   if (sym) return; // Found — not stale
 
   const issue: AuditIssue = {
-    file, line, category: 'stale_symbol',
+    file,
+    line,
+    category: 'stale_symbol',
     issue: `Stale symbol: \`${name}\` — not found in index`,
     severity: 'warning',
   };
@@ -202,8 +253,7 @@ function checkSymbol(
       if (matches.length > 0) {
         const best = matches[0];
         const fileRow = store.getFileById(best.fileId);
-        issue.fix = `Did you mean \`${best.name}\`?` +
-          (fileRow ? ` (${fileRow.path})` : '');
+        issue.fix = `Did you mean \`${best.name}\`?` + (fileRow ? ` (${fileRow.path})` : '');
       }
     } catch {
       // Fuzzy search may fail if trigram table empty — ignore
@@ -233,5 +283,9 @@ function resolveConfigPath(file: string, projectRoot: string): string {
 }
 
 function isGlobalConfig(file: string): boolean {
-  return file.startsWith('~') || file.includes('.claude/CLAUDE.md') || file.includes('.claw/settings.json');
+  return (
+    file.startsWith('~') ||
+    file.includes('.claude/CLAUDE.md') ||
+    file.includes('.claw/settings.json')
+  );
 }
