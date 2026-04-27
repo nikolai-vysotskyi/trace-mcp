@@ -1,5 +1,5 @@
 import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
-import { execSync, exec, execFile, spawn } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -541,8 +541,15 @@ ipcMain.handle('check-for-update', async () => {
 // shell that does NOT source `.zshrc`, so nvm/Herd-managed `npm` is invisible.
 // We try, in order: interactive login shell (sources .zshrc/.bashrc),
 // non-interactive login shell, then a scan of common nvm/Homebrew paths.
-function execCapture(cmd: string, timeoutMs = 30_000): Promise<string | null> {
+// Helper for shell-using probes (`${SHELL} -ilc 'command -v npm'`) where
+// shell semantics are required to source rc files. Callers MUST pass a
+// statically-constructed string built only from local-process-controlled
+// inputs (process.env.SHELL, hardcoded literals). Never accept renderer- or
+// user-supplied content here.
+// nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
+function execShellCapture(cmd: string, timeoutMs = 30_000): Promise<string | null> {
   return new Promise((resolve) => {
+    // codeql[js/shell-command-injection-from-environment]
     exec(cmd, { encoding: 'utf-8', timeout: timeoutMs }, (err, stdout) => {
       if (err) {
         resolve(null);
@@ -561,11 +568,11 @@ async function resolveNpmBin(): Promise<string | null> {
   const candidates: Array<() => Promise<string | null>> = [];
   if (sh) {
     // Interactive login first — sources .zshrc/.bashrc where nvm/Herd lives.
-    candidates.push(() => execCapture(`${sh} -ilc 'command -v npm'`));
-    candidates.push(() => execCapture(`${sh} -lc 'command -v npm'`));
+    candidates.push(() => execShellCapture(`${sh} -ilc 'command -v npm'`));
+    candidates.push(() => execShellCapture(`${sh} -lc 'command -v npm'`));
   }
   candidates.push(() =>
-    execCapture(`/usr/bin/env npm --version >/dev/null 2>&1 && /usr/bin/env which npm`),
+    execShellCapture(`/usr/bin/env npm --version >/dev/null 2>&1 && /usr/bin/env which npm`),
   );
   for (const probe of candidates) {
     const found = await probe();

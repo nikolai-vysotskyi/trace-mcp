@@ -518,10 +518,13 @@ export const initCommand = new Command('init')
       } else if (nonInteractive) {
         const header = opts.dryRun ? 'trace-mcp init (dry run)' : 'trace-mcp init';
         console.log(header);
+        // Strip CR/LF from interpolated values to block log-injection via
+        // crafted detail strings or path components.
+        const sanitizeLog = (s: string) => s.replace(/[\r\n]/g, ' ');
         for (const step of steps) {
-          // Strip newlines from user-influenced detail to prevent log injection.
-          const detail = String(step.detail ?? step.action).replace(/[\r\n]/g, ' ');
-          console.log(`  ${shortPath(step.target)}  ${detail}`);
+          const target = sanitizeLog(shortPath(step.target));
+          const detail = sanitizeLog(String(step.detail ?? step.action));
+          console.log(`  ${target}  ${detail}`);
         }
         if (!opts.dryRun) {
           console.log(
