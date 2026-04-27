@@ -134,6 +134,8 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         arch: [arm64, x64]
@@ -177,6 +179,11 @@ jobs:
       - name: Generate SHA-256 per-asset checksums
         run: node scripts/generate-shasums.mjs packages/app/release .zip
 
+      - name: Generate SLSA build provenance attestation
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: 'packages/app/release/*.zip'
+
       - name: Upload to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -192,6 +199,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -233,6 +242,13 @@ jobs:
       - name: Generate SHA-256 checksums
         shell: bash
         run: node scripts/generate-shasums.mjs packages/app/release .exe .zip
+
+      - name: Generate SLSA build provenance attestation
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: |
+            packages/app/release/*.exe
+            packages/app/release/*-win*.zip
 
       - name: Upload to release
         env:
