@@ -23,7 +23,10 @@
   "overrides": {
     "@luma.gl/core": "9.2.6",
     "@luma.gl/engine": "9.2.6",
-    "@luma.gl/webgl": "9.2.6"
+    "@luma.gl/webgl": "9.2.6",
+    "menubar": {
+      "electron": "$electron"
+    }
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
@@ -31,7 +34,7 @@
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.4.1",
     "autoprefixer": "^10.5.0",
-    "electron": "^34.5.8",
+    "electron": "^41.3.0",
     "electron-builder": "^26.0.12",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
