@@ -52,7 +52,7 @@ export const QualityGatesConfigSchema = z.object({
     max_security_critical_findings: QualityGateRuleSchema.optional(),
     max_antipattern_count: QualityGateRuleSchema.optional(),
     max_code_smell_count: QualityGateRuleSchema.optional(),
-  }).default({}),
+  }).prefault({}),
 });
 
 export type QualityGatesConfig = z.infer<typeof QualityGatesConfigSchema>;
