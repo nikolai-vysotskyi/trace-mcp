@@ -549,8 +549,10 @@ ipcMain.handle('check-for-update', async () => {
 // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
 function execShellCapture(cmd: string, timeoutMs = 30_000): Promise<string | null> {
   return new Promise((resolve) => {
-    // codeql[js/shell-command-injection-from-environment]
-    exec(cmd, { encoding: 'utf-8', timeout: timeoutMs }, (err, stdout) => {
+    // Intentional shell exec: cmd is constructed from process.env.SHELL plus
+    // hardcoded literal probes; no renderer/user input flows here.
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
+    exec(cmd, { encoding: 'utf-8', timeout: timeoutMs }, (err, stdout) => { // lgtm[js/shell-command-injection-from-environment]
       if (err) {
         resolve(null);
         return;
