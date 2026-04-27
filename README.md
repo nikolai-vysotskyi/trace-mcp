@@ -12,6 +12,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml/badge.svg" alt="Semgrep" /></a>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/nikolai-vysotskyi/trace-mcp"><img src="https://api.securityscorecards.dev/projects/github.com/nikolai-vysotskyi/trace-mcp/badge" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security"><img src="https://img.shields.io/badge/security-policy-blue" alt="Security policy" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security/dependabot"><img src="https://img.shields.io/badge/Dependabot-enabled-success" alt="Dependabot enabled" /></a>
+</p>
+
+<p align="center">
   <strong>MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration — 80 Grep calls, 190 file reads.</strong>
 </p>
 
@@ -148,6 +156,14 @@ Total                       702,532 tokens      50,812 tokens       92.8%
 
 **Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, with 90%+ token reduction.
 
+### Run it on your codebase
+
+```bash
+trace-mcp benchmark .
+```
+
+Per-category token savings against your actual repo in ~30 seconds — no signup, all local. The numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols); your reduction will vary with project size, framework support, and task mix, but the per-task patterns hold for any well-supported stack.
+
 <details>
 <summary>Methodology</summary>
 
@@ -222,6 +238,21 @@ Then in your MCP client:
 > Prefer a GUI? The [desktop app](#desktop-app) handles install, indexing, MCP-client wiring, and re-indexing without touching a terminal.
 
 **Going further:** [adding more projects / upgrading / manual setup](docs/configuration.md#cli) · [semantic search (local ONNX)](docs/configuration.md#ai-configuration) · [indexing & file watcher](docs/configuration.md#how-config-works) · [`.traceignore`](docs/configuration.md#traceignore).
+
+---
+
+## Local-first by design
+
+trace-mcp runs entirely on your machine. Your source code is never the product.
+
+- **Indexing happens locally.** The MCP server is a Node process you run yourself — stdio or `http://127.0.0.1:3741`.
+- **Index lives in `~/.trace-mcp/`**, never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
+- **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
+- **No telemetry.** Nothing is phoned home about your code, queries, or usage.
+- **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
+- **To wipe everything**, delete `~/.trace-mcp/`. That is the entire footprint.
+
+For security-sensitive environments, review [SECURITY.md](SECURITY.md) before use.
 
 ---
 
@@ -379,6 +410,18 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 | [System prompt routing](docs/tweakcc.md) | Optional tweakcc integration for maximum tool routing enforcement |
 | [Comparisons](docs/comparisons.md) | Full side-by-side tables vs. other code intelligence / memory / RAG tools |
 | [Development](docs/development.md) | Building, testing, contributing, adding new plugins |
+
+---
+
+## Star History
+
+<a href="https://www.star-history.com/#nikolai-vysotskyi/trace-mcp&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nikolai-vysotskyi/trace-mcp&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nikolai-vysotskyi/trace-mcp&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=nikolai-vysotskyi/trace-mcp&type=Date" />
+  </picture>
+</a>
 
 ---
 
