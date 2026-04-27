@@ -9,10 +9,7 @@ import type { Store } from '../../db/store.js';
 import type { EsModuleResolver } from '../../indexer/resolvers/es-modules.js';
 import type { FileEdit, RefactorResult } from './shared.js';
 import { readLines, writeLines, getImportingFiles } from './shared.js';
-import {
-  rewriteImportForMovedTarget,
-  computeRelativeSpecifier,
-} from './import-rewriter.js';
+import { rewriteImportForMovedTarget, computeRelativeSpecifier } from './import-rewriter.js';
 
 export interface MoveSymbolParams {
   symbol_id: string;

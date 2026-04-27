@@ -1,4 +1,3 @@
-
 import type { PipelineState } from '../pipeline-state.js';
 import { logger } from '../../logger.js';
 

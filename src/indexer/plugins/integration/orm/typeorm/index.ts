@@ -1,4 +1,3 @@
-
 import { ok } from 'neverthrow';
 import type {
   FrameworkPlugin,

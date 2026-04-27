@@ -8,7 +8,7 @@
  *   get_plugin_registry  — list registered plugins, their manifests,
  *                          and all known edge types.
  */
-import type { Store, SymbolWithFilePath, } from '../../db/store.js';
+import type { Store, SymbolWithFilePath } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import { getCouplingMetrics, getDependencyCycles } from './graph-analysis.js';
 

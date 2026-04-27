@@ -1,4 +1,4 @@
-import type { Store, } from '../../db/store.js';
+import type { Store } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
 import { resolveSymbolInput } from '../shared/resolve.js';

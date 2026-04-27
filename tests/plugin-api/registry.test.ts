@@ -6,7 +6,7 @@ import type {
   ProjectContext,
   FileParseResult,
 } from '../../src/plugin-api/types.js';
-import { ok, } from '../../src/errors.js';
+import { ok } from '../../src/errors.js';
 
 function makeLanguagePlugin(name: string, priority: number, extensions: string[]): LanguagePlugin {
   return {

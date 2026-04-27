@@ -1,13 +1,5 @@
 import path from 'node:path';
-import {
-  Tray,
-  nativeImage,
-  Menu,
-  BrowserWindow,
-  app,
-  ipcMain,
-  nativeTheme,
-} from 'electron';
+import { Tray, nativeImage, Menu, BrowserWindow, app, ipcMain, nativeTheme } from 'electron';
 import { DaemonClient } from './api-client';
 import { ensureDaemon, restartDaemon } from './daemon-lifecycle';
 

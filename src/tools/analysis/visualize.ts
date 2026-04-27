@@ -10,7 +10,7 @@ import path from 'node:path';
 import type Database from 'better-sqlite3';
 import { ok, err, type TraceMcpResult } from '../../errors.js';
 import { validationError } from '../../errors.js';
-import { Store, type FileRow, } from '../../db/store.js';
+import { Store, type FileRow } from '../../db/store.js';
 import { initializeDatabase } from '../../db/schema.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
 import { logger } from '../../logger.js';

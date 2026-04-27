@@ -20,7 +20,7 @@ import { fallbackSearch, fallbackOutline } from '../navigation/zero-index.js';
 import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../shared/confidence.js';
 import { SubprojectManager } from '../../subproject/manager.js';
-import { decisionsForImpact, } from '../../memory/enrichment.js';
+import { decisionsForImpact } from '../../memory/enrichment.js';
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
   const {

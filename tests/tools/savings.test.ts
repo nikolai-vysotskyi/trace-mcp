@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SavingsTracker, loadPersistentSavings, } from '../../src/savings.js';
+import { SavingsTracker, loadPersistentSavings } from '../../src/savings.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 // Use a temp dir to avoid polluting real ~/.trace-mcp

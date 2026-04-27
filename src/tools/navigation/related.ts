@@ -2,7 +2,7 @@
  * get_related_symbols — find symbols related via co-location, shared importers, and name overlap.
  */
 import { ok, err } from 'neverthrow';
-import type { Store, } from '../../db/store.js';
+import type { Store } from '../../db/store.js';
 import type { TraceMcpResult } from '../../errors.js';
 
 interface RelatedSymbolItem {

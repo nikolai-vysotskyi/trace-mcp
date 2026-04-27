@@ -36,7 +36,14 @@ export interface DuplicationResult {
 
 // ─── Constants ──────────────────────────────────────────────
 
-const _CHECKABLE_KINDS = new Set(['function', 'class', 'method', 'interface', 'type_alias', 'enum']);
+const _CHECKABLE_KINDS = new Set([
+  'function',
+  'class',
+  'method',
+  'interface',
+  'type_alias',
+  'enum',
+]);
 
 const _TRIVIAL_NAMES = new Set([
   'constructor',

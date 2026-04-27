@@ -8,10 +8,7 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { Command } from 'commander';
 import * as p from '@clack/prompts';
-import {
-  detectConflicts,
-  type ConflictSeverity,
-} from '../init/conflict-detector.js';
+import { detectConflicts, type ConflictSeverity } from '../init/conflict-detector.js';
 import { fixConflict, fixAllConflicts, type FixResult } from '../init/conflict-resolver.js';
 import { findProjectRoot } from '../project-root.js';
 import {

@@ -22,7 +22,7 @@ import { AnthropicProvider } from './anthropic.js';
 import { VoyageProvider } from './voyage.js';
 import { VertexAIProvider } from './vertex.js';
 import { logger } from '../logger.js';
-import { aiTracker, } from './tracker.js';
+import { aiTracker } from './tracker.js';
 
 /** Treat empty/whitespace strings as unset — settings UI persists cleared fields as "". */
 const pick = (v: unknown, fallback: string): string =>

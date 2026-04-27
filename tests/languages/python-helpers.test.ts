@@ -2,7 +2,7 @@
  * Unit tests for Python language plugin helper functions.
  * Tests individual extraction utilities in isolation.
  */
-import { describe, it, expect, } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { getParser } from '../../src/parser/tree-sitter.js';
 import {
   detectVisibility,

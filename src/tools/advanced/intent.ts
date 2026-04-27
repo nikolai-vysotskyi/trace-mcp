@@ -14,8 +14,8 @@ import {
   type DomainTreeNode,
   type CrossDomainDep,
 } from '../../intent/domain-store.js';
-import { DomainBuilder, } from '../../intent/domain-builder.js';
-import { searchFts, } from '../../db/fts.js';
+import { DomainBuilder } from '../../intent/domain-builder.js';
+import { searchFts } from '../../db/fts.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

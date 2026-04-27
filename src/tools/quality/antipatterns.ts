@@ -8,12 +8,7 @@ import picomatch from 'picomatch';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../errors.js';
-import type {
-  Store,
-  OrmModelRow,
-  OrmAssociationRow,
-  FileRow,
-} from '../../db/store.js';
+import type { Store, OrmModelRow, OrmAssociationRow, FileRow } from '../../db/store.js';
 import {
   classifyNumericConfidence,
   type ConfidenceLevel,

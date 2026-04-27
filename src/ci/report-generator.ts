@@ -11,7 +11,7 @@
  * No CLI concerns, no git — pure data in, report out.
  */
 import type { Store } from '../db/store.js';
-import { getChangeImpact, } from '../tools/analysis/impact.js';
+import { getChangeImpact } from '../tools/analysis/impact.js';
 import { getDeadExports } from '../tools/analysis/introspect.js';
 import { getUntestedExports } from '../tools/analysis/introspect.js';
 import { getCouplingMetrics, type CouplingResult } from '../tools/analysis/graph-analysis.js';

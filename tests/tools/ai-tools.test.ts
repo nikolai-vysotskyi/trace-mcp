@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
-import type {
-  InferenceService,
-} from '../../src/ai/interfaces.js';
+import type { InferenceService } from '../../src/ai/interfaces.js';
 import { registerAITools } from '../../src/tools/ai/ai-tools.js';
 
 function createMockInference(response = '{"explanation": "This class handles auth."}') {

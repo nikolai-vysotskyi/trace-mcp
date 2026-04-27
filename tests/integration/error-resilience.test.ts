@@ -2,7 +2,7 @@
  * Integration: Error resilience.
  * Does the pipeline handle broken files, missing references, mixed valid/invalid?
  */
-import { describe, it, expect, } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createTestStore, createTmpFixture, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';

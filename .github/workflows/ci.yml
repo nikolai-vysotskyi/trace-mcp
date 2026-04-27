@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  format:
+  biome:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,11 +24,11 @@ jobs:
       - name: Install (skip postinstall scripts; Biome native still installs via optionalDependencies)
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Biome formatter check
-        run: npx biome ci --formatter-enabled=true --linter-enabled=false --assist-enabled=false
+      - name: Biome check (formatter + linter, errors only)
+        run: npx biome ci --diagnostic-level=error
 
   impact-report:
-    needs: format
+    needs: biome
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -89,7 +89,7 @@ jobs:
           path: report.md
 
   app-typecheck:
-    needs: format
+    needs: biome
     runs-on: ubuntu-latest
     permissions:
       contents: read

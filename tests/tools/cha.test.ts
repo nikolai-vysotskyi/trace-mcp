@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
-import { expandMethodViaCha, } from '../../src/tools/shared/cha.js';
+import { expandMethodViaCha } from '../../src/tools/shared/cha.js';
 import { findReferences } from '../../src/tools/framework/references.js';
 import { getCallGraph } from '../../src/tools/framework/call-graph.js';
 

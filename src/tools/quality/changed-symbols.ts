@@ -5,7 +5,7 @@
  * Performance: Single `git diff` call, single batch SQL for symbol lookup per file.
  */
 import { execSync } from 'node:child_process';
-import type { Store, } from '../../db/store.js';
+import type { Store } from '../../db/store.js';
 import { ok, err, type TraceMcpResult } from '../../errors.js';
 
 type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';

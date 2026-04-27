@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
 import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';

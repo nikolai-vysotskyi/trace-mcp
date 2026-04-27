@@ -27,9 +27,7 @@ import {
   findDisconnectedNodes,
   extractCustomNodeDefinitions,
 } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
-import type {
-  WorkflowComplexity,
-} from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
+import type { WorkflowComplexity } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/n8n-basic');

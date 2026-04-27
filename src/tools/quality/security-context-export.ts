@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import type { RouteRow } from '../../db/types.js';
-import { ok, } from 'neverthrow';
+import { ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../errors.js';
 import { getCallGraph } from '../framework/call-graph.js';
 import { taintAnalysis } from './taint-analysis.js';

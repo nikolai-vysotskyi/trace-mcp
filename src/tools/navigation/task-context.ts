@@ -9,7 +9,7 @@
  *           → Test Coverage → Scoring → Structured Assembly
  */
 import path from 'node:path';
-import type { Store, SymbolRow, FileRow, } from '../../db/store.js';
+import type { Store, SymbolRow, FileRow } from '../../db/store.js';
 import { hybridScore, getTypeBonus, computeRecency } from '../../scoring/hybrid.js';
 import { computePageRank } from '../../scoring/pagerank.js';
 import { assembleStructuredContext } from '../../scoring/structured-assembly.js';
