@@ -1,5 +1,5 @@
 import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
-import { exec, execFile, spawn } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -536,82 +536,48 @@ ipcMain.handle('check-for-update', async () => {
 
 // IPC: apply update (runs npm update -g trace-mcp, which triggers postinstall → app update)
 
-// Resolve npm binary path. GUI-launched Electron inherits a minimal env from
-// launchd / Finder — `process.env.SHELL -lc` runs a login-non-interactive
-// shell that does NOT source `.zshrc`, so nvm/Herd-managed `npm` is invisible.
-// We try, in order: interactive login shell (sources .zshrc/.bashrc),
-// non-interactive login shell, then a scan of common nvm/Homebrew paths.
-// Probes are constructed from a closed enum and process.env.SHELL only —
-// never user input. Building the command string inside the helper rather
-// than accepting it as a parameter avoids tripping the Semgrep
-// "child_process from a function argument" pattern.
-type NpmProbe = 'login-interactive' | 'login-noninteractive' | 'env-which';
-
-function probeCommand(kind: NpmProbe, sh: string | undefined): string | null {
-  if ((kind === 'login-interactive' || kind === 'login-noninteractive') && !sh) return null;
-  switch (kind) {
-    case 'login-interactive':
-      return `${sh} -ilc 'command -v npm'`;
-    case 'login-noninteractive':
-      return `${sh} -lc 'command -v npm'`;
-    case 'env-which':
-      return `/usr/bin/env npm --version >/dev/null 2>&1 && /usr/bin/env which npm`;
-  }
-}
-
-function runNpmProbe(kind: NpmProbe, timeoutMs = 30_000): Promise<string | null> {
-  const sh = process.env.SHELL;
-  const cmd = probeCommand(kind, sh);
-  if (!cmd) return Promise.resolve(null);
-  // cmd's input domain is closed (NpmProbe enum + process.env.SHELL),
-  // so there is no injection vector here despite the shell exec.
-  return new Promise((resolve) => {
-    exec(cmd, { encoding: 'utf-8', timeout: timeoutMs }, (err, stdout) => {
-      if (err) {
-        resolve(null);
-        return;
-      }
-      const line = (stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
-      resolve(line || null);
-    });
-  });
-}
-
+// Resolve npm binary path. GUI-launched Electron inherits a minimal env
+// from launchd / Finder — process.env.PATH does not include nvm/Herd
+// versions of npm. We scan the filesystem for known Node managers and
+// system layouts; this covers the vast majority of macOS/Linux setups
+// without invoking a subshell (which would otherwise be needed to source
+// .zshrc / .bashrc).
 let cachedNpmBin: string | null | undefined;
 async function resolveNpmBin(): Promise<string | null> {
   if (cachedNpmBin !== undefined) return cachedNpmBin;
-  const sh = process.env.SHELL;
-  const candidates: Array<() => Promise<string | null>> = [];
-  if (sh) {
-    // Interactive login first — sources .zshrc/.bashrc where nvm/Herd lives.
-    candidates.push(() => runNpmProbe('login-interactive'));
-    candidates.push(() => runNpmProbe('login-noninteractive'));
-  }
-  candidates.push(() => runNpmProbe('env-which'));
-  for (const probe of candidates) {
-    const found = await probe();
-    if (found && fs.existsSync(found)) {
-      cachedNpmBin = found;
-      appendUpdateLog({ event: 'resolve-npm:found', npmBin: found });
-      return found;
-    }
-  }
-  // Filesystem scan — common nvm / Herd / Homebrew layouts.
   const home = os.homedir();
-  const guesses = [
+  const guesses: string[] = [
+    // Homebrew (Apple Silicon and Intel)
     '/opt/homebrew/bin/npm',
     '/usr/local/bin/npm',
+    // Linux system
+    '/usr/bin/npm',
+    // nvm convenience symlink
     path.join(home, '.nvm/current/bin/npm'),
+    // Volta
+    path.join(home, '.volta/bin/npm'),
+    // pnpm-managed Node
+    path.join(home, '.local/share/pnpm/npm'),
   ];
-  // Scan latest Herd/nvm versions if present.
-  for (const baseRel of [
-    'Library/Application Support/Herd/config/nvm/versions/node',
-    '.nvm/versions/node',
-  ]) {
-    const base = path.join(home, baseRel);
+  // Scan latest version directories of common Node managers.
+  const versionedBases = [
+    // nvm
+    path.join(home, '.nvm/versions/node'),
+    // Herd
+    path.join(home, 'Library/Application Support/Herd/config/nvm/versions/node'),
+    // fnm
+    path.join(home, 'Library/Application Support/fnm/node-versions'),
+    path.join(home, '.local/share/fnm/node-versions'),
+    // asdf
+    path.join(home, '.asdf/installs/nodejs'),
+  ];
+  for (const base of versionedBases) {
     try {
       const versions = fs.readdirSync(base).sort().reverse();
-      for (const v of versions) guesses.push(path.join(base, v, 'bin', 'npm'));
+      for (const v of versions) {
+        guesses.push(path.join(base, v, 'bin', 'npm'));
+        // asdf layout: <base>/<version>/.npm/bin/npm doesn't exist; skip.
+      }
     } catch {
       /* dir absent — skip */
     }
@@ -623,7 +589,7 @@ async function resolveNpmBin(): Promise<string | null> {
       return g;
     }
   }
-  appendUpdateLog({ event: 'resolve-npm:not-found', shell: sh ?? null, scanned: guesses });
+  appendUpdateLog({ event: 'resolve-npm:not-found', scanned: guesses });
   cachedNpmBin = null;
   return null;
 }
