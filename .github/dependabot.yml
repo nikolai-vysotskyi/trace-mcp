@@ -15,6 +15,10 @@ updates:
       prefix: chore(deps)
       prefix-development: chore(deps-dev)
       include: scope
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
