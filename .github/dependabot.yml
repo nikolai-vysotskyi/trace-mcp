@@ -19,6 +19,10 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - version-update:semver-major
+      - dependency-name: "web-tree-sitter"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
