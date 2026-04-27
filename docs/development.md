@@ -17,8 +17,23 @@ npm run build
 | `npm run dev` | Watch mode (tsup --watch) |
 | `npm test` | Run all tests (vitest) |
 | `npm run test:watch` | Watch mode for tests |
-| `npm run lint` | TypeScript type checking |
+| `npm run typecheck` | TypeScript type checking (`tsc --noEmit`) |
+| `npm run lint` | Same as `typecheck` (legacy alias) |
+| `npm run format` | Auto-format the repo with Biome |
+| `npm run format:check` | Check formatting without writing |
+| `npm run biome:ci` | Full Biome check (formatter + linter) — same as CI |
 | `npm run serve` | Start MCP server (dev) |
+
+## Code style — Biome
+
+Formatter and linter are unified under [Biome](https://biomejs.dev). Config lives in `biome.jsonc` at the repo root.
+
+- **Formatter**: 2-space indent, single quotes, semicolons, trailing comma all, 100-col line width. Runs across `src/`, `tests/`, and `packages/app/`.
+- **Linter**: only a hand-picked subset is enabled as errors today (correctness + style + selected complexity rules). `recommended: false` — we ramp rules in incrementally rather than turning them all on at once. See `biome.jsonc` for the current set.
+- **Pre-commit hook**: `simple-git-hooks` + `lint-staged` run `biome check --write` only on staged files. Set `SKIP_SIMPLE_GIT_HOOKS=1` to bypass for emergencies.
+- **CI**: a fast `biome` job runs `biome ci --diagnostic-level=error` and gates the heavier `impact-report` and `app-typecheck` jobs.
+- **Editor**: `.vscode/extensions.json` recommends the official `biomejs.biome` extension. JetBrains users can install the [Biome plugin](https://plugins.jetbrains.com/plugin/22761-biome).
+- **`git blame`**: `.git-blame-ignore-revs` lists the formatter mass-pass commit. Enable locally with `git config blame.ignoreRevsFile .git-blame-ignore-revs`. GitHub honors it on the web.
 
 ## Tests
 
