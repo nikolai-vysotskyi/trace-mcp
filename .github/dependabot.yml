@@ -51,6 +51,13 @@ updates:
       prefix: chore(app-deps)
       prefix-development: chore(app-deps-dev)
       include: scope
+    ignore:
+      - dependency-name: "vite"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@vitejs/plugin-react"
+        update-types:
+          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
