@@ -19,7 +19,10 @@
         { "type": "perf",     "section": "Performance" },
         { "type": "refactor", "section": "Refactoring" },
         { "type": "docs",     "section": "Documentation" },
-        { "type": "test",     "section": "Tests" }
+        { "type": "test",     "section": "Tests" },
+        { "type": "chore",    "section": "Chores" },
+        { "type": "ci",       "section": "CI/CD" },
+        { "type": "build",    "section": "Build" }
       ]
     }
   }
