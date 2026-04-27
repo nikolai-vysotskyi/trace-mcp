@@ -1,0 +1,50 @@
+name: Semgrep
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "42 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Semgrep scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    container:
+      image: semgrep/semgrep
+    if: (github.actor != 'dependabot[bot]')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: |
+          semgrep \
+            --config p/typescript \
+            --config p/javascript \
+            --config p/owasp-top-ten \
+            --config p/secrets \
+            --config p/security-audit \
+            --config p/nodejsscan \
+            --config p/cwe-top-25 \
+            --sarif --output semgrep.sarif \
+            --metrics=off \
+            --error
+        continue-on-error: true
+
+      - name: Upload SARIF to code-scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
