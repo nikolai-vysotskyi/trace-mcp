@@ -5,13 +5,19 @@ import { loadConfig } from '../config.js';
 import type { TraceMcpConfig } from '../config.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { FileWatcher } from '../indexer/watcher.js';
-import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from '../ai/index.js';
+import {
+  createAIProvider,
+  BlobVectorStore,
+  EmbeddingPipeline,
+  InferenceCache,
+  CachedInferenceService,
+} from '../ai/index.js';
 import { SummarizationPipeline } from '../ai/summarization-pipeline.js';
 import { ProgressState, writeServerPid, clearServerPid } from '../progress.js';
 import { createServer } from '../server/server.js';
 import { logger } from '../logger.js';
 import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { listProjects, getProject, unregisterProject } from '../registry.js';
+import { listProjects, unregisterProject } from '../registry.js';
 import { setupProject, isDangerousProjectRoot } from '../project-setup.js';
 import { detectGitWorktree } from '../project-root.js';
 import { TopologyStore } from '../topology/topology-db.js';
@@ -63,7 +69,10 @@ export class ProjectManager {
     const indexRoot = worktreeInfo?.mainRoot ?? projectRoot;
 
     if (worktreeInfo) {
-      logger.info({ worktreeRoot: projectRoot, mainRoot: worktreeInfo.mainRoot }, 'Git worktree detected — sharing main repo index');
+      logger.info(
+        { worktreeRoot: projectRoot, mainRoot: worktreeInfo.mainRoot },
+        'Git worktree detected — sharing main repo index',
+      );
     }
 
     // Standard registration: detect, config, DB, registry
@@ -91,26 +100,40 @@ export class ProjectManager {
     const aiProvider = createAIProvider(config);
     const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
     const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
-    const embeddingPipeline = vectorStore && embeddingService
-      ? new EmbeddingPipeline(store, embeddingService, vectorStore, progress)
-      : null;
+    const embeddingPipeline =
+      vectorStore && embeddingService
+        ? new EmbeddingPipeline(store, embeddingService, vectorStore, progress)
+        : null;
 
     const inferenceCache = config.ai?.enabled ? new InferenceCache(store.db) : null;
     inferenceCache?.evictExpired();
-    const summarizationPipeline = config.ai?.enabled && config.ai.summarize_on_index !== false
-      ? new SummarizationPipeline(
-          store,
-          new CachedInferenceService(aiProvider.fastInference(), inferenceCache!, config.ai.fast_model ?? 'fast'),
-          projectRoot,
-          {
-            batchSize: config.ai.summarize_batch_size ?? 20,
-            kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
-            concurrency: config.ai.concurrency ?? 1,
-          },
-          progress,
-          vectorStore,
-        )
-      : null;
+    const summarizationPipeline =
+      config.ai?.enabled && config.ai.summarize_on_index !== false
+        ? new SummarizationPipeline(
+            store,
+            new CachedInferenceService(
+              aiProvider.fastInference(),
+              inferenceCache!,
+              config.ai.fast_model ?? 'fast',
+            ),
+            projectRoot,
+            {
+              batchSize: config.ai.summarize_batch_size ?? 20,
+              kinds: config.ai.summarize_kinds ?? [
+                'class',
+                'function',
+                'method',
+                'interface',
+                'trait',
+                'enum',
+                'type',
+              ],
+              concurrency: config.ai.concurrency ?? 1,
+            },
+            progress,
+            vectorStore,
+          )
+        : null;
 
     const runEmbeddings = () => {
       if (!embeddingPipeline) return;
@@ -146,26 +169,35 @@ export class ProjectManager {
 
     // Start indexing in background
     managed.status = 'indexing';
-    pipeline.indexAll().then(() => {
-      managed.status = 'ready';
-      runSummarization();
-      runEmbeddings();
-      runSubprojectAutoSync(projectRoot, config);
-      logger.info({ projectRoot }, 'Project indexing complete');
-    }).catch((err) => {
-      managed.status = 'error';
-      managed.error = String(err);
-      logger.error({ error: err, projectRoot }, 'Initial indexing failed');
-    });
+    pipeline
+      .indexAll()
+      .then(() => {
+        managed.status = 'ready';
+        runSummarization();
+        runEmbeddings();
+        runSubprojectAutoSync(projectRoot, config);
+        logger.info({ projectRoot }, 'Project indexing complete');
+      })
+      .catch((err) => {
+        managed.status = 'error';
+        managed.error = String(err);
+        logger.error({ error: err, projectRoot }, 'Initial indexing failed');
+      });
 
     // Start file watcher
-    await watcher.start(projectRoot, config, async (paths) => {
-      await pipeline.indexFiles(paths);
-      runSummarization();
-      runEmbeddings();
-    }, undefined, async (deleted) => {
-      pipeline.deleteFiles(deleted);
-    });
+    await watcher.start(
+      projectRoot,
+      config,
+      async (paths) => {
+        await pipeline.indexFiles(paths);
+        runSummarization();
+        runEmbeddings();
+      },
+      undefined,
+      async (deleted) => {
+        pipeline.deleteFiles(deleted);
+      },
+    );
 
     logger.info({ projectRoot }, 'Project added to daemon');
     return managed;
@@ -213,15 +245,16 @@ export class ProjectManager {
     for (const entry of allEntries) {
       const dangerReason = isDangerousProjectRoot(entry.root);
       if (dangerReason) {
-        logger.warn({ root: entry.root, reason: dangerReason }, 'Removing dangerous project from registry');
+        logger.warn(
+          { root: entry.root, reason: dangerReason },
+          'Removing dangerous project from registry',
+        );
         unregisterProject(entry.root);
         continue;
       }
       entries.push(entry);
     }
-    const results = await Promise.allSettled(
-      entries.map((entry) => this.addProject(entry.root)),
-    );
+    const results = await Promise.allSettled(entries.map((entry) => this.addProject(entry.root)));
     for (let i = 0; i < results.length; i++) {
       if (results[i].status === 'rejected') {
         logger.error(

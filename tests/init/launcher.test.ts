@@ -87,7 +87,7 @@ describe('writeLauncherConfig / readLauncherConfig', () => {
     expect(cfg.node).toBe('/n');
     expect(cfg.cli).toBe('/c');
     expect(cfg.version).toBeUndefined();
-    expect((cfg as Record<string, unknown>)['UNKNOWN_KEY']).toBeUndefined();
+    expect((cfg as Record<string, unknown>).UNKNOWN_KEY).toBeUndefined();
   });
 
   it('rejects values containing double quotes', () => {

@@ -54,9 +54,14 @@
       "complexity": {
         "useOptionalChain": "error",
         "useArrowFunction": "error",
+        "useLiteralKeys": "error",
         "noUselessSwitchCase": "error",
         "noUselessContinue": "error",
-        "noUselessEscapeInRegex": "error"
+        "noUselessEscapeInRegex": "error",
+        "noForEach": "off",
+        "noUselessFragments": "error",
+        "noUselessLoneBlockStatements": "error",
+        "noUselessTernary": "error"
       }
     }
   },

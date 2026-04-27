@@ -196,23 +196,23 @@ function toSnakeCase(name: string): string {
 function hasEagerLoadHint(assoc: OrmAssociationRow, model: OrmModelRow): boolean {
   const opts = jsonParse(assoc.options);
   if (opts) {
-    if (opts['eager'] === true || opts['eager_load'] === true) return true;
-    if (opts['autopopulate'] === true) return true;
+    if (opts.eager === true || opts.eager_load === true) return true;
+    if (opts.autopopulate === true) return true;
   }
   // Check model-level metadata for eager declarations
   const meta = jsonParse(model.metadata);
   if (meta) {
     // Laravel Eloquent: $with property
-    const withProp = meta['with'] as string[] | undefined;
+    const withProp = meta.with as string[] | undefined;
     if (Array.isArray(withProp) && withProp.length > 0) return true;
     // TypeORM: eager option on relation decorator
-    if (meta['eager'] === true) return true;
+    if (meta.eager === true) return true;
   }
   const modelOpts = jsonParse(model.options);
   if (modelOpts) {
     // Sequelize: defaultScope with include
-    const defaultScope = modelOpts['defaultScope'] as Record<string, unknown> | undefined;
-    if (defaultScope?.['include']) return true;
+    const defaultScope = modelOpts.defaultScope as Record<string, unknown> | undefined;
+    if (defaultScope?.include) return true;
   }
   return false;
 }
@@ -294,7 +294,7 @@ function extractCallSites(metadata: string | null): CallSiteMeta[] {
   if (!metadata) return [];
   try {
     const meta = JSON.parse(metadata) as Record<string, unknown>;
-    const cs = meta['callSites'];
+    const cs = meta.callSites;
     if (!Array.isArray(cs)) return [];
     return cs as CallSiteMeta[];
   } catch {
@@ -378,7 +378,7 @@ function detectNPlusOne(store: Store, data: PreFetchedData): AntipatternFinding[
     const handlerSymbols: string[] = [];
     for (const sym of callerSyms.values()) {
       const symMeta = jsonParse(sym.metadata);
-      const role = (symMeta?.['frameworkRole'] as string | undefined) ?? '';
+      const role = (symMeta?.frameworkRole as string | undefined) ?? '';
       const isHandler =
         role.includes('controller') ||
         role.includes('handler') ||
@@ -531,10 +531,10 @@ function detectUnboundedQuery(store: Store, data: PreFetchedData): AntipatternFi
     const meta = jsonParse(model.metadata);
 
     const hasPagination =
-      opts?.['perPage'] != null ||
-      opts?.['defaultScope']?.['limit'] != null ||
-      meta?.['perPage'] != null ||
-      meta?.['paginate'] === true;
+      opts?.perPage != null ||
+      opts?.defaultScope?.limit != null ||
+      meta?.perPage != null ||
+      meta?.paginate === true;
 
     if (hasPagination) continue;
 
@@ -892,7 +892,7 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
 
     for (const assoc of assocs) {
       const opts = jsonParse(assoc.options);
-      const explicitFk = opts?.['foreignKey'] as string | undefined;
+      const explicitFk = opts?.foreignKey as string | undefined;
 
       // ORM convention: inferred FK when not explicitly declared.
       // The owning side (belongsTo/ManyToOne/ref) stores the FK locally as

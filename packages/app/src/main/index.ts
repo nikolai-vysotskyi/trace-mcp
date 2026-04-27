@@ -1,8 +1,8 @@
 import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
-import { execSync, exec, spawn } from 'child_process';
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
+import { exec, spawn } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
 import { createTray, showMenuWindow } from './tray';
 
 // SharedArrayBuffer needed for cosmos.gl workers. GPU compositing + Skia
@@ -345,7 +345,7 @@ function cmpSemver(a: string, b: string): number {
 
 function fetchLatestFromNpm(): Promise<{ status: number; version?: string }> {
   return new Promise((resolve, reject) => {
-    const https = require('https');
+    const https = require('node:https');
     const req = https.get(
       'https://registry.npmjs.org/trace-mcp/latest',
       { timeout: 10000, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/json' } },
@@ -400,7 +400,7 @@ function fetchLatestRelease(): Promise<{
   resetAt?: number;
 }> {
   return new Promise((resolve, reject) => {
-    const https = require('https');
+    const https = require('node:https');
     const headers: Record<string, string> = {
       'User-Agent': 'trace-mcp',
       Accept: 'application/vnd.github.v3+json',
@@ -667,7 +667,7 @@ function appendUpdateLog(entry: Record<string, unknown>): void {
     fs.mkdirSync(path.dirname(UPDATE_LOG), { recursive: true });
     fs.appendFileSync(
       UPDATE_LOG,
-      JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n',
+      `${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`,
     );
   } catch {
     /* logging must never break the update */

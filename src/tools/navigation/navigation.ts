@@ -300,11 +300,11 @@ export async function search(
           : (symbol.metadata as Record<string, unknown>);
 
       if (filters?.implements) {
-        const impl = meta['implements'];
+        const impl = meta.implements;
         if (!Array.isArray(impl) || !(impl as string[]).includes(filters.implements)) continue;
       }
       if (filters?.extends) {
-        const ext = meta['extends'];
+        const ext = meta.extends;
         const extArr = Array.isArray(ext)
           ? (ext as string[])
           : typeof ext === 'string'
@@ -315,9 +315,9 @@ export async function search(
       if (decoratorFilter) {
         // Check all decorator-like fields: decorators (TS/Python), annotations (Java), attributes (PHP)
         const decorators =
-          (meta['decorators'] as string[] | undefined) ??
-          (meta['annotations'] as string[] | undefined) ??
-          (meta['attributes'] as string[] | undefined);
+          (meta.decorators as string[] | undefined) ??
+          (meta.annotations as string[] | undefined) ??
+          (meta.attributes as string[] | undefined);
         if (
           !Array.isArray(decorators) ||
           !decorators.some(
@@ -464,19 +464,19 @@ async function runFusionSearch(
         ? (JSON.parse(symbol.metadata) as Record<string, unknown>)
         : (symbol.metadata as Record<string, unknown>);
     if (filters?.implements) {
-      const impl = meta['implements'];
+      const impl = meta.implements;
       if (!Array.isArray(impl) || !(impl as string[]).includes(filters.implements)) return false;
     }
     if (filters?.extends) {
-      const ext = meta['extends'];
+      const ext = meta.extends;
       const extArr = Array.isArray(ext) ? (ext as string[]) : typeof ext === 'string' ? [ext] : [];
       if (!extArr.includes(filters.extends)) return false;
     }
     if (decoratorFilter) {
       const decorators =
-        (meta['decorators'] as string[] | undefined) ??
-        (meta['annotations'] as string[] | undefined) ??
-        (meta['attributes'] as string[] | undefined);
+        (meta.decorators as string[] | undefined) ??
+        (meta.annotations as string[] | undefined) ??
+        (meta.attributes as string[] | undefined);
       if (
         !Array.isArray(decorators) ||
         !decorators.some(
@@ -676,9 +676,9 @@ export function getFileOutline(store: Store, filePath: string): TraceMcpResult<F
             ? (JSON.parse(s.metadata) as Record<string, unknown>)
             : (s.metadata as Record<string, unknown>);
         const decs =
-          (meta['decorators'] as string[] | undefined) ??
-          (meta['annotations'] as string[] | undefined) ??
-          (meta['attributes'] as string[] | undefined);
+          (meta.decorators as string[] | undefined) ??
+          (meta.annotations as string[] | undefined) ??
+          (meta.attributes as string[] | undefined);
         if (Array.isArray(decs) && decs.length > 0) {
           base.decorators = decs;
         }

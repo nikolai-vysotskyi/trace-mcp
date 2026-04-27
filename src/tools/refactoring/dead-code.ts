@@ -130,7 +130,7 @@ function buildImportedNamesSet(store: Store): Set<string> {
           ? (JSON.parse(edge.metadata) as Record<string, unknown>)
           : (edge.metadata as Record<string, unknown>);
 
-      const specifiers = meta['specifiers'];
+      const specifiers = meta.specifiers;
       if (Array.isArray(specifiers)) {
         for (const s of specifiers) {
           if (typeof s === 'string') {
@@ -202,7 +202,7 @@ function buildBarrelExportedNames(store: Store): Set<string> {
           ? (JSON.parse(edge.metadata) as Record<string, unknown>)
           : (edge.metadata as Record<string, unknown>);
 
-      const specifiers = meta['specifiers'];
+      const specifiers = meta.specifiers;
       if (Array.isArray(specifiers)) {
         for (const s of specifiers) {
           if (typeof s === 'string') {

@@ -243,8 +243,8 @@ export class TailwindPlugin implements FrameworkPlugin {
         ...(ctx.packageJson.dependencies as Record<string, string> | undefined),
         ...(ctx.packageJson.devDependencies as Record<string, string> | undefined),
       };
-      if (deps['tailwindcss']) {
-        this.detectedVersion = detectVersionFromSemver(deps['tailwindcss']);
+      if (deps.tailwindcss) {
+        this.detectedVersion = detectVersionFromSemver(deps.tailwindcss);
         this.findConfigFiles(ctx.rootPath);
         return true;
       }

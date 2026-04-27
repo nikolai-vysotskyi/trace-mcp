@@ -138,7 +138,7 @@ export class NuxtPlugin implements FrameworkPlugin {
         ...(ctx.packageJson.dependencies as Record<string, string> | undefined),
         ...(ctx.packageJson.devDependencies as Record<string, string> | undefined),
       };
-      const nuxtVersion = deps['nuxt'];
+      const nuxtVersion = deps.nuxt;
       if (nuxtVersion && (/\^4/.test(nuxtVersion) || />=\s*4\.0\.0/.test(nuxtVersion))) {
         return true;
       }

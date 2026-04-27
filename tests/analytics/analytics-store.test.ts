@@ -117,7 +117,7 @@ describe('AnalyticsStore', () => {
     const result = store.getSessionAnalytics({ period: 'all' });
     expect(result.by_tool_server).toHaveProperty('builtin');
     expect(result.by_tool_server).toHaveProperty('trace-mcp');
-    expect(result.by_tool_server['builtin'].calls).toBe(2); // Read + Bash
+    expect(result.by_tool_server.builtin.calls).toBe(2); // Read + Bash
     expect(result.by_tool_server['trace-mcp'].calls).toBe(1); // search
   });
 

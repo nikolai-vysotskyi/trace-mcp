@@ -18,7 +18,7 @@ describe('tech-detector', () => {
 
   describe('KNOWN_PACKAGES lookup', () => {
     it('finds direct match for known package', () => {
-      const meta = KNOWN_PACKAGES['react'];
+      const meta = KNOWN_PACKAGES.react;
       expect(meta).toBeDefined();
       expect(meta.category).toBe('ui');
       expect(meta.priority).toBe('high');

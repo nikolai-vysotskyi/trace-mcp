@@ -50,13 +50,13 @@ class Kernel extends HttpKernel
     expect(config.global).toHaveLength(2);
     expect(config.global[0]).toContain('TrustProxies');
 
-    expect(config.groups['web']).toHaveLength(3);
-    expect(config.groups['api']).toHaveLength(2);
-    expect(config.groups['api']).toContain('throttle:api');
+    expect(config.groups.web).toHaveLength(3);
+    expect(config.groups.api).toHaveLength(2);
+    expect(config.groups.api).toContain('throttle:api');
 
-    expect(config.aliases['auth']).toContain('Authenticate');
-    expect(config.aliases['verified']).toContain('EnsureEmailIsVerified');
-    expect(config.aliases['can']).toContain('Authorize');
+    expect(config.aliases.auth).toContain('Authenticate');
+    expect(config.aliases.verified).toContain('EnsureEmailIsVerified');
+    expect(config.aliases.can).toContain('Authorize');
   });
 
   it('parses bootstrap/app.php middleware (Laravel 11 style)', () => {
@@ -86,13 +86,13 @@ return Application::configure(basePath: dirname(__DIR__))
 
     const mwConfig = parseBootstrapMiddleware(source);
     expect(mwConfig.source).toBe('bootstrap');
-    expect(mwConfig.aliases['auth']).toContain('Authenticate');
-    expect(mwConfig.aliases['verified']).toContain('EnsureEmailIsVerified');
-    expect(mwConfig.groups['web']).toContain('App\\Http\\Middleware\\HandleInertiaRequests');
+    expect(mwConfig.aliases.auth).toContain('Authenticate');
+    expect(mwConfig.aliases.verified).toContain('EnsureEmailIsVerified');
+    expect(mwConfig.groups.web).toContain('App\\Http\\Middleware\\HandleInertiaRequests');
 
     const routing = parseBootstrapRouting(source);
-    expect(routing['web']).toBe('routes/web.php');
-    expect(routing['api']).toBe('routes/api.php');
+    expect(routing.web).toBe('routes/web.php');
+    expect(routing.api).toBe('routes/api.php');
   });
 
   it('parses RouteServiceProvider namespace (Laravel 6-8)', () => {
@@ -148,7 +148,7 @@ class Kernel extends HttpKernel {
 
     const config = plugin.getMiddlewareConfig();
     expect(config).not.toBeNull();
-    expect(config!.aliases['auth']).toContain('Authenticate');
+    expect(config!.aliases.auth).toContain('Authenticate');
     expect(plugin.resolveMiddlewareAlias('auth')).toContain('Authenticate');
   });
 

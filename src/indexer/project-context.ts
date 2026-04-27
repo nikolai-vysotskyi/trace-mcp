@@ -126,10 +126,10 @@ export function buildProjectContext(rootPath: string): ProjectContext {
       composerJson = JSON.parse(composerRaw) as Record<string, unknown>;
       const require_ = composerJson.require as Record<string, string> | undefined;
       const requireDev = composerJson['require-dev'] as Record<string, string> | undefined;
-      if (require_?.['php'])
+      if (require_?.php)
         detectedVersions.push({
           runtime: 'php',
-          version: require_['php'],
+          version: require_.php,
           source: 'composer.json#require.php',
         });
       const allComposerDeps: Record<string, string> = {};

@@ -48,7 +48,7 @@ export function resolvePythonHeritageEdges(state: PipelineState): void {
   for (const cls of classesWithBases) {
     try {
       const meta = JSON.parse(cls.metadata) as Record<string, unknown>;
-      const bases = meta['bases'];
+      const bases = meta.bases;
       if (Array.isArray(bases)) {
         for (const b of bases) {
           if (typeof b === 'string') {
@@ -123,7 +123,7 @@ export function resolvePythonHeritageEdges(state: PipelineState): void {
       } catch {
         continue;
       }
-      const bases = meta['bases'];
+      const bases = meta.bases;
       if (!Array.isArray(bases)) continue;
 
       const sourceNodeId = symbolNodeMap.get(cls.id);

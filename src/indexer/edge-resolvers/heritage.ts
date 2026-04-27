@@ -39,13 +39,13 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
     try {
       if (!sym.metadata) continue;
       const meta = JSON.parse(sym.metadata) as Record<string, unknown>;
-      const ext = meta['extends'];
+      const ext = meta.extends;
       if (Array.isArray(ext))
         for (const n of ext) {
           if (typeof n === 'string') neededNames.add(n);
         }
       else if (typeof ext === 'string') neededNames.add(ext);
-      const impl = meta['implements'];
+      const impl = meta.implements;
       if (Array.isArray(impl))
         for (const n of impl) {
           if (typeof n === 'string') neededNames.add(n);
@@ -146,7 +146,7 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
         return candidates.filter((c) => c.workspace === sourceWs);
       };
 
-      const ext = meta['extends'];
+      const ext = meta.extends;
       const extNames = Array.isArray(ext)
         ? (ext as string[])
         : typeof ext === 'string'
@@ -166,7 +166,7 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
         emitPhantomEdge(targetName, tsExtendsType.id, 'class');
       }
 
-      const impl = meta['implements'];
+      const impl = meta.implements;
       if (Array.isArray(impl)) {
         for (const targetName of impl as string[]) {
           if (typeof targetName !== 'string' || !targetName) continue;

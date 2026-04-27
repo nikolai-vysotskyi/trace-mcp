@@ -61,12 +61,12 @@ export function parseBootstrapMiddleware(source: string): MiddlewareConfig {
   // Parse $middleware->web(append: [...]) and $middleware->api(prepend: [...])
   const webItems = extractCallArray(body, 'web');
   if (webItems.length > 0) {
-    config.groups['web'] = webItems;
+    config.groups.web = webItems;
   }
 
   const apiItems = extractCallArray(body, 'api');
   if (apiItems.length > 0) {
-    config.groups['api'] = apiItems;
+    config.groups.api = apiItems;
   }
 
   return config;

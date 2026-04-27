@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { StatusDot } from '../components/StatusDot';
-import { useDaemon, ClientInfo } from '../hooks/useDaemon';
+import { useDaemon, type ClientInfo } from '../hooks/useDaemon';
 
 // ── All supported MCP clients (same order as CLI init) ────────────
 type ClientName =

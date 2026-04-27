@@ -55,8 +55,8 @@ export function getImplementations(store: Store, name: string): GetImplementatio
 
   const implementors: ImplementorItem[] = rows.map((row) => {
     const meta = safeParseMeta(row.metadata);
-    const imp = meta['implements'];
-    const ext = meta['extends'];
+    const imp = meta.implements;
+    const ext = meta.extends;
 
     // Determine whether this is an implements or extends relation
     let relation: 'implements' | 'extends' = 'extends';
@@ -118,7 +118,7 @@ export function getApiSurface(store: Store, filePattern?: string): GetApiSurface
       kind: row.kind,
       signature: row.signature,
       line: row.line_start,
-      default: Boolean(meta['default']),
+      default: Boolean(meta.default),
     };
     const list = byFile.get(row.file_path) ?? [];
     list.push(sym);
@@ -254,9 +254,9 @@ function walkAncestors(
   if (!sym) return;
 
   const meta = sym.metadata ? (JSON.parse(sym.metadata) as Record<string, unknown>) : {};
-  const ext = meta['extends'];
+  const ext = meta.extends;
   const extNames = Array.isArray(ext) ? (ext as string[]) : typeof ext === 'string' ? [ext] : [];
-  const implNames = Array.isArray(meta['implements']) ? (meta['implements'] as string[]) : [];
+  const implNames = Array.isArray(meta.implements) ? (meta.implements as string[]) : [];
 
   const _file = store.getFileById(sym.file_id);
 
@@ -320,8 +320,8 @@ function walkDescendants(
 
   for (const row of implementors) {
     const meta = safeParseMeta(row.metadata);
-    const impl = meta['implements'];
-    const _ext = meta['extends'];
+    const impl = meta.implements;
+    const _ext = meta.extends;
 
     let relation: 'extends' | 'implements' = 'extends';
     if (Array.isArray(impl) && (impl as string[]).includes(name)) {
@@ -467,7 +467,7 @@ export function getDeadExports(store: Store, filePattern?: string): GetDeadExpor
         typeof edge.metadata === 'string'
           ? (JSON.parse(edge.metadata) as Record<string, unknown>)
           : (edge.metadata as Record<string, unknown>);
-      const specifiers = meta['specifiers'];
+      const specifiers = meta.specifiers;
       if (Array.isArray(specifiers)) {
         for (const s of specifiers) {
           if (typeof s === 'string') {
@@ -608,7 +608,7 @@ export function getDependencyGraph(store: Store, filePath: string): GetDependenc
     imports.push({
       source: filePath,
       target: targetFile.path,
-      specifiers: (meta['specifiers'] as string[]) ?? [],
+      specifiers: (meta.specifiers as string[]) ?? [],
     });
   }
 
@@ -627,7 +627,7 @@ export function getDependencyGraph(store: Store, filePath: string): GetDependenc
     importedBy.push({
       source: sourceFile.path,
       target: filePath,
-      specifiers: (meta['specifiers'] as string[]) ?? [],
+      specifiers: (meta.specifiers as string[]) ?? [],
     });
   }
 

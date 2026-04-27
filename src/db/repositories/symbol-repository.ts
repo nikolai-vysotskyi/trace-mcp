@@ -49,17 +49,14 @@ export class SymbolRepository {
           : null;
 
     const cyclomatic =
-      ((sym.metadata as Record<string, unknown> | undefined)?.['cyclomatic'] as
-        | number
-        | undefined) ?? null;
+      ((sym.metadata as Record<string, unknown> | undefined)?.cyclomatic as number | undefined) ??
+      null;
     const maxNesting =
-      ((sym.metadata as Record<string, unknown> | undefined)?.['max_nesting'] as
-        | number
-        | undefined) ?? null;
+      ((sym.metadata as Record<string, unknown> | undefined)?.max_nesting as number | undefined) ??
+      null;
     const paramCount =
-      ((sym.metadata as Record<string, unknown> | undefined)?.['param_count'] as
-        | number
-        | undefined) ?? null;
+      ((sym.metadata as Record<string, unknown> | undefined)?.param_count as number | undefined) ??
+      null;
 
     // Guard: auto-generate symbolId if missing (framework plugins may omit it)
     const symbolIdStr = sym.symbolId || `file:${fileId}::${sym.name}#${sym.kind}`;

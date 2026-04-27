@@ -271,9 +271,9 @@ const SYMBOL_PATTERNS: Record<string, SymbolPattern[]> = {
 };
 
 // Alias groups
-SYMBOL_PATTERNS['tsx'] = SYMBOL_PATTERNS['typescript'];
-SYMBOL_PATTERNS['jsx'] = SYMBOL_PATTERNS['javascript'];
-SYMBOL_PATTERNS['kotlin'] = SYMBOL_PATTERNS['java'];
+SYMBOL_PATTERNS.tsx = SYMBOL_PATTERNS.typescript;
+SYMBOL_PATTERNS.jsx = SYMBOL_PATTERNS.javascript;
+SYMBOL_PATTERNS.kotlin = SYMBOL_PATTERNS.java;
 
 function detectLanguage(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();

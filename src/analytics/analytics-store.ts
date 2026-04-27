@@ -123,8 +123,8 @@ export class AnalyticsStore {
         // Store first 500 chars of Bash commands for optimization rule detection
         const snippet =
           tc.toolShortName === 'Bash' || tc.toolShortName === 'bash'
-            ? typeof tc.inputParams['command'] === 'string'
-              ? (tc.inputParams['command'] as string).slice(0, 500)
+            ? typeof tc.inputParams.command === 'string'
+              ? (tc.inputParams.command as string).slice(0, 500)
               : null
             : null;
         insertTC.run(

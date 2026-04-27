@@ -378,7 +378,7 @@ version = "1.0.195"
     const result = generateSbom(TEST_DIR, {});
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
-    expect(data.license_summary['MIT']).toBe(2);
+    expect(data.license_summary.MIT).toBe(2);
     expect(data.license_summary['Apache-2.0']).toBe(1);
   });
 

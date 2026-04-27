@@ -145,17 +145,17 @@ function collectAncestors(
       const meta = JSON.parse(classSymbol.metadata) as Record<string, unknown>;
       const parentNames: string[] = [];
 
-      const ext = meta['extends'];
+      const ext = meta.extends;
       if (Array.isArray(ext))
         parentNames.push(...ext.filter((n): n is string => typeof n === 'string'));
       else if (typeof ext === 'string') parentNames.push(ext);
 
-      const impl = meta['implements'];
+      const impl = meta.implements;
       if (Array.isArray(impl))
         parentNames.push(...impl.filter((n): n is string => typeof n === 'string'));
 
       // Python bases
-      const bases = meta['bases'];
+      const bases = meta.bases;
       if (Array.isArray(bases))
         parentNames.push(...bases.filter((n): n is string => typeof n === 'string'));
 

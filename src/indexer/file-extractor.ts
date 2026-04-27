@@ -180,9 +180,8 @@ export class FileExtractor {
           !edge.sourceSymbolId;
         if (isImportEdge) {
           importEdges.push({
-            from: ((edge.metadata as Record<string, unknown>)?.['from'] as string) ?? '',
-            specifiers:
-              ((edge.metadata as Record<string, unknown>)?.['specifiers'] as string[]) ?? [],
+            from: ((edge.metadata as Record<string, unknown>)?.from as string) ?? '',
+            specifiers: ((edge.metadata as Record<string, unknown>)?.specifiers as string[]) ?? [],
             relPath,
           });
         } else {

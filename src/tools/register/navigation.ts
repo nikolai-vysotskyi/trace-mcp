@@ -247,9 +247,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
               typeof symbol.metadata === 'string' ? JSON.parse(symbol.metadata) : symbol.metadata
             ) as Record<string, unknown>;
             const decs =
-              (meta['decorators'] as string[] | undefined) ??
-              (meta['annotations'] as string[] | undefined) ??
-              (meta['attributes'] as string[] | undefined);
+              (meta.decorators as string[] | undefined) ??
+              (meta.annotations as string[] | undefined) ??
+              (meta.attributes as string[] | undefined);
             if (Array.isArray(decs) && decs.length > 0) item.decorators = decs;
           } catch {
             /* ignore malformed metadata */

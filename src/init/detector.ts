@@ -16,7 +16,6 @@ import type {
   DetectedFramework,
   DetectedMcpClient,
 } from './types.js';
-import { GUARD_HOOK_VERSION } from './types.js';
 
 const HOME = os.homedir();
 

@@ -23,9 +23,9 @@ describe('Session Tracker (Token Savings)', () => {
     tracker.recordCall('get_outline', 200);
 
     const stats = tracker.getSessionStats();
-    expect(stats.per_tool['search'].calls).toBe(2);
-    expect(stats.per_tool['get_outline'].calls).toBe(1);
-    expect(stats.per_tool['search'].tokens_saved).toBeGreaterThan(0);
+    expect(stats.per_tool.search.calls).toBe(2);
+    expect(stats.per_tool.get_outline.calls).toBe(1);
+    expect(stats.per_tool.search.tokens_saved).toBeGreaterThan(0);
   });
 
   it('handles unknown tool names with default cost', () => {
@@ -34,7 +34,7 @@ describe('Session Tracker (Token Savings)', () => {
 
     const stats = tracker.getSessionStats();
     expect(stats.total_calls).toBe(1);
-    expect(stats.per_tool['unknown_tool'].calls).toBe(1);
+    expect(stats.per_tool.unknown_tool.calls).toBe(1);
   });
 
   it('computes reduction percentage correctly', () => {

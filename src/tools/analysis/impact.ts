@@ -847,9 +847,9 @@ function traverseIncoming(
               const meta = JSON.parse(sym.metadata) as Record<string, unknown>;
               isExported = meta.exported === true || meta.exported === 1;
               const decs =
-                (meta['decorators'] as string[] | undefined) ??
-                (meta['annotations'] as string[] | undefined) ??
-                (meta['attributes'] as string[] | undefined);
+                (meta.decorators as string[] | undefined) ??
+                (meta.annotations as string[] | undefined) ??
+                (meta.attributes as string[] | undefined);
               if (Array.isArray(decs) && decs.length > 0) decorators = decs;
             } catch {
               /* ignore */

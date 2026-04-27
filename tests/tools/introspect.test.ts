@@ -294,7 +294,7 @@ describe('ESM import edge resolution', () => {
         typeof e.metadata === 'string'
           ? (JSON.parse(e.metadata) as Record<string, unknown>)
           : e.metadata;
-      return Array.isArray(meta['specifiers']) && (meta['specifiers'] as string[]).length > 0;
+      return Array.isArray(meta.specifiers) && (meta.specifiers as string[]).length > 0;
     });
     expect(withSpecifiers.length).toBeGreaterThan(0);
   });
@@ -310,7 +310,7 @@ describe('ESM import edge resolution', () => {
         typeof edge.metadata === 'string'
           ? (JSON.parse(edge.metadata) as Record<string, unknown>)
           : edge.metadata;
-      const specs = meta['specifiers'];
+      const specs = meta.specifiers;
       if (Array.isArray(specs)) {
         allSpecifiers.push(...(specs as string[]));
       }

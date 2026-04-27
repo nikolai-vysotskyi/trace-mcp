@@ -244,15 +244,14 @@ export class FilePersister {
     for (const sym of ext.symbols) {
       const ex = existingMap.get(sym.symbolId)!;
       const cyclomatic =
-        ((sym.metadata as Record<string, unknown> | undefined)?.['cyclomatic'] as
-          | number
-          | undefined) ?? null;
+        ((sym.metadata as Record<string, unknown> | undefined)?.cyclomatic as number | undefined) ??
+        null;
       const maxNesting =
-        ((sym.metadata as Record<string, unknown> | undefined)?.['max_nesting'] as
+        ((sym.metadata as Record<string, unknown> | undefined)?.max_nesting as
           | number
           | undefined) ?? null;
       const paramCount =
-        ((sym.metadata as Record<string, unknown> | undefined)?.['param_count'] as
+        ((sym.metadata as Record<string, unknown> | undefined)?.param_count as
           | number
           | undefined) ?? null;
       updateStmt.run(

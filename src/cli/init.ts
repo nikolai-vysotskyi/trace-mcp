@@ -26,7 +26,6 @@ const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
 import { installTweakccPrompts, detectTweakccPrompts } from '../init/tweakcc.js';
-import { formatReport } from '../init/reporter.js';
 import { ensureGlobalDirs, getDbPath, GLOBAL_CONFIG_PATH } from '../global.js';
 import {
   migrateGlobalConfig,
@@ -34,7 +33,7 @@ import {
   readGlobalConfigText,
 } from '../config-jsonc.js';
 import { parse as parseJsonc } from 'jsonc-parser';
-import type { DetectedMcpClient, InitStepResult, InitReport } from '../init/types.js';
+import type { DetectedMcpClient, InitStepResult } from '../init/types.js';
 import { detectMcpClients, detectGuardHook, detectProject } from '../init/detector.js';
 import { detectConflicts } from '../init/conflict-detector.js';
 import { fixAllConflicts } from '../init/conflict-resolver.js';
@@ -861,7 +860,7 @@ function formatClientName(name: string): string {
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   const cwd = process.cwd();
   if (p.startsWith(cwd)) return p.slice(cwd.length + 1) || '.';
   return p;

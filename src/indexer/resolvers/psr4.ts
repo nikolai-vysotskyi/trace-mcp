@@ -53,7 +53,7 @@ export class Psr4Resolver {
         }
       };
 
-      extractPsr4(json['autoload']);
+      extractPsr4(json.autoload);
       extractPsr4(json['autoload-dev']);
 
       if (mappings.size === 0) return undefined;

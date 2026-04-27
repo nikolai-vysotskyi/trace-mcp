@@ -521,7 +521,7 @@ async function fetchOpenAICompatModels(
 ): Promise<ModelOption[]> {
   const endpoint = `${url.replace(/\/+$/, '')}/models`;
   const headers: Record<string, string> = {};
-  if (key) headers['Authorization'] = `Bearer ${key}`;
+  if (key) headers.Authorization = `Bearer ${key}`;
   const res = await fetch(endpoint, { signal, headers });
   if (!res.ok)
     throw new Error(`${label}: ${res.status}${res.status === 401 ? ' (check API key)' : ''}`);
@@ -634,7 +634,7 @@ function ModelSelectCtrl({
   const baseUrl = field.modelBaseUrlField
     ? (sectionData[field.modelBaseUrlField] as string | undefined)
     : undefined;
-  const apiKey = sectionData['api_key'] as string | undefined;
+  const apiKey = sectionData.api_key as string | undefined;
   const { models, loading, error, refresh } = useProviderModels(provider, baseUrl, apiKey);
   const wrapRef = useRef<HTMLDivElement>(null);
   const current = (value as string) ?? '';

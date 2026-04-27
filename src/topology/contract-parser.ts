@@ -95,8 +95,8 @@ function resolveRefs(
   if (depth > 5 || !schema || typeof schema !== 'object') return schema;
 
   // Direct $ref: { "$ref": "#/components/schemas/User" }
-  if (typeof schema['$ref'] === 'string') {
-    const refPath = schema['$ref'] as string;
+  if (typeof schema.$ref === 'string') {
+    const refPath = schema.$ref as string;
     const match = /^#\/components\/schemas\/(\w+)$/.exec(refPath);
     if (match && components?.[match[1]] && typeof components[match[1]] === 'object') {
       return resolveRefs(components[match[1]] as Record<string, unknown>, components, depth + 1);
