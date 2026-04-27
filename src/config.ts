@@ -33,7 +33,7 @@ const AiConfigSchema = z.object({
     embedding: z.boolean().default(true),
     inference: z.boolean().default(true),
     fast_inference: z.boolean().default(true),
-  }).default({}),
+  }).prefault({}),
   base_url: z.string().optional(),
   api_key: z.string().optional(),
   inference_model: z.string().optional(),
@@ -67,21 +67,21 @@ const PredictiveConfigSchema = z.object({
       coupling: z.number().default(0.15),
       pagerank: z.number().default(0.10),
       authors: z.number().default(0.15),
-    }).default({}),
+    }).prefault({}),
     tech_debt: z.object({
       complexity: z.number().default(0.30),
       coupling: z.number().default(0.25),
       test_gap: z.number().default(0.25),
       churn: z.number().default(0.20),
-    }).default({}),
+    }).prefault({}),
     change_risk: z.object({
       blast_radius: z.number().default(0.25),
       complexity: z.number().default(0.20),
       churn: z.number().default(0.20),
       test_gap: z.number().default(0.20),
       coupling: z.number().default(0.15),
-    }).default({}),
-  }).default({}),
+    }).prefault({}),
+  }).prefault({}),
   cache_ttl_minutes: z.number().default(60),
   git_since_days: z.number().default(180),
   module_depth: z.number().default(2),
@@ -106,16 +106,16 @@ const RuntimeConfigSchema = z.object({
     port: z.number().int().min(0).max(65535).default(4318),
     host: z.string().default('127.0.0.1'),
     max_body_bytes: z.number().positive().default(4 * 1024 * 1024),
-  }).default({}),
+  }).prefault({}),
   retention: z.object({
     max_span_age_days: z.number().positive().default(7),
     max_aggregate_age_days: z.number().positive().default(90),
     prune_interval: z.number().int().min(0).default(100),
-  }).default({}),
+  }).prefault({}),
   mapping: z.object({
     fqn_attributes: z.array(z.string()).default(['code.function', 'code.namespace', 'code.filepath']),
     route_patterns: z.array(z.string()).default(['^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\s+(.+)$']),
-  }).default({}),
+  }).prefault({}),
 }).optional();
 
 const ToolDescriptionOverrideSchema = z.union([
@@ -162,7 +162,7 @@ const QualityGatesConfigSchema = z.object({
     max_security_critical_findings: QualityGatesRuleSchema.optional(),
     max_antipattern_count: QualityGatesRuleSchema.optional(),
     max_code_smell_count: QualityGatesRuleSchema.optional(),
-  }).default({}),
+  }).prefault({}),
 }).optional();
 
 const IgnoreConfigSchema = z.object({
@@ -170,7 +170,7 @@ const IgnoreConfigSchema = z.object({
   directories: z.array(z.string()).default([]),
   /** Extra gitignore-style patterns to exclude from indexing. */
   patterns: z.array(z.string()).default([]),
-}).default({});
+}).prefault({});
 
 const LspServerConfigSchema = z.object({
   command: z.string(),
@@ -182,7 +182,7 @@ const LspServerConfigSchema = z.object({
 
 const LspConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  servers: z.record(z.string(), LspServerConfigSchema).default({}),
+  servers: z.record(z.string(), LspServerConfigSchema).prefault({}),
   auto_detect: z.boolean().default(true),
   max_concurrent_servers: z.number().int().min(1).max(4).default(2),
   enrichment_timeout_ms: z.number().int().min(5000).max(600000).default(120000),
@@ -201,7 +201,7 @@ export const TraceMcpConfigSchema = z.object({
   root: z.string().default('.'),
   db: z.object({
     path: z.string().default('.trace-mcp/index.db'),
-  }).default({}),
+  }).prefault({}),
   include: z.array(z.string()).default([
     'src/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php,vue,svelte}',
     'lib/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php}',
@@ -246,16 +246,16 @@ export const TraceMcpConfigSchema = z.object({
   watch: z.object({
     enabled: z.boolean().default(true),
     debounceMs: z.number().int().min(500).max(30000).default(2000),
-  }).default({}),
+  }).prefault({}),
   logging: z.object({
     file: z.boolean().default(false),
     path: z.string().default('~/.trace-mcp/run.log'),
     level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
     max_size_mb: z.number().positive().max(500).default(10),
-  }).default({}),
+  }).prefault({}),
   git: z.object({
     defaultBaseBranch: z.string().max(256).optional().describe('Default base branch for diff tools (e.g. "develop"). Auto-detects main/master if omitted.'),
-  }).default({}),
+  }).prefault({}),
   /**
    * Minutes of stdin silence before the stdio process releases full-mode
    * resources (DB, indexer, watcher). The process itself stays alive and
@@ -307,7 +307,7 @@ export const TraceMcpConfigSchema = z.object({
     enabled: z.union([z.literal('auto'), z.boolean()]).default('auto'),
     home_override: z.string().optional(),
     profile: z.string().optional(),
-  }).default({}),
+  }).prefault({}),
   children: z.array(z.string()).optional(),
 });
 
