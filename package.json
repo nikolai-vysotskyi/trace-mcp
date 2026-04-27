@@ -61,7 +61,7 @@
     "picomatch": "^4.0.4",
     "pino": "^10.3.1",
     "tree-sitter-wasms": "^0.1.13",
-    "web-tree-sitter": "^0.24.7",
+    "web-tree-sitter": "^0.26.8",
     "yaml": "^2.8.3",
     "zod": "^3.24.0"
   },
