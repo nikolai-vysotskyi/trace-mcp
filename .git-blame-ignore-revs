@@ -1,0 +1,8 @@
+# Revisions listed here are skipped by `git blame` when the repo is configured
+# with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add only commits that are pure mechanical reformatting / codemod runs with
+# no behavioral changes.
+
+# chore(format): apply Biome formatter across repo
+b07c965db17d9136c17c968d0a822b5f96bd932b
