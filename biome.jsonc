@@ -81,5 +81,30 @@
   },
   "assist": {
     "enabled": false
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/app/src/renderer/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useButtonType": "warn",
+            "useKeyWithClickEvents": "warn",
+            "noStaticElementInteractions": "warn",
+            "useAriaPropsForRole": "error",
+            "useHtmlLang": "error",
+            "noAutofocus": "warn",
+            "noSvgWithoutTitle": "off"
+          },
+          "correctness": {
+            "useExhaustiveDependencies": "warn",
+            "noChildrenProp": "error"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "warn"
+          }
+        }
+      }
+    }
+  ]
 }
