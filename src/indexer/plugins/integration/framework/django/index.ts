@@ -14,21 +14,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
-  EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-import { extractDjangoModels } from './models.js';
-import { extractUrlPatterns } from './urls.js';
-import { extractSignalConnections } from './signals.js';
 import { extractAdminRegistrations } from './admin.js';
+import { extractDjangoModels } from './models.js';
+import { extractSignalConnections } from './signals.js';
+import { extractUrlPatterns } from './urls.js';
 
 export class DjangoPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {

@@ -1,30 +1,32 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { cpus } from 'node:os';
+import path from 'node:path';
 import fg from 'fast-glob';
-import type { Store } from '../db/store.js';
-import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { ResolveContext, ProjectContext, FrameworkPlugin } from '../plugin-api/types.js';
-import { buildProjectContext } from './project-context.js';
+import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
+import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
-import { detectWorkspaces, buildMultiRootWorkspaces, type WorkspaceInfo } from './monorepo.js';
-import { validatePath } from '../utils/security.js';
-import { GitignoreMatcher } from '../utils/gitignore.js';
-import { TraceignoreMatcher } from '../utils/traceignore.js';
+import type { PluginRegistry } from '../plugin-api/registry.js';
+import type { FrameworkPlugin, ProjectContext, ResolveContext } from '../plugin-api/types.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
-import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
-import { FilePersister } from './file-persister.js';
+import { GitignoreMatcher } from '../utils/gitignore.js';
+import { validatePath } from '../utils/security.js';
+import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
-import { FileExtractor } from './file-extractor.js';
 import { EnvIndexer } from './env-indexer.js';
 import { ExtractPool, type ExtractRequest } from './extract-pool.js';
+import { FileExtractor } from './file-extractor.js';
+import { FilePersister } from './file-persister.js';
+import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import type { PipelineState } from './pipeline-state.js';
+import { buildProjectContext } from './project-context.js';
+
 export type { FileExtraction } from './pipeline-state.js';
-import type { FileExtraction } from './pipeline-state.js';
+
 import type { ProgressState } from '../progress.js';
+import type { FileExtraction } from './pipeline-state.js';
 
 export interface IndexingResult {
   totalFiles: number;

@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import {
-  parseToolName,
-  extractTargetFile,
-  parseSessionFile,
-} from '../../src/analytics/log-parser.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  extractTargetFile,
+  parseSessionFile,
+  parseToolName,
+} from '../../src/analytics/log-parser.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('parseToolName', () => {

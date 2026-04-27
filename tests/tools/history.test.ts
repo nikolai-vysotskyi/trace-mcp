@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
 import {
-  getCouplingTrend,
-  getSymbolComplexityTrend,
   countImports,
   extractSymbolSource,
+  getCouplingTrend,
+  getSymbolComplexityTrend,
 } from '../../src/tools/analysis/history.js';
+import { createTestStore } from '../test-utils.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),

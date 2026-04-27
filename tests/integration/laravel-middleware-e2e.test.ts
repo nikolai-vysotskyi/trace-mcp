@@ -2,13 +2,13 @@
  * Integration: Laravel middleware resolution through full pipeline.
  * Tests both L6-10 (Kernel.php) and L11+ (bootstrap/app.php) styles.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import {
-  parseKernelMiddleware,
   parseBootstrapMiddleware,
-  parseRouteServiceProviderNamespace,
   parseBootstrapRouting,
+  parseKernelMiddleware,
+  parseRouteServiceProviderNamespace,
 } from '../../src/indexer/plugins/integration/framework/laravel/middleware.js';
 
 describe('Laravel middleware parsing', () => {

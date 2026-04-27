@@ -6,18 +6,18 @@
  * for cross-file annotation verification and data flow analysis.
  */
 
-import { Command } from 'commander';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { Command } from 'commander';
+import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { loadConfig } from '../config.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { getProject } from '../registry.js';
-import { findProjectRoot } from '../project-root.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
 import { logger } from '../logger.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
+import { findProjectRoot } from '../project-root.js';
+import { getProject } from '../registry.js';
 import { exportSecurityContext } from '../tools/quality/security-context-export.js';
 
 function resolveDbPath(projectRoot: string): string {

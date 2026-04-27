@@ -1,12 +1,12 @@
+import { ok, type TraceMcpResult } from '../errors.js';
+import { logger } from '../logger.js';
 import type {
-  LanguagePlugin,
-  FrameworkPlugin,
   FileParseResult,
+  FrameworkPlugin,
+  LanguagePlugin,
   RawEdge,
   ResolveContext,
 } from './types.js';
-import { ok, type TraceMcpResult } from '../errors.js';
-import { logger } from '../logger.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** Maximum symbols a single file extraction can return. */

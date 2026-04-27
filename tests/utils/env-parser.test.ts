@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseEnvFile, redactEnvFile, type EnvEntry } from '../../src/utils/env-parser.js';
+import { describe, expect, it } from 'vitest';
+import { type EnvEntry, parseEnvFile, redactEnvFile } from '../../src/utils/env-parser.js';
 
 describe('env-parser', () => {
   describe('parseEnvFile', () => {

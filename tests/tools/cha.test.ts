@@ -4,12 +4,12 @@
  * Verifies that find_usages, get_call_graph, and get_change_impact correctly
  * follow method calls through the class hierarchy via CHA expansion.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { expandMethodViaCha } from '../../src/tools/shared/cha.js';
-import { findReferences } from '../../src/tools/framework/references.js';
 import { getCallGraph } from '../../src/tools/framework/call-graph.js';
+import { findReferences } from '../../src/tools/framework/references.js';
+import { expandMethodViaCha } from '../../src/tools/shared/cha.js';
+import { createTestStore } from '../test-utils.js';
 
 function addSymbol(
   store: Store,

@@ -1,5 +1,5 @@
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../../logger.js';
 import { resolveRegisteredAncestor } from '../../registry.js';
 import type { Backend } from './types.js';

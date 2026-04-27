@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { LaravelPlugin } from '../../../src/indexer/plugins/integration/framework/laravel/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

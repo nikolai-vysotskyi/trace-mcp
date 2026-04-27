@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { RailsPlugin } from '../../../src/indexer/plugins/integration/framework/rails/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

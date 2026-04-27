@@ -11,22 +11,21 @@
  * No CLI concerns, no git — pure data in, report out.
  */
 import type { Store } from '../db/store.js';
+import { TOPOLOGY_DB_PATH } from '../global.js';
+import { DomainStore } from '../intent/domain-store.js';
+import { logger } from '../logger.js';
+import { type CouplingResult, getCouplingMetrics } from '../tools/analysis/graph-analysis.js';
 import { getChangeImpact } from '../tools/analysis/impact.js';
-import { getDeadExports } from '../tools/analysis/introspect.js';
-import { getUntestedExports } from '../tools/analysis/introspect.js';
-import { getCouplingMetrics, type CouplingResult } from '../tools/analysis/graph-analysis.js';
+import { getDeadExports, getUntestedExports } from '../tools/analysis/introspect.js';
 import {
-  getLayerViolations,
   detectLayerPreset,
+  getLayerViolations,
   type LayerDefinition,
   type LayerViolation,
 } from '../tools/analysis/layer-violations.js';
 import { getChurnRate } from '../tools/git/git-analysis.js';
-import { DomainStore } from '../intent/domain-store.js';
 import { getFileOwnership } from '../tools/git/git-ownership.js';
 import { TopologyStore } from '../topology/topology-db.js';
-import { TOPOLOGY_DB_PATH } from '../global.js';
-import { logger } from '../logger.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES

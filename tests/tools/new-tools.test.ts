@@ -1,19 +1,19 @@
-import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { NestJSPlugin } from '../../src/indexer/plugins/integration/framework/nestjs/index.js';
 import { ExpressPlugin } from '../../src/indexer/plugins/integration/framework/express/index.js';
+import { NestJSPlugin } from '../../src/indexer/plugins/integration/framework/nestjs/index.js';
 import { ReactNativePlugin } from '../../src/indexer/plugins/integration/view/react-native/index.js';
-import { getMiddlewareChain } from '../../src/tools/framework/middleware-chain.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { getModuleGraph } from '../../src/tools/analysis/module-graph.js';
 import { getDITree } from '../../src/tools/framework/di-tree.js';
+import { getMiddlewareChain } from '../../src/tools/framework/middleware-chain.js';
 import { getNavigationGraph } from '../../src/tools/framework/rn-navigation.js';
 import { getScreenContext } from '../../src/tools/framework/screen-context.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { createTestStore } from '../test-utils.js';
 
 const NESTJS_FIXTURE = path.resolve(__dirname, '../fixtures/nestjs-basic');
 const EXPRESS_FIXTURE = path.resolve(__dirname, '../fixtures/express-basic');

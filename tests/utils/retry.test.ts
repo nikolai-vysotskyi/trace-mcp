@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { withRetry, isTransientError } from '../../src/utils/retry.js';
+import { describe, expect, it, vi } from 'vitest';
+import { isTransientError, withRetry } from '../../src/utils/retry.js';
 
 describe('retry utility', () => {
   describe('isTransientError', () => {

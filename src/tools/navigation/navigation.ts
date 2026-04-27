@@ -1,13 +1,16 @@
 import path from 'node:path';
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
-import { searchFts, type FtsFilters } from '../../db/fts.js';
+import { err, ok } from 'neverthrow';
+import type { EmbeddingService, RerankerService, VectorStore } from '../../ai/interfaces.js';
+import { hybridSearch as aiHybridSearch } from '../../ai/search.js';
+import { type FtsFilters, searchFts } from '../../db/fts.js';
 import { fuzzySearch } from '../../db/fuzzy.js';
-import { readByteRange } from '../../utils/source-reader.js';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
+import { notFound, type TraceMcpResult } from '../../errors.js';
 import {
-  hybridScore,
-  getTypeBonus,
-  computeRecency,
   computeIdentityScore,
+  computeRecency,
+  getTypeBonus,
+  hybridScore,
 } from '../../scoring/hybrid.js';
 import { computePageRank } from '../../scoring/pagerank.js';
 import {
@@ -16,16 +19,13 @@ import {
   putCachedSearch,
 } from '../../scoring/search-cache.js';
 import {
-  signalFusion,
   buildIdentityChannel,
   type FusionChannels,
-  type FusionWeights,
   type FusionDebugInfo,
+  type FusionWeights,
+  signalFusion,
 } from '../../scoring/signal-fusion.js';
-import { notFound, type TraceMcpResult } from '../../errors.js';
-import { ok, err } from 'neverthrow';
-import { hybridSearch as aiHybridSearch } from '../../ai/search.js';
-import type { VectorStore, EmbeddingService, RerankerService } from '../../ai/interfaces.js';
+import { readByteRange } from '../../utils/source-reader.js';
 
 // ─── get_symbol ─────────────────────────────────────────────
 

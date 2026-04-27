@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // extractCompactResult is a module-level function in server.ts — not exported.
 // We test it indirectly via the integration test, but also test the logic here

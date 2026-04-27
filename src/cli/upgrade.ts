@@ -4,26 +4,27 @@
  * Operates on all registered projects by default, or a specific one if [dir] is given.
  */
 
-import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
-import { detectGuardHook } from '../init/detector.js';
+import { Command } from 'commander';
 import { updateClaudeMd } from '../init/claude-md.js';
+import { detectGuardHook } from '../init/detector.js';
 import { installGuardHook, installWorktreeHook, isHookOutdated } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
 
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+
 import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { PluginRegistry } from '../plugin-api/registry.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
-import { logger } from '../logger.js';
-import { listProjects, updateLastIndexed } from '../registry.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
 import type { InitStepResult } from '../init/types.js';
+import { logger } from '../logger.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { listProjects, updateLastIndexed } from '../registry.js';
 
 export const upgradeCommand = new Command('upgrade')
   .description(

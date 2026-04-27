@@ -1,13 +1,13 @@
 /**
  * Tests for laravel/horizon extraction.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  extractHorizonConfig,
-  extractHorizonJob,
-  buildHorizonJobEdges,
   buildHorizonConfigEdges,
   buildHorizonConfigSymbols,
+  buildHorizonJobEdges,
+  extractHorizonConfig,
+  extractHorizonJob,
 } from '../../../src/indexer/plugins/integration/framework/laravel/horizon.js';
 
 // ─── Horizon Config ──────────────────────────────────────────

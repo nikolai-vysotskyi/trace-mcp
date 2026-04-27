@@ -9,9 +9,10 @@
  *
  * Handles `.m` file disambiguation via path heuristics.
  */
-import { createMultiPassPlugin, type CommentStyle, type ScopeConfig } from '../regex-base-v2.js';
-import type { LanguagePlugin, FileParseResult } from '../../../../plugin-api/types.js';
+
 import type { TraceMcpResult } from '../../../../errors.js';
+import type { FileParseResult, LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin, type ScopeConfig } from '../regex-base-v2.js';
 
 /** Path patterns that indicate MATLAB rather than Objective-C */
 const MATLAB_PATH_INDICATORS = /(?:matlab|toolbox|simulink|\+\w|@\w)/i;

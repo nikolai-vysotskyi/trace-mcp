@@ -3,9 +3,9 @@
  * Finds symbols without embeddings and indexes them in batches.
  */
 import type { Store } from '../db/store.js';
-import type { EmbeddingService, VectorStore } from './interfaces.js';
-import type { ProgressState } from '../progress.js';
 import { logger } from '../logger.js';
+import type { ProgressState } from '../progress.js';
+import type { EmbeddingService, VectorStore } from './interfaces.js';
 
 const DEFAULT_BATCH_SIZE = 50;
 

@@ -1,10 +1,10 @@
 /**
  * Tests for spatie/eloquent-sortable extraction.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  extractEloquentSortableModel,
   buildEloquentSortableModelSymbols,
+  extractEloquentSortableModel,
 } from '../../../src/indexer/plugins/integration/framework/laravel/eloquent-sortable.js';
 
 const SORTABLE_MODEL = `<?php

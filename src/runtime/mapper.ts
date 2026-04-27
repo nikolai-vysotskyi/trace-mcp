@@ -8,8 +8,8 @@
  */
 
 import type { Store } from '../db/store.js';
-import type { RuntimeSpanRow } from './types.js';
 import { logger } from '../logger.js';
+import type { RuntimeSpanRow } from './types.js';
 
 interface MappingConfig {
   fqnAttributes: string[];

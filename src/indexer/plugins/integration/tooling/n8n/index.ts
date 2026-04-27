@@ -16,18 +16,18 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { globalRe } from '../../../../../utils/regex.js';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   RawRoute,
   RawSymbol,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
+import { globalRe } from '../../../../../utils/regex.js';
 
 // ── Types ────────────────────────────────────────────────────────────────
 

@@ -9,18 +9,19 @@
  *  - turn-budget advisor
  *  - empty / edge cases
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
-import { SessionJournal } from '../../src/session/journal.js';
-import { SavingsTracker } from '../../src/savings.js';
-import { planTurn, type PlanTurnContext } from '../../src/tools/navigation/plan-turn.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
+import type { Store } from '../../src/db/store.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { SavingsTracker } from '../../src/savings.js';
+import { SessionJournal } from '../../src/session/journal.js';
+import { type PlanTurnContext, planTurn } from '../../src/tools/navigation/plan-turn.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
 

@@ -1,17 +1,17 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  getLauncherConfigPath,
   getLauncherDir,
   getLauncherPath,
-  getLauncherConfigPath,
   installLauncher,
-  readLauncherConfig,
-  writeLauncherConfig,
   readInstalledLauncherVersion,
+  readLauncherConfig,
   resolveCurrentCliPath,
   setupLauncher,
+  writeLauncherConfig,
 } from '../../src/init/launcher.js';
 import { LAUNCHER_VERSION } from '../../src/init/types.js';
 

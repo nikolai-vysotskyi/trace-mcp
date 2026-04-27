@@ -6,7 +6,7 @@
  */
 import { execSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
+import { err, ok, type TraceMcpResult } from '../../errors.js';
 
 type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
 

@@ -3,19 +3,20 @@
  * Verifies that Prisma, TypeORM, Drizzle, Mongoose, and Sequelize
  * associations are correctly mapped to ORM-specific edge types.
  */
-import { describe, it, expect } from 'vitest';
-import { createTestStore, createTmpDir, writeFixtureFile, removeTmpDir } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { MongoosePlugin } from '../../src/indexer/plugins/integration/orm/mongoose/index.js';
-import { SequelizePlugin } from '../../src/indexer/plugins/integration/orm/sequelize/index.js';
-import {
-  PrismaPlugin,
-  PrismaLanguagePlugin,
-} from '../../src/indexer/plugins/integration/orm/prisma/index.js';
-import { TraceMcpConfigSchema } from '../../src/config.js';
+
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { TraceMcpConfigSchema } from '../../src/config.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { MongoosePlugin } from '../../src/indexer/plugins/integration/orm/mongoose/index.js';
+import {
+  PrismaLanguagePlugin,
+  PrismaPlugin,
+} from '../../src/indexer/plugins/integration/orm/prisma/index.js';
+import { SequelizePlugin } from '../../src/indexer/plugins/integration/orm/sequelize/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore, createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
 
 function makeConfig(
   fixturePath: string,

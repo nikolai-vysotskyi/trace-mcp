@@ -1,23 +1,23 @@
-import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import {
-  getImplementations,
   getApiSurface,
-  getPluginRegistry,
-  getTypeHierarchy,
   getDeadExports,
   getDependencyGraph,
+  getImplementations,
+  getPluginRegistry,
+  getTypeHierarchy,
   getUntestedExports,
   getUntestedSymbols,
   selfAudit,
 } from '../../src/tools/analysis/introspect.js';
 import { search } from '../../src/tools/navigation/navigation.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/ts-heritage');
 

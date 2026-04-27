@@ -1,7 +1,7 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { loadConfig, TraceMcpConfigSchema } from '../../src/config.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { loadConfig, TraceMcpConfigSchema } from '../../src/config.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('config', () => {

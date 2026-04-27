@@ -5,16 +5,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
-import { escapeRegExp } from '../../../../../utils/security.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
+import { escapeRegExp } from '../../../../../utils/security.js';
 
 const HTTP_METHODS = ['Get', 'Post', 'Put', 'Delete', 'Patch', 'Head', 'Options'] as const;
 const CONTROLLER_RE = /@Controller\(\s*['"`]([^'"`]*)['"`]\s*\)/;

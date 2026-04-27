@@ -3,11 +3,11 @@
  */
 
 import type { Store } from '../db/store.js';
-import { OtlpReceiver } from './otlp-receiver.js';
+import { logger } from '../logger.js';
+import { RuntimeAggregator } from './aggregator.js';
 import { SpanIngester } from './ingest.js';
 import { SpanMapper } from './mapper.js';
-import { RuntimeAggregator } from './aggregator.js';
-import { logger } from '../logger.js';
+import { OtlpReceiver } from './otlp-receiver.js';
 
 interface RuntimeConfig {
   enabled: boolean;

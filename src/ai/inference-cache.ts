@@ -2,8 +2,9 @@
  * Content-addressable inference cache backed by SQLite.
  * Key = sha256(model + '\0' + prompt) → cached response.
  */
-import type Database from 'better-sqlite3';
+
 import { createHash } from 'node:crypto';
+import type Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
 export class InferenceCache {

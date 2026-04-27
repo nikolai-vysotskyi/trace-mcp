@@ -1,28 +1,28 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
-import { getChurnRate, getHotspots, isGitRepo, HOTSPOT_METHODOLOGY } from '../git/git-analysis.js';
-import { getDeadCodeV2, getDeadCodeReachability } from '../refactoring/dead-code.js';
-import { scanSecurity, type RuleName, type Severity } from '../quality/security-scan.js';
+import type { ServerContext } from '../../server/types.js';
+import { detectAstClones } from '../analysis/ast-clones.js';
+import { getChurnRate, getHotspots, HOTSPOT_METHODOLOGY, isGitRepo } from '../git/git-analysis.js';
+import { type ArtifactCategory, getArtifacts } from '../project/artifacts.js';
+import { planBatchChange } from '../project/batch-changes.js';
+import { generateSbom, type SbomFormat } from '../project/sbom.js';
 import {
-  detectAntipatterns,
   type AntipatternCategory,
   type Severity as AntipatternSeverity,
+  detectAntipatterns,
 } from '../quality/antipatterns.js';
-import { scanCodeSmells, type SmellCategory, type SmellPriority } from '../quality/code-smells.js';
-import { detectAstClones } from '../analysis/ast-clones.js';
+import { type SmellCategory, type SmellPriority, scanCodeSmells } from '../quality/code-smells.js';
+import { type RuleName, type Severity, scanSecurity } from '../quality/security-scan.js';
 import {
-  taintAnalysis,
-  type TaintSourceKind,
   type TaintSinkKind,
+  type TaintSourceKind,
+  taintAnalysis,
 } from '../quality/taint-analysis.js';
-import { generateSbom, type SbomFormat } from '../project/sbom.js';
-import { getArtifacts, type ArtifactCategory } from '../project/artifacts.js';
-import { planBatchChange } from '../project/batch-changes.js';
+import { getDeadCodeReachability, getDeadCodeV2 } from '../refactoring/dead-code.js';
 import { checkRenameSafe } from '../refactoring/rename-check.js';
-import { buildNegativeEvidence } from '../shared/evidence.js';
 import { GIT_CHURN_METHODOLOGY } from '../shared/confidence.js';
+import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerGitTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, registry, guardPath, j, jh } = ctx;

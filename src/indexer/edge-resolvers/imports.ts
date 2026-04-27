@@ -1,8 +1,8 @@
 /** Pass 2d: Resolve ES module import specifiers to file→file graph edges. */
 import path from 'node:path';
+import { logger } from '../../logger.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { EsModuleResolver } from '../resolvers/es-modules.js';
-import { logger } from '../../logger.js';
 import { PhantomPackageFactory } from './phantom-externals.js';
 
 /**

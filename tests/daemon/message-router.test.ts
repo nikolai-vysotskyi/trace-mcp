@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { MessageRouter } from '../../src/daemon/router/message-router.js';
 import type { Backend } from '../../src/daemon/router/types.js';
 

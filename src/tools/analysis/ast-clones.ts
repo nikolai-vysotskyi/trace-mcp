@@ -11,11 +11,11 @@
  * analysis/duplication.ts, which catches Type-1-ish clones by name.
  */
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
-import { ok, type TraceMcpResult } from '../../errors.js';
 import type { Store } from '../../db/store.js';
+import { ok, type TraceMcpResult } from '../../errors.js';
 import { getParser, type TSNode } from '../../parser/tree-sitter.js';
 
 // Languages we hash. A language is only useful here if its tree-sitter

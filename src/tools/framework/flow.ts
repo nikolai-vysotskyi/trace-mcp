@@ -2,9 +2,8 @@
  * get_request_flow tool — traces a request from URL to full handler chain.
  * URL -> Route -> Middleware -> Controller -> FormRequest -> Model
  */
-import type { Store, RouteRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import type { RouteRow, Store } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 
 interface RequestFlowStep {
   type: 'route' | 'middleware' | 'controller' | 'form_request' | 'model' | 'inertia_page';

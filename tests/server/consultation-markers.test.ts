@@ -1,10 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
-import { markToolConsultation } from '../../src/server/consultation-markers.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { projectHash } from '../../src/global.js';
+import { markToolConsultation } from '../../src/server/consultation-markers.js';
 
 const TEST_ROOT = path.join(os.tmpdir(), `trace-mcp-test-consultation-${process.pid}`);
 

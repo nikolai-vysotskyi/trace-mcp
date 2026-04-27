@@ -1,9 +1,9 @@
+import { err, ok } from 'neverthrow';
 import type { Store } from '../../db/store.js';
-import type { EdgeResolution } from '../../plugin-api/types.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
-import { ok, err } from 'neverthrow';
-import { resolveSymbolInput } from '../shared/resolve.js';
+import type { EdgeResolution } from '../../plugin-api/types.js';
 import { expandMethodViaCha } from '../shared/cha.js';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface CallGraphEdgeInfo {
   /** How this edge was resolved */

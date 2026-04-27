@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // detector.ts and mcp-client.ts compute `const HOME = os.homedir()` at module
 // load, so we have to reset modules and re-import per test after stubbing HOME.

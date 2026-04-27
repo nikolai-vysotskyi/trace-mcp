@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Preflight for native (.node) modules on macOS.
  *
@@ -18,10 +19,10 @@
  * all failures, never fails `npm install`.
  */
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
 
 if (process.platform !== 'darwin') process.exit(0);
 if (process.env.TRACE_MCP_NO_PREFLIGHT === '1') process.exit(0);

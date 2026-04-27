@@ -11,83 +11,83 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
-import { extractRoutes } from './routes.js';
+import { extractBroadcastingEvent, extractChannelAuthorizations } from './broadcasting.js';
+import { buildBillableModelEdges, extractBillableModel, extractCashierWebhook } from './cashier.js';
+import {
+  resolveComposerLaravelProviders,
+  resolveDispatchEdges,
+  resolveEloquentEdges,
+  resolveEventEdges,
+  resolveFormRequestEdges,
+} from './edges.js';
 import { extractEloquentModel } from './eloquent.js';
-import { extractMigrations } from './migrations.js';
-import { extractFormRequest } from './requests.js';
+import {
+  buildEloquentSortableModelSymbols,
+  extractEloquentSortableModel,
+} from './eloquent-sortable.js';
 import { detectEventDispatches } from './events.js';
+import { processFilamentNode, resolveFilamentEdges } from './filament.js';
+import {
+  buildHorizonConfigEdges,
+  buildHorizonConfigSymbols,
+  buildHorizonJobEdges,
+  extractHorizonConfig,
+  extractHorizonJob,
+} from './horizon.js';
+import { buildDataClassEdges, extractDataClass } from './laravel-data.js';
+import {
+  buildLaravelFavoriteEdges,
+  buildLaravelFavoriteSymbols,
+  extractLaravelFavoriteModel,
+} from './laravel-favorite.js';
+import {
+  buildLaravelFilemanagerRoutes,
+  extractLaravelFilemanagerConfig,
+  extractLaravelFilemanagerMacro,
+} from './laravel-filemanager.js';
 import {
   isLivewireFile,
   processLivewireNode,
-  resolveLivewirePhpEdges,
   resolveLivewireBladeEdges,
+  resolveLivewirePhpEdges,
 } from './livewire.js';
-import { processFilamentNode, resolveFilamentEdges } from './filament.js';
-import { processNovaNode, resolveNovaEdges } from './nova.js';
-import { extractBroadcastingEvent, extractChannelAuthorizations } from './broadcasting.js';
-import { extractDataClass, buildDataClassEdges } from './laravel-data.js';
 import {
-  extractHorizonConfig,
-  extractHorizonJob,
-  buildHorizonJobEdges,
-  buildHorizonConfigEdges,
-  buildHorizonConfigSymbols,
-} from './horizon.js';
-import { extractBillableModel, extractCashierWebhook, buildBillableModelEdges } from './cashier.js';
-import {
-  extractSearchableModel,
-  buildSearchableModelEdges,
-  buildSearchableModelSymbols,
-} from './scout.js';
-import { extractSocialiteUsage, buildSocialiteEdges } from './socialite.js';
-import {
-  extractMediaLibraryModel,
   buildMediaLibraryModelEdges,
   buildMediaLibraryModelSymbols,
+  extractMediaLibraryModel,
 } from './medialibrary.js';
 import {
-  extractEloquentSortableModel,
-  buildEloquentSortableModelSymbols,
-} from './eloquent-sortable.js';
-import {
-  extractLaravelFavoriteModel,
-  buildLaravelFavoriteEdges,
-  buildLaravelFavoriteSymbols,
-} from './laravel-favorite.js';
-import {
-  extractLaravelFilemanagerConfig,
-  extractLaravelFilemanagerMacro,
-  buildLaravelFilemanagerRoutes,
-} from './laravel-filemanager.js';
-import {
-  extractFeatureDefinitions,
-  extractFeatureUsages,
-  extractFeatureBladeUsages,
-  extractFeatureMiddlewareUsages,
-} from './pennant.js';
-import {
-  parseKernelMiddleware,
-  parseBootstrapMiddleware,
-  parseRouteServiceProviderNamespace,
-  parseBootstrapRouting,
   type MiddlewareConfig,
+  parseBootstrapMiddleware,
+  parseBootstrapRouting,
+  parseKernelMiddleware,
+  parseRouteServiceProviderNamespace,
 } from './middleware.js';
+import { extractMigrations } from './migrations.js';
+import { processNovaNode, resolveNovaEdges } from './nova.js';
 import {
-  resolveEloquentEdges,
-  resolveFormRequestEdges,
-  resolveEventEdges,
-  resolveDispatchEdges,
-  resolveComposerLaravelProviders,
-} from './edges.js';
+  extractFeatureBladeUsages,
+  extractFeatureDefinitions,
+  extractFeatureMiddlewareUsages,
+  extractFeatureUsages,
+} from './pennant.js';
+import { extractFormRequest } from './requests.js';
+import { extractRoutes } from './routes.js';
+import {
+  buildSearchableModelEdges,
+  buildSearchableModelSymbols,
+  extractSearchableModel,
+} from './scout.js';
+import { buildSocialiteEdges, extractSocialiteUsage } from './socialite.js';
 
 export class LaravelPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {

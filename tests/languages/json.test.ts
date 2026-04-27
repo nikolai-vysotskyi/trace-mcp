@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang/index.js';
 
 const plugin = new JsonLanguagePlugin();

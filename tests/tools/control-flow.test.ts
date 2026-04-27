@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { extractCFG, cfgToMermaid, cfgToAscii } from '../../src/indexer/cfg-extractor.js';
+import { describe, expect, it } from 'vitest';
+import { cfgToAscii, cfgToMermaid, extractCFG } from '../../src/indexer/cfg-extractor.js';
 
 describe('CFG Extractor', () => {
   describe('extractCFG', () => {

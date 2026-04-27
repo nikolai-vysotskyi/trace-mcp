@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { TRACE_MCP_HOME, ensureGlobalDirs, projectHash } from '../global.js';
+import { ensureGlobalDirs, projectHash, TRACE_MCP_HOME } from '../global.js';
 import { logger } from '../logger.js';
 
 const SESSIONS_DIR = path.join(TRACE_MCP_HOME, 'sessions');

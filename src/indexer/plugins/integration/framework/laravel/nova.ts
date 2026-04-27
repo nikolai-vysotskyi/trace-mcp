@@ -11,7 +11,7 @@
  * - v2–v3: single fields() method (flat array)
  * - v4–v5: fields() + fieldsForIndex/Detail/Create/Update + Panel::make([...fields...])
  */
-import type { RawEdge, FileParseResult, ResolveContext } from '../../../../../plugin-api/types.js';
+import type { FileParseResult, RawEdge, ResolveContext } from '../../../../../plugin-api/types.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────

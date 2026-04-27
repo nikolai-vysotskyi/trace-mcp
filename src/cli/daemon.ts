@@ -1,9 +1,9 @@
-import { Command } from 'commander';
-import fs from 'node:fs';
 import { execSync, spawn } from 'node:child_process';
-import { DEFAULT_DAEMON_PORT, DAEMON_LOG_PATH, LAUNCHD_PLIST_PATH } from '../global.js';
+import fs from 'node:fs';
+import { Command } from 'commander';
 import { getDaemonHealth } from '../daemon/client.js';
-import { ensureDaemon, stopDaemon, restartDaemon, waitForDaemonUp } from '../daemon/lifecycle.js';
+import { ensureDaemon, restartDaemon, stopDaemon, waitForDaemonUp } from '../daemon/lifecycle.js';
+import { DAEMON_LOG_PATH, DEFAULT_DAEMON_PORT, LAUNCHD_PLIST_PATH } from '../global.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 

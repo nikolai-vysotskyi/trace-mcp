@@ -8,15 +8,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
-import { Store, type FileRow } from '../../db/store.js';
-import { initializeDatabase } from '../../db/schema.js';
-import type { TopologyStore } from '../../topology/topology-db.js';
-import { logger } from '../../logger.js';
-import { computeBottlenecksForVizGraph } from './bottlenecks.js';
 // @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
+import { initializeDatabase } from '../../db/schema.js';
+import { type FileRow, Store } from '../../db/store.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
+import { logger } from '../../logger.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
+import { computeBottlenecksForVizGraph } from './bottlenecks.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@ import type { TraceMcpConfig } from '../config.js';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ChatMessage } from './interfaces.js';
-import { parseOpenAIStream, parseAnthropicStream, parseGeminiStream } from './sse.js';
+import { parseAnthropicStream, parseGeminiStream, parseOpenAIStream } from './sse.js';
 
 // ---------------------------------------------------------------------------
 // LLM provider interface + factories

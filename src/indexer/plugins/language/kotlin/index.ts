@@ -2,35 +2,35 @@
  * Kotlin Language Plugin — tree-sitter based symbol extraction.
  * Uses web-tree-sitter WASM for accurate AST parsing.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  SymbolKind,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
-import { detectMinKotlinVersion } from './version-features.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
-  extractPackageName,
-  extractSignature,
+  detectClassKind,
   extractAnnotations,
-  extractModifiers,
-  extractImportEdges,
-  extractHeritage,
   extractClassMethods,
   extractClassProperties,
-  extractEnumEntries,
   extractCompanionObject,
-  detectClassKind,
+  extractEnumEntries,
+  extractHeritage,
+  extractImportEdges,
+  extractModifiers,
+  extractPackageName,
+  extractSignature,
   getNodeName,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
+import { detectMinKotlinVersion } from './version-features.js';
 
 export class KotlinLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {

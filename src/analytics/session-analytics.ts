@@ -1,6 +1,6 @@
 import type { AnalyticsStore } from './analytics-store.js';
-import { syncAnalytics, syncProjectAnalytics } from './sync.js';
 import { analyzeOptimizations, type OptimizationReport } from './rules.js';
+import { syncAnalytics, syncProjectAnalytics } from './sync.js';
 
 export type { OptimizationReport } from './rules.js';
 

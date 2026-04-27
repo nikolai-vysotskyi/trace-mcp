@@ -1,7 +1,7 @@
 /**
  * Tests for buildProjectContext — manifest file parsing and version detection.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildProjectContext } from '../../src/indexer/project-context.js';
 import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
 

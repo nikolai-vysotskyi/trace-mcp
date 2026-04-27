@@ -1,7 +1,7 @@
 /**
  * Verify that installToolGate injects ToolAnnotations into server.tool() calls.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { installToolGate } from '../src/server/tool-gate.js';
 
 /** Captures all calls that reach the real underlying tool registration. */

@@ -3,14 +3,14 @@
  * Supports both project-scoped and global installation.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 import YAML from 'yaml';
-import { applyEdits, modify, parse as parseJsonc, type FormattingOptions } from 'jsonc-parser';
-import type { DetectedMcpClient, InitStepResult } from './types.js';
 import { getLauncherPath } from './launcher.js';
+import type { DetectedMcpClient, InitStepResult } from './types.js';
 
 const HOME = os.homedir();
 

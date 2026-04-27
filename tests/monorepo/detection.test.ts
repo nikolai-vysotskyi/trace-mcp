@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { detectWorkspaces } from '../../src/indexer/monorepo.js';
 import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
 

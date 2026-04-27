@@ -2,15 +2,14 @@
  * Subproject MCP tools — cross-repo impact analysis and dependency graph.
  */
 
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError, notFound } from '../../errors.js';
+import { err, notFound, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import {
-  SubprojectManager,
   type CrossRepoImpactResult,
   type SubprojectGraphResult,
+  SubprojectManager,
 } from '../../subproject/manager.js';
-import type { TopologyStore } from '../../topology/topology-db.js';
 import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // 1. SUBPROJECT GRAPH — show all subprojects and their connections

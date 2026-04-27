@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { KNOWN_PACKAGES } from '../../src/analytics/known-packages.js';
 import { detectCoverage } from '../../src/analytics/tech-detector.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';

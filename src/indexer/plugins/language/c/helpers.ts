@@ -1,7 +1,8 @@
 /**
  * Helper utilities for the C language plugin (tree-sitter).
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
+
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
 export function makeSymbolId(

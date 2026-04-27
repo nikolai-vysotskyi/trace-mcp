@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ReactPlugin } from '../../../src/indexer/plugins/integration/view/react/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

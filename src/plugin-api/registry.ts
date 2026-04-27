@@ -1,8 +1,7 @@
-import type { LanguagePlugin, FrameworkPlugin, PluginManifest, ProjectContext } from './types.js';
-import { ok, err, type TraceMcpResult } from '../errors.js';
-import { pluginError } from '../errors.js';
-import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
+import { err, ok, pluginError, type TraceMcpResult } from '../errors.js';
 import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.js';
+import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
+import type { FrameworkPlugin, LanguagePlugin, PluginManifest, ProjectContext } from './types.js';
 
 export class PluginRegistry {
   private languagePlugins: LanguagePlugin[] = [];

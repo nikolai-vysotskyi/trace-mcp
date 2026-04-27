@@ -6,11 +6,11 @@
  * we build a minimal one inline using better-sqlite3.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── tmp dir wiring ────────────────────────────────────────────────────────────
 

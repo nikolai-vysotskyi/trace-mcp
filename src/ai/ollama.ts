@@ -1,10 +1,11 @@
 /**
  * Ollama AI provider — connects to a local Ollama instance via its HTTP API.
  */
-import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
-import { parseOllamaChatStream } from './sse.js';
+
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import { parseOllamaChatStream } from './sse.js';
 
 interface OllamaConfig {
   baseUrl: string;

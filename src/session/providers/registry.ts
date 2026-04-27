@@ -1,5 +1,5 @@
-import type { SessionProvider } from './types.js';
 import type { TraceMcpConfig } from '../../config.js';
+import type { SessionProvider } from './types.js';
 
 /**
  * Registry for SessionProvider instances.

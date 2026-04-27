@@ -6,10 +6,10 @@
 
 import type { Store } from '../../db/store.js';
 import type { EsModuleResolver } from '../../indexer/resolvers/es-modules.js';
-import type { RefactorResult } from './shared.js';
-import { applyRename, extractFunction } from './refactor.js';
-import { applyMove } from './move.js';
 import { changeSignature, type SignatureChange } from './change-signature.js';
+import { applyMove } from './move.js';
+import { applyRename, extractFunction } from './refactor.js';
+import type { RefactorResult } from './shared.js';
 
 export interface PlanRefactoringParams {
   type: 'rename' | 'move' | 'extract' | 'signature';

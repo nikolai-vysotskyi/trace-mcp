@@ -5,16 +5,16 @@
 
 import { Command } from 'commander';
 import { AnalyticsStore } from '../analytics/analytics-store.js';
-import { syncAnalytics } from '../analytics/sync.js';
-import { getSessionAnalytics, getOptimizationReport } from '../analytics/session-analytics.js';
-import { runBenchmark, formatBenchmarkMarkdown } from '../analytics/benchmark.js';
-import { detectCoverage, detectCoverageRecursive } from '../analytics/tech-detector.js';
+import { formatBenchmarkMarkdown, runBenchmark } from '../analytics/benchmark.js';
 import { analyzeRealSavings } from '../analytics/real-savings.js';
+import { getOptimizationReport, getSessionAnalytics } from '../analytics/session-analytics.js';
+import { syncAnalytics } from '../analytics/sync.js';
+import { detectCoverage, detectCoverageRecursive } from '../analytics/tech-detector.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { getProject } from '../registry.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
 import { findProjectRoot } from '../project-root.js';
+import { getProject } from '../registry.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);

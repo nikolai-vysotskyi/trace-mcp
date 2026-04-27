@@ -11,8 +11,8 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
 
@@ -123,7 +123,7 @@ function atomicWrite(filePath: string, content: string, mode: number): void {
  */
 function quoteEnvValue(v: string): string {
   if (v.includes('"')) {
-    throw new Error(`launcher config value contains unsupported character \": ${v}`);
+    throw new Error(`launcher config value contains unsupported character ": ${v}`);
   }
   return `"${v}"`;
 }

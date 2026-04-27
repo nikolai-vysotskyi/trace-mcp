@@ -1,7 +1,7 @@
 /**
  * Tests for Python control flow patterns in the CFG extractor.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { extractCFG } from '../../src/indexer/cfg-extractor.js';
 
 describe('CFG extractor — Python patterns', () => {

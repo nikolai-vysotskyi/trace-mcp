@@ -15,8 +15,9 @@
  *  - Generics: generic declarations with defaults
  *  - Imports: library (skip work) + use clauses + VHDL-2008 context references
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'vhdl',

@@ -11,8 +11,9 @@
  *
  * Resolution is workspace-isolated and prefers same-workspace candidates.
  */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 const TS_JS_LANGS = "('typescript','javascript','tsx','jsx','vue')";
 

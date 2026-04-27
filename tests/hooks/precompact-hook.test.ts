@@ -1,9 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest';
 import { execSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const HOOK_SCRIPT = path.resolve('hooks/trace-mcp-precompact.sh');
 const TRACE_MCP_HOME = path.join(os.homedir(), '.trace-mcp');

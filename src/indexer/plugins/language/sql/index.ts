@@ -5,8 +5,9 @@
  * CTEs (WITH ... AS), with support for OR REPLACE, IF NOT EXISTS, and
  * schema-qualified names.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'sql',

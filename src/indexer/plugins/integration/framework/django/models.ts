@@ -7,7 +7,7 @@
  * - Standard field types (CharField, IntegerField, etc.)
  * - Meta class options (db_table, ordering, etc.)
  */
-import type { RawOrmModel, RawOrmAssociation } from '../../../../../plugin-api/types.js';
+import type { RawOrmAssociation, RawOrmModel } from '../../../../../plugin-api/types.js';
 
 interface DjangoModelExtractionResult {
   model: RawOrmModel;

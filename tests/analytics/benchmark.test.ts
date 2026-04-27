@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { formatBenchmarkMarkdown, runBenchmark } from '../../src/analytics/benchmark.js';
 import type { Store } from '../../src/db/store.js';
-import { runBenchmark, formatBenchmarkMarkdown } from '../../src/analytics/benchmark.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('benchmark', () => {
   let store: Store;

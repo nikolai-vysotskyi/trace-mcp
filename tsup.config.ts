@@ -1,7 +1,7 @@
-import { defineConfig } from 'tsup';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { Plugin } from 'esbuild';
+import { defineConfig } from 'tsup';
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 

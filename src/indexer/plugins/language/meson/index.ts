@@ -4,8 +4,9 @@
  * Extracts: project declarations, executables, libraries, dependencies, custom targets,
  * subdir calls, and variables.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'meson',

@@ -4,10 +4,11 @@
  * so embedding() returns a FallbackEmbeddingService (use a separate
  * embedding provider or pair with ONNX for embeddings).
  */
-import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
-import { parseAnthropicStream } from './sse.js';
+
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import { parseAnthropicStream } from './sse.js';
 
 interface AnthropicConfig {
   apiKey: string;

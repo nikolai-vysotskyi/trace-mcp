@@ -19,12 +19,12 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../global.js';
+import { ensureGlobalDirs, getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
 import { findProjectRoot } from '../project-root.js';
 import { getProject } from '../registry.js';
-import { TopologyStore } from '../topology/topology-db.js';
 import { visualizeGraph } from '../tools/analysis/visualize.js';
 import { visualizeSubprojectTopology } from '../tools/analysis/visualize-subproject.js';
+import { TopologyStore } from '../topology/topology-db.js';
 
 function openInBrowser(filePath: string): void {
   const platform = process.platform;

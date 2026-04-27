@@ -1,7 +1,7 @@
-import pino from 'pino';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import pino from 'pino';
 
 const level = process.env.TRACE_MCP_LOG_LEVEL ?? 'info';
 

@@ -7,8 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
 
 // ════════════════════════════════════════════════════════════════════════

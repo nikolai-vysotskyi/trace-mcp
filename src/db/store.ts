@@ -1,19 +1,18 @@
 import type Database from 'better-sqlite3';
+import type { TraceMcpResult } from '../errors.js';
 import type {
-  RawSymbol,
-  RawRoute,
   RawComponent,
   RawMigration,
   RawOrmModel,
   RawRnScreen,
+  RawRoute,
+  RawSymbol,
 } from '../plugin-api/types.js';
-import type { TraceMcpResult } from '../errors.js';
-
-import { FileRepository } from './repositories/file-repository.js';
-import { SymbolRepository } from './repositories/symbol-repository.js';
-import { GraphRepository } from './repositories/graph-repository.js';
-import { DomainRepository } from './repositories/domain-repository.js';
 import { AnalyticsRepository } from './repositories/analytics-repository.js';
+import { DomainRepository } from './repositories/domain-repository.js';
+import { FileRepository } from './repositories/file-repository.js';
+import { GraphRepository } from './repositories/graph-repository.js';
+import { SymbolRepository } from './repositories/symbol-repository.js';
 
 export class Store {
   public readonly files: FileRepository;
@@ -481,40 +480,41 @@ export class Store {
 
 // --- Row types re-exported from db/types.ts for backward compatibility ---
 export type {
-  FileRow,
-  SymbolRow,
-  EdgeRow,
-  RouteRow,
-  MigrationRow,
   ComponentRow,
-  OrmModelRow,
-  OrmAssociationRow,
-  RnScreenRow,
-  EnvVarRow,
-  SymbolWithFilePath,
-  EdgeTypeRow,
-  IndexStats,
-  GraphSnapshotRow,
-  WorkspaceStats,
   CrossWorkspaceEdge,
+  EdgeRow,
+  EdgeTypeRow,
+  EnvVarRow,
+  FileRow,
+  GraphSnapshotRow,
+  IndexStats,
+  MigrationRow,
+  OrmAssociationRow,
+  OrmModelRow,
+  RnScreenRow,
+  RouteRow,
+  SymbolRow,
+  SymbolWithFilePath,
   WorkspaceDependency,
+  WorkspaceStats,
 } from './types.js';
+
 import type {
-  FileRow,
-  SymbolRow,
-  EdgeRow,
-  RouteRow,
-  MigrationRow,
   ComponentRow,
-  OrmModelRow,
-  OrmAssociationRow,
-  RnScreenRow,
-  EnvVarRow,
-  SymbolWithFilePath,
-  EdgeTypeRow,
-  IndexStats,
-  GraphSnapshotRow,
-  WorkspaceStats,
   CrossWorkspaceEdge,
+  EdgeRow,
+  EdgeTypeRow,
+  EnvVarRow,
+  FileRow,
+  GraphSnapshotRow,
+  IndexStats,
+  MigrationRow,
+  OrmAssociationRow,
+  OrmModelRow,
+  RnScreenRow,
+  RouteRow,
+  SymbolRow,
+  SymbolWithFilePath,
   WorkspaceDependency,
+  WorkspaceStats,
 } from './types.js';

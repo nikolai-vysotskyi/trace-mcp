@@ -1,6 +1,7 @@
 /** Pass 2c: Resolve TypeScript extends/implements into graph edges. */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
 
 export function resolveTypeScriptHeritageEdges(state: PipelineState): void {

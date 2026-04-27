@@ -8,11 +8,12 @@
  *
  * PHP `use App\Models\User;` → find the file containing the `App\Models\User` class.
  */
-import * as path from 'node:path';
+
 import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { logger } from '../../logger.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { Psr4Resolver } from '../resolvers/psr4.js';
-import { logger } from '../../logger.js';
 import { PhantomPackageFactory, packageBucketFor } from './phantom-externals.js';
 
 /**

@@ -13,13 +13,13 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import { err, ok } from 'neverthrow';
-import { validationError, type TraceMcpResult } from '../../errors.js';
-import type { TopologyStore } from '../../topology/topology-db.js';
-import { SubprojectManager } from '../../subproject/manager.js';
+import { type TraceMcpResult, validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
+import { SubprojectManager } from '../../subproject/manager.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
 
 export interface DiscoveredSession {
   /** Decoded absolute path of the project */

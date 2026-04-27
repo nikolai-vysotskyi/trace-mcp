@@ -8,8 +8,7 @@
  */
 
 import type { Store } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError, notFound } from '../../errors.js';
+import { err, notFound, ok, type TraceMcpResult, validationError } from '../../errors.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

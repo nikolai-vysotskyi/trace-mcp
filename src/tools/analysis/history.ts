@@ -8,9 +8,9 @@
 
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
+import { logger } from '../../logger.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { computeCyclomatic, computeMaxNesting, computeParamCount } from './complexity.js';
-import { logger } from '../../logger.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

@@ -13,12 +13,12 @@
  * these invariants well beyond what example-based tests can cover.
  */
 
-import { describe, it } from 'vitest';
 import * as fc from 'fast-check';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
+import { describe, it } from 'vitest';
 import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang/index.js';
 import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
 import type { LanguagePlugin } from '../../src/plugin-api/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

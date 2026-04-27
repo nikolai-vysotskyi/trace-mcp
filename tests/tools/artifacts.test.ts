@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, test } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
 import { getArtifacts } from '../../src/tools/project/artifacts.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('Context Artifacts', () => {
   let store: Store;

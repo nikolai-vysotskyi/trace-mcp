@@ -4,8 +4,9 @@
  * Extracts: script-level exports, component props ($props), reactive declarations,
  * stores, event dispatchers, actions, and import edges.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'svelte',

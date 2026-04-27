@@ -8,8 +8,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ResolverFactory } from 'oxc-resolver';
 import type { NapiResolveOptions, TsconfigOptions } from 'oxc-resolver';
+import { ResolverFactory } from 'oxc-resolver';
 import { logger } from '../../logger.js';
 
 /** Detect the Nuxt `srcDir` for a given project root (defaults to `app/` or `.`). */

@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { compareBranches } from '../../src/tools/quality/changed-symbols.js';
+import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('compareBranches', () => {
   let store: Store;

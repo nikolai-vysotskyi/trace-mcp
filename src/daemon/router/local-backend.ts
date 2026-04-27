@@ -1,30 +1,29 @@
-import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import fs from 'node:fs';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type Database from 'better-sqlite3';
-
-import { logger } from '../../logger.js';
-import { initializeDatabase } from '../../db/schema.js';
-import { Store } from '../../db/store.js';
-import { PluginRegistry } from '../../plugin-api/registry.js';
-import { IndexingPipeline } from '../../indexer/pipeline.js';
-import { FileWatcher } from '../../indexer/watcher.js';
 import {
-  createAIProvider,
   BlobVectorStore,
+  CachedInferenceService,
+  createAIProvider,
   EmbeddingPipeline,
   InferenceCache,
-  CachedInferenceService,
 } from '../../ai/index.js';
 import { SummarizationPipeline } from '../../ai/summarization-pipeline.js';
-import { ProgressState, writeServerPid, clearServerPid } from '../../progress.js';
-import { createServer, type ServerHandle } from '../../server/server.js';
-import { ensureGlobalDirs, TOPOLOGY_DB_PATH, DECISIONS_DB_PATH } from '../../global.js';
-import { TopologyStore } from '../../topology/topology-db.js';
-import { DecisionStore } from '../../memory/decision-store.js';
-import { SubprojectManager } from '../../subproject/manager.js';
 import type { TraceMcpConfig } from '../../config.js';
+import { initializeDatabase } from '../../db/schema.js';
+import { Store } from '../../db/store.js';
+import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../../global.js';
+import { IndexingPipeline } from '../../indexer/pipeline.js';
+import { FileWatcher } from '../../indexer/watcher.js';
+import { logger } from '../../logger.js';
+import { DecisionStore } from '../../memory/decision-store.js';
+import { PluginRegistry } from '../../plugin-api/registry.js';
+import { clearServerPid, ProgressState, writeServerPid } from '../../progress.js';
+import { createServer, type ServerHandle } from '../../server/server.js';
+import { SubprojectManager } from '../../subproject/manager.js';
+import { TopologyStore } from '../../topology/topology-db.js';
 import type { Backend } from './types.js';
 
 export interface LocalBackendOptions {

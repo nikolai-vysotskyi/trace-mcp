@@ -9,10 +9,10 @@
  * Markers are ephemeral (tmpdir) and scoped per project.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { projectHash } from '../global.js';
 
 function fileHash(filePath: string): string {

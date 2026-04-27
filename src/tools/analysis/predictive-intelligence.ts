@@ -9,22 +9,21 @@
 
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import {
-  buildFileGraph,
-  getCouplingMetrics,
-  getPageRank,
-  type CouplingResult,
-  type PageRankResult,
-} from './graph-analysis.js';
-import {
-  classifyConfidence,
   type ConfidenceLevel,
+  classifyConfidence,
   type Methodology,
 } from '../shared/confidence.js';
+import {
+  buildFileGraph,
+  type CouplingResult,
+  getCouplingMetrics,
+  getPageRank,
+  type PageRankResult,
+} from './graph-analysis.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

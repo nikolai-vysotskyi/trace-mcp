@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { JavaLanguagePlugin } from '../../src/indexer/plugins/language/java/index.js';
 
 const plugin = new JavaLanguagePlugin();

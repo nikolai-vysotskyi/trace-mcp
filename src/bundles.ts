@@ -11,12 +11,12 @@
  * They are designed to be small, portable, and shareable.
  */
 
-import Database from 'better-sqlite3';
-import path from 'node:path';
-import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { logger } from './logger.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import Database from 'better-sqlite3';
 import { TRACE_MCP_HOME } from './global.js';
+import { logger } from './logger.js';
 
 // ---------------------------------------------------------------------------
 // Paths

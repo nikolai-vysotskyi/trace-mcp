@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PollingDaemonWatcher } from '../../src/daemon/router/daemon-watcher.js';
 
 // Mock the daemon client module so we can control what isDaemonRunning returns.
@@ -10,6 +10,7 @@ vi.mock('../../src/daemon/client.js', () => {
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 import * as daemonClient from '../../src/daemon/client.js';
+
 const mocked = vi.mocked(daemonClient.isDaemonRunning);
 
 describe('PollingDaemonWatcher', () => {

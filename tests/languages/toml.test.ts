@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { TomlLanguagePlugin } from '../../src/indexer/plugins/language/toml/index.js';
 
 const plugin = new TomlLanguagePlugin();

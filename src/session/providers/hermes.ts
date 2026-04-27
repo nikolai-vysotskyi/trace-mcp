@@ -18,12 +18,11 @@
  * tolerate minor version drift between Hermes v8 and future revisions.
  */
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import * as os from 'node:os';
-
-import type { SessionProvider, SessionHandle, RawMessage, DiscoverOpts } from './types.js';
+import * as path from 'node:path';
 import type { ParsedSession } from '../../analytics/log-parser.js';
 import { SqliteSource } from './sqlite-source.js';
+import type { DiscoverOpts, RawMessage, SessionHandle, SessionProvider } from './types.js';
 
 /** Path-segment label used in sourcePath encoding. */
 const PROVIDER_ID = 'hermes';

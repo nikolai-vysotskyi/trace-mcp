@@ -2,14 +2,15 @@
  * Tests for Laravel middleware configuration parsing.
  * Covers Kernel.php (L6-10) and bootstrap/app.php (L11+).
  */
-import { describe, it, expect } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  parseKernelMiddleware,
   parseBootstrapMiddleware,
-  parseRouteServiceProviderNamespace,
   parseBootstrapRouting,
+  parseKernelMiddleware,
+  parseRouteServiceProviderNamespace,
 } from '../../../src/indexer/plugins/integration/framework/laravel/middleware.js';
 
 const L6_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-6');

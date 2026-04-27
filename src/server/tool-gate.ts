@@ -4,13 +4,13 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { SessionTracker } from '../session/tracker.js';
 import type { SessionJournal } from '../session/journal.js';
-import type { ToolResponse } from './types.js';
-import { markToolConsultation } from './consultation-markers.js';
+import type { SessionTracker } from '../session/tracker.js';
 import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
 import { COMPACT_CORE_PARAMS } from './compact-params.js';
+import { markToolConsultation } from './consultation-markers.js';
 import { getToolAnnotations } from './tool-annotations.js';
+import type { ToolResponse } from './types.js';
 
 interface ToolGateResult {
   _originalTool: McpServer['tool'];

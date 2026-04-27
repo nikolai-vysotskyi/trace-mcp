@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import type { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InferenceService } from '../../src/ai/interfaces.js';
 import { SummarizationPipeline } from '../../src/ai/summarization-pipeline.js';
+import type { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 
 function createMockInference(response = 'Manages user authentication.'): InferenceService {
   return {

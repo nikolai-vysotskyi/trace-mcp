@@ -9,14 +9,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { detectProject } from './init/detector.js';
-import type { DetectionResult } from './init/detector.js';
-import { generateConfig } from './init/config-generator.js';
 import { saveProjectConfig } from './config.js';
-import { registerProject, getProject } from './registry.js';
-import type { RegistryEntry } from './registry.js';
-import { ensureGlobalDirs, getDbPath } from './global.js';
 import { initializeDatabase } from './db/schema.js';
+import { ensureGlobalDirs, getDbPath } from './global.js';
+import { generateConfig } from './init/config-generator.js';
+import type { DetectionResult } from './init/detector.js';
+import { detectProject } from './init/detector.js';
+import type { RegistryEntry } from './registry.js';
+import { getProject, registerProject } from './registry.js';
 
 export interface ProjectSetupResult {
   entry: RegistryEntry;

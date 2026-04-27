@@ -3,7 +3,7 @@
  *
  * Builds full navigation tree from RN screens + navigators.
  */
-import type { Store, RnScreenRow } from '../../db/store.js';
+import type { RnScreenRow, Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
 
 interface NavigationNode {

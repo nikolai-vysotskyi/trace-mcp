@@ -3,12 +3,12 @@
  * Coordinates server lifecycle and enrichment passes.
  */
 
-import { logger } from '../logger.js';
-import type { Store } from '../db/store.js';
 import type { TraceMcpConfig } from '../config.js';
-import { resolveServers, fileLanguageToLspLanguage } from './config.js';
+import type { Store } from '../db/store.js';
+import { logger } from '../logger.js';
+import { fileLanguageToLspLanguage, resolveServers } from './config.js';
+import { type EnrichmentResult, LspEnrichmentPass } from './enrichment.js';
 import { LspServerManager } from './lifecycle.js';
-import { LspEnrichmentPass, type EnrichmentResult } from './enrichment.js';
 
 export class LspBridge {
   private serverManager: LspServerManager | null = null;

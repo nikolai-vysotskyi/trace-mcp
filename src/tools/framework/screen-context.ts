@@ -2,9 +2,8 @@
  * get_screen_context tool — full context for a React Native screen.
  * Returns component info, navigator, navigation edges, deep link, platform variants.
  */
-import type { Store, RnScreenRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import type { RnScreenRow, Store } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 
 interface ScreenContextResult {
   screen: string;

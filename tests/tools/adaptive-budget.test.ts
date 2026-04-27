@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { computeAdaptiveBudget } from '../../src/scoring/adaptive-budget.js';
 
 describe('Adaptive Token Budget', () => {

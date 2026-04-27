@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { PythonHttpClientsPlugin } from '../../../src/indexer/plugins/integration/tooling/python-http/index.js';
+import { describe, expect, it } from 'vitest';
+import { AttrsPyPlugin } from '../../../src/indexer/plugins/integration/tooling/attrs-py/index.js';
 import { OpenAIPythonPlugin } from '../../../src/indexer/plugins/integration/tooling/openai-py/index.js';
+import { PythonAsyncPlugin } from '../../../src/indexer/plugins/integration/tooling/python-async/index.js';
+import { PythonHttpClientsPlugin } from '../../../src/indexer/plugins/integration/tooling/python-http/index.js';
+import { PythonImagingPlugin } from '../../../src/indexer/plugins/integration/tooling/python-imaging/index.js';
 import { PythonMLPlugin } from '../../../src/indexer/plugins/integration/tooling/python-ml/index.js';
 import { PythonScientificPlugin } from '../../../src/indexer/plugins/integration/tooling/python-scientific/index.js';
-import { PythonImagingPlugin } from '../../../src/indexer/plugins/integration/tooling/python-imaging/index.js';
-import { PythonAsyncPlugin } from '../../../src/indexer/plugins/integration/tooling/python-async/index.js';
-import { AttrsPyPlugin } from '../../../src/indexer/plugins/integration/tooling/attrs-py/index.js';
 import { TqdmPyPlugin } from '../../../src/indexer/plugins/integration/tooling/tqdm-py/index.js';
 import { Jinja2Plugin } from '../../../src/indexer/plugins/integration/view/jinja2/index.js';
 

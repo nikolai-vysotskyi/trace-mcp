@@ -9,15 +9,15 @@
  *           → Test Coverage → Scoring → Structured Assembly
  */
 import path from 'node:path';
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
-import { hybridScore, getTypeBonus, computeRecency } from '../../scoring/hybrid.js';
+import type { EmbeddingService, VectorStore } from '../../ai/interfaces.js';
+import { hybridSearch } from '../../ai/search.js';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
+import type { ContextItem } from '../../scoring/assembly.js';
+import { computeRecency, getTypeBonus, hybridScore } from '../../scoring/hybrid.js';
 import { computePageRank } from '../../scoring/pagerank.js';
 import { assembleStructuredContext } from '../../scoring/structured-assembly.js';
-import type { ContextItem } from '../../scoring/assembly.js';
 import { readByteRange } from '../../utils/source-reader.js';
 import { tokenizeDescription } from './context.js';
-import { hybridSearch } from '../../ai/search.js';
-import type { VectorStore, EmbeddingService } from '../../ai/interfaces.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES

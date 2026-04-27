@@ -11,8 +11,9 @@
  * Note: Nim is indent-based, not brace-based. Scope tracking uses
  * indent-level analysis for parent-child relationships.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'nim',

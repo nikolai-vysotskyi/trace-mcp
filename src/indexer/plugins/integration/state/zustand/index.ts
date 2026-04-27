@@ -10,16 +10,16 @@
  * Supports Zustand 4+, Redux Toolkit 1.9+.
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 export class ZustandReduxPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {

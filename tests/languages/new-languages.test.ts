@@ -2,18 +2,18 @@
  * Tests for new language plugins (Pascal, Ada, Solidity, PowerShell, Apex, PL/SQL)
  * and upgraded plugins (MATLAB, COBOL, Common Lisp, Zig, OCaml).
  */
-import { describe, it, expect } from 'vitest';
-import { PascalLanguagePlugin } from '../../src/indexer/plugins/language/pascal/index.js';
+import { describe, expect, it } from 'vitest';
 import { AdaLanguagePlugin } from '../../src/indexer/plugins/language/ada/index.js';
-import { SolidityLanguagePlugin } from '../../src/indexer/plugins/language/solidity/index.js';
-import { PowerShellLanguagePlugin } from '../../src/indexer/plugins/language/powershell/index.js';
 import { ApexLanguagePlugin } from '../../src/indexer/plugins/language/apex/index.js';
-import { PlsqlLanguagePlugin } from '../../src/indexer/plugins/language/plsql/index.js';
-import { MatlabLanguagePlugin } from '../../src/indexer/plugins/language/matlab/index.js';
 import { CobolLanguagePlugin } from '../../src/indexer/plugins/language/cobol/index.js';
 import { CommonLispLanguagePlugin } from '../../src/indexer/plugins/language/common-lisp/index.js';
-import { ZigLanguagePlugin } from '../../src/indexer/plugins/language/zig/index.js';
+import { MatlabLanguagePlugin } from '../../src/indexer/plugins/language/matlab/index.js';
 import { OcamlLanguagePlugin } from '../../src/indexer/plugins/language/ocaml/index.js';
+import { PascalLanguagePlugin } from '../../src/indexer/plugins/language/pascal/index.js';
+import { PlsqlLanguagePlugin } from '../../src/indexer/plugins/language/plsql/index.js';
+import { PowerShellLanguagePlugin } from '../../src/indexer/plugins/language/powershell/index.js';
+import { SolidityLanguagePlugin } from '../../src/indexer/plugins/language/solidity/index.js';
+import { ZigLanguagePlugin } from '../../src/indexer/plugins/language/zig/index.js';
 
 // Helper to parse and unwrap (handles both sync and async extractSymbols)
 async function parse(

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
 
 const plugin = new YamlLanguagePlugin();

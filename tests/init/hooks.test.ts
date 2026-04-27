@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock fs and os before importing the module under test
 vi.mock('node:fs');

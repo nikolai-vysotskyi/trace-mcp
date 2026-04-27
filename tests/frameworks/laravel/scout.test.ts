@@ -1,11 +1,11 @@
 /**
  * Tests for laravel/scout extraction.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  extractSearchableModel,
   buildSearchableModelEdges,
   buildSearchableModelSymbols,
+  extractSearchableModel,
 } from '../../../src/indexer/plugins/integration/framework/laravel/scout.js';
 
 // ─── Searchable model ────────────────────────────────────────

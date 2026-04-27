@@ -6,23 +6,23 @@
  * all reuse OpenAIProvider with different default base URLs and models.
  */
 import type { TraceMcpConfig } from '../config.js';
+import { logger } from '../logger.js';
+import { AnthropicProvider } from './anthropic.js';
+import { FallbackProvider } from './fallback.js';
+import { GeminiProvider } from './gemini.js';
 import type {
   AIProvider,
+  ChatMessage,
   EmbeddingService,
   EmbeddingTask,
   InferenceService,
-  ChatMessage,
 } from './interfaces.js';
-import { FallbackProvider } from './fallback.js';
 import { OllamaProvider } from './ollama.js';
-import { OpenAIProvider } from './openai.js';
 import { OnnxProvider } from './onnx.js';
-import { GeminiProvider } from './gemini.js';
-import { AnthropicProvider } from './anthropic.js';
-import { VoyageProvider } from './voyage.js';
-import { VertexAIProvider } from './vertex.js';
-import { logger } from '../logger.js';
+import { OpenAIProvider } from './openai.js';
 import { aiTracker } from './tracker.js';
+import { VertexAIProvider } from './vertex.js';
+import { VoyageProvider } from './voyage.js';
 
 /** Treat empty/whitespace strings as unset — settings UI persists cleared fields as "". */
 const pick = (v: unknown, fallback: string): string =>
@@ -420,36 +420,36 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
   return new FallbackProvider();
 }
 
+export { AnthropicProvider } from './anthropic.js';
+export type { LLMProvider } from './ask-shared.js';
+export {
+  buildSystemPrompt,
+  gatherContext,
+  resolveProvider,
+  stripContextFromMessage,
+} from './ask-shared.js';
+export { CachedInferenceService } from './cached-inference.js';
+export { EmbeddingPipeline } from './embedding-pipeline.js';
+export { FallbackProvider } from './fallback.js';
+export { GeminiProvider } from './gemini.js';
+export { InferenceCache } from './inference-cache.js';
 export type {
   AIProvider,
   ChatMessage,
   EmbeddingService,
   InferenceService,
-  VectorStore,
   RerankerService,
+  VectorStore,
 } from './interfaces.js';
-export { FallbackProvider } from './fallback.js';
 export { OllamaProvider } from './ollama.js';
+export { isOnnxAvailable, OnnxProvider } from './onnx.js';
 export { OpenAIProvider } from './openai.js';
-export { OnnxProvider, isOnnxAvailable } from './onnx.js';
-export { GeminiProvider } from './gemini.js';
-export { AnthropicProvider } from './anthropic.js';
-export { BlobVectorStore } from './vector-store.js';
-export { hybridSearch } from './search.js';
-export { EmbeddingPipeline } from './embedding-pipeline.js';
-export { InferenceCache } from './inference-cache.js';
-export { CachedInferenceService } from './cached-inference.js';
-export { SummarizationPipeline } from './summarization-pipeline.js';
+export type { PromptTemplate } from './prompts.js';
 export { PROMPTS } from './prompts.js';
 export { LLMReranker } from './reranker.js';
-export { parseOpenAIStream, parseAnthropicStream, parseOllamaChatStream } from './sse.js';
-export {
-  resolveProvider,
-  gatherContext,
-  buildSystemPrompt,
-  stripContextFromMessage,
-} from './ask-shared.js';
-export type { LLMProvider } from './ask-shared.js';
-export type { PromptTemplate } from './prompts.js';
+export { hybridSearch } from './search.js';
+export { parseAnthropicStream, parseOllamaChatStream, parseOpenAIStream } from './sse.js';
+export { SummarizationPipeline } from './summarization-pipeline.js';
+export type { AIActivityStats, AIRequestEntry } from './tracker.js';
 export { aiTracker } from './tracker.js';
-export type { AIRequestEntry, AIActivityStats } from './tracker.js';
+export { BlobVectorStore } from './vector-store.js';

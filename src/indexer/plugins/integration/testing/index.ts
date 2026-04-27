@@ -3,17 +3,17 @@
  * and extracts test-to-code relationships: tested routes, tested components, and test names.
  */
 import fs from 'node:fs';
-import { globalRe } from '../../../../utils/regex.js';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../plugin-api/types.js';
+import { globalRe } from '../../../../utils/regex.js';
 
 // --- Regex patterns ---
 

@@ -10,7 +10,7 @@
  *  - Tools with no rules return empty
  *  - Returned `applied` records carry param + forced value + reason
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { applyBudgetDefaults, computeBudgetLevel } from '../../src/server/budget-defaults.js';
 
 describe('computeBudgetLevel', () => {

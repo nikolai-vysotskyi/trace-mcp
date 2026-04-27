@@ -1,9 +1,9 @@
 /**
  * Tests that BM25 field weighting ranks name matches above summary matches.
  */
-import { describe, it, expect } from 'vitest';
-import { createTestStore } from '../test-utils.js';
+import { describe, expect, it } from 'vitest';
 import { searchFts } from '../../src/db/fts.js';
+import { createTestStore } from '../test-utils.js';
 
 function createStoreWithSymbols() {
   const store = createTestStore();

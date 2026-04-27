@@ -12,9 +12,10 @@
  * same workspace as the source to prevent false connections between
  * independent projects sharing a common root.
  */
+
+import { logger } from '../../logger.js';
 import type { PipelineState } from '../pipeline-state.js';
 import type { PhpCallSite } from '../plugins/language/php/helpers.js';
-import { logger } from '../../logger.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
 
 interface PhpSymbol {

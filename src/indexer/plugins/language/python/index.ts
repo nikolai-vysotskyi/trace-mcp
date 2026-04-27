@@ -5,52 +5,52 @@
  * decorators, import edges, type annotation edges, inheritance edges,
  * re-export edges, and docstrings from Python source files.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-  SymbolKind,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
-  filePathToModule,
-  extractSignature,
-  extractDecorators,
-  extractImportEdges,
-  getNodeName,
-  isAllCaps,
-  extractClassBases,
-  extractClassMethods,
-  extractInstanceAttributes,
-  extractTypeAlias,
-  extractTypeParams,
-  hasSpecialDecorator,
   collectNodeTypes,
+  detectPropertyGrouping,
+  detectTypingPatterns,
   // New helpers
   detectVisibility,
-  extractDocstring,
   extractAllList,
-  extractReexportEdges,
-  extractTypeAnnotationEdges,
-  extractDecoratorEdges,
-  extractInheritanceEdges,
-  extractTypeCheckingImports,
-  detectTypingPatterns,
-  extractSlots,
-  extractMetaclass,
-  extractNestedDefinitions,
-  extractConditionalImports,
-  detectPropertyGrouping,
   extractCallSites,
+  extractClassBases,
+  extractClassMethods,
+  extractConditionalImports,
+  extractDecoratorEdges,
+  extractDecorators,
+  extractDocstring,
+  extractImportEdges,
+  extractInheritanceEdges,
+  extractInstanceAttributes,
+  extractMetaclass,
   extractNameMainCallees,
+  extractNestedDefinitions,
+  extractReexportEdges,
+  extractSignature,
+  extractSlots,
+  extractTypeAlias,
+  extractTypeAnnotationEdges,
+  extractTypeCheckingImports,
+  extractTypeParams,
+  filePathToModule,
+  getNodeName,
+  hasSpecialDecorator,
+  isAllCaps,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 import { detectMinPythonVersion } from './version-features.js';
 

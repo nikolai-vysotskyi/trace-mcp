@@ -12,8 +12,9 @@
  *
  * Runs AFTER ESM import resolution so `imports` edges are available.
  */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 interface TsCallSite {
   calleeName: string;

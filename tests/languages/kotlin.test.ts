@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { KotlinLanguagePlugin } from '../../src/indexer/plugins/language/kotlin/index.js';
 
 const plugin = new KotlinLanguagePlugin();

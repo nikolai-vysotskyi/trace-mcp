@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { detectConflicts } from '../../src/init/conflict-detector.js';
 import { createTmpFixture, removeTmpDir } from '../test-utils.js';
 

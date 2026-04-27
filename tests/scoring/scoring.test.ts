@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { hybridScore, getTypeBonus, computeRecency } from '../../src/scoring/hybrid.js';
+import { describe, expect, it } from 'vitest';
 import { assembleContext, type ContextItem } from '../../src/scoring/assembly.js';
+import { computeRecency, getTypeBonus, hybridScore } from '../../src/scoring/hybrid.js';
 
 describe('hybridScore', () => {
   it('returns weighted sum of inputs', () => {

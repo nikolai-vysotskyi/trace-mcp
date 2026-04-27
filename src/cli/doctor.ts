@@ -4,21 +4,21 @@
  * artifacts that may conflict with trace-mcp. Optionally fixes them.
  */
 
-import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { Command } from 'commander';
+import fs from 'node:fs';
 import * as p from '@clack/prompts';
-import { detectConflicts, type ConflictSeverity } from '../init/conflict-detector.js';
-import { fixConflict, fixAllConflicts, type FixResult } from '../init/conflict-resolver.js';
-import { findProjectRoot } from '../project-root.js';
+import { Command } from 'commander';
+import { type ConflictSeverity, detectConflicts } from '../init/conflict-detector.js';
+import { type FixResult, fixAllConflicts, fixConflict } from '../init/conflict-resolver.js';
 import {
-  getLauncherPath,
   getLauncherConfigPath,
   getLauncherDir,
+  getLauncherPath,
   readInstalledLauncherVersion,
   readLauncherConfig,
 } from '../init/launcher.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
+import { findProjectRoot } from '../project-root.js';
 
 const _SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',

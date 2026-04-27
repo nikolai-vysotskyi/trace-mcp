@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
 import {
-  getLayerViolations,
   detectLayerPreset,
+  getLayerViolations,
   type LayerDefinition,
 } from '../../src/tools/analysis/layer-violations.js';
+import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, filePath: string): number {
   return store.insertFile(filePath, 'typescript', `hash_${filePath}`, 100);

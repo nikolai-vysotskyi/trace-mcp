@@ -17,15 +17,15 @@
  *   - Generic XML (id / name fallback)
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../errors.js';
 import type {
+  FileParseResult,
   LanguagePlugin,
   PluginManifest,
-  FileParseResult,
-  RawSymbol,
   RawEdge,
+  RawSymbol,
   SymbolKind,
 } from '../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../errors.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

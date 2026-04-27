@@ -7,33 +7,33 @@
  *   - Extracts custom component tags from <template>
  */
 import { parse as parseSFC } from '@vue/compiler-sfc';
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-  RawComponent,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawComponent,
+  RawEdge,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  extractImportEdges,
-  extractCallSites,
   collectLocalTypes,
-  extractTypeReferences,
+  extractCallSites,
+  extractImportEdges,
   extractModuleCallSites,
+  extractTypeReferences,
+  makeSymbolId,
+  type TSNode,
 } from '../typescript/helpers.js';
 import {
   componentNameFromPath,
-  extractProps,
+  extractComposables,
   extractEmits,
   extractExposed,
-  extractComposables,
+  extractProps,
   extractTemplateComponents,
 } from './helpers.js';
 

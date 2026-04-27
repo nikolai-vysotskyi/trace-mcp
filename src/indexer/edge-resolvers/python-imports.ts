@@ -1,5 +1,5 @@
-import type { PipelineState } from '../pipeline-state.js';
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 /**
  * Resolve Python import edges from pendingImports into file��file edges.

@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logger.js';
-import { parseIgnorePattern, type IgnoreRule } from './ignore-patterns.js';
+import { type IgnoreRule, parseIgnorePattern } from './ignore-patterns.js';
 
 export class GitignoreMatcher {
   private rules: IgnoreRule[] = [];

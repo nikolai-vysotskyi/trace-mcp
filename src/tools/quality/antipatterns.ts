@@ -4,14 +4,14 @@
  * event listener leaks, circular model dependencies, and missing indexes.
  */
 
-import picomatch from 'picomatch';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import picomatch from 'picomatch';
+import type { FileRow, OrmAssociationRow, OrmModelRow, Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
-import type { Store, OrmModelRow, OrmAssociationRow, FileRow } from '../../db/store.js';
 import {
-  classifyNumericConfidence,
   type ConfidenceLevel,
+  classifyNumericConfidence,
   type Methodology,
 } from '../shared/confidence.js';
 

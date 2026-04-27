@@ -1,12 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { ok } from '../../src/errors.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import type {
-  LanguagePlugin,
-  FrameworkPlugin,
-  ProjectContext,
   FileParseResult,
+  FrameworkPlugin,
+  LanguagePlugin,
+  ProjectContext,
 } from '../../src/plugin-api/types.js';
-import { ok } from '../../src/errors.js';
 
 function makeLanguagePlugin(name: string, priority: number, extensions: string[]): LanguagePlugin {
   return {

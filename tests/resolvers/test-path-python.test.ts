@@ -2,7 +2,7 @@
  * Tests for TEST_PATH_RE matching Python test files.
  * Verifies that the test_covers edge resolver correctly identifies Python test files.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Re-create the regex from tests.ts to test it in isolation
 const TEST_PATH_RE =

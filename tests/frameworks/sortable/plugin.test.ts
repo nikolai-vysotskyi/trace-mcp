@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { SortablePlugin } from '../../../src/indexer/plugins/integration/view/sortable/index.js';
 import type { ProjectContext, ResolveContext } from '../../../src/plugin-api/types.js';
 

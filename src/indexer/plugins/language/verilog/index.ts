@@ -13,8 +13,9 @@
  *  - Misc: modport, clocking, bind, let, nettype, enum members
  *  - Imports: import pkg::*, `include "file", `include <file>
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'verilog',

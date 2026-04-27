@@ -16,16 +16,17 @@
  *   budget: turn budget level + actionable advice
  *   next_actions[]: recommended follow-up tool calls
  */
+
+import type { EmbeddingService, RerankerService, VectorStore } from '../../ai/interfaces.js';
 import type { Store } from '../../db/store.js';
-import type { SessionJournal } from '../../session/journal.js';
-import type { SavingsTracker } from '../../savings.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
-import type { VectorStore, EmbeddingService, RerankerService } from '../../ai/interfaces.js';
-import { search } from './navigation.js';
-import { classifyIntent } from './task-context.js';
-import { suggestInsertionPoints, type InsertionPoint } from './insertion-points.js';
+import type { SavingsTracker } from '../../savings.js';
+import type { SessionJournal } from '../../session/journal.js';
 import { assessChangeRisk } from '../analysis/predictive-intelligence.js';
 import { tokenizeDescription } from './context.js';
+import { type InsertionPoint, suggestInsertionPoints } from './insertion-points.js';
+import { search } from './navigation.js';
+import { classifyIntent } from './task-context.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES

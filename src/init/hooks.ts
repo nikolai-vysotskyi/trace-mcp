@@ -4,13 +4,13 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import type { InitStepResult } from './types.js';
 import {
   GUARD_HOOK_VERSION,
-  REINDEX_HOOK_VERSION,
   PRECOMPACT_HOOK_VERSION,
+  REINDEX_HOOK_VERSION,
   WORKTREE_HOOK_VERSION,
 } from './types.js';
 

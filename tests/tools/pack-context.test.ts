@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { packContext } from '../../src/tools/refactoring/pack-context.js';
+import { describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import type { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { packContext } from '../../src/tools/refactoring/pack-context.js';
 
 function createMockStore(files: { id: number; path: string }[] = []): Store {
   const symbols = new Map<number, any[]>();

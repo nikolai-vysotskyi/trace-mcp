@@ -1,18 +1,18 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { StatusDot } from '../components/StatusDot';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OllamaPanel } from '../components/OllamaPanel';
+import { StatusDot } from '../components/StatusDot';
 import { useDaemon } from '../hooks/useDaemon';
 import {
   CONFIG_SCHEMA,
+  computeDiff,
+  countModifiedFields,
+  type DiffEntry,
+  type FieldDef,
+  getSectionDefaults,
+  isFieldVisible,
+  type SectionDef,
   validateField,
   validateSection,
-  isFieldVisible,
-  getSectionDefaults,
-  countModifiedFields,
-  computeDiff,
-  type SectionDef,
-  type FieldDef,
-  type DiffEntry,
 } from './configSchema';
 
 /* ═══ Helpers ═════════════════════════════════════════════════════════ */

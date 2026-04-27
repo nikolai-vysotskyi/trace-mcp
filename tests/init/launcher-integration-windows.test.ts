@@ -4,11 +4,11 @@
  * macOS/Linux CI will skip this entire suite.
  */
 
-import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const isWin = process.platform === 'win32';
 const descIf = isWin ? describe : describe.skip;
@@ -116,7 +116,7 @@ descIf('Windows launcher shim integration', () => {
     fs.writeFileSync(
       path.join(traceHome, 'launcher.env'),
       [
-        `TRACE_MCP_NODE="C:\\nope.exe\"; New-Item -Path '${sentinel}' -ItemType File; \""`,
+        `TRACE_MCP_NODE="C:\\nope.exe"; New-Item -Path '${sentinel}' -ItemType File; ""`,
         `TRACE_MCP_CLI="$( New-Item -Path '${sentinel}-sub' )"`,
         '',
       ].join('\r\n'),

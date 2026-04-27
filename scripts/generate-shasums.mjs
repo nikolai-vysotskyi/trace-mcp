@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * generate-shasums.mjs — emit per-asset `<file>.sha256` files next to release
  * artifacts, plus a combined SHASUMS256.txt for ergonomic verification.
@@ -21,9 +22,9 @@
  * If no extensions are given, hashes every `.zip` and `.exe` in <dir>.
  */
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 
 const dir = process.argv[2];
 if (!dir) {

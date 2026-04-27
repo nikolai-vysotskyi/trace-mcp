@@ -3,12 +3,13 @@
  * Covers: component detection, view resolution, events (dispatch/#[On]),
  * Form objects, wire: directives, and Blade usages.
  */
-import { describe, it, expect } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  extractLivewireComponent,
   extractLivewireBladeUsages,
+  extractLivewireComponent,
   extractWireDirectives,
   isLivewireForm,
   resolveComponentName,

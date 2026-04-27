@@ -8,15 +8,15 @@
  * Supports MUI v5+ (@mui/material) and legacy v4 (@material-ui/core).
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 // ── Theme extraction ──────────────────────────────────────────────────────
 

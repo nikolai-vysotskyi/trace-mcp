@@ -1,5 +1,5 @@
-import { isDaemonRunning } from '../client.js';
 import { logger } from '../../logger.js';
+import { isDaemonRunning } from '../client.js';
 import type { DaemonWatcher } from './types.js';
 
 export interface DaemonWatcherOptions {

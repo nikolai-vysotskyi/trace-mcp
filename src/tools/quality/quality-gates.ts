@@ -14,15 +14,15 @@
  * Returns structured gate results with exit code semantics (0 = pass, 1 = fail).
  */
 
-import type { Store } from '../../db/store.js';
-import { getCouplingMetrics, getDependencyCycles } from '../analysis/graph-analysis.js';
-import { getDeadCodeV2 } from '../refactoring/dead-code.js';
-import { scanSecurity, type SecurityScanResult } from './security-scan.js';
-import { scanCodeSmells, type CodeSmellResult } from './code-smells.js';
-import { getTechDebt, type TechDebtResult } from '../analysis/predictive-intelligence.js';
-import { detectAntipatterns } from './antipatterns.js';
-import { logger } from '../../logger.js';
 import { z } from 'zod';
+import type { Store } from '../../db/store.js';
+import { logger } from '../../logger.js';
+import { getCouplingMetrics, getDependencyCycles } from '../analysis/graph-analysis.js';
+import { getTechDebt, type TechDebtResult } from '../analysis/predictive-intelligence.js';
+import { getDeadCodeV2 } from '../refactoring/dead-code.js';
+import { detectAntipatterns } from './antipatterns.js';
+import { type CodeSmellResult, scanCodeSmells } from './code-smells.js';
+import { type SecurityScanResult, scanSecurity } from './security-scan.js';
 
 // ---------------------------------------------------------------------------
 // Config schema

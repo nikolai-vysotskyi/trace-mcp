@@ -3,10 +3,10 @@
  * using FTS5 search + graph expansion + hybrid scoring + token budget assembly.
  */
 import path from 'node:path';
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
-import { hybridScore, getTypeBonus, computeRecency } from '../../scoring/hybrid.js';
-import { computePageRank } from '../../scoring/pagerank.js';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import { assembleContext, type ContextItem } from '../../scoring/assembly.js';
+import { computeRecency, getTypeBonus, hybridScore } from '../../scoring/hybrid.js';
+import { computePageRank } from '../../scoring/pagerank.js';
 import { readByteRange } from '../../utils/source-reader.js';
 
 interface FeatureContextResult {

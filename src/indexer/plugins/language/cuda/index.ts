@@ -4,8 +4,9 @@
  * Extracts: __global__, __device__, __host__ functions, structs, enums, constants, and import edges.
  * Extends C/C++ with CUDA-specific qualifiers.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'cuda',

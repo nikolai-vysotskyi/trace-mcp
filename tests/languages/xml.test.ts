@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { XmlLanguagePlugin } from '../../src/indexer/plugins/language/xml/index.js';
 
 const plugin = new XmlLanguagePlugin();

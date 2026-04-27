@@ -3,18 +3,19 @@
  * This tests Pass 1 + Pass 2 on real fixture projects and verifies
  * that edges, routes, migrations are stored and queryable.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { InertiaPlugin } from '../../src/indexer/plugins/integration/view/inertia/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { InertiaPlugin } from '../../src/indexer/plugins/integration/view/inertia/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 function setupPipeline(fixturePath: string) {
   const store = createTestStore();

@@ -2,8 +2,8 @@
  * Shared test utilities — reduce boilerplate across test files.
  */
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import { initializeDatabase } from '../src/db/schema.js';
 import { Store } from '../src/db/store.js';
 

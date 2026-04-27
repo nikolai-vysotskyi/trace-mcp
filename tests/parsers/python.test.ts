@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 

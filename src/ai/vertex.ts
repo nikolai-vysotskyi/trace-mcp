@@ -10,6 +10,9 @@
  *   - Embedding API shape: {instances:[{task_type,content}], parameters:{outputDimensionality}}
  *   - Inference API shape: same :generateContent as Gemini, just different host/auth.
  */
+
+import { logger } from '../logger.js';
+import { withRetry } from '../utils/retry.js';
 import type {
   AIProvider,
   ChatMessage,
@@ -17,8 +20,6 @@ import type {
   EmbeddingTask,
   InferenceService,
 } from './interfaces.js';
-import { logger } from '../logger.js';
-import { withRetry } from '../utils/retry.js';
 
 interface VertexAIConfig {
   accessToken: string;

@@ -8,7 +8,7 @@
  * plan_turn, get_session_resume, etc.
  */
 
-import type { DecisionStore, DecisionRow } from './decision-store.js';
+import type { DecisionRow, DecisionStore } from './decision-store.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

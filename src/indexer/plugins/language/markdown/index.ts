@@ -4,8 +4,9 @@
  * Extracts: headings (as structural hierarchy), code block languages,
  * link definitions, and front-matter keys.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'markdown',

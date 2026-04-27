@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import type { Store } from '../../src/db/store.js';
+import { describe, expect, it } from 'vitest';
 import { searchFts } from '../../src/db/fts.js';
+import type { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 
 function createLargeIndex(fileCount: number) {
   const store = createTestStore();

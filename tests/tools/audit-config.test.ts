@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import type Database from 'better-sqlite3';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { indexTrigramsBatch } from '../../src/db/fuzzy.js';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { auditConfig } from '../../src/tools/quality/audit-config.js';
-import { indexTrigramsBatch } from '../../src/db/fuzzy.js';
-import fs from 'node:fs';
-import path from 'node:path';
 import { createTmpDir } from '../test-utils.js';
-import type Database from 'better-sqlite3';
 
 describe('Audit Config', () => {
   let db: Database.Database;

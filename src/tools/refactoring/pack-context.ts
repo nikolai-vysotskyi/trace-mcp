@@ -8,12 +8,12 @@
  * - Include structured metadata (routes, models, components)
  */
 
-import type { Store } from '../../db/store.js';
-import type { PluginRegistry } from '../../plugin-api/registry.js';
-import { searchFts } from '../../db/fts.js';
-import { getPageRank } from '../analysis/graph-analysis.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { searchFts } from '../../db/fts.js';
+import type { Store } from '../../db/store.js';
+import type { PluginRegistry } from '../../plugin-api/registry.js';
+import { getPageRank } from '../analysis/graph-analysis.js';
 
 export type PackStrategy = 'most_relevant' | 'core_first' | 'compact';
 

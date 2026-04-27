@@ -11,8 +11,9 @@
  *
  * Language-agnostic: works for PHP, TypeScript, Python, Java, Go, Ruby, etc.
  */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 export function resolveMemberOfEdges(state: PipelineState): void {
   const { store } = state;

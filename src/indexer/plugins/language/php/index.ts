@@ -4,38 +4,38 @@
  * Extracts classes, methods, functions, interfaces, traits, enums,
  * constants, properties, and enum_cases from PHP source files.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  extractNamespace,
-  extractUseStatements,
-  extractClassHeritage,
-  extractInterfaceExtends,
-  extractCallSites,
-  extractTypeRef,
-  extractParamTypes,
-  makeSymbolId,
-  makeFqn,
-  extractSignature,
-  extractAttributes,
-  extractPromotedProperties,
-  extractPropertySymbol,
-  extractConstantSymbols,
-  extractModifiers,
-  extractPropertyHooks,
-  isReadonly,
-  getVisibility,
   collectNodeTypes,
+  extractAttributes,
+  extractCallSites,
+  extractClassHeritage,
+  extractConstantSymbols,
+  extractInterfaceExtends,
+  extractModifiers,
+  extractNamespace,
+  extractParamTypes,
+  extractPromotedProperties,
+  extractPropertyHooks,
+  extractPropertySymbol,
+  extractSignature,
+  extractTypeRef,
+  extractUseStatements,
+  getVisibility,
+  isReadonly,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 import { detectMinPhpVersion } from './version-features.js';
 

@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server/types.js';
-import { logger } from '../../logger.js';
+import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
-import { getIndexHealth, getProjectMap } from '../project/project.js';
+import { logger } from '../../logger.js';
+import type { ServerContext } from '../../server/types.js';
 import { checkFileForDuplicates } from '../analysis/duplication.js';
-import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
+import { getIndexHealth, getProjectMap } from '../project/project.js';
 
 export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
   const {

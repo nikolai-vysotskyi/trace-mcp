@@ -5,14 +5,14 @@
  * type specs, callbacks, and import edges (-include, -include_lib).
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../errors.js';
 import type {
+  FileParseResult,
   LanguagePlugin,
   PluginManifest,
-  FileParseResult,
-  RawSymbol,
   RawEdge,
+  RawSymbol,
 } from '../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../errors.js';
 import { lineAt, makeSymbolId } from '../regex-base.js';
 
 export const ErlangLanguagePlugin = class implements LanguagePlugin {

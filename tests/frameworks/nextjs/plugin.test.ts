@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  NextJSPlugin,
   appRouterPathToRoute,
+  NextJSPlugin,
   pagesRouterPathToRoute,
 } from '../../../src/indexer/plugins/integration/framework/nextjs/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';

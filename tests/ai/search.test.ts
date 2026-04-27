@@ -1,16 +1,16 @@
-import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import type Database from 'better-sqlite3';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { EmbeddingService } from '../../src/ai/interfaces.js';
+import { hybridSearch } from '../../src/ai/search.js';
+import { BlobVectorStore } from '../../src/ai/vector-store.js';
+import type { TraceMcpConfig } from '../../src/config.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { hybridSearch } from '../../src/ai/search.js';
-import { BlobVectorStore } from '../../src/ai/vector-store.js';
-import type { EmbeddingService } from '../../src/ai/interfaces.js';
-import type { TraceMcpConfig } from '../../src/config.js';
-import type Database from 'better-sqlite3';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');
 

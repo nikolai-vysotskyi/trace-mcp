@@ -2,7 +2,7 @@
  * Tests that getComponentTree does not crash when stored JSON fields are malformed.
  * This can happen if the DB is written by an older version or if data is corrupted.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { getComponentTree } from '../../src/tools/framework/components.js';

@@ -3,17 +3,17 @@
  * extracts useQuery/useMutation/useSWR hooks that reference API endpoints.
  */
 import fs from 'node:fs';
-import { globalRe } from '../../../../../utils/regex.js';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
+import { globalRe } from '../../../../../utils/regex.js';
 
 /**
  * Match useQuery({ queryKey: [...], queryFn: () => fetch('...') })

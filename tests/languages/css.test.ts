@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { CssLanguagePlugin } from '../../src/indexer/plugins/language/css/index.js';
 
 const plugin = new CssLanguagePlugin();

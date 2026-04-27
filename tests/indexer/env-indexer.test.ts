@@ -4,12 +4,13 @@
  * code index. That list must NOT hide env files from EnvIndexer itself, which only
  * records keys + inferred types/formats (never values) — the "anonymization" path.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
-import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
-import { EnvIndexer } from '../../src/indexer/env-indexer.js';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
+import { EnvIndexer } from '../../src/indexer/env-indexer.js';
+import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 
 const DEFAULT_LIKE_EXCLUDE = [
   '**/node_modules/**',

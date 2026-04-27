@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PytestPlugin } from '../../../src/indexer/plugins/integration/testing/pytest/index.js';
 
 const plugin = new PytestPlugin();

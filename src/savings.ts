@@ -10,7 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { TRACE_MCP_HOME, ensureGlobalDirs } from './global.js';
+import { ensureGlobalDirs, TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
 
 export const SAVINGS_PATH = path.join(TRACE_MCP_HOME, 'savings.json');

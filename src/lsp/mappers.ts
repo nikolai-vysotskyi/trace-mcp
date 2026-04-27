@@ -3,10 +3,10 @@
  * Bridges trace-mcp's symbol model with LSP's URI+Position model.
  */
 
-import { pathToFileURL, fileURLToPath } from 'node:url';
-import { relative, resolve, extname } from 'node:path';
+import { extname, relative, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { Store } from '../db/store.js';
-import type { SymbolRow, FileRow } from '../db/types.js';
+import type { FileRow, SymbolRow } from '../db/types.js';
 import { EXTENSION_TO_LANGUAGE } from './config.js';
 
 export interface LspPosition {

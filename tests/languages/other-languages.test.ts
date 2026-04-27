@@ -1,32 +1,32 @@
 /**
  * Tests for all remaining regex-based language plugins.
  */
-import { describe, it, expect } from 'vitest';
-import { GroovyLanguagePlugin } from '../../src/indexer/plugins/language/groovy/index.js';
-import { ElixirLanguagePlugin } from '../../src/indexer/plugins/language/elixir/index.js';
-import { ErlangLanguagePlugin } from '../../src/indexer/plugins/language/erlang/index.js';
-import { HaskellLanguagePlugin } from '../../src/indexer/plugins/language/haskell/index.js';
-import { GleamLanguagePlugin } from '../../src/indexer/plugins/language/gleam/index.js';
-import { BashLanguagePlugin } from '../../src/indexer/plugins/language/bash/index.js';
-import { LuaLanguagePlugin } from '../../src/indexer/plugins/language/lua/index.js';
-import { PerlLanguagePlugin } from '../../src/indexer/plugins/language/perl/index.js';
-import { GdscriptLanguagePlugin } from '../../src/indexer/plugins/language/gdscript/index.js';
-import { RLanguagePlugin } from '../../src/indexer/plugins/language/r/index.js';
-import { JuliaLanguagePlugin } from '../../src/indexer/plugins/language/julia/index.js';
-import { NixLanguagePlugin } from '../../src/indexer/plugins/language/nix/index.js';
-import { SqlLanguagePlugin } from '../../src/indexer/plugins/language/sql/index.js';
-import { HclLanguagePlugin } from '../../src/indexer/plugins/language/hcl/index.js';
-import { ProtobufLanguagePlugin } from '../../src/indexer/plugins/language/protobuf/index.js';
-import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
-import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang/index.js';
-import { TomlLanguagePlugin } from '../../src/indexer/plugins/language/toml/index.js';
-import { AssemblyLanguagePlugin } from '../../src/indexer/plugins/language/assembly/index.js';
-import { FortranLanguagePlugin } from '../../src/indexer/plugins/language/fortran/index.js';
-import { AutoHotkeyLanguagePlugin } from '../../src/indexer/plugins/language/autohotkey/index.js';
-import { VerseLanguagePlugin } from '../../src/indexer/plugins/language/verse/index.js';
+import { describe, expect, it } from 'vitest';
 import { AlLanguagePlugin } from '../../src/indexer/plugins/language/al/index.js';
+import { AssemblyLanguagePlugin } from '../../src/indexer/plugins/language/assembly/index.js';
+import { AutoHotkeyLanguagePlugin } from '../../src/indexer/plugins/language/autohotkey/index.js';
+import { BashLanguagePlugin } from '../../src/indexer/plugins/language/bash/index.js';
 import { BladeLanguagePlugin } from '../../src/indexer/plugins/language/blade/index.js';
 import { EjsLanguagePlugin } from '../../src/indexer/plugins/language/ejs/index.js';
+import { ElixirLanguagePlugin } from '../../src/indexer/plugins/language/elixir/index.js';
+import { ErlangLanguagePlugin } from '../../src/indexer/plugins/language/erlang/index.js';
+import { FortranLanguagePlugin } from '../../src/indexer/plugins/language/fortran/index.js';
+import { GdscriptLanguagePlugin } from '../../src/indexer/plugins/language/gdscript/index.js';
+import { GleamLanguagePlugin } from '../../src/indexer/plugins/language/gleam/index.js';
+import { GroovyLanguagePlugin } from '../../src/indexer/plugins/language/groovy/index.js';
+import { HaskellLanguagePlugin } from '../../src/indexer/plugins/language/haskell/index.js';
+import { HclLanguagePlugin } from '../../src/indexer/plugins/language/hcl/index.js';
+import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang/index.js';
+import { JuliaLanguagePlugin } from '../../src/indexer/plugins/language/julia/index.js';
+import { LuaLanguagePlugin } from '../../src/indexer/plugins/language/lua/index.js';
+import { NixLanguagePlugin } from '../../src/indexer/plugins/language/nix/index.js';
+import { PerlLanguagePlugin } from '../../src/indexer/plugins/language/perl/index.js';
+import { ProtobufLanguagePlugin } from '../../src/indexer/plugins/language/protobuf/index.js';
+import { RLanguagePlugin } from '../../src/indexer/plugins/language/r/index.js';
+import { SqlLanguagePlugin } from '../../src/indexer/plugins/language/sql/index.js';
+import { TomlLanguagePlugin } from '../../src/indexer/plugins/language/toml/index.js';
+import { VerseLanguagePlugin } from '../../src/indexer/plugins/language/verse/index.js';
+import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
 
 // Helper to parse and unwrap (handles both sync and async extractSymbols)
 function parse(

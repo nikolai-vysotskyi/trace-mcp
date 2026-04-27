@@ -4,39 +4,39 @@
  * Extracts functions, classes, variables (exported const/let), types,
  * interfaces, enums, methods, and import edges from TS/JS source files.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  getFullSignature,
-  isExported,
-  isDefaultExport,
-  isAsync,
-  getNodeName,
-  extractImportEdges,
-  extractClassMethods,
-  extractDecorators,
+  collectLocalTypes,
   collectNodeTypes,
   extractCallSites,
-  collectLocalTypes,
-  extractTypeReferences,
+  extractClassMethods,
+  extractDecorators,
+  extractImportEdges,
   extractModuleCallSites,
+  extractTypeReferences,
+  getFullSignature,
+  getNodeName,
+  isAsync,
+  isDefaultExport,
+  isExported,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 import {
+  detectMinEsVersion,
   detectMinNodeVersion,
   detectMinNodeVersionFromAPIs,
   detectMinTsVersion,
   detectMinTsVersionFromSource,
-  detectMinEsVersion,
 } from './version-features.js';
 
 const TSX_EXTENSIONS = new Set(['.tsx', '.jsx']);

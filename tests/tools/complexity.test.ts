@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
+  computeComplexity,
   computeCyclomatic,
   computeMaxNesting,
   computeParamCount,
-  computeComplexity,
 } from '../../src/tools/analysis/complexity.js';
 
 describe('computeCyclomatic', () => {

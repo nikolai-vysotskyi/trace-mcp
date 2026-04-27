@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { RustLanguagePlugin } from '../../src/indexer/plugins/language/rust/index.js';
+import { describe, expect, it } from 'vitest';
 import { CLanguagePlugin } from '../../src/indexer/plugins/language/c/index.js';
 import { CppLanguagePlugin } from '../../src/indexer/plugins/language/cpp/index.js';
+import { RustLanguagePlugin } from '../../src/indexer/plugins/language/rust/index.js';
 
 // ── Rust ────────────────────────────────────────────────────────────────────
 

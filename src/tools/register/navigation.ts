@@ -1,26 +1,26 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { formatToolError } from '../../errors.js';
+import { decisionsForImpact } from '../../memory/enrichment.js';
+import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
 import type { ServerContext } from '../../server/types.js';
-import {
-  getSymbol,
-  search,
-  getFileOutline,
-  type SearchResultItemProjected,
-} from '../navigation/navigation.js';
+import { SubprojectManager } from '../../subproject/manager.js';
 import { getChangeImpact } from '../analysis/impact.js';
 import { getFeatureContext } from '../navigation/context.js';
 import { getContextBundle } from '../navigation/context-bundle.js';
-import { getTaskContext } from '../navigation/task-context.js';
-import { suggestQueries } from '../navigation/suggest.js';
+import {
+  getFileOutline,
+  getSymbol,
+  type SearchResultItemProjected,
+  search,
+} from '../navigation/navigation.js';
 import { getRelatedSymbols } from '../navigation/related.js';
-import { formatToolError } from '../../errors.js';
-import { buildNegativeEvidence } from '../shared/evidence.js';
 import { searchText } from '../navigation/search-text.js';
-import { fallbackSearch, fallbackOutline } from '../navigation/zero-index.js';
-import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
+import { suggestQueries } from '../navigation/suggest.js';
+import { getTaskContext } from '../navigation/task-context.js';
+import { fallbackOutline, fallbackSearch } from '../navigation/zero-index.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../shared/confidence.js';
-import { SubprojectManager } from '../../subproject/manager.js';
-import { decisionsForImpact } from '../../memory/enrichment.js';
+import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
   const {

@@ -1,8 +1,8 @@
 /**
  * Verify that MCP ToolAnnotations are injected into all registered tools.
  */
-import { describe, it, expect } from 'vitest';
-import { getToolAnnotations, DEFAULT_ANNOTATIONS } from '../src/server/tool-annotations.js';
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_ANNOTATIONS, getToolAnnotations } from '../src/server/tool-annotations.js';
 
 describe('tool-annotations', () => {
   it('returns read-only defaults for unknown tools', () => {

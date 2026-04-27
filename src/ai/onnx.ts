@@ -3,9 +3,10 @@
  * Uses @huggingface/transformers (optional dep) with all-MiniLM-L6-v2 (~23 MB).
  * Falls back gracefully if the package is not installed.
  */
-import type { AIProvider, EmbeddingService, InferenceService } from './interfaces.js';
-import { FallbackProvider } from './fallback.js';
+
 import { logger } from '../logger.js';
+import { FallbackProvider } from './fallback.js';
+import type { AIProvider, EmbeddingService, InferenceService } from './interfaces.js';
 
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
 const DEFAULT_DIMENSIONS = 384;

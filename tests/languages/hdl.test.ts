@@ -4,10 +4,10 @@
  * - VHDL
  * - Verilog / SystemVerilog (upgraded)
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { CppLanguagePlugin } from '../../src/indexer/plugins/language/cpp/index.js';
-import { VhdlLanguagePlugin } from '../../src/indexer/plugins/language/vhdl/index.js';
 import { VerilogLanguagePlugin } from '../../src/indexer/plugins/language/verilog/index.js';
+import { VhdlLanguagePlugin } from '../../src/indexer/plugins/language/vhdl/index.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Arduino (.ino/.pde via C++ plugin)

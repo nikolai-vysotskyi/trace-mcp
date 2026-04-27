@@ -1,9 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 import { planRefactoring } from '../../src/tools/refactoring/plan-refactoring.js';
+import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // HELPERS

@@ -2,7 +2,7 @@
  * Helper utilities for the Java language plugin.
  * Extracts AST-walking logic to keep the main plugin concise.
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 

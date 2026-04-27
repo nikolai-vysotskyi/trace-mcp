@@ -2,9 +2,9 @@
  * Stress tests — verify the system handles large codebases without
  * exploding in memory or time. These use in-memory SQLite.
  */
-import { describe, it, expect } from 'vitest';
-import { createTestStore } from '../test-utils.js';
+import { describe, expect, it } from 'vitest';
 import { searchFts } from '../../src/db/fts.js';
+import { createTestStore } from '../test-utils.js';
 
 const KINDS = [
   'class',

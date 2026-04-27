@@ -3,13 +3,13 @@
  * Shows indexing progress for the current project by reading from the SQLite database.
  */
 
-import { Command } from 'commander';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import { Command } from 'commander';
 import { getDbPath } from '../global.js';
-import { getProject } from '../registry.js';
+import { isServerRunning, type PipelineProgressSnapshot, readProgressFromDb } from '../progress.js';
 import { findProjectRoot } from '../project-root.js';
-import { readProgressFromDb, isServerRunning, type PipelineProgressSnapshot } from '../progress.js';
+import { getProject } from '../registry.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);

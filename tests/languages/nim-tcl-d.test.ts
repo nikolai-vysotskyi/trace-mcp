@@ -3,10 +3,10 @@
  * Covers symbol extraction, parent-child relationships, doc comments,
  * import edges, and comment immunity.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { DLanguagePlugin } from '../../src/indexer/plugins/language/dlang/index.js';
 import { NimLanguagePlugin } from '../../src/indexer/plugins/language/nim/index.js';
 import { TclLanguagePlugin } from '../../src/indexer/plugins/language/tcl/index.js';
-import { DLanguagePlugin } from '../../src/indexer/plugins/language/dlang/index.js';
 
 async function parse(
   plugin: { extractSymbols: (f: string, c: Buffer) => any },

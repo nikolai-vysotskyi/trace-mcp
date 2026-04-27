@@ -5,11 +5,11 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server/types.js';
 import { mineSessions } from '../../memory/conversation-miner.js';
+import type { DecisionType } from '../../memory/decision-store.js';
 import { indexSessions } from '../../memory/session-indexer.js';
 import { assembleWakeUp } from '../../memory/wake-up.js';
-import type { DecisionType } from '../../memory/decision-store.js';
+import type { ServerContext } from '../../server/types.js';
 
 const DECISION_TYPES = [
   'architecture_decision',

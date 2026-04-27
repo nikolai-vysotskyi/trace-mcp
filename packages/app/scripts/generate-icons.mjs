@@ -9,9 +9,9 @@
  * App icon:   full-colour gradient background with white graph overlay.
  */
 
-import sharp from 'sharp';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const assetsDir = path.join(__dirname, '..', 'assets');

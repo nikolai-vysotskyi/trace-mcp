@@ -7,8 +7,9 @@
  * Comment stripping: --, block comments
  * Scope: begin-end
  */
-import { createMultiPassPlugin, type CommentStyle, type ScopeConfig } from '../regex-base-v2.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin, type ScopeConfig } from '../regex-base-v2.js';
 
 const comments: CommentStyle = {
   line: ['--'],

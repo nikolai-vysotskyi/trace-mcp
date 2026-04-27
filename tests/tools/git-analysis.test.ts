@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import { getChurnRate, getHotspots, isGitRepo } from '../../src/tools/git/git-analysis.js';
 import { createTestStore } from '../test-utils.js';

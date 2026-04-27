@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import Database from 'better-sqlite3';
-import { parseContracts, extractRoutesFromDb } from '../../src/topology/contract-parser.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { extractRoutesFromDb, parseContracts } from '../../src/topology/contract-parser.js';
 
 describe('parseContracts', () => {
   let tmpDir: string;

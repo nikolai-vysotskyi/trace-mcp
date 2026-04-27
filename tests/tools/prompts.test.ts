@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerPrompts } from '../../src/prompts/index.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
 import type { Store } from '../../src/db/store.js';
 import type { PluginRegistry } from '../../src/plugin-api/registry.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { registerPrompts } from '../../src/prompts/index.js';
 
 // Minimal mock store
 function createMockStore(): Store {

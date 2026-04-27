@@ -1,9 +1,9 @@
-import https from 'node:https';
 import { spawnSync } from 'node:child_process';
-import path from 'node:path';
 import fs from 'node:fs';
+import https from 'node:https';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TRACE_MCP_HOME, ensureGlobalDirs, getDbPath } from './global.js';
+import { ensureGlobalDirs, getDbPath, TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
 
 declare const PKG_VERSION_INJECTED: string;

@@ -5,25 +5,25 @@
  * Falls back to regex when the tree-sitter WASM grammar is unavailable
  * (e.g. ABI version mismatch).
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-  SymbolKind,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
-import { extractClassMembers } from './dart-members.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import {
-  extractImportEdge,
   extractExportEdge,
+  extractImportEdge,
   extractPartEdge,
   extractPartOfEdge,
 } from './dart-edges.js';
+import { extractClassMembers } from './dart-members.js';
 
 /* ── Tree-sitter helpers ─────────────────────────────────────────────────── */
 

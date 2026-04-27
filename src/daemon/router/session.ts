@@ -1,14 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-
-import { logger } from '../../logger.js';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { TraceMcpConfig } from '../../config.js';
+import { logger } from '../../logger.js';
+import { tryAutoSpawnDaemon } from '../lifecycle.js';
+import { PollingDaemonWatcher } from './daemon-watcher.js';
+import { LocalBackend } from './local-backend.js';
 import { MessageRouter } from './message-router.js';
 import { ProxyBackend } from './proxy-backend.js';
-import { LocalBackend } from './local-backend.js';
-import { PollingDaemonWatcher } from './daemon-watcher.js';
-import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import type { Backend } from './types.js';
 
 export interface StdioSessionOptions {

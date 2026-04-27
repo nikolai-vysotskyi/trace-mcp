@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { PhpEcosystemPlugin } from '../../../src/indexer/plugins/integration/tooling/php-ecosystem/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -390,7 +390,7 @@ LanguageLine::create(['group' => 'auth', 'key' => 'failed', 'text' => ['en' => '
 use Titasgailius\\SearchRelations\\SearchesRelations;
 class Order extends Resource {
   use SearchesRelations;
-  public static \$searchRelations = ['user' => ['name', 'email']];
+  public static $searchRelations = ['user' => ['name', 'email']];
 }`);
       const result = plugin.extractNodes('app/Nova/Order.php', source, 'php');
       expect(result._unsafeUnwrap().frameworkRole).toBe('search_relations_usage');

@@ -1,10 +1,10 @@
 /**
  * Tests for laravel/socialite extraction.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  extractSocialiteUsage,
   buildSocialiteEdges,
+  extractSocialiteUsage,
 } from '../../../src/indexer/plugins/integration/framework/laravel/socialite.js';
 
 // ─── Controller with Socialite ───────────────────────────────

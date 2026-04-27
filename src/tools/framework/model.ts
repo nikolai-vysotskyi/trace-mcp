@@ -2,9 +2,8 @@
  * get_model_context tool — assembles full context for an Eloquent, Mongoose, or Sequelize model.
  * Returns model symbol + relationships + schema + related controllers/requests.
  */
-import type { Store, SymbolRow, OrmModelRow, OrmAssociationRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import type { OrmAssociationRow, OrmModelRow, Store, SymbolRow } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 
 interface ModelRelationship {
   type: string; // edge type name: has_many, belongs_to, etc.

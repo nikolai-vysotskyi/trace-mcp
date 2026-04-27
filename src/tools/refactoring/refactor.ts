@@ -10,20 +10,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { Store } from '../../db/store.js';
+import { scanNonCodeFiles } from './non-code-scanner.js';
 import { checkRenameSafe } from './rename-check.js';
 import {
-  type RefactorResult,
-  readLines,
-  writeLines,
+  BINARY_EXTENSIONS,
   buildRenameRegex,
-  getImportingFiles,
   detectLanguage,
   extractIdentifiers,
+  getImportingFiles,
   getIndent,
-  BINARY_EXTENSIONS,
+  type RefactorResult,
+  readLines,
   SKIP_DIRS,
+  writeLines,
 } from './shared.js';
-import { scanNonCodeFiles } from './non-code-scanner.js';
 
 // Re-export shared types for consumers
 export type { FileEdit, RefactorResult } from './shared.js';

@@ -55,4 +55,4 @@ export function formatToolError(error: TraceMcpError): object {
   return { error: base };
 }
 
-export { ok, err, Result };
+export { err, ok, Result };

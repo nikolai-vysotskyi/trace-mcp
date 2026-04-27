@@ -4,8 +4,9 @@
  * Extracts: labels, procedures, macros, equates, sections, defines.
  * Covers NASM, MASM, GAS, and common assembler dialects.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'assembly',

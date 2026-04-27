@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { createTestStore } from '../test-utils.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getComplexityTrend } from '../../src/tools/analysis/complexity-trend.js';
+import { createTestStore } from '../test-utils.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),

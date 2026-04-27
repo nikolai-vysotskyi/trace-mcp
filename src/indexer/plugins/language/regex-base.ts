@@ -3,15 +3,15 @@
  * Languages that don't use tree-sitter can use these helpers for symbol extraction.
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../errors.js';
 import type {
+  FileParseResult,
   LanguagePlugin,
   PluginManifest,
-  FileParseResult,
-  RawSymbol,
   RawEdge,
+  RawSymbol,
   SymbolKind,
 } from '../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../errors.js';
 
 /** Get 1-based line number from byte offset. */
 export function lineAt(source: string, offset: number): number {

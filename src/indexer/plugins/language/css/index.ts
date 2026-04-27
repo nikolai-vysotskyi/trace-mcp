@@ -9,17 +9,17 @@
  * For preprocessor files (.scss, .sass, .less, .styl, .stylus): regex fallback
  * since tree-sitter-css only handles pure CSS syntax.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 
 export class CssLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {

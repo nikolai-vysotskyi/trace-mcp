@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  NestJSPlugin,
+  extractConstructorDeps,
   extractControllerRoutes,
   extractModuleInfo,
-  extractConstructorDeps,
+  NestJSPlugin,
 } from '../../../src/indexer/plugins/integration/framework/nestjs/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

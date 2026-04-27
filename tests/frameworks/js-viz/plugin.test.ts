@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { JsVisualizationPlugin } from '../../../src/indexer/plugins/integration/view/js-viz/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

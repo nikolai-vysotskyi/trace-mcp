@@ -5,16 +5,16 @@
  * Returns JSON, Mermaid, or ASCII representation.
  */
 
-import type { Store } from '../../db/store.js';
-import {
-  extractCFG,
-  cfgToMermaid,
-  cfgToAscii,
-  type CFGResult,
-} from '../../indexer/cfg-extractor.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err, notFound, validationError, type TraceMcpResult } from '../../errors.js';
+import type { Store } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult, validationError } from '../../errors.js';
+import {
+  type CFGResult,
+  cfgToAscii,
+  cfgToMermaid,
+  extractCFG,
+} from '../../indexer/cfg-extractor.js';
 
 interface ControlFlowOptions {
   symbolId?: string;

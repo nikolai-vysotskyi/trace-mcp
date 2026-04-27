@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import {
-  generateTrigrams,
-  fuzzySearch,
-  indexTrigramsBatch,
-  deleteTrigramsByFile,
-} from '../../src/db/fuzzy.js';
 import type Database from 'better-sqlite3';
+import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  deleteTrigramsByFile,
+  fuzzySearch,
+  generateTrigrams,
+  indexTrigramsBatch,
+} from '../../src/db/fuzzy.js';
 import type { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('Fuzzy search', () => {
   let db: Database.Database;

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { logger } from '../logger.js';
-import type { LanguagePlugin, FrameworkPlugin } from './types.js';
+import type { FrameworkPlugin, LanguagePlugin } from './types.js';
 
 type ExternalPlugin = LanguagePlugin | FrameworkPlugin;
 

@@ -4,13 +4,13 @@
  */
 
 import type { Store } from '../db/store.js';
+import { logger } from '../logger.js';
 import { DomainStore } from './domain-store.js';
 import {
+  type ClassifiableSymbol,
   classifyBatch,
   inferTaxonomyHeuristic,
-  type ClassifiableSymbol,
 } from './heuristic-classifier.js';
-import { logger } from '../logger.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

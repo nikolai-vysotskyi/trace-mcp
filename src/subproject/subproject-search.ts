@@ -4,9 +4,9 @@
  */
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
-import type { TopologyStore } from '../topology/topology-db.js';
 import { searchFts } from '../db/fts.js';
 import { logger } from '../logger.js';
+import type { TopologyStore } from '../topology/topology-db.js';
 
 export interface SubprojectSearchItem {
   repo: string;

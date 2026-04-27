@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
-import type { Store, FileRow } from '../../db/store.js';
-import { validatePath } from '../../utils/security.js';
 // @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
+import type { FileRow, Store } from '../../db/store.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
+import { validatePath } from '../../utils/security.js';
 
 interface SearchTextMatch {
   file: string;

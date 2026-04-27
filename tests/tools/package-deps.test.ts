@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { getPackageDeps } from '../../src/tools/project/package-deps.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { REGISTRY_PATH } from '../../src/global.js';
+import { getPackageDeps } from '../../src/tools/project/package-deps.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 let tmpDir: string;

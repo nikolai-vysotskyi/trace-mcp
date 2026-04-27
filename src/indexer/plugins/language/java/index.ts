@@ -1,32 +1,32 @@
 /**
  * Java Language Plugin — tree-sitter based symbol extraction.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
-import { detectMinJavaVersionFromSource } from './version-features.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
+  extractAnnotations,
+  extractClassFields,
+  extractClassMethods,
+  extractEnumConstants,
+  extractImportEdges,
+  extractInterfaceExtends,
   extractPackageName,
   extractSignature,
-  extractAnnotations,
   extractSuperTypes,
-  extractInterfaceExtends,
-  extractImportEdges,
-  extractClassMethods,
-  extractClassFields,
-  extractEnumConstants,
   getNodeName,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
+import { detectMinJavaVersionFromSource } from './version-features.js';
 
 export class JavaLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {

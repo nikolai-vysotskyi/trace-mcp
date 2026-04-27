@@ -3,8 +3,8 @@
  * packed within a token budget. Deduplicates shared imports for batch queries.
  */
 import path from 'node:path';
-import { ok, err } from 'neverthrow';
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
+import { err, ok } from 'neverthrow';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import type { TraceMcpResult } from '../../errors.js';
 import type { ContextItem } from '../../scoring/assembly.js';
 import {

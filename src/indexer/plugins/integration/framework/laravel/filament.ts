@@ -10,7 +10,7 @@
  * - Widget $model / getStats() model references
  * - getPages() → Page class array
  */
-import type { RawEdge, FileParseResult, ResolveContext } from '../../../../../plugin-api/types.js';
+import type { FileParseResult, RawEdge, ResolveContext } from '../../../../../plugin-api/types.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────

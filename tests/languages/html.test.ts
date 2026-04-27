@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HtmlLanguagePlugin } from '../../src/indexer/plugins/language/html/index.js';
 
 const plugin = new HtmlLanguagePlugin();

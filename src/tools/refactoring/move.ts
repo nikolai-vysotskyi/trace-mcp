@@ -7,9 +7,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import type { EsModuleResolver } from '../../indexer/resolvers/es-modules.js';
+import { computeRelativeSpecifier, rewriteImportForMovedTarget } from './import-rewriter.js';
 import type { FileEdit, RefactorResult } from './shared.js';
-import { readLines, writeLines, getImportingFiles } from './shared.js';
-import { rewriteImportForMovedTarget, computeRelativeSpecifier } from './import-rewriter.js';
+import { getImportingFiles, readLines, writeLines } from './shared.js';
 
 export interface MoveSymbolParams {
   symbol_id: string;

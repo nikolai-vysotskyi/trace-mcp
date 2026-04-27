@@ -6,14 +6,14 @@
  */
 
 import type { Store } from '../../db/store.js';
+import { buildProjectContext } from '../../indexer/project-context.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import {
-  getPageRank,
   getCouplingMetrics,
   getDependencyCycles,
+  getPageRank,
 } from '../analysis/graph-analysis.js';
 import { getProjectMap } from './project.js';
-import { buildProjectContext } from '../../indexer/project-context.js';
 
 type DocSection =
   | 'overview'

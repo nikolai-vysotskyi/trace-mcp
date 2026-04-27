@@ -7,8 +7,9 @@
  * Comment stripping: ;, #| |#
  * Scope: indent-based (Lisp uses parens)
  */
-import { createMultiPassPlugin, type CommentStyle, type ScopeConfig } from '../regex-base-v2.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin, type ScopeConfig } from '../regex-base-v2.js';
 
 /** Common Lisp symbol name chars */
 const SYM = '[\\w*+!\\-<>=/.?@]';

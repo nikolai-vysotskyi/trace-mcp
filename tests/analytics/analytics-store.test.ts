@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AnalyticsStore } from '../../src/analytics/analytics-store.js';
 import type { ParsedSession } from '../../src/analytics/log-parser.js';
-import path from 'node:path';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 function makeParsedSession(overrides: Partial<ParsedSession['summary']> = {}): ParsedSession {

@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 import {
-  applyRename,
-  removeDeadCode,
-  extractFunction,
   applyCodemod,
+  applyRename,
+  extractFunction,
+  removeDeadCode,
 } from '../../src/tools/refactoring/refactor.js';
+import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // HELPERS

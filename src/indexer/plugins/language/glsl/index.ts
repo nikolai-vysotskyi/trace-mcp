@@ -3,8 +3,9 @@
  *
  * Extracts: functions, structs, uniforms, varyings, attributes, constants, and import edges (preprocessor).
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'glsl',

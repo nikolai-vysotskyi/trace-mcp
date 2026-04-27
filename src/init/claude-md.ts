@@ -6,8 +6,8 @@
  */
 
 import path from 'node:path';
-import type { InitStepResult } from './types.js';
 import { upsertTraceMcpBlock } from './md-block.js';
+import type { InitStepResult } from './types.js';
 
 export function updateClaudeMd(
   projectRoot: string,

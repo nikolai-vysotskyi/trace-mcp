@@ -4,27 +4,27 @@
  * Produces markdown or JSON output suitable for GitHub PR comments.
  */
 
-import { Command } from 'commander';
 import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 import fs from 'node:fs';
-import { initializeDatabase } from '../db/schema.js';
-import { Store } from '../db/store.js';
-import { PluginRegistry } from '../plugin-api/registry.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
-import { loadConfig } from '../config.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { getProject } from '../registry.js';
-import { findProjectRoot } from '../project-root.js';
-import { generateReport } from '../ci/report-generator.js';
-import { formatMarkdown, formatJson } from '../ci/markdown-formatter.js';
+import path from 'node:path';
+import { Command } from 'commander';
 import { captureBaseline, compareWithBaseline } from '../ci/baseline.js';
 import {
-  generateAnnotations,
-  formatGitHubActions,
   formatAnnotationsJson,
+  formatGitHubActions,
+  generateAnnotations,
 } from '../ci/github-annotations.js';
+import { formatJson, formatMarkdown } from '../ci/markdown-formatter.js';
+import { generateReport } from '../ci/report-generator.js';
+import { loadConfig } from '../config.js';
+import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
 import { logger } from '../logger.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { findProjectRoot } from '../project-root.js';
+import { getProject } from '../registry.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);

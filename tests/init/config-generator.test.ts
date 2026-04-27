@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { generateConfig } from '../../src/init/config-generator.js';
 import type { DetectionResult } from '../../src/init/types.js';
 

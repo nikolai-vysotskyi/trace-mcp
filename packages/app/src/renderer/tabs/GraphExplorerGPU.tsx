@@ -1,13 +1,13 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useImperativeHandle,
-  forwardRef,
-  useMemo,
-} from 'react';
 import { Graph } from '@cosmos.gl/graph';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 const BASE = 'http://127.0.0.1:3741';
 

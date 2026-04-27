@@ -1,53 +1,54 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
-import type { Store } from '../db/store.js';
-import type { PluginRegistry } from '../plugin-api/registry.js';
-import type { TraceMcpConfig } from '../config.js';
-import { formatToolError } from '../errors.js';
-import { validatePath } from '../utils/security.js';
-import { logger } from '../logger.js';
+
 import {
-  createAIProvider,
-  BlobVectorStore,
   type AIProvider,
+  BlobVectorStore,
+  createAIProvider,
   type RerankerService,
 } from '../ai/index.js';
 import { LLMReranker } from '../ai/reranker.js';
-import { resolvePreset } from '../tools/project/presets.js';
-import { withHints } from '../tools/shared/hints.js';
-import { SessionTracker } from '../session/tracker.js';
-import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
-import { flushSessionSummary } from '../session/resume.js';
+import type { TraceMcpConfig } from '../config.js';
+import type { Store } from '../db/store.js';
+import { formatToolError } from '../errors.js';
 import {
-  getSnapshotPath,
-  TOPOLOGY_DB_PATH,
   DECISIONS_DB_PATH,
   ensureGlobalDirs,
+  getSnapshotPath,
+  TOPOLOGY_DB_PATH,
 } from '../global.js';
-import { computePageRank } from '../scoring/pagerank.js';
-import { createExploredTracker } from './explored-tracker.js';
-import type { ServerContext, MetaContext } from './types.js';
-import type { ProgressState } from '../progress.js';
-import { buildInstructions } from './instructions.js';
 import { buildProjectContext } from '../indexer/project-context.js';
-import { installToolGate } from './tool-gate.js';
-
-import { registerCoreTools } from '../tools/register/core.js';
-import { registerNavigationTools } from '../tools/register/navigation.js';
-import { registerFrameworkTools } from '../tools/register/framework.js';
-import { registerAnalysisTools } from '../tools/register/analysis.js';
-import { registerGitTools } from '../tools/register/git.js';
-import { registerRefactoringTools } from '../tools/register/refactoring.js';
-import { registerAdvancedTools } from '../tools/register/advanced.js';
-import { registerQualityTools } from '../tools/register/quality.js';
-import { registerSessionTools } from '../tools/register/session.js';
-import { registerMemoryTools } from '../tools/register/memory.js';
-import { TopologyStore } from '../topology/topology-db.js';
+import { logger } from '../logger.js';
 import { DecisionStore } from '../memory/decision-store.js';
-import { getSessionProviderRegistry } from '../session/providers/registry.js';
+import type { PluginRegistry } from '../plugin-api/registry.js';
+import type { ProgressState } from '../progress.js';
+import { computePageRank } from '../scoring/pagerank.js';
+import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { HermesSessionProvider } from '../session/providers/hermes.js';
+import { getSessionProviderRegistry } from '../session/providers/registry.js';
+import { flushSessionSummary } from '../session/resume.js';
+import { SessionTracker } from '../session/tracker.js';
+import { resolvePreset } from '../tools/project/presets.js';
+import { registerAdvancedTools } from '../tools/register/advanced.js';
+import { registerAnalysisTools } from '../tools/register/analysis.js';
+import { registerCoreTools } from '../tools/register/core.js';
+import { registerFrameworkTools } from '../tools/register/framework.js';
+import { registerGitTools } from '../tools/register/git.js';
+import { registerMemoryTools } from '../tools/register/memory.js';
+import { registerNavigationTools } from '../tools/register/navigation.js';
+import { registerQualityTools } from '../tools/register/quality.js';
+import { registerRefactoringTools } from '../tools/register/refactoring.js';
+import { registerSessionTools } from '../tools/register/session.js';
+import { withHints } from '../tools/shared/hints.js';
+import { TopologyStore } from '../topology/topology-db.js';
+import { validatePath } from '../utils/security.js';
+import { createExploredTracker } from './explored-tracker.js';
+import { buildInstructions } from './instructions.js';
+import { installToolGate } from './tool-gate.js';
+import type { MetaContext, ServerContext } from './types.js';
 
 /** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response */
 function j(value: unknown): string {

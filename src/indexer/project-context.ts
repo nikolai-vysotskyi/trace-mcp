@@ -7,7 +7,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ProjectContext, DetectedVersion, ParsedDependency } from '../plugin-api/types.js';
+import type { DetectedVersion, ParsedDependency, ProjectContext } from '../plugin-api/types.js';
 
 export function buildProjectContext(rootPath: string): ProjectContext {
   const detectedVersions: DetectedVersion[] = [];

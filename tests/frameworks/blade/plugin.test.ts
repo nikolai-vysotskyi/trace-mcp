@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   BladePlugin,
+  bladeNameToPath,
   extractBladeDirectives,
   extractBladeSections,
   extractBladeYields,
-  bladeNameToPath,
   xComponentToPath,
 } from '../../../src/indexer/plugins/integration/view/blade/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';

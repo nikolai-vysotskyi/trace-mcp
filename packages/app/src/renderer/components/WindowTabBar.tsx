@@ -6,7 +6,7 @@
  * Each tab represents an open window (Menu + project windows).
  * Clicking a tab sends IPC to focus that window.
  */
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 interface TabInfo {
   id: string;

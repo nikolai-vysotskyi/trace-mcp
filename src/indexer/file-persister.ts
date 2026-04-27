@@ -2,10 +2,10 @@
  * File persistence layer — extracted from IndexingPipeline.
  * Handles writing FileExtraction results to the database.
  */
-import type { PipelineState } from './pipeline-state.js';
-import type { FileExtraction } from './pipeline-state.js';
+
+import { deleteTrigramsByFile, indexTrigramsBatch } from '../db/fuzzy.js';
 import type { RawEdge } from '../plugin-api/types.js';
-import { indexTrigramsBatch, deleteTrigramsByFile } from '../db/fuzzy.js';
+import type { FileExtraction, PipelineState } from './pipeline-state.js';
 
 /**
  * Callback for storing raw edges — injected from the pipeline so that

@@ -10,9 +10,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound, validationError } from '../../errors.js';
 import type { Store, SymbolRow } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult, validationError } from '../../errors.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 

@@ -5,8 +5,8 @@
  * while preserving comments, formatting, and trailing commas.
  */
 import fs from 'node:fs';
-import { modify, applyEdits, parse, type ModificationOptions } from 'jsonc-parser';
-import { GLOBAL_CONFIG_PATH, DEFAULT_CONFIG_JSONC, ensureGlobalDirs } from './global.js';
+import { applyEdits, type ModificationOptions, modify, parse } from 'jsonc-parser';
+import { DEFAULT_CONFIG_JSONC, ensureGlobalDirs, GLOBAL_CONFIG_PATH } from './global.js';
 import { logger } from './logger.js';
 
 // Shared formatting options — match the 2-space indent used in DEFAULT_CONFIG_JSONC

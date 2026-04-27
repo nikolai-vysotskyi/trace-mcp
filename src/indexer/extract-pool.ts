@@ -10,14 +10,15 @@
  * shuts them down. Worker spawn cost is non-trivial (~150-300 ms each because
  * of WASM init + plugin loading), so callers should gate use by batch size.
  */
-import { Worker } from 'node:worker_threads';
-import os from 'node:os';
+
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { logger } from '../logger.js';
-import type { FileExtraction } from './pipeline-state.js';
-import type { WorkspaceInfo } from './monorepo.js';
+import { Worker } from 'node:worker_threads';
 import type { FileRow } from '../db/types.js';
+import { logger } from '../logger.js';
+import type { WorkspaceInfo } from './monorepo.js';
+import type { FileExtraction } from './pipeline-state.js';
 
 export interface ExtractRequest {
   relPath: string;

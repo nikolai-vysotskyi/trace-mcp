@@ -11,23 +11,23 @@
  * - Cross-repo impact analysis at symbol level
  */
 
-import path from 'node:path';
 import fs from 'node:fs';
-import type { TopologyStore, ClientCallRow } from '../topology/topology-db.js';
-import { parseContracts, extractRoutesFromDb } from '../topology/contract-parser.js';
-import { detectServices } from '../topology/service-detector.js';
-import { scanClientCalls, scanEndpointLiterals } from './scanner.js';
-import type { EndpointSchemaDiff } from './schema-diff.js';
+import path from 'node:path';
 import { getDbPath } from '../global.js';
 import { logger } from '../logger.js';
-import { subprojectSearch as _subprojectSearch } from './subproject-search.js';
-import type { SubprojectSearchResult } from './subproject-search.js';
+import { extractRoutesFromDb, parseContracts } from '../topology/contract-parser.js';
+import { detectServices } from '../topology/service-detector.js';
+import type { ClientCallRow, TopologyStore } from '../topology/topology-db.js';
+import { scanClientCalls, scanEndpointLiterals } from './scanner.js';
+import type { EndpointSchemaDiff } from './schema-diff.js';
 import {
-  computeRiskLevel,
-  upgradeRiskIfBreaking,
   detectBreakingChanges as _detectBreakingChanges,
+  computeRiskLevel,
   resolveSymbolsAtLocation,
+  upgradeRiskIfBreaking,
 } from './subproject-helpers.js';
+import type { SubprojectSearchResult } from './subproject-search.js';
+import { subprojectSearch as _subprojectSearch } from './subproject-search.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

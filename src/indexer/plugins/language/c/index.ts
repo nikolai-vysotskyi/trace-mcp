@@ -4,27 +4,27 @@
  * Extracts: functions, structs, enums, unions, typedefs, macros, global variables.
  * Imports: #include directives.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  extractSignature,
-  getNodeName,
-  extractQualifiers,
-  findDeclaratorName,
   containsFunctionDeclarator,
-  extractImportEdges,
-  extractStructFields,
   extractEnumConstants,
+  extractImportEdges,
+  extractQualifiers,
+  extractSignature,
+  extractStructFields,
+  findDeclaratorName,
+  getNodeName,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 
 export class CLanguagePlugin implements LanguagePlugin {

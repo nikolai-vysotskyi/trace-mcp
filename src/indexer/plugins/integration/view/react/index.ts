@@ -12,19 +12,19 @@
  *
  * Uses tree-sitter-typescript for AST-based extraction of JSX/TSX.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  FrameworkPlugin,
-  PluginManifest,
-  ProjectContext,
-  FileParseResult,
-  RawEdge,
-  RawComponent,
-  ResolveContext,
-} from '../../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
 import { parseError } from '../../../../../errors.js';
 import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  FrameworkPlugin,
+  PluginManifest,
+  ProjectContext,
+  RawComponent,
+  RawEdge,
+  ResolveContext,
+} from '../../../../../plugin-api/types.js';
 
 // ============================================================
 // Built-in hooks — we skip these when detecting custom hook usage

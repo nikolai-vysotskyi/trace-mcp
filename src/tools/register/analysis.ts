@@ -1,36 +1,36 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
+import type { ServerContext } from '../../server/types.js';
+import { getEdgeBottlenecks } from '../analysis/bottlenecks.js';
+import { getComplexityTrend } from '../analysis/complexity-trend.js';
+import { checkSymbolForDuplicates } from '../analysis/duplication.js';
 import {
-  getImplementations,
+  getCouplingMetrics,
+  getDependencyCycles,
+  getExtractionCandidates,
+  getPageRank,
+  getRepoHealth,
+} from '../analysis/graph-analysis.js';
+import { getCouplingTrend, getSymbolComplexityTrend } from '../analysis/history.js';
+import {
   getApiSurface,
-  getPluginRegistry,
-  getTypeHierarchy,
   getDeadExports,
   getDependencyGraph,
+  getImplementations,
+  getPluginRegistry,
+  getTypeHierarchy,
   getUntestedExports,
   getUntestedSymbols,
   selfAudit,
 } from '../analysis/introspect.js';
 import {
-  getCouplingMetrics,
-  getDependencyCycles,
-  getPageRank,
-  getExtractionCandidates,
-  getRepoHealth,
-} from '../analysis/graph-analysis.js';
-import { getEdgeBottlenecks } from '../analysis/bottlenecks.js';
-import { getHotspots } from '../git/git-analysis.js';
-import {
-  getLayerViolations,
   detectLayerPreset,
+  getLayerViolations,
   type LayerDefinition,
 } from '../analysis/layer-violations.js';
+import { getHotspots } from '../git/git-analysis.js';
 import { getFileOwnership, getSymbolOwnership } from '../git/git-ownership.js';
-import { getComplexityTrend } from '../analysis/complexity-trend.js';
-import { getCouplingTrend, getSymbolComplexityTrend } from '../analysis/history.js';
-import { checkSymbolForDuplicates } from '../analysis/duplication.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerAnalysisTools(server: McpServer, ctx: ServerContext): void {

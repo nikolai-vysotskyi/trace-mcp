@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ExpressPlugin,
-  extractExpressRoutes,
   extractExpressMiddleware,
+  extractExpressRoutes,
 } from '../../../src/indexer/plugins/integration/framework/express/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

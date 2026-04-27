@@ -3,8 +3,8 @@
  * Falls back to FTS5-only when AI is unavailable.
  */
 import type Database from 'better-sqlite3';
-import { searchFts, type FtsResult } from '../db/fts.js';
-import type { VectorStore, EmbeddingService, RerankerService } from './interfaces.js';
+import { type FtsResult, searchFts } from '../db/fts.js';
+import type { EmbeddingService, RerankerService, VectorStore } from './interfaces.js';
 
 interface HybridSearchResult {
   symbolId: number;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { InferenceService } from '../../src/ai/interfaces.js';
 import { LLMReranker } from '../../src/ai/reranker.js';
 

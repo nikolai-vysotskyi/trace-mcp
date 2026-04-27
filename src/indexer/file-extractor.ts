@@ -6,28 +6,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../db/store.js';
+import type { FileRow } from '../db/types.js';
+import { logger } from '../logger.js';
+import { executeFrameworkExtractNodes, executeLanguagePlugin } from '../plugin-api/executor.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type {
-  ProjectContext,
   FileParseResult,
-  RawEdge,
   FrameworkPlugin,
+  ProjectContext,
+  RawEdge,
 } from '../plugin-api/types.js';
-import { executeLanguagePlugin, executeFrameworkExtractNodes } from '../plugin-api/executor.js';
-import { buildProjectContext } from './project-context.js';
-import { hashContent } from '../utils/hasher.js';
-import {
-  validatePath,
-  validateFileSize,
-  isSensitiveFile,
-  isBinaryBuffer,
-} from '../utils/security.js';
-import { logger } from '../logger.js';
 import { computeComplexity } from '../tools/analysis/complexity.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
+import { hashContent } from '../utils/hasher.js';
+import {
+  isBinaryBuffer,
+  isSensitiveFile,
+  validateFileSize,
+  validatePath,
+} from '../utils/security.js';
 import type { WorkspaceInfo } from './monorepo.js';
 import type { FileExtraction } from './pipeline-state.js';
-import type { FileRow } from '../db/types.js';
+import { buildProjectContext } from './project-context.js';
 
 interface ExtractorContext {
   /**

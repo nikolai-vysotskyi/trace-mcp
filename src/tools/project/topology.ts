@@ -7,13 +7,12 @@
  * - get_contract_drift: spec vs implementation mismatches
  */
 
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
-import type { TopologyStore } from '../../topology/topology-db.js';
-import { detectServices } from '../../topology/service-detector.js';
-import { parseContracts } from '../../topology/contract-parser.js';
-import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 import { getDbPath } from '../../global.js';
+import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
+import { parseContracts } from '../../topology/contract-parser.js';
+import { detectServices } from '../../topology/service-detector.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

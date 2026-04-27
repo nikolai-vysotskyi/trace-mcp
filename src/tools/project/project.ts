@@ -1,6 +1,6 @@
-import type { Store, IndexStats } from '../../db/store.js';
-import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../../config.js';
+import type { IndexStats, Store } from '../../db/store.js';
+import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { DetectedVersion, ProjectContext } from '../../plugin-api/types.js';
 import type { ProgressSnapshot } from '../../progress.js';
 

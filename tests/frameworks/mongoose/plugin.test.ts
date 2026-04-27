@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  MongoosePlugin,
   extractMongooseSchema,
+  MongoosePlugin,
 } from '../../../src/indexer/plugins/integration/orm/mongoose/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

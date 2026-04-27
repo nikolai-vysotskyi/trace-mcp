@@ -5,7 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { REGISTRY_PATH, ensureGlobalDirs, getDbPath, projectName } from './global.js';
+import { ensureGlobalDirs, getDbPath, projectName, REGISTRY_PATH } from './global.js';
 
 export interface RegistryEntry {
   name: string;

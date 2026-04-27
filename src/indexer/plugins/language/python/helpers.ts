@@ -2,7 +2,7 @@
  * Helper utilities for the Python language plugin.
  * Extracts AST-walking logic to keep the main plugin under 300 lines.
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 

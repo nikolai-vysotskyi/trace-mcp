@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { DrizzlePlugin } from '../../../src/indexer/plugins/integration/orm/drizzle/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

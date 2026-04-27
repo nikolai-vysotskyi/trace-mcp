@@ -2,28 +2,28 @@
  * Comprehensive E2E test for all MCP tools.
  * Runs the full pipeline on fixtures and verifies tool outputs.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import type { Store } from '../../src/db/store.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
+import type { Store } from '../../src/db/store.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { BladePlugin } from '../../src/indexer/plugins/integration/view/blade/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { BladePlugin } from '../../src/indexer/plugins/integration/view/blade/index.js';
-
-// Tools under test
-import { search, getFileOutline, getSymbol } from '../../src/tools/navigation/navigation.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { getChangeImpact } from '../../src/tools/analysis/impact.js';
-import { findReferences } from '../../src/tools/framework/references.js';
-import { getRequestFlow } from '../../src/tools/framework/flow.js';
-import { getSchema } from '../../src/tools/framework/schema.js';
-import { getModelContext } from '../../src/tools/framework/model.js';
 import { getComponentTree } from '../../src/tools/framework/components.js';
+import { getRequestFlow } from '../../src/tools/framework/flow.js';
+import { getModelContext } from '../../src/tools/framework/model.js';
+import { findReferences } from '../../src/tools/framework/references.js';
+import { getSchema } from '../../src/tools/framework/schema.js';
+// Tools under test
+import { getFileOutline, getSymbol, search } from '../../src/tools/navigation/navigation.js';
+import { createTestStore } from '../test-utils.js';
 
 // ─── Laravel Fixture (full-stack: routes, models, controllers, migrations) ───
 

@@ -1,30 +1,30 @@
 /**
  * Ruby Language Plugin — tree-sitter based symbol extraction.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
-import { detectMinRubyVersionFromSource } from './version-features.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
+  extractAttributes,
+  extractConstants,
+  extractImportEdges,
+  extractMethods,
+  extractMixins,
   extractSignature,
   extractSuperclass,
-  extractMethods,
-  extractAttributes,
-  extractMixins,
-  extractImportEdges,
-  extractConstants,
   getNodeName,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
+import { detectMinRubyVersionFromSource } from './version-features.js';
 
 export class RubyLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {

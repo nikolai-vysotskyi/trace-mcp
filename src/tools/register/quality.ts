@@ -1,21 +1,21 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
-import { getCoChanges, collectCoChanges, persistCoChanges } from '../quality/co-changes.js';
-import { getChangedSymbols, compareBranches } from '../quality/changed-symbols.js';
+import type { ServerContext } from '../../server/types.js';
 import { detectCommunities, getCommunities, getCommunityDetail } from '../analysis/communities.js';
-import { auditConfig } from '../quality/audit-config.js';
 import { getControlFlow } from '../analysis/control-flow.js';
-import { getPackageDeps } from '../project/package-deps.js';
 import { generateDocs } from '../project/generate-docs.js';
-import { packContext } from '../refactoring/pack-context.js';
+import { getPackageDeps } from '../project/package-deps.js';
+import { auditConfig } from '../quality/audit-config.js';
+import { compareBranches, getChangedSymbols } from '../quality/changed-symbols.js';
+import { collectCoChanges, getCoChanges, persistCoChanges } from '../quality/co-changes.js';
 import {
   evaluateQualityGates,
-  QualityGatesConfigSchema,
   type QualityGatesConfig,
+  QualityGatesConfigSchema,
 } from '../quality/quality-gates.js';
 import { exportSecurityContext } from '../quality/security-context-export.js';
+import { packContext } from '../refactoring/pack-context.js';
 
 export function registerQualityTools(server: McpServer, ctx: ServerContext): void {
   const { store, registry, config, projectRoot, j } = ctx;

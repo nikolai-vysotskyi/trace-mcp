@@ -8,7 +8,7 @@
  * - Public properties (reactive state) and methods (callable actions)
  * - Blade-side: <livewire:name/>, @livewire(), wire:click directives
  */
-import type { RawEdge, FileParseResult, ResolveContext } from '../../../../../plugin-api/types.js';
+import type { FileParseResult, RawEdge, ResolveContext } from '../../../../../plugin-api/types.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
 

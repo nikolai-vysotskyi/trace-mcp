@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  PrismaPlugin,
   PrismaLanguagePlugin,
+  PrismaPlugin,
   parsePrismaSchema,
 } from '../../../src/indexer/plugins/integration/orm/prisma/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';

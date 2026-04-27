@@ -1,11 +1,11 @@
 /**
  * Tests for laravel/cashier extraction.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
+  buildBillableModelEdges,
   extractBillableModel,
   extractCashierWebhook,
-  buildBillableModelEdges,
 } from '../../../src/indexer/plugins/integration/framework/laravel/cashier.js';
 
 // ─── Billable model ──────────────────────────────────────────

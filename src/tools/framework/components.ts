@@ -1,6 +1,5 @@
-import type { Store, ComponentRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import type { ComponentRow, Store } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 import { estimateTokens } from '../../utils/token-counter.js';
 
 interface ComponentTreeNode {

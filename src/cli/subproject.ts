@@ -13,10 +13,10 @@
  */
 
 import { Command } from 'commander';
-import { TopologyStore } from '../topology/topology-db.js';
-import { SubprojectManager } from '../subproject/manager.js';
-import { TOPOLOGY_DB_PATH, ensureGlobalDirs } from '../global.js';
+import { ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
+import { SubprojectManager } from '../subproject/manager.js';
+import { TopologyStore } from '../topology/topology-db.js';
 
 function createManager(): { manager: SubprojectManager; topoStore: TopologyStore } {
   ensureGlobalDirs();

@@ -1,10 +1,9 @@
-import type { Store, SymbolRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
-import { isGitRepo } from '../git/git-analysis.js';
 import { execSync } from 'node:child_process';
-import { resolveSymbolInput } from '../shared/resolve.js';
+import type { Store, SymbolRow } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
+import { isGitRepo } from '../git/git-analysis.js';
 import { getChaNodeIds } from '../shared/cha.js';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 // ─── Pennant (feature-flag) types ────────────────────────────────────────────
 

@@ -1,7 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { TraceMcpResult } from '../../errors.js';
-import { ok, err } from '../../errors.js';
-import { dbError } from '../../errors.js';
+import { dbError, err, ok } from '../../errors.js';
 import type { EdgeRow } from '../types.js';
 
 export interface EdgeTypeRow {

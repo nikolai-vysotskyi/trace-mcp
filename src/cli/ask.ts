@@ -9,27 +9,27 @@
  *   trace-mcp ask --model gpt-4o "explain the plugin system"
  */
 
-import { Command } from 'commander';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
-import { execSync } from 'node:child_process';
 import readline from 'node:readline';
-import { loadConfig, type TraceMcpConfig } from '../config.js';
-import { findProjectRoot, hasRootMarkers } from '../project-root.js';
-import { getProject } from '../registry.js';
-import { setupProject } from '../project-setup.js';
-import { Store } from '../db/store.js';
-import { initializeDatabase } from '../db/schema.js';
-import { PluginRegistry } from '../plugin-api/registry.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
-import type { ChatMessage } from '../ai/interfaces.js';
+import { Command } from 'commander';
 import {
+  buildSystemPrompt,
+  gatherContext,
   type LLMProvider,
   resolveProvider,
-  gatherContext,
-  buildSystemPrompt,
   stripContextFromMessage,
 } from '../ai/ask-shared.js';
+import type { ChatMessage } from '../ai/interfaces.js';
+import { loadConfig, type TraceMcpConfig } from '../config.js';
+import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { findProjectRoot, hasRootMarkers } from '../project-root.js';
+import { setupProject } from '../project-setup.js';
+import { getProject } from '../registry.js';
 
 // ---------------------------------------------------------------------------
 // Project resolution (local dir or --repo clone)

@@ -1,53 +1,53 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
 import { logger } from '../../logger.js';
+import { RuntimeIntelligence } from '../../runtime/lifecycle.js';
+import type { ServerContext } from '../../server/types.js';
 import {
-  getServiceMap,
-  getCrossServiceImpact,
-  getApiContract,
-  getServiceDependencies,
-  getContractDrift,
-} from '../project/topology.js';
+  discoverAndRegisterSubprojects,
+  discoverClaudeSessions,
+} from '../advanced/claude-sessions.js';
+import { discoverHermesSessions } from '../advanced/hermes-sessions.js';
 import {
+  getCrossDomainDependencies,
+  getDomainContext,
+  getDomainMap,
+  queryByIntent,
+} from '../advanced/intent.js';
+import {
+  getEndpointAnalytics,
+  getRuntimeCallGraph,
+  getRuntimeDependencies,
+  getRuntimeProfile,
+} from '../advanced/runtime.js';
+import {
+  getContractVersions,
+  getSubprojectClients,
   getSubprojectGraph,
   getSubprojectImpact,
   subprojectAddRepo,
   subprojectSync,
-  getSubprojectClients,
-  getContractVersions,
 } from '../advanced/subproject.js';
-import {
-  discoverClaudeSessions,
-  discoverAndRegisterSubprojects,
-} from '../advanced/claude-sessions.js';
-import { discoverHermesSessions } from '../advanced/hermes-sessions.js';
-import { RuntimeIntelligence } from '../../runtime/lifecycle.js';
-import {
-  getRuntimeProfile,
-  getRuntimeCallGraph,
-  getEndpointAnalytics,
-  getRuntimeDependencies,
-} from '../advanced/runtime.js';
-import {
-  queryByIntent,
-  getDomainMap,
-  getDomainContext,
-  getCrossDomainDependencies,
-} from '../advanced/intent.js';
-import { graphQuery } from '../analysis/graph-query.js';
 import { getDataflow } from '../analysis/dataflow.js';
-import { visualizeGraph, getDependencyDiagram } from '../analysis/visualize.js';
+import { graphQuery } from '../analysis/graph-query.js';
+import {
+  assessChangeRisk,
+  detectDrift,
+  getHealthTrends,
+  getTechDebt,
+  predictBugs,
+} from '../analysis/predictive-intelligence.js';
+import { getDependencyDiagram, visualizeGraph } from '../analysis/visualize.js';
 import { visualizeSubprojectTopology } from '../analysis/visualize-subproject.js';
 import { searchText } from '../navigation/search-text.js';
 import {
-  predictBugs,
-  detectDrift,
-  getTechDebt,
-  assessChangeRisk,
-  getHealthTrends,
-} from '../analysis/predictive-intelligence.js';
+  getApiContract,
+  getContractDrift,
+  getCrossServiceImpact,
+  getServiceDependencies,
+  getServiceMap,
+} from '../project/topology.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerAdvancedTools(server: McpServer, ctx: ServerContext): void {

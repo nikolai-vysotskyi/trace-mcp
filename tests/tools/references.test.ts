@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
 import { findReferences } from '../../src/tools/framework/references.js';
+import { createTestStore } from '../test-utils.js';
 
 function addSymbol(
   store: Store,

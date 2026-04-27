@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { describe, expect, it } from 'vitest';
 import {
-  extractUseStatements,
+  extractCallSites,
   extractClassHeritage,
   extractInterfaceExtends,
-  extractCallSites,
+  extractUseStatements,
 } from '../../src/indexer/plugins/language/php/helpers.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { getParser } from '../../src/parser/tree-sitter.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 

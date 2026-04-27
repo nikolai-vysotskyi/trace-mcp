@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
+import { getDeadCodeReachability, getDeadCodeV2 } from '../../src/tools/refactoring/dead-code.js';
 import { createTestStore } from '../test-utils.js';
-import { getDeadCodeV2, getDeadCodeReachability } from '../../src/tools/refactoring/dead-code.js';
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
   return store.insertFile(filePath, lang, `hash_${filePath}`, 100);

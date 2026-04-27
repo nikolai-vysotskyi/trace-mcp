@@ -3,28 +3,28 @@
  * Registers a project: detects root, detects frameworks, creates DB, adds to registry.
  */
 
-import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as p from '@clack/prompts';
-import { findProjectRoot, discoverChildProjects, hasRootMarkers } from '../project-root.js';
-import { detectProject } from '../init/detector.js';
-import { generateConfig } from '../init/config-generator.js';
+import { Command } from 'commander';
+import { loadConfig, removeProjectConfig, saveProjectConfig } from '../config.js';
+import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
 import { ensureGlobalDirs, getDbPath } from '../global.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
+import { generateConfig } from '../init/config-generator.js';
+import { detectProject } from '../init/detector.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
+import { setupProject } from '../project-setup.js';
 import {
-  registerProject,
-  getProject,
-  unregisterProject,
-  listProjects,
   findParentProject,
+  getProject,
+  listProjects,
+  registerProject,
+  unregisterProject,
   updateLastIndexed,
 } from '../registry.js';
-import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
-import { initializeDatabase } from '../db/schema.js';
-import { setupProject } from '../project-setup.js';
-import { Store } from '../db/store.js';
-import { PluginRegistry } from '../plugin-api/registry.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
 
 async function runIndexing(
   projectRoot: string,

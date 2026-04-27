@@ -3,6 +3,9 @@
  * Supports embeddings (text-embedding-004) and inference (gemini-2.0-flash, etc.).
  * Uses fetch directly; no SDK dependency required.
  */
+
+import { logger } from '../logger.js';
+import { withRetry } from '../utils/retry.js';
 import type {
   AIProvider,
   ChatMessage,
@@ -10,8 +13,6 @@ import type {
   EmbeddingTask,
   InferenceService,
 } from './interfaces.js';
-import { logger } from '../logger.js';
-import { withRetry } from '../utils/retry.js';
 
 interface GeminiConfig {
   apiKey: string;

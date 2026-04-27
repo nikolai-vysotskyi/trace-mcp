@@ -4,8 +4,9 @@
  * Extracts: functions, classes, static methods.
  * Supports both AHK v1 and v2 syntax.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'autohotkey',

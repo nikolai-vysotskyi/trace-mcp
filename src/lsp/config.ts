@@ -2,11 +2,11 @@
  * LSP server auto-detection and configuration resolution.
  */
 
-import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { logger } from '../logger.js';
 import type { TraceMcpConfig } from '../config.js';
+import { logger } from '../logger.js';
 
 export interface LspServerSpec {
   language: string;

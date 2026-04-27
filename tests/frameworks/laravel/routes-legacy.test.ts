@@ -3,9 +3,10 @@
  * Covers string controller syntax (L6-8), invokable controllers,
  * Route::namespace(), Route::controller() groups.
  */
-import { describe, it, expect } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { extractRoutes } from '../../../src/indexer/plugins/integration/framework/laravel/routes.js';
 
 const L6_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-6');

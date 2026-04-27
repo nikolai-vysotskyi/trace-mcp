@@ -8,10 +8,10 @@
  */
 import { parentPort } from 'node:worker_threads';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { FileExtractor } from './file-extractor.js';
-import { buildProjectContext } from './project-context.js';
 import type { ExtractRequest, ExtractResponse } from './extract-pool.js';
+import { FileExtractor } from './file-extractor.js';
 import type { WorkspaceInfo } from './monorepo.js';
+import { buildProjectContext } from './project-context.js';
 
 if (!parentPort) {
   throw new Error('extract-worker.ts must be loaded as a worker_thread');

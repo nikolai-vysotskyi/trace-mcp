@@ -12,17 +12,17 @@
  * and packages/app/src/main/daemon-lifecycle.ts (electron app).
  */
 
+import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync, spawn } from 'node:child_process';
 import {
-  TRACE_MCP_HOME,
-  DEFAULT_DAEMON_PORT,
   DAEMON_LOG_PATH,
+  DEFAULT_DAEMON_PORT,
   LAUNCHD_PLIST_PATH,
+  TRACE_MCP_HOME,
 } from '../global.js';
-import { getDaemonHealth, isDaemonRunning } from './client.js';
 import { logger } from '../logger.js';
+import { getDaemonHealth, isDaemonRunning } from './client.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 // Bump when the plist contents (env vars, args, KeepAlive policy, throttle) change.

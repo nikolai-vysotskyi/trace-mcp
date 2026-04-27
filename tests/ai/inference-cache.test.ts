@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { InferenceCache } from '../../src/ai/inference-cache.js';
 
 function createDb(): Database.Database {

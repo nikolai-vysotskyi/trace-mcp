@@ -3,9 +3,9 @@
  * Covers: config extraction, CSS directives, template scanning,
  * class composition helpers, PostCSS, container queries, v4 features.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { TailwindPlugin } from '../../../src/indexer/plugins/integration/view/tailwind/index.js';
-import type { ProjectContext, FileParseResult } from '../../../src/plugin-api/types.js';
+import type { FileParseResult, ProjectContext } from '../../../src/plugin-api/types.js';
 
 function makeCtx(deps: Record<string, string> = {}, rootPath = '/tmp/test'): ProjectContext {
   return {

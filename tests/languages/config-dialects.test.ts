@@ -1,11 +1,11 @@
 /**
  * Tests for dialect-aware config language plugins: YAML, JSON, TOML, HCL.
  */
-import { describe, it, expect } from 'vitest';
-import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
+import { describe, expect, it } from 'vitest';
+import { HclLanguagePlugin } from '../../src/indexer/plugins/language/hcl/index.js';
 import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang/index.js';
 import { TomlLanguagePlugin } from '../../src/indexer/plugins/language/toml/index.js';
-import { HclLanguagePlugin } from '../../src/indexer/plugins/language/hcl/index.js';
+import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
 
 const yamlPlugin = new YamlLanguagePlugin();
 const jsonPlugin = new JsonLanguagePlugin();

@@ -1,15 +1,15 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ServerContext } from '../../server/types.js';
-import {
-  applyRename,
-  removeDeadCode,
-  extractFunction,
-  applyCodemod,
-} from '../refactoring/refactor.js';
-import { applyMove } from '../refactoring/move.js';
 import { changeSignature, type SignatureChange } from '../refactoring/change-signature.js';
-import { planRefactoring, type PlanRefactoringParams } from '../refactoring/plan-refactoring.js';
+import { applyMove } from '../refactoring/move.js';
+import { type PlanRefactoringParams, planRefactoring } from '../refactoring/plan-refactoring.js';
+import {
+  applyCodemod,
+  applyRename,
+  extractFunction,
+  removeDeadCode,
+} from '../refactoring/refactor.js';
 
 export function registerRefactoringTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j } = ctx;

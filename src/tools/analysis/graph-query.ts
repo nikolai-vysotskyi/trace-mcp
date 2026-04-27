@@ -1,6 +1,6 @@
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
-import { type TraceMcpResult, ok, err, notFound } from '../../errors.js';
 import { searchFts } from '../../db/fts.js';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

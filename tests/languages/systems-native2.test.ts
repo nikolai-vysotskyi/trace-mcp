@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { CSharpLanguagePlugin } from '../../src/indexer/plugins/language/csharp/index.js';
 import { ScalaLanguagePlugin } from '../../src/indexer/plugins/language/scala/index.js';
 

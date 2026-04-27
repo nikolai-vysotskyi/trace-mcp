@@ -10,12 +10,12 @@
  *   trace-mcp memory index [--project=.] [--force]
  */
 
-import { Command } from 'commander';
 import * as path from 'node:path';
-import { DecisionStore } from '../memory/decision-store.js';
-import { mineSessions } from '../memory/conversation-miner.js';
-import { indexSessions } from '../memory/session-indexer.js';
+import { Command } from 'commander';
 import { DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
+import { mineSessions } from '../memory/conversation-miner.js';
+import { DecisionStore } from '../memory/decision-store.js';
+import { indexSessions } from '../memory/session-indexer.js';
 
 function openStore(): DecisionStore {
   ensureGlobalDirs();

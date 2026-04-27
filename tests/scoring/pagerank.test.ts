@@ -2,11 +2,12 @@
  * Tests for computePageRank — verifies score distribution, sink-node handling,
  * convergence on cycles, and edge cases (empty graph, all sinks, star topologies).
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import { computePageRank, invalidatePageRankCache } from '../../src/scoring/pagerank.js';
+
 import type Database from 'better-sqlite3';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
+import { computePageRank, invalidatePageRankCache } from '../../src/scoring/pagerank.js';
+import { createTestStore } from '../test-utils.js';
 
 function setup() {
   const store = createTestStore();

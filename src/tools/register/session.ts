@@ -1,21 +1,21 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { MetaContext } from '../../server/types.js';
-import { getIndexHealth, getProjectMap } from '../project/project.js';
-import { buildProjectContext } from '../../indexer/project-context.js';
-import { registerAITools } from '../ai/ai-tools.js';
-import { listBundles, loadAllBundles, searchBundles } from '../../bundles.js';
-import { listPresets } from '../project/presets.js';
-import { getSessionResume } from '../../session/resume.js';
 import { AnalyticsStore } from '../../analytics/analytics-store.js';
-import { getSessionAnalytics, getOptimizationReport } from '../../analytics/session-analytics.js';
-import { runBenchmark, formatBenchmarkMarkdown } from '../../analytics/benchmark.js';
-import { detectCoverage } from '../../analytics/tech-detector.js';
+import { formatBenchmarkMarkdown, runBenchmark } from '../../analytics/benchmark.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
+import { getOptimizationReport, getSessionAnalytics } from '../../analytics/session-analytics.js';
 import { syncAnalytics } from '../../analytics/sync.js';
+import { detectCoverage } from '../../analytics/tech-detector.js';
+import { listBundles, loadAllBundles, searchBundles } from '../../bundles.js';
+import { buildProjectContext } from '../../indexer/project-context.js';
+import { decisionsForResume, decisionsForTask } from '../../memory/enrichment.js';
 import { registerPrompts } from '../../prompts/index.js';
+import type { MetaContext } from '../../server/types.js';
+import { getSessionResume } from '../../session/resume.js';
+import { registerAITools } from '../ai/ai-tools.js';
 import { planTurn } from '../navigation/plan-turn.js';
-import { decisionsForTask, decisionsForResume } from '../../memory/enrichment.js';
+import { listPresets } from '../project/presets.js';
+import { getIndexHealth, getProjectMap } from '../project/project.js';
 
 export function registerSessionTools(server: McpServer, ctx: MetaContext): void {
   const {

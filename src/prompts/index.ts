@@ -7,22 +7,22 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import type { TraceMcpConfig } from '../config.js';
 import type { Store } from '../db/store.js';
-import { getChangeImpact } from '../tools/analysis/impact.js';
-import { getFeatureContext } from '../tools/navigation/context.js';
-import { getProjectMap } from '../tools/project/project.js';
 import { buildProjectContext } from '../indexer/project-context.js';
-import { getCallGraph } from '../tools/framework/call-graph.js';
+import type { PluginRegistry } from '../plugin-api/registry.js';
 import {
   getCouplingMetrics,
   getDependencyCycles,
   getRepoHealth,
 } from '../tools/analysis/graph-analysis.js';
-import { getDeadCodeV2 } from '../tools/refactoring/dead-code.js';
+import { getChangeImpact } from '../tools/analysis/impact.js';
+import { getTechDebt, predictBugs } from '../tools/analysis/predictive-intelligence.js';
+import { getCallGraph } from '../tools/framework/call-graph.js';
 import { getHotspots } from '../tools/git/git-analysis.js';
-import { predictBugs, getTechDebt } from '../tools/analysis/predictive-intelligence.js';
-import type { PluginRegistry } from '../plugin-api/registry.js';
-import type { TraceMcpConfig } from '../config.js';
+import { getFeatureContext } from '../tools/navigation/context.js';
+import { getProjectMap } from '../tools/project/project.js';
+import { getDeadCodeV2 } from '../tools/refactoring/dead-code.js';
 
 interface PromptContext {
   store: Store;

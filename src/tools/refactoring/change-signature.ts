@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import type { FileEdit, RefactorResult } from './shared.js';
-import { readLines, writeLines, detectLanguage } from './shared.js';
+import { detectLanguage, readLines, writeLines } from './shared.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

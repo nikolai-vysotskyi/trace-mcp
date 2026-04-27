@@ -5,8 +5,9 @@
  * Reads `metadata.bases` from Python class symbols and creates
  * extends-style edges to the target base class symbols.
  */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 export function resolvePythonHeritageEdges(state: PipelineState): void {
   const { store } = state;

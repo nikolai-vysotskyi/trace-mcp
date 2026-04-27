@@ -4,23 +4,23 @@
  * Exit code 0 = pass, 1 = fail. Designed for CI pipelines.
  */
 
+import fs from 'node:fs';
 import { Command } from 'commander';
+import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { loadConfig } from '../config.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { getProject } from '../registry.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
+import { logger } from '../logger.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
 import { findProjectRoot } from '../project-root.js';
+import { getProject } from '../registry.js';
 import {
   evaluateQualityGates,
   formatGateReport,
-  QualityGatesConfigSchema,
   type QualityGatesConfig,
+  QualityGatesConfigSchema,
 } from '../tools/quality/quality-gates.js';
-import { logger } from '../logger.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
-import { PluginRegistry } from '../plugin-api/registry.js';
-import fs from 'node:fs';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);

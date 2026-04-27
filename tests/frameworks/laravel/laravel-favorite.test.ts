@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  extractLaravelFavoriteModel,
   buildLaravelFavoriteEdges,
   buildLaravelFavoriteSymbols,
+  extractLaravelFavoriteModel,
 } from '../../../src/indexer/plugins/integration/framework/laravel/laravel-favorite.js';
 
 describe('laravel-favorite', () => {

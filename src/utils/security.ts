@@ -1,6 +1,5 @@
 import path from 'node:path';
-import { ok, err, type TraceMcpResult } from '../errors.js';
-import { securityViolation } from '../errors.js';
+import { err, ok, securityViolation, type TraceMcpResult } from '../errors.js';
 
 const DEFAULT_SECRET_PATTERNS = [
   /password/i,

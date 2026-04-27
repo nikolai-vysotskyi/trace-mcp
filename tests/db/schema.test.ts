@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
-import { initializeDatabase, getTableNames } from '../../src/db/schema.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { getTableNames, initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 

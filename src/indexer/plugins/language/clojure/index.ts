@@ -6,8 +6,9 @@
  *           extend-type, extend-protocol, ns, spec definitions (s/def, s/fdef),
  *           and import/require edges (including nested vectors).
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'clojure',

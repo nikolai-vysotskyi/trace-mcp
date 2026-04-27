@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { SwiftLanguagePlugin } from '../../src/indexer/plugins/language/swift/index.js';
-import { ObjCLanguagePlugin } from '../../src/indexer/plugins/language/objc/index.js';
+import { describe, expect, it } from 'vitest';
 import { DartLanguagePlugin } from '../../src/indexer/plugins/language/dart/index.js';
+import { ObjCLanguagePlugin } from '../../src/indexer/plugins/language/objc/index.js';
+import { SwiftLanguagePlugin } from '../../src/indexer/plugins/language/swift/index.js';
+
 // XML tests moved to xml.test.ts
 
 // ── Swift ───────────────────────────────────────────────────────────────────

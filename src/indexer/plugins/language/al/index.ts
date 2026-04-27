@@ -4,8 +4,9 @@
  * Extracts: tables, pages, codeunits, reports, enums, interfaces,
  * procedures, and triggers for Microsoft Dynamics 365 Business Central.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'al',

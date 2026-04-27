@@ -19,8 +19,9 @@
  * flag. We avoid inventing a new type because downstream consumers already
  * treat `imports` as the "this file depends on that file" signal.
  */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 export function resolveFileProjectionEdges(state: PipelineState): void {
   const { store } = state;

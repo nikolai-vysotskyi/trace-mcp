@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
 import fg from 'fast-glob';
+import { parse as parseYaml } from 'yaml';
 import { logger } from '../logger.js';
 
 export interface WorkspaceInfo {

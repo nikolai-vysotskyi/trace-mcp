@@ -2,14 +2,15 @@
  * Integration: NestJS module → controller → DI → routes through full pipeline.
  * Does the pipeline actually create NestJS edges? Do routes get extracted?
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { NestJSPlugin } from '../../src/indexer/plugins/integration/framework/nestjs/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('NestJS e2e through pipeline', () => {
   let store: Store;

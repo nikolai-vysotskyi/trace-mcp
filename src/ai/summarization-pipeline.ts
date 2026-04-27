@@ -3,13 +3,14 @@
  * Runs after indexing to populate the symbols.summary column using the fast inference model.
  * Uses CachedInferenceService to avoid redundant LLM calls across re-indexes.
  */
-import type { InferenceService, VectorStore } from './interfaces.js';
-import type { Store } from '../db/store.js';
-import type { ProgressState } from '../progress.js';
-import { PROMPTS } from './prompts.js';
-import { logger } from '../logger.js';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Store } from '../db/store.js';
+import { logger } from '../logger.js';
+import type { ProgressState } from '../progress.js';
+import type { InferenceService, VectorStore } from './interfaces.js';
+import { PROMPTS } from './prompts.js';
 
 interface SummarizationConfig {
   batchSize: number;

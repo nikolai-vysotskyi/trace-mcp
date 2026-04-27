@@ -1,18 +1,18 @@
 import type Database from 'better-sqlite3';
 import type {
-  RawRoute,
   RawComponent,
   RawMigration,
   RawOrmModel,
   RawRnScreen,
+  RawRoute,
 } from '../../plugin-api/types.js';
 import type {
-  RouteRow,
   ComponentRow,
   MigrationRow,
-  OrmModelRow,
   OrmAssociationRow,
+  OrmModelRow,
   RnScreenRow,
+  RouteRow,
 } from '../types.js';
 
 export class DomainRepository {

@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Indexes } from './tabs/Indexes';
-import { Clients } from './tabs/Clients';
-import { Settings } from './tabs/Settings';
-import { ProjectOverview } from './tabs/ProjectOverview';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { WindowTabBar } from './components/WindowTabBar';
 import { AskTab } from './tabs/AskTab';
+import { Clients } from './tabs/Clients';
 import {
+  DEFAULT_GRAPH_GPU_SETTINGS,
   GraphExplorerGPU,
   type GraphExplorerGPUHandle,
   type GraphGPUSettings,
-  DEFAULT_GRAPH_GPU_SETTINGS,
 } from './tabs/GraphExplorerGPU';
-import { WindowTabBar } from './components/WindowTabBar';
+import { Indexes } from './tabs/Indexes';
+import { ProjectOverview } from './tabs/ProjectOverview';
+import { Settings } from './tabs/Settings';
 
 // ── URL params determine window type ──────────────────────────
 // ?view=menu&tab=projects  → Menu window (sidebar + Projects/Clients/Settings)

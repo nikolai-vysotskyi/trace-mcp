@@ -9,8 +9,9 @@
  *
  * This resolver runs AFTER import resolution, so file-level import edges are available.
  */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 interface CallSiteRow {
   calleeName: string;

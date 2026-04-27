@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  GraphQLPlugin,
   GraphQLLanguagePlugin,
+  GraphQLPlugin,
 } from '../../../src/indexer/plugins/integration/api/graphql/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

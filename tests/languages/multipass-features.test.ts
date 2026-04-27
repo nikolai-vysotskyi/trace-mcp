@@ -5,12 +5,12 @@
  * - Scoped member extraction
  * - Edge deduplication
  */
-import { describe, it, expect } from 'vitest';
-import { PascalLanguagePlugin } from '../../src/indexer/plugins/language/pascal/index.js';
+import { describe, expect, it } from 'vitest';
 import { AdaLanguagePlugin } from '../../src/indexer/plugins/language/ada/index.js';
-import { PowerShellLanguagePlugin } from '../../src/indexer/plugins/language/powershell/index.js';
 import { ApexLanguagePlugin } from '../../src/indexer/plugins/language/apex/index.js';
+import { PascalLanguagePlugin } from '../../src/indexer/plugins/language/pascal/index.js';
 import { PlsqlLanguagePlugin } from '../../src/indexer/plugins/language/plsql/index.js';
+import { PowerShellLanguagePlugin } from '../../src/indexer/plugins/language/powershell/index.js';
 import { stripCommentsAndStrings } from '../../src/indexer/plugins/language/regex-base-v2.js';
 
 function parse(

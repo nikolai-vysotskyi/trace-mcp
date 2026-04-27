@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { installToolGate } from '../../src/server/tool-gate.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
+import { installToolGate } from '../../src/server/tool-gate.js';
 
 // ─── Mocks ───────────────────────────────────────────────────
 

@@ -2,12 +2,13 @@
  * Tests for Livewire v2 component extraction.
  * Covers: $listeners property, emit() calls, v2 namespace, convention view path.
  */
-import { describe, it, expect } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  extractLivewireComponent,
   extractLivewireBladeUsages,
+  extractLivewireComponent,
   extractWireDirectives,
 } from '../../../src/indexer/plugins/integration/framework/laravel/livewire.js';
 

@@ -12,19 +12,19 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
+import { parseError } from '../../../../../errors.js';
+import { getParser } from '../../../../../parser/tree-sitter.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawRoute,
-  EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
-import { parseError } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-import { getParser } from '../../../../../parser/tree-sitter.js';
 
 /** Default HTTP method when none specified in @app.route(). */
 const DEFAULT_METHODS = ['GET'];

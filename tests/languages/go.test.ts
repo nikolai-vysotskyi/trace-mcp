@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { GoLanguagePlugin } from '../../src/indexer/plugins/language/go/index.js';
 
 const plugin = new GoLanguagePlugin();

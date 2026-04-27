@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { Psr4Resolver } from '../../src/indexer/resolvers/psr4.js';
 
 describe('PSR-4 resolver', () => {

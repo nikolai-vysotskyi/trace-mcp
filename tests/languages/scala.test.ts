@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { ScalaLanguagePlugin } from '../../src/indexer/plugins/language/scala/index.js';
 
 const plugin = new ScalaLanguagePlugin();

@@ -5,8 +5,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { KNOWN_PACKAGES, type PackageMeta } from './known-packages.js';
 import { discoverChildProjectsRecursive } from '../project-root.js';
+import { KNOWN_PACKAGES, type PackageMeta } from './known-packages.js';
 
 interface DependencyInfo {
   name: string;

@@ -4,8 +4,8 @@
  */
 import type { RawEdge, ResolveContext } from '../../../../../plugin-api/types.js';
 import { extractEloquentModel } from './eloquent.js';
+import { detectEventDispatches, extractEventListeners } from './events.js';
 import { detectFormRequestUsage } from './requests.js';
-import { extractEventListeners, detectEventDispatches } from './events.js';
 
 export function resolveEloquentEdges(
   source: string,

@@ -1,33 +1,33 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { WorkflowComplexity } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
 import {
-  N8nPlugin,
-  parseN8nWorkflow,
-  extractConnections,
-  extractTriggers,
-  extractRoutes,
-  extractCodeNodes,
-  extractSubWorkflowCalls,
-  extractHttpRequests,
-  extractStickyNotes,
+  classifyAiNode,
+  classifyNode,
+  computeWorkflowComplexity,
+  createExpressionInfo,
   extractAiNodes,
   extractAllExpressionDeps,
+  extractCodeNodes,
+  extractConnections,
   extractCredentialUsages,
-  extractFlowControl,
-  classifyNode,
-  classifyAiNode,
+  extractCustomNodeDefinitions,
   extractExpressionDeps,
+  extractFlowControl,
+  extractHttpRequests,
+  extractRoutes,
+  extractStickyNotes,
+  extractSubWorkflowCalls,
+  extractTriggers,
+  extractWorkflowExpressionInfo,
+  findDisconnectedNodes,
   getServiceDomain,
   isTriggerNode,
+  N8nPlugin,
   parseExpressions,
-  createExpressionInfo,
-  extractWorkflowExpressionInfo,
-  computeWorkflowComplexity,
-  findDisconnectedNodes,
-  extractCustomNodeDefinitions,
+  parseN8nWorkflow,
 } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
-import type { WorkflowComplexity } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/n8n-basic');

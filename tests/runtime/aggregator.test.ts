@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RuntimeAggregator } from '../../src/runtime/aggregator.js';
 
 function createDb(): Database.Database {

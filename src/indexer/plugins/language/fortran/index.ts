@@ -4,8 +4,9 @@
  * Extracts: subroutines, functions, modules, programs, types, interfaces.
  * Case-insensitive to match Fortran conventions.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'fortran',

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildInstructions } from '../../src/server/instructions.js';
 
 describe('buildInstructions — verbosity', () => {

@@ -3,15 +3,16 @@
  * Indexes the redis-py-app fixture and asserts strict file → framework_role mapping
  * (sync + async), plus symbol-level pub/sub and stream edges with correct metadata.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
-import { RedisPyPlugin } from '../../src/indexer/plugins/integration/tooling/redis-py/index.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
 import type { Store } from '../../src/db/store.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { RedisPyPlugin } from '../../src/indexer/plugins/integration/tooling/redis-py/index.js';
+import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/redis-py-app');
 

@@ -14,15 +14,15 @@
  *   - fuzzy search fallback
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { search, getSymbol, getFileOutline } from '../../src/tools/navigation/navigation.js';
-import { enableFts5Triggers } from '../../src/db/schema.js';
-import { indexTrigramsBatch } from '../../src/db/fuzzy.js';
-import path from 'node:path';
-import os from 'node:os';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { indexTrigramsBatch } from '../../src/db/fuzzy.js';
+import { enableFts5Triggers } from '../../src/db/schema.js';
+import type { Store } from '../../src/db/store.js';
+import { getFileOutline, getSymbol, search } from '../../src/tools/navigation/navigation.js';
+import { createTestStore } from '../test-utils.js';
 
 // ── Store seeding helpers ─────────────────────────────────────────────────────
 

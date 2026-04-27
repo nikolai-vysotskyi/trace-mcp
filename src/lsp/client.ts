@@ -3,21 +3,21 @@
  * Implements Content-Length message framing and request/response tracking.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import { logger } from '../logger.js';
 import type {
-  JsonRpcRequest,
-  JsonRpcResponse,
-  JsonRpcNotification,
+  CallHierarchyIncomingCall,
+  CallHierarchyItem,
+  CallHierarchyOutgoingCall,
+  DidCloseTextDocumentParams,
+  DidOpenTextDocumentParams,
   InitializeParams,
   InitializeResult,
-  CallHierarchyItem,
-  CallHierarchyIncomingCall,
-  CallHierarchyOutgoingCall,
-  DidOpenTextDocumentParams,
-  DidCloseTextDocumentParams,
-  TextDocumentItem,
+  JsonRpcNotification,
+  JsonRpcRequest,
+  JsonRpcResponse,
   Location,
+  TextDocumentItem,
 } from './protocol.js';
 
 interface PendingRequest {

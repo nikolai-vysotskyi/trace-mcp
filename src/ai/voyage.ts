@@ -5,15 +5,16 @@
  * a separate inference provider (Anthropic, OpenAI, Ollama) if summarization
  * or reasoning is needed.
  */
+
+import { logger } from '../logger.js';
+import { withRetry } from '../utils/retry.js';
+import { FallbackInferenceService } from './fallback.js';
 import type {
   AIProvider,
   EmbeddingService,
   EmbeddingTask,
   InferenceService,
 } from './interfaces.js';
-import { FallbackInferenceService } from './fallback.js';
-import { logger } from '../logger.js';
-import { withRetry } from '../utils/retry.js';
 
 interface VoyageConfig {
   apiKey: string;

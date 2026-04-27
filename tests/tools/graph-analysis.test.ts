@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import {
   getCouplingMetrics,
   getDependencyCycles,
-  getPageRank,
   getExtractionCandidates,
+  getPageRank,
   getRepoHealth,
 } from '../../src/tools/analysis/graph-analysis.js';
 import { createTestStore } from '../test-utils.js';

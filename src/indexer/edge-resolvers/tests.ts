@@ -1,6 +1,7 @@
 /** Pass 2e: Create test_covers edges from test files to their source files. */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 // JS/TS: *.test.ts, *.spec.ts, __tests__/
 // Python: test_*.py, *_test.py, conftest.py, tests/test_*.py

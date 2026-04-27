@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import { removeRecentProject } from '../App';
 import { ProjectRow } from '../components/ProjectRow';
 import { useDaemon } from '../hooks/useDaemon';
-import { removeRecentProject } from '../App';
 
 interface IndexesProps {
   onOpenProject: (root: string) => void;

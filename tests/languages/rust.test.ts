@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { RustLanguagePlugin } from '../../src/indexer/plugins/language/rust/index.js';
 
 const plugin = new RustLanguagePlugin();

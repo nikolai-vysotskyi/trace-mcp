@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { CppLanguagePlugin } from '../../src/indexer/plugins/language/cpp/index.js';
 
 const plugin = new CppLanguagePlugin();

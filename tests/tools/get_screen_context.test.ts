@@ -2,7 +2,7 @@
  * Tests for get_screen_context tool.
  * Uses in-memory store populated via insertRnScreen to avoid full pipeline.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import { getScreenContext } from '../../src/tools/framework/screen-context.js';
 import { createTestStore } from '../test-utils.js';

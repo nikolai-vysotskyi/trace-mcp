@@ -7,12 +7,12 @@
  * sessions and closes resources when no sessions remain.
  */
 
-import type { ServerDeps } from '../server/server.js';
 import type { TraceMcpConfig } from '../config.js';
-import { TopologyStore } from '../topology/topology-db.js';
-import { DecisionStore } from '../memory/decision-store.js';
-import { TOPOLOGY_DB_PATH, DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
+import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
+import { DecisionStore } from '../memory/decision-store.js';
+import type { ServerDeps } from '../server/server.js';
+import { TopologyStore } from '../topology/topology-db.js';
 
 interface PoolEntry {
   topoStore: TopologyStore | null;

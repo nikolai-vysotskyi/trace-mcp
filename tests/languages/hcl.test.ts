@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { HclLanguagePlugin } from '../../src/indexer/plugins/language/hcl/index.js';
 
 const plugin = new HclLanguagePlugin();

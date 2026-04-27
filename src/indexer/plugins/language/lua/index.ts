@@ -9,20 +9,21 @@
  * table field function assignments, local variables.
  * Imports: require() calls.
  */
-import { ok, err } from 'neverthrow';
-import Parser from 'web-tree-sitter';
+
 import { createRequire } from 'node:module';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-  SymbolKind,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
+import Parser from 'web-tree-sitter';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import type { TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 const _require = createRequire(import.meta.url);
 let _initPromise: Promise<void> | null = null;

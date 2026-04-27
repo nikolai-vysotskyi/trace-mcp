@@ -3,8 +3,8 @@
  * Shows top imported files, most connected symbols, language stats, and example queries.
  */
 import type { Store } from '../../db/store.js';
-import { buildFileGraph } from '../analysis/graph-analysis.js';
 import { computePageRank } from '../../scoring/pagerank.js';
+import { buildFileGraph } from '../analysis/graph-analysis.js';
 
 interface LanguageStat {
   language: string;

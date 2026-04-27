@@ -11,7 +11,7 @@
  *  - automatically when the indexed-symbol count changes between calls (cheap
  *    sanity check that catches background indexing finishing mid-session).
  */
-import type { SymbolRow, FileRow } from '../db/store.js';
+import type { FileRow, SymbolRow } from '../db/store.js';
 
 export interface CachedSearchItem {
   symbol: SymbolRow;

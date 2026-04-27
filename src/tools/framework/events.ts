@@ -3,8 +3,7 @@
  * Finds events, their listeners, and dispatchers.
  */
 import type { Store, SymbolRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 
 interface BroadcastingInfo {
   channels: { name: string; type: string }[];

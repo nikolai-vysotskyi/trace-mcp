@@ -2,13 +2,13 @@
  * Rails Framework Plugin — routes, ActiveRecord models, controllers, migrations.
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 export class RailsPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 describe('detectProject', () => {
   it('detects languages and frameworks from a real project root', async () => {

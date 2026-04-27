@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * postinstall hook for `npm install -g trace-mcp`.
  * If the Electron menu bar app is already installed in ~/Applications/,
@@ -20,13 +21,13 @@
  * Runs silently — never fails the install (all errors are swallowed).
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import https from 'node:https';
-import http from 'node:http';
-import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import os from 'node:os';
+import path from 'node:path';
 
 const APP_NAME = 'trace-mcp.app';
 const INSTALL_DIR = path.join(os.homedir(), 'Applications');

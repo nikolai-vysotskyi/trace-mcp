@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  TestingPlugin,
   detectTestFramework,
-  extractTestedRoutes,
   extractTestedComponents,
+  extractTestedRoutes,
   extractTestNames,
+  TestingPlugin,
 } from '../../../src/indexer/plugins/integration/testing/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

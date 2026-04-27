@@ -16,18 +16,18 @@
  *   - composer.json
  *   - Generic JSON (first-level keys as constants)
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-  SymbolKind,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -96,11 +96,11 @@ function stripJsonComments(source: string): string {
 
 // ── Tree-sitter AST helpers ──────────────────────────────────────────────
 
-/** Get the text of a string node, stripping surrounding quotes and unescaping JSON inEscapes */
+/** Get the text of a string node, stripping surrounding quotes and unescaping JSON escapes */
 function getStringText(node: TSNode | null): string | undefined {
   if (!node || node.type !== 'string') return undefined;
   const raw = node.text; // includes surrounding quotes, e.g. "App\\"
-  // Use JSON.parse to properly uninEscape JSON string inEscapes
+  // Use JSON.parse to properly unescape JSON string escapes
   try {
     return JSON.parse(raw) as string;
   } catch {

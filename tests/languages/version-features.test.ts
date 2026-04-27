@@ -1,21 +1,21 @@
 /**
  * Tests for version-features detection across all languages.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { detectCssVersions } from '../../src/indexer/plugins/language/css/version-features.js';
+import { detectMinGoVersionFromSource } from '../../src/indexer/plugins/language/go/version-features.js';
+import { detectMinJavaVersionFromSource } from '../../src/indexer/plugins/language/java/version-features.js';
+import { detectMinKotlinVersion } from '../../src/indexer/plugins/language/kotlin/version-features.js';
+import { detectMinPhpVersion } from '../../src/indexer/plugins/language/php/version-features.js';
+import { detectMinPythonVersion } from '../../src/indexer/plugins/language/python/version-features.js';
+import { detectMinRubyVersionFromSource } from '../../src/indexer/plugins/language/ruby/version-features.js';
 import {
+  detectMinEsVersion,
   detectMinNodeVersion,
   detectMinNodeVersionFromAPIs,
   detectMinTsVersion,
   detectMinTsVersionFromSource,
-  detectMinEsVersion,
 } from '../../src/indexer/plugins/language/typescript/version-features.js';
-import { detectMinPythonVersion } from '../../src/indexer/plugins/language/python/version-features.js';
-import { detectMinPhpVersion } from '../../src/indexer/plugins/language/php/version-features.js';
-import { detectMinGoVersionFromSource } from '../../src/indexer/plugins/language/go/version-features.js';
-import { detectMinJavaVersionFromSource } from '../../src/indexer/plugins/language/java/version-features.js';
-import { detectMinKotlinVersion } from '../../src/indexer/plugins/language/kotlin/version-features.js';
-import { detectMinRubyVersionFromSource } from '../../src/indexer/plugins/language/ruby/version-features.js';
-import { detectCssVersions } from '../../src/indexer/plugins/language/css/version-features.js';
 
 // ==============================
 // Node.js

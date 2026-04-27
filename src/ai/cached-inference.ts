@@ -2,8 +2,9 @@
  * Wraps an InferenceService with a content-addressable cache.
  * Used at index time (summarization pipeline) to avoid redundant LLM calls.
  */
-import type { InferenceService } from './interfaces.js';
+
 import type { InferenceCache } from './inference-cache.js';
+import type { InferenceService } from './interfaces.js';
 
 export class CachedInferenceService implements InferenceService {
   constructor(

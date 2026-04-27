@@ -8,7 +8,7 @@
  * - include('app.urls') → django_includes_urls edge
  * - Router-based DRF patterns: router.register('prefix', ViewSet)
  */
-import type { RawRoute, RawEdge } from '../../../../../plugin-api/types.js';
+import type { RawEdge, RawRoute } from '../../../../../plugin-api/types.js';
 
 interface UrlExtractionResult {
   routes: RawRoute[];

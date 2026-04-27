@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * apply-pending-update.mjs — invoked detached by the running Electron app
  * via the `restart-app` IPC when a verified update zip is staged at
@@ -19,11 +20,11 @@
  * 0 even on failure to avoid noise in detached spawn logs.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import crypto from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const APP_NAME = 'trace-mcp.app';
 const INSTALL_DIR = path.join(os.homedir(), 'Applications');

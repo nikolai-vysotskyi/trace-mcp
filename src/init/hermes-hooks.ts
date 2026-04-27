@@ -15,8 +15,8 @@
  * get rejected.
  */
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import YAML from 'yaml';
 import type { InitStepResult } from './types.js';
 
@@ -74,7 +74,7 @@ case "$first" in
     # Block find walks that look for source files by extension (the classic
     # "discover the codebase" antipattern). Passing through find calls with
     # explicit paths or non-code extensions.
-    if printf '%s' "$cmd" | grep -qE -- "-name[[:space:]]+[\\\"']?\\\*\\.(ts|tsx|js|jsx|py|go|rs|java|kt|rb|php|vue|svelte|c|cpp|h|hpp|cs|scala|swift)"; then
+    if printf '%s' "$cmd" | grep -qE -- "-name[[:space:]]+[\\"']?\\*\\.(ts|tsx|js|jsx|py|go|rs|java|kt|rb|php|vue|svelte|c|cpp|h|hpp|cs|scala|swift)"; then
       block "Use trace-mcp 'search' or 'get_project_map' instead of 'find -name \\"*.<lang>\\"'. trace-mcp already knows every indexed file and can filter by language and symbol kind."
     fi
     ;;

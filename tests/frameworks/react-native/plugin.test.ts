@@ -1,16 +1,16 @@
-import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  ReactNativePlugin,
-  extractNavigatorScreens,
-  extractNavigationCalls,
   extractExpoNavigationCalls,
-  matchExpoRoute,
-  isPlatformSpecificFile,
+  extractNativeModuleNames,
+  extractNavigationCalls,
+  extractNavigatorScreens,
   getPlatform,
   hasNativeModuleUsage,
-  extractNativeModuleNames,
+  isPlatformSpecificFile,
+  matchExpoRoute,
+  ReactNativePlugin,
 } from '../../../src/indexer/plugins/integration/view/react-native/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

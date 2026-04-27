@@ -1,12 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  validatePath,
   detectSecrets,
-  validateFileSize,
-  validateArtisanCommand,
   escapeRegExp,
-  isSensitiveFile,
   isBinaryBuffer,
+  isSensitiveFile,
+  validateArtisanCommand,
+  validateFileSize,
+  validatePath,
 } from '../../src/utils/security.js';
 
 describe('security', () => {

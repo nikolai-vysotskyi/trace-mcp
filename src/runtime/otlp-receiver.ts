@@ -4,7 +4,7 @@
  * Zero external dependencies.
  */
 
-import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { logger } from '../logger.js';
 import type { OtlpExportRequest } from './types.js';
 

@@ -3,11 +3,11 @@
  * Supports macOS and Windows.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import https from 'node:https';
 import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import https from 'node:https';
+import os from 'node:os';
+import path from 'node:path';
 import { Command } from 'commander';
 
 const GITHUB_REPO = 'nikolai-vysotskyi/trace-mcp';

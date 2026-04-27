@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { analyzeOptimizations } from '../../src/analytics/rules.js';
+import { describe, expect, it } from 'vitest';
 import type { ToolCallRow } from '../../src/analytics/analytics-store.js';
+import { analyzeOptimizations } from '../../src/analytics/rules.js';
 
 function makeToolCall(overrides: Partial<ToolCallRow> = {}): ToolCallRow {
   return {

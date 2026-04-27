@@ -7,8 +7,9 @@
  * Comment stripping: //, /* *​/, /+ +/
  * Scope: braces
  */
-import { createMultiPassPlugin, type CommentStyle } from '../regex-base-v2.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin } from '../regex-base-v2.js';
 
 const comments: CommentStyle = {
   line: ['//'],

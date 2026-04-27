@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ── Types (mirrored from api-client.ts — renderer can't import main process modules) ──
 

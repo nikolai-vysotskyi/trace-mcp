@@ -12,16 +12,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
+import { getParser } from '../../../../../parser/tree-sitter.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
-  EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
-import { getParser } from '../../../../../parser/tree-sitter.js';
 
 type TSNode = import('tree-sitter').SyntaxNode;
 

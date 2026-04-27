@@ -7,14 +7,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { logger } from '../logger.js';
 import type { Store } from '../db/store.js';
-import type { SymbolRow, FileRow } from '../db/types.js';
-import type { LspServerManager } from './lifecycle.js';
-import { symbolToLspPosition, findSymbolAtPosition, getLanguageId } from './mappers.js';
-import { fileLanguageToLspLanguage } from './config.js';
-import type { CallHierarchyOutgoingCall } from './protocol.js';
+import type { FileRow, SymbolRow } from '../db/types.js';
+import { logger } from '../logger.js';
 import type { LspClient } from './client.js';
+import { fileLanguageToLspLanguage } from './config.js';
+import type { LspServerManager } from './lifecycle.js';
+import { findSymbolAtPosition, getLanguageId, symbolToLspPosition } from './mappers.js';
+import type { CallHierarchyOutgoingCall } from './protocol.js';
 
 /** Edge types that represent call semantics — eligible for LSP enrichment */
 const CALL_EDGE_TYPES = new Set([

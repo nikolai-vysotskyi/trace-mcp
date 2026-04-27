@@ -6,12 +6,12 @@
 import type Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import {
-  type OtlpExportRequest,
-  type IngestResult,
   getServiceName,
   getStringAttr,
-  nanoToIso,
+  type IngestResult,
   nanoDurationUs,
+  nanoToIso,
+  type OtlpExportRequest,
   SPAN_KIND_MAP,
 } from './types.js';
 

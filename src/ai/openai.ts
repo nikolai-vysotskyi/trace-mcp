@@ -2,10 +2,11 @@
  * OpenAI AI provider — connects to the OpenAI API (or any OpenAI-compatible endpoint).
  * Uses fetch directly; no SDK dependency required.
  */
-import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
-import { parseOpenAIStream } from './sse.js';
+
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import { parseOpenAIStream } from './sse.js';
 
 interface OpenAIConfig {
   apiKey: string;

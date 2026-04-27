@@ -1,10 +1,10 @@
-import { describe, test, expect, beforeEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import path from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { beforeEach, describe, expect, test } from 'vitest';
 import type { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
 import { detectAntipatterns } from '../../src/tools/quality/antipatterns.js';
+import { createTestStore } from '../test-utils.js';
 
 const TEST_DIR = path.join(tmpdir(), `trace-mcp-antipatterns-test-${process.pid}`);
 

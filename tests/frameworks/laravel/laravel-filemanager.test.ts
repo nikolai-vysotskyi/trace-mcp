@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
+  buildLaravelFilemanagerRoutes,
   extractLaravelFilemanagerConfig,
   extractLaravelFilemanagerMacro,
-  buildLaravelFilemanagerRoutes,
 } from '../../../src/indexer/plugins/integration/framework/laravel/laravel-filemanager.js';
 
 describe('laravel-filemanager', () => {

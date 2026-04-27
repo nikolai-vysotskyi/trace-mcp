@@ -8,10 +8,9 @@
  * Reads files in one pass — no N+1.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 
 // ---------------------------------------------------------------------------
 // Types

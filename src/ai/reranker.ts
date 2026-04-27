@@ -2,9 +2,10 @@
  * LLM-based reranker — uses a fast inference model to re-score search results.
  * Falls back to original order on parse failure.
  */
+
+import { logger } from '../logger.js';
 import type { InferenceService, RerankerService } from './interfaces.js';
 import { PROMPTS } from './prompts.js';
-import { logger } from '../logger.js';
 
 export class LLMReranker implements RerankerService {
   constructor(private inference: InferenceService) {}

@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  signalFusion,
-  computeIdentityScore,
   buildIdentityChannel,
+  computeIdentityScore,
   type FusionChannels,
+  signalFusion,
 } from '../../src/scoring/signal-fusion.js';
 
 // ── computeIdentityScore ──────────────────────────────────────

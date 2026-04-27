@@ -2,17 +2,18 @@
  * Integration test: hybrid AI search (FTS + vector).
  * Verifies search() returns search_mode='hybrid_ai' when vector store is populated.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
+import type { EmbeddingService } from '../../src/ai/interfaces.js';
+import { BlobVectorStore } from '../../src/ai/vector-store.js';
+import type { TraceMcpConfig } from '../../src/config.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { BlobVectorStore } from '../../src/ai/vector-store.js';
-import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { search } from '../../src/tools/navigation/navigation.js';
-import type { EmbeddingService } from '../../src/ai/interfaces.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');
 

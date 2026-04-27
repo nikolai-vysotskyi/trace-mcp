@@ -14,8 +14,8 @@ import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
 import {
-  classifyConfidence,
   type ConfidenceLevel,
+  classifyConfidence,
   type Methodology,
 } from '../shared/confidence.js';
 

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { SpanMapper } from '../../src/runtime/mapper.js';
 import { createTestStore } from '../test-utils.js';
-import type { Store } from '../../src/db/store.js';
 
 function createTestDb(): { db: Database.Database; store: Store } {
   const store = createTestStore();

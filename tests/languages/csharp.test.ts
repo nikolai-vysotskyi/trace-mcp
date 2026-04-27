@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { CSharpLanguagePlugin } from '../../src/indexer/plugins/language/csharp/index.js';
 
 const plugin = new CSharpLanguagePlugin();

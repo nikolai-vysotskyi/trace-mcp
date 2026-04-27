@@ -1,10 +1,9 @@
+import fs from 'node:fs';
 import { cosmiconfig } from 'cosmiconfig';
 import { z } from 'zod';
-import fs from 'node:fs';
-import { ok, err, type TraceMcpResult } from './errors.js';
-import { configError } from './errors.js';
-import { logger } from './logger.js';
+import { configError, err, ok, type TraceMcpResult } from './errors.js';
 import { GLOBAL_CONFIG_PATH, stripJsonComments } from './global.js';
+import { logger } from './logger.js';
 
 const SecurityConfigSchema = z
   .object({
@@ -610,7 +609,8 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
 }
 
 /** Save per-project config section in the global config file (JSONC-safe). */
-export { saveProjectConfigJsonc as saveProjectConfig } from './config-jsonc.js';
-
 /** Remove a per-project config section from the global config file (JSONC-safe). */
-export { removeProjectConfigJsonc as removeProjectConfig } from './config-jsonc.js';
+export {
+  removeProjectConfigJsonc as removeProjectConfig,
+  saveProjectConfigJsonc as saveProjectConfig,
+} from './config-jsonc.js';

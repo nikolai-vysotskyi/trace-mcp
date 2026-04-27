@@ -12,17 +12,17 @@
  */
 import fs from 'node:fs';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   LanguagePlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
-  RawSymbol,
   RawEdge,
+  RawSymbol,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 // ── Language plugin: .graphql / .gql files ────────────────────────────────
 

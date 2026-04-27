@@ -2,7 +2,7 @@
  * Tests for graphQuery — NL graph queries with intent classification,
  * BFS path finding, subgraph extraction, and Mermaid generation.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import { graphQuery } from '../../src/tools/analysis/graph-query.js';
 import { createTestStore } from '../test-utils.js';

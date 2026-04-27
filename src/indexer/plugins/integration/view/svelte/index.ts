@@ -6,12 +6,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
-  RawEdge,
   RawComponent,
+  RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 

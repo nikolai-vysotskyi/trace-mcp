@@ -8,15 +8,15 @@
  * globally. Now only extracts keys inside locals blocks using brace depth tracking.
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../errors.js';
 import type {
+  FileParseResult,
   LanguagePlugin,
   PluginManifest,
-  FileParseResult,
-  RawSymbol,
   RawEdge,
+  RawSymbol,
   SymbolKind,
 } from '../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../errors.js';
 
 function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parent?: string): string {
   if (parent) return `${filePath}::${parent}::${name}#${kind}`;

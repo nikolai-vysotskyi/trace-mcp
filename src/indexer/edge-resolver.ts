@@ -4,27 +4,27 @@
  * Domain-specific resolvers live in ./edge-resolvers/.
  */
 import path from 'node:path';
-import type { ResolveContext, RawEdge, ProjectContext } from '../plugin-api/types.js';
-import { executeFrameworkResolveEdges } from '../plugin-api/executor.js';
-import { buildProjectContext } from './project-context.js';
 import { logger } from '../logger.js';
-import type { PipelineState } from './pipeline-state.js';
-import { resolveOrmAssociationEdges as _resolveOrm } from './edge-resolvers/orm.js';
+import { executeFrameworkResolveEdges } from '../plugin-api/executor.js';
+import type { ProjectContext, RawEdge, ResolveContext } from '../plugin-api/types.js';
+import {
+  purgeForbiddenCrossWorkspaceEdges as _purgeCrossWs,
+  resolveFileProjectionEdges as _resolveFileProjection,
+} from './edge-resolvers/file-projection.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
 import { resolveEsmImportEdges as _resolveImports } from './edge-resolvers/imports.js';
-import { resolvePythonImportEdges as _resolvePyImports } from './edge-resolvers/python-imports.js';
-import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolvers/python-heritage.js';
-import { resolvePythonCallEdges as _resolvePyCalls } from './edge-resolvers/python-calls.js';
-import { resolvePhpImportEdges as _resolvePhpImports } from './edge-resolvers/php-imports.js';
+import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
+import { resolveOrmAssociationEdges as _resolveOrm } from './edge-resolvers/orm.js';
 import { resolvePhpCallEdges as _resolvePhpCalls } from './edge-resolvers/php-calls.js';
+import { resolvePhpImportEdges as _resolvePhpImports } from './edge-resolvers/php-imports.js';
+import { resolvePythonCallEdges as _resolvePyCalls } from './edge-resolvers/python-calls.js';
+import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolvers/python-heritage.js';
+import { resolvePythonImportEdges as _resolvePyImports } from './edge-resolvers/python-imports.js';
+import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
 import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/typescript-calls.js';
 import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/typescript-types.js';
-import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
-import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
-import {
-  resolveFileProjectionEdges as _resolveFileProjection,
-  purgeForbiddenCrossWorkspaceEdges as _purgeCrossWs,
-} from './edge-resolvers/file-projection.js';
+import type { PipelineState } from './pipeline-state.js';
+import { buildProjectContext } from './project-context.js';
 
 export class EdgeResolver {
   constructor(private state: PipelineState) {}

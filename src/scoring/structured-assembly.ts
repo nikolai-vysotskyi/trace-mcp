@@ -3,7 +3,7 @@
  * Groups items by role (primary, dependencies, callers, type context)
  * and allocates token budget proportionally.
  */
-import { assembleContext, type ContextItem, type AssembledItem } from './assembly.js';
+import { type AssembledItem, assembleContext, type ContextItem } from './assembly.js';
 
 interface StructuredContextRequest {
   primary: ContextItem[];

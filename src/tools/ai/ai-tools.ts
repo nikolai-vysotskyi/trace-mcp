@@ -2,25 +2,26 @@
  * AI-powered MCP tools — require AI to be enabled.
  * Each tool gracefully returns an error message when AI is disabled.
  */
+
+import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
-import { resolveSymbolInput } from '../shared/resolve.js';
 import type {
-  InferenceService,
   EmbeddingService,
-  VectorStore,
+  InferenceService,
   RerankerService,
+  VectorStore,
 } from '../../ai/interfaces.js';
 import { PROMPTS } from '../../ai/prompts.js';
-import { readByteRange } from '../../utils/source-reader.js';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
+import type { ContextItem } from '../../scoring/assembly.js';
 import {
   assembleStructuredContext,
   renderStructuredContext,
 } from '../../scoring/structured-assembly.js';
-import type { ContextItem } from '../../scoring/assembly.js';
+import { readByteRange } from '../../utils/source-reader.js';
 import { getChangeImpact } from '../analysis/impact.js';
-import path from 'node:path';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface AIToolsContext {
   store: Store;

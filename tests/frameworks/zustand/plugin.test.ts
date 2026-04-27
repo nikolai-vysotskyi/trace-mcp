@@ -1,12 +1,12 @@
 /**
  * Tests for Zustand / Redux Toolkit state management plugin.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  ZustandReduxPlugin,
-  extractZustandStores,
-  extractReduxSlices,
   extractDispatches,
+  extractReduxSlices,
+  extractZustandStores,
+  ZustandReduxPlugin,
 } from '../../../src/indexer/plugins/integration/state/zustand/index.js';
 
 // ── detect() ──────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { detectPropMismatches } from '../../../src/indexer/plugins/integration/view/inertia/index.js';
 
 describe('Inertia prop mismatch detection', () => {
