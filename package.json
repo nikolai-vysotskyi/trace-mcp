@@ -14,7 +14,11 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "biome:ci": "biome ci",
     "serve": "tsx src/cli.ts serve",
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs",
     "prepublishOnly": "npm run build"
@@ -66,6 +70,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.13",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.13.0",
     "@types/picomatch": "^4.0.3",
