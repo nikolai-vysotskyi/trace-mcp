@@ -45,7 +45,16 @@ When promoting a new rule:
 4. Once violations hit zero, promote severity to `error`.
 5. Mass-fix commits should be added to `.git-blame-ignore-revs`.
 
-Current burndown of warnings: see `npx biome lint --reporter=summary`.
+### Remaining warning burndown
+
+`npm run biome:ci` currently has **0 errors** and a backlog of warnings. Each is left at warn intentionally:
+
+- **`suspicious/noExplicitAny`** (~917) — incremental typing work. Fix when touching a module; do not block PRs.
+- **`correctness/noUnusedVariables`** (~26) — most are destructured signature placeholders. Prefix with `_` (Biome ignores `_*`) or remove. Promote to error once cleared.
+- **`correctness/useExhaustiveDependencies`** (~17, scoped to renderer) — every fix needs to verify the hook isn't intentionally capturing a stale value. Biome's `--unsafe` autofix removes deps; **do not run it blindly.**
+- **`a11y/useKeyWithClickEvents`, `a11y/noStaticElementInteractions`, `suspicious/noArrayIndexKey`, `a11y/noAutofocus`** (~20 total, scoped to renderer) — UX/accessibility refactors, e.g. converting clickable `<div>` to `<button>` or adding `onKeyDown` for keyboard parity.
+
+The current set of error-level rules can be inspected in [biome.jsonc](../biome.jsonc).
 
 ## Tests
 
