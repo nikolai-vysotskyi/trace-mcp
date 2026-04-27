@@ -87,7 +87,7 @@ describe('runPostUpdateMigrations', () => {
   });
 
   afterEach(() => {
-    delete (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED;
+    (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = undefined;
     vi.restoreAllMocks();
   });
 
@@ -208,7 +208,7 @@ describe('checkAndInstallUpdate', () => {
   });
 
   afterEach(() => {
-    delete (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED;
+    (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = undefined;
     vi.restoreAllMocks();
   });
 

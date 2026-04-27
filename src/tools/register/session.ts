@@ -542,10 +542,10 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
               // _hints, _optimization_hint, _budget_warning, _budget_level are
               // per-call suggestions irrelevant when batched together
               if (parsed && typeof parsed === 'object') {
-                delete parsed._hints;
-                delete parsed._optimization_hint;
-                delete parsed._budget_warning;
-                delete parsed._budget_level;
+                parsed._hints = undefined;
+                parsed._optimization_hint = undefined;
+                parsed._budget_warning = undefined;
+                parsed._budget_level = undefined;
               }
               results.push({ tool: call.tool, result: parsed });
             } catch {

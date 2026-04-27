@@ -128,7 +128,9 @@ describe('description_verbosity config', () => {
       for (const val of Object.values(schema)) {
         if (val && typeof val === 'object' && '_def' in val) {
           const def = (val as { _def: Record<string, unknown> })._def;
+          // biome-ignore lint/performance/noDelete: Zod description is a getter-only property — assigning undefined throws.
           delete def.description;
+          // biome-ignore lint/performance/noDelete: same as above.
           delete (val as Record<string, unknown>).description;
         }
       }

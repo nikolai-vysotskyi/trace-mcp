@@ -138,7 +138,9 @@ export function installToolGate(
         for (const val of Object.values(schema as Record<string, unknown>)) {
           if (val && typeof val === 'object' && '_def' in val) {
             const def = (val as { _def: Record<string, unknown> })._def;
+            // biome-ignore lint/performance/noDelete: Zod attaches `description` as a getter-only property; assigning undefined throws.
             delete def.description;
+            // biome-ignore lint/performance/noDelete: same as above — Zod description is getter-only.
             delete (val as Record<string, unknown>).description;
           }
         }

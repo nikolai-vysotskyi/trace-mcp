@@ -248,7 +248,7 @@ function fixHookInSettings(conflict: Conflict, opts: { dryRun?: boolean }): FixR
 
     // Clean up empty hooks object
     if (Object.keys(hooks).length === 0) {
-      delete settings.hooks;
+      settings.hooks = undefined;
     }
 
     if (!modified) {

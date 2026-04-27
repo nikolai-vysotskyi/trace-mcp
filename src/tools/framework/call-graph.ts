@@ -264,8 +264,8 @@ function buildCallNode(
     buildVisited.add(nodeId);
 
     if (depth <= 0) {
-      delete node.calls;
-      delete node.called_by;
+      node.calls = undefined;
+      node.called_by = undefined;
       return node;
     }
 
@@ -285,8 +285,8 @@ function buildCallNode(
       node.called_by!.push(child);
     }
 
-    if (node.calls!.length === 0) delete node.calls;
-    if (node.called_by!.length === 0) delete node.called_by;
+    if (node.calls!.length === 0) node.calls = undefined;
+    if (node.called_by!.length === 0) node.called_by = undefined;
     return node;
   }
 

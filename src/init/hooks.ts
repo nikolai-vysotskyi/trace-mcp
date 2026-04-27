@@ -185,7 +185,7 @@ function addHookEntry(settings: Record<string, unknown>, desc: HookDescriptor, d
     // and matcher in case the schema changed between versions.
     existing.hooks = [{ type: 'command', command: expectedCmd }];
     if (desc.matcher) existing.matcher = desc.matcher;
-    else delete existing.matcher;
+    else existing.matcher = undefined;
     return;
   }
 
@@ -207,7 +207,7 @@ function removeHookEntry(settings: Record<string, unknown>, desc: HookDescriptor
     return !entry.hooks?.some((hh) => hh.command?.includes(desc.scriptName));
   });
   if ((hooks[desc.settingsKey] as unknown[]).length === 0) delete hooks[desc.settingsKey];
-  if (Object.keys(hooks).length === 0) delete settings.hooks;
+  if (Object.keys(hooks).length === 0) settings.hooks = undefined;
 }
 
 // --- Generic install/uninstall ---
@@ -382,7 +382,7 @@ export function cleanupLegacyHooks(opts: { global?: boolean; dryRun?: boolean })
           else hooks[event] = filtered;
         }
       }
-      if (hooks && Object.keys(hooks).length === 0) delete settings.hooks;
+      if (hooks && Object.keys(hooks).length === 0) settings.hooks = undefined;
     }
 
     if (changed && !opts.dryRun) writeSettings(sPath, settings);

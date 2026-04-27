@@ -76,7 +76,7 @@
         "noGlobalEval": "error"
       },
       "performance": {
-        "noDelete": "warn",
+        "noDelete": "error",
         "noAccumulatingSpread": "warn"
       }
     }
