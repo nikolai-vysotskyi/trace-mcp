@@ -40,10 +40,8 @@ function sv(d: Record<string, unknown>, f: FieldDef, v: unknown): Record<string,
     if (v !== undefined) p[f.key] = v;
     else delete p[f.key];
     c[f.nested] = Object.keys(p).length ? p : undefined;
-  } else {
-    if (v !== undefined) c[f.key] = v;
-    else delete c[f.key];
-  }
+  } else if (v !== undefined) c[f.key] = v;
+  else delete c[f.key];
   return c;
 }
 

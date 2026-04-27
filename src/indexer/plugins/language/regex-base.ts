@@ -101,8 +101,8 @@ function buildLineIndex(source: string): number[] {
 }
 
 function lineAtFast(lineStarts: number[], offset: number): number {
-  let lo = 0,
-    hi = lineStarts.length - 1;
+  let lo = 0;
+  let hi = lineStarts.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
     if (lineStarts[mid] <= offset) lo = mid + 1;

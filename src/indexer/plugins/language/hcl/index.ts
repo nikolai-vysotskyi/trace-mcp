@@ -296,13 +296,11 @@ export class HclLanguagePlugin implements LanguagePlugin {
             continue;
           }
           if (ch === stringChar) inString = false;
-        } else {
-          if (ch === '"') {
-            inString = true;
-            stringChar = '"';
-          } else if (ch === '{') lineDepthChange++;
-          else if (ch === '}') lineDepthChange--;
-        }
+        } else if (ch === '"') {
+          inString = true;
+          stringChar = '"';
+        } else if (ch === '{') lineDepthChange++;
+        else if (ch === '}') lineDepthChange--;
       }
 
       // Before updating brace depth, extract content from inside blocks

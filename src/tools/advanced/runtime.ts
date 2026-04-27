@@ -130,11 +130,11 @@ export function getRuntimeProfile(
   const totalDuration = aggregates.reduce((s, a) => s + a.total_duration_us, 0);
 
   // Merge percentiles from all buckets (weighted)
-  let p50 = 0,
-    p95 = 0,
-    p99 = 0;
-  let minUs = Infinity,
-    maxUs = 0;
+  let p50 = 0;
+  let p95 = 0;
+  let p99 = 0;
+  let minUs = Infinity;
+  let maxUs = 0;
 
   for (const agg of aggregates) {
     if (agg.min_duration_us != null && agg.min_duration_us < minUs) minUs = agg.min_duration_us;
@@ -311,9 +311,9 @@ export function getEndpointAnalytics(
   const totalDur = aggRows.reduce((s, a) => s + a.total_duration_us, 0);
 
   // Merge percentiles (weighted average across buckets)
-  let p50 = 0,
-    p95 = 0,
-    p99 = 0;
+  let p50 = 0;
+  let p95 = 0;
+  let p99 = 0;
   for (const agg of aggRows) {
     if (agg.percentiles && total > 0) {
       try {

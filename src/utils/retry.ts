@@ -69,7 +69,7 @@ export async function withRetry<T>(fn: () => Promise<T>, options?: RetryOptions)
         throw error;
       }
 
-      const delay = Math.min(initialDelay * Math.pow(backoffFactor, attempt - 1), maxDelay);
+      const delay = Math.min(initialDelay * backoffFactor ** (attempt - 1), maxDelay);
       // Add jitter (±25%) to avoid thundering herd
       const jitter = delay * (0.75 + Math.random() * 0.5);
 

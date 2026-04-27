@@ -111,8 +111,8 @@ export function AskTab({ root }: { root: string }) {
 
       const reader = r.body!.getReader();
       const dec = new TextDecoder();
-      let buf = '',
-        acc = '';
+      let buf = '';
+      let acc = '';
 
       while (true) {
         const { done, value } = await reader.read();

@@ -340,11 +340,11 @@ export async function mineSessions(
   const sessions = listAllSessions();
   const minConfidence = opts.minConfidence ?? 0.6;
 
-  let scanned = 0,
-    skipped = 0,
-    mined = 0,
-    extracted = 0,
-    errors = 0;
+  let scanned = 0;
+  let skipped = 0;
+  let mined = 0;
+  let extracted = 0;
+  let errors = 0;
 
   for (const session of sessions) {
     scanned++;

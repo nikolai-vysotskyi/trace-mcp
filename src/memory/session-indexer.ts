@@ -152,11 +152,11 @@ export function indexSessions(
   const start = Date.now();
   const sessions = listAllSessions();
 
-  let scanned = 0,
-    indexed = 0,
-    skipped = 0,
-    chunksAdded = 0,
-    errors = 0;
+  let scanned = 0;
+  let indexed = 0;
+  let skipped = 0;
+  let chunksAdded = 0;
+  let errors = 0;
 
   for (const session of sessions) {
     scanned++;

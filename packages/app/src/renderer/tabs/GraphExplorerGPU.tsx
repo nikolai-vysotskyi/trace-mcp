@@ -1333,7 +1333,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       try {
         const resp = await fetch(`${BASE}/api/projects/graph?${params}`);
         if (resp.status === 429) {
-          const delay = 400 * Math.pow(2, attempt);
+          const delay = 400 * 2 ** attempt;
           await new Promise((r) => setTimeout(r, delay));
           lastErr = new Error('Too many requests (retrying…)');
           continue;
@@ -1603,10 +1603,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       let carryDx = 0;
       let carryDy = 0;
       if (carryPositions && carryPositions.length >= 2) {
-        let minX = Infinity,
-          minY = Infinity,
-          maxX = -Infinity,
-          maxY = -Infinity;
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
         for (let i = 0; i < carryPositions.length; i += 2) {
           const x = carryPositions[i];
           const y = carryPositions[i + 1];
@@ -2835,8 +2835,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       {stressTest &&
         (() => {
           const chart = (() => {
-            const W = 240,
-              H = 60;
+            const W = 240;
+            const H = 60;
             const points = breakHistory;
             if (points.length === 0) return null;
             // X-axis max: during auto-play, scale to the user's chosen count so

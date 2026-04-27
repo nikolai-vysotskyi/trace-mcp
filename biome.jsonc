@@ -43,7 +43,13 @@
         "useNodejsImportProtocol": "error",
         "useExportType": "error",
         "useTemplate": "error",
-        "noUselessElse": "error"
+        "noUselessElse": "error",
+        "useShorthandFunctionType": "error",
+        "useExponentiationOperator": "error",
+        "useShorthandAssign": "error",
+        "useCollapsedElseIf": "warn",
+        "useDefaultParameterLast": "error",
+        "useSingleVarDeclarator": "error"
       },
       "suspicious": {
         "noDebugger": "error",
