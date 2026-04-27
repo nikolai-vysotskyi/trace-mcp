@@ -517,6 +517,35 @@ The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported
 
 ---
 
+## Supported MCP clients
+
+`trace-mcp init` detects installed MCP clients and writes a `trace-mcp` server entry into each one's native config format. Pick clients interactively, or pass `--mcp-client <name>` for non-interactive runs.
+
+| Client | Config path | Format | Top-level key | Notes |
+|---|---|---|---|---|
+| Claude Code | `~/.claude.json`, `<project>/.mcp.json` | JSON | `mcpServers` | Supports Base / Standard / Max enforcement tiers (hooks, tweakcc) |
+| Claw Code | `~/.claw/settings.json`, `<project>/.claw.json` | JSON | `mcpServers` | Same enforcement tiers as Claude Code |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) | JSON | `mcpServers` | Quit Claude.app before init — it overwrites foreign keys on preference flush |
+| Cursor | `~/.cursor/mcp.json`, `<project>/.cursor/mcp.json` | JSON | `mcpServers` | Also writes `.cursor/rules/trace-mcp.mdc` |
+| Windsurf | `~/.windsurf/mcp.json`, `<project>/.windsurf/mcp.json` | JSON | `mcpServers` | Also writes `.windsurfrules` |
+| Continue | `~/.continue/mcpServers/mcp.json` | JSON | `mcpServers` | |
+| Junie | `~/.junie/mcp/mcp.json` | JSON | `mcpServers` | |
+| JetBrains AI Assistant | IDE-internal XML | — | — | Manual: Settings → Tools → AI Assistant → MCP. Use "Import from Claude" if Claude Desktop is configured |
+| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.trace-mcp]` | |
+| Hermes Agent | `$HERMES_HOME/config.yaml` (default `~/.hermes/config.yaml`) | YAML | `mcp_servers` | Always global; also writes `AGENTS.md` and pre-allowlists hooks |
+| **AMP** (Sourcegraph) | `~/.config/amp/settings.json[c]`, `<project>/.amp/settings.json[c]` | JSON / JSONC | `amp.mcpServers` (literal dot in key) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
+| **Warp** | Cloud-synced storage (no writable file) | — | — | Manual: Settings → Agents → MCP servers → + Add → paste JSON. If Claude Code is also configured, enable "File-based MCP servers" so Warp inherits trace-mcp from `~/.claude.json`. Also writes `AGENTS.md` |
+| **Factory Droid** | `~/.factory/mcp.json`, `<project>/.factory/mcp.json` | JSON | `mcpServers` (entries need `type: "stdio"`) | Also writes `AGENTS.md` |
+
+**Enforcement tiers (Claude Code / Claw / Desktop only):**
+- **Base** — `CLAUDE.md` block with tool routing rules.
+- **Standard** — Base + PreToolUse guard hooks that intercept built-in Read/Grep/Glob.
+- **Max** — Standard + tweakcc system-prompt patches and strict agent-behavior rules.
+
+For all other clients only the Base tier applies — there is no equivalent of Claude Code hooks or tweakcc in those tools.
+
+---
+
 ## Hermes Agent sessions
 
 Hermes Agent (NousResearch) stores conversations in a SQLite database at `$HERMES_HOME/state.db` (default `~/.hermes/state.db`) plus one DB per profile under `<home>/profiles/<name>/state.db`. trace-mcp reads these read-only and exposes them through:
