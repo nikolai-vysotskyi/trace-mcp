@@ -20,19 +20,40 @@
 </p>
 
 <p align="center">
-  <strong>MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration — 80 Grep calls, 190 file reads.</strong>
+  <strong>The optimization layer for LLM applications.</strong><br>
+  Make AI systems faster, more efficient, and reliable at scale.
+</p>
+
+<p align="center">
+  <em>~40–50% lower token usage on average in real production systems.<br>
+  Up to 94–99% reduction in structured tasks like code navigation and search.</em>
 </p>
 
 > Your AI agent reads `UserController.php` and sees a class.
 > trace-mcp reads it and sees a route → controller → Eloquent model → Inertia render → Vue page — **in one graph.**
 >
-> Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 58 framework integrations across 81 languages, 138 tools, up to 99% token reduction.
+> Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 58 framework integrations across 81 languages, 138 tools.
 
 <p align="center">
   <img src="docs/images/app-graph.png" alt="trace-mcp desktop app — GPU graph explorer" width="820" />
   <br/>
   <sub>Also ships a <a href="#desktop-app">desktop app</a> with a GPU graph explorer over the same index.</sub>
 </p>
+
+---
+
+## Why this matters
+
+AI is bottlenecked not by models, but by infrastructure. Inference cost, context overhead, and retry loops grow faster than model quality — and every LLM call is paid for in tokens × latency × retries. With each model generation, the gap between *what AI could do* and *what production budgets allow* widens.
+
+trace-mcp is the systemic optimization layer that makes AI applications **cheaper, faster, and more accurate in production**:
+
+- **Lower cost** — fewer tokens per successful answer, on average and at peak
+- **Lower latency** — fewer sequential tool calls, fewer round-trips to the model
+- **Higher accuracy** — less noise in context means fewer hallucinations and stronger first-response correctness
+- **Production stability** — context that scales with project size, not against it
+
+We're starting with code intelligence — the hardest, noisiest context most agents handle today. The same optimization layer extends to any LLM application that needs to reason over structured data.
 
 ---
 
@@ -126,9 +147,20 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 
 ---
 
-## Up to 99% token reduction — real-world benchmark
+## Token reduction — measured, not marketed
 
 AI agents burn tokens reading files they don't need. trace-mcp returns **precision context** — only the symbols, edges, and signatures relevant to the query.
+
+**What to expect — by workload:**
+
+| Workload | Typical reduction |
+|---|---|
+| **Mixed real-world production** (code-aware tasks across a typical session) | **~40–50% on average** |
+| **Structured code-navigation tasks** (symbol lookup, impact analysis, type hierarchy, call graph) | **up to 94–99%** |
+| **Targeted research / planning queries** (composite tasks that replace ~10 sequential operations) | **up to ~40× on individual calls** |
+| Non-code workloads (raw text, unstructured data) | Out of scope today |
+
+The peaks are real — they show up consistently in structured benchmarks. The averages are honest: in a typical session, you're mixing those high-leverage calls with reads, edits, and cheaper queries, and the net usually lands at 30–60% depending on stack and task mix.
 
 **Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols → 929 files, 5,197 symbols in v1.30):
 
@@ -150,11 +182,11 @@ Composite task              223,721 tokens      14,245 tokens       93.6%
 Total                       702,532 tokens      50,812 tokens       92.8%
 ```
 
-**92.8% fewer tokens** to accomplish the same code understanding tasks. On the v1.30 index (929 files, 5,197 symbols) that translates to ~652K tokens saved per exploration session — up from ~522K in the original benchmark. More headroom for actual coding, fewer context window evictions, lower API costs.
+**92.8% reduction in this benchmark** — but read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **~40–50% on average**. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
 
-**Savings scale with project size.** On a 650-file project, trace-mcp saves ~522K tokens. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
+**Savings scale with project size.** On a 650-file project, structured-task savings cluster around ~522K tokens per session. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
 
-**Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, with 90%+ token reduction.
+**Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten** — fewer tokens, lower latency, and one clean answer instead of ten partial ones.
 
 ### Run it on your codebase
 
@@ -162,7 +194,7 @@ Total                       702,532 tokens      50,812 tokens       92.8%
 trace-mcp benchmark .
 ```
 
-Per-category token savings against your actual repo in ~30 seconds — no signup, all local. The numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols); your reduction will vary with project size, framework support, and task mix, but the per-task patterns hold for any well-supported stack.
+Per-category token savings against your actual repo in ~30 seconds — no signup, all local. Numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols) under structured benchmarks; production reduction on mixed workloads will be lower (typically 30–60% depending on stack), but the per-task patterns hold for any well-supported stack.
 
 <details>
 <summary>Methodology</summary>
@@ -334,6 +366,28 @@ External subprojects can be added manually with `trace-mcp subproject add --repo
 `trace-mcp ci-report --base main --head HEAD` produces a markdown or JSON report per pull request: **summary, blast radius** (depth-2 reverse dep traversal), **test coverage gaps** (per-symbol `hasTestReach`), **risk analysis** (30% complexity + 25% churn + 25% coupling + 20% blast radius), **architecture violations** (auto-detects clean / hexagonal presets), and **new dead exports**.
 
 Use `--fail-on high` to block merges on high-risk changes. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for a ready-to-use GitHub Action that runs `build → test → impact-report` and posts a sticky PR comment on every push.
+
+---
+
+## Pilot program — for teams running LLM in production
+
+If you're shipping AI features in production — internal copilots, customer-facing assistants, RAG over a code or knowledge base — and you're hitting cost, latency, or quality ceilings, we'll run a focused pilot with you.
+
+**Format:** 2–4 weeks. Minimal integration. One or two real production use cases — not a demo.
+
+**What we measure (before / after):**
+
+- Tokens per successful answer
+- First-response accuracy (% of queries resolved without retry)
+- Retries and fallback calls
+- End-to-end latency
+- User success rate on a fixed evaluation set
+
+**What you get:** a clear, before/after report on whether context optimization moves the metrics that matter for your stack — and a path to scale usage with confidence instead of throttling it on cost.
+
+We're not optimizing for cost reduction in isolation. We're optimizing for systems that work at scale: teams that move from unstable usage to reliable production and *then* grow their LLM footprint.
+
+**Get in touch:** open an issue at [github.com/nikolai-vysotskyi/trace-mcp/issues](https://github.com/nikolai-vysotskyi/trace-mcp/issues) tagged `pilot`, or reach out to [@nikolai-vysotskyi](https://github.com/nikolai-vysotskyi).
 
 ---
 

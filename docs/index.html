@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- ── Primary Meta ── -->
-  <title>trace-mcp — the code intelligence layer for AI agents</title>
-  <meta name="description" content="Give AI agents a map of your codebase. Framework-aware dependency graph exposed through MCP — so agents navigate, reason, and safely modify complex systems. 81 languages, 58 integrations, up to 99% token reduction. Open source, local-first, zero API keys.">
+  <title>trace-mcp — the optimization layer for LLM applications</title>
+  <meta name="description" content="Make AI systems faster, more efficient, and reliable at scale. ~40–50% lower token usage on average in production; up to 94–99% in structured tasks like code navigation. Framework-aware dependency graph exposed through MCP. 81 languages, 58 integrations. Open source, local-first.">
   <meta name="keywords" content="mcp, model context protocol, code intelligence, ai agents, code graph, ai coding agent, llm developer tools, code search, framework-aware indexing, claude code, cursor, windsurf, dependency graph, ast, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -47,8 +47,8 @@
   <meta property="og:site_name" content="trace-mcp">
   <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://trace-mcp.com/">
-  <meta property="og:title" content="trace-mcp — the code intelligence layer for AI agents">
-  <meta property="og:description" content="Framework-aware dependency graph exposed through MCP. Give AI agents a map of your codebase. 81 languages, 58 integrations, up to 99% token reduction.">
+  <meta property="og:title" content="trace-mcp — the optimization layer for LLM applications">
+  <meta property="og:description" content="Make AI systems faster, more efficient, and reliable at scale. ~40–50% lower token usage on average in production; up to 94–99% in structured tasks like code navigation.">
   <meta property="og:image" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:secure_url" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:type" content="image/png">
@@ -58,8 +58,8 @@
 
   <!-- ── Twitter / X Card ── -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="trace-mcp — the code intelligence layer for AI agents">
-  <meta name="twitter:description" content="Framework-aware code graph via MCP. 81 languages. 58 integrations. Up to 99% token reduction. Open source, local-first.">
+  <meta name="twitter:title" content="trace-mcp — the optimization layer for LLM applications">
+  <meta name="twitter:description" content="Faster, more efficient, more reliable AI at scale. ~40–50% lower tokens on average in production; up to 94–99% in structured tasks. Open source, local-first.">
   <meta name="twitter:image" content="https://trace-mcp.com/og-image.png">
   <meta name="twitter:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
 
@@ -69,8 +69,8 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
-    "alternateName": "trace-mcp Code Intelligence",
-    "description": "Framework-aware code intelligence layer for AI agents. Indexes source code into a dependency graph exposed through MCP — 81 languages, 58 framework integrations, up to 99% token reduction.",
+    "alternateName": "trace-mcp — Optimization Layer for LLM Applications",
+    "description": "Systemic optimization layer for LLM applications. Makes AI systems faster, more efficient, and reliable at scale — ~40–50% lower token usage on average in production, up to 94–99% in structured tasks like code navigation. Framework-aware dependency graph via MCP, 81 languages, 58 integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
     "applicationCategory": "DeveloperApplication",
@@ -99,10 +99,11 @@
       "url": "https://github.com/nikolai-vysotskyi"
     },
     "featureList": [
-      "Framework-aware dependency graph (58 integrations)",
-      "81 languages via tree-sitter + LSP enrichment",
+      "Optimization layer for LLM applications — lower cost, latency, and hallucinations",
+      "~40–50% lower token usage on average in real production",
+      "Up to 94–99% reduction in structured tasks (code navigation, impact analysis)",
+      "Framework-aware dependency graph (58 integrations, 81 languages)",
       "138 MCP tools for navigation, impact analysis, refactoring",
-      "Up to 99% token reduction vs. naive read/grep",
       "Local-first: SQLite + bundled ONNX embeddings, zero API keys",
       "Native Model Context Protocol integration"
     ]
@@ -968,6 +969,59 @@
       .usecase:last-child { border-bottom: none; }
     }
 
+    /* ── Pilot section ── */
+    .pilot-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border: 1px solid var(--border-visible);
+    }
+    .pilot-col {
+      padding: 32px 28px;
+      display: flex; flex-direction: column;
+      gap: 16px;
+    }
+    .pilot-col:first-child { border-right: 1px solid var(--border); }
+    .pilot-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex; flex-direction: column;
+      gap: 10px;
+    }
+    .pilot-list li {
+      font-family: var(--font-body);
+      font-size: 16px;
+      color: var(--text-display);
+      line-height: 1.45;
+      padding-left: 20px;
+      position: relative;
+    }
+    .pilot-list li::before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: var(--text-disabled);
+      font-family: var(--font-mono);
+    }
+    .pilot-text {
+      font-size: 15px;
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+    .pilot-text strong { color: var(--text-display); font-weight: 600; }
+    .pilot-cta {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      margin-top: 12px;
+    }
+    @media (max-width: 700px) {
+      .pilot-grid { grid-template-columns: 1fr; }
+      .pilot-col:first-child {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+
     /* ── Integrations marquee ── */
     .integrations-list {
       display: flex; flex-wrap: wrap; gap: 1px;
@@ -1823,7 +1877,7 @@
     <div class="container">
 
       <div class="hero-meta">
-        <span class="label">/ Code Intelligence · MCP Server</span>
+        <span class="label">/ Optimization Layer · LLM Applications</span>
         <span class="divider"></span>
         <span class="label label-disabled">v<span data-version>&hellip;</span> / mit license</span>
       </div>
@@ -1831,28 +1885,28 @@
       <div class="hero-grid">
         <div>
           <h1 class="hero-headline">
-            Give AI agents a <span class="em">map of your codebase.</span>
+            Make AI systems faster, more efficient, and <span class="em">reliable at scale.</span>
           </h1>
         </div>
         <div class="hero-side">
-          <span class="label">/ Token Reduction · Peak</span>
+          <span class="label">/ Token Reduction · Structured Tasks</span>
           <div class="hero-massive">
-            99<span class="pct">%</span>
+            94<span class="pct">%</span>
           </div>
-          <span class="label hero-side-label">94% average across<br>11 task categories</span>
+          <span class="label hero-side-label">~40&ndash;50% on average<br>in real production</span>
         </div>
       </div>
 
       <p class="hero-desc">
-        Code intelligence for AI agents that <span class="accent-text">actually understand frameworks.</span> Turn your code into a dependency graph so agents can navigate, reason, and safely modify complex systems.
+        The systemic optimization layer for LLM applications. Less wasted context means <span class="accent-text">lower cost, lower latency, and fewer hallucinations</span> &mdash; in production, not just in benchmarks. We start with code intelligence: a framework-aware dependency graph exposed through MCP, so agents reason over your stack instead of brute-reading it.
       </p>
 
       <div class="hero-cta">
         <a href="#install" class="btn btn-primary">
           Get started in minutes <span class="arrow">&rarr;</span>
         </a>
-        <a href="#product" class="btn btn-secondary">
-          View demo
+        <a href="#pilot" class="btn btn-secondary">
+          Run a pilot
         </a>
         <span class="hero-install" onclick="copyInstall(this)">
           <code>npm i -g trace-mcp</code>
@@ -2276,8 +2330,8 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">009 / Benchmark</span></div>
         <div>
-          <h2 class="section-title">Token cost, <span class="em">measured.</span></h2>
-          <p class="section-lede">Real codebase: 856 files, 4,774 symbols. Tasks executed with native Read/Grep/Glob vs trace-mcp tools. Numbers from the built-in <code>benchmark_project</code> command.</p>
+          <h2 class="section-title">Token cost, <span class="em">measured &mdash; not marketed.</span></h2>
+          <p class="section-lede">Structured benchmarks on a real codebase (856 files, 4,774 symbols), native Read/Grep/Glob vs trace-mcp tools, via <code>benchmark_project</code>. These are <strong>peak structured-task numbers</strong>, not average production. On mixed real-world workloads expect <strong>~40&ndash;50%</strong>; on non-code tasks, 0%. The peaks are where the math gets dramatic.</p>
         </div>
       </div>
 
@@ -2352,7 +2406,7 @@
 
       <div class="benchmark-summary">
         <div class="bs-text">
-          Average across 11 task categories. ~624,000 tokens saved per exploration session &mdash; more headroom for actual coding, fewer context-window evictions, lower API costs.
+          Average across 11 structured task categories on the trace-mcp TS/Vue codebase. Production reduction on mixed workloads is lower &mdash; typically 30&ndash;60% depending on stack &mdash; but the per-task patterns hold for any well-supported codebase. Less noise also means fewer hallucinations and stronger first-response accuracy.
         </div>
         <div class="bs-num">94<span class="pct">%</span></div>
       </div>
@@ -2617,30 +2671,72 @@
     <div class="container">
       <div class="category-tag"><span class="label">/ The Category</span></div>
       <h2 class="category-headline">
-        The code intelligence layer<br>
-        <span class="em">for AI agents.</span>
+        The optimization layer<br>
+        <span class="em">for LLM applications.</span>
       </h2>
       <p class="category-sub">
-        Turn codebases into structured systems agents can understand and act on &mdash; framework-aware, graph-native, local-first.
+        AI is bottlenecked not by models, but by infrastructure. Inference cost, context overhead, and retry loops grow faster than model quality. trace-mcp is the systemic layer that keeps LLM systems cheap, fast, and reliable as they scale &mdash; starting with code intelligence, where the noise is loudest.
       </p>
+    </div>
+  </section>
+
+  <!-- ── PILOT ── -->
+  <section id="pilot" class="pilot">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">/ Pilot Program</span></div>
+        <div>
+          <h2 class="section-title">Run a focused pilot &mdash; <span class="em">measure the impact.</span></h2>
+          <p class="section-lede">If you're shipping AI features in production and hitting cost, latency, or quality ceilings, we'll run a 2&ndash;4 week pilot with one or two real use cases. Minimal integration. Clear before/after metrics.</p>
+        </div>
+      </div>
+
+      <div class="pilot-grid">
+        <div class="pilot-col">
+          <span class="label">/ What we measure</span>
+          <ul class="pilot-list">
+            <li>Tokens per successful answer</li>
+            <li>First-response accuracy &mdash; queries resolved without retry</li>
+            <li>Retries and fallback calls</li>
+            <li>End-to-end latency</li>
+            <li>User success rate on a fixed evaluation set</li>
+          </ul>
+        </div>
+        <div class="pilot-col">
+          <span class="label">/ What you get</span>
+          <p class="pilot-text">A clear, before/after report on whether context optimization moves the metrics that matter for your stack &mdash; and a path to scale usage with confidence instead of throttling it on cost.</p>
+          <p class="pilot-text"><strong>We're not optimizing for cost reduction in isolation.</strong> We're optimizing for systems that work at scale: teams that move from unstable usage to reliable production and <em>then</em> grow their LLM footprint.</p>
+          <div class="pilot-cta">
+            <a href="https://github.com/nikolai-vysotskyi/trace-mcp/issues/new?labels=pilot&amp;title=Pilot+request" target="_blank" rel="noopener" class="btn btn-primary">
+              Request a pilot <span class="arrow">&rarr;</span>
+            </a>
+            <a href="https://github.com/nikolai-vysotskyi" target="_blank" rel="noopener" class="btn btn-secondary">
+              Reach the maintainer
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- ── FINAL CTA ── -->
   <section class="cta">
-    <div class="cta-bg-num" aria-hidden="true">99%</div>
+    <div class="cta-bg-num" aria-hidden="true">94%</div>
     <div class="container cta-content">
       <span class="label cta-label">/ Open Source · Mit License · Zero Api Keys</span>
       <h2 class="cta-headline">
-        Stop guessing.<br>
-        <span class="em">Start reasoning over your codebase.</span>
+        Stop burning tokens.<br>
+        <span class="em">Make AI work at scale.</span>
       </h2>
       <p class="cta-sub">
-        One install. Every project. Every AI agent that speaks MCP.
+        ~40&ndash;50% lower token usage on average in production. Up to 94&ndash;99% in structured tasks. One install. Every project. Every AI agent that speaks MCP.
       </p>
       <div class="cta-buttons">
         <a href="#install" class="btn btn-primary">
           Get started in minutes <span class="arrow">&rarr;</span>
+        </a>
+        <a href="#pilot" class="btn btn-secondary">
+          Run a pilot
         </a>
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-secondary">
           Star on github
@@ -2660,6 +2756,7 @@
         <a href="#product">Product view</a>
         <a href="#capabilities">Capabilities</a>
         <a href="#benchmark">Benchmark</a>
+        <a href="#pilot">Pilot program</a>
         <a href="#install">Install</a>
       </div>
       <div class="footer-col">
@@ -2688,7 +2785,7 @@
         <span class="item">mit</span>
         <span class="item">2026</span>
       </div>
-      <div>Framework-aware code intelligence for AI agents</div>
+      <div>The optimization layer for LLM applications</div>
     </div>
   </div>
 </footer>
