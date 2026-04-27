@@ -3,7 +3,19 @@ import { StatusDot } from '../components/StatusDot';
 import { useDaemon, ClientInfo } from '../hooks/useDaemon';
 
 // ── All supported MCP clients (same order as CLI init) ────────────
-type ClientName = 'claude-code' | 'claw-code' | 'claude-desktop' | 'cursor' | 'windsurf' | 'continue' | 'junie' | 'jetbrains-ai' | 'codex';
+type ClientName =
+  | 'claude-code'
+  | 'claw-code'
+  | 'claude-desktop'
+  | 'cursor'
+  | 'windsurf'
+  | 'continue'
+  | 'junie'
+  | 'jetbrains-ai'
+  | 'codex'
+  | 'amp'
+  | 'warp'
+  | 'factory-droid';
 
 const ALL_CLIENTS: { name: ClientName; label: string }[] = [
   { name: 'claude-code', label: 'Claude Code' },
@@ -15,16 +27,20 @@ const ALL_CLIENTS: { name: ClientName; label: string }[] = [
   { name: 'junie', label: 'Junie' },
   { name: 'jetbrains-ai', label: 'JetBrains AI Assistant' },
   { name: 'codex', label: 'Codex' },
+  { name: 'amp', label: 'AMP' },
+  { name: 'warp', label: 'Warp' },
+  { name: 'factory-droid', label: 'Factory Droid' },
 ];
 
 // Clients that support enforcement levels (hooks & tweakcc are CC-specific)
 const CLAUDE_CLIENTS = new Set<ClientName>(['claude-code', 'claw-code', 'claude-desktop']);
 
-// Clients that require manual IDE configuration
-const MANUAL_CLIENTS = new Set<ClientName>(['jetbrains-ai']);
+// Clients that require manual configuration (no programmatic write path)
+const MANUAL_CLIENTS = new Set<ClientName>(['jetbrains-ai', 'warp']);
 
 const MANUAL_HINTS: Partial<Record<ClientName, string>> = {
   'jetbrains-ai': 'Settings → Tools → AI Assistant → MCP → Add → Command: trace-mcp, Args: serve',
+  warp: 'Settings → Agents → MCP servers → + Add → paste { mcpServers: { "trace-mcp": ... } }',
 };
 
 interface DetectedClient {
@@ -133,16 +149,10 @@ function ConnectedClientRow({ client }: { client: ClientInfo }) {
       <StatusDot status={status} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span
-            className="text-xs font-medium truncate"
-            style={{ color: 'var(--text-primary)' }}
-          >
+          <span className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
             {clientDisplayName(client)}
           </span>
-          <span
-            className="text-[10px] shrink-0"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
+          <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
             {client.transport}
           </span>
         </div>
@@ -156,10 +166,7 @@ function ConnectedClientRow({ client }: { client: ClientInfo }) {
           </div>
         )}
       </div>
-      <span
-        className="text-[10px] shrink-0"
-        style={{ color: 'var(--text-tertiary)' }}
-      >
+      <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
         {timeAgo(client.lastSeen)}
       </span>
     </div>
@@ -217,34 +224,22 @@ function SupportedClientRow({
           {label}
         </span>
         {configured && configPath && (
-          <div
-            className="text-[10px] truncate"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
+          <div className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>
             {configPath.replace(/^\/Users\/[^/]+/, '~')}
           </div>
         )}
         {!configured && isManual && MANUAL_HINTS[name] && (
-          <div
-            className="text-[10px] truncate"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
+          <div className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>
             {MANUAL_HINTS[name]}
           </div>
         )}
       </div>
       {configured ? (
-        <span
-          className="text-[10px] shrink-0 font-medium"
-          style={{ color: '#34c759' }}
-        >
+        <span className="text-[10px] shrink-0 font-medium" style={{ color: '#34c759' }}>
           Configured
         </span>
       ) : isManual ? (
-        <span
-          className="text-[10px] shrink-0"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
+        <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
           Manual
         </span>
       ) : (
@@ -371,7 +366,16 @@ export function Clients() {
             style={{ color: 'var(--text-secondary)' }}
             title="Refresh"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M1.5 1.5v4h4" />
               <path d="M1.5 5.5A6.5 6.5 0 0 1 14.5 8" />
               <path d="M14.5 14.5v-4h-4" />
@@ -417,7 +421,16 @@ export function Clients() {
             style={{ color: 'var(--text-secondary)' }}
             title="Refresh"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M1.5 1.5v4h4" />
               <path d="M1.5 5.5A6.5 6.5 0 0 1 14.5 8" />
               <path d="M14.5 14.5v-4h-4" />
@@ -443,8 +456,8 @@ export function Clients() {
             {[...clients]
               .sort((a, b) => new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime())
               .map((c) => (
-              <ConnectedClientRow key={c.id} client={c} />
-            ))}
+                <ConnectedClientRow key={c.id} client={c} />
+              ))}
           </div>
         )}
       </div>

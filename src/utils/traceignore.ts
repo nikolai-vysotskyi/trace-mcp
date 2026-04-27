@@ -27,9 +27,27 @@ export class TraceignoreMatcher {
 
   /** Built-in directories that are always skipped. */
   static readonly DEFAULT_SKIP_DIRS = new Set([
-    'node_modules', '.git', 'dist', 'build', '.next', '__pycache__',
-    '.venv', 'vendor', '.trace-mcp', 'coverage', '.turbo',
-    '.claude', '.cursor', '.windsurf', '.codeium', '.aider', '.copilot',
+    'node_modules',
+    '.git',
+    'dist',
+    'build',
+    '.next',
+    '__pycache__',
+    '.venv',
+    'vendor',
+    '.trace-mcp',
+    'coverage',
+    '.turbo',
+    '.claude',
+    '.cursor',
+    '.windsurf',
+    '.codeium',
+    '.aider',
+    '.copilot',
+    '.amp',
+    '.factory',
+    '.junie',
+    '.codex',
   ]);
 
   constructor(rootPath: string, config: TraceignoreConfig = {}) {
