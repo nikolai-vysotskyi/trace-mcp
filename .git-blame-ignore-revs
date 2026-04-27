@@ -6,3 +6,6 @@
 
 # chore(format): apply Biome formatter across repo
 b07c965db17d9136c17c968d0a822b5f96bd932b
+
+# chore(imports): enable Biome organize-imports and apply across repo
+91cfbf2b9263420d6051bfdd62f8633a41be7fa3
