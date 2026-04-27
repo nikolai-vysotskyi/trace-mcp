@@ -84,6 +84,7 @@ export function ProjectRow({
           {!confirmRemove ? (
             <>
               <button
+                type="button"
                 onClick={onReindex}
                 disabled={status === 'indexing'}
                 className="w-7 h-7 flex items-center justify-center rounded-lg disabled:opacity-30 transition-colors hover:bg-[var(--bg-active)]"
@@ -105,6 +106,7 @@ export function ProjectRow({
                 </svg>
               </button>
               <button
+                type="button"
                 onClick={() => setConfirmRemove(true)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--bg-active)]"
                 style={{ color: 'var(--text-tertiary)' }}
@@ -127,6 +129,7 @@ export function ProjectRow({
           ) : (
             <>
               <button
+                type="button"
                 onClick={() => setConfirmRemove(false)}
                 className="text-[11px] px-1.5 py-0.5 rounded-md font-medium transition-colors hover:bg-[var(--bg-active)]"
                 style={{
@@ -138,6 +141,7 @@ export function ProjectRow({
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => {
                   onRemove();
                   setConfirmRemove(false);

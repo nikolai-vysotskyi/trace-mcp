@@ -2260,6 +2260,7 @@ export function Settings() {
           Daemon not reachable
         </div>
         <button
+          type="button"
           onClick={() => restartDaemon()}
           disabled={restarting}
           className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"

@@ -304,6 +304,7 @@ export function AskTab({ root }: { root: string }) {
               {['How does auth work?', 'Explain the plugin system', 'Where are API routes?'].map(
                 (q) => (
                   <button
+                    type="button"
                     key={q}
                     onClick={() => {
                       setInput(q);
@@ -438,6 +439,7 @@ export function AskTab({ root }: { root: string }) {
           />
           {busy ? (
             <button
+              type="button"
               onClick={() => abortRef.current?.abort()}
               title="Stop"
               style={{
@@ -455,6 +457,7 @@ export function AskTab({ root }: { root: string }) {
             </button>
           ) : (
             <button
+              type="button"
               onClick={send}
               disabled={!input.trim() || !ok}
               title="Send"
@@ -510,6 +513,7 @@ export function AskTab({ root }: { root: string }) {
           </div>
           {messages.length > 0 && (
             <button
+              type="button"
               onClick={() => {
                 setMessages([]);
                 setStreaming('');

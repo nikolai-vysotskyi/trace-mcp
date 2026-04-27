@@ -2807,6 +2807,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               const tgtShort = e.target.split('/').pop() ?? e.target;
               return (
                 <button
+                  type="button"
                   key={`${e.source}|${e.target}|${i}`}
                   onClick={() => focusBottleneckEdge(e)}
                   className="cosmos-gpu-bn-row"
@@ -2997,6 +2998,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               <div className="flex flex-wrap gap-1.5">
                 {autoSteps > 0 ? (
                   <button
+                    type="button"
                     onClick={() => setAutoSteps(0)}
                     className="cosmos-gpu-pill-btn active"
                     title="Stop auto-destruction"
@@ -3007,6 +3009,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                 ) : (
                   <>
                     <button
+                      type="button"
                       onClick={breakNextEdge}
                       className="cosmos-gpu-pill-btn active"
                       title="Remove the highest-scoring remaining edge"
@@ -3015,6 +3018,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                       Break next
                     </button>
                     <button
+                      type="button"
                       onClick={() => setAutoSteps(autoStepsCount)}
                       className="cosmos-gpu-pill-btn"
                       title={`Auto: remove the top ${autoStepsCount} hottest edges one by one with animation`}
@@ -3039,6 +3043,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                   </>
                 )}
                 <button
+                  type="button"
                   onClick={resetStressTest}
                   className="cosmos-gpu-pill-btn"
                   title="Restore all broken edges and clear history"
@@ -3303,12 +3308,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         {/* Granularity toggle — segmented */}
         <div className="cosmos-gpu-seg">
           <button
+            type="button"
             onClick={() => onSettingsChange({ granularity: 'file' })}
             className={`cosmos-gpu-pill-btn ${granularity === 'file' ? 'active' : ''}`}
           >
             Files
           </button>
           <button
+            type="button"
             onClick={() => onSettingsChange({ granularity: 'symbol' })}
             className={`cosmos-gpu-pill-btn ${granularity === 'symbol' ? 'active' : ''}`}
           >
@@ -3337,6 +3344,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 
         {/* Toggle buttons — checkboxes replaced with tappable pills */}
         <button
+          type="button"
           onClick={() => onSettingsChange({ hideIsolated: !hideIsolated })}
           className={`cosmos-gpu-pill-btn ${hideIsolated ? 'active' : ''}`}
           title="Hide nodes with no edges"
@@ -3344,6 +3352,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           ⌀ Isolated
         </button>
         <button
+          type="button"
           onClick={() => onSettingsChange({ showLabels: !showLabels })}
           className={`cosmos-gpu-pill-btn ${showLabels ? 'active' : ''}`}
           title="Show top labels"
@@ -3351,6 +3360,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           Labels
         </button>
         <button
+          type="button"
           onClick={() => onSettingsChange({ showFPS: !showFPS })}
           className={`cosmos-gpu-pill-btn ${showFPS ? 'active' : ''}`}
           title="Show FPS counter"
@@ -3365,6 +3375,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 
         {/* Bottleneck analysis — color edges by betweenness+co-change, highlight bridges & articulation points */}
         <button
+          type="button"
           onClick={() =>
             onSettingsChange({
               bottlenecks: !bottlenecks,
@@ -3377,6 +3388,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           Bottlenecks
         </button>
         <button
+          type="button"
           onClick={() =>
             onSettingsChange({
               stressTest: !stressTest,
@@ -3468,6 +3480,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 
         {/* Live / Paused toggle */}
         <button
+          type="button"
           onClick={() => setLive((v) => !v)}
           className="cosmos-gpu-pill-btn"
           title={`${live ? 'Pause' : 'Resume'} simulation (Space)`}
@@ -3483,11 +3496,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           {live ? 'Live' : 'Paused'}
         </button>
 
-        <button onClick={doFit} className="cosmos-gpu-pill-btn" title="Fit view & pause (F)">
+        <button
+          type="button"
+          onClick={doFit}
+          className="cosmos-gpu-pill-btn"
+          title="Fit view & pause (F)"
+        >
           Fit <span className="cosmos-gpu-kbd">F</span>
         </button>
 
         <button
+          type="button"
           onClick={clearHighlight}
           className="cosmos-gpu-pill-btn"
           title="Clear highlight (Esc)"
@@ -3495,7 +3514,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           ⌫
         </button>
 
-        <button onClick={loadGraph} className="cosmos-gpu-pill-btn" title="Reload graph data">
+        <button
+          type="button"
+          onClick={loadGraph}
+          className="cosmos-gpu-pill-btn"
+          title="Reload graph data"
+        >
           ↻
         </button>
       </div>
@@ -3638,6 +3662,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                   {relPath && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       <button
+                        type="button"
                         className="cosmos-gpu-pill-btn"
                         title="Copy full path"
                         onClick={async () => {
@@ -3655,6 +3680,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                       {canOpen &&
                         orderedIdes.map((ide) => (
                           <button
+                            type="button"
                             key={ide.id}
                             className={`cosmos-gpu-pill-btn ${ide.id === lastIdeId ? 'active' : ''}`}
                             title={`Open in ${ide.name}`}
@@ -3696,6 +3722,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                           {selectedEdge ? 'AI prompt · this edge' : 'AI prompt · this file'}
                         </span>
                         <button
+                          type="button"
                           className="cosmos-gpu-pill-btn"
                           title="Copy the prompt below to your clipboard"
                           onClick={async () => {
@@ -3761,6 +3788,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                   )}
                 </div>
                 <button
+                  type="button"
                   onClick={() => {
                     setSelected(null);
                     setSelectedEdge(null);

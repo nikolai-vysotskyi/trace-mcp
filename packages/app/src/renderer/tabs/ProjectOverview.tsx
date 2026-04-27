@@ -324,6 +324,7 @@ export function ProjectOverview({
       {/* ── Primary action ───────────────────────────── */}
       {project ? (
         <button
+          type="button"
           onClick={() => reindexProject(root)}
           disabled={status === 'indexing'}
           className="w-full text-[13px] font-medium transition-all disabled:opacity-40 hover:brightness-110 active:brightness-95"
@@ -342,6 +343,7 @@ export function ProjectOverview({
         </button>
       ) : (
         <button
+          type="button"
           onClick={() => addProject(root)}
           className="w-full text-[13px] font-medium transition-all hover:brightness-110 active:brightness-95"
           style={{
@@ -454,6 +456,7 @@ export function ProjectOverview({
                     </span>
                   </div>
                   <button
+                    type="button"
                     onClick={() => window.open(buildIssueUrl(gap), '_blank')}
                     className="shrink-0 text-[11px] font-medium transition-colors hover:opacity-80"
                     style={{
@@ -494,6 +497,7 @@ export function ProjectOverview({
                     </span>
                   </div>
                   <button
+                    type="button"
                     onClick={() => window.open(buildIssueUrl(pkg), '_blank')}
                     className="shrink-0 text-[11px] font-medium transition-colors hover:opacity-80"
                     style={{
@@ -584,6 +588,7 @@ export function ProjectOverview({
               const active = smellsCategory === tab.key;
               return (
                 <button
+                  type="button"
                   key={tab.key}
                   onClick={() => setSmellsCategory(tab.key)}
                   className="text-[11px] px-2 py-1 rounded transition-all"
@@ -628,6 +633,7 @@ export function ProjectOverview({
               const isLast = i === Math.min(smells.findings.length, 25) - 1;
               return (
                 <button
+                  type="button"
                   key={`${f.file}:${f.line}:${i}`}
                   onClick={() => {
                     const api = (window as any).electronAPI;
@@ -720,6 +726,7 @@ export function ProjectOverview({
                 )}
               </div>
               <button
+                type="button"
                 onClick={handleAddService}
                 disabled={addingService}
                 className="text-[12px] transition-colors disabled:opacity-40 flex items-center gap-1 hover:opacity-80"
@@ -884,6 +891,7 @@ export function ProjectOverview({
                                 </form>
                               ) : (
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     setEditingGroup(svc.id);
                                     setGroupInput(svc.projectGroup ?? '');
@@ -925,6 +933,7 @@ export function ProjectOverview({
                               {/* Graph button */}
                               {onNavigateToService && (
                                 <button
+                                  type="button"
                                   onClick={() => onNavigateToService(svc.name)}
                                   className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-[26px] h-[22px] flex items-center justify-center"
                                   style={{
@@ -956,6 +965,7 @@ export function ProjectOverview({
 
                               {/* Remove button */}
                               <button
+                                type="button"
                                 onClick={() => handleRemoveService(svc.name)}
                                 className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-[22px] h-[22px] flex items-center justify-center rounded-full"
                                 style={{ color: 'var(--text-tertiary)' }}

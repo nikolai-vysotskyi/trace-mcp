@@ -119,7 +119,7 @@
       "linter": {
         "rules": {
           "a11y": {
-            "useButtonType": "warn",
+            "useButtonType": "error",
             "useKeyWithClickEvents": "warn",
             "noStaticElementInteractions": "warn",
             "useAriaPropsForRole": "error",

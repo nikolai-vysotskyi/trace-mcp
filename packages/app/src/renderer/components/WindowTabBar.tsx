@@ -71,6 +71,7 @@ export function WindowTabBar() {
     >
       {tabs.map((tab) => (
         <button
+          type="button"
           key={tab.id}
           onClick={() => handleTabClick(tab.id)}
           style={

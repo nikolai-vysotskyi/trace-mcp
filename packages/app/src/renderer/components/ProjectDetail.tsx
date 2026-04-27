@@ -67,6 +67,7 @@ export function ProjectDetail({ root, status, progress, onBack, onReindex }: Pro
       {/* Header with back button */}
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={onBack}
           className="text-xs px-1.5 py-0.5 rounded"
           style={{ color: 'var(--accent)' }}
@@ -143,6 +144,7 @@ export function ProjectDetail({ root, status, progress, onBack, onReindex }: Pro
       {/* Actions */}
       <div className="space-y-1.5">
         <button
+          type="button"
           onClick={onReindex}
           disabled={status === 'indexing'}
           className="w-full text-xs px-3 py-2 rounded-md font-medium transition-colors disabled:opacity-40"

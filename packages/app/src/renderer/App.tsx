@@ -110,6 +110,7 @@ function RecentProjects() {
           className="group flex items-center rounded-md transition-colors hover:bg-[var(--bg-active)]"
         >
           <button
+            type="button"
             onClick={() => openProject(root)}
             className="text-left flex-1 min-w-0 px-2.5 py-1 text-[11px] truncate"
             style={{ color: 'var(--text-secondary)' }}
@@ -118,6 +119,7 @@ function RecentProjects() {
             {root.split(/[/\\]/).filter(Boolean).pop()}
           </button>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               removeRecentProject(root);
@@ -277,6 +279,7 @@ function ProjectFileExplorer({
         ) : (
           files.map((f) => (
             <button
+              type="button"
               key={f.path}
               onClick={() => onFileClick(f.path)}
               className="w-full text-left px-2.5 py-1 text-[10px] truncate rounded-md transition-colors hover:bg-[var(--bg-active)] flex items-center gap-1"
@@ -538,7 +541,7 @@ function UpdateBanner() {
           v{pendingVersion} ready
         </div>
         <div className="subtitle">Restart to install · v{state.current}</div>
-        <button className="btn-prominent success" onClick={handleRestart}>
+        <button type="button" className="btn-prominent success" onClick={handleRestart}>
           Restart to install
         </button>
       </div>
@@ -595,7 +598,7 @@ function UpdateBanner() {
             {state.error}
           </div>
         )}
-        <button className="btn-prominent" onClick={handleUpdate} disabled={updating}>
+        <button type="button" className="btn-prominent" onClick={handleUpdate} disabled={updating}>
           {updating ? 'Updating…' : 'Update'}
         </button>
       </div>
@@ -796,6 +799,7 @@ export function App() {
               <>
                 {PROJECT_TABS.map((t) => (
                   <button
+                    type="button"
                     key={t.id}
                     onClick={() => setProjectTab(t.id)}
                     className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
@@ -824,6 +828,7 @@ export function App() {
               <>
                 {GLOBAL_TABS.map((t) => (
                   <button
+                    type="button"
                     key={t.id}
                     onClick={() => setGlobalTab(t.id)}
                     className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"

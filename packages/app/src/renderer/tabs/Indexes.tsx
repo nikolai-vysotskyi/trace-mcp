@@ -47,6 +47,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
           Daemon not reachable
         </div>
         <button
+          type="button"
           onClick={() => restartDaemon()}
           disabled={restarting}
           className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
@@ -75,6 +76,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
         </h2>
         <div className="flex gap-1">
           <button
+            type="button"
             onClick={handleAddFolder}
             className="text-xs px-2 py-1 rounded-md font-medium transition-colors"
             style={{ background: 'var(--accent)', color: '#fff' }}
@@ -83,6 +85,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
             + Add
           </button>
           <button
+            type="button"
             onClick={handleAddManual}
             className="text-xs px-2 py-1 rounded-md font-medium transition-colors"
             style={{ color: 'var(--accent)', border: '1px solid var(--accent)' }}
@@ -116,6 +119,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
             }}
           />
           <button
+            type="button"
             onClick={handleAddManual}
             className="text-xs px-2 py-1 rounded-md font-medium"
             style={{ background: 'var(--accent)', color: '#fff' }}
@@ -123,6 +127,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
             OK
           </button>
           <button
+            type="button"
             onClick={() => {
               setShowAddInput(false);
               setAddPath('');
