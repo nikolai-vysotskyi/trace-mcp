@@ -519,7 +519,9 @@ export const initCommand = new Command('init')
         const header = opts.dryRun ? 'trace-mcp init (dry run)' : 'trace-mcp init';
         console.log(header);
         for (const step of steps) {
-          console.log(`  ${shortPath(step.target)}  ${step.detail ?? step.action}`);
+          // Strip newlines from user-influenced detail to prevent log injection.
+          const detail = String(step.detail ?? step.action).replace(/[\r\n]/g, ' ');
+          console.log(`  ${shortPath(step.target)}  ${detail}`);
         }
         if (!opts.dryRun) {
           console.log(

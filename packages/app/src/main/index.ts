@@ -1,5 +1,5 @@
 import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
-import { execSync, exec, spawn } from 'child_process';
+import { execSync, exec, execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -296,8 +296,11 @@ ipcMain.handle(
     }
 
     return new Promise<{ ok: boolean; error?: string }>((resolve) => {
-      exec(
-        `trace-mcp init ${flags.join(' ')}`,
+      // Use execFile to avoid shell interpretation: flags like project paths
+      // could contain whitespace or special chars and must not be evaluated.
+      execFile(
+        'trace-mcp',
+        ['init', ...flags],
         {
           timeout: 30_000,
         },
@@ -608,8 +611,11 @@ async function resolveNpmRoot(): Promise<string | null> {
   const npmBin = await resolveNpmBin();
   if (!npmBin) return null;
   return new Promise((resolve) => {
-    exec(
-      `${JSON.stringify(npmBin)} root -g`,
+    // execFile bypasses shell parsing — npmBin is a filesystem path that
+    // could in theory contain a space or quote.
+    execFile(
+      npmBin,
+      ['root', '-g'],
       { encoding: 'utf-8', timeout: 30_000 },
       (err, stdout) => {
         if (err) {
@@ -684,9 +690,10 @@ ipcMain.handle('apply-update', async () => {
     appendUpdateLog({ event: 'apply-update:no-npm' });
     return { ok: false, error: `${msg}\n\nFull log: ${UPDATE_LOG}` };
   }
-  // Pass through a login shell only to inherit `HOME`, `USER` etc. — but
-  // execute the resolved npm binary directly so we don't depend on PATH.
-  const npmCmd = `${JSON.stringify(npmBin)} install -g trace-mcp@latest --force`;
+  // Execute the resolved npm binary directly with execFile (no shell) so we
+  // don't depend on PATH and avoid command-line injection if npmBin contains
+  // unusual characters.
+  const npmArgs = ['install', '-g', 'trace-mcp@latest', '--force'];
 
   const npmRoot = await resolveNpmRoot();
   if (npmRoot) cleanStaleScratchDirs(npmRoot);
@@ -694,8 +701,9 @@ ipcMain.handle('apply-update', async () => {
   const runOnce = () =>
     new Promise<{ err?: Error; stderr: string; stdout: string; code?: number; signal?: string }>(
       (resolve) => {
-        const child = exec(
-          npmCmd,
+        const child = execFile(
+          npmBin,
+          npmArgs,
           { encoding: 'utf-8', timeout: 600_000, maxBuffer: 16 * 1024 * 1024 },
           (err, stdout, stderr) => {
             resolve({
@@ -712,7 +720,7 @@ ipcMain.handle('apply-update', async () => {
 
   appendUpdateLog({
     event: 'apply-update:start',
-    cmd: npmCmd,
+    cmd: `${npmBin} ${npmArgs.join(' ')}`,
     npmBin,
     npmRoot,
     shell: process.env.SHELL ?? null,

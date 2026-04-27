@@ -518,9 +518,12 @@ function writeAmpJsoncEntry(configPath: string, entry: McpServerEntry): 'created
 
   let isNew = true;
   let content = '{}';
-  if (fs.existsSync(configPath)) {
-    isNew = false;
+  // Atomic read: avoids TOCTOU between existsSync and readFileSync.
+  try {
     content = fs.readFileSync(configPath, 'utf-8') || '{}';
+    isNew = false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
   }
 
   // jsonc-parser preserves comments and formatting around untouched regions.
@@ -563,12 +566,13 @@ function writeFactoryJsonEntry(
 
   let config: Record<string, unknown> = {};
   let isNew = true;
-  if (fs.existsSync(configPath)) {
-    try {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      isNew = false;
-    } catch {
-      /* malformed — overwrite */
+  // Atomic read: avoids TOCTOU between existsSync and readFileSync.
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    isNew = false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+      // malformed JSON — overwrite
     }
   }
 
