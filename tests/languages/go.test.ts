@@ -17,7 +17,10 @@ describe('GoLanguagePlugin', () => {
   // that can surface when other tree-sitter plugins run first in the suite.
   beforeAll(async () => {
     const probe = await plugin.extractSymbols('probe.go', Buffer.from('package probe\n'));
-    expect(probe.isOk(), `Go parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+    expect(
+      probe.isOk(),
+      `Go parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`,
+    ).toBe(true);
   });
   it('has correct manifest', () => {
     expect(plugin.manifest.name).toBe('go-language');
@@ -38,14 +41,20 @@ func main() {
   });
 
   it('extracts struct type', async () => {
-    const result = await extract(`
+    const result = await extract(
+      `
 package models
 
 type User struct {
-  ID   int    ` + '`json:"id"`' + `
-  Name string ` + '`json:"name"`' + `
+  ID   int    ` +
+        '`json:"id"`' +
+        `
+  Name string ` +
+        '`json:"name"`' +
+        `
 }
-    `);
+    `,
+    );
     const st = result.symbols.find((s) => s.name === 'User' && s.kind === 'class');
     expect(st).toBeDefined();
     expect(st!.fqn).toBe('models.User');

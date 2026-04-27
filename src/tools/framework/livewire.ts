@@ -43,8 +43,7 @@ export function getLivewireContext(
   componentName: string,
 ): TraceMcpResult<LivewireContextResult> {
   // Find the symbol for the Livewire component class
-  const symbol = store.getSymbolByFqn(componentName)
-    ?? findLivewireSymbol(store, componentName);
+  const symbol = store.getSymbolByFqn(componentName) ?? findLivewireSymbol(store, componentName);
 
   if (!symbol) return err(notFound(componentName));
 
@@ -57,7 +56,9 @@ export function getLivewireContext(
   let meta: Record<string, unknown> = {};
   try {
     if (symbol.metadata) meta = JSON.parse(symbol.metadata) as Record<string, unknown>;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   const properties: LivewireProperty[] = [];
   const actions: LivewireAction[] = [];
@@ -112,7 +113,9 @@ export function getLivewireContext(
           break;
         }
         case 'livewire_dispatches': {
-          const edgeMeta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
+          const edgeMeta = edge.metadata
+            ? (JSON.parse(edge.metadata) as Record<string, unknown>)
+            : {};
           if (edgeMeta.event) dispatches.push(String(edgeMeta.event));
           break;
         }
@@ -137,7 +140,9 @@ export function getLivewireContext(
     const incoming = store.getIncomingEdges(nodeId);
     for (const edge of incoming) {
       if (edge.edge_type_name === 'livewire_listens') {
-        const edgeMeta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
+        const edgeMeta = edge.metadata
+          ? (JSON.parse(edge.metadata) as Record<string, unknown>)
+          : {};
         if (edgeMeta.event) listens.push(String(edgeMeta.event));
       }
     }

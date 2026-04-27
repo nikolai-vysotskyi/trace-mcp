@@ -92,12 +92,10 @@ interface TypeORMEntityResult {
   associations: RawOrmAssociation[];
 }
 
-export function extractTypeORMEntity(
-  source: string,
-  filePath: string,
-): TypeORMEntityResult | null {
+export function extractTypeORMEntity(source: string, filePath: string): TypeORMEntityResult | null {
   // Match @Entity() ... class ClassName
-  const entityRegex = /@Entity\s*\(\s*(?:['"]([^'"]+)['"]|\{[^}]*tableName\s*:\s*['"]([^'"]+)['"][^}]*\})?\s*\)[\s\S]*?class\s+(\w+)/;
+  const entityRegex =
+    /@Entity\s*\(\s*(?:['"]([^'"]+)['"]|\{[^}]*tableName\s*:\s*['"]([^'"]+)['"][^}]*\})?\s*\)[\s\S]*?class\s+(\w+)/;
   const entityMatch = source.match(entityRegex);
   if (!entityMatch) return null;
 
@@ -109,7 +107,8 @@ export function extractTypeORMEntity(
   const indices: string[] = [];
 
   // Extract @Column, @PrimaryGeneratedColumn, @PrimaryColumn fields
-  const columnRegex = /@(PrimaryGeneratedColumn|PrimaryColumn|Column|CreateDateColumn|UpdateDateColumn|DeleteDateColumn)\s*(?:\([^)]*\))?\s*(?:\w+\s*[?!]?\s*:\s*[\w|]+\s*)*\s*(\w+)\s*[?!]?\s*:\s*([\w|[\]<>]+)/g;
+  const columnRegex =
+    /@(PrimaryGeneratedColumn|PrimaryColumn|Column|CreateDateColumn|UpdateDateColumn|DeleteDateColumn)\s*(?:\([^)]*\))?\s*(?:\w+\s*[?!]?\s*:\s*[\w|]+\s*)*\s*(\w+)\s*[?!]?\s*:\s*([\w|[\]<>]+)/g;
   let colMatch: RegExpExecArray | null;
   while ((colMatch = columnRegex.exec(source)) !== null) {
     const decorator = colMatch[1];

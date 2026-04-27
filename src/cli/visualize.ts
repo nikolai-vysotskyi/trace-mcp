@@ -40,31 +40,50 @@ function openInBrowser(filePath: string): void {
 export const visualizeCommand = new Command('visualize')
   .alias('viz')
   .description('Generate an interactive dependency graph and open it in the browser')
-  .argument('[scope]', `what to visualize
+  .argument(
+    '[scope]',
+    `what to visualize
 
   Scope can be:
     project            whole project graph
     src/server.ts      single file and its dependencies
-    src/indexer/        all files under a directory`, 'project')
-  .option('-l, --layout <type>', `graph layout algorithm
+    src/indexer/        all files under a directory`,
+    'project',
+  )
+  .option(
+    '-l, --layout <type>',
+    `graph layout algorithm
 
   Layouts:
     force          physics-based force-directed (best for exploration)
     hierarchical   top-down layered DAG (best for dependency chains)
-    radial         concentric circles from the scope center`, 'force')
-  .option('-c, --color-by <mode>', `node coloring strategy
+    radial         concentric circles from the scope center`,
+    'force',
+  )
+  .option(
+    '-c, --color-by <mode>',
+    `node coloring strategy
 
   Modes:
     community        color by detected module community
     language         color by programming language
-    framework_role   color by framework role (controller, model, etc.)`, 'community')
+    framework_role   color by framework role (controller, model, etc.)`,
+    'community',
+  )
   .option('-d, --depth <n>', 'max dependency hops from scope', '2')
-  .option('-g, --granularity <mode>', `node granularity
+  .option(
+    '-g, --granularity <mode>',
+    `node granularity
 
   Modes:
     file     each node = one file (default)
-    symbol   each node = function/class/method`, 'file')
-  .option('-k, --symbol-kinds <kinds>', 'comma-separated symbol kinds when granularity=symbol (e.g. function,class,method)')
+    symbol   each node = function/class/method`,
+    'file',
+  )
+  .option(
+    '-k, --symbol-kinds <kinds>',
+    'comma-separated symbol kinds when granularity=symbol (e.g. function,class,method)',
+  )
   .option('--hide-isolated', 'hide nodes with no edges')
   .option('--max-files <n>', 'max seed files for file-level graph (default: 10000)')
   .option('--max-nodes <n>', 'max viz nodes for symbol-level graph (default: 100000)')
@@ -100,7 +119,9 @@ export const visualizeCommand = new Command('visualize')
     let topoStore: InstanceType<typeof TopologyStore> | undefined;
     try {
       if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-    } catch { /* subproject support is optional */ }
+    } catch {
+      /* subproject support is optional */
+    }
 
     const result = visualizeGraph(store, {
       scope,
@@ -125,7 +146,9 @@ export const visualizeCommand = new Command('visualize')
       process.exit(1);
     }
 
-    console.log(`Graph: ${result.value.nodes} nodes, ${result.value.edges} edges, ${result.value.communities} communities`);
+    console.log(
+      `Graph: ${result.value.nodes} nodes, ${result.value.edges} edges, ${result.value.communities} communities`,
+    );
     console.log(`Output: ${result.value.outputPath}`);
 
     if (opts.open !== false) {

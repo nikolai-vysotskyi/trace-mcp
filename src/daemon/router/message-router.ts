@@ -11,17 +11,25 @@ export interface MessageRouterOptions {
 
 type ClientMessage = JSONRPCMessage;
 
-function isRequest(msg: JSONRPCMessage): msg is JSONRPCMessage & { id: string | number; method: string } {
-  return typeof (msg as Record<string, unknown>).method === 'string'
-    && (msg as Record<string, unknown>).id !== undefined
-    && (msg as Record<string, unknown>).id !== null;
+function isRequest(
+  msg: JSONRPCMessage,
+): msg is JSONRPCMessage & { id: string | number; method: string } {
+  return (
+    typeof (msg as Record<string, unknown>).method === 'string' &&
+    (msg as Record<string, unknown>).id !== undefined &&
+    (msg as Record<string, unknown>).id !== null
+  );
 }
 
 function isResponse(msg: JSONRPCMessage): msg is JSONRPCMessage & { id: string | number } {
   const m = msg as Record<string, unknown>;
-  return m.id !== undefined && m.id !== null
-    && (Object.prototype.hasOwnProperty.call(m, 'result') || Object.prototype.hasOwnProperty.call(m, 'error'))
-    && m.method === undefined;
+  return (
+    m.id !== undefined &&
+    m.id !== null &&
+    (Object.prototype.hasOwnProperty.call(m, 'result') ||
+      Object.prototype.hasOwnProperty.call(m, 'error')) &&
+    m.method === undefined
+  );
 }
 
 /**
@@ -114,7 +122,10 @@ export class MessageRouter {
     this.transitioning = true;
     const old = this.activeBackend;
     const prevKind = old?.kind ?? 'null';
-    logger.info({ from: prevKind, to: newBackend.kind, drainMs, pending: this.pendingRequestIds.size }, 'MessageRouter: swap begin');
+    logger.info(
+      { from: prevKind, to: newBackend.kind, drainMs, pending: this.pendingRequestIds.size },
+      'MessageRouter: swap begin',
+    );
 
     try {
       // 1. Wait for pending requests to drain (up to drainMs).
@@ -123,7 +134,10 @@ export class MessageRouter {
       // 2. Synthesize error responses for anything still pending.
       if (this.pendingRequestIds.size > 0) {
         const stuck = [...this.pendingRequestIds];
-        logger.warn({ count: stuck.length }, 'MessageRouter: drain timeout, synthesizing errors for pending');
+        logger.warn(
+          { count: stuck.length },
+          'MessageRouter: drain timeout, synthesizing errors for pending',
+        );
         for (const id of stuck) {
           await this.sendErrorResponseSafely(id, -32603, 'Request interrupted by backend switch');
         }
@@ -135,7 +149,9 @@ export class MessageRouter {
 
       // 4. Stop old backend (non-blocking heavy cleanup runs in backgroundDispose).
       if (old) {
-        try { await old.stop(); } catch (err) {
+        try {
+          await old.stop();
+        } catch (err) {
           logger.warn({ err: String(err) }, 'MessageRouter: old backend stop errored');
         }
       }
@@ -149,7 +165,9 @@ export class MessageRouter {
       const toFlush = this.queue.splice(0, this.queue.length);
       for (const m of toFlush) {
         if (isRequest(m)) this.pendingRequestIds.add(m.id);
-        try { await newBackend.send(m); } catch (err) {
+        try {
+          await newBackend.send(m);
+        } catch (err) {
           logger.error({ err: String(err) }, 'MessageRouter: flush send failed');
           if (isRequest(m)) {
             await this.sendErrorResponseSafely(m.id, -32603, `Backend send failed: ${String(err)}`);
@@ -157,7 +175,10 @@ export class MessageRouter {
           }
         }
       }
-      logger.info({ from: prevKind, to: newBackend.kind, flushed: toFlush.length }, 'MessageRouter: swap complete');
+      logger.info(
+        { from: prevKind, to: newBackend.kind, flushed: toFlush.length },
+        'MessageRouter: swap complete',
+      );
     } finally {
       this.transitioning = false;
     }
@@ -174,7 +195,9 @@ export class MessageRouter {
     const toFlush = this.queue.splice(0, this.queue.length);
     for (const m of toFlush) {
       if (isRequest(m)) this.pendingRequestIds.add(m.id);
-      try { await backend.send(m); } catch (err) {
+      try {
+        await backend.send(m);
+      } catch (err) {
         logger.error({ err: String(err) }, 'MessageRouter: flushPending send failed');
         if (isRequest(m)) {
           await this.sendErrorResponseSafely(m.id, -32603, `Backend send failed: ${String(err)}`);
@@ -194,7 +217,11 @@ export class MessageRouter {
     const old = this.activeBackend;
     if (old) {
       old.onmessage = undefined;
-      try { await old.stop(); } catch { /* best-effort */ }
+      try {
+        await old.stop();
+      } catch {
+        /* best-effort */
+      }
     }
     this.activeBackend = null;
     // Fail fast any requests we can't possibly answer now; queue stays intact.
@@ -258,7 +285,11 @@ export class MessageRouter {
     });
   }
 
-  private async sendErrorResponseSafely(id: string | number, code: number, message: string): Promise<void> {
+  private async sendErrorResponseSafely(
+    id: string | number,
+    code: number,
+    message: string,
+  ): Promise<void> {
     try {
       const resp = { jsonrpc: '2.0', id, error: { code, message } } as unknown as JSONRPCMessage;
       const ret = this.sendToClient(resp);

@@ -43,9 +43,7 @@ describe('tRPC E2E', () => {
 
   it('extracts tRPC procedures as routes', () => {
     const routes = store.getAllRoutes();
-    const trpcRoutes = routes.filter((r) =>
-      r.method === 'QUERY' || r.method === 'MUTATION',
-    );
+    const trpcRoutes = routes.filter((r) => r.method === 'QUERY' || r.method === 'MUTATION');
     expect(trpcRoutes.length).toBeGreaterThan(0);
   });
 
@@ -53,7 +51,9 @@ describe('tRPC E2E', () => {
     const routes = store.getAllRoutes();
     const queries = routes.filter((r) => r.method === 'QUERY');
     const names = queries.map((r) => r.uri);
-    expect(names.some((n) => n.includes('getById') || n.includes('list') || n.includes('feed'))).toBe(true);
+    expect(
+      names.some((n) => n.includes('getById') || n.includes('list') || n.includes('feed')),
+    ).toBe(true);
   });
 
   it('captures mutation procedures', () => {
@@ -64,8 +64,8 @@ describe('tRPC E2E', () => {
 
   it('sets framework role on router files', () => {
     const files = store.getAllFiles();
-    const trpcFiles = files.filter((f) =>
-      f.framework_role === 'trpc_router' || f.framework_role === 'trpc_procedure',
+    const trpcFiles = files.filter(
+      (f) => f.framework_role === 'trpc_router' || f.framework_role === 'trpc_procedure',
     );
     expect(trpcFiles.length).toBeGreaterThan(0);
   });

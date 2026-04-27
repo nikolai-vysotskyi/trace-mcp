@@ -8,8 +8,8 @@
 // ════════════════════════════════════════════════════════════════════════
 
 interface DomainSuggestion {
-  domainPath: string[];  // e.g. ['payments', 'refunds']
-  confidence: number;    // 0..1
+  domainPath: string[]; // e.g. ['payments', 'refunds']
+  confidence: number; // 0..1
   reason: string;
 }
 
@@ -235,8 +235,8 @@ function matchGlob(filePath: string, pattern: string): boolean {
   // Escape regex metacharacters, then convert glob wildcards
   const escaped = pattern
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // escape regex special chars
-    .replace(/\\\*\\\*/g, '.*')              // ** → .*
-    .replace(/\\\*/g, '[^/]*');              // * → [^/]*
+    .replace(/\\\*\\\*/g, '.*') // ** → .*
+    .replace(/\\\*/g, '[^/]*'); // * → [^/]*
   const regex = new RegExp('^' + escaped + '$');
   return regex.test(filePath);
 }

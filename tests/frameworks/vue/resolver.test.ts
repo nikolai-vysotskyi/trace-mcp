@@ -77,9 +77,7 @@ describe('resolveComponentTag', () => {
   });
 
   it('imports take priority over auto-registered', () => {
-    const localImports = new Map<string, string>([
-      ['AppHeader', 'src/pages/AppHeader.vue'],
-    ]);
+    const localImports = new Map<string, string>([['AppHeader', 'src/pages/AppHeader.vue']]);
     expect(resolveComponentTag('AppHeader', localImports, componentFiles)).toBe(
       'src/pages/AppHeader.vue',
     );

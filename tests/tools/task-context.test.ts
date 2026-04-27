@@ -9,7 +9,12 @@ import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typ
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { getTaskContext, classifyIntent, type TaskIntent, type TaskContextResult } from '../../src/tools/navigation/task-context.js';
+import {
+  getTaskContext,
+  classifyIntent,
+  type TaskIntent,
+  type TaskContextResult,
+} from '../../src/tools/navigation/task-context.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
@@ -17,11 +22,7 @@ const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'routes/**/*.php',
-      'database/migrations/**/*.php',
-    ],
+    include: ['app/**/*.php', 'routes/**/*.php', 'database/migrations/**/*.php'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],
@@ -244,23 +245,38 @@ describe('getTaskContext', () => {
   // ─── AI fallback ───
 
   it('works without AI (explicit null)', async () => {
-    const result = await getTaskContext(store, FIXTURE_DIR, {
-      task: 'user authentication',
-    }, null);
+    const result = await getTaskContext(
+      store,
+      FIXTURE_DIR,
+      {
+        task: 'user authentication',
+      },
+      null,
+    );
     expect(result.sections.primary.length).toBeGreaterThan(0);
   });
 
   it('works without AI (undefined)', async () => {
-    const result = await getTaskContext(store, FIXTURE_DIR, {
-      task: 'user authentication',
-    }, undefined);
+    const result = await getTaskContext(
+      store,
+      FIXTURE_DIR,
+      {
+        task: 'user authentication',
+      },
+      undefined,
+    );
     expect(result.sections.primary.length).toBeGreaterThan(0);
   });
 
   it('works with empty vectorStore/embeddingService', async () => {
-    const result = await getTaskContext(store, FIXTURE_DIR, {
-      task: 'user authentication',
-    }, { vectorStore: null, embeddingService: null });
+    const result = await getTaskContext(
+      store,
+      FIXTURE_DIR,
+      {
+        task: 'user authentication',
+      },
+      { vectorStore: null, embeddingService: null },
+    );
     expect(result.sections.primary.length).toBeGreaterThan(0);
   });
 
@@ -358,7 +374,9 @@ describe('getTaskContext', () => {
       tokenBudget: 20000,
     });
 
-    const allIds = Object.values(result.sections).flat().map((i) => i.symbolId);
+    const allIds = Object.values(result.sections)
+      .flat()
+      .map((i) => i.symbolId);
     const uniqueIds = new Set(allIds);
     expect(allIds.length).toBe(uniqueIds.size);
   });

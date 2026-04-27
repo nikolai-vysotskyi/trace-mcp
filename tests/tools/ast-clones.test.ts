@@ -143,7 +143,8 @@ function get2() { return 1; }
   });
 
   test('detects 3+ identical clones in one group', async () => {
-    const body = (name: string, a: string, b: string) => `
+    const body = (name: string, a: string, b: string) =>
+      `
 function ${name}(input) {
   const ${a} = input.split(',');
   const ${b} = [];
@@ -224,7 +225,9 @@ function doWork(x) {
     ]);
 
     const result = await detectAstClones(store, TEST_DIR, {
-      min_loc: 5, min_nodes: 10, file_pattern: 'src/app',
+      min_loc: 5,
+      min_nodes: 10,
+      file_pattern: 'src/app',
     });
     expect(result.isOk()).toBe(true);
     // Only 1 symbol matches the pattern → no clone group possible

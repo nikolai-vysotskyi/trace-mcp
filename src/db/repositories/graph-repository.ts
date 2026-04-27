@@ -25,7 +25,9 @@ export class GraphRepository {
       getNodeId: db.prepare('SELECT id FROM nodes WHERE node_type = ? AND ref_id = ?'),
       createNodeInsert: db.prepare('INSERT OR IGNORE INTO nodes (node_type, ref_id) VALUES (?, ?)'),
       createNodeSelect: db.prepare('SELECT id FROM nodes WHERE node_type = ? AND ref_id = ?'),
-      getNodeRef: db.prepare('SELECT node_type AS nodeType, ref_id AS refId FROM nodes WHERE id = ?'),
+      getNodeRef: db.prepare(
+        'SELECT node_type AS nodeType, ref_id AS refId FROM nodes WHERE id = ?',
+      ),
       getEdgeType: db.prepare('SELECT id FROM edge_types WHERE name = ?'),
       insertEdge: db.prepare(
         `INSERT INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
@@ -61,8 +63,12 @@ export class GraphRepository {
 
     try {
       const result = this._stmts.insertEdge.run(
-        sourceNodeId, targetNodeId, edgeType.id,
-        resolved ? 1 : 0, metadata ? JSON.stringify(metadata) : null, isCrossWs ? 1 : 0,
+        sourceNodeId,
+        targetNodeId,
+        edgeType.id,
+        resolved ? 1 : 0,
+        metadata ? JSON.stringify(metadata) : null,
+        isCrossWs ? 1 : 0,
         resolutionTier,
       );
       return ok(Number(result.lastInsertRowid));
@@ -72,7 +78,8 @@ export class GraphRepository {
   }
 
   deleteEdgesForFileNodes(fileId: number): void {
-    this.db.prepare(`
+    this.db
+      .prepare(`
       DELETE FROM edges WHERE source_node_id IN (
         SELECT n.id FROM nodes n
         WHERE (n.node_type = 'file' AND n.ref_id = ?)
@@ -82,25 +89,30 @@ export class GraphRepository {
         WHERE (n.node_type = 'file' AND n.ref_id = ?)
            OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
       )
-    `).run(fileId, fileId, fileId, fileId);
+    `)
+      .run(fileId, fileId, fileId, fileId);
   }
 
   deleteOutgoingImportEdges(fileId: number): void {
-    this.db.prepare(`
+    this.db
+      .prepare(`
       DELETE FROM edges WHERE source_node_id IN (
         SELECT n.id FROM nodes n WHERE n.node_type = 'file' AND n.ref_id = ?
       ) AND edge_type_id = (SELECT id FROM edge_types WHERE name = 'imports')
-    `).run(fileId);
+    `)
+      .run(fileId);
   }
 
   deleteOutgoingEdgesForFileNodes(fileId: number): void {
-    this.db.prepare(`
+    this.db
+      .prepare(`
       DELETE FROM edges WHERE source_node_id IN (
         SELECT n.id FROM nodes n
         WHERE (n.node_type = 'file' AND n.ref_id = ?)
            OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
       )
-    `).run(fileId, fileId);
+    `)
+      .run(fileId, fileId);
   }
 
   traverseEdges(startNodeId: number, direction: 'outgoing' | 'incoming', depth: number): EdgeRow[] {
@@ -126,39 +138,47 @@ export class GraphRepository {
   }
 
   getEdgesByType(edgeTypeName: string): EdgeRow[] {
-    const edgeType = this.db.prepare(
-      'SELECT id FROM edge_types WHERE name = ?',
-    ).get(edgeTypeName) as { id: number } | undefined;
+    const edgeType = this.db
+      .prepare('SELECT id FROM edge_types WHERE name = ?')
+      .get(edgeTypeName) as { id: number } | undefined;
     if (!edgeType) return [];
-    return this.db.prepare(
-      'SELECT * FROM edges WHERE edge_type_id = ?',
-    ).all(edgeType.id) as EdgeRow[];
+    return this.db
+      .prepare('SELECT * FROM edges WHERE edge_type_id = ?')
+      .all(edgeType.id) as EdgeRow[];
   }
 
   getOutgoingEdges(nodeId: number): (EdgeRow & { edge_type_name: string })[] {
-    return this.db.prepare(
-      `SELECT e.*, et.name as edge_type_name
+    return this.db
+      .prepare(
+        `SELECT e.*, et.name as edge_type_name
        FROM edges e JOIN edge_types et ON e.edge_type_id = et.id
        WHERE e.source_node_id = ?`,
-    ).all(nodeId) as (EdgeRow & { edge_type_name: string })[];
+      )
+      .all(nodeId) as (EdgeRow & { edge_type_name: string })[];
   }
 
   getIncomingEdges(nodeId: number): (EdgeRow & { edge_type_name: string })[] {
-    return this.db.prepare(
-      `SELECT e.*, et.name as edge_type_name
+    return this.db
+      .prepare(
+        `SELECT e.*, et.name as edge_type_name
        FROM edges e JOIN edge_types et ON e.edge_type_id = et.id
        WHERE e.target_node_id = ?`,
-    ).all(nodeId) as (EdgeRow & { edge_type_name: string })[];
+      )
+      .all(nodeId) as (EdgeRow & { edge_type_name: string })[];
   }
 
   ensureEdgeType(name: string, category: string, description: string): void {
-    this.db.prepare(
-      'INSERT OR IGNORE INTO edge_types (name, category, directed, description) VALUES (?, ?, 1, ?)',
-    ).run(name, category, description);
+    this.db
+      .prepare(
+        'INSERT OR IGNORE INTO edge_types (name, category, directed, description) VALUES (?, ?, 1, ?)',
+      )
+      .run(name, category, description);
   }
 
   getEdgeTypeName(edgeTypeId: number): string | undefined {
-    const row = this.db.prepare('SELECT name FROM edge_types WHERE id = ?').get(edgeTypeId) as { name: string } | undefined;
+    const row = this.db.prepare('SELECT name FROM edge_types WHERE id = ?').get(edgeTypeId) as
+      | { name: string }
+      | undefined;
     return row?.name;
   }
 
@@ -167,9 +187,9 @@ export class GraphRepository {
   }
 
   getNodeByNodeId(nodeId: number): { node_type: string; ref_id: number } | undefined {
-    return this.db.prepare(
-      'SELECT node_type, ref_id FROM nodes WHERE id = ?',
-    ).get(nodeId) as { node_type: string; ref_id: number } | undefined;
+    return this.db.prepare('SELECT node_type, ref_id FROM nodes WHERE id = ?').get(nodeId) as
+      | { node_type: string; ref_id: number }
+      | undefined;
   }
 
   getNodeIdsBatch(nodeType: string, refIds: number[]): Map<number, number> {
@@ -179,9 +199,9 @@ export class GraphRepository {
     for (let i = 0; i < refIds.length; i += CHUNK) {
       const chunk = refIds.slice(i, i + CHUNK);
       const placeholders = chunk.map(() => '?').join(',');
-      const rows = this.db.prepare(
-        `SELECT ref_id, id FROM nodes WHERE node_type = ? AND ref_id IN (${placeholders})`,
-      ).all(nodeType, ...chunk) as { ref_id: number; id: number }[];
+      const rows = this.db
+        .prepare(`SELECT ref_id, id FROM nodes WHERE node_type = ? AND ref_id IN (${placeholders})`)
+        .all(nodeType, ...chunk) as { ref_id: number; id: number }[];
       for (const row of rows) map.set(row.ref_id, row.id);
     }
     return map;
@@ -194,9 +214,9 @@ export class GraphRepository {
     for (let i = 0; i < nodeIds.length; i += CHUNK) {
       const chunk = nodeIds.slice(i, i + CHUNK);
       const placeholders = chunk.map(() => '?').join(',');
-      const rows = this.db.prepare(
-        `SELECT id, node_type, ref_id FROM nodes WHERE id IN (${placeholders})`,
-      ).all(...chunk) as { id: number; node_type: string; ref_id: number }[];
+      const rows = this.db
+        .prepare(`SELECT id, node_type, ref_id FROM nodes WHERE id IN (${placeholders})`)
+        .all(...chunk) as { id: number; node_type: string; ref_id: number }[];
       for (const row of rows) map.set(row.id, { nodeType: row.node_type, refId: row.ref_id });
     }
     return map;
@@ -213,13 +233,15 @@ export class GraphRepository {
     for (let i = 0; i < nodeIds.length; i += CHUNK) {
       const chunk = nodeIds.slice(i, i + CHUNK);
       const placeholders = chunk.map(() => '?').join(',');
-      const rows = this.db.prepare(
-        `SELECT e.*, et.name AS edge_type_name
+      const rows = this.db
+        .prepare(
+          `SELECT e.*, et.name AS edge_type_name
            FROM edges e
            JOIN edge_types et ON e.edge_type_id = et.id
           WHERE e.source_node_id IN (${placeholders})
              OR e.target_node_id IN (${placeholders})`,
-      ).all(...chunk, ...chunk) as (EdgeRow & { edge_type_name: string })[];
+        )
+        .all(...chunk, ...chunk) as (EdgeRow & { edge_type_name: string })[];
 
       for (const row of rows) {
         results.push({
@@ -232,8 +254,10 @@ export class GraphRepository {
   }
 
   getEdgeTypes(): EdgeTypeRow[] {
-    return this.db.prepare(
-      `SELECT name, category, COALESCE(description, '') as description FROM edge_types ORDER BY name`,
-    ).all() as EdgeTypeRow[];
+    return this.db
+      .prepare(
+        `SELECT name, category, COALESCE(description, '') as description FROM edge_types ORDER BY name`,
+      )
+      .all() as EdgeTypeRow[];
   }
 }

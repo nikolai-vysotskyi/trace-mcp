@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
-import { detectCommunities, getCommunities, getCommunityDetail } from '../../src/tools/analysis/communities.js';
+import {
+  detectCommunities,
+  getCommunities,
+  getCommunityDetail,
+} from '../../src/tools/analysis/communities.js';
 import type Database from 'better-sqlite3';
 
 describe('Community Detection', () => {
@@ -100,7 +104,9 @@ describe('Community Detection', () => {
       const count = (db.prepare('SELECT COUNT(*) as c FROM communities').get() as { c: number }).c;
       expect(count).toBeGreaterThan(0);
 
-      const memberCount = (db.prepare('SELECT COUNT(*) as c FROM community_members').get() as { c: number }).c;
+      const memberCount = (
+        db.prepare('SELECT COUNT(*) as c FROM community_members').get() as { c: number }
+      ).c;
       expect(memberCount).toBe(6); // All 6 files assigned
     });
 

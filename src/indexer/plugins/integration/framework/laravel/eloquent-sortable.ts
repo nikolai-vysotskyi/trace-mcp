@@ -56,9 +56,7 @@ export function extractEloquentSortableModel(
 
 // ─── Symbol builders ─────────────────────────────────────────
 
-export function buildEloquentSortableModelSymbols(
-  info: EloquentSortableModelInfo,
-): RawSymbol[] {
+export function buildEloquentSortableModelSymbols(info: EloquentSortableModelInfo): RawSymbol[] {
   return [
     {
       name: `${info.className}::sortable`,

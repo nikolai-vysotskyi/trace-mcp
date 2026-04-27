@@ -46,11 +46,26 @@ export function isDangerousProjectRoot(absRoot: string): string | null {
 
   // Top-level system/user-container directories (POSIX + macOS)
   const SYSTEM_DIRS = new Set([
-    '/Users', '/home', '/root',
-    '/System', '/Library', '/private',
-    '/tmp', '/var', '/etc', '/bin', '/sbin', '/usr', '/opt',
-    '/dev', '/Volumes', '/Applications', '/Network',
-    '/cores', '/proc', '/sys',
+    '/Users',
+    '/home',
+    '/root',
+    '/System',
+    '/Library',
+    '/private',
+    '/tmp',
+    '/var',
+    '/etc',
+    '/bin',
+    '/sbin',
+    '/usr',
+    '/opt',
+    '/dev',
+    '/Volumes',
+    '/Applications',
+    '/Network',
+    '/cores',
+    '/proc',
+    '/sys',
   ]);
   if (SYSTEM_DIRS.has(absRoot)) return 'system directory';
 
@@ -77,15 +92,21 @@ export function setupProject(
   if (dangerReason) {
     throw new Error(
       `Refusing to register "${absRoot}" as a trace-mcp project: ${dangerReason}. ` +
-      `Projects must point to a specific source directory, not a system or root path. ` +
-      `This usually means an MCP client spawned trace-mcp with an unexpected working directory — ` +
-      `configure a "cwd" on the MCP server entry or run trace-mcp from inside your project folder.`,
+        `Projects must point to a specific source directory, not a system or root path. ` +
+        `This usually means an MCP client spawned trace-mcp with an unexpected working directory — ` +
+        `configure a "cwd" on the MCP server entry or run trace-mcp from inside your project folder.`,
     );
   }
 
   const existing = getProject(absRoot);
   if (existing && !opts?.force) {
-    return { entry: existing, detection: { languages: [], frameworks: [], packageManagers: [], rootMarkers: [] }, dbPath: existing.dbPath, migrated: false, isNew: false };
+    return {
+      entry: existing,
+      detection: { languages: [], frameworks: [], packageManagers: [], rootMarkers: [] },
+      dbPath: existing.dbPath,
+      migrated: false,
+      isNew: false,
+    };
   }
 
   // 1. Detect project

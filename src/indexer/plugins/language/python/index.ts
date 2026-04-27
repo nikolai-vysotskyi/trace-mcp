@@ -6,7 +6,14 @@
  * re-export edges, and docstrings from Python source files.
  */
 import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+  RawEdge,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
@@ -57,11 +64,27 @@ export class PythonLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.py', '.pyi'];
   supportedVersions = [
     '2.7',
-    '3.0', '3.1', '3.2', '3.3', '3.4', '3.5', '3.6', '3.7', '3.8',
-    '3.9', '3.10', '3.11', '3.12', '3.13', '3.14',
+    '3.0',
+    '3.1',
+    '3.2',
+    '3.3',
+    '3.4',
+    '3.5',
+    '3.6',
+    '3.7',
+    '3.8',
+    '3.9',
+    '3.10',
+    '3.11',
+    '3.12',
+    '3.13',
+    '3.14',
   ];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('python');
       const sourceCode = content.toString('utf-8');
@@ -362,7 +385,9 @@ export class PythonLanguagePlugin implements LanguagePlugin {
     if (bases.some((b) => b === 'ABC' || b === 'ABCMeta' || b.endsWith('.ABC'))) {
       meta.abstract = true;
     }
-    if (bases.some((b) => b === 'Enum' || b === 'IntEnum' || b === 'StrEnum' || b.endsWith('.Enum'))) {
+    if (
+      bases.some((b) => b === 'Enum' || b === 'IntEnum' || b === 'StrEnum' || b.endsWith('.Enum'))
+    ) {
       meta.enum = true;
     }
 
@@ -449,10 +474,16 @@ export class PythonLanguagePlugin implements LanguagePlugin {
 
         // Decorator edges from method
         if (method.metadata?.decorators && Array.isArray(method.metadata.decorators)) {
-          edges.push(...extractDecoratorEdges(method.metadata.decorators as string[], method.symbolId));
+          edges.push(
+            ...extractDecoratorEdges(method.metadata.decorators as string[], method.symbolId),
+          );
 
           // Property grouping
-          detectPropertyGrouping(method.metadata.decorators as string[], method.name, method.metadata);
+          detectPropertyGrouping(
+            method.metadata.decorators as string[],
+            method.name,
+            method.metadata,
+          );
         }
 
         symbols.push(method);
@@ -542,7 +573,8 @@ export class PythonLanguagePlugin implements LanguagePlugin {
           const name = left.text;
           const kind: SymbolKind = isAllCaps(name) ? 'constant' : 'property';
           const vis = detectVisibility(name);
-          const meta: Record<string, unknown> | undefined = vis !== 'public' ? { visibility: vis } : undefined;
+          const meta: Record<string, unknown> | undefined =
+            vis !== 'public' ? { visibility: vis } : undefined;
           symbols.push({
             symbolId: makeSymbolId(filePath, name, kind, className),
             name,
@@ -571,12 +603,11 @@ export class PythonLanguagePlugin implements LanguagePlugin {
         if (innerAssign && innerAssign.type === 'identifier') {
           const name = innerAssign.text;
           const kind: SymbolKind = isAllCaps(name) ? 'constant' : 'property';
-          const exists = symbols.some(
-            (s) => s.parentSymbolId === classSymbolId && s.name === name,
-          );
+          const exists = symbols.some((s) => s.parentSymbolId === classSymbolId && s.name === name);
           if (!exists) {
             const vis = detectVisibility(name);
-            const meta: Record<string, unknown> | undefined = vis !== 'public' ? { visibility: vis } : undefined;
+            const meta: Record<string, unknown> | undefined =
+              vis !== 'public' ? { visibility: vis } : undefined;
             symbols.push({
               symbolId: makeSymbolId(filePath, name, kind, className),
               name,
@@ -613,7 +644,8 @@ export class PythonLanguagePlugin implements LanguagePlugin {
         const kind: SymbolKind = isAllCaps(name) ? 'constant' : 'variable';
         const sig = node.text.split('\n')[0].trim().slice(0, 80);
         const vis = detectVisibility(name);
-        const meta: Record<string, unknown> | undefined = vis !== 'public' ? { visibility: vis } : undefined;
+        const meta: Record<string, unknown> | undefined =
+          vis !== 'public' ? { visibility: vis } : undefined;
 
         symbols.push({
           symbolId: makeSymbolId(filePath, name, kind),
@@ -635,7 +667,8 @@ export class PythonLanguagePlugin implements LanguagePlugin {
             const name = id.text;
             const kind: SymbolKind = isAllCaps(name) ? 'constant' : 'variable';
             const vis = detectVisibility(name);
-            const meta: Record<string, unknown> | undefined = vis !== 'public' ? { visibility: vis } : undefined;
+            const meta: Record<string, unknown> | undefined =
+              vis !== 'public' ? { visibility: vis } : undefined;
             symbols.push({
               symbolId: makeSymbolId(filePath, name, kind),
               name,

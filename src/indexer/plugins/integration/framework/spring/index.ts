@@ -3,12 +3,22 @@
  */
 import { ok } from 'neverthrow';
 import type {
-  FrameworkPlugin, PluginManifest, ProjectContext, FileParseResult, RawEdge, RawRoute,
+  FrameworkPlugin,
+  PluginManifest,
+  ProjectContext,
+  FileParseResult,
+  RawEdge,
+  RawRoute,
 } from '../../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../../errors.js';
 
 export class SpringPlugin implements FrameworkPlugin {
-  manifest: PluginManifest = { name: 'spring', version: '1.0.0', priority: 50, category: 'framework' };
+  manifest: PluginManifest = {
+    name: 'spring',
+    version: '1.0.0',
+    priority: 50,
+    category: 'framework',
+  };
 
   detect(ctx: ProjectContext): boolean {
     const hasSpringFiles = ctx.configFiles.some((f) =>
@@ -23,13 +33,21 @@ export class SpringPlugin implements FrameworkPlugin {
         { name: 'spring_route', category: 'http', description: 'Spring MVC/REST route mapping' },
         { name: 'spring_injects', category: 'di', description: 'Spring dependency injection' },
         { name: 'spring_entity_relation', category: 'orm', description: 'JPA entity relationship' },
-        { name: 'spring_component_scan', category: 'framework', description: 'Component scan scope' },
+        {
+          name: 'spring_component_scan',
+          category: 'framework',
+          description: 'Component scan scope',
+        },
         { name: 'spring_config_value', category: 'config', description: '@Value injection' },
       ],
     };
   }
 
-  extractNodes(filePath: string, content: Buffer, language: string): TraceMcpResult<FileParseResult> {
+  extractNodes(
+    filePath: string,
+    content: Buffer,
+    language: string,
+  ): TraceMcpResult<FileParseResult> {
     if (language !== 'java' && language !== 'kotlin') return ok({ status: 'ok', symbols: [] });
 
     const source = content.toString('utf-8');
@@ -63,7 +81,9 @@ export class SpringPlugin implements FrameworkPlugin {
 
   private extractRoutes(source: string, filePath: string, result: FileParseResult): void {
     // Class-level @RequestMapping prefix
-    const classMappingMatch = source.match(/@RequestMapping\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/);
+    const classMappingMatch = source.match(
+      /@RequestMapping\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/,
+    );
     const classPrefix = classMappingMatch?.[1] ?? '';
 
     const mappings: { annotation: string; method: string }[] = [
@@ -75,7 +95,10 @@ export class SpringPlugin implements FrameworkPlugin {
     ];
 
     for (const { annotation, method } of mappings) {
-      const re = new RegExp(`@${annotation}\\s*(?:\\(\\s*(?:value\\s*=\\s*)?["']([^"']*)["']\\s*\\))?`, 'g');
+      const re = new RegExp(
+        `@${annotation}\\s*(?:\\(\\s*(?:value\\s*=\\s*)?["']([^"']*)["']\\s*\\))?`,
+        'g',
+      );
       let m: RegExpExecArray | null;
       while ((m = re.exec(source)) !== null) {
         const path = m[1] ?? '';
@@ -85,11 +108,16 @@ export class SpringPlugin implements FrameworkPlugin {
     }
 
     // @RequestMapping with method parameter
-    const rmRe = /@RequestMapping\s*\([^)]*(?:value\s*=\s*)?["']([^"']+)["'][^)]*method\s*=\s*RequestMethod\.(\w+)/g;
+    const rmRe =
+      /@RequestMapping\s*\([^)]*(?:value\s*=\s*)?["']([^"']+)["'][^)]*method\s*=\s*RequestMethod\.(\w+)/g;
     let rm: RegExpExecArray | null;
     while ((rm = rmRe.exec(source)) !== null) {
       const uri = normalizePath(classPrefix + '/' + rm[1]);
-      result.routes!.push({ method: rm[2], uri, line: source.substring(0, rm.index).split('\n').length });
+      result.routes!.push({
+        method: rm[2],
+        uri,
+        line: source.substring(0, rm.index).split('\n').length,
+      });
     }
   }
 
@@ -113,7 +141,11 @@ export class SpringPlugin implements FrameworkPlugin {
         const parts = param.trim().split(/\s+/);
         if (parts.length >= 2) {
           const typeName = parts[parts.length - 2];
-          if (typeName[0] === typeName[0].toUpperCase() && typeName !== 'String' && typeName !== 'Integer') {
+          if (
+            typeName[0] === typeName[0].toUpperCase() &&
+            typeName !== 'String' &&
+            typeName !== 'Integer'
+          ) {
             result.edges!.push({
               edgeType: 'spring_injects',
               metadata: { targetType: typeName, style: 'constructor' },
@@ -137,7 +169,10 @@ export class SpringPlugin implements FrameworkPlugin {
   private extractEntityRelations(source: string, filePath: string, result: FileParseResult): void {
     const relations = ['OneToMany', 'ManyToOne', 'OneToOne', 'ManyToMany'];
     for (const rel of relations) {
-      const re = new RegExp(`@${rel}[^)]*(?:targetEntity\\s*=\\s*(\\w+))?[^)]*\\)\\s*(?:private\\s+|protected\\s+)?(?:[\\w<>]+\\s+)?(\\w+)`, 'g');
+      const re = new RegExp(
+        `@${rel}[^)]*(?:targetEntity\\s*=\\s*(\\w+))?[^)]*\\)\\s*(?:private\\s+|protected\\s+)?(?:[\\w<>]+\\s+)?(\\w+)`,
+        'g',
+      );
       let m: RegExpExecArray | null;
       while ((m = re.exec(source)) !== null) {
         result.edges!.push({

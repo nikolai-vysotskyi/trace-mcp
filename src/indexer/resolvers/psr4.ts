@@ -10,7 +10,10 @@ export class Psr4Resolver {
   /** namespace prefix (with trailing backslash) → directory (with trailing slash) */
   private mappings: Map<string, string>;
 
-  constructor(mappings: Map<string, string>, private rootPath: string) {
+  constructor(
+    mappings: Map<string, string>,
+    private rootPath: string,
+  ) {
     // Normalise: ensure prefix ends with \ and dir ends with /
     this.mappings = new Map();
     for (const [prefix, dir] of mappings) {

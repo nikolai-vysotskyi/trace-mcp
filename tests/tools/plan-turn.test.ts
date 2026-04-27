@@ -27,22 +27,22 @@ const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'routes/**/*.php',
-      'database/migrations/**/*.php',
-    ],
+    include: ['app/**/*.php', 'routes/**/*.php', 'database/migrations/**/*.php'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],
   };
 }
 
-function buildCtx(store: Store, registry: PluginRegistry, opts?: {
-  has?: PlanTurnContext['has'];
-  journal?: SessionJournal;
-  savings?: SavingsTracker;
-}): PlanTurnContext {
+function buildCtx(
+  store: Store,
+  registry: PluginRegistry,
+  opts?: {
+    has?: PlanTurnContext['has'];
+    journal?: SessionJournal;
+    savings?: SavingsTracker;
+  },
+): PlanTurnContext {
   return {
     store,
     projectRoot: FIXTURE_DIR,

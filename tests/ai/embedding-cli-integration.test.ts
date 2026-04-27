@@ -39,7 +39,9 @@ function makeMockEmbeddingService(): EmbeddingService {
     dimensions() {
       return 3;
     },
-    modelName() { return 'mock-model'; },
+    modelName() {
+      return 'mock-model';
+    },
   };
 }
 
@@ -93,13 +95,27 @@ describe('EmbeddingPipeline CLI integration', () => {
     const store = createTestStore();
     const db = store.db;
     store.insertFile('test.ts', 'typescript', 'abc', 100);
-    store.insertSymbol(1, { symbolId: 's1', name: 'Foo', kind: 'class', byteStart: 0, byteEnd: 50 });
+    store.insertSymbol(1, {
+      symbolId: 's1',
+      name: 'Foo',
+      kind: 'class',
+      byteStart: 0,
+      byteEnd: 50,
+    });
 
     const failingService: EmbeddingService = {
-      async embed() { throw new Error('network error'); },
-      async embedBatch() { throw new Error('network error'); },
-      dimensions() { return 3; },
-    modelName() { return 'mock-model'; },
+      async embed() {
+        throw new Error('network error');
+      },
+      async embedBatch() {
+        throw new Error('network error');
+      },
+      dimensions() {
+        return 3;
+      },
+      modelName() {
+        return 'mock-model';
+      },
     };
 
     const vectorStore = new BlobVectorStore(db);
@@ -127,9 +143,15 @@ describe('EmbeddingPipeline CLI integration', () => {
         embeddedCounts.push(texts.length);
         return texts.map(() => [0.1, 0.2, 0.3]);
       },
-      async embed(_t: string) { return [0.1, 0.2, 0.3]; },
-      dimensions() { return 3; },
-    modelName() { return 'mock-model'; },
+      async embed(_t: string) {
+        return [0.1, 0.2, 0.3];
+      },
+      dimensions() {
+        return 3;
+      },
+      modelName() {
+        return 'mock-model';
+      },
     };
 
     const embeddingPipeline = new EmbeddingPipeline(store, trackingService, vectorStore);

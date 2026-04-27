@@ -89,9 +89,7 @@ export class PluginRegistry {
       const name = plugin.manifest.name;
 
       if (visiting.has(name)) {
-        return err(
-          pluginError(name, `Circular dependency detected involving plugin '${name}'`),
-        );
+        return err(pluginError(name, `Circular dependency detected involving plugin '${name}'`));
       }
 
       if (visited.has(name)) return ok(undefined);

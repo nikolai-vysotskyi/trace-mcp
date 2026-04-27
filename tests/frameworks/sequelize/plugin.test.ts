@@ -67,10 +67,7 @@ describe('SequelizePlugin', () => {
 
 describe('Sequelize model extraction', () => {
   describe('User model (class-based)', () => {
-    const source = fs.readFileSync(
-      path.join(S6_FIXTURE, 'models/user.ts'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(S6_FIXTURE, 'models/user.ts'), 'utf-8');
     const result = extractSequelizeModel(source, 'models/user.ts');
 
     it('extracts model', () => {
@@ -134,10 +131,7 @@ describe('Sequelize model extraction', () => {
   });
 
   describe('Post model', () => {
-    const source = fs.readFileSync(
-      path.join(S6_FIXTURE, 'models/post.ts'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(S6_FIXTURE, 'models/post.ts'), 'utf-8');
     const result = extractSequelizeModel(source, 'models/post.ts');
 
     it('extracts model', () => {

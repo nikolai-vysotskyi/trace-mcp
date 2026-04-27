@@ -2,7 +2,12 @@
  * Rust Language Plugin — tree-sitter based symbol extraction.
  */
 import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
@@ -29,7 +34,10 @@ export class RustLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.rs'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('rust');
       const sourceCode = content.toString('utf-8');

@@ -77,12 +77,13 @@ export class DomainStore {
   // ── Domains ──────────────────────────────────────────────────────────
 
   upsertDomain(input: DomainInput): number {
-    const existing = this.db.prepare(
-      'SELECT id FROM domains WHERE name = ? AND parent_id IS ?',
-    ).get(input.name, input.parentId ?? null) as { id: number } | undefined;
+    const existing = this.db
+      .prepare('SELECT id FROM domains WHERE name = ? AND parent_id IS ?')
+      .get(input.name, input.parentId ?? null) as { id: number } | undefined;
 
     if (existing) {
-      this.db.prepare(`
+      this.db
+        .prepare(`
         UPDATE domains SET description = COALESCE(?, description),
           path_hints = COALESCE(?, path_hints),
           confidence = COALESCE(?, confidence),
@@ -90,29 +91,32 @@ export class DomainStore {
           metadata = COALESCE(?, metadata),
           updated_at = datetime('now')
         WHERE id = ?
-      `).run(
-        input.description ?? null,
-        input.pathHints ? JSON.stringify(input.pathHints) : null,
-        input.confidence ?? null,
-        input.isManual ? 1 : null,
-        input.metadata ? JSON.stringify(input.metadata) : null,
-        existing.id,
-      );
+      `)
+        .run(
+          input.description ?? null,
+          input.pathHints ? JSON.stringify(input.pathHints) : null,
+          input.confidence ?? null,
+          input.isManual ? 1 : null,
+          input.metadata ? JSON.stringify(input.metadata) : null,
+          existing.id,
+        );
       return existing.id;
     }
 
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       INSERT INTO domains (name, parent_id, description, path_hints, confidence, is_manual, metadata)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      input.name,
-      input.parentId ?? null,
-      input.description ?? null,
-      input.pathHints ? JSON.stringify(input.pathHints) : null,
-      input.confidence ?? 1.0,
-      input.isManual ? 1 : 0,
-      input.metadata ? JSON.stringify(input.metadata) : null,
-    ).lastInsertRowid as number;
+    `)
+      .run(
+        input.name,
+        input.parentId ?? null,
+        input.description ?? null,
+        input.pathHints ? JSON.stringify(input.pathHints) : null,
+        input.confidence ?? 1.0,
+        input.isManual ? 1 : 0,
+        input.metadata ? JSON.stringify(input.metadata) : null,
+      ).lastInsertRowid as number;
   }
 
   getDomain(id: number): DomainRow | undefined {
@@ -120,21 +124,21 @@ export class DomainStore {
   }
 
   getDomainByName(name: string, parentId?: number | null): DomainRow | undefined {
-    return this.db.prepare(
-      'SELECT * FROM domains WHERE name = ? AND parent_id IS ?',
-    ).get(name, parentId ?? null) as DomainRow | undefined;
+    return this.db
+      .prepare('SELECT * FROM domains WHERE name = ? AND parent_id IS ?')
+      .get(name, parentId ?? null) as DomainRow | undefined;
   }
 
   getRootDomains(): DomainRow[] {
-    return this.db.prepare(
-      'SELECT * FROM domains WHERE parent_id IS NULL ORDER BY name',
-    ).all() as DomainRow[];
+    return this.db
+      .prepare('SELECT * FROM domains WHERE parent_id IS NULL ORDER BY name')
+      .all() as DomainRow[];
   }
 
   getChildDomains(parentId: number): DomainRow[] {
-    return this.db.prepare(
-      'SELECT * FROM domains WHERE parent_id = ? ORDER BY name',
-    ).all(parentId) as DomainRow[];
+    return this.db
+      .prepare('SELECT * FROM domains WHERE parent_id = ? ORDER BY name')
+      .all(parentId) as DomainRow[];
   }
 
   getAllDomains(): DomainRow[] {
@@ -180,10 +184,12 @@ export class DomainStore {
     inferredBy: string,
     isManual = false,
   ): void {
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT OR REPLACE INTO symbol_domains (symbol_id, domain_id, relevance, inferred_by, is_manual)
       VALUES (?, ?, ?, ?, ?)
-    `).run(symbolId, domainId, relevance, inferredBy, isManual ? 1 : 0);
+    `)
+      .run(symbolId, domainId, relevance, inferredBy, isManual ? 1 : 0);
   }
 
   mapSymbolsToDomainBatch(
@@ -201,15 +207,20 @@ export class DomainStore {
   }
 
   getDomainsForSymbol(symbolId: number): Array<DomainRow & { relevance: number }> {
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT d.*, sd.relevance FROM symbol_domains sd
       JOIN domains d ON sd.domain_id = d.id
       WHERE sd.symbol_id = ?
       ORDER BY sd.relevance DESC
-    `).all(symbolId) as Array<DomainRow & { relevance: number }>;
+    `)
+      .all(symbolId) as Array<DomainRow & { relevance: number }>;
   }
 
-  getSymbolsForDomain(domainId: number, includeChildren = false): Array<{
+  getSymbolsForDomain(
+    domainId: number,
+    includeChildren = false,
+  ): Array<{
     symbol_id: number;
     symbol_id_str: string;
     name: string;
@@ -218,14 +229,16 @@ export class DomainStore {
     relevance: number;
   }> {
     if (!includeChildren) {
-      return this.db.prepare(`
+      return this.db
+        .prepare(`
         SELECT s.id as symbol_id, s.symbol_id as symbol_id_str, s.name, s.kind, f.path as file_path, sd.relevance
         FROM symbol_domains sd
         JOIN symbols s ON sd.symbol_id = s.id
         JOIN files f ON s.file_id = f.id
         WHERE sd.domain_id = ?
         ORDER BY sd.relevance DESC
-      `).all(domainId) as any[];
+      `)
+        .all(domainId) as any[];
     }
 
     // Include children: collect all domain IDs
@@ -233,25 +246,31 @@ export class DomainStore {
     domainIds.push(domainId);
     const placeholders = domainIds.map(() => '?').join(',');
 
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT s.id as symbol_id, s.symbol_id as symbol_id_str, s.name, s.kind, f.path as file_path, sd.relevance
       FROM symbol_domains sd
       JOIN symbols s ON sd.symbol_id = s.id
       JOIN files f ON s.file_id = f.id
       WHERE sd.domain_id IN (${placeholders})
       ORDER BY sd.relevance DESC
-    `).all(...domainIds) as any[];
+    `)
+      .all(...domainIds) as any[];
   }
 
-  getUnclassifiedSymbolIds(limit: number): Array<{ id: number; name: string; kind: string; fqn: string | null; file_path: string }> {
-    return this.db.prepare(`
+  getUnclassifiedSymbolIds(
+    limit: number,
+  ): Array<{ id: number; name: string; kind: string; fqn: string | null; file_path: string }> {
+    return this.db
+      .prepare(`
       SELECT s.id, s.name, s.kind, s.fqn, f.path as file_path
       FROM symbols s
       JOIN files f ON s.file_id = f.id
       WHERE s.id NOT IN (SELECT symbol_id FROM symbol_domains)
         AND s.kind IN ('class', 'function', 'method', 'interface', 'trait', 'enum', 'type')
       LIMIT ?
-    `).all(limit) as any[];
+    `)
+      .all(limit) as any[];
   }
 
   clearInferredMappings(): void {
@@ -260,31 +279,31 @@ export class DomainStore {
 
   // ── File-Domain Mappings ────────────────────────────────────────────
 
-  mapFileToDomain(
-    fileId: number,
-    domainId: number,
-    relevance: number,
-    inferredBy: string,
-  ): void {
-    this.db.prepare(`
+  mapFileToDomain(fileId: number, domainId: number, relevance: number, inferredBy: string): void {
+    this.db
+      .prepare(`
       INSERT OR REPLACE INTO file_domains (file_id, domain_id, relevance, inferred_by, is_manual)
       VALUES (?, ?, ?, ?, 0)
-    `).run(fileId, domainId, relevance, inferredBy);
+    `)
+      .run(fileId, domainId, relevance, inferredBy);
   }
 
   getDomainsForFile(fileId: number): Array<DomainRow & { relevance: number }> {
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT d.*, fd.relevance FROM file_domains fd
       JOIN domains d ON fd.domain_id = d.id
       WHERE fd.file_id = ?
-    `).all(fileId) as Array<DomainRow & { relevance: number }>;
+    `)
+      .all(fileId) as Array<DomainRow & { relevance: number }>;
   }
 
   // ── Cross-Domain Dependencies ──────────────────────────────────────
 
   getCrossDomainDependencies(focusDomainId?: number): CrossDomainDep[] {
     // Find edges between symbols in different domains
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(`
       SELECT
         sd1.domain_id as source_domain_id,
         d1.name as source_domain,
@@ -302,7 +321,8 @@ export class DomainStore {
       ${focusDomainId ? 'AND (sd1.domain_id = ? OR sd2.domain_id = ?)' : ''}
       GROUP BY sd1.domain_id, sd2.domain_id, et.name
       ORDER BY cnt DESC
-    `).all(...(focusDomainId ? [focusDomainId, focusDomainId] : [])) as Array<{
+    `)
+      .all(...(focusDomainId ? [focusDomainId, focusDomainId] : [])) as Array<{
       source_domain: string;
       target_domain: string;
       edge_type: string;
@@ -334,11 +354,21 @@ export class DomainStore {
   // ── Stats ──────────────────────────────────────────────────────────
 
   getDomainStats(): { totalDomains: number; mappedSymbols: number; unmappedSymbols: number } {
-    const totalDomains = (this.db.prepare('SELECT COUNT(*) as cnt FROM domains').get() as { cnt: number }).cnt;
-    const mappedSymbols = (this.db.prepare('SELECT COUNT(DISTINCT symbol_id) as cnt FROM symbol_domains').get() as { cnt: number }).cnt;
-    const totalSymbols = (this.db.prepare(
-      "SELECT COUNT(*) as cnt FROM symbols WHERE kind IN ('class','function','method','interface','trait','enum','type')",
-    ).get() as { cnt: number }).cnt;
+    const totalDomains = (
+      this.db.prepare('SELECT COUNT(*) as cnt FROM domains').get() as { cnt: number }
+    ).cnt;
+    const mappedSymbols = (
+      this.db.prepare('SELECT COUNT(DISTINCT symbol_id) as cnt FROM symbol_domains').get() as {
+        cnt: number;
+      }
+    ).cnt;
+    const totalSymbols = (
+      this.db
+        .prepare(
+          "SELECT COUNT(*) as cnt FROM symbols WHERE kind IN ('class','function','method','interface','trait','enum','type')",
+        )
+        .get() as { cnt: number }
+    ).cnt;
 
     return { totalDomains, mappedSymbols, unmappedSymbols: totalSymbols - mappedSymbols };
   }
@@ -346,9 +376,11 @@ export class DomainStore {
   // ── Helpers ────────────────────────────────────────────────────────
 
   private getSymbolCountPerDomain(): Map<number, number> {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(`
       SELECT domain_id, COUNT(*) as cnt FROM symbol_domains GROUP BY domain_id
-    `).all() as Array<{ domain_id: number; cnt: number }>;
+    `)
+      .all() as Array<{ domain_id: number; cnt: number }>;
     const map = new Map<number, number>();
     for (const r of rows) map.set(r.domain_id, r.cnt);
     return map;

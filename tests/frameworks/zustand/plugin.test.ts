@@ -16,27 +16,33 @@ describe('ZustandReduxPlugin.detect()', () => {
   const plugin = new ZustandReduxPlugin();
 
   it('returns true when zustand is in deps', () => {
-    expect(plugin.detect({
-      rootPath: '/test',
-      packageJson: { dependencies: { zustand: '^4.0.0', react: '18' } },
-      configFiles: [],
-    })).toBe(true);
+    expect(
+      plugin.detect({
+        rootPath: '/test',
+        packageJson: { dependencies: { zustand: '^4.0.0', react: '18' } },
+        configFiles: [],
+      }),
+    ).toBe(true);
   });
 
   it('returns true when @reduxjs/toolkit is in deps', () => {
-    expect(plugin.detect({
-      rootPath: '/test',
-      packageJson: { dependencies: { '@reduxjs/toolkit': '^1.9.0', react: '18' } },
-      configFiles: [],
-    })).toBe(true);
+    expect(
+      plugin.detect({
+        rootPath: '/test',
+        packageJson: { dependencies: { '@reduxjs/toolkit': '^1.9.0', react: '18' } },
+        configFiles: [],
+      }),
+    ).toBe(true);
   });
 
   it('returns false when neither is present', () => {
-    expect(plugin.detect({
-      rootPath: '/test',
-      packageJson: { dependencies: { react: '18' } },
-      configFiles: [],
-    })).toBe(false);
+    expect(
+      plugin.detect({
+        rootPath: '/test',
+        packageJson: { dependencies: { react: '18' } },
+        configFiles: [],
+      }),
+    ).toBe(false);
   });
 });
 

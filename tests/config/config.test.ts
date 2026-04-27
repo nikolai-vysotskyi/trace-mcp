@@ -28,12 +28,15 @@ describe('config', () => {
   it('loads .trace-mcp.json config file', async () => {
     tmpDir = createTmpDir('trace-mcp-test-');
     const configFile = path.join(tmpDir, '.trace-mcp.json');
-    fs.writeFileSync(configFile, JSON.stringify({
-      root: './src',
-      db: { path: 'custom/index.db' },
-      include: ['src/**/*.ts'],
-      exclude: ['dist/**'],
-    }));
+    fs.writeFileSync(
+      configFile,
+      JSON.stringify({
+        root: './src',
+        db: { path: 'custom/index.db' },
+        include: ['src/**/*.ts'],
+        exclude: ['dist/**'],
+      }),
+    );
 
     const result = await loadConfig(tmpDir);
     expect(result.isOk()).toBe(true);
@@ -47,9 +50,12 @@ describe('config', () => {
   it('env vars override file config', async () => {
     tmpDir = createTmpDir('trace-mcp-test-');
     const configFile = path.join(tmpDir, '.trace-mcp.json');
-    fs.writeFileSync(configFile, JSON.stringify({
-      db: { path: 'file-path.db' },
-    }));
+    fs.writeFileSync(
+      configFile,
+      JSON.stringify({
+        db: { path: 'file-path.db' },
+      }),
+    );
 
     process.env.TRACE_MCP_DB_PATH = '/custom/env-path.db';
 

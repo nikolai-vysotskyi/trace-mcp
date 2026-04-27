@@ -10,14 +10,20 @@ import type { NonCodeMention } from './shared.js';
 import { buildRenameRegex, SKIP_DIRS } from './shared.js';
 
 const NON_CODE_PATTERNS = [
-  '**/*.yaml', '**/*.yml',
+  '**/*.yaml',
+  '**/*.yml',
   '**/*.json',
   '**/*.toml',
-  '**/*.env', '**/.env*',
-  '**/*.ini', '**/*.cfg',
-  '**/Dockerfile', '**/Dockerfile.*',
-  '**/docker-compose*.yml', '**/docker-compose*.yaml',
-  '**/Makefile', '**/makefile',
+  '**/*.env',
+  '**/.env*',
+  '**/*.ini',
+  '**/*.cfg',
+  '**/Dockerfile',
+  '**/Dockerfile.*',
+  '**/docker-compose*.yml',
+  '**/docker-compose*.yaml',
+  '**/Makefile',
+  '**/makefile',
   '**/*.conf',
   '**/*.properties',
 ];

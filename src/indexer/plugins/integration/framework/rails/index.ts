@@ -3,16 +3,27 @@
  */
 import { ok } from 'neverthrow';
 import type {
-  FrameworkPlugin, PluginManifest, ProjectContext, FileParseResult, RawEdge, RawRoute, RawMigration,
+  FrameworkPlugin,
+  PluginManifest,
+  ProjectContext,
+  FileParseResult,
+  RawEdge,
+  RawRoute,
+  RawMigration,
 } from '../../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../../errors.js';
 
 export class RailsPlugin implements FrameworkPlugin {
-  manifest: PluginManifest = { name: 'rails', version: '1.0.0', priority: 50, category: 'framework' };
+  manifest: PluginManifest = {
+    name: 'rails',
+    version: '1.0.0',
+    priority: 50,
+    category: 'framework',
+  };
 
   detect(ctx: ProjectContext): boolean {
-    return ctx.configFiles.some((f) =>
-      f === 'Gemfile' || f === 'config/routes.rb' || f === 'config/application.rb',
+    return ctx.configFiles.some(
+      (f) => f === 'Gemfile' || f === 'config/routes.rb' || f === 'config/application.rb',
     );
   }
 
@@ -23,18 +34,36 @@ export class RailsPlugin implements FrameworkPlugin {
         { name: 'rails_has_many', category: 'orm', description: 'ActiveRecord has_many' },
         { name: 'rails_belongs_to', category: 'orm', description: 'ActiveRecord belongs_to' },
         { name: 'rails_has_one', category: 'orm', description: 'ActiveRecord has_one' },
-        { name: 'rails_habtm', category: 'orm', description: 'ActiveRecord has_and_belongs_to_many' },
-        { name: 'rails_before_action', category: 'middleware', description: 'Controller before_action callback' },
+        {
+          name: 'rails_habtm',
+          category: 'orm',
+          description: 'ActiveRecord has_and_belongs_to_many',
+        },
+        {
+          name: 'rails_before_action',
+          category: 'middleware',
+          description: 'Controller before_action callback',
+        },
         { name: 'rails_validates', category: 'validation', description: 'Model validation' },
       ],
     };
   }
 
-  extractNodes(filePath: string, content: Buffer, language: string): TraceMcpResult<FileParseResult> {
+  extractNodes(
+    filePath: string,
+    content: Buffer,
+    language: string,
+  ): TraceMcpResult<FileParseResult> {
     if (language !== 'ruby') return ok({ status: 'ok', symbols: [] });
 
     const source = content.toString('utf-8');
-    const result: FileParseResult = { status: 'ok', symbols: [], edges: [], routes: [], migrations: [] };
+    const result: FileParseResult = {
+      status: 'ok',
+      symbols: [],
+      edges: [],
+      routes: [],
+      migrations: [],
+    };
 
     if (filePath.match(/config\/routes/)) {
       this.extractRoutes(source, result);
@@ -86,7 +115,9 @@ export class RailsPlugin implements FrameworkPlugin {
       // resources :users
       const resourcesMatch = line.match(/resources?\s+:(\w+)/);
       if (resourcesMatch) {
-        const name = resourcesMatch[0].startsWith('resources') ? resourcesMatch[1] : resourcesMatch[1];
+        const name = resourcesMatch[0].startsWith('resources')
+          ? resourcesMatch[1]
+          : resourcesMatch[1];
         const isPlural = resourcesMatch[0].startsWith('resources');
         const base = `${prefix}/${name}`;
 
@@ -129,7 +160,12 @@ export class RailsPlugin implements FrameworkPlugin {
       // root to: 'home#index'
       const rootMatch = line.match(/root\s+(?:to:\s*)?['"](\w+)#(\w+)['"]/);
       if (rootMatch) {
-        result.routes!.push({ method: 'GET', uri: '/', line: i + 1, name: `${rootMatch[1]}#${rootMatch[2]}` });
+        result.routes!.push({
+          method: 'GET',
+          uri: '/',
+          line: i + 1,
+          name: `${rootMatch[1]}#${rootMatch[2]}`,
+        });
       }
     }
   }

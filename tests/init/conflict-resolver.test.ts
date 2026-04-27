@@ -100,7 +100,9 @@ describe('commentOutJsonKey', () => {
     expect(result).toContain('//     }');
     // No uncommented jcodemunch references
     const lines = result.split('\n');
-    const uncommented = lines.filter((l) => !l.trimStart().startsWith('//') && l.includes('jcodemunch'));
+    const uncommented = lines.filter(
+      (l) => !l.trimStart().startsWith('//') && l.includes('jcodemunch'),
+    );
     expect(uncommented).toHaveLength(0);
   });
 });

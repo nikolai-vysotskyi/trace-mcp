@@ -18,20 +18,16 @@ import type {
 const RESULT_PACKAGES = ['neverthrow', 'ts-results', 'oxide.ts', 'true-myth', '@badrap/result'];
 
 // Result<T, E>, ResultAsync<T, E>
-const RESULT_TYPE_RE =
-  /(?:Result|ResultAsync|Ok|Err)\s*<[^>]+>/g;
+const RESULT_TYPE_RE = /(?:Result|ResultAsync|Ok|Err)\s*<[^>]+>/g;
 
 // .andThen(...), .map(...), .mapErr(...), .orElse(...), .match(...)
-const CHAIN_RE =
-  /\.\s*(?:andThen|map|mapErr|orElse|match|unwrapOr|isOk|isErr)\s*\(/g;
+const CHAIN_RE = /\.\s*(?:andThen|map|mapErr|orElse|match|unwrapOr|isOk|isErr)\s*\(/g;
 
 // ok(...), err(...), okAsync(...), errAsync(...)
-const CONSTRUCTOR_RE =
-  /\b(?:ok|err|okAsync|errAsync)\s*\(/g;
+const CONSTRUCTOR_RE = /\b(?:ok|err|okAsync|errAsync)\s*\(/g;
 
 // fromPromise(...), fromThrowable(...)
-const WRAPPER_RE =
-  /\b(?:fromPromise|fromThrowable|safeTry)\s*\(/g;
+const WRAPPER_RE = /\b(?:fromPromise|fromThrowable|safeTry)\s*\(/g;
 
 // Import detection
 const RESULT_IMPORT_RE =
@@ -78,8 +74,16 @@ export class NeverthrowPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'result_chain', category: 'error-handling', description: 'Result type chain (andThen/map/mapErr)' },
-        { name: 'result_wraps', category: 'error-handling', description: 'fromPromise/fromThrowable wrapper' },
+        {
+          name: 'result_chain',
+          category: 'error-handling',
+          description: 'Result type chain (andThen/map/mapErr)',
+        },
+        {
+          name: 'result_wraps',
+          category: 'error-handling',
+          description: 'fromPromise/fromThrowable wrapper',
+        },
       ],
     };
   }

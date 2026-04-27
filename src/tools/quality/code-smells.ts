@@ -37,12 +37,12 @@ export type SmellPriority = 'high' | 'medium' | 'low';
 interface CodeSmellFinding {
   category: SmellCategory;
   priority: SmellPriority;
-  tag?: string;            // e.g. TODO, FIXME, HACK, XXX for todo_comment
+  tag?: string; // e.g. TODO, FIXME, HACK, XXX for todo_comment
   file: string;
   line: number;
   snippet: string;
   description: string;
-  symbol?: string;         // enclosing symbol name (for empty_function)
+  symbol?: string; // enclosing symbol name (for empty_function)
 }
 
 export interface CodeSmellResult {
@@ -62,16 +62,16 @@ interface TodoTag {
 }
 
 const TODO_TAGS: TodoTag[] = [
-  { tag: 'FIXME',   priority: 'high' },
-  { tag: 'HACK',    priority: 'high' },
-  { tag: 'XXX',     priority: 'medium' },
-  { tag: 'TODO',    priority: 'medium' },
-  { tag: 'TEMP',    priority: 'medium' },
+  { tag: 'FIXME', priority: 'high' },
+  { tag: 'HACK', priority: 'high' },
+  { tag: 'XXX', priority: 'medium' },
+  { tag: 'TODO', priority: 'medium' },
+  { tag: 'TEMP', priority: 'medium' },
   { tag: 'WORKAROUND', priority: 'medium' },
-  { tag: 'BUG',     priority: 'high' },
+  { tag: 'BUG', priority: 'high' },
   { tag: 'REFACTOR', priority: 'low' },
   { tag: 'OPTIMIZE', priority: 'low' },
-  { tag: 'NOTE',    priority: 'low' },
+  { tag: 'NOTE', priority: 'low' },
 ];
 
 // Build a single regex that captures the tag and trailing text.
@@ -82,14 +82,9 @@ const TODO_REGEX = new RegExp(
   'i',
 );
 
-const TODO_TAG_PRIORITY = new Map<string, SmellPriority>(
-  TODO_TAGS.map((t) => [t.tag, t.priority]),
-);
+const TODO_TAG_PRIORITY = new Map<string, SmellPriority>(TODO_TAGS.map((t) => [t.tag, t.priority]));
 
-function detectTodoComments(
-  lines: string[],
-  filePath: string,
-): CodeSmellFinding[] {
+function detectTodoComments(lines: string[], filePath: string): CodeSmellFinding[] {
   const findings: CodeSmellFinding[] = [];
 
   for (let i = 0; i < lines.length; i++) {
@@ -146,9 +141,16 @@ const STUB_BODY_PATTERNS = [
 ];
 
 const CALLABLE_KINDS = new Set([
-  'function', 'method', 'arrow_function', 'closure',
-  'constructor', 'static_method', 'class_method',
-  'generator', 'async_function', 'async_method',
+  'function',
+  'method',
+  'arrow_function',
+  'closure',
+  'constructor',
+  'static_method',
+  'class_method',
+  'generator',
+  'async_function',
+  'async_method',
 ]);
 
 interface SymbolRange {
@@ -207,13 +209,14 @@ function detectEmptyFunctions(
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.length > 0)
-      .filter((l) => !(/^(?:\/\/|#|--|\/\*|\*\/|\*)\s*$/.test(l)));
+      .filter((l) => !/^(?:\/\/|#|--|\/\*|\*\/|\*)\s*$/.test(l));
 
     const joined = strippedLines.join('\n');
 
     // Check if body matches any stub pattern
     const isEmpty = strippedLines.length === 0;
-    const isStub = !isEmpty && strippedLines.length <= 2 && STUB_BODY_PATTERNS.some((p) => p.test(joined));
+    const isStub =
+      !isEmpty && strippedLines.length <= 2 && STUB_BODY_PATTERNS.some((p) => p.test(joined));
 
     if (isEmpty || isStub) {
       const description = isEmpty
@@ -252,7 +255,8 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
   // Hardcoded IP addresses (not 127.0.0.1 or 0.0.0.0 which are often intentional)
   {
     name: 'hardcoded_ip',
-    regex: /(?<![.\d])(?!(?:127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.\d+)\b)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?![\d.])/g,
+    regex:
+      /(?<![.\d])(?!(?:127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.\d+)\b)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?![\d.])/g,
     priority: 'medium',
     description: 'Hardcoded IP address — use configuration or environment variable',
     falsePositives: [
@@ -278,7 +282,8 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
   // Hardcoded URLs (http/https) — likely should be configurable
   {
     name: 'hardcoded_url',
-    regex: /(?:['"`])(https?:\/\/(?!(?:localhost|127\.0\.0\.1|example\.com|schemas?\.))[\w.-]+\.\w+[^'"`\s]*?)(?:['"`])/g,
+    regex:
+      /(?:['"`])(https?:\/\/(?!(?:localhost|127\.0\.0\.1|example\.com|schemas?\.))[\w.-]+\.\w+[^'"`\s]*?)(?:['"`])/g,
     priority: 'medium',
     description: 'Hardcoded URL — use configuration or environment variable',
     falsePositives: [
@@ -310,7 +315,8 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
   // Hardcoded credentials / secrets patterns (not already caught by security scanner)
   {
     name: 'hardcoded_credential',
-    regex: /(?:password|passwd|pwd|secret|api_?key|token|auth)\s*[:=]\s*['"`](?![\s'"`)]{0,2}$)[^'"`\n]{3,}['"`]/gi,
+    regex:
+      /(?:password|passwd|pwd|secret|api_?key|token|auth)\s*[:=]\s*['"`](?![\s'"`)]{0,2}$)[^'"`\n]{3,}['"`]/gi,
     priority: 'high',
     description: 'Hardcoded credential — use environment variable or secret manager',
     falsePositives: [
@@ -323,7 +329,8 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
   // Hardcoded feature flags / toggles
   {
     name: 'hardcoded_feature_flag',
-    regex: /(?:feature|flag|toggle|experiment|beta|enable|disable)[\w_]*\s*[:=]\s*(?:true|false|1|0)\b/gi,
+    regex:
+      /(?:feature|flag|toggle|experiment|beta|enable|disable)[\w_]*\s*[:=]\s*(?:true|false|1|0)\b/gi,
     priority: 'low',
     description: 'Hardcoded feature flag — use a feature flag service or configuration',
     falsePositives: [
@@ -334,10 +341,7 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
   },
 ];
 
-function detectHardcodedValues(
-  lines: string[],
-  filePath: string,
-): CodeSmellFinding[] {
+function detectHardcodedValues(lines: string[], filePath: string): CodeSmellFinding[] {
   const findings: CodeSmellFinding[] = [];
 
   for (let i = 0; i < lines.length; i++) {
@@ -471,10 +475,7 @@ const DEBUG_PATTERNS: DebugPattern[] = [
     regex: /(?<![\w>:])\b(?:dd|dump|ddd)\s*\(/g,
     priority: 'high',
     description: 'Laravel dd()/dump() — remove before production',
-    falsePositives: [
-      ...COMMON_FP,
-      /(?:function|method|class)\s+(?:dd|dump)\s*\(/i,
-    ],
+    falsePositives: [...COMMON_FP, /(?:function|method|class)\s+(?:dd|dump)\s*\(/i],
   },
   {
     name: 'php_die_exit',
@@ -655,10 +656,22 @@ const MAX_FILE_SIZE = 512 * 1024; // 512 KB
 // for code smells. Markdown headings like `### Bug Fixes` would otherwise match
 // the TODO regex (via the `#` comment-delimiter + `BUG` tag).
 const NON_CODE_EXTENSIONS = new Set([
-  '.md', '.mdx', '.markdown', '.rst', '.adoc', '.asciidoc', '.txt',
+  '.md',
+  '.mdx',
+  '.markdown',
+  '.rst',
+  '.adoc',
+  '.asciidoc',
+  '.txt',
 ]);
 const NON_CODE_LANGUAGES = new Set([
-  'markdown', 'mdx', 'rst', 'restructuredtext', 'asciidoc', 'text', 'plaintext',
+  'markdown',
+  'mdx',
+  'rst',
+  'restructuredtext',
+  'asciidoc',
+  'text',
+  'plaintext',
 ]);
 
 export function scanCodeSmells(
@@ -682,8 +695,14 @@ export function scanCodeSmells(
   // Fetch indexed files
   const scope = opts.scope?.replace(/\/+$/, '');
   const files: { id: number; path: string; language: string }[] = scope
-    ? store.db.prepare("SELECT id, path, language FROM files WHERE path LIKE ? AND (status = 'ok' OR status IS NULL)").all(`${scope}%`) as { id: number; path: string; language: string }[]
-    : store.db.prepare("SELECT id, path, language FROM files WHERE status = 'ok' OR status IS NULL").all() as { id: number; path: string; language: string }[];
+    ? (store.db
+        .prepare(
+          "SELECT id, path, language FROM files WHERE path LIKE ? AND (status = 'ok' OR status IS NULL)",
+        )
+        .all(`${scope}%`) as { id: number; path: string; language: string }[])
+    : (store.db
+        .prepare("SELECT id, path, language FROM files WHERE status = 'ok' OR status IS NULL")
+        .all() as { id: number; path: string; language: string }[]);
 
   const allFindings: CodeSmellFinding[] = [];
   let scanned = 0;
@@ -730,7 +749,13 @@ export function scanCodeSmells(
       // 2. Empty functions
       if (needsEmptyFn) {
         const symbols = store.getSymbolsByFile(file.id) as SymbolRange[];
-        const empties = detectEmptyFunctions(content, lines, symbols, file.path, file.language ?? '');
+        const empties = detectEmptyFunctions(
+          content,
+          lines,
+          symbols,
+          file.path,
+          file.language ?? '',
+        );
         for (const f of empties) {
           if (priorityRank(f.priority) > thresholdRank) continue;
           allFindings.push(f);
@@ -759,10 +784,11 @@ export function scanCodeSmells(
   }
 
   // Sort: high priority first, then by file
-  allFindings.sort((a, b) =>
-    priorityRank(a.priority) - priorityRank(b.priority)
-    || a.file.localeCompare(b.file)
-    || a.line - b.line,
+  allFindings.sort(
+    (a, b) =>
+      priorityRank(a.priority) - priorityRank(b.priority) ||
+      a.file.localeCompare(b.file) ||
+      a.line - b.line,
   );
 
   const summary: Record<SmellCategory, number> = {

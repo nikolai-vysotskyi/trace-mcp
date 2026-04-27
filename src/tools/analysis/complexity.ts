@@ -41,8 +41,7 @@ function stripStringsAndComments(source: string): string {
 
 export function computeCyclomatic(source: string, language?: string): number {
   const clean = stripStringsAndComments(source);
-  const pattern =
-    BRANCH_KEYWORDS_BY_LANG[language ?? ''] ?? BRANCH_KEYWORDS_DEFAULT;
+  const pattern = BRANCH_KEYWORDS_BY_LANG[language ?? ''] ?? BRANCH_KEYWORDS_DEFAULT;
   // Reset regex state (global flag)
   pattern.lastIndex = 0;
   const matches = clean.match(pattern);

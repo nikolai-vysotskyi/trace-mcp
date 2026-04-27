@@ -11,7 +11,10 @@ async function parse(code: string, filePath = 'src/myapp/utils.py') {
 
 function findSymbol(symbols: RawSymbol[], name: string, kind?: string): RawSymbol {
   const found = symbols.find((s) => s.name === name && (!kind || s.kind === kind));
-  if (!found) throw new Error(`Symbol "${name}" (kind=${kind}) not found in: ${symbols.map(s => `${s.name}#${s.kind}`).join(', ')}`);
+  if (!found)
+    throw new Error(
+      `Symbol "${name}" (kind=${kind}) not found in: ${symbols.map((s) => `${s.name}#${s.kind}`).join(', ')}`,
+    );
   return found;
 }
 

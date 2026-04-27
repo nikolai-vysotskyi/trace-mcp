@@ -3,12 +3,24 @@ import type { Store, SymbolRow, FileRow } from '../../db/store.js';
 import { searchFts, type FtsResult, type FtsFilters } from '../../db/fts.js';
 import { fuzzySearch, type FuzzyMatch } from '../../db/fuzzy.js';
 import { readByteRange } from '../../utils/source-reader.js';
-import { hybridScore, getTypeBonus, computeRecency, computeIdentityScore } from '../../scoring/hybrid.js';
-import { computePageRank } from '../../scoring/pagerank.js';
-import { buildSearchCacheKey, getCachedSearch, putCachedSearch } from '../../scoring/search-cache.js';
 import {
-  signalFusion, buildIdentityChannel,
-  type FusionChannels, type FusionWeights, type FusionDebugInfo,
+  hybridScore,
+  getTypeBonus,
+  computeRecency,
+  computeIdentityScore,
+} from '../../scoring/hybrid.js';
+import { computePageRank } from '../../scoring/pagerank.js';
+import {
+  buildSearchCacheKey,
+  getCachedSearch,
+  putCachedSearch,
+} from '../../scoring/search-cache.js';
+import {
+  signalFusion,
+  buildIdentityChannel,
+  type FusionChannels,
+  type FusionWeights,
+  type FusionDebugInfo,
 } from '../../scoring/signal-fusion.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
@@ -158,20 +170,30 @@ export async function search(
 ): Promise<SearchResult> {
   // ─── Signal Fusion mode ───────────────────────────────────────
   if (fusionOptions?.fusion) {
-    return runFusionSearch(store, query, filters, limit, offset, aiOptions, semanticOptions, fusionOptions);
+    return runFusionSearch(
+      store,
+      query,
+      filters,
+      limit,
+      offset,
+      aiOptions,
+      semanticOptions,
+      fusionOptions,
+    );
   }
 
   const fetchLimit = limit + offset + 50;
   const semanticMode = semanticOptions?.semantic ?? 'auto';
   const aiAvailable = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
   // 'off' forces FTS regardless of AI availability; 'only'/'on' require AI configured.
-  const useAI = semanticMode === 'off'
-    ? false
-    : (semanticMode === 'on' || semanticMode === 'only' || semanticMode === 'auto') && aiAvailable;
+  const useAI =
+    semanticMode === 'off'
+      ? false
+      : (semanticMode === 'on' || semanticMode === 'only' || semanticMode === 'auto') &&
+        aiAvailable;
   // Effective semantic weight: 'only' pins to 1, otherwise honor explicit weight (default 0.5)
-  const effectiveSemanticWeight = semanticMode === 'only'
-    ? 1
-    : semanticOptions?.semanticWeight ?? 0.5;
+  const effectiveSemanticWeight =
+    semanticMode === 'only' ? 1 : (semanticOptions?.semanticWeight ?? 0.5);
 
   // Explicit fuzzy mode — skip FTS/AI entirely (and skip cache: results depend on
   // fuzzy threshold/edit-distance which the cache key doesn't capture)
@@ -247,11 +269,14 @@ export async function search(
 
   // Batch-fetch all candidate symbols in one query
   const symbolIdStrs = candidates.map((c) => c.symbolIdStr);
-  const allSymbols = symbolIdStrs.length > 0
-    ? store.db.prepare(
-        `SELECT * FROM symbols WHERE symbol_id IN (${symbolIdStrs.map(() => '?').join(',')})`,
-      ).all(...symbolIdStrs) as SymbolRow[]
-    : [];
+  const allSymbols =
+    symbolIdStrs.length > 0
+      ? (store.db
+          .prepare(
+            `SELECT * FROM symbols WHERE symbol_id IN (${symbolIdStrs.map(() => '?').join(',')})`,
+          )
+          .all(...symbolIdStrs) as SymbolRow[])
+      : [];
   const symbolByIdStr = new Map(allSymbols.map((s) => [s.symbol_id, s]));
 
   // Batch-fetch files and node IDs
@@ -269,9 +294,10 @@ export async function search(
     if (!symbol) continue;
 
     if ((heritageFilter || decoratorFilter) && symbol.metadata) {
-      const meta = typeof symbol.metadata === 'string'
-        ? JSON.parse(symbol.metadata) as Record<string, unknown>
-        : symbol.metadata as Record<string, unknown>;
+      const meta =
+        typeof symbol.metadata === 'string'
+          ? (JSON.parse(symbol.metadata) as Record<string, unknown>)
+          : (symbol.metadata as Record<string, unknown>);
 
       if (filters?.implements) {
         const impl = meta['implements'];
@@ -279,17 +305,29 @@ export async function search(
       }
       if (filters?.extends) {
         const ext = meta['extends'];
-        const extArr = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
+        const extArr = Array.isArray(ext)
+          ? (ext as string[])
+          : typeof ext === 'string'
+            ? [ext]
+            : [];
         if (!extArr.includes(filters.extends)) continue;
       }
       if (decoratorFilter) {
         // Check all decorator-like fields: decorators (TS/Python), annotations (Java), attributes (PHP)
-        const decorators = (meta['decorators'] as string[] | undefined)
-          ?? (meta['annotations'] as string[] | undefined)
-          ?? (meta['attributes'] as string[] | undefined);
-        if (!Array.isArray(decorators) || !decorators.some((d) =>
-          d === decoratorFilter || d.endsWith(`.${decoratorFilter}`) || d.startsWith(`${decoratorFilter}(`),
-        )) continue;
+        const decorators =
+          (meta['decorators'] as string[] | undefined) ??
+          (meta['annotations'] as string[] | undefined) ??
+          (meta['attributes'] as string[] | undefined);
+        if (
+          !Array.isArray(decorators) ||
+          !decorators.some(
+            (d) =>
+              d === decoratorFilter ||
+              d.endsWith(`.${decoratorFilter}`) ||
+              d.startsWith(`${decoratorFilter}(`),
+          )
+        )
+          continue;
       }
     } else if (heritageFilter || decoratorFilter) {
       continue; // no metadata → can't match metadata filter
@@ -304,7 +342,13 @@ export async function search(
     const typeBonus = getTypeBonus(symbol.kind);
     const identity = computeIdentityScore(query, symbol.name, symbol.fqn);
 
-    const score = hybridScore({ relevance: candidate.relevance, pagerank: pr, recency, typeBonus, identity });
+    const score = hybridScore({
+      relevance: candidate.relevance,
+      pagerank: pr,
+      recency,
+      typeBonus,
+      identity,
+    });
     scored.push({ symbol, file, score });
   }
 
@@ -370,7 +414,9 @@ async function runFusionSearch(
       if (queryEmbedding.length > 0) {
         similarityResults = aiOptions!.vectorStore!.search(queryEmbedding, fetchLimit);
       }
-    } catch { /* vector search failed, continue without */ }
+    } catch {
+      /* vector search failed, continue without */
+    }
   }
 
   // Collect all candidate symbol IDs from FTS + similarity
@@ -387,11 +433,12 @@ async function runFusionSearch(
 
   // Batch-fetch all symbols
   const allSymbolIds = [...candidateNumIds];
-  const allSymbols = allSymbolIds.length > 0
-    ? store.db.prepare(
-        `SELECT * FROM symbols WHERE id IN (${allSymbolIds.map(() => '?').join(',')})`,
-      ).all(...allSymbolIds) as SymbolRow[]
-    : [];
+  const allSymbols =
+    allSymbolIds.length > 0
+      ? (store.db
+          .prepare(`SELECT * FROM symbols WHERE id IN (${allSymbolIds.map(() => '?').join(',')})`)
+          .all(...allSymbolIds) as SymbolRow[])
+      : [];
   const symbolById = new Map(allSymbols.map((s) => [s.id, s]));
   const symbolByIdStr = new Map(allSymbols.map((s) => [s.symbol_id, s]));
 
@@ -412,31 +459,41 @@ async function runFusionSearch(
   const passesFilter = (symbol: SymbolRow): boolean => {
     if (!heritageFilter && !decoratorFilter) return true;
     if (!symbol.metadata) return false;
-    const meta = typeof symbol.metadata === 'string'
-      ? JSON.parse(symbol.metadata) as Record<string, unknown>
-      : symbol.metadata as Record<string, unknown>;
+    const meta =
+      typeof symbol.metadata === 'string'
+        ? (JSON.parse(symbol.metadata) as Record<string, unknown>)
+        : (symbol.metadata as Record<string, unknown>);
     if (filters?.implements) {
       const impl = meta['implements'];
       if (!Array.isArray(impl) || !(impl as string[]).includes(filters.implements)) return false;
     }
     if (filters?.extends) {
       const ext = meta['extends'];
-      const extArr = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
+      const extArr = Array.isArray(ext) ? (ext as string[]) : typeof ext === 'string' ? [ext] : [];
       if (!extArr.includes(filters.extends)) return false;
     }
     if (decoratorFilter) {
-      const decorators = (meta['decorators'] as string[] | undefined)
-        ?? (meta['annotations'] as string[] | undefined)
-        ?? (meta['attributes'] as string[] | undefined);
-      if (!Array.isArray(decorators) || !decorators.some((d) =>
-        d === decoratorFilter || d.endsWith(`.${decoratorFilter}`) || d.startsWith(`${decoratorFilter}(`),
-      )) return false;
+      const decorators =
+        (meta['decorators'] as string[] | undefined) ??
+        (meta['annotations'] as string[] | undefined) ??
+        (meta['attributes'] as string[] | undefined);
+      if (
+        !Array.isArray(decorators) ||
+        !decorators.some(
+          (d) =>
+            d === decoratorFilter ||
+            d.endsWith(`.${decoratorFilter}`) ||
+            d.startsWith(`${decoratorFilter}(`),
+        )
+      )
+        return false;
     }
     return true;
   };
 
   // Filter symbols and build candidate list
-  const validCandidates: Array<{ id: string; symbol: SymbolRow; file: FileRow; nodeId?: number }> = [];
+  const validCandidates: Array<{ id: string; symbol: SymbolRow; file: FileRow; nodeId?: number }> =
+    [];
   for (const idStr of candidateIdStrs) {
     const symbol = symbolByIdStr.get(idStr);
     if (!symbol || !passesFilter(symbol)) continue;
@@ -591,10 +648,7 @@ interface FileOutlineResult {
   symbols: FileOutlineSymbol[];
 }
 
-export function getFileOutline(
-  store: Store,
-  filePath: string,
-): TraceMcpResult<FileOutlineResult> {
+export function getFileOutline(store: Store, filePath: string): TraceMcpResult<FileOutlineResult> {
   const file = store.getFile(filePath);
   if (!file) {
     return err(notFound(filePath));
@@ -617,12 +671,14 @@ export function getFileOutline(
       };
       // Surface decorators/annotations/attributes from metadata
       if (s.metadata) {
-        const meta = typeof s.metadata === 'string'
-          ? JSON.parse(s.metadata) as Record<string, unknown>
-          : s.metadata as Record<string, unknown>;
-        const decs = (meta['decorators'] as string[] | undefined)
-          ?? (meta['annotations'] as string[] | undefined)
-          ?? (meta['attributes'] as string[] | undefined);
+        const meta =
+          typeof s.metadata === 'string'
+            ? (JSON.parse(s.metadata) as Record<string, unknown>)
+            : (s.metadata as Record<string, unknown>);
+        const decs =
+          (meta['decorators'] as string[] | undefined) ??
+          (meta['annotations'] as string[] | undefined) ??
+          (meta['attributes'] as string[] | undefined);
         if (Array.isArray(decs) && decs.length > 0) {
           base.decorators = decs;
         }

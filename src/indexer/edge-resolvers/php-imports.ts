@@ -25,21 +25,23 @@ export function resolvePhpImportEdges(state: PipelineState): void {
   if (state.pendingImports.size === 0) return;
 
   // Collect all indexed PHP files with their workspace
-  const allPhpFiles = store.db.prepare(
-    `SELECT id, path, workspace FROM files WHERE language = 'php'`,
-  ).all() as Array<{ id: number; path: string; workspace: string | null }>;
+  const allPhpFiles = store.db
+    .prepare(`SELECT id, path, workspace FROM files WHERE language = 'php'`)
+    .all() as Array<{ id: number; path: string; workspace: string | null }>;
 
   if (allPhpFiles.length === 0) return;
 
   // Build workspace-aware FQN → file lookup
   // Key: "workspace\0fqn" (or "\0fqn" for files without workspace)
   const fqnToFile = new Map<string, { id: number; path: string; workspace: string | null }>();
-  const fqnRows = store.db.prepare(
-    `SELECT s.fqn, f.id, f.path, f.workspace FROM symbols s
+  const fqnRows = store.db
+    .prepare(
+      `SELECT s.fqn, f.id, f.path, f.workspace FROM symbols s
      JOIN files f ON s.file_id = f.id
      WHERE s.fqn IS NOT NULL AND f.language = 'php'
        AND s.kind IN ('class', 'interface', 'trait', 'enum')`,
-  ).all() as Array<{ fqn: string; id: number; path: string; workspace: string | null }>;
+    )
+    .all() as Array<{ fqn: string; id: number; path: string; workspace: string | null }>;
 
   for (const row of fqnRows) {
     const key = `${row.workspace ?? ''}\0${row.fqn}`;
@@ -85,9 +87,9 @@ export function resolvePhpImportEdges(state: PipelineState): void {
     }
   }
 
-  const importsEdgeType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('imports') as { id: number } | undefined;
+  const importsEdgeType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('imports') as { id: number } | undefined;
   if (!importsEdgeType) return;
 
   const insertStmt = store.db.prepare(
@@ -138,7 +140,14 @@ export function resolvePhpImportEdges(state: PipelineState): void {
       }
 
       for (const [fqn, specifiers] of consolidated) {
-        const target = resolvePhpFqn(fqn, sourceWs, fqnToFile, psr4Resolvers, pathToFile, state.rootPath);
+        const target = resolvePhpFqn(
+          fqn,
+          sourceWs,
+          fqnToFile,
+          psr4Resolvers,
+          pathToFile,
+          state.rootPath,
+        );
         if (target) {
           const targetNodeId = fileNodeMap.get(target.id);
           if (targetNodeId == null) continue;
@@ -220,9 +229,7 @@ function resolvePhpFqn(
     const resolved = psr4.resolve(fqn);
     if (resolved) {
       // PSR-4 returns path relative to workspace root — convert to project-relative
-      const projectRelative = sourceWorkspace
-        ? `${sourceWorkspace}/${resolved}`
-        : resolved;
+      const projectRelative = sourceWorkspace ? `${sourceWorkspace}/${resolved}` : resolved;
       const fromPath = pathIndex.get(projectRelative);
       if (fromPath) return fromPath;
     }

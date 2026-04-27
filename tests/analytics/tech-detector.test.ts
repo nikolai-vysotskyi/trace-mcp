@@ -51,17 +51,20 @@ describe('tech-detector', () => {
     it('detects dependencies from a minimal package.json', () => {
       const projDir = path.join(tmpDir, 'proj-npm');
       fs.mkdirSync(projDir, { recursive: true });
-      fs.writeFileSync(path.join(projDir, 'package.json'), JSON.stringify({
-        name: 'test-project',
-        dependencies: {
-          'react': '^18.0.0',
-          'express': '^4.18.0',
-          'lodash': '^4.17.0',
-        },
-        devDependencies: {
-          'vitest': '^1.0.0',
-        },
-      }));
+      fs.writeFileSync(
+        path.join(projDir, 'package.json'),
+        JSON.stringify({
+          name: 'test-project',
+          dependencies: {
+            react: '^18.0.0',
+            express: '^4.18.0',
+            lodash: '^4.17.0',
+          },
+          devDependencies: {
+            vitest: '^1.0.0',
+          },
+        }),
+      );
 
       const report = detectCoverage(projDir);
 
@@ -80,7 +83,7 @@ describe('tech-detector', () => {
       expect(report.coverage.coverage_pct).toBeLessThanOrEqual(100);
 
       // covered list
-      const coveredNames = report.covered.map(c => c.name);
+      const coveredNames = report.covered.map((c) => c.name);
       expect(coveredNames).toContain('react');
       expect(coveredNames).toContain('express');
 
@@ -95,13 +98,16 @@ describe('tech-detector', () => {
     it('includes devDependencies when includeDev is true', () => {
       const projDir = path.join(tmpDir, 'proj-dev');
       fs.mkdirSync(projDir, { recursive: true });
-      fs.writeFileSync(path.join(projDir, 'package.json'), JSON.stringify({
-        name: 'test-dev',
-        dependencies: {},
-        devDependencies: {
-          'vitest': '^1.0.0',
-        },
-      }));
+      fs.writeFileSync(
+        path.join(projDir, 'package.json'),
+        JSON.stringify({
+          name: 'test-dev',
+          dependencies: {},
+          devDependencies: {
+            vitest: '^1.0.0',
+          },
+        }),
+      );
 
       const withoutDev = detectCoverage(projDir);
       const withDev = detectCoverage(projDir, { includeDev: true });
@@ -122,35 +128,41 @@ describe('tech-detector', () => {
     it('identifies unknown packages', () => {
       const projDir = path.join(tmpDir, 'proj-unknown');
       fs.mkdirSync(projDir, { recursive: true });
-      fs.writeFileSync(path.join(projDir, 'package.json'), JSON.stringify({
-        name: 'test-unknown',
-        dependencies: {
-          'my-custom-internal-lib': '^1.0.0',
-        },
-      }));
+      fs.writeFileSync(
+        path.join(projDir, 'package.json'),
+        JSON.stringify({
+          name: 'test-unknown',
+          dependencies: {
+            'my-custom-internal-lib': '^1.0.0',
+          },
+        }),
+      );
 
       const report = detectCoverage(projDir);
-      const unknownNames = report.unknown.map(u => u.name);
+      const unknownNames = report.unknown.map((u) => u.name);
       expect(unknownNames).toContain('my-custom-internal-lib');
     });
 
     it('excludes pure UI widgets (priority none) from gaps and from the coverage denominator', () => {
       const projDir = path.join(tmpDir, 'proj-ui-widgets');
       fs.mkdirSync(projDir, { recursive: true });
-      fs.writeFileSync(path.join(projDir, 'package.json'), JSON.stringify({
-        name: 'test-ui-widgets',
-        dependencies: {
-          // Known UI widgets set to `priority: 'none'` in KNOWN_PACKAGES — a dedicated
-          // plugin would add no architectural value, so they drop out of both `gaps`
-          // and the coverage denominator.
-          'glightbox': '^3.3.0',
-          '@fancyapps/ui': '^5.0.0',
-          'chartist': '^1.3.0',
-        },
-      }));
+      fs.writeFileSync(
+        path.join(projDir, 'package.json'),
+        JSON.stringify({
+          name: 'test-ui-widgets',
+          dependencies: {
+            // Known UI widgets set to `priority: 'none'` in KNOWN_PACKAGES — a dedicated
+            // plugin would add no architectural value, so they drop out of both `gaps`
+            // and the coverage denominator.
+            glightbox: '^3.3.0',
+            '@fancyapps/ui': '^5.0.0',
+            chartist: '^1.3.0',
+          },
+        }),
+      );
 
       const report = detectCoverage(projDir);
-      const gapNames = report.gaps.map(g => g.name);
+      const gapNames = report.gaps.map((g) => g.name);
       expect(gapNames).not.toContain('glightbox');
       expect(gapNames).not.toContain('@fancyapps/ui');
       expect(gapNames).not.toContain('chartist');

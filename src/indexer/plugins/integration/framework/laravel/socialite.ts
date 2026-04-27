@@ -37,7 +37,8 @@ const CLASS_NAME_RE = /class\s+(\w+)/;
 const SOCIALITE_DRIVER_RE = /Socialite::driver\(\s*['"](\w+)['"]\s*\)\s*->\s*(\w+)/g;
 
 // Custom provider: class MyProvider extends AbstractProvider
-const CUSTOM_PROVIDER_RE = /class\s+(\w+)\s+extends\s+(?:[\w\\]*\\)?(?:AbstractProvider|AbstractUser)/;
+const CUSTOM_PROVIDER_RE =
+  /class\s+(\w+)\s+extends\s+(?:[\w\\]*\\)?(?:AbstractProvider|AbstractUser)/;
 
 // ─── Extraction ──────────────────────────────────────────────
 

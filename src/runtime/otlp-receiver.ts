@@ -32,10 +32,7 @@ export class OtlpReceiver {
       });
 
       this.server.listen(this.options.port, this.options.host, () => {
-        logger.info(
-          { host: this.options.host, port: this.options.port },
-          'OTLP receiver started',
-        );
+        logger.info({ host: this.options.host, port: this.options.port }, 'OTLP receiver started');
         resolve();
       });
     });

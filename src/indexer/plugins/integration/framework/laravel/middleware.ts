@@ -78,9 +78,7 @@ export function parseBootstrapMiddleware(source: string): MiddlewareConfig {
  */
 function extractPropertyArray(source: string, propName: string): string[] {
   const escaped = escapeRegExp(propName);
-  const regex = new RegExp(
-    `protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`,
-  );
+  const regex = new RegExp(`protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`);
   const match = source.match(regex);
   if (!match) return [];
   return extractClassReferences(match[1]);
@@ -90,14 +88,9 @@ function extractPropertyArray(source: string, propName: string): string[] {
  * Extract a property that is a map of group name -> array of class references.
  * e.g. protected $middlewareGroups = [ 'web' => [...], 'api' => [...] ];
  */
-function extractPropertyGroups(
-  source: string,
-  propName: string,
-): Record<string, string[]> {
+function extractPropertyGroups(source: string, propName: string): Record<string, string[]> {
   const escaped = escapeRegExp(propName);
-  const regex = new RegExp(
-    `protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`,
-  );
+  const regex = new RegExp(`protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`);
   const match = source.match(regex);
   if (!match) return {};
 
@@ -118,14 +111,9 @@ function extractPropertyGroups(
  * Extract a property that is a map of alias name -> class reference.
  * e.g. protected $routeMiddleware = [ 'auth' => \App\Http\Middleware\Authenticate::class, ... ];
  */
-function extractPropertyMap(
-  source: string,
-  propName: string,
-): Record<string, string> {
+function extractPropertyMap(source: string, propName: string): Record<string, string> {
   const escaped = escapeRegExp(propName);
-  const regex = new RegExp(
-    `protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`,
-  );
+  const regex = new RegExp(`protected\\s+${escaped}\\s*=\\s*\\[([\\s\\S]*?)\\];`);
   const match = source.match(regex);
   if (!match) return {};
 

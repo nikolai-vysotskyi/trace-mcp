@@ -11,7 +11,11 @@ function insertEdge(store: Store, srcNode: number, tgtNode: number): void {
   store.insertEdge(srcNode, tgtNode, 'esm_imports');
 }
 
-function buildButterfly(store: Store): { left: string[]; right: string[]; bridgeEdge: [string, string] } {
+function buildButterfly(store: Store): {
+  left: string[];
+  right: string[];
+  bridgeEdge: [string, string];
+} {
   // Two triangles connected by a single edge:
   //   a1 — a2 — a3 — a1    (left clique, directed cycle)
   //   b1 — b2 — b3 — b1    (right clique, directed cycle)

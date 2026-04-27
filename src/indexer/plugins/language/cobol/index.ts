@@ -69,9 +69,7 @@ const _plugin = createMultiPassPlugin({
       kind: 'class',
       pattern: /^\s*FD\s+([\w-]+)/gim,
       meta: { fileDesc: true },
-      memberPatterns: [
-        { kind: 'property', pattern: /^\s*(?:0[1-9]|[1-4]\d)\s+([\w-]+)/gim },
-      ],
+      memberPatterns: [{ kind: 'property', pattern: /^\s*(?:0[1-9]|[1-4]\d)\s+([\w-]+)/gim }],
     },
   ],
 

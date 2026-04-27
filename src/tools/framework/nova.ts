@@ -37,9 +37,10 @@ export function getNovaResource(
   resourceName: string,
 ): TraceMcpResult<NovaResourceResult> {
   // Find the Nova resource symbol
-  const symbol = store.getSymbolByFqn(resourceName)
-    ?? store.getSymbolByFqn(`App\\Nova\\${resourceName}`)
-    ?? findNovaSymbol(store, resourceName);
+  const symbol =
+    store.getSymbolByFqn(resourceName) ??
+    store.getSymbolByFqn(`App\\Nova\\${resourceName}`) ??
+    findNovaSymbol(store, resourceName);
 
   if (!symbol) return err(notFound(`nova_resource:${resourceName}`));
 
@@ -66,17 +67,24 @@ export function getNovaResource(
     const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
 
     for (const edge of outgoing) {
-      const meta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
+      const meta = edge.metadata ? (JSON.parse(edge.metadata) as Record<string, unknown>) : {};
       const ref = refs.get(edge.target_node_id);
       const targetSym = ref?.nodeType === 'symbol' ? symMap.get(ref.refId) : undefined;
 
       switch (edge.edge_type_name) {
         case 'nova_resource_for': {
           if (targetSym) {
-            modelInfo = { name: targetSym.name, fqn: targetSym.fqn ?? targetSym.name, symbolId: targetSym.symbol_id };
+            modelInfo = {
+              name: targetSym.name,
+              fqn: targetSym.fqn ?? targetSym.name,
+              symbolId: targetSym.symbol_id,
+            };
           }
           if (!modelInfo && meta.targetFqn) {
-            modelInfo = { name: String(meta.targetFqn).split('\\').pop()!, fqn: String(meta.targetFqn) };
+            modelInfo = {
+              name: String(meta.targetFqn).split('\\').pop()!,
+              fqn: String(meta.targetFqn),
+            };
           }
           break;
         }
@@ -111,7 +119,7 @@ export function getNovaResource(
   // Also try to extract from metadata if edges weren't resolved
   if (fields.length === 0 || actions.length === 0) {
     try {
-      const meta = symbol.metadata ? JSON.parse(symbol.metadata) as Record<string, unknown> : {};
+      const meta = symbol.metadata ? (JSON.parse(symbol.metadata) as Record<string, unknown>) : {};
       if (Array.isArray(meta.fieldRelationships) && fields.length === 0) {
         for (const f of meta.fieldRelationships as Record<string, unknown>[]) {
           fields.push({
@@ -138,7 +146,9 @@ export function getNovaResource(
         const fqn = String(meta.modelFqn);
         modelInfo = { name: fqn.split('\\').pop()!, fqn };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return ok({

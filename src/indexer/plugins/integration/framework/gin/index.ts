@@ -18,20 +18,16 @@ import type {
 } from '../../../../../plugin-api/types.js';
 
 // r.GET("/path", handler), r.POST(...), etc.
-const ROUTE_RE =
-  /\b(\w+)\s*\.\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|Any)\s*\(\s*"([^"]+)"/g;
+const ROUTE_RE = /\b(\w+)\s*\.\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|Any)\s*\(\s*"([^"]+)"/g;
 
 // r.Group("/api") or v1 := r.Group("/v1")
-const GROUP_RE =
-  /\b(\w+)\s*\.\s*Group\s*\(\s*"([^"]+)"/g;
+const GROUP_RE = /\b(\w+)\s*\.\s*Group\s*\(\s*"([^"]+)"/g;
 
 // r.Use(middleware) or group.Use(middleware)
-const MIDDLEWARE_RE =
-  /\b(\w+)\s*\.\s*Use\s*\(\s*(\w[\w.]*)/g;
+const MIDDLEWARE_RE = /\b(\w+)\s*\.\s*Use\s*\(\s*(\w[\w.]*)/g;
 
 // r.Static("/assets", "./public")
-const STATIC_RE =
-  /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
+const STATIC_RE = /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
 
 interface GinRoute {
   method: string;

@@ -74,18 +74,19 @@ export function extractDjangoModels(
 /** Check if base classes indicate a Django model. */
 function isDjangoModel(bases: string): boolean {
   const baseList = bases.split(',').map((b) => b.trim());
-  return baseList.some((b) =>
-    b === 'models.Model' ||
-    b === 'Model' ||
-    b.endsWith('Model') ||
-    b.endsWith('Mixin') ||
-    b === 'AbstractUser' ||
-    b === 'AbstractBaseUser' ||
-    b === 'PermissionsMixin' ||
-    b.includes('models.') ||
-    // Common DRF / third-party bases
-    b === 'TimeStampedModel' ||
-    b === 'SoftDeletableModel',
+  return baseList.some(
+    (b) =>
+      b === 'models.Model' ||
+      b === 'Model' ||
+      b.endsWith('Model') ||
+      b.endsWith('Mixin') ||
+      b === 'AbstractUser' ||
+      b === 'AbstractBaseUser' ||
+      b === 'PermissionsMixin' ||
+      b.includes('models.') ||
+      // Common DRF / third-party bases
+      b === 'TimeStampedModel' ||
+      b === 'SoftDeletableModel',
   );
 }
 
@@ -202,10 +203,7 @@ function extractRelationshipTarget(args: string): string | null {
 }
 
 /** Extract associations (relationship fields) from a class body. */
-function extractAssociations(
-  classBody: string,
-  sourceModelName: string,
-): RawOrmAssociation[] {
+function extractAssociations(classBody: string, sourceModelName: string): RawOrmAssociation[] {
   const associations: RawOrmAssociation[] = [];
   const lines = classBody.split('\n');
 
@@ -214,9 +212,7 @@ function extractAssociations(
 
     for (const [fieldType, kind] of Object.entries(RELATIONSHIP_FIELDS)) {
       // Match: name = models.ForeignKey(...) or name = ForeignKey(...)
-      const regex = new RegExp(
-        `^(\\w+)\\s*=\\s*(?:models\\.)?${fieldType}\\s*\\((.*)\\)`,
-      );
+      const regex = new RegExp(`^(\\w+)\\s*=\\s*(?:models\\.)?${fieldType}\\s*\\((.*)\\)`);
       const match = line.match(regex);
       if (!match) continue;
 
@@ -243,13 +239,15 @@ function extractAssociations(
 /** Extract Meta class options. */
 function extractMeta(classBody: string): {
   dbTable?: string;
-  'abstract'?: boolean;
+  abstract?: boolean;
   ordering?: string[];
 } {
-  const meta: { dbTable?: string; 'abstract'?: boolean; ordering?: string[] } = {};
+  const meta: { dbTable?: string; abstract?: boolean; ordering?: string[] } = {};
 
   // Match class Meta: block
-  const metaMatch = classBody.match(/class\s+Meta\s*:\s*\n([\s\S]*?)(?=\n\s*(?:class\s|def\s|\w+\s*=)|$)/);
+  const metaMatch = classBody.match(
+    /class\s+Meta\s*:\s*\n([\s\S]*?)(?=\n\s*(?:class\s|def\s|\w+\s*=)|$)/,
+  );
   if (!metaMatch) return meta;
 
   const metaBody = metaMatch[1];

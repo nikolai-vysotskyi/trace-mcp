@@ -47,7 +47,8 @@ const _plugin = createMultiPassPlugin({
     // type ... is [tagged] record
     {
       kind: 'class',
-      pattern: /^\s*type\s+(\w+)\s+is\s+(?:abstract\s+)?(?:tagged\s+)?(?:limited\s+)?(?:new\s+\w[\w.]*\s+with\s+)?record\b/gim,
+      pattern:
+        /^\s*type\s+(\w+)\s+is\s+(?:abstract\s+)?(?:tagged\s+)?(?:limited\s+)?(?:new\s+\w[\w.]*\s+with\s+)?record\b/gim,
       memberPatterns: [
         // record components: Name : Type;
         { kind: 'property', pattern: /^\s+(\w+)\s*:\s*(?!constant\b)(?:\w[\w.]*)/gim },
@@ -68,9 +69,7 @@ const _plugin = createMultiPassPlugin({
       kind: 'class',
       pattern: /^\s*task\s+(?:type\s+)?(\w+)/gim,
       meta: { task: true },
-      memberPatterns: [
-        { kind: 'method', pattern: /^\s*entry\s+(\w+)/gim },
-      ],
+      memberPatterns: [{ kind: 'method', pattern: /^\s*entry\s+(\w+)/gim }],
     },
   ],
 
@@ -82,7 +81,10 @@ const _plugin = createMultiPassPlugin({
     // Enum type: type X is (A, B, C)
     { kind: 'enum', pattern: /^\s*type\s+(\w+)\s+is\s*\(/gim },
     // Type alias / derived type (not record, not enum)
-    { kind: 'type', pattern: /^\s*type\s+(\w+)\s+is\s+(?:new\s+)?(?:access\s+)?(?:not\s+null\s+)?\w/gim },
+    {
+      kind: 'type',
+      pattern: /^\s*type\s+(\w+)\s+is\s+(?:new\s+)?(?:access\s+)?(?:not\s+null\s+)?\w/gim,
+    },
     // Subtype
     { kind: 'type', pattern: /^\s*subtype\s+(\w+)\s+is\b/gim },
     // Constant

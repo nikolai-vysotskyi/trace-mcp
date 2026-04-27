@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
-import { changeSignature, parseParamList, splitArgs } from '../../src/tools/refactoring/change-signature.js';
+import {
+  changeSignature,
+  parseParamList,
+  splitArgs,
+} from '../../src/tools/refactoring/change-signature.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -142,7 +146,9 @@ describe('changeSignature', () => {
     store = createTestStore();
     const fileId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileId, 'Foo', { kind: 'class', lineStart: 1, lineEnd: 3 });
-    const result = changeSignature(store, '/tmp', 'src/a.ts::Foo#class', [{ add_param: { name: 'x' } }]);
+    const result = changeSignature(store, '/tmp', 'src/a.ts::Foo#class', [
+      { add_param: { name: 'x' } },
+    ]);
     expect(result.success).toBe(false);
     expect(result.error).toContain('not a function');
   });
@@ -162,9 +168,13 @@ describe('changeSignature', () => {
     const fileId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileId, 'greet', { kind: 'function', lineStart: 1, lineEnd: 3 });
 
-    const result = changeSignature(store, tmpDir, 'src/a.ts::greet#function', [
-      { add_param: { name: 'greeting', type: 'string', default_value: '"hello"' } },
-    ], false);
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/a.ts::greet#function',
+      [{ add_param: { name: 'greeting', type: 'string', default_value: '"hello"' } }],
+      false,
+    );
 
     expect(result.success).toBe(true);
     const content = readFile(tmpDir, 'src/a.ts');
@@ -179,9 +189,13 @@ describe('changeSignature', () => {
     const fileId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileId, 'add', { kind: 'function', lineStart: 1, lineEnd: 3 });
 
-    const result = changeSignature(store, tmpDir, 'src/a.ts::add#function', [
-      { remove_param: { name: 'c' } },
-    ], false);
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/a.ts::add#function',
+      [{ remove_param: { name: 'c' } }],
+      false,
+    );
 
     expect(result.success).toBe(true);
     const content = readFile(tmpDir, 'src/a.ts');
@@ -197,9 +211,13 @@ describe('changeSignature', () => {
     const fileId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileId, 'calc', { kind: 'function', lineStart: 1, lineEnd: 3 });
 
-    const result = changeSignature(store, tmpDir, 'src/a.ts::calc#function', [
-      { rename_param: { old_name: 'x', new_name: 'left' } },
-    ], false);
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/a.ts::calc#function',
+      [{ rename_param: { old_name: 'x', new_name: 'left' } }],
+      false,
+    );
 
     expect(result.success).toBe(true);
     const content = readFile(tmpDir, 'src/a.ts');
@@ -215,9 +233,13 @@ describe('changeSignature', () => {
     const fileId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileId, 'mix', { kind: 'function', lineStart: 1, lineEnd: 3 });
 
-    const result = changeSignature(store, tmpDir, 'src/a.ts::mix#function', [
-      { reorder_params: ['c', 'a', 'b'] },
-    ], false);
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/a.ts::mix#function',
+      [{ reorder_params: ['c', 'a', 'b'] }],
+      false,
+    );
 
     expect(result.success).toBe(true);
     const content = readFile(tmpDir, 'src/a.ts');
@@ -227,12 +249,18 @@ describe('changeSignature', () => {
   it('updates call sites when removing a param', () => {
     store = createTestStore();
     tmpDir = createTmpFixture({
-      'src/utils.ts': 'export function add(a: number, b: number, c: number) {\n  return a + b + c;\n}\n',
+      'src/utils.ts':
+        'export function add(a: number, b: number, c: number) {\n  return a + b + c;\n}\n',
       'src/main.ts': "import { add } from './utils';\nconst result = add(1, 2, 3);\n",
     });
     const utilsFileId = insertFile(store, 'src/utils.ts');
     const mainFileId = insertFile(store, 'src/main.ts');
-    const symDbId = insertSymbol(store, utilsFileId, 'add', { kind: 'function', lineStart: 1, lineEnd: 3, metadata: { exported: true } });
+    const symDbId = insertSymbol(store, utilsFileId, 'add', {
+      kind: 'function',
+      lineStart: 1,
+      lineEnd: 3,
+      metadata: { exported: true },
+    });
 
     // Create edge: main calls add
     const symNodeId = store.createNode('symbol', symDbId);
@@ -240,9 +268,13 @@ describe('changeSignature', () => {
     store.ensureEdgeType('calls', 'structural', 'Function calls');
     store.insertEdge(mainFileNodeId, symNodeId, 'calls', true);
 
-    const result = changeSignature(store, tmpDir, 'src/utils.ts::add#function', [
-      { remove_param: { name: 'c' } },
-    ], false);
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/utils.ts::add#function',
+      [{ remove_param: { name: 'c' } }],
+      false,
+    );
 
     expect(result.success).toBe(true);
 
@@ -259,21 +291,31 @@ describe('changeSignature', () => {
   it('updates call sites when reordering params', () => {
     store = createTestStore();
     tmpDir = createTmpFixture({
-      'src/utils.ts': 'export function format(name: string, age: number) {\n  return `${name} is ${age}`;\n}\n',
+      'src/utils.ts':
+        'export function format(name: string, age: number) {\n  return `${name} is ${age}`;\n}\n',
       'src/main.ts': "import { format } from './utils';\nconst s = format('Alice', 30);\n",
     });
     const utilsFileId = insertFile(store, 'src/utils.ts');
     const mainFileId = insertFile(store, 'src/main.ts');
-    const symDbId = insertSymbol(store, utilsFileId, 'format', { kind: 'function', lineStart: 1, lineEnd: 3, metadata: { exported: true } });
+    const symDbId = insertSymbol(store, utilsFileId, 'format', {
+      kind: 'function',
+      lineStart: 1,
+      lineEnd: 3,
+      metadata: { exported: true },
+    });
 
     const symNodeId = store.createNode('symbol', symDbId);
     const mainFileNodeId = store.createNode('file', mainFileId);
     store.ensureEdgeType('calls', 'structural', 'Function calls');
     store.insertEdge(mainFileNodeId, symNodeId, 'calls', true);
 
-    const result = changeSignature(store, tmpDir, 'src/utils.ts::format#function', [
-      { reorder_params: ['age', 'name'] },
-    ], false);
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/utils.ts::format#function',
+      [{ reorder_params: ['age', 'name'] }],
+      false,
+    );
 
     expect(result.success).toBe(true);
 
@@ -290,9 +332,13 @@ describe('changeSignature', () => {
     insertSymbol(store, fileId, 'greet', { kind: 'function', lineStart: 1, lineEnd: 3 });
 
     const originalContent = readFile(tmpDir, 'src/a.ts');
-    const result = changeSignature(store, tmpDir, 'src/a.ts::greet#function', [
-      { add_param: { name: 'greeting', type: 'string' } },
-    ], true); // dry_run = true
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/a.ts::greet#function',
+      [{ add_param: { name: 'greeting', type: 'string' } }],
+      true,
+    ); // dry_run = true
 
     expect(result.success).toBe(true);
     expect(result.edits.length).toBeGreaterThan(0);
@@ -308,16 +354,25 @@ describe('changeSignature', () => {
     });
     const utilsFileId = insertFile(store, 'src/utils.ts');
     const mainFileId = insertFile(store, 'src/main.ts');
-    const symDbId = insertSymbol(store, utilsFileId, 'greet', { kind: 'function', lineStart: 1, lineEnd: 3, metadata: { exported: true } });
+    const symDbId = insertSymbol(store, utilsFileId, 'greet', {
+      kind: 'function',
+      lineStart: 1,
+      lineEnd: 3,
+      metadata: { exported: true },
+    });
 
     const symNodeId = store.createNode('symbol', symDbId);
     const mainFileNodeId = store.createNode('file', mainFileId);
     store.ensureEdgeType('calls', 'structural', 'Function calls');
     store.insertEdge(mainFileNodeId, symNodeId, 'calls', true);
 
-    const result = changeSignature(store, tmpDir, 'src/utils.ts::greet#function', [
-      { add_param: { name: 'greeting', type: 'string' } },
-    ], false);
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/utils.ts::greet#function',
+      [{ add_param: { name: 'greeting', type: 'string' } }],
+      false,
+    );
 
     expect(result.success).toBe(true);
 
@@ -334,11 +389,17 @@ describe('changeSignature', () => {
     const fileId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileId, 'process', { kind: 'function', lineStart: 1, lineEnd: 3 });
 
-    const result = changeSignature(store, tmpDir, 'src/a.ts::process#function', [
-      { remove_param: { name: 'c' } },
-      { rename_param: { old_name: 'a', new_name: 'input' } },
-      { add_param: { name: 'options', type: 'Options', default_value: '{}' } },
-    ], false);
+    const result = changeSignature(
+      store,
+      tmpDir,
+      'src/a.ts::process#function',
+      [
+        { remove_param: { name: 'c' } },
+        { rename_param: { old_name: 'a', new_name: 'input' } },
+        { add_param: { name: 'options', type: 'Options', default_value: '{}' } },
+      ],
+      false,
+    );
 
     expect(result.success).toBe(true);
     const content = readFile(tmpDir, 'src/a.ts');

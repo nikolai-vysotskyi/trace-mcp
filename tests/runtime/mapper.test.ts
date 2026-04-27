@@ -38,7 +38,9 @@ describe('SpanMapper', () => {
     db = t.db;
     store = t.store;
   });
-  afterEach(() => { db.close(); });
+  afterEach(() => {
+    db.close();
+  });
 
   it('maps span by FQN (code.function + code.namespace)', () => {
     // Insert a symbol
@@ -60,10 +62,12 @@ describe('SpanMapper', () => {
     db.prepare(`
       INSERT INTO runtime_spans (trace_id, span_id, service_name, operation, kind, started_at, duration_us, status_code, attributes, mapped_node_id, mapping_method)
       VALUES (1, 'span-1', 'svc', 'UserModule.UserService', 'server', datetime('now'), 500, 0, ?, NULL, NULL)
-    `).run(JSON.stringify([
-      { key: 'code.function', value: { stringValue: 'UserService' } },
-      { key: 'code.namespace', value: { stringValue: 'UserModule' } },
-    ]));
+    `).run(
+      JSON.stringify([
+        { key: 'code.function', value: { stringValue: 'UserService' } },
+        { key: 'code.namespace', value: { stringValue: 'UserModule' } },
+      ]),
+    );
 
     const mapper = new SpanMapper(store, db, { routePatterns: [] });
     const mapped = mapper.mapUnmapped();
@@ -93,10 +97,12 @@ describe('SpanMapper', () => {
     db.prepare(`
       INSERT INTO runtime_spans (trace_id, span_id, service_name, operation, kind, started_at, duration_us, status_code, attributes, mapped_node_id, mapping_method)
       VALUES (1, 'span-file', 'svc', 'handleRequest', 'server', datetime('now'), 100, 0, ?, NULL, NULL)
-    `).run(JSON.stringify([
-      { key: 'code.filepath', value: { stringValue: 'src/handler.ts' } },
-      { key: 'code.lineno', value: { stringValue: '10' } },
-    ]));
+    `).run(
+      JSON.stringify([
+        { key: 'code.filepath', value: { stringValue: 'src/handler.ts' } },
+        { key: 'code.lineno', value: { stringValue: '10' } },
+      ]),
+    );
 
     const mapper = new SpanMapper(store, db, { routePatterns: [] });
     const mapped = mapper.mapUnmapped();

@@ -21,12 +21,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
-import type {
-  SessionProvider,
-  SessionHandle,
-  RawMessage,
-  DiscoverOpts,
-} from './types.js';
+import type { SessionProvider, SessionHandle, RawMessage, DiscoverOpts } from './types.js';
 import type { ParsedSession } from '../../analytics/log-parser.js';
 import { SqliteSource } from './sqlite-source.js';
 
@@ -135,9 +130,7 @@ function pickCol(cols: string[], candidates: string[]): string {
 /** Build a SELECT that normalizes Hermes's schema drift into a stable row
  *  shape (HermesSessionRow). */
 function buildSessionsQuery(source: SqliteSource): string {
-  const cols = source
-    .queryRows<{ name: string }>(`PRAGMA table_info(sessions)`)
-    .map((r) => r.name);
+  const cols = source.queryRows<{ name: string }>(`PRAGMA table_info(sessions)`).map((r) => r.name);
   return `SELECT
       id,
       ${pickCol(cols, ['source'])} AS source,
@@ -149,10 +142,12 @@ function buildSessionsQuery(source: SqliteSource): string {
 }
 
 function buildMessagesQuery(source: SqliteSource): string {
-  const cols = source
-    .queryRows<{ name: string }>(`PRAGMA table_info(messages)`)
-    .map((r) => r.name);
-  const orderBy = cols.includes('timestamp') ? 'timestamp' : cols.includes('created_at') ? 'created_at' : 'id';
+  const cols = source.queryRows<{ name: string }>(`PRAGMA table_info(messages)`).map((r) => r.name);
+  const orderBy = cols.includes('timestamp')
+    ? 'timestamp'
+    : cols.includes('created_at')
+      ? 'created_at'
+      : 'id';
   return `SELECT
       id,
       session_id,
@@ -309,10 +304,7 @@ export class HermesSessionProvider implements SessionProvider {
     }
   }
 
-  private *streamMessagesSync(
-    source: SqliteSource,
-    handle: SessionHandle,
-  ): Iterable<RawMessage> {
+  private *streamMessagesSync(source: SqliteSource, handle: SessionHandle): Iterable<RawMessage> {
     const sql = buildMessagesQuery(source);
     // Strip a leading profile prefix we added in discover() (profile:id → id).
     const sessionKey = handle.sessionId.includes(':')

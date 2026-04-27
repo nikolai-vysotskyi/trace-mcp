@@ -40,7 +40,11 @@ export class SummarizationPipeline {
     if (total === 0) return 0;
 
     this.progress?.update('summarization', {
-      phase: 'running', processed: 0, total, startedAt: Date.now(), completedAt: 0,
+      phase: 'running',
+      processed: 0,
+      total,
+      startedAt: Date.now(),
+      completedAt: 0,
     });
 
     try {
@@ -58,15 +62,21 @@ export class SummarizationPipeline {
         }
 
         this.progress?.update('summarization', { processed: totalSummarized });
-        logger.debug({ batch: batch.length, total: totalSummarized }, 'Summarization batch complete');
+        logger.debug(
+          { batch: batch.length, total: totalSummarized },
+          'Summarization batch complete',
+        );
       } while (batch.length === this.config.batchSize);
 
       this.progress?.update('summarization', {
-        phase: 'completed', processed: totalSummarized, completedAt: Date.now(),
+        phase: 'completed',
+        processed: totalSummarized,
+        completedAt: Date.now(),
       });
     } catch (e) {
       this.progress?.update('summarization', {
-        phase: 'error', error: e instanceof Error ? e.message : String(e),
+        phase: 'error',
+        error: e instanceof Error ? e.message : String(e),
       });
       throw e;
     }

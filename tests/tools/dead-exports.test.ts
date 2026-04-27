@@ -4,7 +4,10 @@ import { getDeadExports } from '../../src/tools/analysis/introspect.js';
 import { createTestStore } from '../test-utils.js';
 
 function addExportedSymbol(
-  store: Store, filePath: string, name: string, kind: string,
+  store: Store,
+  filePath: string,
+  name: string,
+  kind: string,
   extraMetadata?: Record<string, unknown>,
 ): number {
   let file = store.getFile(filePath);
@@ -13,7 +16,10 @@ function addExportedSymbol(
     symbolId: `${filePath}::${name}#${kind}`,
     name,
     kind: kind as any,
-    byteStart: 0, byteEnd: 100, lineStart: 1, lineEnd: 10,
+    byteStart: 0,
+    byteEnd: 100,
+    lineStart: 1,
+    lineEnd: 10,
     metadata: { exported: 1, ...extraMetadata },
   });
 }

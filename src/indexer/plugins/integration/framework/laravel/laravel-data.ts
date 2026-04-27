@@ -49,10 +49,7 @@ const EXTENDS_DATA_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Data\b/;
 
 // ─── Data class extraction ────────────────────────────────────
 
-export function extractDataClass(
-  source: string,
-  _filePath: string,
-): DataClassInfo | null {
+export function extractDataClass(source: string, _filePath: string): DataClassInfo | null {
   if (!EXTENDS_DATA_RE.test(source)) return null;
 
   const useMap = buildUseMap(source);
@@ -63,7 +60,23 @@ export function extractDataClass(
   const className = classMatch[1];
   const fqn = namespace ? `${namespace}\\${className}` : className;
 
-  const PRIMITIVES = new Set(['string','int','float','bool','array','object','null','mixed','void','never','callable','iterable','self','static','parent']);
+  const PRIMITIVES = new Set([
+    'string',
+    'int',
+    'float',
+    'bool',
+    'array',
+    'object',
+    'null',
+    'mixed',
+    'void',
+    'never',
+    'callable',
+    'iterable',
+    'self',
+    'static',
+    'parent',
+  ]);
   const fields = extractConstructorFields(source, useMap);
   // Qualify any short type names that weren't resolved via use map (skip primitives)
   for (const f of fields) {
@@ -75,7 +88,15 @@ export function extractDataClass(
   const collectedDataClasses = extractCollectedDataClasses(source, useMap, namespace);
   const sourceModels = extractSourceModels(source, useMap);
 
-  return { className, namespace, fqn, fields, nestedDataClasses, collectedDataClasses, sourceModels };
+  return {
+    className,
+    namespace,
+    fqn,
+    fields,
+    nestedDataClasses,
+    collectedDataClasses,
+    sourceModels,
+  };
 }
 
 /**
@@ -161,10 +182,7 @@ function resolveClass(ref: string, useMap: Map<string, string>): string {
  * Handles: public string $name, public ?string $avatar = null,
  * #[MapFrom('created_at')] public CarbonImmutable $memberSince
  */
-function extractConstructorFields(
-  source: string,
-  useMap: Map<string, string>,
-): DataField[] {
+function extractConstructorFields(source: string, useMap: Map<string, string>): DataField[] {
   const fields: DataField[] = [];
 
   // Find constructor body
@@ -177,7 +195,8 @@ function extractConstructorFields(
 
   // Match each promoted property (may have attributes above)
   // Pattern: optional #[...attrs...] then public [readonly] [?]Type $name [= default]
-  const propRe = /(?:#\[MapFrom\(\s*['"]([^'"]+)['"]\s*\)\]\s*)?public\s+(?:readonly\s+)?(\??\s*[\w\\|]+)\s+\$(\w+)/g;
+  const propRe =
+    /(?:#\[MapFrom\(\s*['"]([^'"]+)['"]\s*\)\]\s*)?public\s+(?:readonly\s+)?(\??\s*[\w\\|]+)\s+\$(\w+)/g;
   let match: RegExpExecArray | null;
   while ((match = propRe.exec(body)) !== null) {
     const mapFrom = match[1] ?? null;
@@ -277,10 +296,7 @@ function extractCollectedDataClasses(
  * - ::from($model) where $model is typed as an Eloquent model
  * - Constructor with param typed as Eloquent model
  */
-function extractSourceModels(
-  source: string,
-  useMap: Map<string, string>,
-): string[] {
+function extractSourceModels(source: string, useMap: Map<string, string>): string[] {
   const results: string[] = [];
 
   // Pattern 1: explicit fromModel(ModelType $param)

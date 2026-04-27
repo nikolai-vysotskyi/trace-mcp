@@ -126,7 +126,9 @@ export function changeSignature(
     if (change.remove_param) {
       const idx = newParams.findIndex((p) => p.name === change.remove_param!.name);
       if (idx === -1) {
-        result.warnings.push(`Parameter "${change.remove_param.name}" not found in signature — skipped`);
+        result.warnings.push(
+          `Parameter "${change.remove_param.name}" not found in signature — skipped`,
+        );
       } else {
         newParams.splice(idx, 1);
       }
@@ -135,7 +137,9 @@ export function changeSignature(
     if (change.rename_param) {
       const param = newParams.find((p) => p.name === change.rename_param!.old_name);
       if (!param) {
-        result.warnings.push(`Parameter "${change.rename_param.old_name}" not found in signature — skipped`);
+        result.warnings.push(
+          `Parameter "${change.rename_param.old_name}" not found in signature — skipped`,
+        );
       } else {
         param.name = change.rename_param.new_name;
         param.raw = buildParamText(param.name, param.type, param.default_value, lang);
@@ -167,7 +171,8 @@ export function changeSignature(
   const oldParamText = parenResult.content;
 
   // Build the new definition region
-  const newDefRegion = defRegion.slice(0, parenResult.openOffset + 1) +
+  const newDefRegion =
+    defRegion.slice(0, parenResult.openOffset + 1) +
     newParamText +
     defRegion.slice(parenResult.closeOffset);
 
@@ -176,7 +181,10 @@ export function changeSignature(
   result.edits.push({
     file: symbolFile.path,
     original_line: symbol.line_start,
-    original_text: defRegion.split('\n').map((l) => l.trimStart()).join('\n'),
+    original_text: defRegion
+      .split('\n')
+      .map((l) => l.trimStart())
+      .join('\n'),
     new_text: newDefLines.map((l) => l.trimStart()).join('\n'),
   });
 
@@ -219,7 +227,9 @@ export function changeSignature(
  * Extract content between matched parentheses, handling nesting.
  * Returns the content and offsets.
  */
-function extractParenContent(text: string): { content: string; openOffset: number; closeOffset: number } | null {
+function extractParenContent(
+  text: string,
+): { content: string; openOffset: number; closeOffset: number } | null {
   const openIdx = text.indexOf('(');
   if (openIdx === -1) return null;
 
@@ -377,7 +387,12 @@ function findTopLevelChar(text: string, ch: string): number {
   return -1;
 }
 
-function buildParamText(name: string, type?: string, default_value?: string, lang?: string): string {
+function buildParamText(
+  name: string,
+  type?: string,
+  default_value?: string,
+  lang?: string,
+): string {
   if (lang === 'python') {
     let text = name;
     if (type) text += `: ${type}`;
@@ -502,7 +517,10 @@ function updateCallSites(
         result.edits.push({
           file: file.path,
           original_line: i + 1,
-          original_text: lines.slice(i, endLine + 1).map((l) => l.trimStart()).join('\n'),
+          original_text: lines
+            .slice(i, endLine + 1)
+            .map((l) => l.trimStart())
+            .join('\n'),
           new_text: newFirstLine.trimStart(),
         });
         // Replace multi-line with single line
@@ -642,7 +660,7 @@ function extractCallArgs(
 
   for (let i = startLine; i < lines.length; i++) {
     const line = lines[i];
-    const startJ = (i === startLine) ? startCol : 0;
+    const startJ = i === startLine ? startCol : 0;
 
     for (let j = startJ; j < line.length; j++) {
       const ch = line[j];

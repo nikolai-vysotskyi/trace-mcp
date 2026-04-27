@@ -13,10 +13,7 @@ const L8_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-8');
 const L11_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-11');
 
 describe('Laravel 6 route extraction (string syntax)', () => {
-  const source = fs.readFileSync(
-    path.join(L6_FIXTURE, 'routes/web.php'),
-    'utf-8',
-  );
+  const source = fs.readFileSync(path.join(L6_FIXTURE, 'routes/web.php'), 'utf-8');
   const { routes } = extractRoutes(source, 'routes/web.php');
 
   it('extracts string controller syntax: Controller@method', () => {
@@ -27,9 +24,7 @@ describe('Laravel 6 route extraction (string syntax)', () => {
   });
 
   it('extracts string controller with middleware', () => {
-    const profile = routes.find(
-      (r) => r.uri === '/profile' && r.method === 'GET',
-    );
+    const profile = routes.find((r) => r.uri === '/profile' && r.method === 'GET');
     expect(profile).toBeDefined();
     expect(profile!.controllerSymbolId).toBe('UserController::profile');
     expect(profile!.middleware).toContain('auth');
@@ -45,9 +40,7 @@ describe('Laravel 6 route extraction (string syntax)', () => {
   });
 
   it('extracts routes from Route::namespace group', () => {
-    const dashboard = routes.find(
-      (r) => r.uri === '/admin/dashboard' && r.method === 'GET',
-    );
+    const dashboard = routes.find((r) => r.uri === '/admin/dashboard' && r.method === 'GET');
     expect(dashboard).toBeDefined();
     expect(dashboard!.controllerSymbolId).toBe('Admin\\DashboardController::index');
     expect(dashboard!.name).toBe('admin.dashboard');
@@ -59,24 +52,17 @@ describe('Laravel 6 route extraction (string syntax)', () => {
   });
 
   it('applies middleware from namespace group', () => {
-    const dashboard = routes.find(
-      (r) => r.uri === '/admin/dashboard',
-    );
+    const dashboard = routes.find((r) => r.uri === '/admin/dashboard');
     expect(dashboard).toBeDefined();
     expect(dashboard!.middleware).toContain('admin');
   });
 
   describe('api.php routes', () => {
-    const apiSource = fs.readFileSync(
-      path.join(L6_FIXTURE, 'routes/api.php'),
-      'utf-8',
-    );
+    const apiSource = fs.readFileSync(path.join(L6_FIXTURE, 'routes/api.php'), 'utf-8');
     const { routes: apiRoutes } = extractRoutes(apiSource, 'routes/api.php');
 
     it('extracts string controller in api routes', () => {
-      const userMe = apiRoutes.find(
-        (r) => r.uri === '/user' && r.method === 'GET',
-      );
+      const userMe = apiRoutes.find((r) => r.uri === '/user' && r.method === 'GET');
       expect(userMe).toBeDefined();
       expect(userMe!.controllerSymbolId).toBe('Api\\UserController::me');
     });
@@ -87,34 +73,25 @@ describe('Laravel 6 route extraction (string syntax)', () => {
     });
 
     it('applies middleware group from Route::middleware', () => {
-      const grouped = apiRoutes.filter(
-        (r) => r.middleware && r.middleware.includes('auth:api'),
-      );
+      const grouped = apiRoutes.filter((r) => r.middleware && r.middleware.includes('auth:api'));
       expect(grouped.length).toBeGreaterThan(0);
     });
   });
 });
 
 describe('Laravel 8 route extraction (mixed syntax)', () => {
-  const source = fs.readFileSync(
-    path.join(L8_FIXTURE, 'routes/web.php'),
-    'utf-8',
-  );
+  const source = fs.readFileSync(path.join(L8_FIXTURE, 'routes/web.php'), 'utf-8');
   const { routes } = extractRoutes(source, 'routes/web.php');
 
   it('extracts class array syntax (L8 default)', () => {
-    const usersIndex = routes.find(
-      (r) => r.uri === '/users' && r.method === 'GET',
-    );
+    const usersIndex = routes.find((r) => r.uri === '/users' && r.method === 'GET');
     expect(usersIndex).toBeDefined();
     expect(usersIndex!.controllerSymbolId).toContain('UserController');
     expect(usersIndex!.controllerSymbolId).toContain('index');
   });
 
   it('extracts invokable controller', () => {
-    const dashboard = routes.find(
-      (r) => r.uri === '/dashboard' && r.method === 'GET',
-    );
+    const dashboard = routes.find((r) => r.uri === '/dashboard' && r.method === 'GET');
     expect(dashboard).toBeDefined();
     expect(dashboard!.controllerSymbolId).toContain('DashboardController::__invoke');
     expect(dashboard!.name).toBe('dashboard');
@@ -122,9 +99,7 @@ describe('Laravel 8 route extraction (mixed syntax)', () => {
   });
 
   it('still parses deprecated string syntax in L8', () => {
-    const legacy = routes.find(
-      (r) => r.uri === '/legacy' && r.method === 'GET',
-    );
+    const legacy = routes.find((r) => r.uri === '/legacy' && r.method === 'GET');
     expect(legacy).toBeDefined();
     expect(legacy!.controllerSymbolId).toBe('LegacyController::show');
     expect(legacy!.name).toBe('legacy.show');
@@ -136,9 +111,7 @@ describe('Laravel 8 route extraction (mixed syntax)', () => {
   });
 
   it('applies middleware array group', () => {
-    const settings = routes.find(
-      (r) => r.uri === '/settings' && r.method === 'GET',
-    );
+    const settings = routes.find((r) => r.uri === '/settings' && r.method === 'GET');
     expect(settings).toBeDefined();
     expect(settings!.middleware).toContain('auth');
     expect(settings!.middleware).toContain('verified');
@@ -146,10 +119,7 @@ describe('Laravel 8 route extraction (mixed syntax)', () => {
 });
 
 describe('Laravel 11 route extraction (controller groups)', () => {
-  const source = fs.readFileSync(
-    path.join(L11_FIXTURE, 'routes/web.php'),
-    'utf-8',
-  );
+  const source = fs.readFileSync(path.join(L11_FIXTURE, 'routes/web.php'), 'utf-8');
   const { routes } = extractRoutes(source, 'routes/web.php');
 
   it('extracts routes from Route::controller() group', () => {
@@ -162,32 +132,26 @@ describe('Laravel 11 route extraction (controller groups)', () => {
   });
 
   it('extracts all routes from controller group', () => {
-    const usersStore = routes.find(
-      (r) => r.uri === '/users' && r.method === 'POST',
-    );
+    const usersStore = routes.find((r) => r.uri === '/users' && r.method === 'POST');
     expect(usersStore).toBeDefined();
     expect(usersStore!.controllerSymbolId).toContain('UserController');
     expect(usersStore!.controllerSymbolId).toContain('store');
 
-    const usersShow = routes.find(
-      (r) => r.uri === '/users/{user}' && r.method === 'GET',
-    );
+    const usersShow = routes.find((r) => r.uri === '/users/{user}' && r.method === 'GET');
     expect(usersShow).toBeDefined();
     expect(usersShow!.controllerSymbolId).toContain('show');
   });
 
   it('extracts invokable controller', () => {
-    const dashboard = routes.find(
-      (r) => r.uri === '/dashboard' && r.method === 'GET',
-    );
+    const dashboard = routes.find((r) => r.uri === '/dashboard' && r.method === 'GET');
     expect(dashboard).toBeDefined();
     expect(dashboard!.controllerSymbolId).toContain('DashboardController::__invoke');
     expect(dashboard!.middleware).toContain('auth');
   });
 
   it('extracts resource with chained middleware', () => {
-    const postRoutes = routes.filter((r) =>
-      r.uri.startsWith('/posts') && r.controllerSymbolId?.includes('PostController'),
+    const postRoutes = routes.filter(
+      (r) => r.uri.startsWith('/posts') && r.controllerSymbolId?.includes('PostController'),
     );
     expect(postRoutes.length).toBe(7);
     for (const r of postRoutes) {
@@ -196,9 +160,7 @@ describe('Laravel 11 route extraction (controller groups)', () => {
   });
 
   it('applies middleware array group', () => {
-    const profileEdit = routes.find(
-      (r) => r.uri === '/profile' && r.method === 'GET',
-    );
+    const profileEdit = routes.find((r) => r.uri === '/profile' && r.method === 'GET');
     expect(profileEdit).toBeDefined();
     expect(profileEdit!.middleware).toContain('auth');
     expect(profileEdit!.middleware).toContain('verified');

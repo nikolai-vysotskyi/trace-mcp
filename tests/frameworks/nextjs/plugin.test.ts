@@ -88,8 +88,9 @@ describe('NextJSPlugin', () => {
     });
 
     it('handles nested dynamic routes', () => {
-      expect(appRouterPathToRoute('app/posts/[postId]/comments/[id]/page.tsx'))
-        .toBe('/posts/:postId/comments/:id');
+      expect(appRouterPathToRoute('app/posts/[postId]/comments/[id]/page.tsx')).toBe(
+        '/posts/:postId/comments/:id',
+      );
     });
 
     it('strips @parallel slot segments from route', () => {
@@ -130,9 +131,7 @@ describe('NextJSPlugin', () => {
     });
 
     it('detects layout files', () => {
-      const content = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'app/layout.tsx'),
-      );
+      const content = fs.readFileSync(path.join(FIXTURE_DIR, 'app/layout.tsx'));
       const result = plugin.extractNodes('app/layout.tsx', content, 'typescript');
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
@@ -140,9 +139,7 @@ describe('NextJSPlugin', () => {
     });
 
     it('extracts API route methods', () => {
-      const content = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'app/api/users/route.ts'),
-      );
+      const content = fs.readFileSync(path.join(FIXTURE_DIR, 'app/api/users/route.ts'));
       const result = plugin.extractNodes('app/api/users/route.ts', content, 'typescript');
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
@@ -234,7 +231,7 @@ describe('NextJSPlugin', () => {
         expect(result.isOk()).toBe(true);
         const parsed = result._unsafeUnwrap();
         expect(parsed.metadata?.intercepting).toBe(true);
-        expect(parsed.metadata?.interceptPattern).toBe('(..)(..)')
+        expect(parsed.metadata?.interceptPattern).toBe('(..)(..)');
         expect(parsed.metadata?.interceptedRoute).toBe('/photos/:id');
       });
 
@@ -290,7 +287,11 @@ export async function getStaticProps({ params }) {
 }
 export default function Post({ id }) { return <div>{id}</div>; }
 `;
-        const result = plugin.extractNodes('pages/posts/[id].tsx', Buffer.from(source), 'typescript');
+        const result = plugin.extractNodes(
+          'pages/posts/[id].tsx',
+          Buffer.from(source),
+          'typescript',
+        );
         expect(result.isOk()).toBe(true);
         const parsed = result._unsafeUnwrap();
         expect(parsed.metadata?.dataFetching).toContain('getStaticPaths');
@@ -313,7 +314,9 @@ export default function handler(req, res) { res.json({}); }
       it('detects template files', () => {
         const result = plugin.extractNodes(
           'app/dashboard/template.tsx',
-          Buffer.from('export default function Template({ children }) { return <div>{children}</div>; }'),
+          Buffer.from(
+            'export default function Template({ children }) { return <div>{children}</div>; }',
+          ),
           'typescript',
         );
         expect(result.isOk()).toBe(true);
@@ -326,7 +329,9 @@ export default function handler(req, res) { res.json({}); }
       it('detects global-not-found.tsx', () => {
         const result = plugin.extractNodes(
           'app/global-not-found.tsx',
-          Buffer.from('export default function GlobalNotFound() { return <html><body>Not Found</body></html>; }'),
+          Buffer.from(
+            'export default function GlobalNotFound() { return <html><body>Not Found</body></html>; }',
+          ),
           'typescript',
         );
         expect(result.isOk()).toBe(true);
@@ -338,7 +343,9 @@ export default function handler(req, res) { res.json({}); }
       it('detects _app as next_custom_app', () => {
         const result = plugin.extractNodes(
           'pages/_app.tsx',
-          Buffer.from('export default function App({ Component, pageProps }) { return <Component {...pageProps} />; }'),
+          Buffer.from(
+            'export default function App({ Component, pageProps }) { return <Component {...pageProps} />; }',
+          ),
           'typescript',
         );
         expect(result.isOk()).toBe(true);
@@ -360,7 +367,9 @@ export default function handler(req, res) { res.json({}); }
       it('detects _error as next_custom_error', () => {
         const result = plugin.extractNodes(
           'pages/_error.tsx',
-          Buffer.from('export default function Error({ statusCode }) { return <div>{statusCode}</div>; }'),
+          Buffer.from(
+            'export default function Error({ statusCode }) { return <div>{statusCode}</div>; }',
+          ),
           'typescript',
         );
         expect(result.isOk()).toBe(true);
@@ -415,7 +424,11 @@ export default Page;
     describe('directives', () => {
       it('detects "use client" directive', () => {
         const source = `'use client'\nexport default function Button() { return <button/>; }`;
-        const result = plugin.extractNodes('app/components/Button.tsx', Buffer.from(source), 'typescript');
+        const result = plugin.extractNodes(
+          'app/components/Button.tsx',
+          Buffer.from(source),
+          'typescript',
+        );
         expect(result.isOk()).toBe(true);
         const parsed = result._unsafeUnwrap();
         expect(parsed.metadata?.directive).toBe('use client');
@@ -542,7 +555,11 @@ export const config = { matcher: ['/dashboard/:path*', '/api/:path*'] };
 export async function generateStaticParams() { return [{ id: '1' }]; }
 export default function Page({ params }) { return <div/>; }
 `;
-        const result = plugin.extractNodes('app/posts/[id]/page.tsx', Buffer.from(source), 'typescript');
+        const result = plugin.extractNodes(
+          'app/posts/[id]/page.tsx',
+          Buffer.from(source),
+          'typescript',
+        );
         expect(result.isOk()).toBe(true);
         const parsed = result._unsafeUnwrap();
         expect(parsed.metadata?.dataFetching).toContain('generateStaticParams');
@@ -553,7 +570,11 @@ export default function Page({ params }) { return <div/>; }
 export async function generateMetadata({ params }) { return { title: 'Post' }; }
 export default function Page() { return <div/>; }
 `;
-        const result = plugin.extractNodes('app/posts/[id]/page.tsx', Buffer.from(source), 'typescript');
+        const result = plugin.extractNodes(
+          'app/posts/[id]/page.tsx',
+          Buffer.from(source),
+          'typescript',
+        );
         expect(result.isOk()).toBe(true);
         const parsed = result._unsafeUnwrap();
         expect(parsed.metadata?.hasMetadata).toBe(true);
@@ -604,7 +625,11 @@ export const revalidate = 60;
 export const preferredRegion = 'iad1';
 export default function Page() { return <div/>; }
 `;
-        const result = plugin.extractNodes('app/dashboard/page.tsx', Buffer.from(source), 'typescript');
+        const result = plugin.extractNodes(
+          'app/dashboard/page.tsx',
+          Buffer.from(source),
+          'typescript',
+        );
         expect(result.isOk()).toBe(true);
         const parsed = result._unsafeUnwrap();
         const config = parsed.metadata?.routeSegmentConfig as Record<string, string>;
@@ -629,7 +654,11 @@ export default function sitemap({ id }) { return []; }
 export async function generateImageMetadata() { return [{ id: 'og', alt: 'OG' }]; }
 export default function Image({ id }) { return new ImageResponse(<div/>); }
 `;
-        const result = plugin.extractNodes('app/opengraph-image.tsx', Buffer.from(source), 'typescript');
+        const result = plugin.extractNodes(
+          'app/opengraph-image.tsx',
+          Buffer.from(source),
+          'typescript',
+        );
         expect(result.isOk()).toBe(true);
         expect(result._unsafeUnwrap().metadata?.generatesImageMetadata).toBe(true);
       });
@@ -645,7 +674,11 @@ export default function Image({ id }) { return new ImageResponse(<div/>); }
       });
 
       it('detects opengraph-image.png in app/', () => {
-        const result = plugin.extractNodes('app/blog/opengraph-image.png', Buffer.from(''), 'other');
+        const result = plugin.extractNodes(
+          'app/blog/opengraph-image.png',
+          Buffer.from(''),
+          'other',
+        );
         expect(result.isOk()).toBe(true);
         expect(result._unsafeUnwrap().frameworkRole).toBe('next_static_metadata');
       });

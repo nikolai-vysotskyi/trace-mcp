@@ -45,7 +45,9 @@ describe('LLMReranker', () => {
 
   it('returns original order on inference error', async () => {
     const inference: InferenceService = {
-      generate: vi.fn(async () => { throw new Error('network error'); }),
+      generate: vi.fn(async () => {
+        throw new Error('network error');
+      }),
     };
     const reranker = new LLMReranker(inference);
 

@@ -23,7 +23,8 @@ const LEGACY_COMPLETION_RE = /\bopenai\s*\.\s*Completion\s*\.\s*create\s*\(/g;
 const EMBEDDING_RE = /\b\w+\s*\.\s*embeddings\s*\.\s*create\s*\(/g;
 const LEGACY_EMBEDDING_RE = /\bopenai\s*\.\s*Embedding\s*\.\s*create\s*\(/g;
 const IMAGE_RE = /\b\w+\s*\.\s*images\s*\.\s*(?:generate|edit|create_variation)\s*\(/g;
-const AUDIO_RE = /\b\w+\s*\.\s*audio\s*\.\s*(?:transcriptions|translations|speech)\s*\.\s*create\s*\(/g;
+const AUDIO_RE =
+  /\b\w+\s*\.\s*audio\s*\.\s*(?:transcriptions|translations|speech)\s*\.\s*create\s*\(/g;
 const RESPONSES_RE = /\b\w+\s*\.\s*responses\s*\.\s*create\s*\(/g;
 
 const MODEL_KW_RE = /model\s*=\s*["']([^"']+)["']/;
@@ -44,7 +45,11 @@ export class OpenAIPythonPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'llm_call', category: 'llm', description: 'OpenAI API call (chat/completion/embedding/image/audio)' },
+        {
+          name: 'llm_call',
+          category: 'llm',
+          description: 'OpenAI API call (chat/completion/embedding/image/audio)',
+        },
       ],
     };
   }

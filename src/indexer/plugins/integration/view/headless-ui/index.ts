@@ -27,25 +27,63 @@ import type { TraceMcpResult } from '../../../../../errors.js';
 
 /** Known Headless UI compound component roots. */
 const HEADLESS_UI_ROOTS = new Set([
-  'Combobox', 'Dialog', 'Disclosure', 'Listbox', 'Menu', 'Popover',
-  'RadioGroup', 'Switch', 'Tab', 'Transition', 'CloseButton', 'Field',
-  'Fieldset', 'Input', 'Label', 'Legend', 'Select', 'Textarea',
-  'Description', 'Button',
+  'Combobox',
+  'Dialog',
+  'Disclosure',
+  'Listbox',
+  'Menu',
+  'Popover',
+  'RadioGroup',
+  'Switch',
+  'Tab',
+  'Transition',
+  'CloseButton',
+  'Field',
+  'Fieldset',
+  'Input',
+  'Label',
+  'Legend',
+  'Select',
+  'Textarea',
+  'Description',
+  'Button',
 ]);
 
 /** Known Radix UI primitive roots. */
 const RADIX_ROOTS = new Set([
-  'Accordion', 'AlertDialog', 'AspectRatio', 'Avatar', 'Checkbox',
-  'Collapsible', 'ContextMenu', 'Dialog', 'DropdownMenu', 'Form',
-  'HoverCard', 'Label', 'Menubar', 'NavigationMenu', 'Popover',
-  'Progress', 'RadioGroup', 'ScrollArea', 'Select', 'Separator',
-  'Slider', 'Switch', 'Tabs', 'Toast', 'Toggle', 'ToggleGroup',
-  'Tooltip', 'VisuallyHidden',
+  'Accordion',
+  'AlertDialog',
+  'AspectRatio',
+  'Avatar',
+  'Checkbox',
+  'Collapsible',
+  'ContextMenu',
+  'Dialog',
+  'DropdownMenu',
+  'Form',
+  'HoverCard',
+  'Label',
+  'Menubar',
+  'NavigationMenu',
+  'Popover',
+  'Progress',
+  'RadioGroup',
+  'ScrollArea',
+  'Select',
+  'Separator',
+  'Slider',
+  'Switch',
+  'Tabs',
+  'Toast',
+  'Toggle',
+  'ToggleGroup',
+  'Tooltip',
+  'VisuallyHidden',
 ]);
 
 interface CompoundComponentUsage {
-  root: string;       // e.g. 'Dialog'
-  parts: string[];    // e.g. ['Trigger', 'Content', 'Close']
+  root: string; // e.g. 'Dialog'
+  parts: string[]; // e.g. ['Trigger', 'Content', 'Close']
   library: 'headless-ui' | 'radix' | 'ark-ui';
 }
 
@@ -60,38 +98,58 @@ function extractHeadlessImports(source: string): HeadlessImport[] {
   const imports: HeadlessImport[] = [];
 
   // Headless UI: import { Dialog, Menu } from '@headlessui/react'
-  const headlessRe =
-    /import\s*\{([^}]+)\}\s*from\s*["'](@headlessui\/(?:react|vue))["']/g;
+  const headlessRe = /import\s*\{([^}]+)\}\s*from\s*["'](@headlessui\/(?:react|vue))["']/g;
   let m: RegExpExecArray | null;
   while ((m = headlessRe.exec(source)) !== null) {
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     for (const name of names) {
       imports.push({ name, package: m[2], library: 'headless-ui' });
     }
   }
 
   // Radix UI: import * as Dialog from '@radix-ui/react-dialog'
-  const radixStarRe =
-    /import\s*\*\s*as\s+(\w+)\s+from\s*["'](@radix-ui\/react-[\w-]+)["']/g;
+  const radixStarRe = /import\s*\*\s*as\s+(\w+)\s+from\s*["'](@radix-ui\/react-[\w-]+)["']/g;
   while ((m = radixStarRe.exec(source)) !== null) {
     imports.push({ name: m[1], package: m[2], library: 'radix' });
   }
 
   // Radix UI named: import { Root, Trigger, Content } from '@radix-ui/react-dialog'
-  const radixNamedRe =
-    /import\s*\{([^}]+)\}\s*from\s*["'](@radix-ui\/react-[\w-]+)["']/g;
+  const radixNamedRe = /import\s*\{([^}]+)\}\s*from\s*["'](@radix-ui\/react-[\w-]+)["']/g;
   while ((m = radixNamedRe.exec(source)) !== null) {
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     for (const name of names) {
       imports.push({ name, package: m[2], library: 'radix' });
     }
   }
 
   // Ark UI: import { Dialog } from '@ark-ui/react'
-  const arkRe =
-    /import\s*\{([^}]+)\}\s*from\s*["'](@ark-ui\/(?:react|vue|solid))["']/g;
+  const arkRe = /import\s*\{([^}]+)\}\s*from\s*["'](@ark-ui\/(?:react|vue|solid))["']/g;
   while ((m = arkRe.exec(source)) !== null) {
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     for (const name of names) {
       imports.push({ name, package: m[2], library: 'ark-ui' });
     }
@@ -136,9 +194,21 @@ function extractCompoundComponents(
 function extractControlledState(source: string): string[] {
   const patterns: string[] = [];
   const stateProps = [
-    'open', 'onOpenChange', 'onClose', 'value', 'onChange', 'onValueChange',
-    'checked', 'onCheckedChange', 'selected', 'onSelect', 'defaultOpen',
-    'defaultValue', 'defaultChecked', 'asChild', 'forceMount',
+    'open',
+    'onOpenChange',
+    'onClose',
+    'value',
+    'onChange',
+    'onValueChange',
+    'checked',
+    'onCheckedChange',
+    'selected',
+    'onSelect',
+    'defaultOpen',
+    'defaultValue',
+    'defaultChecked',
+    'asChild',
+    'forceMount',
   ];
 
   for (const prop of stateProps) {
@@ -193,9 +263,21 @@ export class HeadlessUiPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'headless_compound_component', category: 'ui-library', description: 'Compound component usage (Root + Parts)' },
-        { name: 'uses_headless_primitive', category: 'ui-library', description: 'Imports headless UI primitive' },
-        { name: 'headless_controlled_state', category: 'ui-library', description: 'Controlled state binding on headless primitive' },
+        {
+          name: 'headless_compound_component',
+          category: 'ui-library',
+          description: 'Compound component usage (Root + Parts)',
+        },
+        {
+          name: 'uses_headless_primitive',
+          category: 'ui-library',
+          description: 'Imports headless UI primitive',
+        },
+        {
+          name: 'headless_controlled_state',
+          category: 'ui-library',
+          description: 'Controlled state binding on headless primitive',
+        },
       ],
     };
   }
@@ -205,7 +287,9 @@ export class HeadlessUiPlugin implements FrameworkPlugin {
     content: Buffer,
     language: string,
   ): TraceMcpResult<FileParseResult> {
-    if (!['typescript', 'javascript', 'typescriptreact', 'javascriptreact', 'vue'].includes(language)) {
+    if (
+      !['typescript', 'javascript', 'typescriptreact', 'javascriptreact', 'vue'].includes(language)
+    ) {
       return ok({ status: 'ok', symbols: [] });
     }
 

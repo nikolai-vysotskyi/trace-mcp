@@ -21,7 +21,11 @@ const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.[jt]s
 /** Safely parse JSON metadata — returns empty object on malformed input. */
 function safeParseMeta(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
-  try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -46,10 +50,7 @@ interface GetImplementationsResult {
   total: number;
 }
 
-export function getImplementations(
-  store: Store,
-  name: string,
-): GetImplementationsResult {
+export function getImplementations(store: Store, name: string): GetImplementationsResult {
   const rows = store.findImplementors(name);
 
   const implementors: ImplementorItem[] = rows.map((row) => {
@@ -104,10 +105,7 @@ interface GetApiSurfaceResult {
   total_symbols: number;
 }
 
-export function getApiSurface(
-  store: Store,
-  filePattern?: string,
-): GetApiSurfaceResult {
+export function getApiSurface(store: Store, filePattern?: string): GetApiSurfaceResult {
   const rows = store.getExportedSymbols(filePattern);
 
   // Group by file
@@ -176,24 +174,20 @@ export function getPluginRegistry(
   registry: PluginRegistry,
   activeFrameworkNames: Set<string>,
 ): GetPluginRegistryResult {
-  const languagePlugins: LanguagePluginInfo[] = registry
-    .getLanguagePlugins()
-    .map((p) => ({
-      name: p.manifest.name,
-      version: p.manifest.version,
-      priority: p.manifest.priority,
-      extensions: p.supportedExtensions,
-    }));
+  const languagePlugins: LanguagePluginInfo[] = registry.getLanguagePlugins().map((p) => ({
+    name: p.manifest.name,
+    version: p.manifest.version,
+    priority: p.manifest.priority,
+    extensions: p.supportedExtensions,
+  }));
 
-  const frameworkPlugins: FrameworkPluginInfo[] = registry
-    .getAllFrameworkPlugins()
-    .map((p) => ({
-      name: p.manifest.name,
-      version: p.manifest.version,
-      priority: p.manifest.priority,
-      dependencies: p.manifest.dependencies ?? [],
-      active: activeFrameworkNames.has(p.manifest.name),
-    }));
+  const frameworkPlugins: FrameworkPluginInfo[] = registry.getAllFrameworkPlugins().map((p) => ({
+    name: p.manifest.name,
+    version: p.manifest.version,
+    priority: p.manifest.priority,
+    dependencies: p.manifest.dependencies ?? [],
+    active: activeFrameworkNames.has(p.manifest.name),
+  }));
 
   const edgeTypes = store.getEdgeTypes();
 
@@ -261,8 +255,8 @@ function walkAncestors(
 
   const meta = sym.metadata ? (JSON.parse(sym.metadata) as Record<string, unknown>) : {};
   const ext = meta['extends'];
-  const extNames = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
-  const implNames = Array.isArray(meta['implements']) ? meta['implements'] as string[] : [];
+  const extNames = Array.isArray(ext) ? (ext as string[]) : typeof ext === 'string' ? [ext] : [];
+  const implNames = Array.isArray(meta['implements']) ? (meta['implements'] as string[]) : [];
 
   const file = store.getFileById(sym.file_id);
 
@@ -277,7 +271,8 @@ function walkAncestors(
       children: [],
     };
     // Try to resolve the parent
-    const parentSym = store.getSymbolByName(parentName, 'class') ?? store.getSymbolByName(parentName, 'interface');
+    const parentSym =
+      store.getSymbolByName(parentName, 'class') ?? store.getSymbolByName(parentName, 'interface');
     if (parentSym) {
       const parentFile = store.getFileById(parentSym.file_id);
       node.kind = parentSym.kind;
@@ -390,11 +385,13 @@ function collectPyprojectEntryPoints(store: Store): Set<string> {
     // project.scripts, project.gui-scripts, tool.setuptools.scripts, etc.
     if (!sym.metadata) continue;
     try {
-      const meta = typeof sym.metadata === 'string'
-        ? JSON.parse(sym.metadata) as Record<string, unknown>
-        : sym.metadata as Record<string, unknown>;
+      const meta =
+        typeof sym.metadata === 'string'
+          ? (JSON.parse(sym.metadata) as Record<string, unknown>)
+          : (sym.metadata as Record<string, unknown>);
       const section = typeof meta.section === 'string' ? meta.section : '';
-      const isScriptSection = /(?:project\.(?:scripts|gui-scripts)|console_scripts|gui_scripts)/.test(section);
+      const isScriptSection =
+        /(?:project\.(?:scripts|gui-scripts)|console_scripts|gui_scripts)/.test(section);
       if (!isScriptSection) continue;
 
       // The value is typically "package.module:function_name" or "package.module:Class.method"
@@ -406,20 +403,25 @@ function collectPyprojectEntryPoints(store: Store): Set<string> {
         const dotIdx = funcPart.lastIndexOf('.');
         names.add(dotIdx >= 0 ? funcPart.slice(dotIdx + 1) : funcPart);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Also check setup.py / setup.cfg style entry_points if present
   // via file content heuristic (fallback for repos without pyproject.toml scripts)
-  const setupFile = allFiles.find((f) => f.path.endsWith('setup.py') || f.path.endsWith('setup.cfg'));
+  const setupFile = allFiles.find(
+    (f) => f.path.endsWith('setup.py') || f.path.endsWith('setup.cfg'),
+  );
   if (setupFile) {
     const setupSymbols = store.getSymbolsByFile(setupFile.id);
     for (const sym of setupSymbols) {
       if (!sym.metadata) continue;
       try {
-        const meta = typeof sym.metadata === 'string'
-          ? JSON.parse(sym.metadata) as Record<string, unknown>
-          : sym.metadata as Record<string, unknown>;
+        const meta =
+          typeof sym.metadata === 'string'
+            ? (JSON.parse(sym.metadata) as Record<string, unknown>)
+            : (sym.metadata as Record<string, unknown>);
         if (meta.console_scripts || meta.gui_scripts) {
           const scripts = (meta.console_scripts ?? meta.gui_scripts) as string[];
           if (Array.isArray(scripts)) {
@@ -433,7 +435,9 @@ function collectPyprojectEntryPoints(store: Store): Set<string> {
             }
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -445,11 +449,9 @@ function collectPyprojectEntryPoints(store: Store): Set<string> {
  * Cross-references exported symbols with import edge metadata (specifiers).
  * An export is "dead" if its name never appears as a specifier in any import edge.
  */
-export function getDeadExports(
-  store: Store,
-  filePattern?: string,
-): GetDeadExportsResult {
-  const exported = store.getExportedSymbols(filePattern)
+export function getDeadExports(store: Store, filePattern?: string): GetDeadExportsResult {
+  const exported = store
+    .getExportedSymbols(filePattern)
     .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
     .filter((s) => !TEST_FILE_RE.test(s.file_path));
 
@@ -461,9 +463,10 @@ export function getDeadExports(
     const importEdges = store.getEdgesByType(edgeType);
     for (const edge of importEdges) {
       if (!edge.metadata) continue;
-      const meta = typeof edge.metadata === 'string'
-        ? JSON.parse(edge.metadata) as Record<string, unknown>
-        : edge.metadata as Record<string, unknown>;
+      const meta =
+        typeof edge.metadata === 'string'
+          ? (JSON.parse(edge.metadata) as Record<string, unknown>)
+          : (edge.metadata as Record<string, unknown>);
       const specifiers = meta['specifiers'];
       if (Array.isArray(specifiers)) {
         for (const s of specifiers) {
@@ -489,11 +492,14 @@ export function getDeadExports(
     // Skip symbols marked as entry points (e.g. called from `if __name__ == "__main__"`)
     if (sym.metadata) {
       try {
-        const meta = typeof sym.metadata === 'string'
-          ? JSON.parse(sym.metadata) as Record<string, unknown>
-          : sym.metadata as Record<string, unknown>;
+        const meta =
+          typeof sym.metadata === 'string'
+            ? (JSON.parse(sym.metadata) as Record<string, unknown>)
+            : (sym.metadata as Record<string, unknown>);
         if (meta.is_entry_point) continue;
-      } catch { /* ignore malformed metadata */ }
+      } catch {
+        /* ignore malformed metadata */
+      }
     }
 
     // Skip symbols referenced by pyproject.toml script entry points
@@ -513,9 +519,18 @@ export function getDeadExports(
   // Detect languages present in the project that lack export semantics.
   // Warn explicitly so agents don't mistake "0 exports" for "no dead code".
   const LANGUAGES_WITH_EXPORT_SUPPORT = new Set([
-    'typescript', 'javascript', 'tsx', 'jsx',
-    'python', 'go', 'rust', 'zig',
-    'bash', 'makefile', 'assembly', 'erlang',
+    'typescript',
+    'javascript',
+    'tsx',
+    'jsx',
+    'python',
+    'go',
+    'rust',
+    'zig',
+    'bash',
+    'makefile',
+    'assembly',
+    'erlang',
   ]);
   const allFiles = store.getAllFiles();
   const projectLanguages = new Set(allFiles.map((f) => f.language).filter(Boolean));
@@ -550,10 +565,7 @@ interface GetDependencyGraphResult {
  * Show file-level dependency graph: what a file imports and what imports it.
  * Requires ESM import edges (resolved by the pipeline in Pass 2d).
  */
-export function getDependencyGraph(
-  store: Store,
-  filePath: string,
-): GetDependencyGraphResult {
+export function getDependencyGraph(store: Store, filePath: string): GetDependencyGraphResult {
   const file = store.getFile(filePath);
   if (!file) {
     return { file: filePath, imports: [], imported_by: [] };
@@ -588,9 +600,16 @@ export function getDependencyGraph(
     const targetFile = fileMap.get(ref.refId);
     if (!targetFile) continue;
     const meta = edge.metadata
-      ? (typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata) as Record<string, unknown>
+      ? ((typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata) as Record<
+          string,
+          unknown
+        >)
       : {};
-    imports.push({ source: filePath, target: targetFile.path, specifiers: (meta['specifiers'] as string[]) ?? [] });
+    imports.push({
+      source: filePath,
+      target: targetFile.path,
+      specifiers: (meta['specifiers'] as string[]) ?? [],
+    });
   }
 
   const importedBy: DependencyEdge[] = [];
@@ -600,9 +619,16 @@ export function getDependencyGraph(
     const sourceFile = fileMap.get(ref.refId);
     if (!sourceFile) continue;
     const meta = edge.metadata
-      ? (typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata) as Record<string, unknown>
+      ? ((typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata) as Record<
+          string,
+          unknown
+        >)
       : {};
-    importedBy.push({ source: sourceFile.path, target: filePath, specifiers: (meta['specifiers'] as string[]) ?? [] });
+    importedBy.push({
+      source: sourceFile.path,
+      target: filePath,
+      specifiers: (meta['specifiers'] as string[]) ?? [],
+    });
   }
 
   return { file: filePath, imports, imported_by: importedBy };
@@ -633,11 +659,9 @@ interface GetUntestedExportsResult {
  * Uses heuristic path matching: for each exported symbol, checks if any
  * test file in the project matches its file name or symbol name pattern.
  */
-export function getUntestedExports(
-  store: Store,
-  filePattern?: string,
-): GetUntestedExportsResult {
-  const exported = store.getExportedSymbols(filePattern)
+export function getUntestedExports(store: Store, filePattern?: string): GetUntestedExportsResult {
+  const exported = store
+    .getExportedSymbols(filePattern)
     .filter((s) => s.kind !== 'method') // methods inherit from class
     .filter((s) => !TEST_FIXTURE_RE.test(s.file_path));
 
@@ -653,16 +677,14 @@ export function getUntestedExports(
     // Normalize the source file name for matching
     const baseName = sym.file_path
       .replace(/\.[^.]+$/, '') // strip extension
-      .split('/').pop()!       // get filename
+      .split('/')
+      .pop()! // get filename
       .toLowerCase();
 
     // Check if any test file references this source file
     const hasTest = testFiles.some((testPath) => {
       const testBase = testPath.split('/').pop()!;
-      return (
-        testBase.includes(baseName) ||
-        testBase.includes(toKebab(sym.name))
-      );
+      return testBase.includes(baseName) || testBase.includes(toKebab(sym.name));
     });
 
     if (!hasTest) {
@@ -718,9 +740,7 @@ interface GetUntestedSymbolsResult {
 }
 
 /** Kinds worth analyzing — skip trivial structural kinds */
-const TESTABLE_KINDS = new Set([
-  'function', 'class', 'interface', 'type', 'enum', 'method',
-]);
+const TESTABLE_KINDS = new Set(['function', 'class', 'interface', 'type', 'enum', 'method']);
 
 /**
  * Find ALL symbols (not just exports) that lack test coverage.
@@ -741,12 +761,14 @@ export function getUntestedSymbols(
     ? `AND f.path LIKE '${filePattern.replace(/\*/g, '%').replace(/\?/g, '_')}'`
     : '';
 
-  const allSymbols = store.db.prepare(`
+  const allSymbols = store.db
+    .prepare(`
     SELECT s.*, f.path as file_path
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE 1=1 ${likeClause}
-  `).all() as SymbolWithFilePath[];
+  `)
+    .all() as SymbolWithFilePath[];
 
   // ── 2. Filter to testable symbols ─────────────────────────────────────────
   const candidates = allSymbols
@@ -757,7 +779,8 @@ export function getUntestedSymbols(
 
   // ── 3. Build file-level test reach via test_covers edges ──────────────────
   const testedFileIds = new Set<number>();
-  const testCoverRows = store.db.prepare(`
+  const testCoverRows = store.db
+    .prepare(`
     SELECT DISTINCT
       CASE
         WHEN n.node_type = 'file' THEN n.ref_id
@@ -767,7 +790,8 @@ export function getUntestedSymbols(
     JOIN edge_types et ON e.edge_type_id = et.id
     JOIN nodes n ON e.target_node_id = n.id
     WHERE et.name = 'test_covers'
-  `).all() as Array<{ fid: number | null }>;
+  `)
+    .all() as Array<{ fid: number | null }>;
   for (const r of testCoverRows) if (r.fid != null) testedFileIds.add(r.fid);
 
   // ── 4. Build name-based test file matching (same heuristic as getUntestedExports)
@@ -795,10 +819,16 @@ export function getUntestedSymbols(
       let sourceBaseName: string | undefined;
       if (targetRef.nodeType === 'file') {
         const f = store.getFileById(targetRef.refId);
-        if (f) sourceBaseName = f.path.replace(/\.[^.]+$/, '').split('/').pop()!.toLowerCase();
+        if (f)
+          sourceBaseName = f.path
+            .replace(/\.[^.]+$/, '')
+            .split('/')
+            .pop()!
+            .toLowerCase();
       }
       if (sourceBaseName) {
-        if (!testFileSymbolNames.has(sourceBaseName)) testFileSymbolNames.set(sourceBaseName, new Set());
+        if (!testFileSymbolNames.has(sourceBaseName))
+          testFileSymbolNames.set(sourceBaseName, new Set());
         // Add all symbol names from this test file as potential references
         for (const ts of testSymbols) {
           testFileSymbolNames.get(sourceBaseName)!.add(ts.name.toLowerCase());
@@ -815,11 +845,13 @@ export function getUntestedSymbols(
   for (const sym of candidates) {
     const baseName = sym.file_path
       .replace(/\.[^.]+$/, '')
-      .split('/').pop()!
+      .split('/')
+      .pop()!
       .toLowerCase();
 
     // Check file-level coverage: graph edges OR name-based matching
-    const hasFileCoverage = testedFileIds.has(sym.file_id) ||
+    const hasFileCoverage =
+      testedFileIds.has(sym.file_id) ||
       testFiles.some((tp) => {
         const testBase = tp.split('/').pop()!;
         return testBase.includes(baseName);
@@ -949,10 +981,7 @@ export function selfAudit(store: Store): SelfAuditResult {
   // Most imported files (incoming import edges per file)
   const importedByCount = new Map<number, number>();
   for (const edge of importEdges) {
-    importedByCount.set(
-      edge.target_node_id,
-      (importedByCount.get(edge.target_node_id) ?? 0) + 1,
-    );
+    importedByCount.set(edge.target_node_id, (importedByCount.get(edge.target_node_id) ?? 0) + 1);
   }
   const mostImported = [...importedByCount.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -966,10 +995,7 @@ export function selfAudit(store: Store): SelfAuditResult {
   // Most dependent files (outgoing import edges per file)
   const importsCount = new Map<number, number>();
   for (const edge of importEdges) {
-    importsCount.set(
-      edge.source_node_id,
-      (importsCount.get(edge.source_node_id) ?? 0) + 1,
-    );
+    importsCount.set(edge.source_node_id, (importsCount.get(edge.source_node_id) ?? 0) + 1);
   }
   const mostDependent = [...importsCount.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -985,7 +1011,12 @@ export function selfAudit(store: Store): SelfAuditResult {
   const heritageSymbols = store.getSymbolsWithHeritage();
   const implCountMap = new Map<string, number>(); // interface name → implementor count
   for (const sym of heritageSymbols) {
-    const meta = sym.metadata ? (typeof sym.metadata === 'string' ? JSON.parse(sym.metadata) : sym.metadata) as Record<string, unknown> : {};
+    const meta = sym.metadata
+      ? ((typeof sym.metadata === 'string' ? JSON.parse(sym.metadata) : sym.metadata) as Record<
+          string,
+          unknown
+        >)
+      : {};
     for (const key of ['implements', 'extends']) {
       const parents = meta[key] as string[] | undefined;
       if (Array.isArray(parents)) {
@@ -1006,21 +1037,22 @@ export function selfAudit(store: Store): SelfAuditResult {
   const unstable = coupling.filter((c) => c.assessment === 'unstable');
 
   // Average cyclomatic complexity
-  const complexityRow = store.db.prepare(
-    'SELECT AVG(cyclomatic) as avg FROM symbols WHERE cyclomatic IS NOT NULL',
-  ).get() as { avg: number | null } | undefined;
-  const avgCyclomatic = complexityRow?.avg != null
-    ? Math.round(complexityRow.avg * 100) / 100
-    : null;
+  const complexityRow = store.db
+    .prepare('SELECT AVG(cyclomatic) as avg FROM symbols WHERE cyclomatic IS NOT NULL')
+    .get() as { avg: number | null } | undefined;
+  const avgCyclomatic =
+    complexityRow?.avg != null ? Math.round(complexityRow.avg * 100) / 100 : null;
 
   // Most complex symbols
-  const complexSymbols = store.db.prepare(`
+  const complexSymbols = store.db
+    .prepare(`
     SELECT s.symbol_id, s.name, f.path as file, s.cyclomatic
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE s.cyclomatic IS NOT NULL
     ORDER BY s.cyclomatic DESC
     LIMIT 10
-  `).all() as { symbol_id: string; name: string; file: string; cyclomatic: number }[];
+  `)
+    .all() as { symbol_id: string; name: string; file: string; cyclomatic: number }[];
 
   return {
     summary: {
@@ -1045,7 +1077,10 @@ export function selfAudit(store: Store): SelfAuditResult {
     widest_interfaces: interfaceCounts.slice(0, 10),
     most_complex_symbols: complexSymbols,
     most_unstable: unstable.slice(0, 10).map((c) => ({
-      file: c.file, instability: c.instability, ca: c.ca, ce: c.ce,
+      file: c.file,
+      instability: c.instability,
+      ca: c.ca,
+      ce: c.ce,
     })),
   };
 }

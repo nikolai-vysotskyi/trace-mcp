@@ -9,7 +9,11 @@
 import type { Store } from '../../db/store.js';
 import { ok, err, type TraceMcpResult } from '../../errors.js';
 import { validationError, notFound } from '../../errors.js';
-import { DomainStore, type DomainTreeNode, type CrossDomainDep } from '../../intent/domain-store.js';
+import {
+  DomainStore,
+  type DomainTreeNode,
+  type CrossDomainDep,
+} from '../../intent/domain-store.js';
 import { DomainBuilder, type IntentConfig } from '../../intent/domain-builder.js';
 import { searchFts, type FtsResult } from '../../db/fts.js';
 
@@ -186,7 +190,12 @@ export async function getDomainContext(
     await builder.buildAll();
     domain = domainStore.getDomainByName(parts[0]);
     if (!domain) {
-      return err(notFound(domainName, domainStore.getAllDomains().map((d) => d.name)));
+      return err(
+        notFound(
+          domainName,
+          domainStore.getAllDomains().map((d) => d.name),
+        ),
+      );
     }
   }
 
@@ -235,7 +244,12 @@ export async function getCrossDomainDependencies(
   if (options.domain) {
     const d = domainStore.getDomainByName(options.domain);
     if (!d) {
-      return err(notFound(options.domain, domainStore.getAllDomains().map((dd) => dd.name)));
+      return err(
+        notFound(
+          options.domain,
+          domainStore.getAllDomains().map((dd) => dd.name),
+        ),
+      );
     }
     focusDomainId = d.id;
   }

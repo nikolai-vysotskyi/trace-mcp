@@ -84,9 +84,22 @@ export function suggestInsertionPoints(
 // ═══════════════════════════════════════════════════════════════════
 
 type FeatureKind =
-  | 'endpoint' | 'route' | 'controller' | 'model' | 'migration'
-  | 'middleware' | 'command' | 'job' | 'event' | 'listener'
-  | 'view' | 'page' | 'component' | 'service' | 'test' | 'unknown';
+  | 'endpoint'
+  | 'route'
+  | 'controller'
+  | 'model'
+  | 'migration'
+  | 'middleware'
+  | 'command'
+  | 'job'
+  | 'event'
+  | 'listener'
+  | 'view'
+  | 'page'
+  | 'component'
+  | 'service'
+  | 'test'
+  | 'unknown';
 
 function detectFeatureKind(lower: string): FeatureKind {
   if (/\b(endpoint|api|rest|graphql|http|webhook)\b/.test(lower)) return 'endpoint';
@@ -122,59 +135,74 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'laravel',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'route') {
-        return [{
-          file: 'routes/api.php',
-          after_symbol: 'Route::',
-          framework: 'laravel',
-          reason: 'Laravel convention: API routes live in routes/api.php',
-          scaffold_hint: 'Add Route::method(\'/path\', [Controller::class, \'action\']); then create the controller method, FormRequest validator, and feature test',
-          related_files: ['app/Http/Controllers/', 'app/Http/Requests/', 'tests/Feature/'],
-        }];
+        return [
+          {
+            file: 'routes/api.php',
+            after_symbol: 'Route::',
+            framework: 'laravel',
+            reason: 'Laravel convention: API routes live in routes/api.php',
+            scaffold_hint:
+              "Add Route::method('/path', [Controller::class, 'action']); then create the controller method, FormRequest validator, and feature test",
+            related_files: ['app/Http/Controllers/', 'app/Http/Requests/', 'tests/Feature/'],
+          },
+        ];
       }
       if (kind === 'controller') {
-        return [{
-          file: 'app/Http/Controllers/',
-          framework: 'laravel',
-          reason: 'Laravel convention: controllers live under app/Http/Controllers/',
-          scaffold_hint: 'php artisan make:controller NameController --resource (or extend an existing controller)',
-          related_files: ['routes/api.php', 'routes/web.php'],
-        }];
+        return [
+          {
+            file: 'app/Http/Controllers/',
+            framework: 'laravel',
+            reason: 'Laravel convention: controllers live under app/Http/Controllers/',
+            scaffold_hint:
+              'php artisan make:controller NameController --resource (or extend an existing controller)',
+            related_files: ['routes/api.php', 'routes/web.php'],
+          },
+        ];
       }
       if (kind === 'model' || kind === 'migration') {
-        return [{
-          file: 'app/Models/',
-          framework: 'laravel',
-          reason: 'Laravel convention: Eloquent models live under app/Models/',
-          scaffold_hint: 'php artisan make:model Name -m (creates model + migration)',
-          related_files: ['database/migrations/', 'database/factories/', 'database/seeders/'],
-        }];
+        return [
+          {
+            file: 'app/Models/',
+            framework: 'laravel',
+            reason: 'Laravel convention: Eloquent models live under app/Models/',
+            scaffold_hint: 'php artisan make:model Name -m (creates model + migration)',
+            related_files: ['database/migrations/', 'database/factories/', 'database/seeders/'],
+          },
+        ];
       }
       if (kind === 'command') {
-        return [{
-          file: 'app/Console/Commands/',
-          framework: 'laravel',
-          reason: 'Laravel convention: artisan commands live under app/Console/Commands/',
-          scaffold_hint: 'php artisan make:command NameCommand',
-          related_files: ['app/Console/Kernel.php'],
-        }];
+        return [
+          {
+            file: 'app/Console/Commands/',
+            framework: 'laravel',
+            reason: 'Laravel convention: artisan commands live under app/Console/Commands/',
+            scaffold_hint: 'php artisan make:command NameCommand',
+            related_files: ['app/Console/Kernel.php'],
+          },
+        ];
       }
       if (kind === 'job') {
-        return [{
-          file: 'app/Jobs/',
-          framework: 'laravel',
-          reason: 'Laravel convention: queueable jobs live under app/Jobs/',
-          scaffold_hint: 'php artisan make:job NameJob (implements ShouldQueue)',
-          related_files: ['config/queue.php'],
-        }];
+        return [
+          {
+            file: 'app/Jobs/',
+            framework: 'laravel',
+            reason: 'Laravel convention: queueable jobs live under app/Jobs/',
+            scaffold_hint: 'php artisan make:job NameJob (implements ShouldQueue)',
+            related_files: ['config/queue.php'],
+          },
+        ];
       }
       if (kind === 'middleware') {
-        return [{
-          file: 'app/Http/Middleware/',
-          framework: 'laravel',
-          reason: 'Laravel convention: HTTP middleware lives under app/Http/Middleware/',
-          scaffold_hint: 'php artisan make:middleware NameMiddleware; register in app/Http/Kernel.php',
-          related_files: ['app/Http/Kernel.php'],
-        }];
+        return [
+          {
+            file: 'app/Http/Middleware/',
+            framework: 'laravel',
+            reason: 'Laravel convention: HTTP middleware lives under app/Http/Middleware/',
+            scaffold_hint:
+              'php artisan make:middleware NameMiddleware; register in app/Http/Kernel.php',
+            related_files: ['app/Http/Kernel.php'],
+          },
+        ];
       }
       return [];
     },
@@ -185,22 +213,27 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'nestjs',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'route' || kind === 'controller') {
-        return [{
-          file: 'src/',
-          framework: 'nestjs',
-          reason: 'NestJS convention: feature module = controller + service + DTO under src/<feature>/',
-          scaffold_hint: 'nest g module name && nest g controller name && nest g service name',
-          related_files: ['src/app.module.ts'],
-        }];
+        return [
+          {
+            file: 'src/',
+            framework: 'nestjs',
+            reason:
+              'NestJS convention: feature module = controller + service + DTO under src/<feature>/',
+            scaffold_hint: 'nest g module name && nest g controller name && nest g service name',
+            related_files: ['src/app.module.ts'],
+          },
+        ];
       }
       if (kind === 'service') {
-        return [{
-          file: 'src/',
-          framework: 'nestjs',
-          reason: 'NestJS convention: providers/services co-located with their module',
-          scaffold_hint: 'nest g service name (and inject into the relevant module)',
-          related_files: [],
-        }];
+        return [
+          {
+            file: 'src/',
+            framework: 'nestjs',
+            reason: 'NestJS convention: providers/services co-located with their module',
+            scaffold_hint: 'nest g service name (and inject into the relevant module)',
+            related_files: [],
+          },
+        ];
       }
       return [];
     },
@@ -211,22 +244,27 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'express',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'route') {
-        return [{
-          file: 'routes/',
-          framework: 'express',
-          reason: 'Express convention: routes typically live under routes/ or src/routes/',
-          scaffold_hint: 'router.method(\'/path\', handler); mount the router in the app entry point',
-          related_files: ['src/app.ts', 'src/server.ts', 'src/index.ts', 'middleware/'],
-        }];
+        return [
+          {
+            file: 'routes/',
+            framework: 'express',
+            reason: 'Express convention: routes typically live under routes/ or src/routes/',
+            scaffold_hint:
+              "router.method('/path', handler); mount the router in the app entry point",
+            related_files: ['src/app.ts', 'src/server.ts', 'src/index.ts', 'middleware/'],
+          },
+        ];
       }
       if (kind === 'middleware') {
-        return [{
-          file: 'middleware/',
-          framework: 'express',
-          reason: 'Express convention: middleware under middleware/ or src/middleware/',
-          scaffold_hint: 'export function name(req, res, next) { ... }',
-          related_files: ['src/app.ts'],
-        }];
+        return [
+          {
+            file: 'middleware/',
+            framework: 'express',
+            reason: 'Express convention: middleware under middleware/ or src/middleware/',
+            scaffold_hint: 'export function name(req, res, next) { ... }',
+            related_files: ['src/app.ts'],
+          },
+        ];
       }
       return [];
     },
@@ -235,13 +273,16 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'fastify',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'route') {
-        return [{
-          file: 'routes/',
-          framework: 'fastify',
-          reason: 'Fastify convention: routes registered as plugins under routes/ or src/routes/',
-          scaffold_hint: 'export default async function (fastify) { fastify.method(\'/path\', { schema }, handler); }',
-          related_files: ['src/server.ts', 'plugins/'],
-        }];
+        return [
+          {
+            file: 'routes/',
+            framework: 'fastify',
+            reason: 'Fastify convention: routes registered as plugins under routes/ or src/routes/',
+            scaffold_hint:
+              "export default async function (fastify) { fastify.method('/path', { schema }, handler); }",
+            related_files: ['src/server.ts', 'plugins/'],
+          },
+        ];
       }
       return [];
     },
@@ -250,13 +291,15 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'hono',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'route') {
-        return [{
-          file: 'src/',
-          framework: 'hono',
-          reason: 'Hono convention: routes attached to the app instance in src/',
-          scaffold_hint: 'app.method(\'/path\', (c) => c.json(...))',
-          related_files: ['src/index.ts'],
-        }];
+        return [
+          {
+            file: 'src/',
+            framework: 'hono',
+            reason: 'Hono convention: routes attached to the app instance in src/',
+            scaffold_hint: "app.method('/path', (c) => c.json(...))",
+            related_files: ['src/index.ts'],
+          },
+        ];
       }
       return [];
     },
@@ -267,22 +310,27 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'django',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'view') {
-        return [{
-          file: 'views.py',
-          framework: 'django',
-          reason: 'Django convention: HTTP views live in <app>/views.py and are wired in <app>/urls.py',
-          scaffold_hint: 'def view(request): ...; then add a path() entry in urls.py',
-          related_files: ['urls.py', 'templates/'],
-        }];
+        return [
+          {
+            file: 'views.py',
+            framework: 'django',
+            reason:
+              'Django convention: HTTP views live in <app>/views.py and are wired in <app>/urls.py',
+            scaffold_hint: 'def view(request): ...; then add a path() entry in urls.py',
+            related_files: ['urls.py', 'templates/'],
+          },
+        ];
       }
       if (kind === 'model' || kind === 'migration') {
-        return [{
-          file: 'models.py',
-          framework: 'django',
-          reason: 'Django convention: ORM models in <app>/models.py; migrations auto-generated',
-          scaffold_hint: 'class Name(models.Model): ...; run python manage.py makemigrations',
-          related_files: ['migrations/', 'admin.py'],
-        }];
+        return [
+          {
+            file: 'models.py',
+            framework: 'django',
+            reason: 'Django convention: ORM models in <app>/models.py; migrations auto-generated',
+            scaffold_hint: 'class Name(models.Model): ...; run python manage.py makemigrations',
+            related_files: ['migrations/', 'admin.py'],
+          },
+        ];
       }
       return [];
     },
@@ -291,13 +339,17 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'drf',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'view') {
-        return [{
-          file: 'views.py',
-          framework: 'drf',
-          reason: 'Django REST Framework convention: ViewSets in views.py registered via routers in urls.py',
-          scaffold_hint: 'class NameViewSet(viewsets.ModelViewSet): ...; register with router in urls.py',
-          related_files: ['urls.py', 'serializers.py'],
-        }];
+        return [
+          {
+            file: 'views.py',
+            framework: 'drf',
+            reason:
+              'Django REST Framework convention: ViewSets in views.py registered via routers in urls.py',
+            scaffold_hint:
+              'class NameViewSet(viewsets.ModelViewSet): ...; register with router in urls.py',
+            related_files: ['urls.py', 'serializers.py'],
+          },
+        ];
       }
       return [];
     },
@@ -306,13 +358,16 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'fastapi',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'route') {
-        return [{
-          file: 'main.py',
-          framework: 'fastapi',
-          reason: 'FastAPI convention: routes via @app.method or APIRouter mounted in main.py',
-          scaffold_hint: '@router.method(\'/path\') async def handler(...): ...; include router in main.py',
-          related_files: ['routers/', 'schemas.py'],
-        }];
+        return [
+          {
+            file: 'main.py',
+            framework: 'fastapi',
+            reason: 'FastAPI convention: routes via @app.method or APIRouter mounted in main.py',
+            scaffold_hint:
+              "@router.method('/path') async def handler(...): ...; include router in main.py",
+            related_files: ['routers/', 'schemas.py'],
+          },
+        ];
       }
       return [];
     },
@@ -321,13 +376,15 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'flask',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'route' || kind === 'view') {
-        return [{
-          file: 'app.py',
-          framework: 'flask',
-          reason: 'Flask convention: routes via @app.route or Blueprints',
-          scaffold_hint: '@bp.route(\'/path\', methods=[...]) def handler(): ...',
-          related_files: ['blueprints/'],
-        }];
+        return [
+          {
+            file: 'app.py',
+            framework: 'flask',
+            reason: 'Flask convention: routes via @app.route or Blueprints',
+            scaffold_hint: "@bp.route('/path', methods=[...]) def handler(): ...",
+            related_files: ['blueprints/'],
+          },
+        ];
       }
       return [];
     },
@@ -338,22 +395,27 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'rails',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'route' || kind === 'controller') {
-        return [{
-          file: 'config/routes.rb',
-          framework: 'rails',
-          reason: 'Rails convention: routes in config/routes.rb, controllers under app/controllers/',
-          scaffold_hint: 'rails generate controller Name action; add route in config/routes.rb',
-          related_files: ['app/controllers/', 'app/views/', 'test/controllers/'],
-        }];
+        return [
+          {
+            file: 'config/routes.rb',
+            framework: 'rails',
+            reason:
+              'Rails convention: routes in config/routes.rb, controllers under app/controllers/',
+            scaffold_hint: 'rails generate controller Name action; add route in config/routes.rb',
+            related_files: ['app/controllers/', 'app/views/', 'test/controllers/'],
+          },
+        ];
       }
       if (kind === 'model') {
-        return [{
-          file: 'app/models/',
-          framework: 'rails',
-          reason: 'Rails convention: ActiveRecord models under app/models/',
-          scaffold_hint: 'rails generate model Name field:type (creates model + migration)',
-          related_files: ['db/migrate/'],
-        }];
+        return [
+          {
+            file: 'app/models/',
+            framework: 'rails',
+            reason: 'Rails convention: ActiveRecord models under app/models/',
+            scaffold_hint: 'rails generate model Name field:type (creates model + migration)',
+            related_files: ['db/migrate/'],
+          },
+        ];
       }
       return [];
     },
@@ -364,13 +426,16 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'spring',
     match: (kind) => {
       if (kind === 'endpoint' || kind === 'controller') {
-        return [{
-          file: 'src/main/java/',
-          framework: 'spring',
-          reason: 'Spring convention: @RestController classes under src/main/java/<package>/',
-          scaffold_hint: '@RestController class with @GetMapping/@PostMapping methods; add Service + Repository as needed',
-          related_files: [],
-        }];
+        return [
+          {
+            file: 'src/main/java/',
+            framework: 'spring',
+            reason: 'Spring convention: @RestController classes under src/main/java/<package>/',
+            scaffold_hint:
+              '@RestController class with @GetMapping/@PostMapping methods; add Service + Repository as needed',
+            related_files: [],
+          },
+        ];
       }
       return [];
     },
@@ -381,31 +446,39 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'nextjs',
     match: (kind) => {
       if (kind === 'page') {
-        return [{
-          file: 'app/',
-          framework: 'nextjs',
-          reason: 'Next.js App Router convention: pages live as page.tsx files under app/<route>/',
-          scaffold_hint: 'Create app/<route>/page.tsx (server component by default)',
-          related_files: ['app/layout.tsx'],
-        }];
+        return [
+          {
+            file: 'app/',
+            framework: 'nextjs',
+            reason:
+              'Next.js App Router convention: pages live as page.tsx files under app/<route>/',
+            scaffold_hint: 'Create app/<route>/page.tsx (server component by default)',
+            related_files: ['app/layout.tsx'],
+          },
+        ];
       }
       if (kind === 'endpoint' || kind === 'route') {
-        return [{
-          file: 'app/api/',
-          framework: 'nextjs',
-          reason: 'Next.js convention: API routes as route.ts handlers under app/api/<path>/',
-          scaffold_hint: 'export async function GET/POST(req: Request) { ... } in app/api/<name>/route.ts',
-          related_files: [],
-        }];
+        return [
+          {
+            file: 'app/api/',
+            framework: 'nextjs',
+            reason: 'Next.js convention: API routes as route.ts handlers under app/api/<path>/',
+            scaffold_hint:
+              'export async function GET/POST(req: Request) { ... } in app/api/<name>/route.ts',
+            related_files: [],
+          },
+        ];
       }
       if (kind === 'component') {
-        return [{
-          file: 'components/',
-          framework: 'nextjs',
-          reason: 'Next.js convention: shared components under components/ or app/_components/',
-          scaffold_hint: 'Create a .tsx file exporting a named component',
-          related_files: [],
-        }];
+        return [
+          {
+            file: 'components/',
+            framework: 'nextjs',
+            reason: 'Next.js convention: shared components under components/ or app/_components/',
+            scaffold_hint: 'Create a .tsx file exporting a named component',
+            related_files: [],
+          },
+        ];
       }
       return [];
     },
@@ -414,22 +487,26 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'nuxt',
     match: (kind) => {
       if (kind === 'page') {
-        return [{
-          file: 'pages/',
-          framework: 'nuxt',
-          reason: 'Nuxt convention: file-based routing under pages/',
-          scaffold_hint: 'Create pages/<name>.vue with <script setup> + <template>',
-          related_files: ['layouts/'],
-        }];
+        return [
+          {
+            file: 'pages/',
+            framework: 'nuxt',
+            reason: 'Nuxt convention: file-based routing under pages/',
+            scaffold_hint: 'Create pages/<name>.vue with <script setup> + <template>',
+            related_files: ['layouts/'],
+          },
+        ];
       }
       if (kind === 'endpoint' || kind === 'route') {
-        return [{
-          file: 'server/api/',
-          framework: 'nuxt',
-          reason: 'Nuxt convention: server API handlers under server/api/',
-          scaffold_hint: 'export default defineEventHandler(async (event) => { ... })',
-          related_files: [],
-        }];
+        return [
+          {
+            file: 'server/api/',
+            framework: 'nuxt',
+            reason: 'Nuxt convention: server API handlers under server/api/',
+            scaffold_hint: 'export default defineEventHandler(async (event) => { ... })',
+            related_files: [],
+          },
+        ];
       }
       return [];
     },
@@ -440,13 +517,15 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'react',
     match: (kind) => {
       if (kind === 'component') {
-        return [{
-          file: 'src/components/',
-          framework: 'react',
-          reason: 'React convention: components under src/components/',
-          scaffold_hint: 'Create a .tsx file exporting a named function component',
-          related_files: [],
-        }];
+        return [
+          {
+            file: 'src/components/',
+            framework: 'react',
+            reason: 'React convention: components under src/components/',
+            scaffold_hint: 'Create a .tsx file exporting a named function component',
+            related_files: [],
+          },
+        ];
       }
       return [];
     },
@@ -457,13 +536,15 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
     framework: 'vue-framework',
     match: (kind) => {
       if (kind === 'component' || kind === 'page') {
-        return [{
-          file: 'src/components/',
-          framework: 'vue',
-          reason: 'Vue convention: SFCs under src/components/ or src/views/',
-          scaffold_hint: 'Create a .vue file with <script setup>, <template>, <style>',
-          related_files: ['src/router/'],
-        }];
+        return [
+          {
+            file: 'src/components/',
+            framework: 'vue',
+            reason: 'Vue convention: SFCs under src/components/ or src/views/',
+            scaffold_hint: 'Create a .vue file with <script setup>, <template>, <style>',
+            related_files: ['src/router/'],
+          },
+        ];
       }
       return [];
     },

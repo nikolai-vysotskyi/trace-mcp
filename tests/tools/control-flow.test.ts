@@ -166,7 +166,7 @@ if (a) {
       const mermaid = cfgToMermaid(cfg);
       expect(mermaid).toContain('flowchart TD');
       expect(mermaid).toContain('N0'); // At least one node
-      expect(mermaid).toContain('-->');  // At least one edge
+      expect(mermaid).toContain('-->'); // At least one edge
     });
 
     it('uses diamond shape for decision nodes', () => {

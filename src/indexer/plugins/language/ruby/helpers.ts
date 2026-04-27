@@ -33,9 +33,7 @@ export function makeFqn(namespaceParts: string[], methodName?: string): string {
 
 /** Convert a file path to a Ruby module-style path (for FQN prefix). */
 export function filePathToModule(filePath: string): string {
-  return filePath
-    .replace(/\\/g, '/')
-    .replace(/\.(rb|rake)$/, '');
+  return filePath.replace(/\\/g, '/').replace(/\.(rb|rake)$/, '');
 }
 
 /** Extract signature — first line of the node text. */
@@ -134,7 +132,11 @@ export function extractAttributes(
     if (!methodNode) continue;
     const methodName = methodNode.text;
 
-    if (methodName !== 'attr_accessor' && methodName !== 'attr_reader' && methodName !== 'attr_writer') {
+    if (
+      methodName !== 'attr_accessor' &&
+      methodName !== 'attr_reader' &&
+      methodName !== 'attr_writer'
+    ) {
       continue;
     }
 
@@ -259,7 +261,10 @@ function extractStringContent(node: TSNode): string | null {
   }
   // Fallback: strip outer quotes from the text
   const text = node.text;
-  if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+  if (
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
+  ) {
     return text.slice(1, -1);
   }
   return null;

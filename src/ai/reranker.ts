@@ -18,9 +18,7 @@ export class LLMReranker implements RerankerService {
     if (documents.length <= 1) return documents.map((d) => ({ id: d.id, score: 1 }));
 
     try {
-      const docsText = documents
-        .map((d, i) => `[${i + 1}] ${d.text.slice(0, 200)}`)
-        .join('\n');
+      const docsText = documents.map((d, i) => `[${i + 1}] ${d.text.slice(0, 200)}`).join('\n');
 
       const prompt = PROMPTS.rerank.build({
         query,
@@ -58,7 +56,11 @@ export class LLMReranker implements RerankerService {
   }
 
   private parseScores(response: string, expectedCount: number): number[] | null {
-    const lines = response.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+    const lines = response
+      .trim()
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
     const scores: number[] = [];
 
     for (const line of lines) {

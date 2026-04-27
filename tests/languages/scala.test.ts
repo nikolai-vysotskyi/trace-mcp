@@ -14,7 +14,10 @@ async function extract(code: string, filePath = 'src/main/scala/App.scala') {
 describe('ScalaLanguagePlugin', () => {
   beforeAll(async () => {
     const probe = await plugin.extractSymbols('probe.scala', Buffer.from('class Probe\n'));
-    expect(probe.isOk(), `Scala parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+    expect(
+      probe.isOk(),
+      `Scala parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`,
+    ).toBe(true);
   });
 
   it('has correct manifest', () => {

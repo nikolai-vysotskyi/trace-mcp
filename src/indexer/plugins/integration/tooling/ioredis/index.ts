@@ -37,21 +37,16 @@ const REDIS_PACKAGES = [
   'node-redis',
 ];
 
-const CONNECTION_RE =
-  /new\s+(?:Redis|IORedis|IoRedis)(?:\.Cluster)?\s*\(/;
-const CREATE_CLIENT_RE =
-  /\bcreateClient\s*\(\s*\{/;
+const CONNECTION_RE = /new\s+(?:Redis|IORedis|IoRedis)(?:\.Cluster)?\s*\(/;
+const CREATE_CLIENT_RE = /\bcreateClient\s*\(\s*\{/;
 const BULLMQ_QUEUE_RE =
   /new\s+(?:Queue|Worker|QueueEvents|QueueScheduler|FlowProducer)\s*\(\s*['"`]/;
 
 const STREAM_RE =
   /\.(?:xadd|xread|xreadgroup|xrange|xrevrange|xgroup|xack|xlen|xpending|xclaim)\s*\(/i;
-const PUBLISH_RE =
-  /\.(?:publish|sPublish)\s*\(/;
-const SUBSCRIBE_RE =
-  /\.(?:p?subscribe|sSubscribe|pSubscribe)\s*\(/;
-const PIPELINE_RE =
-  /\.(?:pipeline|multi)\s*\(\s*\)/;
+const PUBLISH_RE = /\.(?:publish|sPublish)\s*\(/;
+const SUBSCRIBE_RE = /\.(?:p?subscribe|sSubscribe|pSubscribe)\s*\(/;
+const PIPELINE_RE = /\.(?:pipeline|multi)\s*\(\s*\)/;
 
 const TYPED_COMMAND_RE =
   /\.(?:h(?:get|set|mset|mget|getall|del|incrby|incrbyfloat|exists|keys|vals|len)|l(?:push|pop|range|len|rem|trim|index|set)|r(?:push|poplpush)|z(?:add|range|rem|score|rangebyscore|revrange|rank|incrby|card)|s(?:add|members|rem|ismember|inter|union|diff|card)|expire|pexpire|expireat|ttl|pttl|persist|incr|incrby|decr|decrby|setex|setnx|psetex|getset)\s*\(/gi;
@@ -62,12 +57,9 @@ const GENERIC_COMMAND_RE =
 const REDIS_IMPORT_RE =
   /(?:import|require)\s*(?:\(|{)?\s*.*['"](?:ioredis|ioredis-mock|redis|bullmq|bull|@upstash\/redis|node-redis)['"]/;
 
-const PUBLISH_NAME_RE =
-  /\.(?:publish|sPublish)\s*\(\s*['"`]([^'"`]+)['"`]/g;
-const SUBSCRIBE_NAME_RE =
-  /\.(?:p?subscribe|sSubscribe|pSubscribe)\s*\(\s*['"`]([^'"`]+)['"`]/g;
-const XADD_NAME_RE =
-  /\.xadd\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const PUBLISH_NAME_RE = /\.(?:publish|sPublish)\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const SUBSCRIBE_NAME_RE = /\.(?:p?subscribe|sSubscribe|pSubscribe)\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const XADD_NAME_RE = /\.xadd\s*\(\s*['"`]([^'"`]+)['"`]/g;
 const QUEUE_NAME_RE =
   /new\s+(Queue|Worker|QueueEvents|QueueScheduler|FlowProducer)\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
@@ -121,7 +113,11 @@ export class IoredisPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'redis_connects', category: 'redis', description: 'Redis client connection creation' },
+        {
+          name: 'redis_connects',
+          category: 'redis',
+          description: 'Redis client connection creation',
+        },
         { name: 'redis_pubsub', category: 'redis', description: 'Redis pub/sub channel operation' },
         { name: 'redis_stream', category: 'redis', description: 'Redis Streams operation' },
         { name: 'redis_queue', category: 'redis', description: 'BullMQ/Bull queue definition' },
@@ -203,9 +199,11 @@ export class IoredisPlugin implements FrameworkPlugin {
             targetSymbolId: `${resourcePrefix}::${name}`,
             metadata: {
               op,
-              [resourcePrefix === 'redis-channel' ? 'channel'
-                : resourcePrefix === 'redis-stream' ? 'stream'
-                : 'queue']: name,
+              [resourcePrefix === 'redis-channel'
+                ? 'channel'
+                : resourcePrefix === 'redis-stream'
+                  ? 'stream'
+                  : 'queue']: name,
               line,
               file: file.path,
             },

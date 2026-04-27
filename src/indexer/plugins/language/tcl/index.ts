@@ -32,8 +32,16 @@ const _plugin = createMultiPassPlugin({
       meta: { tclOO: true },
       memberPatterns: [
         { kind: 'method', pattern: /^\s*method\s+(\w+)\s*\{/gm },
-        { kind: 'method', pattern: /^\s*(constructor)\s*(?:\{[^}]*\}\s*)?\{/gm, meta: { constructor: true } },
-        { kind: 'method', pattern: /^\s*(destructor)\s*(?:\{[^}]*\}\s*)?\{/gm, meta: { destructor: true } },
+        {
+          kind: 'method',
+          pattern: /^\s*(constructor)\s*(?:\{[^}]*\}\s*)?\{/gm,
+          meta: { constructor: true },
+        },
+        {
+          kind: 'method',
+          pattern: /^\s*(destructor)\s*(?:\{[^}]*\}\s*)?\{/gm,
+          meta: { destructor: true },
+        },
         { kind: 'method', pattern: /^\s*forward\s+(\w+)/gm, meta: { forward: true } },
         { kind: 'variable', pattern: /^\s*variable\s+(\w+)/gm },
       ],
@@ -45,8 +53,16 @@ const _plugin = createMultiPassPlugin({
       meta: { tclOO: true },
       memberPatterns: [
         { kind: 'method', pattern: /^\s*method\s+(\w+)\s*\{/gm },
-        { kind: 'method', pattern: /^\s*(constructor)\s*(?:\{[^}]*\}\s*)?\{/gm, meta: { constructor: true } },
-        { kind: 'method', pattern: /^\s*(destructor)\s*(?:\{[^}]*\}\s*)?\{/gm, meta: { destructor: true } },
+        {
+          kind: 'method',
+          pattern: /^\s*(constructor)\s*(?:\{[^}]*\}\s*)?\{/gm,
+          meta: { constructor: true },
+        },
+        {
+          kind: 'method',
+          pattern: /^\s*(destructor)\s*(?:\{[^}]*\}\s*)?\{/gm,
+          meta: { destructor: true },
+        },
         { kind: 'method', pattern: /^\s*forward\s+(\w+)/gm, meta: { forward: true } },
         { kind: 'variable', pattern: /^\s*variable\s+(\w+)/gm },
         { kind: 'method', pattern: /^\s*superclass\s+([\w:]+)/gm, meta: { superclass: true } },
@@ -63,8 +79,16 @@ const _plugin = createMultiPassPlugin({
       memberPatterns: [
         { kind: 'method', pattern: /^\s*(?:public|protected|private)\s+method\s+(\w+)/gm },
         { kind: 'method', pattern: /^\s*method\s+(\w+)/gm },
-        { kind: 'method', pattern: /^\s*(constructor)\s*(?:\{[^}]*\}\s*)?\{/gm, meta: { constructor: true } },
-        { kind: 'method', pattern: /^\s*(destructor)\s*(?:\{[^}]*\}\s*)?\{/gm, meta: { destructor: true } },
+        {
+          kind: 'method',
+          pattern: /^\s*(constructor)\s*(?:\{[^}]*\}\s*)?\{/gm,
+          meta: { constructor: true },
+        },
+        {
+          kind: 'method',
+          pattern: /^\s*(destructor)\s*(?:\{[^}]*\}\s*)?\{/gm,
+          meta: { destructor: true },
+        },
         { kind: 'variable', pattern: /^\s*(?:public|protected|private)\s+variable\s+(\w+)/gm },
         { kind: 'variable', pattern: /^\s*variable\s+(\w+)/gm },
         { kind: 'variable', pattern: /^\s*common\s+(\w+)/gm, meta: { static: true } },
@@ -80,8 +104,16 @@ const _plugin = createMultiPassPlugin({
       memberPatterns: [
         { kind: 'method', pattern: /^\s*method\s+(\w+)/gm },
         { kind: 'method', pattern: /^\s*typemethod\s+(\w+)/gm, meta: { static: true } },
-        { kind: 'method', pattern: /^\s*(constructor)\s*(?:\{[^}]*\}\s*)?\{/gm, meta: { constructor: true } },
-        { kind: 'method', pattern: /^\s*(destructor)\s*(?:\{[^}]*\}\s*)?\{/gm, meta: { destructor: true } },
+        {
+          kind: 'method',
+          pattern: /^\s*(constructor)\s*(?:\{[^}]*\}\s*)?\{/gm,
+          meta: { constructor: true },
+        },
+        {
+          kind: 'method',
+          pattern: /^\s*(destructor)\s*(?:\{[^}]*\}\s*)?\{/gm,
+          meta: { destructor: true },
+        },
         { kind: 'variable', pattern: /^\s*variable\s+(\w+)/gm },
         { kind: 'variable', pattern: /^\s*typevariable\s+(\w+)/gm, meta: { static: true } },
         { kind: 'property', pattern: /^\s*option\s+(-\w+)/gm },
@@ -138,7 +170,11 @@ const _plugin = createMultiPassPlugin({
     { kind: 'function', pattern: /^\s*namespace\s+export\s+([\w:*]+)/gm, meta: { exported: true } },
 
     // ── Ensemble creation ──────────────────────────────────────────────
-    { kind: 'function', pattern: /^\s*namespace\s+ensemble\s+create\s+-command\s+([\w:]+)/gm, meta: { ensemble: true } },
+    {
+      kind: 'function',
+      pattern: /^\s*namespace\s+ensemble\s+create\s+-command\s+([\w:]+)/gm,
+      meta: { ensemble: true },
+    },
 
     // ── Coroutines (8.6+) ──────────────────────────────────────────────
     { kind: 'function', pattern: /^\s*coroutine\s+(\w+)/gm, meta: { coroutine: true } },

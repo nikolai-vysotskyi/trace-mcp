@@ -76,10 +76,7 @@ export function computeNewImportSpecifier(
  * Compute a relative import specifier from one file to another.
  * Strips extensions per TS/JS convention and ensures leading './'.
  */
-export function computeRelativeSpecifier(
-  fromFile: string,
-  toFile: string,
-): string {
+export function computeRelativeSpecifier(fromFile: string, toFile: string): string {
   const fromDir = path.dirname(fromFile);
   let rel = path.relative(fromDir, toFile);
 
@@ -247,7 +244,12 @@ export function rewriteImportForMovedTarget(
   dryRun: boolean,
   resolver?: EsModuleResolver,
 ): FileEdit[] {
-  const oldSpecifier = findImportSpecifier(importerAbsPath, oldTargetAbsPath, projectRoot, resolver);
+  const oldSpecifier = findImportSpecifier(
+    importerAbsPath,
+    oldTargetAbsPath,
+    projectRoot,
+    resolver,
+  );
   if (!oldSpecifier) return [];
 
   const newSpecifier = computeNewImportSpecifier(

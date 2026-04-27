@@ -15,7 +15,7 @@ interface RunResult {
 
 function runLauncher(env: Record<string, string>, args: string[] = ['serve']): RunResult {
   const result = spawnSync(LAUNCHER_SRC, args, {
-    env: { ...env, PATH: '/usr/bin:/bin' },  // minimal PATH, no node visible
+    env: { ...env, PATH: '/usr/bin:/bin' }, // minimal PATH, no node visible
     encoding: 'utf-8',
     timeout: 5000,
   });
@@ -39,12 +39,12 @@ function setupFakeHome(): { home: string; traceHome: string; node: string; cli: 
 }
 
 function writeConfig(traceHome: string, node: string, cli: string) {
-  fs.writeFileSync(path.join(traceHome, 'launcher.env'), [
-    `TRACE_MCP_NODE="${node}"`,
-    `TRACE_MCP_CLI="${cli}"`,
-    'TRACE_MCP_VERSION="0.0.0"',
-    '',
-  ].join('\n'));
+  fs.writeFileSync(
+    path.join(traceHome, 'launcher.env'),
+    [`TRACE_MCP_NODE="${node}"`, `TRACE_MCP_CLI="${cli}"`, 'TRACE_MCP_VERSION="0.0.0"', ''].join(
+      '\n',
+    ),
+  );
 }
 
 beforeAll(() => {
@@ -61,10 +61,11 @@ describe('launcher shim integration', () => {
     const { home, traceHome, node, cli } = setupFakeHome();
     writeConfig(traceHome, node, cli);
 
-    const { status, stdout, stderr } = runLauncher(
-      { HOME: home, TRACE_MCP_HOME: traceHome },
-      ['serve', '--foo', 'bar'],
-    );
+    const { status, stdout, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+      'serve',
+      '--foo',
+      'bar',
+    ]);
 
     expect(status).toBe(0);
     expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve --foo bar`);
@@ -76,12 +77,15 @@ describe('launcher shim integration', () => {
     // config points at non-existent paths — override rescues it
     writeConfig(traceHome, '/nope/node', '/nope/cli.js');
 
-    const { status, stdout } = runLauncher({
-      HOME: home,
-      TRACE_MCP_HOME: traceHome,
-      TRACE_MCP_NODE_OVERRIDE: node,
-      TRACE_MCP_CLI_OVERRIDE: cli,
-    }, ['serve']);
+    const { status, stdout } = runLauncher(
+      {
+        HOME: home,
+        TRACE_MCP_HOME: traceHome,
+        TRACE_MCP_NODE_OVERRIDE: node,
+        TRACE_MCP_CLI_OVERRIDE: cli,
+      },
+      ['serve'],
+    );
 
     expect(status).toBe(0);
     expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
@@ -107,11 +111,14 @@ describe('launcher shim integration', () => {
     const { home, traceHome } = setupFakeHome();
     // Sentinel file we check below — command substitution would create it
     const sentinel = path.join(home, 'PWNED');
-    fs.writeFileSync(path.join(traceHome, 'launcher.env'), [
-      `TRACE_MCP_NODE="/tmp/fake; touch ${sentinel}"`,
-      `TRACE_MCP_CLI="$(touch ${sentinel}-sub)"`,
-      '',
-    ].join('\n'));
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [
+        `TRACE_MCP_NODE="/tmp/fake; touch ${sentinel}"`,
+        `TRACE_MCP_CLI="$(touch ${sentinel}-sub)"`,
+        '',
+      ].join('\n'),
+    );
 
     const { status } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
 

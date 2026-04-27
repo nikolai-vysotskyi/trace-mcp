@@ -56,18 +56,21 @@ export function getSessionAnalytics(
       toolCalls: result.totals.tool_calls,
     },
     byToolServer: Object.fromEntries(
-      Object.entries(result.by_tool_server).map(([k, v]) => [k, {
-        calls: v.calls,
-        outputTokensEst: v.output_tokens_est,
-        pct: v.pct,
-      }]),
+      Object.entries(result.by_tool_server).map(([k, v]) => [
+        k,
+        {
+          calls: v.calls,
+          outputTokensEst: v.output_tokens_est,
+          pct: v.pct,
+        },
+      ]),
     ),
-    topTools: result.top_tools.map(t => ({
+    topTools: result.top_tools.map((t) => ({
       name: t.name,
       calls: t.calls,
       outputTokensEst: t.output_tokens_est,
     })),
-    topFiles: result.top_files.map(f => ({
+    topFiles: result.top_files.map((f) => ({
       path: f.path,
       reads: f.reads,
       tokensEst: f.tokens_est,

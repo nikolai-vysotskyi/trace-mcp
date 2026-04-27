@@ -88,7 +88,10 @@ export function findReferences(
   }
 
   // Collect incoming edges for all target nodes (self + CHA equivalents)
-  const allIncomingEdges: Array<{ edge: ReturnType<Store['getIncomingEdges']>[0]; via_cha?: string }> = [];
+  const allIncomingEdges: Array<{
+    edge: ReturnType<Store['getIncomingEdges']>[0];
+    via_cha?: string;
+  }> = [];
   const seenEdgeKeys = new Set<string>();
 
   for (const targetNid of allTargetNodeIds) {
@@ -101,12 +104,14 @@ export function findReferences(
       seenEdgeKeys.add(key);
       allIncomingEdges.push({
         edge,
-        via_cha: isChaTarget ? chaExpansion?.find((c) => {
-          const ref = store.getNodeRef(targetNid);
-          return ref && ref.nodeType === 'symbol'
-            ? store.getSymbolById(ref.refId)?.symbol_id === c.symbol_id
-            : false;
-        })?.name : undefined,
+        via_cha: isChaTarget
+          ? chaExpansion?.find((c) => {
+              const ref = store.getNodeRef(targetNid);
+              return ref && ref.nodeType === 'symbol'
+                ? store.getSymbolById(ref.refId)?.symbol_id === c.symbol_id
+                : false;
+            })?.name
+          : undefined,
       });
     }
   }

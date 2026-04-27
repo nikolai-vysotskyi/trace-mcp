@@ -30,13 +30,25 @@ const _plugin = createRegexLanguagePlugin({
     // entity name is
     { kind: 'class', pattern: /^\s*entity\s+(\w+)\s+is\b/gim, meta: { vhdlKind: 'entity' } },
     // architecture name of entity_name is
-    { kind: 'class', pattern: /^\s*architecture\s+(\w+)\s+of\s+\w+\s+is\b/gim, meta: { vhdlKind: 'architecture' } },
+    {
+      kind: 'class',
+      pattern: /^\s*architecture\s+(\w+)\s+of\s+\w+\s+is\b/gim,
+      meta: { vhdlKind: 'architecture' },
+    },
     // package name is
     { kind: 'namespace', pattern: /^\s*package\s+(\w+)\s+is\b/gim, meta: { vhdlKind: 'package' } },
     // package body name is
-    { kind: 'namespace', pattern: /^\s*package\s+body\s+(\w+)\s+is\b/gim, meta: { vhdlKind: 'package_body' } },
+    {
+      kind: 'namespace',
+      pattern: /^\s*package\s+body\s+(\w+)\s+is\b/gim,
+      meta: { vhdlKind: 'package_body' },
+    },
     // configuration name of entity is
-    { kind: 'class', pattern: /^\s*configuration\s+(\w+)\s+of\s+\w+\s+is\b/gim, meta: { vhdlKind: 'configuration' } },
+    {
+      kind: 'class',
+      pattern: /^\s*configuration\s+(\w+)\s+of\s+\w+\s+is\b/gim,
+      meta: { vhdlKind: 'configuration' },
+    },
     // context name is  (VHDL-2008)
     { kind: 'namespace', pattern: /^\s*context\s+(\w+)\s+is\b/gim, meta: { vhdlKind: 'context' } },
 
@@ -45,7 +57,11 @@ const _plugin = createRegexLanguagePlugin({
     // ═══════════════════════════════════════════════════════════════
 
     // label : [postponed] process
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*(?:postponed\s+)?process\b/gim, meta: { vhdlKind: 'process' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*(?:postponed\s+)?process\b/gim,
+      meta: { vhdlKind: 'process' },
+    },
     // function name (pure/impure)
     { kind: 'function', pattern: /^\s*(?:pure\s+|impure\s+)?function\s+(?:"[^"]+"|(\w+))/gim },
     // procedure name
@@ -82,9 +98,17 @@ const _plugin = createRegexLanguagePlugin({
     // ═══════════════════════════════════════════════════════════════
 
     // type name is protected body  (must be before protected_type to match first)
-    { kind: 'class', pattern: /^\s*type\s+(\w+)\s+is\s+protected\s+body\b/gim, meta: { vhdlKind: 'protected_body' } },
+    {
+      kind: 'class',
+      pattern: /^\s*type\s+(\w+)\s+is\s+protected\s+body\b/gim,
+      meta: { vhdlKind: 'protected_body' },
+    },
     // type name is protected  (but not "protected body")
-    { kind: 'class', pattern: /^\s*type\s+(\w+)\s+is\s+protected\b(?!\s+body)/gim, meta: { vhdlKind: 'protected_type' } },
+    {
+      kind: 'class',
+      pattern: /^\s*type\s+(\w+)\s+is\s+protected\b(?!\s+body)/gim,
+      meta: { vhdlKind: 'protected_type' },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // Aliases, Attributes, Groups
@@ -97,7 +121,11 @@ const _plugin = createRegexLanguagePlugin({
     // group name : group_template_name (...)
     { kind: 'variable', pattern: /^\s*group\s+(\w+)\s*:/gim, meta: { vhdlKind: 'group' } },
     // disconnect signal_name : type after time
-    { kind: 'variable', pattern: /^\s*disconnect\s+(\w+)\s*:/gim, meta: { vhdlKind: 'disconnect' } },
+    {
+      kind: 'variable',
+      pattern: /^\s*disconnect\s+(\w+)\s*:/gim,
+      meta: { vhdlKind: 'disconnect' },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // Blocks & Generate Statements
@@ -106,18 +134,34 @@ const _plugin = createRegexLanguagePlugin({
     // label : block [(guard_expression)]
     { kind: 'function', pattern: /^\s*(\w+)\s*:\s*block\b/gim, meta: { vhdlKind: 'block' } },
     // label : for ... generate
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*for\b.*\bgenerate\b/gim, meta: { vhdlKind: 'generate' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*for\b.*\bgenerate\b/gim,
+      meta: { vhdlKind: 'generate' },
+    },
     // label : if ... generate
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*if\b.*\bgenerate\b/gim, meta: { vhdlKind: 'generate' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*if\b.*\bgenerate\b/gim,
+      meta: { vhdlKind: 'generate' },
+    },
     // label : case ... generate  (VHDL-2008)
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*case\b.*\bgenerate\b/gim, meta: { vhdlKind: 'case_generate' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*case\b.*\bgenerate\b/gim,
+      meta: { vhdlKind: 'case_generate' },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // Ports & Generics
     // ═══════════════════════════════════════════════════════════════
 
     // port name : direction type
-    { kind: 'property', pattern: /^\s*(\w+)\s*:\s*(?:in|out|inout|buffer|linkage)\s+\w+/gim, meta: { vhdlKind: 'port' } },
+    {
+      kind: 'property',
+      pattern: /^\s*(\w+)\s*:\s*(?:in|out|inout|buffer|linkage)\s+\w+/gim,
+      meta: { vhdlKind: 'port' },
+    },
     // generic (name : type := default)
     { kind: 'constant', pattern: /^\s*(\w+)\s*:\s*\w+\s*:=/gim, meta: { vhdlKind: 'generic' } },
 

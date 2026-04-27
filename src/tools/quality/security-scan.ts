@@ -65,8 +65,18 @@ interface SecurityRule {
 }
 
 const ALL_LANGUAGES = new Set([
-  'typescript', 'javascript', 'python', 'php', 'ruby', 'java', 'csharp',
-  'go', 'rust', 'kotlin', 'scala', 'swift',
+  'typescript',
+  'javascript',
+  'python',
+  'php',
+  'ruby',
+  'java',
+  'csharp',
+  'go',
+  'rust',
+  'kotlin',
+  'scala',
+  'swift',
 ]);
 
 const JS_TS = new Set(['typescript', 'javascript']);
@@ -101,7 +111,10 @@ const RULES: SecurityRule[] = [
       // Ruby: interpolation in query
       { regex: /\.(execute|query|select_all|find_by_sql)\s*\(\s*["'][^"']*#\{/g, languages: RUBY },
       // Java: concatenation in SQL
-      { regex: /\.(executeQuery|executeUpdate|prepareStatement)\s*\(\s*["'][^"']*["']\s*\+/g, languages: JAVA },
+      {
+        regex: /\.(executeQuery|executeUpdate|prepareStatement)\s*\(\s*["'][^"']*["']\s*\+/g,
+        languages: JAVA,
+      },
       // Go: Sprintf in query
       { regex: /\.(Query|Exec|QueryRow)\s*\(\s*fmt\.Sprintf\s*\(/g, languages: GO },
     ],
@@ -129,7 +142,7 @@ const RULES: SecurityRule[] = [
       // Vue: v-html directive
       { regex: /v-html\s*=\s*["'][^"']+["']/g, languages: JS_TS },
       // PHP: echo without escaping
-      { regex:/<\?=\s*\$(?!_SERVER\['REQUEST_METHOD)/g, languages: PHP },
+      { regex: /<\?=\s*\$(?!_SERVER\['REQUEST_METHOD)/g, languages: PHP },
       // PHP: {!! !!} in Blade
       { regex: /\{!!\s*\$[^}]+!!\}/g, languages: PHP },
       // Ruby: raw in ERB
@@ -162,7 +175,10 @@ const RULES: SecurityRule[] = [
       // Python: subprocess with shell=True
       { regex: /subprocess\.(?:call|run|Popen)\s*\([^)]*shell\s*=\s*True/g, languages: PY },
       // PHP: exec/system/passthru/shell_exec with variable
-      { regex: /(?:exec|system|passthru|shell_exec|popen|proc_open)\s*\(\s*\$[a-zA-Z_]/g, languages: PHP },
+      {
+        regex: /(?:exec|system|passthru|shell_exec|popen|proc_open)\s*\(\s*\$[a-zA-Z_]/g,
+        languages: PHP,
+      },
       // PHP: backtick operator with variable
       { regex: /`[^`]*\$[a-zA-Z_][^`]*`/g, languages: PHP },
       // Ruby: system with interpolation
@@ -186,13 +202,23 @@ const RULES: SecurityRule[] = [
     severity: 'high',
     patterns: [
       // JS/TS: path.join with user input (req.params/req.query/req.body)
-      { regex: /path\.(?:join|resolve)\s*\([^)]*(?:req\.|params\.|query\.|body\.)/g, languages: JS_TS },
+      {
+        regex: /path\.(?:join|resolve)\s*\([^)]*(?:req\.|params\.|query\.|body\.)/g,
+        languages: JS_TS,
+      },
       // JS/TS: fs operations with template literal
-      { regex: /fs\.(?:readFile|writeFile|unlink|readdir|stat|access)(?:Sync)?\s*\(\s*`[^`]*\$\{/g, languages: JS_TS },
+      {
+        regex: /fs\.(?:readFile|writeFile|unlink|readdir|stat|access)(?:Sync)?\s*\(\s*`[^`]*\$\{/g,
+        languages: JS_TS,
+      },
       // Python: open() with user-controlled path
       { regex: /open\s*\(\s*(?:request\.|f["']|os\.path\.join.*request)/g, languages: PY },
       // PHP: file operations with user input
-      { regex: /(?:file_get_contents|fopen|readfile|include|require)\s*\(\s*\$_(?:GET|POST|REQUEST)/g, languages: PHP },
+      {
+        regex:
+          /(?:file_get_contents|fopen|readfile|include|require)\s*\(\s*\$_(?:GET|POST|REQUEST)/g,
+        languages: PHP,
+      },
     ],
     falsePositiveFilters: [
       /realpath|normalize|sanitize|validate.*path/i,
@@ -209,7 +235,10 @@ const RULES: SecurityRule[] = [
     severity: 'high',
     patterns: [
       // Generic: API key patterns
-      { regex: /(?:api[_-]?key|apikey|api[_-]?secret)\s*[:=]\s*['"][a-zA-Z0-9_\-]{20,}['"]/gi, languages: ALL_LANGUAGES },
+      {
+        regex: /(?:api[_-]?key|apikey|api[_-]?secret)\s*[:=]\s*['"][a-zA-Z0-9_\-]{20,}['"]/gi,
+        languages: ALL_LANGUAGES,
+      },
       // AWS access key
       { regex: /['"]AKIA[0-9A-Z]{16}['"]/g, languages: ALL_LANGUAGES },
       // Private key inline
@@ -217,11 +246,17 @@ const RULES: SecurityRule[] = [
       // Generic password assignment
       { regex: /(?:password|passwd|pwd)\s*[:=]\s*['"][^'"]{8,}['"]/gi, languages: ALL_LANGUAGES },
       // JWT/Bearer token
-      { regex: /['"](?:eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,})['"]/g, languages: ALL_LANGUAGES },
+      {
+        regex: /['"](?:eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,})['"]/g,
+        languages: ALL_LANGUAGES,
+      },
       // Stripe live key
       { regex: /['"]sk_live_[a-zA-Z0-9]{20,}['"]/g, languages: ALL_LANGUAGES },
       // Generic secret assignment
-      { regex: /(?:secret|token)\s*[:=]\s*['"][a-zA-Z0-9_\-/+=]{20,}['"]/gi, languages: ALL_LANGUAGES },
+      {
+        regex: /(?:secret|token)\s*[:=]\s*['"][a-zA-Z0-9_\-/+=]{20,}['"]/gi,
+        languages: ALL_LANGUAGES,
+      },
     ],
     falsePositiveFilters: [
       /process\.env|os\.environ|ENV\[|getenv|env\(|config\(/i,
@@ -240,15 +275,30 @@ const RULES: SecurityRule[] = [
     severity: 'medium',
     patterns: [
       // MD5
-      { regex: /(?:createHash|MessageDigest\.getInstance|hashlib\.)\s*\(\s*['"]md5['"]/gi, languages: ALL_LANGUAGES },
+      {
+        regex: /(?:createHash|MessageDigest\.getInstance|hashlib\.)\s*\(\s*['"]md5['"]/gi,
+        languages: ALL_LANGUAGES,
+      },
       // SHA1
-      { regex: /(?:createHash|MessageDigest\.getInstance|hashlib\.)\s*\(\s*['"]sha1?['"]/gi, languages: ALL_LANGUAGES },
+      {
+        regex: /(?:createHash|MessageDigest\.getInstance|hashlib\.)\s*\(\s*['"]sha1?['"]/gi,
+        languages: ALL_LANGUAGES,
+      },
       // DES
-      { regex: /(?:createCipher|Cipher\.getInstance)\s*\(\s*['"](?:des|des-ede|rc4)['"]/gi, languages: ALL_LANGUAGES },
+      {
+        regex: /(?:createCipher|Cipher\.getInstance)\s*\(\s*['"](?:des|des-ede|rc4)['"]/gi,
+        languages: ALL_LANGUAGES,
+      },
       // Math.random for crypto
-      { regex: /Math\.random\s*\(\s*\).*(?:token|key|secret|password|nonce|salt)/gi, languages: JS_TS },
+      {
+        regex: /Math\.random\s*\(\s*\).*(?:token|key|secret|password|nonce|salt)/gi,
+        languages: JS_TS,
+      },
       // Python random for crypto
-      { regex: /random\.(?:random|randint|choice)\s*\(.*(?:token|key|secret|password)/gi, languages: PY },
+      {
+        regex: /random\.(?:random|randint|choice)\s*\(.*(?:token|key|secret|password)/gi,
+        languages: PY,
+      },
     ],
     falsePositiveFilters: [
       /checksum|etag|cache|hash.*file|content.?hash|fingerprint/i,
@@ -265,11 +315,18 @@ const RULES: SecurityRule[] = [
     severity: 'medium',
     patterns: [
       // JS/TS: redirect with user input
-      { regex: /(?:res\.redirect|redirect|location\.href|window\.location)\s*(?:=|\()\s*(?:req\.|params\.|query\.)/g, languages: JS_TS },
+      {
+        regex:
+          /(?:res\.redirect|redirect|location\.href|window\.location)\s*(?:=|\()\s*(?:req\.|params\.|query\.)/g,
+        languages: JS_TS,
+      },
       // Python: redirect with request
       { regex: /redirect\s*\(\s*request\.(?:GET|POST|args|form)\s*(?:\.|\.get\()/g, languages: PY },
       // PHP: header Location with user input
-      { regex: /header\s*\(\s*['"]Location:\s*['"]\s*\.\s*\$_(?:GET|POST|REQUEST)/g, languages: PHP },
+      {
+        regex: /header\s*\(\s*['"]Location:\s*['"]\s*\.\s*\$_(?:GET|POST|REQUEST)/g,
+        languages: PHP,
+      },
     ],
     falsePositiveFilters: [
       /allowedUrls|whitelist|safelist|validateUrl|isRelative|startsWith\s*\(\s*['"]\/['"]\)/i,
@@ -286,9 +343,16 @@ const RULES: SecurityRule[] = [
     severity: 'high',
     patterns: [
       // JS/TS: fetch/axios with user input
-      { regex: /(?:fetch|axios\.get|axios\.post|got|request)\s*\(\s*(?:req\.|params\.|query\.|body\.|`[^`]*\$\{)/g, languages: JS_TS },
+      {
+        regex:
+          /(?:fetch|axios\.get|axios\.post|got|request)\s*\(\s*(?:req\.|params\.|query\.|body\.|`[^`]*\$\{)/g,
+        languages: JS_TS,
+      },
       // Python: requests with user input
-      { regex: /requests\.(?:get|post|put|delete|patch)\s*\(\s*(?:request\.|f["'])/g, languages: PY },
+      {
+        regex: /requests\.(?:get|post|put|delete|patch)\s*\(\s*(?:request\.|f["'])/g,
+        languages: PY,
+      },
       // PHP: file_get_contents/curl with user input
       { regex: /(?:file_get_contents|curl_init)\s*\(\s*\$_(?:GET|POST|REQUEST)/g, languages: PHP },
       // Java: URL connection with user input
@@ -366,8 +430,14 @@ export function scanSecurity(
   // Fetch file list from DB (already indexed)
   const scope = opts.scope?.replace(/\/+$/, '');
   const files: { path: string; language: string }[] = scope
-    ? store.db.prepare("SELECT path, language FROM files WHERE path LIKE ? AND (status = 'ok' OR status IS NULL)").all(`${scope}%`) as { path: string; language: string }[]
-    : store.db.prepare("SELECT path, language FROM files WHERE status = 'ok' OR status IS NULL").all() as { path: string; language: string }[];
+    ? (store.db
+        .prepare(
+          "SELECT path, language FROM files WHERE path LIKE ? AND (status = 'ok' OR status IS NULL)",
+        )
+        .all(`${scope}%`) as { path: string; language: string }[])
+    : (store.db
+        .prepare("SELECT path, language FROM files WHERE status = 'ok' OR status IS NULL")
+        .all() as { path: string; language: string }[]);
 
   const findings: SecurityFinding[] = [];
   let scanned = 0;
@@ -411,10 +481,9 @@ export function scanSecurity(
             const snippet = line.trim();
 
             // Check false positive filters on the line + surrounding context
-            const contextWindow = lines.slice(
-              Math.max(0, lineIdx - 2),
-              Math.min(lines.length, lineIdx + 3),
-            ).join('\n');
+            const contextWindow = lines
+              .slice(Math.max(0, lineIdx - 2), Math.min(lines.length, lineIdx + 3))
+              .join('\n');
 
             let isFalsePositive = false;
             for (const fp of rule.falsePositiveFilters) {

@@ -10,7 +10,14 @@
  * Dialects: cargo, pyproject, hugo, rustfmt, deno, taplo, generic (fallback).
  */
 import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+  RawEdge,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
@@ -76,7 +83,10 @@ export class TomlLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.toml'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('toml');
       const source = content.toString('utf-8');
@@ -145,33 +155,68 @@ export class TomlLanguagePlugin implements LanguagePlugin {
             if (dialect === 'cargo') {
               if (currentTable === 'package' || currentTable === 'features') {
                 // will extract keys inside
-              } else if (currentTable === 'dependencies' || currentTable.startsWith('dependencies.') ||
-                         currentTable === 'dev-dependencies' || currentTable === 'build-dependencies') {
+              } else if (
+                currentTable === 'dependencies' ||
+                currentTable.startsWith('dependencies.') ||
+                currentTable === 'dev-dependencies' ||
+                currentTable === 'build-dependencies'
+              ) {
                 // dependencies are handled per-key below
               } else {
-                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                  tomlKind: 'table',
+                  dialect,
+                });
               }
             } else if (dialect === 'pyproject') {
-              if (currentTable === 'project' || currentTable === 'build-system' ||
-                  currentTable === 'tool.poetry.dependencies' || currentTable.startsWith('tool.')) {
+              if (
+                currentTable === 'project' ||
+                currentTable === 'build-system' ||
+                currentTable === 'tool.poetry.dependencies' ||
+                currentTable.startsWith('tool.')
+              ) {
                 // will extract keys inside
               } else {
-                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                  tomlKind: 'table',
+                  dialect,
+                });
               }
             } else if (dialect === 'hugo') {
-              if (currentTable === 'params' || currentTable.startsWith('params.') ||
-                  currentTable === 'menu' || currentTable.startsWith('menu.')) {
-                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+              if (
+                currentTable === 'params' ||
+                currentTable.startsWith('params.') ||
+                currentTable === 'menu' ||
+                currentTable.startsWith('menu.')
+              ) {
+                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                  tomlKind: 'table',
+                  dialect,
+                });
               } else {
-                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                  tomlKind: 'table',
+                  dialect,
+                });
               }
             } else {
               // generic, rustfmt, deno, taplo
-              addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, { tomlKind: 'table', dialect });
+              addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                tomlKind: 'table',
+                dialect,
+              });
             }
 
             // Process pairs inside this table
-            this.processPairs(child, filePath, dialect, currentTable, currentArrayTable, addSymbol, addEdge);
+            this.processPairs(
+              child,
+              filePath,
+              dialect,
+              currentTable,
+              currentArrayTable,
+              addSymbol,
+              addEdge,
+            );
             break;
           }
 
@@ -189,17 +234,36 @@ export class TomlLanguagePlugin implements LanguagePlugin {
             if (dialect === 'cargo' && currentTable === 'bin') {
               // [[bin]] — will extract name from keys inside
             } else if (dialect === 'generic') {
-              addSymbol(currentArrayTable, 'class', ln, lnEnd, bs, be, { tomlKind: 'array-of-tables', dialect });
+              addSymbol(currentArrayTable, 'class', ln, lnEnd, bs, be, {
+                tomlKind: 'array-of-tables',
+                dialect,
+              });
             }
 
             // Process pairs inside this array-of-tables element
-            this.processPairs(child, filePath, dialect, currentTable, currentArrayTable, addSymbol, addEdge);
+            this.processPairs(
+              child,
+              filePath,
+              dialect,
+              currentTable,
+              currentArrayTable,
+              addSymbol,
+              addEdge,
+            );
             break;
           }
 
           case 'pair': {
             // Top-level key = value (before any table)
-            this.processSinglePair(child, filePath, dialect, currentTable, currentArrayTable, addSymbol, addEdge);
+            this.processSinglePair(
+              child,
+              filePath,
+              dialect,
+              currentTable,
+              currentArrayTable,
+              addSymbol,
+              addEdge,
+            );
             break;
           }
         }
@@ -225,12 +289,29 @@ export class TomlLanguagePlugin implements LanguagePlugin {
     dialect: TomlDialect,
     currentTable: string,
     currentArrayTable: string,
-    addSymbol: (name: string, kind: SymbolKind, lineStart: number, lineEnd: number, byteStart: number, byteEnd: number, meta?: Record<string, unknown>, parent?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      lineStart: number,
+      lineEnd: number,
+      byteStart: number,
+      byteEnd: number,
+      meta?: Record<string, unknown>,
+      parent?: string,
+    ) => void,
     addEdge: (module: string) => void,
   ): void {
     for (const child of parentNode.namedChildren) {
       if (child.type === 'pair') {
-        this.processSinglePair(child, filePath, dialect, currentTable, currentArrayTable, addSymbol, addEdge);
+        this.processSinglePair(
+          child,
+          filePath,
+          dialect,
+          currentTable,
+          currentArrayTable,
+          addSymbol,
+          addEdge,
+        );
       }
     }
   }
@@ -242,7 +323,16 @@ export class TomlLanguagePlugin implements LanguagePlugin {
     dialect: TomlDialect,
     currentTable: string,
     currentArrayTable: string,
-    addSymbol: (name: string, kind: SymbolKind, lineStart: number, lineEnd: number, byteStart: number, byteEnd: number, meta?: Record<string, unknown>, parent?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      lineStart: number,
+      lineEnd: number,
+      byteStart: number,
+      byteEnd: number,
+      meta?: Record<string, unknown>,
+      parent?: string,
+    ) => void,
     addEdge: (module: string) => void,
   ): void {
     const key = extractKeyName(pairNode);
@@ -260,23 +350,63 @@ export class TomlLanguagePlugin implements LanguagePlugin {
       case 'cargo':
         if (currentTable === 'package') {
           if (key === 'name' || key === 'version') {
-            addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'package-field', dialect, value: unquotedValue }, 'package');
+            addSymbol(
+              key,
+              'constant',
+              ln,
+              lnEnd,
+              bs,
+              be,
+              { tomlKind: 'package-field', dialect, value: unquotedValue },
+              'package',
+            );
           }
-        } else if (currentTable === 'dependencies' || currentTable === 'dev-dependencies' || currentTable === 'build-dependencies') {
+        } else if (
+          currentTable === 'dependencies' ||
+          currentTable === 'dev-dependencies' ||
+          currentTable === 'build-dependencies'
+        ) {
           addEdge(key);
         } else if (currentTable === 'features') {
-          addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'feature', dialect }, 'features');
+          addSymbol(
+            key,
+            'constant',
+            ln,
+            lnEnd,
+            bs,
+            be,
+            { tomlKind: 'feature', dialect },
+            'features',
+          );
         } else if (currentArrayTable === 'bin' && key === 'name') {
           addSymbol(unquotedValue, 'constant', ln, lnEnd, bs, be, { tomlKind: 'binary', dialect });
         } else {
-          addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+          addSymbol(
+            key,
+            'constant',
+            ln,
+            lnEnd,
+            bs,
+            be,
+            { tomlKind: 'key', dialect },
+            currentTable || undefined,
+          );
         }
         break;
 
       case 'pyproject':
         if (currentTable === 'project') {
           if (key === 'name' || key === 'version') {
-            addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'project-field', dialect, value: unquotedValue }, 'project');
+            addSymbol(
+              key,
+              'constant',
+              ln,
+              lnEnd,
+              bs,
+              be,
+              { tomlKind: 'project-field', dialect, value: unquotedValue },
+              'project',
+            );
           }
         } else if (currentTable === 'tool.poetry.dependencies') {
           addEdge(key);
@@ -285,11 +415,25 @@ export class TomlLanguagePlugin implements LanguagePlugin {
           const deps = valueText.match(/"([^"]+)"/g);
           if (deps) {
             for (const dep of deps) {
-              addEdge(dep.replace(/"/g, '').split(/[><=!~]/)[0].trim());
+              addEdge(
+                dep
+                  .replace(/"/g, '')
+                  .split(/[><=!~]/)[0]
+                  .trim(),
+              );
             }
           }
         } else {
-          addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+          addSymbol(
+            key,
+            'constant',
+            ln,
+            lnEnd,
+            bs,
+            be,
+            { tomlKind: 'key', dialect },
+            currentTable || undefined,
+          );
         }
         break;
 
@@ -297,7 +441,16 @@ export class TomlLanguagePlugin implements LanguagePlugin {
         if (key === 'theme') {
           addEdge(unquotedValue);
         }
-        addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+        addSymbol(
+          key,
+          'constant',
+          ln,
+          lnEnd,
+          bs,
+          be,
+          { tomlKind: 'key', dialect },
+          currentTable || undefined,
+        );
         break;
 
       case 'rustfmt':
@@ -310,7 +463,16 @@ export class TomlLanguagePlugin implements LanguagePlugin {
         } else if (currentTable === 'imports') {
           addEdge(unquotedValue);
         } else {
-          addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+          addSymbol(
+            key,
+            'constant',
+            ln,
+            lnEnd,
+            bs,
+            be,
+            { tomlKind: 'key', dialect },
+            currentTable || undefined,
+          );
         }
         break;
 
@@ -320,7 +482,16 @@ export class TomlLanguagePlugin implements LanguagePlugin {
 
       default:
         // generic
-        addSymbol(key, 'constant', ln, lnEnd, bs, be, { tomlKind: 'key', dialect }, currentTable || undefined);
+        addSymbol(
+          key,
+          'constant',
+          ln,
+          lnEnd,
+          bs,
+          be,
+          { tomlKind: 'key', dialect },
+          currentTable || undefined,
+        );
         break;
     }
   }

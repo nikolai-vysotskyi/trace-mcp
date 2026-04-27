@@ -47,14 +47,18 @@ function hasPythonDep(ctx: ProjectContext, pkg: string): boolean {
     const content = fs.readFileSync(pyprojectPath, 'utf-8');
     const re = new RegExp(`["']${escapeRegExp(pkg)}[>=<\\[!~\\s"']`, 'i');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   try {
     const reqPath = path.join(ctx.rootPath, 'requirements.txt');
     const content = fs.readFileSync(reqPath, 'utf-8');
     const re = new RegExp(`^${escapeRegExp(pkg)}\\b`, 'im');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return false;
 }
@@ -75,10 +79,26 @@ export class FlaskPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'flask_route', category: 'flask', description: 'Flask route decorator → handler function' },
-        { name: 'flask_blueprint_mounts', category: 'flask', description: 'app.register_blueprint() mount' },
-        { name: 'flask_before_request', category: 'flask', description: '@app.before_request hook' },
-        { name: 'flask_error_handler', category: 'flask', description: '@app.errorhandler() registration' },
+        {
+          name: 'flask_route',
+          category: 'flask',
+          description: 'Flask route decorator → handler function',
+        },
+        {
+          name: 'flask_blueprint_mounts',
+          category: 'flask',
+          description: 'app.register_blueprint() mount',
+        },
+        {
+          name: 'flask_before_request',
+          category: 'flask',
+          description: '@app.before_request hook',
+        },
+        {
+          name: 'flask_error_handler',
+          category: 'flask',
+          description: '@app.errorhandler() registration',
+        },
       ] satisfies EdgeTypeDeclaration[],
     };
   }
@@ -123,7 +143,9 @@ export class FlaskPlugin implements FrameworkPlugin {
       this.extractBeforeRequestHooks(root, source, filePath, result);
       this.extractErrorHandlers(root, source, filePath, result);
     } catch (e: unknown) {
-      return err(parseError(filePath, `Flask parse error: ${e instanceof Error ? e.message : String(e)}`));
+      return err(
+        parseError(filePath, `Flask parse error: ${e instanceof Error ? e.message : String(e)}`),
+      );
     }
 
     if (result.routes!.length > 0 || result.edges!.length > 0) {
@@ -150,9 +172,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find(
-        (c: any) => c.type === 'function_definition',
-      );
+      const funcDef = decoratedDef.children.find((c: any) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -254,9 +274,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find(
-        (c: any) => c.type === 'function_definition',
-      );
+      const funcDef = decoratedDef.children.find((c: any) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -296,9 +314,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find(
-        (c: any) => c.type === 'function_definition',
-      );
+      const funcDef = decoratedDef.children.find((c: any) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -356,7 +372,13 @@ export class FlaskPlugin implements FrameworkPlugin {
 
   private getFirstArgText(args: any): string | null {
     for (const child of args.children ?? []) {
-      if (child.type === 'keyword_argument' || child.type === '(' || child.type === ')' || child.type === ',') continue;
+      if (
+        child.type === 'keyword_argument' ||
+        child.type === '(' ||
+        child.type === ')' ||
+        child.type === ','
+      )
+        continue;
       return child.text;
     }
     return null;

@@ -16,7 +16,9 @@ afterEach(() => {
   const dir = getMarkerDir();
   try {
     fs.rmSync(dir, { recursive: true, force: true });
-  } catch { /* may not exist */ }
+  } catch {
+    /* may not exist */
+  }
 });
 
 describe('createExploredTracker', () => {

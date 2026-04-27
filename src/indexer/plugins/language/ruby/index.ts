@@ -2,7 +2,12 @@
  * Ruby Language Plugin — tree-sitter based symbol extraction.
  */
 import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
@@ -31,7 +36,10 @@ export class RubyLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.rb', '.rake'];
   supportedVersions = ['2.0', '2.3', '2.5', '2.6', '2.7', '3.0', '3.1', '3.2', '3.3'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('ruby');
       const sourceCode = content.toString('utf-8');
@@ -68,7 +76,12 @@ export class RubyLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private walkNode(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private walkNode(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     for (const child of node.namedChildren) {
       switch (child.type) {
         case 'class':
@@ -87,12 +100,22 @@ export class RubyLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private extractClass(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private extractClass(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) return;
 
     const parts = [...namespaceParts, name];
-    const symbolId = makeSymbolId(filePath, name, 'class', namespaceParts.length > 0 ? namespaceParts.join('::') : undefined);
+    const symbolId = makeSymbolId(
+      filePath,
+      name,
+      'class',
+      namespaceParts.length > 0 ? namespaceParts.join('::') : undefined,
+    );
     const superclass = extractSuperclass(node);
     const meta: Record<string, unknown> = {};
 
@@ -126,12 +149,22 @@ export class RubyLanguagePlugin implements LanguagePlugin {
     this.walkNode(body, filePath, parts, symbols);
   }
 
-  private extractModule(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private extractModule(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) return;
 
     const parts = [...namespaceParts, name];
-    const symbolId = makeSymbolId(filePath, name, 'namespace', namespaceParts.length > 0 ? namespaceParts.join('::') : undefined);
+    const symbolId = makeSymbolId(
+      filePath,
+      name,
+      'namespace',
+      namespaceParts.length > 0 ? namespaceParts.join('::') : undefined,
+    );
 
     const body = node.childForFieldName('body') ?? node;
 
@@ -161,7 +194,12 @@ export class RubyLanguagePlugin implements LanguagePlugin {
     this.walkNode(body, filePath, parts, symbols);
   }
 
-  private extractTopLevelMethod(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private extractTopLevelMethod(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) return;
 
@@ -178,7 +216,12 @@ export class RubyLanguagePlugin implements LanguagePlugin {
     });
   }
 
-  private extractTopLevelConstant(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private extractTopLevelConstant(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     const left = node.childForFieldName('left');
     if (!left || left.type !== 'constant') return;
     const name = left.text;

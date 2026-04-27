@@ -8,8 +8,18 @@ import picomatch from 'picomatch';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../errors.js';
-import type { Store, OrmModelRow, OrmAssociationRow, FileRow, MigrationRow } from '../../db/store.js';
-import { classifyNumericConfidence, type ConfidenceLevel, type Methodology } from '../shared/confidence.js';
+import type {
+  Store,
+  OrmModelRow,
+  OrmAssociationRow,
+  FileRow,
+  MigrationRow,
+} from '../../db/store.js';
+import {
+  classifyNumericConfidence,
+  type ConfidenceLevel,
+  type Methodology,
+} from '../shared/confidence.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,7 +84,9 @@ interface AntipatternResult {
    */
   files_analyzed: number;
   /** Per-category scope counters so callers can distinguish "0 findings" from "detector was inapplicable". */
-  scope_by_category: Partial<Record<AntipatternCategory, { files_scanned: number; models_scanned?: number }>>;
+  scope_by_category: Partial<
+    Record<AntipatternCategory, { files_scanned: number; models_scanned?: number }>
+  >;
   categories_checked: AntipatternCategory[];
   _methodology: Methodology;
 }
@@ -112,7 +124,11 @@ const ANTIPATTERN_METHODOLOGY: Methodology = {
 
 function jsonParse<T = Record<string, unknown>>(raw: string | null): T | null {
   if (!raw) return null;
-  try { return JSON.parse(raw) as T; } catch { return null; }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
 }
 
 function groupBy<T, K extends string | number>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {
@@ -120,7 +136,10 @@ function groupBy<T, K extends string | number>(items: T[], keyFn: (item: T) => K
   for (const item of items) {
     const key = keyFn(item);
     let arr = map.get(key);
-    if (!arr) { arr = []; map.set(key, arr); }
+    if (!arr) {
+      arr = [];
+      map.set(key, arr);
+    }
     arr.push(item);
   }
   return map;
@@ -128,27 +147,46 @@ function groupBy<T, K extends string | number>(items: T[], keyFn: (item: T) => K
 
 /** Kinds that represent "to-many" relationships (N+1 risk). */
 const MANY_KINDS = new Set([
-  'hasMany', 'has_many', 'hasManyThrough', 'has_many_through',
-  'belongsToMany', 'belongs_to_many',
-  'ManyToMany', 'OneToMany',
+  'hasMany',
+  'has_many',
+  'hasManyThrough',
+  'has_many_through',
+  'belongsToMany',
+  'belongs_to_many',
+  'ManyToMany',
+  'OneToMany',
   // Sequelize-specific edge names
-  'sequelize_has_many', 'sequelize_belongs_to_many',
+  'sequelize_has_many',
+  'sequelize_belongs_to_many',
 ]);
 
 /** Kinds for any relationship (eager load analysis). */
 const RELATION_KINDS = new Set([
   ...MANY_KINDS,
-  'hasOne', 'has_one', 'belongsTo', 'belongs_to',
-  'ManyToOne', 'OneToOne',
-  'ref', 'morphsTo', 'morphs_to', 'morphMany', 'morph_many',
-  'sequelize_has_one', 'sequelize_belongs_to',
+  'hasOne',
+  'has_one',
+  'belongsTo',
+  'belongs_to',
+  'ManyToOne',
+  'OneToOne',
+  'ref',
+  'morphsTo',
+  'morphs_to',
+  'morphMany',
+  'morph_many',
+  'sequelize_has_one',
+  'sequelize_belongs_to',
 ]);
 
 /** Owning-side relationship kinds — the FK lives on THIS model's table. */
 const BELONGS_TO_KINDS = new Set([
-  'belongsTo', 'belongs_to',
-  'ManyToOne', 'OneToOne',
-  'ref', 'morphsTo', 'morphs_to',
+  'belongsTo',
+  'belongs_to',
+  'ManyToOne',
+  'OneToOne',
+  'ref',
+  'morphsTo',
+  'morphs_to',
   'sequelize_belongs_to',
 ]);
 
@@ -187,7 +225,8 @@ function hasEagerLoadHint(assoc: OrmAssociationRow, model: OrmModelRow): boolean
 
 /** High-cardinality table name heuristic.
  *  Matches whole-word tokens so `audit_logs`, `user_events`, `app_notifications` all hit. */
-const HIGH_CARDINALITY_PATTERNS = /(^|[^a-z0-9])(logs?|events?|messages?|notifications?|activities|audit|metrics|jobs|queue|sessions?|clicks?|views?|requests?)([^a-z0-9]|$)/i;
+const HIGH_CARDINALITY_PATTERNS =
+  /(^|[^a-z0-9])(logs?|events?|messages?|notifications?|activities|audit|metrics|jobs|queue|sessions?|clicks?|views?|requests?)([^a-z0-9]|$)/i;
 
 /** Add/remove listener rules matched against `symbols.metadata.callSites[].calleeName`.
  *  Signature-based matching has been retired — function bodies aren't in `signature`,
@@ -201,20 +240,49 @@ interface ListenerRule {
   requiresContainer?: boolean;
 }
 const LISTENER_RULES: ListenerRule[] = [
-  { add: /^addEventListener$/i, cleanup: /^removeEventListener$/i, label: 'addEventListener without removeEventListener' },
-  { add: /^(on|addListener|addEventHandler)$/i, cleanup: /^(off|removeListener|removeEventHandler|removeAllListeners)$/i, label: '.on() without .off()/.removeListener()' },
-  { add: /^subscribe$/i, cleanup: /^(unsubscribe|complete)$/i, label: '.subscribe() without .unsubscribe()' },
-  { add: /^setInterval$/i, cleanup: /^clearInterval$/i, label: 'setInterval without clearInterval' },
-  { add: /^setTimeout$/i, cleanup: /^clearTimeout$/i, label: 'setTimeout without clearTimeout (in class/component)', requiresContainer: true },
+  {
+    add: /^addEventListener$/i,
+    cleanup: /^removeEventListener$/i,
+    label: 'addEventListener without removeEventListener',
+  },
+  {
+    add: /^(on|addListener|addEventHandler)$/i,
+    cleanup: /^(off|removeListener|removeEventHandler|removeAllListeners)$/i,
+    label: '.on() without .off()/.removeListener()',
+  },
+  {
+    add: /^subscribe$/i,
+    cleanup: /^(unsubscribe|complete)$/i,
+    label: '.subscribe() without .unsubscribe()',
+  },
+  {
+    add: /^setInterval$/i,
+    cleanup: /^clearInterval$/i,
+    label: 'setInterval without clearInterval',
+  },
+  {
+    add: /^setTimeout$/i,
+    cleanup: /^clearTimeout$/i,
+    label: 'setTimeout without clearTimeout (in class/component)',
+    requiresContainer: true,
+  },
 ];
 
 /** Lifecycle-cleanup method/callee names — their presence signals implicit disposal. */
 const LIFECYCLE_CLEANUP_NAMES = new Set([
   // Vue / React / Angular / Svelte
-  'onUnmounted', 'onBeforeUnmount', 'onDestroy', 'ngOnDestroy',
-  'componentWillUnmount', 'useEffect', 'useLayoutEffect',
+  'onUnmounted',
+  'onBeforeUnmount',
+  'onDestroy',
+  'ngOnDestroy',
+  'componentWillUnmount',
+  'useEffect',
+  'useLayoutEffect',
   // Node / EventEmitter / generic disposables
-  'dispose', 'destroy', 'cleanup', 'teardown',
+  'dispose',
+  'destroy',
+  'cleanup',
+  'teardown',
 ]);
 
 interface CallSiteMeta {
@@ -235,7 +303,9 @@ function extractCallSites(metadata: string | null): CallSiteMeta[] {
     const cs = meta['callSites'];
     if (!Array.isArray(cs)) return [];
     return cs as CallSiteMeta[];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -253,11 +323,11 @@ interface PreFetchedData {
 
 function preFetch(store: Store, filePattern?: string, projectRoot?: string): PreFetchedData {
   const models = store.getAllOrmModels();
-  const modelMap = new Map(models.map(m => [m.id, m]));
+  const modelMap = new Map(models.map((m) => [m.id, m]));
   const allAssociations = store.getAllOrmAssociations();
-  const assocByModel = groupBy(allAssociations, a => a.source_model_id);
+  const assocByModel = groupBy(allAssociations, (a) => a.source_model_id);
 
-  const fileIds = [...new Set(models.map(m => m.file_id))];
+  const fileIds = [...new Set(models.map((m) => m.file_id))];
   const fileMap = store.getFilesByIds(fileIds);
 
   return { models, modelMap, assocByModel, fileMap, filePattern, projectRoot };
@@ -282,7 +352,7 @@ function detectNPlusOne(store: Store, data: PreFetchedData): AntipatternFinding[
   let counter = 0;
 
   // Get node IDs for all models in one batch
-  const modelIds = data.models.map(m => m.id);
+  const modelIds = data.models.map((m) => m.id);
   const modelNodeIds = store.getNodeIdsBatch('orm_model', modelIds);
 
   // For each model, check its to-many associations
@@ -291,7 +361,7 @@ function detectNPlusOne(store: Store, data: PreFetchedData): AntipatternFinding[
     if (!file || !matchesFilePattern(file.path, data.filePattern)) continue;
 
     const assocs = data.assocByModel.get(model.id) ?? [];
-    const manyAssocs = assocs.filter(a => MANY_KINDS.has(a.kind));
+    const manyAssocs = assocs.filter((a) => MANY_KINDS.has(a.kind));
     if (manyAssocs.length === 0) continue;
 
     const modelNodeId = modelNodeIds.get(model.id);
@@ -299,13 +369,13 @@ function detectNPlusOne(store: Store, data: PreFetchedData): AntipatternFinding[
 
     // Check incoming edges to see who accesses this model
     const incoming = store.getIncomingEdges(modelNodeId);
-    const callerNodeIds = incoming.map(e => e.source_node_id);
+    const callerNodeIds = incoming.map((e) => e.source_node_id);
 
     // Resolve callers to check if they're controllers/services
     const callerRefs = callerNodeIds.length > 0 ? store.getNodeRefsBatch(callerNodeIds) : new Map();
     const callerSymIds = [...callerRefs.values()]
-      .filter(r => r.nodeType === 'symbol')
-      .map(r => r.refId);
+      .filter((r) => r.nodeType === 'symbol')
+      .map((r) => r.refId);
     const callerSyms = callerSymIds.length > 0 ? store.getSymbolsByIds(callerSymIds) : new Map();
 
     // Identify handler-like callers — request-path symbols that access the model.
@@ -315,10 +385,11 @@ function detectNPlusOne(store: Store, data: PreFetchedData): AntipatternFinding[
     for (const sym of callerSyms.values()) {
       const symMeta = jsonParse(sym.metadata);
       const role = (symMeta?.['frameworkRole'] as string | undefined) ?? '';
-      const isHandler = role.includes('controller')
-        || role.includes('handler')
-        || role.includes('route')
-        || role.includes('resolver');
+      const isHandler =
+        role.includes('controller') ||
+        role.includes('handler') ||
+        role.includes('route') ||
+        role.includes('resolver');
       if (isHandler) handlerSymbols.push(sym.symbol_id);
     }
 
@@ -340,16 +411,18 @@ function detectNPlusOne(store: Store, data: PreFetchedData): AntipatternFinding[
       }
 
       const targetName = assoc.target_model_name ?? `model#${assoc.target_model_id}`;
-      const handlerNote = handlerSymbols.length > 0
-        ? `, accessed from ${handlerSymbols.length} handler symbol(s)`
-        : ' (no request-path accessor detected — verify this model is ever loaded in bulk)';
+      const handlerNote =
+        handlerSymbols.length > 0
+          ? `, accessed from ${handlerSymbols.length} handler symbol(s)`
+          : ' (no request-path accessor detected — verify this model is ever loaded in bulk)';
       counter++;
       findings.push({
         id: `NP1-${String(counter).padStart(3, '0')}`,
         category: 'n_plus_one_risk',
         severity,
         title: `N+1 risk: ${model.name}.${assoc.kind}(${targetName})`,
-        description: `Model "${model.name}" has a ${assoc.kind} relationship to "${targetName}" without eager loading${handlerNote}. ` +
+        description:
+          `Model "${model.name}" has a ${assoc.kind} relationship to "${targetName}" without eager loading${handlerNote}. ` +
           `When iterating over ${model.name} records, each access to the "${targetName}" relationship triggers a separate query.`,
         file: file.path,
         line: assoc.line,
@@ -399,10 +472,10 @@ function detectMissingEagerLoad(store: Store, data: PreFetchedData): Antipattern
     if (!file || !matchesFilePattern(file.path, data.filePattern)) continue;
 
     const assocs = data.assocByModel.get(model.id) ?? [];
-    const relations = assocs.filter(a => RELATION_KINDS.has(a.kind));
+    const relations = assocs.filter((a) => RELATION_KINDS.has(a.kind));
     if (relations.length < 2) continue;
 
-    const uneager = relations.filter(a => !hasEagerLoadHint(a, model));
+    const uneager = relations.filter((a) => !hasEagerLoadHint(a, model));
     if (uneager.length === 0) continue;
 
     // Count how many files access this model via incoming edges
@@ -410,11 +483,11 @@ function detectMissingEagerLoad(store: Store, data: PreFetchedData): Antipattern
     let accessorFileCount = 0;
     if (modelNodeId) {
       const incoming = store.getIncomingEdges(modelNodeId);
-      const refs = store.getNodeRefsBatch(incoming.map(e => e.source_node_id));
-      const symIds = [...refs.values()].filter(r => r.nodeType === 'symbol').map(r => r.refId);
+      const refs = store.getNodeRefsBatch(incoming.map((e) => e.source_node_id));
+      const symIds = [...refs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
       if (symIds.length > 0) {
         const syms = store.getSymbolsByIds(symIds);
-        accessorFileCount = new Set([...syms.values()].map(s => s.file_id)).size;
+        accessorFileCount = new Set([...syms.values()].map((s) => s.file_id)).size;
       }
     }
 
@@ -426,15 +499,19 @@ function detectMissingEagerLoad(store: Store, data: PreFetchedData): Antipattern
       category: 'missing_eager_load',
       severity: 'medium',
       title: `${model.name}: ${uneager.length}/${relations.length} relationships lack eager loading`,
-      description: `Model "${model.name}" has ${relations.length} relationships but ${uneager.length} have no eager loading configured. ` +
+      description:
+        `Model "${model.name}" has ${relations.length} relationships but ${uneager.length} have no eager loading configured. ` +
         `This can lead to N+1 queries when relationships are accessed lazily.` +
-        (accessorFileCount >= 3 ? ` The model is accessed from ${accessorFileCount} different files.` : ''),
+        (accessorFileCount >= 3
+          ? ` The model is accessed from ${accessorFileCount} different files.`
+          : ''),
       file: file.path,
       line: null,
       model: model.name,
       orm: model.orm,
-      fix: `Review relationships on ${model.name} and configure eager loading for frequently accessed ones: ` +
-        uneager.map(a => a.target_model_name ?? a.kind).join(', '),
+      fix:
+        `Review relationships on ${model.name} and configure eager loading for frequently accessed ones: ` +
+        uneager.map((a) => a.target_model_name ?? a.kind).join(', '),
       confidence,
     });
   }
@@ -460,10 +537,10 @@ function detectUnboundedQuery(store: Store, data: PreFetchedData): AntipatternFi
     const meta = jsonParse(model.metadata);
 
     const hasPagination =
-      opts?.['perPage'] != null
-      || opts?.['defaultScope']?.['limit'] != null
-      || meta?.['perPage'] != null
-      || meta?.['paginate'] === true;
+      opts?.['perPage'] != null ||
+      opts?.['defaultScope']?.['limit'] != null ||
+      meta?.['perPage'] != null ||
+      meta?.['paginate'] === true;
 
     if (hasPagination) continue;
 
@@ -475,8 +552,11 @@ function detectUnboundedQuery(store: Store, data: PreFetchedData): AntipatternFi
     let routeAccessCount = 0;
     if (modelNodeId) {
       const incoming = store.getIncomingEdges(modelNodeId);
-      const routeEdges = incoming.filter(e =>
-        e.edge_type_name === 'routes_to' || e.edge_type_name === 'calls' || e.edge_type_name === 'references',
+      const routeEdges = incoming.filter(
+        (e) =>
+          e.edge_type_name === 'routes_to' ||
+          e.edge_type_name === 'calls' ||
+          e.edge_type_name === 'references',
       );
       routeAccessCount = routeEdges.length;
     }
@@ -490,7 +570,8 @@ function detectUnboundedQuery(store: Store, data: PreFetchedData): AntipatternFi
       category: 'unbounded_query',
       severity: isHighCardinality ? 'high' : 'medium',
       title: `Unbounded query risk: ${model.name} (table: ${tableName})`,
-      description: `Model "${model.name}" has no default pagination or limit configured. ` +
+      description:
+        `Model "${model.name}" has no default pagination or limit configured. ` +
         (isHighCardinality
           ? `Table "${tableName}" likely has high cardinality — unbounded queries can cause memory issues and slow responses.`
           : `Queries returning all rows can degrade performance as the table grows.`),
@@ -542,11 +623,11 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
     const edges = store.getEdgesByType(edgeType);
     if (edges.length === 0) continue;
 
-    const sourceNodeIds = edges.map(e => e.source_node_id);
+    const sourceNodeIds = edges.map((e) => e.source_node_id);
     const refs = store.getNodeRefsBatch(sourceNodeIds);
-    const symIds = [...refs.values()].filter(r => r.nodeType === 'symbol').map(r => r.refId);
+    const symIds = [...refs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
     const syms = symIds.length > 0 ? store.getSymbolsByIds(symIds) : new Map();
-    const fileIds = [...new Set([...syms.values()].map(s => s.file_id))];
+    const fileIds = [...new Set([...syms.values()].map((s) => s.file_id))];
     const files = fileIds.length > 0 ? store.getFilesByIds(fileIds) : new Map();
 
     for (const edge of edges) {
@@ -578,7 +659,8 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
   // in files that import this one. callSites records every call-expression
   // calleeName, which is the authoritative source — `signature` only contains
   // the declaration header, so body calls like `addEventListener(...)` never appear there.
-  const symsWithCallSites = store.db.prepare(`
+  const symsWithCallSites = store.db
+    .prepare(`
     SELECT s.id, s.file_id, s.symbol_id, s.name, s.kind, s.parent_id, s.line_start, s.metadata,
            f.path as file_path
     FROM symbols s
@@ -586,13 +668,21 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
     WHERE s.metadata IS NOT NULL
       AND s.metadata LIKE '%"callSites"%'
       AND f.gitignored = 0
-  `).all() as Array<{
-    id: number; file_id: number; symbol_id: string; name: string; kind: string;
-    parent_id: number | null; line_start: number | null; metadata: string; file_path: string;
+  `)
+    .all() as Array<{
+    id: number;
+    file_id: number;
+    symbol_id: string;
+    name: string;
+    kind: string;
+    parent_id: number | null;
+    line_start: number | null;
+    metadata: string;
+    file_path: string;
   }>;
 
-  type SymRow = typeof symsWithCallSites[number];
-  const byFile = groupBy(symsWithCallSites, s => s.file_id);
+  type SymRow = (typeof symsWithCallSites)[number];
+  const byFile = groupBy(symsWithCallSites, (s) => s.file_id);
 
   // Per-file cache of every callee name seen (for cleanup matching) plus imports scan.
   for (const [fileId, syms] of byFile) {
@@ -610,7 +700,7 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
     if (fileCalls.length === 0) continue;
 
     // Union of calleeNames in this file — used for cleanup matching.
-    const fileCalleeNames = fileCalls.map(c => c.call.calleeName);
+    const fileCalleeNames = fileCalls.map((c) => c.call.calleeName);
 
     // Also pull calleeNames from files that import this one. Use case: a Setup.ts
     // module exposes `init()` which registers a listener, and a sibling Teardown.ts
@@ -620,13 +710,13 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
     if (fileNodeId) {
       const incomingEdges = store.getIncomingEdges(fileNodeId);
       const importerNodeIds = incomingEdges
-        .filter(e => e.edge_type_name === 'esm_imports' || e.edge_type_name === 'imports')
-        .map(e => e.source_node_id);
+        .filter((e) => e.edge_type_name === 'esm_imports' || e.edge_type_name === 'imports')
+        .map((e) => e.source_node_id);
       if (importerNodeIds.length > 0) {
         const importerRefs = store.getNodeRefsBatch(importerNodeIds);
         const importerFileIds = [...importerRefs.values()]
-          .filter(r => r.nodeType === 'file')
-          .map(r => r.refId);
+          .filter((r) => r.nodeType === 'file')
+          .map((r) => r.refId);
         for (const impFileId of importerFileIds) {
           const impSyms = store.getSymbolsByFile(impFileId);
           for (const s of impSyms) {
@@ -640,10 +730,10 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
     const combinedCalleeNames = [...fileCalleeNames, ...crossFileCalleeNames];
 
     const hasCleanupCall = (rule: ListenerRule) =>
-      combinedCalleeNames.some(n => rule.cleanup.test(n));
+      combinedCalleeNames.some((n) => rule.cleanup.test(n));
     const fileHasLifecycleCleanup =
-      syms.some(s => LIFECYCLE_CLEANUP_NAMES.has(s.name))
-      || combinedCalleeNames.some(n => LIFECYCLE_CLEANUP_NAMES.has(n));
+      syms.some((s) => LIFECYCLE_CLEANUP_NAMES.has(s.name)) ||
+      combinedCalleeNames.some((n) => LIFECYCLE_CLEANUP_NAMES.has(n));
 
     // Deduplicate: one finding per (rule, sym) pair — a symbol that registers
     // multiple listeners via the same rule gets only one report at its earliest line.
@@ -739,7 +829,7 @@ function detectCircularDeps(data: PreFetchedData): AntipatternFinding[] {
   let counter = 0;
   for (const scc of sccs) {
     const modelNames = scc
-      .map(id => data.modelMap.get(id))
+      .map((id) => data.modelMap.get(id))
       .filter((m): m is OrmModelRow => m != null);
 
     if (modelNames.length === 0) continue;
@@ -748,13 +838,13 @@ function detectCircularDeps(data: PreFetchedData): AntipatternFinding[] {
     const file = data.fileMap.get(first.file_id);
     if (!file || !matchesFilePattern(file.path, data.filePattern)) continue;
 
-    const cycle = modelNames.map(m => m.name).join(' → ') + ' → ' + modelNames[0].name;
+    const cycle = modelNames.map((m) => m.name).join(' → ') + ' → ' + modelNames[0].name;
     counter++;
     findings.push({
       id: `CYC-${String(counter).padStart(3, '0')}`,
       category: 'circular_dependency',
       severity: 'low',
-      title: `Circular model dependency: ${modelNames.map(m => m.name).join(', ')}`,
+      title: `Circular model dependency: ${modelNames.map((m) => m.name).join(', ')}`,
       description: `Circular relationship chain detected: ${cycle}. This can cause infinite loops in serialization, cascading deletes, or eager loading.`,
       file: file.path,
       line: null,
@@ -777,7 +867,7 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
 
   // Pre-fetch all migrations grouped by table
   const allMigrations = store.getAllMigrations();
-  const migByTable = groupBy(allMigrations, m => m.table_name);
+  const migByTable = groupBy(allMigrations, (m) => m.table_name);
 
   // Collect all indexed columns per table from migrations
   const indexedColumns = new Map<string, Set<string>>();
@@ -843,7 +933,8 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
         category: 'missing_index',
         severity: 'medium',
         title: `Missing index on FK: ${tableName}.${fk}${isInferred ? ' (inferred)' : ''}`,
-        description: `Foreign key "${fk}" on table "${tableName}" (from ${model.name}.${assoc.kind}${isInferred ? ', FK inferred from ORM convention' : ''}) has no corresponding index in migrations. ` +
+        description:
+          `Foreign key "${fk}" on table "${tableName}" (from ${model.name}.${assoc.kind}${isInferred ? ', FK inferred from ORM convention' : ''}) has no corresponding index in migrations. ` +
           `JOINs and relationship lookups on this column will be slow on large tables.`,
         file: file.path,
         line: assoc.line,
@@ -862,13 +953,20 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
 // ---------------------------------------------------------------------------
 
 /** Patterns that suggest potential memory leaks via unbounded growth. */
-const MEMORY_LEAK_PATTERNS: { regex: RegExp; label: string; severity: Severity; description: string; fix: string }[] = [
+const MEMORY_LEAK_PATTERNS: {
+  regex: RegExp;
+  label: string;
+  severity: Severity;
+  description: string;
+  fix: string;
+}[] = [
   // Growing caches without eviction
   {
     regex: /\.(set|push|add)\s*\(/i,
     label: 'Unbounded cache/collection growth',
     severity: 'medium',
-    description: 'adds to a Map/Set/Array without size limits or eviction — can grow indefinitely in long-running processes.',
+    description:
+      'adds to a Map/Set/Array without size limits or eviction — can grow indefinitely in long-running processes.',
     fix: 'Add a max size check and eviction policy (LRU, TTL) or use WeakMap/WeakRef.',
   },
   // Module-level mutable Map/Set/Array (likely cache)
@@ -876,7 +974,8 @@ const MEMORY_LEAK_PATTERNS: { regex: RegExp; label: string; severity: Severity; 
     regex: /^(?:const|let|var)\s+\w+\s*=\s*new\s+(?:Map|Set)\s*\(/i,
     label: 'Module-level Map/Set (potential unbounded cache)',
     severity: 'low',
-    description: 'declares a module-level Map/Set. If items are added during request handling without cleanup, this grows unboundedly.',
+    description:
+      'declares a module-level Map/Set. If items are added during request handling without cleanup, this grows unboundedly.',
     fix: 'Consider WeakMap/WeakRef for caches, or add TTL-based eviction.',
   },
 ];
@@ -885,7 +984,8 @@ const MEMORY_LEAK_PATTERNS: { regex: RegExp; label: string; severity: Severity; 
 const GROWTH_CALLEES = new Set(['set', 'push', 'add', 'unshift']);
 const CLEANUP_CALLEES = new Set(['delete', 'clear', 'splice', 'shift', 'pop', 'evict']);
 /** Bounded-cache hints in signature or anywhere in file text — suppress leak findings. */
-const BOUNDED_SIGNATURE_RE = /weak(map|set|ref)|\blru\b|\bttl\b|maxsize|max_size|maxEntries|MAX_ENTRIES/i;
+const BOUNDED_SIGNATURE_RE =
+  /weak(map|set|ref)|\blru\b|\bttl\b|maxsize|max_size|maxEntries|MAX_ENTRIES/i;
 /** Listener-registration callees that trigger closure-leak Strategy 2. */
 const LISTENER_CALLEE_RE = /^(addEventListener|on|subscribe|setInterval)$/i;
 
@@ -899,7 +999,8 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
   // Strategy 1: Find cache-like variables/properties (Map/Set declarations or
   // name-based hints) and verify growth vs. cleanup via callSites in the same file.
   // Name patterns use word-endings to avoid matching `useStore`, `restoreX`, etc.
-  const cacheSymbols = store.db.prepare(`
+  const cacheSymbols = store.db
+    .prepare(`
     SELECT s.id, s.name, s.kind, s.symbol_id, s.line_start, s.signature,
            f.path as file_path, f.id as file_id
     FROM symbols s
@@ -917,13 +1018,19 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
       OR s.name = '_pool')
     AND s.kind IN ('variable', 'property', 'constant')
     AND f.gitignored = 0
-  `).all() as Array<{
-    id: number; name: string; kind: string; symbol_id: string;
-    line_start: number | null; signature: string | null;
-    file_path: string; file_id: number;
+  `)
+    .all() as Array<{
+    id: number;
+    name: string;
+    kind: string;
+    symbol_id: string;
+    line_start: number | null;
+    signature: string | null;
+    file_path: string;
+    file_id: number;
   }>;
 
-  const byFile = groupBy(cacheSymbols, s => s.file_id);
+  const byFile = groupBy(cacheSymbols, (s) => s.file_id);
 
   for (const [fileId, syms] of byFile) {
     const filePath = syms[0]?.file_path;
@@ -938,12 +1045,14 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
       }
     }
 
-    const hasGrowth = fileCalleeNames.some(n => GROWTH_CALLEES.has(n));
+    const hasGrowth = fileCalleeNames.some((n) => GROWTH_CALLEES.has(n));
     if (!hasGrowth) continue;
 
-    const hasCleanupCall = fileCalleeNames.some(n => CLEANUP_CALLEES.has(n));
+    const hasCleanupCall = fileCalleeNames.some((n) => CLEANUP_CALLEES.has(n));
     // Also accept declarative bounded-cache hints anywhere in a signature.
-    const boundedBySignature = allFileSyms.some(s => BOUNDED_SIGNATURE_RE.test(s.signature ?? ''));
+    const boundedBySignature = allFileSyms.some((s) =>
+      BOUNDED_SIGNATURE_RE.test(s.signature ?? ''),
+    );
     if (hasCleanupCall || boundedBySignature) continue;
 
     for (const sym of syms) {
@@ -965,7 +1074,8 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
 
   // Strategy 2: Closure-over-mutable — a symbol whose callSites both register
   // a listener AND push to a collection, with no cleanup calls anywhere in the file.
-  const handlerCandidates = store.db.prepare(`
+  const handlerCandidates = store.db
+    .prepare(`
     SELECT s.id, s.file_id, s.symbol_id, s.name, s.line_start, s.metadata,
            f.path as file_path
     FROM symbols s
@@ -973,9 +1083,15 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
     WHERE s.metadata IS NOT NULL
       AND s.metadata LIKE '%"callSites"%'
       AND f.gitignored = 0
-  `).all() as Array<{
-    id: number; file_id: number; symbol_id: string; name: string;
-    line_start: number | null; metadata: string; file_path: string;
+  `)
+    .all() as Array<{
+    id: number;
+    file_id: number;
+    symbol_id: string;
+    name: string;
+    line_start: number | null;
+    metadata: string;
+    file_path: string;
   }>;
 
   for (const sym of handlerCandidates) {
@@ -983,13 +1099,13 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
     const callSites = extractCallSites(sym.metadata);
     if (callSites.length === 0) continue;
 
-    const registersListener = callSites.some(c => LISTENER_CALLEE_RE.test(c.calleeName));
-    const pushesToCollection = callSites.some(c => GROWTH_CALLEES.has(c.calleeName));
+    const registersListener = callSites.some((c) => LISTENER_CALLEE_RE.test(c.calleeName));
+    const pushesToCollection = callSites.some((c) => GROWTH_CALLEES.has(c.calleeName));
     if (!registersListener || !pushesToCollection) continue;
 
     const allFileSyms = store.getSymbolsByFile(sym.file_id);
-    const fileHasCleanup = allFileSyms.some(s =>
-      extractCallSites(s.metadata).some(c => CLEANUP_CALLEES.has(c.calleeName)),
+    const fileHasCleanup = allFileSyms.some((s) =>
+      extractCallSites(s.metadata).some((c) => CLEANUP_CALLEES.has(c.calleeName)),
     );
     if (fileHasCleanup) continue;
 
@@ -1040,7 +1156,10 @@ function countParamsFromSignature(signature: string | null): number {
   for (const ch of inner) {
     if (ch === '(' || ch === '[' || ch === '<' || ch === '{') depth++;
     else if (ch === ')' || ch === ']' || ch === '>' || ch === '}') depth--;
-    else if (ch === ',' && depth === 0) { cleaned += '\x00'; continue; }
+    else if (ch === ',' && depth === 0) {
+      cleaned += '\x00';
+      continue;
+    }
     cleaned += ch;
   }
   return cleaned.split('\x00').filter((p) => p.trim().length > 0).length;
@@ -1050,26 +1169,35 @@ function detectGodClass(store: Store, data: PreFetchedData): AntipatternFinding[
   const findings: AntipatternFinding[] = [];
   let counter = 0;
 
-  const classes = store.db.prepare(`
+  const classes = store.db
+    .prepare(`
     SELECT s.id, s.name, s.kind, s.symbol_id, s.line_start, s.line_end,
            f.path as file_path
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.kind IN ('class', 'interface', 'struct', 'trait', 'module')
       AND f.gitignored = 0
-  `).all() as Array<{
-    id: number; name: string; kind: string; symbol_id: string;
-    line_start: number | null; line_end: number | null; file_path: string;
+  `)
+    .all() as Array<{
+    id: number;
+    name: string;
+    kind: string;
+    symbol_id: string;
+    line_start: number | null;
+    line_end: number | null;
+    file_path: string;
   }>;
 
   const methodCounts = new Map<number, number>();
-  for (const row of store.db.prepare(`
+  for (const row of store.db
+    .prepare(`
     SELECT parent_id, COUNT(*) as cnt
     FROM symbols
     WHERE parent_id IS NOT NULL
       AND kind IN ('method', 'function', 'constructor', 'arrow_function')
     GROUP BY parent_id
-  `).all() as Array<{ parent_id: number; cnt: number }>) {
+  `)
+    .all() as Array<{ parent_id: number; cnt: number }>) {
     methodCounts.set(row.parent_id, row.cnt);
   }
 
@@ -1112,7 +1240,8 @@ function detectLongMethod(store: Store, data: PreFetchedData): AntipatternFindin
   const findings: AntipatternFinding[] = [];
   let counter = 0;
 
-  const methods = store.db.prepare(`
+  const methods = store.db
+    .prepare(`
     SELECT s.name, s.kind, s.symbol_id, s.line_start, s.line_end, s.signature,
            f.path as file_path
     FROM symbols s
@@ -1122,9 +1251,14 @@ function detectLongMethod(store: Store, data: PreFetchedData): AntipatternFindin
       AND s.line_end IS NOT NULL
       AND (s.line_end - s.line_start) >= ?
       AND f.gitignored = 0
-  `).all(LONG_METHOD_LOC_THRESHOLD) as Array<{
-    name: string; kind: string; symbol_id: string;
-    line_start: number; line_end: number; signature: string | null;
+  `)
+    .all(LONG_METHOD_LOC_THRESHOLD) as Array<{
+    name: string;
+    kind: string;
+    symbol_id: string;
+    line_start: number;
+    line_end: number;
+    signature: string | null;
     file_path: string;
   }>;
 
@@ -1157,7 +1291,8 @@ function detectLongParameterList(store: Store, data: PreFetchedData): Antipatter
   const findings: AntipatternFinding[] = [];
   let counter = 0;
 
-  const callables = store.db.prepare(`
+  const callables = store.db
+    .prepare(`
     SELECT s.name, s.kind, s.symbol_id, s.line_start, s.signature,
            f.path as file_path
     FROM symbols s
@@ -1165,9 +1300,14 @@ function detectLongParameterList(store: Store, data: PreFetchedData): Antipatter
     WHERE s.kind IN ('method', 'function', 'constructor', 'arrow_function')
       AND s.signature IS NOT NULL
       AND f.gitignored = 0
-  `).all() as Array<{
-    name: string; kind: string; symbol_id: string;
-    line_start: number | null; signature: string; file_path: string;
+  `)
+    .all() as Array<{
+    name: string;
+    kind: string;
+    symbol_id: string;
+    line_start: number | null;
+    signature: string;
+    file_path: string;
   }>;
 
   for (const c of callables) {
@@ -1227,7 +1367,8 @@ function detectDeepNesting(store: Store, data: PreFetchedData): AntipatternFindi
   const findings: AntipatternFinding[] = [];
   let counter = 0;
 
-  const methods = store.db.prepare(`
+  const methods = store.db
+    .prepare(`
     SELECT s.name, s.kind, s.symbol_id, s.line_start, s.line_end, s.byte_start, s.byte_end,
            f.path as file_path, f.id as file_id
     FROM symbols s
@@ -1237,11 +1378,17 @@ function detectDeepNesting(store: Store, data: PreFetchedData): AntipatternFindi
       AND s.line_end IS NOT NULL
       AND (s.line_end - s.line_start) >= 10
       AND f.gitignored = 0
-  `).all() as Array<{
-    name: string; kind: string; symbol_id: string;
-    line_start: number; line_end: number;
-    byte_start: number; byte_end: number;
-    file_path: string; file_id: number;
+  `)
+    .all() as Array<{
+    name: string;
+    kind: string;
+    symbol_id: string;
+    line_start: number;
+    line_end: number;
+    byte_start: number;
+    byte_end: number;
+    file_path: string;
+    file_id: number;
   }>;
 
   // Read files only once per file
@@ -1314,14 +1461,19 @@ export function detectAntipatterns(
 
   // Count of TS/JS files with callSites metadata — the real scan surface for
   // listener-leak and memory-leak detectors (they don't depend on ORM models).
-  const callSiteFileCount = (store.db.prepare(`
+  const callSiteFileCount =
+    (
+      store.db
+        .prepare(`
     SELECT COUNT(DISTINCT s.file_id) AS n
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.metadata IS NOT NULL
       AND s.metadata LIKE '%"callSites"%'
       AND f.gitignored = 0
-  `).get() as { n: number } | undefined)?.n ?? 0;
+  `)
+        .get() as { n: number } | undefined
+    )?.n ?? 0;
 
   // Run detectors
   let findings: AntipatternFinding[] = [];
@@ -1360,12 +1512,17 @@ export function detectAntipatterns(
   }
 
   // Size / complexity detectors — operate on any symbol kind, no ORM dependency
-  const symbolFileCount = (store.db.prepare(`
+  const symbolFileCount =
+    (
+      store.db
+        .prepare(`
     SELECT COUNT(DISTINCT s.file_id) AS n
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE f.gitignored = 0
-  `).get() as { n: number } | undefined)?.n ?? 0;
+  `)
+        .get() as { n: number } | undefined
+    )?.n ?? 0;
 
   if (categories.has('god_class')) {
     findings.push(...detectGodClass(store, data));
@@ -1390,7 +1547,7 @@ export function detectAntipatterns(
   }
 
   // Filter by severity threshold
-  findings = findings.filter(f => SEVERITY_ORDER[f.severity] <= severityThreshold);
+  findings = findings.filter((f) => SEVERITY_ORDER[f.severity] <= severityThreshold);
 
   // Sort by severity (critical first), then confidence descending
   findings.sort((a, b) => {
@@ -1410,8 +1567,11 @@ export function detectAntipatterns(
   // listener/memory detectors ran), and (all indexed files iff size/complexity
   // detectors ran). Gives a truthful scan surface even on no-ORM projects.
   const usedCallSiteScope = categories.has('event_listener_leak') || categories.has('memory_leak');
-  const usedSymbolScope = categories.has('god_class') || categories.has('long_method')
-    || categories.has('long_parameter_list') || categories.has('deep_nesting');
+  const usedSymbolScope =
+    categories.has('god_class') ||
+    categories.has('long_method') ||
+    categories.has('long_parameter_list') ||
+    categories.has('deep_nesting');
   const filesAnalyzed = usedSymbolScope
     ? symbolFileCount
     : ormFileCount + (usedCallSiteScope ? callSiteFileCount : 0);

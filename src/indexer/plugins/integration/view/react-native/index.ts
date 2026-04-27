@@ -26,7 +26,9 @@ import type {
 import type { TraceMcpResult } from '../../../../../errors.js';
 
 /** Map an Expo Router app/ file path to a route string. Returns null if not in app/ dir. */
-function expoFileToRoute(filePath: string): { route: string; isLayout: boolean; is404: boolean } | null {
+function expoFileToRoute(
+  filePath: string,
+): { route: string; isLayout: boolean; is404: boolean } | null {
   // Normalize to forward slashes
   const normalized = filePath.replace(/\\/g, '/');
   const match = normalized.match(/(?:^|\/)app\/(.+)\.(tsx?|jsx?)$/);
@@ -88,12 +90,36 @@ export class ReactNativePlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'rn_navigates_to', category: 'react-native', description: 'navigation.navigate() to screen' },
-        { name: 'rn_screen_in_navigator', category: 'react-native', description: 'Screen registered in navigator' },
-        { name: 'rn_uses_native_module', category: 'react-native', description: 'Uses NativeModules/TurboModuleRegistry' },
-        { name: 'rn_platform_specific', category: 'react-native', description: 'Platform-specific file variant' },
-        { name: 'rn_deep_links_to', category: 'react-native', description: 'Deep link maps to screen' },
-        { name: 'expo_route', category: 'expo-router', description: 'Expo Router file-based route' },
+        {
+          name: 'rn_navigates_to',
+          category: 'react-native',
+          description: 'navigation.navigate() to screen',
+        },
+        {
+          name: 'rn_screen_in_navigator',
+          category: 'react-native',
+          description: 'Screen registered in navigator',
+        },
+        {
+          name: 'rn_uses_native_module',
+          category: 'react-native',
+          description: 'Uses NativeModules/TurboModuleRegistry',
+        },
+        {
+          name: 'rn_platform_specific',
+          category: 'react-native',
+          description: 'Platform-specific file variant',
+        },
+        {
+          name: 'rn_deep_links_to',
+          category: 'react-native',
+          description: 'Deep link maps to screen',
+        },
+        {
+          name: 'expo_route',
+          category: 'expo-router',
+          description: 'Expo Router file-based route',
+        },
         { name: 'expo_layout', category: 'expo-router', description: 'Expo Router layout file' },
       ],
     };
@@ -125,17 +151,19 @@ export class ReactNativePlugin implements FrameworkPlugin {
         } else {
           // Navigation calls in this screen
           const navCalls = extractNavigationCalls(source);
-          result.rnScreens = [{
-            name: expoRoute.route,
-            componentPath: filePath,
-            navigatorType: 'native-stack',
-            deepLink: expoRoute.route,
-            metadata: {
-              expoRoute: true,
-              navigationCalls: navCalls,
-              nativeModules: hasNativeModuleUsage(source) ? extractNativeModuleNames(source) : [],
+          result.rnScreens = [
+            {
+              name: expoRoute.route,
+              componentPath: filePath,
+              navigatorType: 'native-stack',
+              deepLink: expoRoute.route,
+              metadata: {
+                expoRoute: true,
+                navigationCalls: navCalls,
+                nativeModules: hasNativeModuleUsage(source) ? extractNativeModuleNames(source) : [],
+              },
             },
-          }];
+          ];
           result.frameworkRole = 'expo_route';
         }
         return ok(result);
@@ -286,10 +314,7 @@ export class ReactNativePlugin implements FrameworkPlugin {
  * Extract screens from React Navigation navigator definitions.
  * Handles v6, v5, v4, and v3 patterns.
  */
-export function extractNavigatorScreens(
-  source: string,
-  filePath: string,
-): RawRnScreen[] {
+export function extractNavigatorScreens(source: string, filePath: string): RawRnScreen[] {
   const screens: RawRnScreen[] = [];
 
   // Detect navigator type from creation call
@@ -334,7 +359,17 @@ export function extractNavigatorScreens(
       const screenName = sm[1];
       const component = sm[2] ?? sm[3];
       // Skip navigator option keys and sub-object keys
-      if (['initialRouteName', 'navigationOptions', 'defaultNavigationOptions', 'mode', 'headerMode', 'screen'].includes(screenName)) continue;
+      if (
+        [
+          'initialRouteName',
+          'navigationOptions',
+          'defaultNavigationOptions',
+          'mode',
+          'headerMode',
+          'screen',
+        ].includes(screenName)
+      )
+        continue;
       screens.push({
         name: screenName,
         componentPath: component,
@@ -360,7 +395,8 @@ export function extractNavigatorScreens(
  */
 function detectNavigatorType(source: string): RawRnScreen['navigatorType'] | undefined {
   if (/createNativeStackNavigator|createStackNavigator/.test(source)) return 'native-stack';
-  if (/createBottomTabNavigator|createMaterialTopTabNavigator|createTabNavigator/.test(source)) return 'tab';
+  if (/createBottomTabNavigator|createMaterialTopTabNavigator|createTabNavigator/.test(source))
+    return 'tab';
   if (/createDrawerNavigator/.test(source)) return 'drawer';
   return undefined;
 }
@@ -411,7 +447,8 @@ export function extractExpoNavigationCalls(source: string): string[] {
   }
 
   // router.push({ pathname: '/path' })
-  const objectRegex = /router\.(push|replace|navigate)\s*\(\s*\{[^}]*pathname\s*:\s*['"]([^'"]+)['"]/g;
+  const objectRegex =
+    /router\.(push|replace|navigate)\s*\(\s*\{[^}]*pathname\s*:\s*['"]([^'"]+)['"]/g;
   while ((match = objectRegex.exec(source)) !== null) {
     paths.push(match[2]);
   }
@@ -437,9 +474,7 @@ export function matchExpoRoute(path: string, routePattern: string): boolean {
     return false;
   }
 
-  return routeParts.every((rp, i) =>
-    rp.startsWith(':') || rp === ':param' || rp === pathParts[i],
-  );
+  return routeParts.every((rp, i) => rp.startsWith(':') || rp === ':param' || rp === pathParts[i]);
 }
 
 /**
@@ -481,9 +516,11 @@ export function getPlatform(filePath: string): string | null {
  * Detect NativeModules or TurboModuleRegistry usage.
  */
 export function hasNativeModuleUsage(source: string): boolean {
-  return /\bNativeModules\b/.test(source)
-    || /\bTurboModuleRegistry\b/.test(source)
-    || /\brequireNativeComponent\b/.test(source);
+  return (
+    /\bNativeModules\b/.test(source) ||
+    /\bTurboModuleRegistry\b/.test(source) ||
+    /\brequireNativeComponent\b/.test(source)
+  );
 }
 
 /**
@@ -496,7 +533,10 @@ export function extractNativeModuleNames(source: string): string[] {
   const destructRegex = /(?:const|let|var)\s*\{([^}]+)\}\s*=\s*NativeModules/g;
   let match: RegExpExecArray | null;
   while ((match = destructRegex.exec(source)) !== null) {
-    const names = match[1].split(',').map((n) => n.trim()).filter(Boolean);
+    const names = match[1]
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean);
     modules.push(...names);
   }
 
@@ -506,7 +546,8 @@ export function extractNativeModuleNames(source: string): string[] {
   }
 
   // TurboModuleRegistry.getEnforcing<Spec>('ModuleName')
-  const turboRegex = /TurboModuleRegistry\.(?:getEnforcing|get)\s*(?:<[^>]*>)?\s*\(\s*['"](\w+)['"]\s*\)/g;
+  const turboRegex =
+    /TurboModuleRegistry\.(?:getEnforcing|get)\s*(?:<[^>]*>)?\s*\(\s*['"](\w+)['"]\s*\)/g;
   while ((match = turboRegex.exec(source)) !== null) {
     modules.push(match[1]);
   }

@@ -42,29 +42,45 @@ function hasPythonDep(ctx: ProjectContext, pkg: string): boolean {
     const content = fs.readFileSync(pyprojectPath, 'utf-8');
     const re = new RegExp(`["']${escapeRegExp(pkg)}[>=<\\[!~\\s"']`, 'i');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
   try {
     const reqPath = path.join(ctx.rootPath, 'requirements.txt');
     const content = fs.readFileSync(reqPath, 'utf-8');
     const re = new RegExp(`^${escapeRegExp(pkg)}\\b`, 'im');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
   // Also check requirements-dev.txt and requirements-test.txt
   for (const alt of ['requirements-dev.txt', 'requirements-test.txt', 'test-requirements.txt']) {
     try {
       const content = fs.readFileSync(path.join(ctx.rootPath, alt), 'utf-8');
       const re = new RegExp(`^${escapeRegExp(pkg)}\\b`, 'im');
       if (re.test(content)) return true;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
   return false;
 }
 
 /** Known pytest marker names. */
 const KNOWN_MARKERS = new Set([
-  'skip', 'skipif', 'xfail', 'parametrize', 'usefixtures',
-  'filterwarnings', 'timeout', 'slow', 'integration', 'e2e',
-  'asyncio', 'django_db', 'benchmark',
+  'skip',
+  'skipif',
+  'xfail',
+  'parametrize',
+  'usefixtures',
+  'filterwarnings',
+  'timeout',
+  'slow',
+  'integration',
+  'e2e',
+  'asyncio',
+  'django_db',
+  'benchmark',
 ]);
 
 /** Fixture scope values. */
@@ -278,7 +294,8 @@ function extractTests(root: TSNode): PytestTest[] {
             let methodOuter: TSNode = child;
 
             if (child.type === 'decorated_definition') {
-              methodNode = child.namedChildren.find((c) => c.type === 'function_definition') ?? null;
+              methodNode =
+                child.namedChildren.find((c) => c.type === 'function_definition') ?? null;
               methodOuter = child;
             } else if (child.type === 'function_definition') {
               methodNode = child;
@@ -333,8 +350,16 @@ export class PytestPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'pytest_fixture_used', category: 'pytest', description: 'Test function uses a pytest fixture' },
-        { name: 'pytest_parametrize', category: 'pytest', description: 'Test parametrized with @pytest.mark.parametrize' },
+        {
+          name: 'pytest_fixture_used',
+          category: 'pytest',
+          description: 'Test function uses a pytest fixture',
+        },
+        {
+          name: 'pytest_parametrize',
+          category: 'pytest',
+          description: 'Test parametrized with @pytest.mark.parametrize',
+        },
       ] satisfies EdgeTypeDeclaration[],
     };
   }
@@ -347,10 +372,10 @@ export class PytestPlugin implements FrameworkPlugin {
     if (language !== 'python') return ok({ status: 'ok', symbols: [] });
 
     const isConftest = filePath.endsWith('conftest.py');
-    const isTestFile = !isConftest && (
-      /(?:^|\/|\\)(?:test_[^/\\]+|[^/\\]+_test)\.py$/.test(filePath) ||
-      /(?:^|\/|\\)tests?\//.test(filePath)
-    );
+    const isTestFile =
+      !isConftest &&
+      (/(?:^|\/|\\)(?:test_[^/\\]+|[^/\\]+_test)\.py$/.test(filePath) ||
+        /(?:^|\/|\\)tests?\//.test(filePath));
 
     if (!isTestFile && !isConftest) return ok({ status: 'ok', symbols: [] });
 

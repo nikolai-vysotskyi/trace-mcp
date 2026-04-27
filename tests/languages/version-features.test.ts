@@ -111,7 +111,9 @@ describe('ECMAScript version detection', () => {
   });
 
   it('picks highest ES version', () => {
-    expect(detectMinEsVersion(['arrow_function', 'optional_chaining', 'class_static_block'])).toBe('ES2022');
+    expect(detectMinEsVersion(['arrow_function', 'optional_chaining', 'class_static_block'])).toBe(
+      'ES2022',
+    );
   });
 });
 
@@ -215,7 +217,9 @@ describe('Java version detection', () => {
   });
 
   it('detects sealed classes → Java 17', () => {
-    expect(detectMinJavaVersionFromSource('sealed class Shape permits Circle, Square {}')).toBe('17');
+    expect(detectMinJavaVersionFromSource('sealed class Shape permits Circle, Square {}')).toBe(
+      '17',
+    );
   });
 });
 

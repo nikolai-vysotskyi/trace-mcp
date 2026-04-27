@@ -85,7 +85,7 @@ function indexSessionFile(
   decisionStore: DecisionStore,
 ): number {
   const content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split('\n').filter(l => l.trim());
+  const lines = content.split('\n').filter((l) => l.trim());
   const sessionId = path.basename(filePath, '.jsonl');
 
   const chunks: SessionChunkInput[] = [];
@@ -152,7 +152,11 @@ export function indexSessions(
   const start = Date.now();
   const sessions = listAllSessions();
 
-  let scanned = 0, indexed = 0, skipped = 0, chunksAdded = 0, errors = 0;
+  let scanned = 0,
+    indexed = 0,
+    skipped = 0,
+    chunksAdded = 0,
+    errors = 0;
 
   for (const session of sessions) {
     scanned++;

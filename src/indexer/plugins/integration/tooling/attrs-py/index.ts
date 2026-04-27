@@ -41,7 +41,11 @@ export class AttrsPyPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'attrs_class', category: 'dataclass', description: '@attr.s / @attrs.define decorated class' },
+        {
+          name: 'attrs_class',
+          category: 'dataclass',
+          description: '@attr.s / @attrs.define decorated class',
+        },
       ],
     };
   }

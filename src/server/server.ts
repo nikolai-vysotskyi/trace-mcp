@@ -1,20 +1,31 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 declare const PKG_VERSION_INJECTED: string;
-const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+const PKG_VERSION =
+  typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
 import { formatToolError } from '../errors.js';
 import { validatePath } from '../utils/security.js';
 import { logger } from '../logger.js';
-import { createAIProvider, BlobVectorStore, type AIProvider, type RerankerService } from '../ai/index.js';
+import {
+  createAIProvider,
+  BlobVectorStore,
+  type AIProvider,
+  type RerankerService,
+} from '../ai/index.js';
 import { LLMReranker } from '../ai/reranker.js';
 import { resolvePreset } from '../tools/project/presets.js';
 import { withHints } from '../tools/shared/hints.js';
 import { SessionTracker } from '../session/tracker.js';
 import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { flushSessionSummary } from '../session/resume.js';
-import { getSnapshotPath, TOPOLOGY_DB_PATH, DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
+import {
+  getSnapshotPath,
+  TOPOLOGY_DB_PATH,
+  DECISIONS_DB_PATH,
+  ensureGlobalDirs,
+} from '../global.js';
 import { computePageRank } from '../scoring/pagerank.js';
 import { createExploredTracker } from './explored-tracker.js';
 import type { ServerContext, MetaContext } from './types.js';
@@ -40,11 +51,16 @@ import { HermesSessionProvider } from '../session/providers/hermes.js';
 
 /** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response */
 function j(value: unknown): string {
-  return JSON.stringify(value, (_key, val) => (val === null || val === undefined) ? undefined : val);
+  return JSON.stringify(value, (_key, val) =>
+    val === null || val === undefined ? undefined : val,
+  );
 }
 
 /** Extract result count from an MCP tool response for journal tracking */
-function extractResultCount(response: { content: Array<{ type: string; text: string }>; isError?: boolean }): number {
+function extractResultCount(response: {
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}): number {
   if (response?.isError) return 0;
   try {
     const text = response?.content?.[0]?.text;
@@ -70,10 +86,19 @@ function extractCompactResult(
   response: { content: Array<{ type: string; text: string }>; isError?: boolean },
 ): Record<string, unknown> | undefined {
   const DEDUP_TOOLS = new Set([
-    'get_symbol', 'get_outline', 'get_context_bundle', 'get_call_graph',
-    'get_type_hierarchy', 'get_import_graph', 'get_dependency_diagram',
-    'get_component_tree', 'get_dataflow', 'get_control_flow',
-    'get_middleware_chain', 'get_di_tree', 'get_model_context',
+    'get_symbol',
+    'get_outline',
+    'get_context_bundle',
+    'get_call_graph',
+    'get_type_hierarchy',
+    'get_import_graph',
+    'get_dependency_diagram',
+    'get_component_tree',
+    'get_dataflow',
+    'get_control_flow',
+    'get_middleware_chain',
+    'get_di_tree',
+    'get_model_context',
     'get_schema',
   ]);
   if (!DEDUP_TOOLS.has(toolName)) return undefined;
@@ -88,37 +113,59 @@ function extractCompactResult(
     switch (toolName) {
       case 'get_symbol':
         return {
-          symbol_id: parsed.symbol_id, name: parsed.name, kind: parsed.kind,
-          fqn: parsed.fqn, signature: parsed.signature, file: parsed.file,
-          line_start: parsed.line_start, line_end: parsed.line_end, _result_count: 1,
+          symbol_id: parsed.symbol_id,
+          name: parsed.name,
+          kind: parsed.kind,
+          fqn: parsed.fqn,
+          signature: parsed.signature,
+          file: parsed.file,
+          line_start: parsed.line_start,
+          line_end: parsed.line_end,
+          _result_count: 1,
         };
       case 'get_outline':
         return {
-          path: parsed.path, language: parsed.language,
+          path: parsed.path,
+          language: parsed.language,
           symbols: Array.isArray(parsed.symbols)
             ? parsed.symbols.map((s: Record<string, unknown>) => ({
-              symbolId: s.symbolId, name: s.name, kind: s.kind,
-              signature: s.signature, lineStart: s.lineStart, lineEnd: s.lineEnd,
-            })) : [],
+                symbolId: s.symbolId,
+                name: s.name,
+                kind: s.kind,
+                signature: s.signature,
+                lineStart: s.lineStart,
+                lineEnd: s.lineEnd,
+              }))
+            : [],
           _result_count: Array.isArray(parsed.symbols) ? parsed.symbols.length : 1,
         };
       case 'get_context_bundle':
         return {
           primary: Array.isArray(parsed.primary)
             ? parsed.primary.map((s: Record<string, unknown>) => ({
-              symbol_id: s.symbol_id, name: s.name, kind: s.kind, file: s.file, line: s.line,
-            })) : [],
+                symbol_id: s.symbol_id,
+                name: s.name,
+                kind: s.kind,
+                file: s.file,
+                line: s.line,
+              }))
+            : [],
           totalTokens: parsed.totalTokens,
           _result_count: Array.isArray(parsed.primary) ? parsed.primary.length : 1,
         };
       case 'get_call_graph':
         return {
-          root: parsed.root, direction: parsed.direction,
+          root: parsed.root,
+          direction: parsed.direction,
           node_count: parsed.nodes?.length ?? parsed.node_count ?? 0,
           nodes: Array.isArray(parsed.nodes)
             ? parsed.nodes.map((n: Record<string, unknown>) => ({
-              symbol_id: n.symbol_id, name: n.name, kind: n.kind, file: n.file,
-            })) : [],
+                symbol_id: n.symbol_id,
+                name: n.name,
+                kind: n.kind,
+                file: n.file,
+              }))
+            : [],
           _result_count: parsed.nodes?.length ?? 1,
         };
       default:
@@ -162,9 +209,7 @@ export function createServer(
   const projectContext = buildProjectContext(projectRoot);
   const activeResult = registry.getActiveFrameworkPlugins(projectContext);
   const activePlugins = activeResult.isErr() ? [] : activeResult.value;
-  const frameworkNames = new Set(
-    activePlugins.map((p) => p.manifest.name),
-  );
+  const frameworkNames = new Set(activePlugins.map((p) => p.manifest.name));
   const has = (...names: string[]) => names.some((n) => frameworkNames.has(n));
   const detectedFrameworks = [...frameworkNames].join(', ') || 'none';
 
@@ -239,7 +284,8 @@ export function createServer(
       const file = store.getFile(fp);
       if (!file) continue;
       const syms = store.getSymbolsByFile(file.id);
-      for (const sym of syms.slice(0, 3)) { // top 3 symbols per edited file
+      for (const sym of syms.slice(0, 3)) {
+        // top 3 symbols per edited file
         if (landmarks.some((l) => l.symbol_id === sym.symbol_id)) continue;
         landmarks.push({
           symbol_id: sym.symbol_id,
@@ -259,7 +305,11 @@ export function createServer(
   const flushAll = () => {
     savings.flush();
     // Write final snapshot for PreCompact hook
-    try { journal.flushSnapshotFile(snapshotPath); } catch { /* best-effort */ }
+    try {
+      journal.flushSnapshotFile(snapshotPath);
+    } catch {
+      /* best-effort */
+    }
     if (!sessionFlushed) {
       sessionFlushed = true;
       const stats = savings.getSessionStats();
@@ -288,10 +338,18 @@ export function createServer(
     flushAll();
     // Close only resources we own (not shared via deps)
     if (ownsDecisionStore) {
-      try { decisionStore.close(); } catch { /* best-effort */ }
+      try {
+        decisionStore.close();
+      } catch {
+        /* best-effort */
+      }
     }
     if (ownsTopoStore && topoStore) {
-      try { topoStore.close(); } catch { /* best-effort */ }
+      try {
+        topoStore.close();
+      } catch {
+        /* best-effort */
+      }
     }
     // Free session memory
     journal.dispose();
@@ -299,7 +357,17 @@ export function createServer(
 
   // Meta-field filtering
   const metaFieldsConfig = config.tools?.meta_fields ?? true;
-  const META_KEYS = ['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta', '_duplication_warnings', '_methodology'] as const;
+  const META_KEYS = [
+    '_hints',
+    '_budget_warning',
+    '_budget_level',
+    '_duplicate_warning',
+    '_dedup',
+    '_optimization_hint',
+    '_meta',
+    '_duplication_warnings',
+    '_methodology',
+  ] as const;
 
   function stripMetaFields(obj: Record<string, unknown>): void {
     if (metaFieldsConfig === true) return;
@@ -319,13 +387,23 @@ export function createServer(
   const activePreset = presetResult ?? 'all';
 
   const { _originalTool, registeredToolNames, toolHandlers } = installToolGate(
-    server, config, activePreset, savings, journal,
-    j, extractResultCount, extractCompactResult, stripMetaFields,
+    server,
+    config,
+    activePreset,
+    savings,
+    journal,
+    j,
+    extractResultCount,
+    extractCompactResult,
+    stripMetaFields,
     projectRoot,
   );
 
   if (presetName !== 'full') {
-    logger.info({ preset: presetName, tools: activePreset === 'all' ? 'all' : activePreset.size }, 'Tool preset active');
+    logger.info(
+      { preset: presetName, tools: activePreset === 'all' ? 'all' : activePreset.size },
+      'Tool preset active',
+    );
   }
 
   // Budget-aware JSON serializer with hints
@@ -343,9 +421,10 @@ export function createServer(
 
     if (level !== 'none' && level !== lastBudgetLevel) {
       lastBudgetLevel = level;
-      const obj = (hinted !== null && typeof hinted === 'object' && !Array.isArray(hinted))
-        ? hinted as Record<string, unknown>
-        : { data: hinted };
+      const obj =
+        hinted !== null && typeof hinted === 'object' && !Array.isArray(hinted)
+          ? (hinted as Record<string, unknown>)
+          : { data: hinted };
       const messages: Record<string, string> = {
         info: `${calls} tool calls this session (~${tokens} raw tokens). Consider using get_task_context or get_feature_context for consolidated context instead of many small queries.`,
         warning: `High token usage: ${calls} calls, ~${tokens} raw tokens. Switch to batch calls and get_task_context to reduce overhead.`,
@@ -371,7 +450,9 @@ export function createServer(
     ? new LLMReranker(aiProvider.fastInference())
     : null;
 
-  function guardPath(filePath: string): { content: [{ type: 'text'; text: string }]; isError: true } | null {
+  function guardPath(
+    filePath: string,
+  ): { content: [{ type: 'text'; text: string }]; isError: true } | null {
     const check = validatePath(filePath, projectRoot);
     if (check.isErr()) {
       return { content: [{ type: 'text', text: j(formatToolError(check.error)) }], isError: true };
@@ -404,10 +485,20 @@ export function createServer(
 
   // Build shared context and register all tools
   const ctx: ServerContext = {
-    store, registry, config, projectRoot,
-    savings, journal,
-    aiProvider, vectorStore, embeddingService, reranker,
-    has, guardPath, j, jh,
+    store,
+    registry,
+    config,
+    projectRoot,
+    savings,
+    journal,
+    aiProvider,
+    vectorStore,
+    embeddingService,
+    reranker,
+    has,
+    guardPath,
+    j,
+    jh,
     markExplored: explored.markExplored,
     progress: progress ?? null,
     topoStore,
@@ -415,7 +506,11 @@ export function createServer(
   };
 
   const metaCtx: MetaContext = {
-    ...ctx, _originalTool, registeredToolNames, toolHandlers, presetName,
+    ...ctx,
+    _originalTool,
+    registeredToolNames,
+    toolHandlers,
+    presetName,
   };
 
   // Session providers — register enabled providers into the shared singleton

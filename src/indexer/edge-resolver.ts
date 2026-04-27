@@ -21,13 +21,19 @@ import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/
 import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/typescript-types.js';
 import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
-import { resolveFileProjectionEdges as _resolveFileProjection, purgeForbiddenCrossWorkspaceEdges as _purgeCrossWs } from './edge-resolvers/file-projection.js';
+import {
+  resolveFileProjectionEdges as _resolveFileProjection,
+  purgeForbiddenCrossWorkspaceEdges as _purgeCrossWs,
+} from './edge-resolvers/file-projection.js';
 
 export class EdgeResolver {
   constructor(private state: PipelineState) {}
 
   /** Pass 2: resolve framework plugin edges (root + per-workspace). */
-  async resolveEdges(projectContext: ProjectContext, resolveContext: ResolveContext): Promise<void> {
+  async resolveEdges(
+    projectContext: ProjectContext,
+    resolveContext: ResolveContext,
+  ): Promise<void> {
     // Root-level plugins
     const activeResult = this.state.registry.getActiveFrameworkPlugins(projectContext);
     if (activeResult.isOk()) {
@@ -48,7 +54,8 @@ export class EdgeResolver {
     for (const ws of this.state.workspaces) {
       const wsRoot = path.join(this.state.rootPath, ws.path);
       const wsCtx = buildProjectContext(wsRoot);
-      const wsPlugins = this.state.registry.getAllFrameworkPlugins()
+      const wsPlugins = this.state.registry
+        .getAllFrameworkPlugins()
         .filter((p) => !seen.has(p.manifest.name) && p.detect(wsCtx));
       if (wsPlugins.length === 0) continue;
 
@@ -57,9 +64,11 @@ export class EdgeResolver {
       const wsPrefix = ws.path + '/';
       const scopedCtx: ResolveContext = {
         rootPath: wsRoot,
-        getAllFiles: () => resolveContext.getAllFiles()
-          .filter((f) => f.path.startsWith(wsPrefix))
-          .map((f) => ({ ...f, path: f.path.slice(wsPrefix.length) })),
+        getAllFiles: () =>
+          resolveContext
+            .getAllFiles()
+            .filter((f) => f.path.startsWith(wsPrefix))
+            .map((f) => ({ ...f, path: f.path.slice(wsPrefix.length) })),
         getSymbolsByFile: resolveContext.getSymbolsByFile,
         getSymbolByFqn: resolveContext.getSymbolByFqn,
         getNodeId: resolveContext.getNodeId,
@@ -76,46 +85,74 @@ export class EdgeResolver {
   }
 
   /** Pass 2b: ORM association edges. */
-  resolveOrmAssociationEdges(): void { _resolveOrm(this.state); }
+  resolveOrmAssociationEdges(): void {
+    _resolveOrm(this.state);
+  }
 
   /** Pass 2c: TypeScript extends/implements edges. */
-  resolveTypeScriptHeritageEdges(): void { _resolveHeritage(this.state); }
+  resolveTypeScriptHeritageEdges(): void {
+    _resolveHeritage(this.state);
+  }
 
   /** Pass 2d: ES module import edges. */
-  resolveEsmImportEdges(): void { _resolveImports(this.state); }
+  resolveEsmImportEdges(): void {
+    _resolveImports(this.state);
+  }
 
   /** Pass 2e: Python import edges (dotted paths, relative imports). */
-  resolvePythonImportEdges(): void { _resolvePyImports(this.state); }
+  resolvePythonImportEdges(): void {
+    _resolvePyImports(this.state);
+  }
 
   /** Pass 2e2: PHP import edges (PSR-4 use statements). */
-  resolvePhpImportEdges(): void { _resolvePhpImports(this.state); }
+  resolvePhpImportEdges(): void {
+    _resolvePhpImports(this.state);
+  }
 
   /** Pass 2f: Python heritage edges (class inheritance). */
-  resolvePythonHeritageEdges(): void { _resolvePyHeritage(this.state); }
+  resolvePythonHeritageEdges(): void {
+    _resolvePyHeritage(this.state);
+  }
 
   /** Pass 2g: Python call edges (function/method calls → definitions). */
-  resolvePythonCallEdges(): void { _resolvePyCalls(this.state); }
+  resolvePythonCallEdges(): void {
+    _resolvePyCalls(this.state);
+  }
 
   /** Pass 2g2: PHP call/heritage edges (method calls, extends, implements, uses_trait). */
-  resolvePhpCallEdges(): void { _resolvePhpCalls(this.state); }
+  resolvePhpCallEdges(): void {
+    _resolvePhpCalls(this.state);
+  }
 
   /** Pass 2g3: TypeScript/JavaScript call edges (function/method calls → definitions). */
-  resolveTypeScriptCallEdges(): void { _resolveTsCalls(this.state); }
+  resolveTypeScriptCallEdges(): void {
+    _resolveTsCalls(this.state);
+  }
 
   /** Pass 2g4: TypeScript/JavaScript type-reference edges (types used in annotations). */
-  resolveTypeScriptTypeEdges(): void { _resolveTsTypes(this.state); }
+  resolveTypeScriptTypeEdges(): void {
+    _resolveTsTypes(this.state);
+  }
 
   /** Pass 2i: structural member_of edges for every nested symbol → its parent. */
-  resolveMemberOfEdges(): void { _resolveMemberOf(this.state); }
+  resolveMemberOfEdges(): void {
+    _resolveMemberOf(this.state);
+  }
 
   /** Pass 2h: test_covers edges. */
-  resolveTestCoversEdges(): void { _resolveTests(this.state); }
+  resolveTestCoversEdges(): void {
+    _resolveTests(this.state);
+  }
 
   /** Pass 2j: file-level projection of cross-file symbol edges. */
-  resolveFileProjectionEdges(): void { _resolveFileProjection(this.state); }
+  resolveFileProjectionEdges(): void {
+    _resolveFileProjection(this.state);
+  }
 
   /** Pass 2k (final sweep): remove forbidden cross-workspace edges. */
-  purgeForbiddenCrossWorkspaceEdges(): void { _purgeCrossWs(this.state); }
+  purgeForbiddenCrossWorkspaceEdges(): void {
+    _purgeCrossWs(this.state);
+  }
 
   /** Store raw edges from framework/language plugins into the graph. */
   storeRawEdges(edges: RawEdge[]): void {
@@ -133,12 +170,14 @@ export class EdgeResolver {
     if (symbolIdStrs.size > 0) {
       const arr = Array.from(symbolIdStrs);
       const placeholders = arr.map(() => '?').join(',');
-      const rows = store.db.prepare(
-        `SELECT s.symbol_id, n.id AS node_id
+      const rows = store.db
+        .prepare(
+          `SELECT s.symbol_id, n.id AS node_id
            FROM symbols s
            JOIN nodes n ON n.node_type = 'symbol' AND n.ref_id = s.id
           WHERE s.symbol_id IN (${placeholders})`,
-      ).all(...arr) as Array<{ symbol_id: string; node_id: number }>;
+        )
+        .all(...arr) as Array<{ symbol_id: string; node_id: number }>;
       for (const row of rows) {
         symbolNodeCache.set(row.symbol_id, row.node_id);
       }
@@ -149,12 +188,18 @@ export class EdgeResolver {
     for (const edge of edges) {
       if (edge.sourceNodeType && edge.sourceRefId != null) {
         let s = refIdsByType.get(edge.sourceNodeType);
-        if (!s) { s = new Set(); refIdsByType.set(edge.sourceNodeType, s); }
+        if (!s) {
+          s = new Set();
+          refIdsByType.set(edge.sourceNodeType, s);
+        }
         s.add(edge.sourceRefId);
       }
       if (edge.targetNodeType && edge.targetRefId != null) {
         let s = refIdsByType.get(edge.targetNodeType);
-        if (!s) { s = new Set(); refIdsByType.set(edge.targetNodeType, s); }
+        if (!s) {
+          s = new Set();
+          refIdsByType.set(edge.targetNodeType, s);
+        }
         s.add(edge.targetRefId);
       }
     }
@@ -175,9 +220,9 @@ export class EdgeResolver {
     if (edgeTypeNames.size > 0) {
       const arr = Array.from(edgeTypeNames);
       const ph = arr.map(() => '?').join(',');
-      const rows = store.db.prepare(
-        `SELECT id, name, category FROM edge_types WHERE name IN (${ph})`,
-      ).all(...arr) as Array<{ id: number; name: string; category: string }>;
+      const rows = store.db
+        .prepare(`SELECT id, name, category FROM edge_types WHERE name IN (${ph})`)
+        .all(...arr) as Array<{ id: number; name: string; category: string }>;
       for (const row of rows) {
         edgeTypeCache.set(row.name, row.id);
         edgeTypeCategoryCache.set(row.name, row.category);
@@ -194,7 +239,10 @@ export class EdgeResolver {
       if (src == null) continue;
       const tgt = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache) ?? src;
       resolved.push({ src, tgt, edge });
-      if (allNodeIds) { allNodeIds.add(src); allNodeIds.add(tgt); }
+      if (allNodeIds) {
+        allNodeIds.add(src);
+        allNodeIds.add(tgt);
+      }
     }
 
     // 5. Pre-load workspace info for cross-workspace detection
@@ -202,13 +250,15 @@ export class EdgeResolver {
     if (allNodeIds && allNodeIds.size > 0) {
       const nodeIdArr = Array.from(allNodeIds);
       const ph = nodeIdArr.map(() => '?').join(',');
-      const rows = store.db.prepare(`
+      const rows = store.db
+        .prepare(`
         SELECT n.id AS node_id, f.workspace
         FROM nodes n
         LEFT JOIN files f ON (n.node_type = 'file' AND n.ref_id = f.id)
           OR (n.node_type = 'symbol' AND f.id = (SELECT file_id FROM symbols WHERE id = n.ref_id))
         WHERE n.id IN (${ph})
-      `).all(...nodeIdArr) as Array<{ node_id: number; workspace: string | null }>;
+      `)
+        .all(...nodeIdArr) as Array<{ node_id: number; workspace: string | null }>;
       for (const row of rows) nodeWorkspaceCache.set(row.node_id, row.workspace);
     }
 
@@ -254,7 +304,9 @@ export class EdgeResolver {
         const resolutionTier = edge.resolution ?? 'ast_resolved';
 
         insertStmt.run(
-          sourceNodeId, targetNodeId, edgeTypeId,
+          sourceNodeId,
+          targetNodeId,
+          edgeTypeId,
           (edge.resolved ?? true) ? 1 : 0,
           edge.metadata ? JSON.stringify(edge.metadata) : null,
           isCrossWs ? 1 : 0,
@@ -275,8 +327,10 @@ export class EdgeResolver {
     typeRefCache: Map<string, number>,
   ): number | undefined {
     if (edge.sourceNodeType && edge.sourceRefId != null) {
-      return typeRefCache.get(`${edge.sourceNodeType}:${edge.sourceRefId}`)
-        ?? this.state.store.getNodeId(edge.sourceNodeType, edge.sourceRefId);
+      return (
+        typeRefCache.get(`${edge.sourceNodeType}:${edge.sourceRefId}`) ??
+        this.state.store.getNodeId(edge.sourceNodeType, edge.sourceRefId)
+      );
     }
     if (edge.sourceSymbolId) {
       return symbolNodeCache.get(edge.sourceSymbolId);
@@ -290,8 +344,10 @@ export class EdgeResolver {
     typeRefCache: Map<string, number>,
   ): number | undefined {
     if (edge.targetNodeType && edge.targetRefId != null) {
-      return typeRefCache.get(`${edge.targetNodeType}:${edge.targetRefId}`)
-        ?? this.state.store.getNodeId(edge.targetNodeType, edge.targetRefId);
+      return (
+        typeRefCache.get(`${edge.targetNodeType}:${edge.targetRefId}`) ??
+        this.state.store.getNodeId(edge.targetNodeType, edge.targetRefId)
+      );
     }
     if (edge.targetSymbolId) {
       return symbolNodeCache.get(edge.targetSymbolId);

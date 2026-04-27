@@ -47,7 +47,9 @@ describe('Co-Change Analysis', () => {
       expect(data.coChanges.length).toBeGreaterThan(0);
       // Should be sorted by confidence DESC
       for (let i = 1; i < data.coChanges.length; i++) {
-        expect(data.coChanges[i - 1].confidence).toBeGreaterThanOrEqual(data.coChanges[i].confidence);
+        expect(data.coChanges[i - 1].confidence).toBeGreaterThanOrEqual(
+          data.coChanges[i].confidence,
+        );
       }
     });
 

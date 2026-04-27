@@ -35,9 +35,9 @@ interface CommunitiesResult {
 // ─── Graph building ───────────────────────────────────────
 
 interface FileGraph {
-  nodes: string[];                          // file paths
-  nodeIndex: Map<string, number>;           // path → index
-  weights: number[][];                      // adjacency matrix (sparse via Map would be better for large graphs)
+  nodes: string[]; // file paths
+  nodeIndex: Map<string, number>; // path → index
+  weights: number[][]; // adjacency matrix (sparse via Map would be better for large graphs)
 }
 
 /**
@@ -47,7 +47,8 @@ interface FileGraph {
 function buildFileGraph(store: Store): FileGraph {
   // Aggregate: for each pair of files connected by symbol-level edges,
   // count the total number of edges between them.
-  const rows = store.db.prepare(`
+  const rows = store.db
+    .prepare(`
     SELECT
       sf.path AS source_file,
       tf.path AS target_file,
@@ -61,7 +62,8 @@ function buildFileGraph(store: Store): FileGraph {
     LEFT JOIN files tf ON (tn.node_type = 'file' AND tn.ref_id = tf.id) OR ts.file_id = tf.id
     WHERE sf.path IS NOT NULL AND tf.path IS NOT NULL AND sf.path != tf.path
     GROUP BY sf.path, tf.path
-  `).all() as Array<{ source_file: string; target_file: string; weight: number }>;
+  `)
+    .all() as Array<{ source_file: string; target_file: string; weight: number }>;
 
   // Collect unique nodes
   const nodeSet = new Set<string>();
@@ -99,11 +101,7 @@ function buildFileGraph(store: Store): FileGraph {
  * 4. Repeat until no improvement
  * 5. Aggregate communities and repeat on the coarsened graph
  */
-function leidenDetect(
-  graph: FileGraph,
-  resolution = 1.0,
-  maxIterations = 20,
-): number[] {
+function leidenDetect(graph: FileGraph, resolution = 1.0, maxIterations = 20): number[] {
   const n = graph.nodes.length;
   if (n === 0) return [];
 
@@ -174,8 +172,8 @@ function leidenDetect(
         const ki = nodeDegree[i];
 
         // Modularity gain (delta Q) for moving node i from currentComm to c
-        const gain = (wc - wCurrent) / m2
-          - resolution * ki * (sumC - sumCurrent + ki) / (m2 * m2);
+        const gain =
+          (wc - wCurrent) / m2 - (resolution * ki * (sumC - sumCurrent + ki)) / (m2 * m2);
 
         if (gain > bestGain) {
           bestGain = gain;
@@ -277,9 +275,8 @@ export function detectCommunities(
     }
 
     internal = Math.floor(internal / 2); // counted twice in undirected graph
-    const cohesion = internal + external > 0
-      ? Math.round((internal / (internal + external)) * 100) / 100
-      : 0;
+    const cohesion =
+      internal + external > 0 ? Math.round((internal / (internal + external)) * 100) / 100 : 0;
 
     const label = autoLabel(files);
 
@@ -310,7 +307,14 @@ export function detectCommunities(
     );
 
     for (const comm of communities) {
-      insertComm.run(comm.id, comm.label, comm.fileCount, comm.cohesion, comm.internalEdges, comm.externalEdges);
+      insertComm.run(
+        comm.id,
+        comm.label,
+        comm.fileCount,
+        comm.cohesion,
+        comm.internalEdges,
+        comm.externalEdges,
+      );
       const files = communityFiles.get(comm.id) ?? [];
       for (const file of files) {
         insertMember.run(comm.id, file);
@@ -329,11 +333,15 @@ export function detectCommunities(
  * Get previously computed communities from DB.
  */
 export function getCommunities(store: Store): TraceMcpResult<CommunitiesResult> {
-  const rows = store.db.prepare(
-    'SELECT * FROM communities ORDER BY file_count DESC',
-  ).all() as Array<{
-    id: number; label: string; file_count: number; cohesion: number;
-    internal_edges: number; external_edges: number;
+  const rows = store.db
+    .prepare('SELECT * FROM communities ORDER BY file_count DESC')
+    .all() as Array<{
+    id: number;
+    label: string;
+    file_count: number;
+    cohesion: number;
+    internal_edges: number;
+    external_edges: number;
   }>;
 
   if (rows.length === 0) {
@@ -341,9 +349,9 @@ export function getCommunities(store: Store): TraceMcpResult<CommunitiesResult> 
   }
 
   const communities: Community[] = rows.map((r) => {
-    const members = store.db.prepare(
-      'SELECT file_path FROM community_members WHERE community_id = ? LIMIT 5',
-    ).all(r.id) as Array<{ file_path: string }>;
+    const members = store.db
+      .prepare('SELECT file_path FROM community_members WHERE community_id = ? LIMIT 5')
+      .all(r.id) as Array<{ file_path: string }>;
 
     return {
       id: r.id,
@@ -367,28 +375,38 @@ export function getCommunityDetail(
   store: Store,
   communityId: number,
 ): TraceMcpResult<CommunityDetail> {
-  const comm = store.db.prepare('SELECT * FROM communities WHERE id = ?').get(communityId) as {
-    id: number; label: string; file_count: number; cohesion: number;
-    internal_edges: number; external_edges: number;
-  } | undefined;
+  const comm = store.db.prepare('SELECT * FROM communities WHERE id = ?').get(communityId) as
+    | {
+        id: number;
+        label: string;
+        file_count: number;
+        cohesion: number;
+        internal_edges: number;
+        external_edges: number;
+      }
+    | undefined;
 
   if (!comm) {
     return ok(null as unknown as CommunityDetail);
   }
 
-  const members = store.db.prepare(
-    'SELECT file_path FROM community_members WHERE community_id = ?',
-  ).all(comm.id) as Array<{ file_path: string }>;
+  const members = store.db
+    .prepare('SELECT file_path FROM community_members WHERE community_id = ?')
+    .all(comm.id) as Array<{ file_path: string }>;
 
   // Find inter-community dependencies
-  const allMembers = store.db.prepare(
-    'SELECT community_id, file_path FROM community_members',
-  ).all() as Array<{ community_id: number; file_path: string }>;
+  const allMembers = store.db
+    .prepare('SELECT community_id, file_path FROM community_members')
+    .all() as Array<{ community_id: number; file_path: string }>;
 
   const fileToComm = new Map(allMembers.map((m) => [m.file_path, m.community_id]));
   const commLabels = new Map(
-    (store.db.prepare('SELECT id, label FROM communities').all() as Array<{ id: number; label: string }>)
-      .map((r) => [r.id, r.label]),
+    (
+      store.db.prepare('SELECT id, label FROM communities').all() as Array<{
+        id: number;
+        label: string;
+      }>
+    ).map((r) => [r.id, r.label]),
   );
 
   // This community's files
@@ -402,7 +420,8 @@ export function getCommunityDetail(
   const fileList = members.map((m) => m.file_path);
   if (fileList.length > 0) {
     const placeholders = fileList.map(() => '?').join(',');
-    const edgeRows = store.db.prepare(`
+    const edgeRows = store.db
+      .prepare(`
       SELECT sf.path AS source_file, tf.path AS target_file, COUNT(*) AS cnt
       FROM edges e
       JOIN nodes sn ON e.source_node_id = sn.id
@@ -415,7 +434,12 @@ export function getCommunityDetail(
         AND sf.path IS NOT NULL AND tf.path IS NOT NULL
         AND sf.path != tf.path
       GROUP BY sf.path, tf.path
-    `).all(...fileList, ...fileList) as Array<{ source_file: string; target_file: string; cnt: number }>;
+    `)
+      .all(...fileList, ...fileList) as Array<{
+      source_file: string;
+      target_file: string;
+      cnt: number;
+    }>;
 
     for (const row of edgeRows) {
       if (myFiles.has(row.source_file) && !myFiles.has(row.target_file)) {

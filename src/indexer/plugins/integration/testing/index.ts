@@ -25,7 +25,8 @@ const CY_VISIT_RE = /cy\.visit\s*\(\s*['"`]([^'"`]+)['"`]/g;
 const REQUEST_METHOD_RE = /request\s*\.\s*(get|post|put|delete|patch)\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 // cy.request('METHOD', '/path') or cy.request('/path')
-const CY_REQUEST_METHOD_RE = /cy\.request\s*\(\s*['"`](GET|POST|PUT|DELETE|PATCH)['"`]\s*,\s*['"`]([^'"`]+)['"`]/g;
+const CY_REQUEST_METHOD_RE =
+  /cy\.request\s*\(\s*['"`](GET|POST|PUT|DELETE|PATCH)['"`]\s*,\s*['"`]([^'"`]+)['"`]/g;
 const CY_REQUEST_SIMPLE_RE = /cy\.request\s*\(\s*['"`](\/[^'"`]+)['"`]\s*\)/g;
 
 // fetch('/api/...')
@@ -199,9 +200,21 @@ export class TestingPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'test_covers_route', category: 'testing', description: 'Test file visits/requests an API route' },
-        { name: 'test_covers_component', category: 'testing', description: 'Test file mounts/renders a component' },
-        { name: 'test_imports_module', category: 'testing', description: 'Test file imports the module under test' },
+        {
+          name: 'test_covers_route',
+          category: 'testing',
+          description: 'Test file visits/requests an API route',
+        },
+        {
+          name: 'test_covers_component',
+          category: 'testing',
+          description: 'Test file mounts/renders a component',
+        },
+        {
+          name: 'test_imports_module',
+          category: 'testing',
+          description: 'Test file imports the module under test',
+        },
       ],
     };
   }

@@ -204,7 +204,9 @@ function foo() { return x; }
 
       const result = plugin.resolveEdges(ctx);
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap().filter((e) => e.edgeType === 'sortable_shared_group')).toHaveLength(0);
+      expect(
+        result._unsafeUnwrap().filter((e) => e.edgeType === 'sortable_shared_group'),
+      ).toHaveLength(0);
     });
   });
 });

@@ -135,44 +135,53 @@ memoryCommand
   .command('decisions')
   .description('List decisions in the knowledge graph')
   .option('--project <path>', 'Filter to project (default: current directory)', process.cwd())
-  .option('--type <type>', 'Filter by type (architecture_decision, tech_choice, bug_root_cause, preference, tradeoff, discovery, convention)')
+  .option(
+    '--type <type>',
+    'Filter by type (architecture_decision, tech_choice, bug_root_cause, preference, tradeoff, discovery, convention)',
+  )
   .option('--search <query>', 'Full-text search query')
   .option('--limit <n>', 'Max results (default: 20)', '20')
   .option('--json', 'Output as JSON')
-  .action((opts: { project: string; type?: string; search?: string; limit: string; json?: boolean }) => {
-    const store = openStore();
-    try {
-      const projectRoot = path.resolve(opts.project);
-      const decisions = store.queryDecisions({
-        project_root: projectRoot,
-        type: opts.type as any,
-        search: opts.search,
-        limit: parseInt(opts.limit, 10),
-      });
+  .action(
+    (opts: { project: string; type?: string; search?: string; limit: string; json?: boolean }) => {
+      const store = openStore();
+      try {
+        const projectRoot = path.resolve(opts.project);
+        const decisions = store.queryDecisions({
+          project_root: projectRoot,
+          type: opts.type as any,
+          search: opts.search,
+          limit: parseInt(opts.limit, 10),
+        });
 
-      if (opts.json) {
-        console.log(JSON.stringify(decisions, null, 2));
-        return;
-      }
+        if (opts.json) {
+          console.log(JSON.stringify(decisions, null, 2));
+          return;
+        }
 
-      if (decisions.length === 0) {
-        console.log('No decisions found. Run `trace-mcp memory mine` to extract from session logs.');
-        return;
-      }
+        if (decisions.length === 0) {
+          console.log(
+            'No decisions found. Run `trace-mcp memory mine` to extract from session logs.',
+          );
+          return;
+        }
 
-      console.log(`${decisions.length} decisions:\n`);
-      for (const d of decisions) {
-        const status = d.valid_until ? '(invalidated)' : '(active)';
-        const link = d.symbol_id ? ` → ${d.symbol_id}` : d.file_path ? ` → ${d.file_path}` : '';
-        console.log(`  #${d.id} [${d.type}] ${d.title} ${status}${link}`);
-        console.log(`    ${d.content.slice(0, 120)}${d.content.length > 120 ? '...' : ''}`);
-        console.log(`    Source: ${d.source} | Confidence: ${(d.confidence * 100).toFixed(0)}% | Since: ${d.valid_from}`);
-        console.log();
+        console.log(`${decisions.length} decisions:\n`);
+        for (const d of decisions) {
+          const status = d.valid_until ? '(invalidated)' : '(active)';
+          const link = d.symbol_id ? ` → ${d.symbol_id}` : d.file_path ? ` → ${d.file_path}` : '';
+          console.log(`  #${d.id} [${d.type}] ${d.title} ${status}${link}`);
+          console.log(`    ${d.content.slice(0, 120)}${d.content.length > 120 ? '...' : ''}`);
+          console.log(
+            `    Source: ${d.source} | Confidence: ${(d.confidence * 100).toFixed(0)}% | Since: ${d.valid_from}`,
+          );
+          console.log();
+        }
+      } finally {
+        store.close();
       }
-    } finally {
-      store.close();
-    }
-  });
+    },
+  );
 
 // ── memory stats ────────────────────────────────────────────────────
 

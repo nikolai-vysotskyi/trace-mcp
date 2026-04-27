@@ -32,12 +32,7 @@ export const exportSecurityContextCommand = new Command('export-security-context
   .option('--scope <path>', 'Limit analysis to directory (relative to project root)')
   .option('--depth <n>', 'Call graph traversal depth (default: 3, max: 5)', '3')
   .option('--index', 'Re-index project before export', false)
-  .action(async (opts: {
-    output: string;
-    scope?: string;
-    depth: string;
-    index?: boolean;
-  }) => {
+  .action(async (opts: { output: string; scope?: string; depth: string; index?: boolean }) => {
     let projectRoot: string;
     try {
       projectRoot = findProjectRoot(process.cwd());
@@ -55,15 +50,17 @@ export const exportSecurityContextCommand = new Command('export-security-context
       // Optional re-index
       if (opts.index) {
         const configResult = await loadConfig(projectRoot);
-        const config = configResult.isOk() ? configResult.value : {
-          root: projectRoot,
-          include: ['**/*'],
-          exclude: ['vendor/**', 'node_modules/**', '.git/**'],
-          db: { path: '' },
-          plugins: [] as string[],
-          ignore: { directories: [] as string[], patterns: [] as string[] },
-          watch: { enabled: false, debounceMs: 2000 },
-        };
+        const config = configResult.isOk()
+          ? configResult.value
+          : {
+              root: projectRoot,
+              include: ['**/*'],
+              exclude: ['vendor/**', 'node_modules/**', '.git/**'],
+              db: { path: '' },
+              plugins: [] as string[],
+              ignore: { directories: [] as string[], patterns: [] as string[] },
+              watch: { enabled: false, debounceMs: 2000 },
+            };
 
         const registry = PluginRegistry.createWithDefaults();
 
@@ -76,7 +73,9 @@ export const exportSecurityContextCommand = new Command('export-security-context
       // Check that the project has been indexed
       const stats = store.getStats();
       if (stats.totalFiles === 0) {
-        console.error('Error: No files indexed. Run `trace-mcp reindex` first or use --index flag.');
+        console.error(
+          'Error: No files indexed. Run `trace-mcp reindex` first or use --index flag.',
+        );
         process.exit(2);
       }
 
@@ -101,7 +100,9 @@ export const exportSecurityContextCommand = new Command('export-security-context
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
         fs.writeFileSync(outputPath, json, 'utf-8');
         logger.info({ path: outputPath }, 'Security context exported');
-        console.error(`Exported to ${outputPath} (${result.value.tool_registrations.length} tool registrations)`);
+        console.error(
+          `Exported to ${outputPath} (${result.value.tool_registrations.length} tool registrations)`,
+        );
       }
     } finally {
       db.close();

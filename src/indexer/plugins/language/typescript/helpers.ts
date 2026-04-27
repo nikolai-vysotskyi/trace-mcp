@@ -90,8 +90,7 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
   // isolated in the graph.
   for (const node of root.namedChildren) {
     const isImport = node.type === 'import_statement';
-    const isReExport = node.type === 'export_statement'
-      && !!node.childForFieldName('source');
+    const isReExport = node.type === 'export_statement' && !!node.childForFieldName('source');
     if (!isImport && !isReExport) continue;
     const source = node.childForFieldName('source');
     if (!source) continue;
@@ -241,7 +240,10 @@ export function extractDecorators(node: TSNode): string[] {
     for (let i = parent.namedChildCount - 1; i >= 0; i--) {
       const sibling = parent.namedChild(i);
       if (!sibling) continue;
-      if (sibling.id === node.id) { foundSelf = true; continue; }
+      if (sibling.id === node.id) {
+        foundSelf = true;
+        continue;
+      }
       if (foundSelf && sibling.type === 'decorator') {
         const expr = sibling.namedChildren[0];
         if (expr) {
@@ -348,22 +350,25 @@ export function extractCallSites(fnNode: TSNode): TsCallSite[] {
   const sites: TsCallSite[] = [];
   const visit = (n: TSNode): void => {
     // Do not descend into nested functions / classes — they collect their own sites
-    if (n !== fnNode && (
-      n.type === 'function_declaration'
-      || n.type === 'class_declaration'
-      || n.type === 'method_definition'
-      || n.type === 'arrow_function'
-      || n.type === 'function_expression'
-      || n.type === 'generator_function'
-      || n.type === 'generator_function_declaration'
-    )) {
+    if (
+      n !== fnNode &&
+      (n.type === 'function_declaration' ||
+        n.type === 'class_declaration' ||
+        n.type === 'method_definition' ||
+        n.type === 'arrow_function' ||
+        n.type === 'function_expression' ||
+        n.type === 'generator_function' ||
+        n.type === 'generator_function_declaration')
+    ) {
       // But arrow/function expressions can be IIFEs — still walk their body
       // for simplicity and accuracy, walk them all (call graphs are best-effort)
       // Exception: nested named declarations — they get their own sites
-      if (n.type === 'function_declaration'
-        || n.type === 'method_definition'
-        || n.type === 'class_declaration'
-        || n.type === 'generator_function_declaration') {
+      if (
+        n.type === 'function_declaration' ||
+        n.type === 'method_definition' ||
+        n.type === 'class_declaration' ||
+        n.type === 'generator_function_declaration'
+      ) {
         return;
       }
     }
@@ -467,15 +472,19 @@ function parseCallExpression(node: TSNode, isNew: boolean): TsCallSite | null {
  *   - const x = getFoo()              → x: { assignedFrom: 'getFoo' }
  *   - this.x = new Foo()              → this.x: 'Foo'
  */
-export function collectLocalTypes(fnNode: TSNode): Record<string, { type?: string; assignedFrom?: string }> {
+export function collectLocalTypes(
+  fnNode: TSNode,
+): Record<string, { type?: string; assignedFrom?: string }> {
   const out: Record<string, { type?: string; assignedFrom?: string }> = {};
   const visit = (n: TSNode): void => {
     // Don't descend into nested named declarations
-    if (n !== fnNode && (
-      n.type === 'function_declaration'
-      || n.type === 'method_definition'
-      || n.type === 'class_declaration'
-    )) return;
+    if (
+      n !== fnNode &&
+      (n.type === 'function_declaration' ||
+        n.type === 'method_definition' ||
+        n.type === 'class_declaration')
+    )
+      return;
 
     // Variable declarator: `const x = <init>` or `const x: Foo = <init>`
     if (n.type === 'variable_declarator') {
@@ -547,12 +556,50 @@ export function collectLocalTypes(fnNode: TSNode): Record<string, { type?: strin
  * Filters out built-ins (string/number/boolean/void/etc.) to keep resolver fast.
  */
 const BUILTIN_TYPE_NAMES = new Set([
-  'string', 'number', 'boolean', 'void', 'any', 'unknown', 'never', 'object',
-  'symbol', 'bigint', 'null', 'undefined', 'this', 'Function', 'Object',
-  'String', 'Number', 'Boolean', 'Array', 'Map', 'Set', 'Promise', 'Record',
-  'Partial', 'Readonly', 'Required', 'Pick', 'Omit', 'Exclude', 'Extract',
-  'ReturnType', 'Parameters', 'InstanceType', 'NonNullable', 'Awaited',
-  'ReadonlyArray', 'Date', 'RegExp', 'Error', 'Buffer', 'T', 'U', 'V', 'K',
+  'string',
+  'number',
+  'boolean',
+  'void',
+  'any',
+  'unknown',
+  'never',
+  'object',
+  'symbol',
+  'bigint',
+  'null',
+  'undefined',
+  'this',
+  'Function',
+  'Object',
+  'String',
+  'Number',
+  'Boolean',
+  'Array',
+  'Map',
+  'Set',
+  'Promise',
+  'Record',
+  'Partial',
+  'Readonly',
+  'Required',
+  'Pick',
+  'Omit',
+  'Exclude',
+  'Extract',
+  'ReturnType',
+  'Parameters',
+  'InstanceType',
+  'NonNullable',
+  'Awaited',
+  'ReadonlyArray',
+  'Date',
+  'RegExp',
+  'Error',
+  'Buffer',
+  'T',
+  'U',
+  'V',
+  'K',
 ]);
 
 export function extractTypeReferences(node: TSNode): string[] {
@@ -606,7 +653,12 @@ export function extractModuleCallSites(
       for (const d of n.namedChildren) {
         if (d.type !== 'variable_declarator') continue;
         const v = d.childForFieldName('value');
-        if (v && (v.type === 'arrow_function' || v.type === 'function_expression' || v.type === 'generator_function')) {
+        if (
+          v &&
+          (v.type === 'arrow_function' ||
+            v.type === 'function_expression' ||
+            v.type === 'generator_function')
+        ) {
           // Body is captured by extractFunction/extractVariable; skip here
           return;
         }

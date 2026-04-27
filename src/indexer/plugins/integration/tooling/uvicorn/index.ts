@@ -29,10 +29,8 @@ const UVICORN_RUN_ARG_RE =
   /\buvicorn\s*\.\s*run\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["']|([A-Za-z_][\w.]*))/g;
 
 // Named import: `from uvicorn import run` → plain `run(app, ...)` calls.
-const FROM_UVICORN_RUN_IMPORT_RE =
-  /\bfrom\s+uvicorn\s+import\s+(?:[^;\n]*\brun\b[^;\n]*)/;
-const BARE_RUN_ARG_RE =
-  /(?:^|[^.\w])run\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["']|([A-Za-z_][\w.]*))/g;
+const FROM_UVICORN_RUN_IMPORT_RE = /\bfrom\s+uvicorn\s+import\s+(?:[^;\n]*\brun\b[^;\n]*)/;
+const BARE_RUN_ARG_RE = /(?:^|[^.\w])run\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["']|([A-Za-z_][\w.]*))/g;
 
 export class UvicornPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -50,7 +48,11 @@ export class UvicornPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'asgi_server_runs', category: 'python-server', description: 'uvicorn.run() → ASGI app reference' },
+        {
+          name: 'asgi_server_runs',
+          category: 'python-server',
+          description: 'uvicorn.run() → ASGI app reference',
+        },
       ],
     };
   }

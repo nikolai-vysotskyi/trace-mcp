@@ -3,7 +3,11 @@ import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { createTestStore } from '../test-utils.js';
-import { isIndexStale, fallbackSearch, fallbackOutline } from '../../src/tools/navigation/zero-index.js';
+import {
+  isIndexStale,
+  fallbackSearch,
+  fallbackOutline,
+} from '../../src/tools/navigation/zero-index.js';
 
 const TEST_DIR = path.join(tmpdir(), 'trace-mcp-zeroindex-test-' + process.pid);
 
@@ -41,9 +45,11 @@ describe('Zero-index fallback', () => {
     test('returns stale for old index', () => {
       const store = createTestStore();
       // Manually insert with old timestamp
-      store.db.prepare(
-        "INSERT INTO files (path, language, content_hash, byte_length, indexed_at) VALUES (?, ?, ?, ?, datetime('now', '-120 minutes'))"
-      ).run('src/old.ts', 'typescript', 'h1', 100);
+      store.db
+        .prepare(
+          "INSERT INTO files (path, language, content_hash, byte_length, indexed_at) VALUES (?, ?, ?, ?, datetime('now', '-120 minutes'))",
+        )
+        .run('src/old.ts', 'typescript', 'h1', 100);
       const result = isIndexStale(store, 60);
       expect(result.stale).toBe(true);
       expect(result.reason).toContain('minutes old');
@@ -56,17 +62,23 @@ describe('Zero-index fallback', () => {
 
   describe('fallbackSearch', () => {
     test('finds text matches in files', () => {
-      writeFile('src/app.ts', `
+      writeFile(
+        'src/app.ts',
+        `
 export function handleRequest(req: Request) {
   const userId = req.params.id;
   return findUser(userId);
 }
-`);
-      writeFile('src/utils.ts', `
+`,
+      );
+      writeFile(
+        'src/utils.ts',
+        `
 export function findUser(id: string) {
   return db.query('SELECT * FROM users WHERE id = ?', [id]);
 }
-`);
+`,
+      );
 
       const result = fallbackSearch(TEST_DIR, 'findUser');
       expect(result.fallback).toBe(true);
@@ -108,7 +120,9 @@ export function findUser(id: string) {
 
   describe('fallbackOutline', () => {
     test('extracts TypeScript symbols', () => {
-      writeFile('src/models.ts', `
+      writeFile(
+        'src/models.ts',
+        `
 export class User {
   constructor(public name: string) {}
 }
@@ -129,7 +143,8 @@ export enum Role {
   Admin,
   User,
 }
-`);
+`,
+      );
 
       const result = fallbackOutline(TEST_DIR, 'src/models.ts');
       expect(result.fallback).toBe(true);
@@ -149,14 +164,17 @@ export enum Role {
     });
 
     test('extracts Python symbols', () => {
-      writeFile('src/app.py', `
+      writeFile(
+        'src/app.py',
+        `
 class UserService:
     def get_user(self, user_id: str):
         pass
 
 async def process_request(data):
     pass
-`);
+`,
+      );
 
       const result = fallbackOutline(TEST_DIR, 'src/app.py');
       const names = result.symbols.map((s) => s.name);
@@ -166,7 +184,9 @@ async def process_request(data):
     });
 
     test('extracts Go symbols', () => {
-      writeFile('src/main.go', `
+      writeFile(
+        'src/main.go',
+        `
 package main
 
 type UserService struct {
@@ -180,7 +200,8 @@ func (s *UserService) GetUser(id string) (*User, error) {
 func main() {
     fmt.Println("hello")
 }
-`);
+`,
+      );
 
       const result = fallbackOutline(TEST_DIR, 'src/main.go');
       const names = result.symbols.map((s) => s.name);
@@ -190,7 +211,9 @@ func main() {
     });
 
     test('extracts Rust symbols', () => {
-      writeFile('src/lib.rs', `
+      writeFile(
+        'src/lib.rs',
+        `
 pub struct Config {
     port: u16,
 }
@@ -207,7 +230,8 @@ pub trait Handler {
 pub async fn serve(config: Config) {
     // ...
 }
-`);
+`,
+      );
 
       const result = fallbackOutline(TEST_DIR, 'src/lib.rs');
       const names = result.symbols.map((s) => s.name);
@@ -218,11 +242,14 @@ pub async fn serve(config: Config) {
     });
 
     test('symbols are sorted by line', () => {
-      writeFile('src/sorted.ts', `
+      writeFile(
+        'src/sorted.ts',
+        `
 const A = 1;
 function B() {}
 class C {}
-`);
+`,
+      );
 
       const result = fallbackOutline(TEST_DIR, 'src/sorted.ts');
       for (let i = 1; i < result.symbols.length; i++) {

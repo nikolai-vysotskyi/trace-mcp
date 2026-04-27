@@ -88,11 +88,7 @@ describe('assembleContext', () => {
   });
 
   it('respects token budget', () => {
-    const items = [
-      makeItem('a', 1.0, 1000),
-      makeItem('b', 0.5, 1000),
-      makeItem('c', 0.3, 1000),
-    ];
+    const items = [makeItem('a', 1.0, 1000), makeItem('b', 0.5, 1000), makeItem('c', 0.3, 1000)];
 
     // Very small budget: should not fit all items at full detail
     const result = assembleContext(items, 50);
@@ -100,11 +96,7 @@ describe('assembleContext', () => {
   });
 
   it('sorts items by score descending', () => {
-    const items = [
-      makeItem('low', 0.1, 10),
-      makeItem('high', 0.9, 10),
-      makeItem('mid', 0.5, 10),
-    ];
+    const items = [makeItem('low', 0.1, 10), makeItem('high', 0.9, 10), makeItem('mid', 0.5, 10)];
 
     const result = assembleContext(items, 10000);
     expect(result.items[0].id).toBe('high');

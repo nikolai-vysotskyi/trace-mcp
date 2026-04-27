@@ -23,9 +23,9 @@ describe('JsonLanguagePlugin', () => {
   describe('generic', () => {
     it('extracts first-level keys as constants', async () => {
       const r = await parse('{"host": "localhost", "port": 8080, "debug": true}');
-      expect(r.symbols.some(s => s.name === 'host' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'port' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'debug' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'host' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'port' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'debug' && s.kind === 'constant')).toBe(true);
       // generic dialect => no jsonDialect in metadata
       expect(r.metadata?.jsonDialect).toBeUndefined();
     });
@@ -57,12 +57,16 @@ describe('JsonLanguagePlugin', () => {
       );
 
       expect(r.metadata?.jsonDialect).toBe('package-json');
-      expect(r.symbols.some(s => s.name === 'my-package' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'build' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'test' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'my-package' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'build' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'test' && s.kind === 'function')).toBe(true);
       // import edges for deps
-      expect(r.edges!.some(e => (e.metadata as any).module === 'express')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).module === 'vitest' && (e.metadata as any).dev === true)).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'express')).toBe(true);
+      expect(
+        r.edges!.some(
+          (e) => (e.metadata as any).module === 'vitest' && (e.metadata as any).dev === true,
+        ),
+      ).toBe(true);
     });
   });
 
@@ -79,9 +83,11 @@ describe('JsonLanguagePlugin', () => {
       );
 
       expect(r.metadata?.jsonDialect).toBe('tsconfig');
-      expect(r.symbols.some(s => s.name === 'strict' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'target' && s.kind === 'constant')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).module === '@tsconfig/node18/tsconfig.json')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'strict' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'target' && s.kind === 'constant')).toBe(true);
+      expect(
+        r.edges!.some((e) => (e.metadata as any).module === '@tsconfig/node18/tsconfig.json'),
+      ).toBe(true);
     });
   });
 
@@ -93,19 +99,25 @@ describe('JsonLanguagePlugin', () => {
         JSON.stringify({
           extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
           plugins: ['@typescript-eslint'],
-          rules: { 'no-unused-vars': 'warn', 'semi': 'error' },
+          rules: { 'no-unused-vars': 'warn', semi: 'error' },
         }),
         '.eslintrc.json',
       );
 
       expect(r.metadata?.jsonDialect).toBe('eslint');
-      expect(r.symbols.some(s => s.name === 'no-unused-vars' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'semi' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'no-unused-vars' && s.kind === 'constant')).toBe(
+        true,
+      );
+      expect(r.symbols.some((s) => s.name === 'semi' && s.kind === 'constant')).toBe(true);
       // extends
-      expect(r.edges!.some(e => (e.metadata as any).module === 'eslint:recommended')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).module === 'plugin:@typescript-eslint/recommended')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'eslint:recommended')).toBe(true);
+      expect(
+        r.edges!.some(
+          (e) => (e.metadata as any).module === 'plugin:@typescript-eslint/recommended',
+        ),
+      ).toBe(true);
       // plugins
-      expect(r.edges!.some(e => (e.metadata as any).module === '@typescript-eslint')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === '@typescript-eslint')).toBe(true);
     });
   });
 
@@ -116,7 +128,7 @@ describe('JsonLanguagePlugin', () => {
       const r = await parse(
         JSON.stringify({
           name: 'vendor/my-package',
-          require: { 'php': '>=8.1', 'laravel/framework': '^10.0' },
+          require: { php: '>=8.1', 'laravel/framework': '^10.0' },
           'require-dev': { 'phpunit/phpunit': '^10.0' },
           scripts: { test: 'phpunit', lint: 'phpcs' },
           autoload: { 'psr-4': { 'App\\': 'src/' } },
@@ -125,13 +137,20 @@ describe('JsonLanguagePlugin', () => {
       );
 
       expect(r.metadata?.jsonDialect).toBe('composer');
-      expect(r.symbols.some(s => s.name === 'vendor/my-package' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'test' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'lint' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'App\\' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'vendor/my-package' && s.kind === 'constant')).toBe(
+        true,
+      );
+      expect(r.symbols.some((s) => s.name === 'test' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'lint' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'App\\' && s.kind === 'namespace')).toBe(true);
       // import edges
-      expect(r.edges!.some(e => (e.metadata as any).module === 'laravel/framework')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).module === 'phpunit/phpunit' && (e.metadata as any).dev === true)).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'laravel/framework')).toBe(true);
+      expect(
+        r.edges!.some(
+          (e) =>
+            (e.metadata as any).module === 'phpunit/phpunit' && (e.metadata as any).dev === true,
+        ),
+      ).toBe(true);
     });
   });
 
@@ -155,9 +174,9 @@ describe('JsonLanguagePlugin', () => {
       );
 
       expect(r.metadata?.jsonDialect).toBe('angular');
-      expect(r.symbols.some(s => s.name === 'my-app' && s.kind === 'namespace')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'build' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'serve' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'my-app' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'build' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'serve' && s.kind === 'function')).toBe(true);
     });
   });
 
@@ -175,9 +194,15 @@ describe('JsonLanguagePlugin', () => {
       );
 
       expect(r.metadata?.jsonDialect).toBe('vscode-settings');
-      expect(r.symbols.some(s => s.name === 'editor.fontSize' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'editor.tabSize' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'files.autoSave' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'editor.fontSize' && s.kind === 'constant')).toBe(
+        true,
+      );
+      expect(r.symbols.some((s) => s.name === 'editor.tabSize' && s.kind === 'constant')).toBe(
+        true,
+      );
+      expect(r.symbols.some((s) => s.name === 'files.autoSave' && s.kind === 'constant')).toBe(
+        true,
+      );
     });
   });
 
@@ -221,25 +246,37 @@ describe('JsonLanguagePlugin', () => {
       const r = await parse(JSON.stringify(spec), 'openapi.json');
 
       expect(r.metadata?.jsonDialect).toBe('openapi');
-      expect(r.symbols.some(s => s.name === 'GET /users/{id}' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'GET /users/{id}' && s.kind === 'function')).toBe(
+        true,
+      );
 
-      const opSym = r.symbols.find(s => s.name === 'getUserById');
+      const opSym = r.symbols.find((s) => s.name === 'getUserById');
       expect(opSym).toBeDefined();
       expect(opSym?.metadata?.jsonKind).toBe('operationId');
 
-      const endpoint = r.symbols.find(s => s.name === 'GET /users/{id}');
+      const endpoint = r.symbols.find((s) => s.name === 'GET /users/{id}');
       expect(endpoint?.metadata?.operationId).toBe('getUserById');
       expect(endpoint?.metadata?.tags).toEqual(['users', 'public']);
 
-      expect(r.symbols.some(s => s.name === 'User' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'Profile' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'User' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'Profile' && s.kind === 'type')).toBe(true);
 
-      expect(r.edges?.some(e =>
-        e.edgeType === 'imports' && (e.metadata as any)?.module === 'User' && (e.metadata as any)?.dialect === 'openapi'
-      )).toBe(true);
-      expect(r.edges?.some(e =>
-        e.edgeType === 'imports' && (e.metadata as any)?.module === 'Profile' && (e.metadata as any)?.from === 'User'
-      )).toBe(true);
+      expect(
+        r.edges?.some(
+          (e) =>
+            e.edgeType === 'imports' &&
+            (e.metadata as any)?.module === 'User' &&
+            (e.metadata as any)?.dialect === 'openapi',
+        ),
+      ).toBe(true);
+      expect(
+        r.edges?.some(
+          (e) =>
+            e.edgeType === 'imports' &&
+            (e.metadata as any)?.module === 'Profile' &&
+            (e.metadata as any)?.from === 'User',
+        ),
+      ).toBe(true);
     });
 
     it('detects via top-level openapi key when filename is unrelated', async () => {

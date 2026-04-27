@@ -9,7 +9,11 @@ import type { Store } from '../../db/store.js';
 import type { EsModuleResolver } from '../../indexer/resolvers/es-modules.js';
 import type { FileEdit, RefactorResult } from './shared.js';
 import { readLines, writeLines, getImportingFiles } from './shared.js';
-import { rewriteImportForMovedTarget, computeRelativeSpecifier, rewriteImportSpecifiers } from './import-rewriter.js';
+import {
+  rewriteImportForMovedTarget,
+  computeRelativeSpecifier,
+  rewriteImportSpecifiers,
+} from './import-rewriter.js';
 
 export interface MoveSymbolParams {
   symbol_id: string;
@@ -19,7 +23,7 @@ export interface MoveSymbolParams {
 
 export interface MoveFileParams {
   source_file: string; // relative to project root
-  new_path: string;    // relative to project root
+  new_path: string; // relative to project root
   dry_run?: boolean;
 }
 
@@ -129,7 +133,9 @@ function moveSymbol(
 
   // Check if symbol is exported
   const meta = symbol.metadata
-    ? (typeof symbol.metadata === 'string' ? JSON.parse(symbol.metadata) : symbol.metadata)
+    ? typeof symbol.metadata === 'string'
+      ? JSON.parse(symbol.metadata)
+      : symbol.metadata
     : {};
   const isExported = !!meta?.exported;
 
@@ -147,7 +153,11 @@ function moveSymbol(
   let insertIdx = targetLines.length;
   for (let i = targetLines.length - 1; i >= 0; i--) {
     const trimmed = targetLines[i].trim();
-    if (trimmed.startsWith('import ') || trimmed.startsWith('from ') || trimmed.startsWith('require(')) {
+    if (
+      trimmed.startsWith('import ') ||
+      trimmed.startsWith('from ') ||
+      trimmed.startsWith('require(')
+    ) {
       insertIdx = i + 1;
       break;
     }
@@ -189,7 +199,10 @@ function moveSymbol(
   result.edits.push({
     file: sourceFile.path,
     original_line: extractStart + 1,
-    original_text: extractedText.split('\n').map((l) => l.trimStart()).join('\n'),
+    original_text: extractedText
+      .split('\n')
+      .map((l) => l.trimStart())
+      .join('\n'),
     new_text: '(removed)',
   });
 
@@ -235,7 +248,7 @@ function moveSymbol(
       // We'll add a re-export to avoid breaking imports that pull multiple symbols
       result.warnings.push(
         `Source file has ${remainingExports.length} other export(s). ` +
-        `Consider adding a re-export: export { ${symbol.name} } from '${computeRelativeSpecifier(sourceAbsPath, targetAbsPath)}';`
+          `Consider adding a re-export: export { ${symbol.name} } from '${computeRelativeSpecifier(sourceAbsPath, targetAbsPath)}';`,
       );
     }
   }
@@ -509,7 +522,10 @@ function rewriteSymbolImport(
     // Check if this import has multiple symbols
     const namedImportMatch = line.match(/\{([^}]+)\}/);
     if (namedImportMatch) {
-      const names = namedImportMatch[1].split(',').map((n) => n.trim()).filter(Boolean);
+      const names = namedImportMatch[1]
+        .split(',')
+        .map((n) => n.trim())
+        .filter(Boolean);
       const otherNames = names.filter((n) => {
         // Handle `name as alias` patterns
         const baseName = n.split(/\s+as\s+/)[0].trim();

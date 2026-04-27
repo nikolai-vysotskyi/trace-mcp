@@ -5,11 +5,11 @@ import { searchFts } from '../../db/fts.js';
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type GraphQueryIntent =
-  | 'path'         // "How does X flow to Y?"
-  | 'dependents'   // "What depends on X?"
+  | 'path' // "How does X flow to Y?"
+  | 'dependents' // "What depends on X?"
   | 'dependencies' // "What does X depend on?"
-  | 'flow'         // "Trace the flow through X" (bidirectional)
-  | 'between';     // "What connects X and Y?"
+  | 'flow' // "Trace the flow through X" (bidirectional)
+  | 'between'; // "What connects X and Y?"
 
 interface GraphNode {
   symbol_id: string;
@@ -106,7 +106,11 @@ function classifyQuery(query: string): ClassifiedQuery {
   const tokens = query
     .replace(/[?!.,;:'"]/g, '')
     .split(/\s+/)
-    .filter((t) => t.length > 2 && !/^(how|does|the|from|what|is|are|and|to|in|of|for|a|an|this|that|with)$/i.test(t));
+    .filter(
+      (t) =>
+        t.length > 2 &&
+        !/^(how|does|the|from|what|is|are|and|to|in|of|for|a|an|this|that|with)$/i.test(t),
+    );
 
   if (tokens.length >= 2) {
     return { intent: 'path', anchors: [tokens[0], tokens[tokens.length - 1]] };
@@ -141,13 +145,27 @@ function resolveAnchor(store: Store, anchor: string): SymbolRow | undefined {
 // ── Graph Building Helpers ───────────────────────────────────────────────────
 
 const ALL_TRAVERSAL_EDGES = new Set([
-  'calls', 'references', 'imports', 'esm_imports', 'py_imports',
-  'extends', 'implements', 'uses_trait',
-  'dispatches', 'routes_to', 'validates_with',
-  'nest_injects', 'graphql_resolves',
-  'inertia_renders', 'renders',
-  'has_one', 'has_many', 'belongs_to', 'many_to_many',
-  'uses_middleware', 'listens_to',
+  'calls',
+  'references',
+  'imports',
+  'esm_imports',
+  'py_imports',
+  'extends',
+  'implements',
+  'uses_trait',
+  'dispatches',
+  'routes_to',
+  'validates_with',
+  'nest_injects',
+  'graphql_resolves',
+  'inertia_renders',
+  'renders',
+  'has_one',
+  'has_many',
+  'belongs_to',
+  'many_to_many',
+  'uses_middleware',
+  'listens_to',
 ]);
 
 function symbolToNode(sym: SymbolRow, fileMap: Map<number, FileRow>): GraphNode {
@@ -164,7 +182,7 @@ function symbolToNode(sym: SymbolRow, fileMap: Map<number, FileRow>): GraphNode 
 
 interface TraversalContext {
   store: Store;
-  visitedNodes: Set<number>;  // node IDs
+  visitedNodes: Set<number>; // node IDs
   collectedEdges: Map<string, { srcNodeId: number; tgtNodeId: number; edgeType: string }>;
   symbolIds: Set<number>;
   maxNodes: number;
@@ -234,8 +252,8 @@ function traverseBFS(
 // ── BFS Path Finding ─────────────────────────────────────────────────────────
 
 interface BFSPathResult {
-  path: number[];         // node IDs from start to end
-  edgeTypes: string[];    // edge type at each step
+  path: number[]; // node IDs from start to end
+  edgeTypes: string[]; // edge type at each step
 }
 
 function findShortestPath(
@@ -351,7 +369,11 @@ export function graphQuery(
   // 1. Classify intent
   const classified = classifyQuery(query);
   if (classified.anchors.length === 0) {
-    return err({ code: 'VALIDATION_ERROR', message: 'Could not extract any symbol references from query. Try: "how does AuthService flow to Database?" or "what depends on UserModel?"' });
+    return err({
+      code: 'VALIDATION_ERROR',
+      message:
+        'Could not extract any symbol references from query. Try: "how does AuthService flow to Database?" or "what depends on UserModel?"',
+    });
   }
 
   // 2. Resolve anchor symbols
@@ -371,14 +393,15 @@ export function graphQuery(
       const fts = searchFts(store.db, a, 3);
       return fts.map((f) => f.name);
     });
-    return err(notFound(
-      classified.anchors.join(', '),
-      candidates.length > 0 ? candidates : undefined,
-    ));
+    return err(
+      notFound(classified.anchors.join(', '), candidates.length > 0 ? candidates : undefined),
+    );
   }
 
   if (unresolvedAnchors.length > 0) {
-    warnings.push(`Could not resolve: ${unresolvedAnchors.join(', ')}. Proceeding with resolved symbols only.`);
+    warnings.push(
+      `Could not resolve: ${unresolvedAnchors.join(', ')}. Proceeding with resolved symbols only.`,
+    );
   }
 
   // 3. Get node IDs for anchors
@@ -419,7 +442,9 @@ export function graphQuery(
           // Also do a shallow expansion around path nodes for context
           traverseBFS(ctx, pathResult.path, 'both', 1);
         } else {
-          warnings.push('No direct path found between the two symbols. Showing neighborhoods instead.');
+          warnings.push(
+            'No direct path found between the two symbols. Showing neighborhoods instead.',
+          );
           traverseBFS(ctx, [anchorNodeIds[0]], 'both', depth);
           traverseBFS(ctx, [anchorNodeIds[1]], 'both', depth);
         }
@@ -454,9 +479,13 @@ export function graphQuery(
   }
 
   const allSymbolRefIds = [...symbolIds];
-  const symbolMap = allSymbolRefIds.length > 0 ? store.getSymbolsByIds(allSymbolRefIds) : new Map<number, SymbolRow>();
+  const symbolMap =
+    allSymbolRefIds.length > 0
+      ? store.getSymbolsByIds(allSymbolRefIds)
+      : new Map<number, SymbolRow>();
   const allFileIds = [...new Set([...symbolMap.values()].map((s) => s.file_id))];
-  const fileMap = allFileIds.length > 0 ? store.getFilesByIds(allFileIds) : new Map<number, FileRow>();
+  const fileMap =
+    allFileIds.length > 0 ? store.getFilesByIds(allFileIds) : new Map<number, FileRow>();
 
   // Build nodeId → symbolId mapping
   const nodeToSymbol = new Map<number, SymbolRow>();

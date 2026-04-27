@@ -37,11 +37,18 @@ function createDb(): Database.Database {
   return db;
 }
 
-function insertSpan(db: Database.Database, opts: {
-  traceId?: number; spanId?: string; nodeId?: number;
-  operation?: string; durationUs?: number; statusCode?: number;
-  startedAt?: string;
-}) {
+function insertSpan(
+  db: Database.Database,
+  opts: {
+    traceId?: number;
+    spanId?: string;
+    nodeId?: number;
+    operation?: string;
+    durationUs?: number;
+    statusCode?: number;
+    startedAt?: string;
+  },
+) {
   const id = opts.spanId ?? `span-${Math.random().toString(36).slice(2)}`;
   db.prepare(`
     INSERT INTO runtime_spans (trace_id, span_id, service_name, operation, kind, started_at, duration_us, status_code, mapped_node_id, mapping_method)
@@ -60,8 +67,12 @@ function insertSpan(db: Database.Database, opts: {
 describe('RuntimeAggregator', () => {
   let db: Database.Database;
 
-  beforeEach(() => { db = createDb(); });
-  afterEach(() => { db.close(); });
+  beforeEach(() => {
+    db = createDb();
+  });
+  afterEach(() => {
+    db.close();
+  });
 
   it('aggregates mapped spans into buckets', () => {
     insertSpan(db, { nodeId: 10, durationUs: 100 });
@@ -75,7 +86,9 @@ describe('RuntimeAggregator', () => {
     expect(result.nodesAffected).toBeGreaterThanOrEqual(1);
 
     const rows = db.prepare('SELECT * FROM runtime_aggregates WHERE node_id = 10').all() as Array<{
-      call_count: number; error_count: number; total_duration_us: number;
+      call_count: number;
+      error_count: number;
+      total_duration_us: number;
     }>;
     expect(rows.length).toBeGreaterThanOrEqual(1);
     const total = rows.reduce((sum, r) => sum + r.call_count, 0);

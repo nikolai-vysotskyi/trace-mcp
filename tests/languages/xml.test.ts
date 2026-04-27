@@ -26,45 +26,47 @@ describe('XmlLanguagePlugin', () => {
   describe('generic XML', () => {
     it('extracts root element only once', () => {
       const r = parse('<root>\n  <child />\n  <other />\n</root>');
-      const roots = r.symbols.filter(s => s.metadata?.xmlKind === 'rootElement');
+      const roots = r.symbols.filter((s) => s.metadata?.xmlKind === 'rootElement');
       expect(roots).toHaveLength(1);
       expect(roots[0].name).toBe('root');
     });
 
     it('handles namespaced root', () => {
       const r = parse('<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" />');
-      expect(r.symbols.some(s => s.name === 'soap:Envelope' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'soap:Envelope' && s.kind === 'type')).toBe(true);
     });
 
     it('extracts id attributes', () => {
       const r = parse('<root><a id="x" /><b id="y" /></root>');
-      expect(r.symbols.some(s => s.name === 'x' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'y' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'x' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'y' && s.kind === 'constant')).toBe(true);
     });
 
     it('deduplicates id symbols', () => {
       const r = parse('<root><a id="dup" /><b id="dup" /></root>');
-      expect(r.symbols.filter(s => s.name === 'dup')).toHaveLength(1);
+      expect(r.symbols.filter((s) => s.name === 'dup')).toHaveLength(1);
     });
 
     it('extracts name from structural tags, not noise', () => {
       const r = parse('<root>\n  <setting name="timeout" />\n  <input name="email" />\n</root>');
-      expect(r.symbols.some(s => s.name === 'timeout')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'email')).toBe(false);
+      expect(r.symbols.some((s) => s.name === 'timeout')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'email')).toBe(false);
     });
 
     it('extracts namespace declarations', () => {
       const r = parse('<root xmlns:ns="http://a" xmlns:xsi="http://b" />');
-      expect(r.symbols.some(s => s.name === 'ns' && s.kind === 'namespace')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'xsi' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'ns' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'xsi' && s.kind === 'namespace')).toBe(true);
     });
 
     it('skips comments, CDATA, PIs', () => {
-      const r = parse('<?xml version="1.0"?>\n<!-- comment -->\n<root>\n  <![CDATA[<fake>]]>\n  <item id="real" />\n</root>');
-      expect(r.symbols.some(s => s.name === 'root')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'real')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'xml')).toBe(false);
-      expect(r.symbols.some(s => s.name === 'fake')).toBe(false);
+      const r = parse(
+        '<?xml version="1.0"?>\n<!-- comment -->\n<root>\n  <![CDATA[<fake>]]>\n  <item id="real" />\n</root>',
+      );
+      expect(r.symbols.some((s) => s.name === 'root')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'real')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'xml')).toBe(false);
+      expect(r.symbols.some((s) => s.name === 'fake')).toBe(false);
     });
 
     it('does not extract non-import hrefs', () => {
@@ -87,19 +89,25 @@ describe('XmlLanguagePlugin', () => {
     });
 
     it('extracts complexType, simpleType, element', () => {
-      const r = parse(`<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      const r = parse(
+        `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
   <xs:complexType name="UserType"><xs:sequence /></xs:complexType>
   <xs:simpleType name="StatusCode"><xs:restriction base="xs:string" /></xs:simpleType>
   <xs:element name="user" type="UserType" />
-</xs:schema>`, 'types.xsd');
-      expect(r.symbols.some(s => s.name === 'UserType' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'StatusCode' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'user' && s.kind === 'type')).toBe(true);
+</xs:schema>`,
+        'types.xsd',
+      );
+      expect(r.symbols.some((s) => s.name === 'UserType' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'StatusCode' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'user' && s.kind === 'type')).toBe(true);
     });
 
     it('extracts xs:import schemaLocation', () => {
-      const r = parse('<xs:schema><xs:import schemaLocation="common.xsd" /></xs:schema>', 'types.xsd');
-      expect(r.edges!.some(e => (e.metadata as any).from === 'common.xsd')).toBe(true);
+      const r = parse(
+        '<xs:schema><xs:import schemaLocation="common.xsd" /></xs:schema>',
+        'types.xsd',
+      );
+      expect(r.edges!.some((e) => (e.metadata as any).from === 'common.xsd')).toBe(true);
     });
   });
 
@@ -107,17 +115,20 @@ describe('XmlLanguagePlugin', () => {
 
   describe('WSDL', () => {
     it('extracts WSDL definitions', () => {
-      const r = parse(`<definitions xmlns="http://schemas.xmlsoap.org/wsdl/">
+      const r = parse(
+        `<definitions xmlns="http://schemas.xmlsoap.org/wsdl/">
   <message name="GetUserRequest" />
   <portType name="UserPort">
     <operation name="getUser" />
   </portType>
   <service name="UserService" />
-</definitions>`, 'service.wsdl');
-      expect(r.symbols.some(s => s.name === 'GetUserRequest' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'UserPort' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'getUser' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'UserService' && s.kind === 'type')).toBe(true);
+</definitions>`,
+        'service.wsdl',
+      );
+      expect(r.symbols.some((s) => s.name === 'GetUserRequest' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'UserPort' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'getUser' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'UserService' && s.kind === 'type')).toBe(true);
     });
   });
 
@@ -125,23 +136,29 @@ describe('XmlLanguagePlugin', () => {
 
   describe('XSLT', () => {
     it('extracts templates and variables', () => {
-      const r = parse(`<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+      const r = parse(
+        `<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
   <xsl:variable name="title" select="'Hello'" />
   <xsl:template name="header"><h1 /></xsl:template>
   <xsl:param name="lang" />
-</xsl:stylesheet>`, 'transform.xsl');
+</xsl:stylesheet>`,
+        'transform.xsl',
+      );
       expect(r.metadata?.xmlDialect).toBe('xslt');
-      expect(r.symbols.some(s => s.name === 'header' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'title' && s.kind === 'variable')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'lang' && s.kind === 'variable')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'header' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'title' && s.kind === 'variable')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'lang' && s.kind === 'variable')).toBe(true);
     });
 
     it('extracts xsl:import/include as edges', () => {
-      const r = parse(`<xsl:stylesheet>
+      const r = parse(
+        `<xsl:stylesheet>
   <xsl:import href="base.xsl" />
   <xsl:include href="helpers.xsl" />
-</xsl:stylesheet>`, 'main.xsl');
-      const modules = r.edges!.map(e => (e.metadata as any).from);
+</xsl:stylesheet>`,
+        'main.xsl',
+      );
+      const modules = r.edges!.map((e) => (e.metadata as any).from);
       expect(modules).toContain('base.xsl');
       expect(modules).toContain('helpers.xsl');
     });
@@ -159,9 +176,9 @@ describe('XmlLanguagePlugin', () => {
   </channel>
 </rss>`);
       expect(r.metadata?.xmlDialect).toBe('rss');
-      expect(r.symbols.some(s => s.name === 'My Blog' && s.kind === 'namespace')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'First Post' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'Second Post' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'My Blog' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'First Post' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'Second Post' && s.kind === 'constant')).toBe(true);
     });
   });
 
@@ -174,7 +191,7 @@ describe('XmlLanguagePlugin', () => {
   <entry><title>Entry One</title></entry>
 </feed>`);
       expect(r.metadata?.xmlDialect).toBe('atom');
-      expect(r.symbols.some(s => s.name === 'Entry One')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'Entry One')).toBe(true);
     });
   });
 
@@ -187,8 +204,8 @@ describe('XmlLanguagePlugin', () => {
   <url><loc>https://example.com/about</loc></url>
 </urlset>`);
       expect(r.metadata?.xmlDialect).toBe('sitemap');
-      expect(r.symbols.some(s => s.name === 'https://example.com/')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'https://example.com/about')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'https://example.com/')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'https://example.com/about')).toBe(true);
     });
   });
 
@@ -196,14 +213,17 @@ describe('XmlLanguagePlugin', () => {
 
   describe('Maven POM', () => {
     it('extracts groupId and artifactId', () => {
-      const r = parse(`<project xmlns="http://maven.apache.org/POM/4.0.0">
+      const r = parse(
+        `<project xmlns="http://maven.apache.org/POM/4.0.0">
   <groupId>com.example</groupId>
   <artifactId>my-app</artifactId>
   <version>1.0.0</version>
-</project>`, 'pom.xml');
+</project>`,
+        'pom.xml',
+      );
       expect(r.metadata?.xmlDialect).toBe('maven-pom');
-      expect(r.symbols.some(s => s.name === 'com.example' && s.kind === 'namespace')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'my-app' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'com.example' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'my-app' && s.kind === 'constant')).toBe(true);
     });
   });
 
@@ -211,18 +231,27 @@ describe('XmlLanguagePlugin', () => {
 
   describe('.NET project files', () => {
     it('extracts PackageReference and ProjectReference', () => {
-      const r = parse(`<Project Sdk="Microsoft.NET.Sdk">
+      const r = parse(
+        `<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <ProjectReference Include="../Core/Core.csproj" />
   </ItemGroup>
-</Project>`, 'MyApp.csproj');
+</Project>`,
+        'MyApp.csproj',
+      );
       expect(r.metadata?.xmlDialect).toBe('dotnet-project');
-      expect(r.symbols.some(s => s.name === 'Newtonsoft.Json' && s.metadata?.xmlKind === 'nuget')).toBe(true);
-      expect(r.symbols.some(s => s.name === '../Core/Core.csproj' && s.metadata?.xmlKind === 'projectRef')).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'Newtonsoft.Json' && s.metadata?.xmlKind === 'nuget'),
+      ).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.name === '../Core/Core.csproj' && s.metadata?.xmlKind === 'projectRef',
+        ),
+      ).toBe(true);
       // Also as import edges
-      expect(r.edges!.some(e => (e.metadata as any).from === 'Newtonsoft.Json')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).from === '../Core/Core.csproj')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).from === 'Newtonsoft.Json')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).from === '../Core/Core.csproj')).toBe(true);
     });
   });
 
@@ -230,17 +259,22 @@ describe('XmlLanguagePlugin', () => {
 
   describe('Android Manifest', () => {
     it('extracts activities and permissions', () => {
-      const r = parse(`<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.app">
+      const r = parse(
+        `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.app">
   <uses-permission android:name="android.permission.INTERNET" />
   <application>
     <activity android:name=".MainActivity" />
     <service android:name=".SyncService" />
   </application>
-</manifest>`, 'AndroidManifest.xml');
+</manifest>`,
+        'AndroidManifest.xml',
+      );
       expect(r.metadata?.xmlDialect).toBe('android-manifest');
-      expect(r.symbols.some(s => s.name === '.MainActivity' && s.kind === 'class')).toBe(true);
-      expect(r.symbols.some(s => s.name === '.SyncService' && s.kind === 'class')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'android.permission.INTERNET' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === '.MainActivity' && s.kind === 'class')).toBe(true);
+      expect(r.symbols.some((s) => s.name === '.SyncService' && s.kind === 'class')).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'android.permission.INTERNET' && s.kind === 'constant'),
+      ).toBe(true);
     });
   });
 
@@ -254,9 +288,11 @@ describe('XmlLanguagePlugin', () => {
   </bean>
 </beans>`);
       expect(r.metadata?.xmlDialect).toBe('spring-beans');
-      expect(r.symbols.some(s => s.name === 'userService' && s.kind === 'class')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'com.example.UserService' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'repository' && s.kind === 'property')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'userService' && s.kind === 'class')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'com.example.UserService' && s.kind === 'type')).toBe(
+        true,
+      );
+      expect(r.symbols.some((s) => s.name === 'repository' && s.kind === 'property')).toBe(true);
     });
   });
 
@@ -264,7 +300,8 @@ describe('XmlLanguagePlugin', () => {
 
   describe('web.xml', () => {
     it('extracts servlets and URL patterns', () => {
-      const r = parse(`<web-app>
+      const r = parse(
+        `<web-app>
   <servlet>
     <servlet-name>MainServlet</servlet-name>
     <servlet-class>com.example.MainServlet</servlet-class>
@@ -272,11 +309,15 @@ describe('XmlLanguagePlugin', () => {
   <servlet-mapping>
     <url-pattern>/api/*</url-pattern>
   </servlet-mapping>
-</web-app>`, 'web.xml');
+</web-app>`,
+        'web.xml',
+      );
       expect(r.metadata?.xmlDialect).toBe('web-xml');
-      expect(r.symbols.some(s => s.name === 'MainServlet' && s.kind === 'class')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'com.example.MainServlet' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === '/api/*' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'MainServlet' && s.kind === 'class')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'com.example.MainServlet' && s.kind === 'type')).toBe(
+        true,
+      );
+      expect(r.symbols.some((s) => s.name === '/api/*' && s.kind === 'constant')).toBe(true);
     });
   });
 
@@ -284,17 +325,20 @@ describe('XmlLanguagePlugin', () => {
 
   describe('Ant build.xml', () => {
     it('extracts targets and properties', () => {
-      const r = parse(`<project name="myapp" default="build" xmlns:ant="http://ant.apache.org/">
+      const r = parse(
+        `<project name="myapp" default="build" xmlns:ant="http://ant.apache.org/">
   <property name="src.dir" value="src" />
   <target name="compile" depends="init" />
   <target name="build" depends="compile" />
   <macrodef name="deploy-task" />
-</project>`, 'build.xml');
+</project>`,
+        'build.xml',
+      );
       expect(r.metadata?.xmlDialect).toBe('ant-build');
-      expect(r.symbols.some(s => s.name === 'compile' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'build' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'src.dir' && s.kind === 'variable')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'deploy-task' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'compile' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'build' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'src.dir' && s.kind === 'variable')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'deploy-task' && s.kind === 'function')).toBe(true);
     });
   });
 
@@ -302,7 +346,8 @@ describe('XmlLanguagePlugin', () => {
 
   describe('plist', () => {
     it('extracts plist keys', () => {
-      const r = parse(`<?xml version="1.0" encoding="UTF-8"?>
+      const r = parse(
+        `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -311,10 +356,14 @@ describe('XmlLanguagePlugin', () => {
   <key>CFBundleVersion</key>
   <string>1.0</string>
 </dict>
-</plist>`, 'Info.plist');
+</plist>`,
+        'Info.plist',
+      );
       expect(r.metadata?.xmlDialect).toBe('plist');
-      expect(r.symbols.some(s => s.name === 'CFBundleName' && s.kind === 'property')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'CFBundleVersion' && s.kind === 'property')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'CFBundleName' && s.kind === 'property')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'CFBundleVersion' && s.kind === 'property')).toBe(
+        true,
+      );
     });
   });
 
@@ -322,19 +371,22 @@ describe('XmlLanguagePlugin', () => {
 
   describe('SVG', () => {
     it('extracts defs and elements with ids', () => {
-      const r = parse(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      const r = parse(
+        `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
     <linearGradient id="grad1" />
     <clipPath id="clip1" />
   </defs>
   <g id="layer1"><rect id="bg" /></g>
-</svg>`, 'icon.svg');
+</svg>`,
+        'icon.svg',
+      );
       expect(r.metadata?.xmlDialect).toBe('svg');
-      expect(r.symbols.some(s => s.name === 'grad1')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'clip1')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'layer1')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'bg')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'xlink' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'grad1')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'clip1')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'layer1')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'bg')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'xlink' && s.kind === 'namespace')).toBe(true);
     });
   });
 
@@ -342,14 +394,21 @@ describe('XmlLanguagePlugin', () => {
 
   describe('Logback', () => {
     it('extracts appenders and loggers', () => {
-      const r = parse(`<configuration>
+      const r = parse(
+        `<configuration>
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender" />
   <logger name="com.example" level="DEBUG" />
   <root level="INFO" />
-</configuration>`, 'logback.xml');
+</configuration>`,
+        'logback.xml',
+      );
       expect(r.metadata?.xmlDialect).toBe('logback');
-      expect(r.symbols.some(s => s.name === 'STDOUT' && s.metadata?.xmlKind === 'logAppender')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'com.example' && s.metadata?.xmlKind === 'logLogger')).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'STDOUT' && s.metadata?.xmlKind === 'logAppender'),
+      ).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'com.example' && s.metadata?.xmlKind === 'logLogger'),
+      ).toBe(true);
     });
   });
 
@@ -357,17 +416,20 @@ describe('XmlLanguagePlugin', () => {
 
   describe('Struts', () => {
     it('extracts actions and packages', () => {
-      const r = parse(`<struts>
+      const r = parse(
+        `<struts>
   <package name="default" extends="struts-default">
     <action name="login" class="com.example.LoginAction">
       <result name="success">/login.jsp</result>
     </action>
   </package>
-</struts>`, 'struts.xml');
+</struts>`,
+        'struts.xml',
+      );
       expect(r.metadata?.xmlDialect).toBe('struts');
-      expect(r.symbols.some(s => s.name === 'default' && s.kind === 'namespace')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'login' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'success' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'default' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'login' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'success' && s.kind === 'constant')).toBe(true);
     });
   });
 
@@ -376,12 +438,12 @@ describe('XmlLanguagePlugin', () => {
   describe('import edges', () => {
     it('extracts script src', () => {
       const r = parse('<root><script src="app.js" /></root>');
-      expect(r.edges!.some(e => (e.metadata as any).from === 'app.js')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).from === 'app.js')).toBe(true);
     });
 
     it('extracts stylesheet link', () => {
       const r = parse('<root><link rel="stylesheet" href="style.css" /></root>');
-      expect(r.edges!.some(e => (e.metadata as any).from === 'style.css')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).from === 'style.css')).toBe(true);
     });
 
     it('does not extract anchor href as import', () => {
@@ -393,7 +455,10 @@ describe('XmlLanguagePlugin', () => {
   // ── Performance ──
 
   it('handles 1000 elements under 500ms', () => {
-    const items = Array.from({ length: 1000 }, (_, i) => `  <item id="item${i}" name="n${i}" />`).join('\n');
+    const items = Array.from(
+      { length: 1000 },
+      (_, i) => `  <item id="item${i}" name="n${i}" />`,
+    ).join('\n');
     const start = performance.now();
     const r = parse(`<root>\n${items}\n</root>`);
     expect(performance.now() - start).toBeLessThan(500);

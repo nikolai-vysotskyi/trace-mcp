@@ -2,8 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DaemonIdleMonitor } from '../../src/daemon/idle-monitor.js';
 
 describe('DaemonIdleMonitor', () => {
-  beforeEach(() => { vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); });
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('calls onIdle after idleTimeoutMs of zero busy', () => {
     let busy = false;

@@ -31,9 +31,7 @@ export class ProjectResourcePool {
     let entry = this.pools.get(projectRoot);
     if (!entry) {
       ensureGlobalDirs();
-      const topoStore = config.topology?.enabled
-        ? new TopologyStore(TOPOLOGY_DB_PATH)
-        : null;
+      const topoStore = config.topology?.enabled ? new TopologyStore(TOPOLOGY_DB_PATH) : null;
       const decisionStore = new DecisionStore(DECISIONS_DB_PATH);
       entry = { topoStore, decisionStore, refCount: 0 };
       this.pools.set(projectRoot, entry);
@@ -62,8 +60,16 @@ export class ProjectResourcePool {
   disposeProject(projectRoot: string): void {
     const entry = this.pools.get(projectRoot);
     if (!entry) return;
-    try { entry.topoStore?.close(); } catch { /* best-effort */ }
-    try { entry.decisionStore.close(); } catch { /* best-effort */ }
+    try {
+      entry.topoStore?.close();
+    } catch {
+      /* best-effort */
+    }
+    try {
+      entry.decisionStore.close();
+    } catch {
+      /* best-effort */
+    }
     this.pools.delete(projectRoot);
     logger.debug({ projectRoot }, 'Resource pool: disposed project resources');
   }

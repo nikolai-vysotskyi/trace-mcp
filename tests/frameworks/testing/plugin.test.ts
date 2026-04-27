@@ -339,7 +339,11 @@ describe('TestingPlugin', () => {
       const source = `
         cy.mount(<MyComponent />);
       `;
-      const result = plugin.extractNodes('cypress/component/my.cy.ts', Buffer.from(source), 'typescript');
+      const result = plugin.extractNodes(
+        'cypress/component/my.cy.ts',
+        Buffer.from(source),
+        'typescript',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       expect(parsed.frameworkRole).toBe('cypress_test');
@@ -350,7 +354,11 @@ describe('TestingPlugin', () => {
         cy.visit('/login');
         cy.get('#email').type('user@test.com');
       `;
-      const result = plugin.extractNodes('cypress/e2e/login.cy.ts', Buffer.from(source), 'typescript');
+      const result = plugin.extractNodes(
+        'cypress/e2e/login.cy.ts',
+        Buffer.from(source),
+        'typescript',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       expect(parsed.frameworkRole).toBe('e2e_test');
@@ -365,7 +373,11 @@ describe('TestingPlugin', () => {
           });
         });
       `;
-      const result = plugin.extractNodes('src/__tests__/utils.test.ts', Buffer.from(source), 'typescript');
+      const result = plugin.extractNodes(
+        'src/__tests__/utils.test.ts',
+        Buffer.from(source),
+        'typescript',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       expect(parsed.frameworkRole).toBe('unit_test');
@@ -398,7 +410,11 @@ describe('TestingPlugin', () => {
           });
         });
       `;
-      const result = plugin.extractNodes('src/__tests__/Button.test.tsx', Buffer.from(source), 'typescript');
+      const result = plugin.extractNodes(
+        'src/__tests__/Button.test.tsx',
+        Buffer.from(source),
+        'typescript',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const compRoutes = parsed.routes!.filter((r) => r.method === 'TEST_COMPONENT');
@@ -414,7 +430,11 @@ describe('TestingPlugin', () => {
           test('subtracts numbers', () => {});
         });
       `;
-      const result = plugin.extractNodes('src/__tests__/calc.test.ts', Buffer.from(source), 'typescript');
+      const result = plugin.extractNodes(
+        'src/__tests__/calc.test.ts',
+        Buffer.from(source),
+        'typescript',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const testEntries = parsed.routes!.filter((r) => r.method === 'TEST');

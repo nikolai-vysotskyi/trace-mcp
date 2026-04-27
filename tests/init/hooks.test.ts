@@ -52,7 +52,8 @@ describe('installGuardHook', () => {
     // Hook source exists at package path, but not yet installed at dest
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
       const s = String(p);
-      if (s.includes('hooks') && s.includes('hooks/trace-mcp-guard') && !s.includes('.claude')) return true;
+      if (s.includes('hooks') && s.includes('hooks/trace-mcp-guard') && !s.includes('.claude'))
+        return true;
       if (s.includes('.claw')) return false;
       return false;
     });
@@ -64,8 +65,8 @@ describe('installGuardHook', () => {
     expect(mockFs.writeFileSync).toHaveBeenCalled();
 
     // Verify settings content
-    const writeCall = mockFs.writeFileSync.mock.calls.find(
-      (c) => String(c[0]).includes('settings.json'),
+    const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+      String(c[0]).includes('settings.json'),
     );
     expect(writeCall).toBeDefined();
     const settings = JSON.parse(String(writeCall![1]).trim());
@@ -89,10 +90,12 @@ describe('installGuardHook', () => {
   it('does not duplicate hook entry if already present', () => {
     const existingSettings = JSON.stringify({
       hooks: {
-        PreToolUse: [{
-          matcher: 'Read|Grep|Glob|Bash',
-          hooks: [{ type: 'command', command: 'trace-mcp-guard /path' }],
-        }],
+        PreToolUse: [
+          {
+            matcher: 'Read|Grep|Glob|Bash',
+            hooks: [{ type: 'command', command: 'trace-mcp-guard /path' }],
+          },
+        ],
       },
     });
 
@@ -107,8 +110,8 @@ describe('installGuardHook', () => {
 
     installGuardHook({ global: true });
 
-    const writeCall = mockFs.writeFileSync.mock.calls.find(
-      (c) => String(c[0]).includes('settings.json'),
+    const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+      String(c[0]).includes('settings.json'),
     );
     const settings = JSON.parse(String(writeCall![1]).trim());
     expect(settings.hooks.PreToolUse).toHaveLength(1); // not duplicated
@@ -123,8 +126,10 @@ describe('installGuardHook', () => {
       vi.resetModules();
       mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
         const s = String(p);
-        if (s.includes('hooks') && s.includes('trace-mcp-guard.cmd') && !s.includes('.claude')) return true;
-        if (s.includes('hooks') && s.includes('trace-mcp-guard-read.ps1') && !s.includes('.claude')) return true;
+        if (s.includes('hooks') && s.includes('trace-mcp-guard.cmd') && !s.includes('.claude'))
+          return true;
+        if (s.includes('hooks') && s.includes('trace-mcp-guard-read.ps1') && !s.includes('.claude'))
+          return true;
         if (s.includes('.claw')) return false;
         return false;
       });
@@ -144,7 +149,8 @@ describe('installGuardHook', () => {
     // Current platform is non-win32 (darwin/linux in CI); aux file should be skipped.
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
       const s = String(p);
-      if (s.includes('hooks') && s.includes('trace-mcp-guard') && !s.includes('.claude')) return true;
+      if (s.includes('hooks') && s.includes('trace-mcp-guard') && !s.includes('.claude'))
+        return true;
       if (s.includes('.claw')) return false;
       return false;
     });
@@ -159,15 +165,15 @@ describe('installGuardHook', () => {
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
       const s = String(p);
       if (s.includes('hooks/trace-mcp-guard')) return true;
-      if (s.endsWith('.claw')) return true;  // claw dir exists
+      if (s.endsWith('.claw')) return true; // claw dir exists
       return false;
     });
 
     installGuardHook({ global: true });
 
     // Should have written both Claude and Claw settings
-    const settingsWrites = mockFs.writeFileSync.mock.calls.filter(
-      (c) => String(c[0]).includes('settings'),
+    const settingsWrites = mockFs.writeFileSync.mock.calls.filter((c) =>
+      String(c[0]).includes('settings'),
     );
     expect(settingsWrites.length).toBe(2);
   });
@@ -198,8 +204,8 @@ describe('uninstallGuardHook', () => {
     expect(result.detail).toBe('Removed');
     expect(mockFs.unlinkSync).toHaveBeenCalled();
 
-    const writeCall = mockFs.writeFileSync.mock.calls.find(
-      (c) => String(c[0]).includes('settings'),
+    const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+      String(c[0]).includes('settings'),
     );
     const settings = JSON.parse(String(writeCall![1]).trim());
     expect(settings.hooks.PreToolUse).toHaveLength(1);
@@ -209,9 +215,7 @@ describe('uninstallGuardHook', () => {
   it('removes hooks key entirely when last entry removed', () => {
     const existingSettings = JSON.stringify({
       hooks: {
-        PreToolUse: [
-          { hooks: [{ command: 'trace-mcp-guard /path' }] },
-        ],
+        PreToolUse: [{ hooks: [{ command: 'trace-mcp-guard /path' }] }],
       },
     });
 
@@ -225,8 +229,8 @@ describe('uninstallGuardHook', () => {
 
     uninstallGuardHook({ global: true });
 
-    const writeCall = mockFs.writeFileSync.mock.calls.find(
-      (c) => String(c[0]).includes('settings'),
+    const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+      String(c[0]).includes('settings'),
     );
     const settings = JSON.parse(String(writeCall![1]).trim());
     expect(settings.hooks).toBeUndefined();
@@ -251,8 +255,8 @@ describe('installReindexHook', () => {
     const result = installReindexHook({ global: true });
     expect(result.action).toBe('created');
 
-    const writeCall = mockFs.writeFileSync.mock.calls.find(
-      (c) => String(c[0]).includes('settings.json'),
+    const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+      String(c[0]).includes('settings.json'),
     );
     const settings = JSON.parse(String(writeCall![1]).trim());
     expect(settings.hooks.PostToolUse).toHaveLength(1);

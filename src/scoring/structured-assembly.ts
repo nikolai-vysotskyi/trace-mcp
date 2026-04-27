@@ -25,7 +25,9 @@ interface StructuredContextResult {
 
 const DEFAULT_WEIGHTS = { primary: 0.4, dependencies: 0.3, callers: 0.2, typeContext: 0.1 };
 
-export function assembleStructuredContext(request: StructuredContextRequest): StructuredContextResult {
+export function assembleStructuredContext(
+  request: StructuredContextRequest,
+): StructuredContextResult {
   const weights = request.budgetWeights ?? DEFAULT_WEIGHTS;
   const budget = request.totalBudget;
 
@@ -49,7 +51,12 @@ export function assembleStructuredContext(request: StructuredContextRequest): St
     }
   }
 
-  const effectiveWeights: Record<Category, number> = { primary: 0, dependencies: 0, callers: 0, typeContext: 0 };
+  const effectiveWeights: Record<Category, number> = {
+    primary: 0,
+    dependencies: 0,
+    callers: 0,
+    typeContext: 0,
+  };
   for (const cat of categories) {
     if (itemCounts[cat] === 0) {
       effectiveWeights[cat] = 0;
@@ -59,18 +66,38 @@ export function assembleStructuredContext(request: StructuredContextRequest): St
     }
   }
 
-  const primaryResult = assembleContext(request.primary, Math.floor(budget * effectiveWeights.primary));
-  const depsResult = assembleContext(request.dependencies, Math.floor(budget * effectiveWeights.dependencies));
-  const callersResult = assembleContext(request.callers, Math.floor(budget * effectiveWeights.callers));
-  const typeResult = assembleContext(request.typeContext, Math.floor(budget * effectiveWeights.typeContext));
+  const primaryResult = assembleContext(
+    request.primary,
+    Math.floor(budget * effectiveWeights.primary),
+  );
+  const depsResult = assembleContext(
+    request.dependencies,
+    Math.floor(budget * effectiveWeights.dependencies),
+  );
+  const callersResult = assembleContext(
+    request.callers,
+    Math.floor(budget * effectiveWeights.callers),
+  );
+  const typeResult = assembleContext(
+    request.typeContext,
+    Math.floor(budget * effectiveWeights.typeContext),
+  );
 
   return {
     primary: primaryResult.items,
     dependencies: depsResult.items,
     callers: callersResult.items,
     typeContext: typeResult.items,
-    totalTokens: primaryResult.totalTokens + depsResult.totalTokens + callersResult.totalTokens + typeResult.totalTokens,
-    truncated: primaryResult.truncated || depsResult.truncated || callersResult.truncated || typeResult.truncated,
+    totalTokens:
+      primaryResult.totalTokens +
+      depsResult.totalTokens +
+      callersResult.totalTokens +
+      typeResult.totalTokens,
+    truncated:
+      primaryResult.truncated ||
+      depsResult.truncated ||
+      callersResult.truncated ||
+      typeResult.truncated,
   };
 }
 
@@ -84,13 +111,17 @@ export function renderStructuredContext(result: StructuredContextResult): string
     sections.push('=== Primary Symbol ===\n' + result.primary.map((i) => i.content).join('\n\n'));
   }
   if (result.dependencies.length > 0) {
-    sections.push('=== Dependencies ===\n' + result.dependencies.map((i) => i.content).join('\n\n'));
+    sections.push(
+      '=== Dependencies ===\n' + result.dependencies.map((i) => i.content).join('\n\n'),
+    );
   }
   if (result.callers.length > 0) {
     sections.push('=== Callers ===\n' + result.callers.map((i) => i.content).join('\n\n'));
   }
   if (result.typeContext.length > 0) {
-    sections.push('=== Type Hierarchy ===\n' + result.typeContext.map((i) => i.content).join('\n\n'));
+    sections.push(
+      '=== Type Hierarchy ===\n' + result.typeContext.map((i) => i.content).join('\n\n'),
+    );
   }
 
   return sections.join('\n\n');

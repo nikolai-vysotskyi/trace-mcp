@@ -256,8 +256,8 @@ describe('PHP import edge resolution (laravel-10)', () => {
     const extendsE = store.getEdgesByType('extends');
     const implementsE = store.getEdgesByType('implements');
     const usesTrait = store.getEdgesByType('uses_trait');
-    const total = calls.length + insts.length + extendsE.length
-      + implementsE.length + usesTrait.length;
+    const total =
+      calls.length + insts.length + extendsE.length + implementsE.length + usesTrait.length;
     expect(total).toBeGreaterThan(0);
   });
 });

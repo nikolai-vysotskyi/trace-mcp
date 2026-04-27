@@ -12,7 +12,11 @@ import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/v
 import { generateReport, type CIReport } from '../../src/ci/report-generator.js';
 import { formatMarkdown, formatJson } from '../../src/ci/markdown-formatter.js';
 import { captureBaseline, compareWithBaseline } from '../../src/ci/baseline.js';
-import { generateAnnotations, formatGitHubActions, formatAnnotationsJson } from '../../src/ci/github-annotations.js';
+import {
+  generateAnnotations,
+  formatGitHubActions,
+  formatAnnotationsJson,
+} from '../../src/ci/github-annotations.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
@@ -20,11 +24,7 @@ const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'routes/**/*.php',
-      'database/migrations/**/*.php',
-    ],
+    include: ['app/**/*.php', 'routes/**/*.php', 'database/migrations/**/*.php'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],
@@ -184,7 +184,7 @@ describe('CI Report Generator', () => {
     const level = report.riskAnalysis.overallLevel;
 
     if (score >= 0.75) expect(level).toBe('critical');
-    else if (score >= 0.50) expect(level).toBe('high');
+    else if (score >= 0.5) expect(level).toBe('high');
     else if (score >= 0.25) expect(level).toBe('medium');
     else expect(level).toBe('low');
   });
@@ -365,22 +365,48 @@ describe('CI Report Markdown Formatter', () => {
       },
       testCoverage: {
         gaps: [
-          { symbolId: 'sym_1', name: 'doStuff', kind: 'function', file: 'src/foo.ts', signature: 'function doStuff()' },
+          {
+            symbolId: 'sym_1',
+            name: 'doStuff',
+            kind: 'function',
+            file: 'src/foo.ts',
+            signature: 'function doStuff()',
+          },
         ],
         totalExports: 10,
         totalUntested: 1,
       },
       riskAnalysis: {
         files: [
-          { file: 'src/foo.ts', complexity: 0.5, churn: 0.3, coupling: 0.4, blastSize: 1, score: 0.35 },
-          { file: 'src/bar.ts', complexity: 0.2, churn: 0.1, coupling: 0.3, blastSize: 0, score: 0.15 },
+          {
+            file: 'src/foo.ts',
+            complexity: 0.5,
+            churn: 0.3,
+            coupling: 0.4,
+            blastSize: 1,
+            score: 0.35,
+          },
+          {
+            file: 'src/bar.ts',
+            complexity: 0.2,
+            churn: 0.1,
+            coupling: 0.3,
+            blastSize: 0,
+            score: 0.15,
+          },
         ],
         overallScore: 0.25,
         overallLevel: 'medium',
       },
       architectureViolations: {
         violations: [
-          { source_file: 'src/foo.ts', source_layer: 'presentation', target_file: 'src/db.ts', target_layer: 'infrastructure', rule: 'presentation cannot import infrastructure' },
+          {
+            source_file: 'src/foo.ts',
+            source_layer: 'presentation',
+            target_file: 'src/db.ts',
+            target_layer: 'infrastructure',
+            rule: 'presentation cannot import infrastructure',
+          },
         ],
         totalViolations: 1,
         layersChecked: ['domain', 'application', 'presentation', 'infrastructure'],
@@ -454,13 +480,22 @@ describe('CI Report Markdown Formatter', () => {
       blastRadius: { entries: [], totalAffected: 0, truncated: false },
       testCoverage: { gaps: [], totalExports: 0, totalUntested: 0 },
       riskAnalysis: {
-        files: [{ file: 'src/foo.ts', complexity: 0.1, churn: 0, coupling: 0, blastSize: 0, score: 0.03 }],
+        files: [
+          { file: 'src/foo.ts', complexity: 0.1, churn: 0, coupling: 0, blastSize: 0, score: 0.03 },
+        ],
         overallScore: 0.03,
         overallLevel: 'low',
       },
       architectureViolations: { violations: [], totalViolations: 0, layersChecked: [] },
       deadCode: { symbols: [], totalDead: 0 },
-      summary: { changedFileCount: 1, affectedFileCount: 0, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0 },
+      summary: {
+        changedFileCount: 1,
+        affectedFileCount: 0,
+        riskLevel: 'low',
+        untestedGaps: 0,
+        violations: 0,
+        deadExports: 0,
+      },
     };
 
     const md = formatMarkdown(report);
@@ -488,7 +523,14 @@ describe('CI Report Markdown Formatter', () => {
       riskAnalysis: { files: [], overallScore: 0, overallLevel: 'low' },
       architectureViolations: { violations: [], totalViolations: 0, layersChecked: [] },
       deadCode: { symbols: [], totalDead: 0 },
-      summary: { changedFileCount: 0, affectedFileCount: 1, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0 },
+      summary: {
+        changedFileCount: 0,
+        affectedFileCount: 1,
+        riskLevel: 'low',
+        untestedGaps: 0,
+        violations: 0,
+        deadExports: 0,
+      },
     };
 
     const md = formatMarkdown(report);
@@ -503,7 +545,14 @@ describe('CI Report Markdown Formatter', () => {
       riskAnalysis: { files: [], overallScore: 0.1, overallLevel: 'low' },
       architectureViolations: { violations: [], totalViolations: 0, layersChecked: [] },
       deadCode: { symbols: [], totalDead: 0 },
-      summary: { changedFileCount: 1, affectedFileCount: 0, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0 },
+      summary: {
+        changedFileCount: 1,
+        affectedFileCount: 0,
+        riskLevel: 'low',
+        untestedGaps: 0,
+        violations: 0,
+        deadExports: 0,
+      },
     };
 
     const json = formatJson(report);
@@ -632,7 +681,15 @@ describe('CI Report — Project-Aware Analysis', () => {
         owners: [{ file: 'src/foo.ts', primaryOwner: 'Alice', percentage: 80 }],
         teamsCrossed: ['Alice', 'Bob'],
       },
-      summary: { changedFileCount: 1, affectedFileCount: 0, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0, domainsCrossed: 1 },
+      summary: {
+        changedFileCount: 1,
+        affectedFileCount: 0,
+        riskLevel: 'low',
+        untestedGaps: 0,
+        violations: 0,
+        deadExports: 0,
+        domainsCrossed: 1,
+      },
     };
 
     const md = formatMarkdown(report);
@@ -656,7 +713,14 @@ describe('CI Report — Project-Aware Analysis', () => {
       riskAnalysis: { files: [], overallScore: 0, overallLevel: 'low' },
       architectureViolations: { violations: [], totalViolations: 0, layersChecked: [] },
       deadCode: { symbols: [], totalDead: 0 },
-      summary: { changedFileCount: 1, affectedFileCount: 0, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0 },
+      summary: {
+        changedFileCount: 1,
+        affectedFileCount: 0,
+        riskLevel: 'low',
+        untestedGaps: 0,
+        violations: 0,
+        deadExports: 0,
+      },
     };
 
     const md = formatMarkdown(report);
@@ -681,7 +745,14 @@ describe('CI Quality Baseline', () => {
       riskAnalysis: { files: [], overallScore: 0.3, overallLevel: 'medium', ...overrides },
       architectureViolations: { violations: [], totalViolations: 1, layersChecked: [] },
       deadCode: { symbols: [], totalDead: 3 },
-      summary: { changedFileCount: 1, affectedFileCount: 0, riskLevel: 'medium', untestedGaps: 2, violations: 1, deadExports: 3 },
+      summary: {
+        changedFileCount: 1,
+        affectedFileCount: 0,
+        riskLevel: 'medium',
+        untestedGaps: 2,
+        violations: 1,
+        deadExports: 3,
+      },
     };
   }
 
@@ -699,15 +770,15 @@ describe('CI Quality Baseline', () => {
     captureBaseline(store, report1, 'abc1234');
 
     const report2 = makeMinimalReport({ overallScore: 0.35 });
-    report2.testCoverage.totalUntested = 4;  // worse
-    report2.architectureViolations.totalViolations = 0;  // better
+    report2.testCoverage.totalUntested = 4; // worse
+    report2.architectureViolations.totalViolations = 0; // better
 
     const comparison = compareWithBaseline(store, report2);
     expect(comparison).not.toBeNull();
     expect(comparison!.baselineCommit).toBe('abc1234');
     expect(comparison!.riskDelta).toBe(0.05);
-    expect(comparison!.untestedDelta).toBe(2);      // 4 - 2
-    expect(comparison!.violationsDelta).toBe(-1);    // 0 - 1
+    expect(comparison!.untestedDelta).toBe(2); // 4 - 2
+    expect(comparison!.violationsDelta).toBe(-1); // 0 - 1
     expect(comparison!.regressionDetected).toBe(false); // 0.05 < 0.15 threshold
     store.db.close();
   });
@@ -740,7 +811,14 @@ describe('CI Quality Baseline', () => {
         baselineCommit: 'abc1234',
         baselineDate: '2026-04-07T00:00:00Z',
       },
-      summary: { changedFileCount: 0, affectedFileCount: 0, riskLevel: 'low', untestedGaps: 0, violations: 0, deadExports: 0 },
+      summary: {
+        changedFileCount: 0,
+        affectedFileCount: 0,
+        riskLevel: 'low',
+        untestedGaps: 0,
+        violations: 0,
+        deadExports: 0,
+      },
     };
 
     const md = formatMarkdown(report);
@@ -763,17 +841,42 @@ describe('CI GitHub Annotations', () => {
       changedFiles: [],
       blastRadius: { entries: [], totalAffected: 0, truncated: false },
       testCoverage: {
-        gaps: [{ symbolId: 's1', name: 'doStuff', kind: 'function', file: 'src/foo.ts', signature: null }],
+        gaps: [
+          {
+            symbolId: 's1',
+            name: 'doStuff',
+            kind: 'function',
+            file: 'src/foo.ts',
+            signature: null,
+          },
+        ],
         totalExports: 5,
         totalUntested: 1,
       },
       riskAnalysis: {
-        files: [{ file: 'src/bar.ts', complexity: 0.8, churn: 0.6, coupling: 0.5, blastSize: 5, score: 0.65 }],
+        files: [
+          {
+            file: 'src/bar.ts',
+            complexity: 0.8,
+            churn: 0.6,
+            coupling: 0.5,
+            blastSize: 5,
+            score: 0.65,
+          },
+        ],
         overallScore: 0.65,
         overallLevel: 'high',
       },
       architectureViolations: {
-        violations: [{ source_file: 'src/a.ts', source_layer: 'ui', target_file: 'src/b.ts', target_layer: 'db', rule: 'no direct access' }],
+        violations: [
+          {
+            source_file: 'src/a.ts',
+            source_layer: 'ui',
+            target_file: 'src/b.ts',
+            target_layer: 'db',
+            rule: 'no direct access',
+          },
+        ],
         totalViolations: 1,
         layersChecked: ['ui', 'db'],
       },
@@ -783,7 +886,14 @@ describe('CI GitHub Annotations', () => {
         crossDomainChanges: [{ from: 'auth', to: 'billing', edgeCount: 3 }],
         reviewTeams: [],
       },
-      summary: { changedFileCount: 0, affectedFileCount: 0, riskLevel: 'high', untestedGaps: 1, violations: 1, deadExports: 0 },
+      summary: {
+        changedFileCount: 0,
+        affectedFileCount: 0,
+        riskLevel: 'high',
+        untestedGaps: 1,
+        violations: 1,
+        deadExports: 0,
+      },
     };
 
     const annotations = generateAnnotations(report);
@@ -806,14 +916,16 @@ describe('CI GitHub Annotations', () => {
   });
 
   it('formatGitHubActions produces valid workflow commands', () => {
-    const annotations = [{
-      path: 'src/foo.ts',
-      start_line: 10,
-      end_line: 10,
-      annotation_level: 'warning' as const,
-      title: 'Test warning',
-      message: 'Something is wrong',
-    }];
+    const annotations = [
+      {
+        path: 'src/foo.ts',
+        start_line: 10,
+        end_line: 10,
+        annotation_level: 'warning' as const,
+        title: 'Test warning',
+        message: 'Something is wrong',
+      },
+    ];
 
     const output = formatGitHubActions(annotations);
     expect(output).toContain('::warning');
@@ -824,10 +936,16 @@ describe('CI GitHub Annotations', () => {
   });
 
   it('formatAnnotationsJson produces valid JSON', () => {
-    const annotations = [{
-      path: 'src/a.ts', start_line: 1, end_line: 1,
-      annotation_level: 'notice' as const, title: 'T', message: 'M',
-    }];
+    const annotations = [
+      {
+        path: 'src/a.ts',
+        start_line: 1,
+        end_line: 1,
+        annotation_level: 'notice' as const,
+        title: 'T',
+        message: 'M',
+      },
+    ];
 
     const json = formatAnnotationsJson(annotations);
     const parsed = JSON.parse(json);

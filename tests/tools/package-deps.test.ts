@@ -24,25 +24,34 @@ describe('getPackageDeps', () => {
     fs.mkdirSync(repoC, { recursive: true });
 
     // repo-a publishes @myorg/shared-utils
-    fs.writeFileSync(path.join(repoA, 'package.json'), JSON.stringify({
-      name: '@myorg/shared-utils',
-      version: '1.0.0',
-      dependencies: {},
-    }));
+    fs.writeFileSync(
+      path.join(repoA, 'package.json'),
+      JSON.stringify({
+        name: '@myorg/shared-utils',
+        version: '1.0.0',
+        dependencies: {},
+      }),
+    );
 
     // repo-b depends on @myorg/shared-utils
-    fs.writeFileSync(path.join(repoB, 'package.json'), JSON.stringify({
-      name: '@myorg/api-server',
-      version: '2.0.0',
-      dependencies: { '@myorg/shared-utils': '^1.0.0', 'express': '^4.0.0' },
-    }));
+    fs.writeFileSync(
+      path.join(repoB, 'package.json'),
+      JSON.stringify({
+        name: '@myorg/api-server',
+        version: '2.0.0',
+        dependencies: { '@myorg/shared-utils': '^1.0.0', express: '^4.0.0' },
+      }),
+    );
 
     // repo-c depends on @myorg/shared-utils in devDeps
-    fs.writeFileSync(path.join(repoC, 'package.json'), JSON.stringify({
-      name: '@myorg/frontend',
-      version: '1.0.0',
-      devDependencies: { '@myorg/shared-utils': '^1.0.0' },
-    }));
+    fs.writeFileSync(
+      path.join(repoC, 'package.json'),
+      JSON.stringify({
+        name: '@myorg/frontend',
+        version: '1.0.0',
+        devDependencies: { '@myorg/shared-utils': '^1.0.0' },
+      }),
+    );
 
     // Save original registry (if exists) and write test registry
     if (fs.existsSync(REGISTRY_PATH)) {
@@ -51,11 +60,14 @@ describe('getPackageDeps', () => {
 
     const registryDir = path.dirname(REGISTRY_PATH);
     fs.mkdirSync(registryDir, { recursive: true });
-    fs.writeFileSync(REGISTRY_PATH, JSON.stringify({
-      [repoA]: { name: 'repo-a', path: repoA },
-      [repoB]: { name: 'repo-b', path: repoB },
-      [repoC]: { name: 'repo-c', path: repoC },
-    }));
+    fs.writeFileSync(
+      REGISTRY_PATH,
+      JSON.stringify({
+        [repoA]: { name: 'repo-a', path: repoA },
+        [repoB]: { name: 'repo-b', path: repoB },
+        [repoC]: { name: 'repo-c', path: repoC },
+      }),
+    );
   });
 
   afterEach(() => {
@@ -138,19 +150,25 @@ describe('getPackageDeps with composer.json', () => {
     tmpDir = createTmpDir('trace-pkg-composer-');
     const repo = path.join(tmpDir, 'laravel-app');
     fs.mkdirSync(repo, { recursive: true });
-    fs.writeFileSync(path.join(repo, 'composer.json'), JSON.stringify({
-      name: 'myorg/laravel-app',
-      require: { 'php': '^8.1', 'laravel/framework': '^10.0', 'myorg/shared-lib': '^1.0' },
-    }));
+    fs.writeFileSync(
+      path.join(repo, 'composer.json'),
+      JSON.stringify({
+        name: 'myorg/laravel-app',
+        require: { php: '^8.1', 'laravel/framework': '^10.0', 'myorg/shared-lib': '^1.0' },
+      }),
+    );
 
     const registryDir = path.dirname(REGISTRY_PATH);
     fs.mkdirSync(registryDir, { recursive: true });
     if (fs.existsSync(REGISTRY_PATH)) {
       origRegistryContent = fs.readFileSync(REGISTRY_PATH, 'utf-8');
     }
-    fs.writeFileSync(REGISTRY_PATH, JSON.stringify({
-      [repo]: { name: 'laravel-app', path: repo },
-    }));
+    fs.writeFileSync(
+      REGISTRY_PATH,
+      JSON.stringify({
+        [repo]: { name: 'laravel-app', path: repo },
+      }),
+    );
   });
 
   afterEach(() => {

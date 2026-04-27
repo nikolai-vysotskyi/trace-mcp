@@ -37,25 +37,33 @@ function hasPythonDep(rootPath: string, depName: string): boolean {
     try {
       const content = fs.readFileSync(path.join(rootPath, reqFile), 'utf-8');
       if (new RegExp(`^${escapeRegExp(depName)}\\b`, 'm').test(content)) return true;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
 
   try {
     const content = fs.readFileSync(path.join(rootPath, 'pyproject.toml'), 'utf-8');
     if (content.includes(depName)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   for (const f of ['setup.py', 'setup.cfg']) {
     try {
       const content = fs.readFileSync(path.join(rootPath, f), 'utf-8');
       if (content.includes(depName)) return true;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
 
   try {
     const content = fs.readFileSync(path.join(rootPath, 'Pipfile'), 'utf-8');
     if (content.includes(depName)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return false;
 }
@@ -71,7 +79,7 @@ function findClassDefinitions(root: TSNode): TSNode[] {
     if (child.type === 'class_definition') {
       classes.push(child);
     } else if (child.type === 'decorated_definition') {
-      const inner = child.namedChildren.find(c => c.type === 'class_definition');
+      const inner = child.namedChildren.find((c) => c.type === 'class_definition');
       if (inner) classes.push(inner);
     }
   }
@@ -138,19 +146,66 @@ function shortName(name: string): string {
 // ============================================================
 
 const PYTHON_BUILTINS = new Set([
-  'str', 'int', 'float', 'bool', 'bytes', 'None', 'NoneType',
-  'dict', 'list', 'tuple', 'set', 'frozenset',
-  'Any', 'Optional', 'Union', 'Literal', 'ClassVar',
-  'List', 'Dict', 'Set', 'Tuple', 'FrozenSet', 'Sequence',
-  'Mapping', 'Iterable', 'Iterator', 'Callable', 'Type',
-  'Annotated', 'Final',
-  'datetime', 'date', 'time', 'timedelta', 'Decimal', 'UUID',
-  'EmailStr', 'HttpUrl', 'AnyUrl', 'AnyHttpUrl',
-  'constr', 'conint', 'confloat', 'conbytes', 'condecimal',
-  'PositiveInt', 'NegativeInt', 'PositiveFloat', 'NegativeFloat',
-  'StrictStr', 'StrictInt', 'StrictFloat', 'StrictBool',
-  'SecretStr', 'SecretBytes', 'FilePath', 'DirectoryPath',
-  'Json', 'PaymentCardNumber', 'IPvAnyAddress',
+  'str',
+  'int',
+  'float',
+  'bool',
+  'bytes',
+  'None',
+  'NoneType',
+  'dict',
+  'list',
+  'tuple',
+  'set',
+  'frozenset',
+  'Any',
+  'Optional',
+  'Union',
+  'Literal',
+  'ClassVar',
+  'List',
+  'Dict',
+  'Set',
+  'Tuple',
+  'FrozenSet',
+  'Sequence',
+  'Mapping',
+  'Iterable',
+  'Iterator',
+  'Callable',
+  'Type',
+  'Annotated',
+  'Final',
+  'datetime',
+  'date',
+  'time',
+  'timedelta',
+  'Decimal',
+  'UUID',
+  'EmailStr',
+  'HttpUrl',
+  'AnyUrl',
+  'AnyHttpUrl',
+  'constr',
+  'conint',
+  'confloat',
+  'conbytes',
+  'condecimal',
+  'PositiveInt',
+  'NegativeInt',
+  'PositiveFloat',
+  'NegativeFloat',
+  'StrictStr',
+  'StrictInt',
+  'StrictFloat',
+  'StrictBool',
+  'SecretStr',
+  'SecretBytes',
+  'FilePath',
+  'DirectoryPath',
+  'Json',
+  'PaymentCardNumber',
+  'IPvAnyAddress',
 ]);
 
 // ============================================================
@@ -158,9 +213,12 @@ const PYTHON_BUILTINS = new Set([
 // ============================================================
 
 const PYDANTIC_BASES = new Set([
-  'BaseModel', 'pydantic.BaseModel',
-  'BaseSettings', 'pydantic.BaseSettings',
-  'GenericModel', 'pydantic.generics.GenericModel',
+  'BaseModel',
+  'pydantic.BaseModel',
+  'BaseSettings',
+  'pydantic.BaseSettings',
+  'GenericModel',
+  'pydantic.generics.GenericModel',
 ]);
 
 interface PydanticFieldRef {
@@ -202,7 +260,7 @@ function extractTypeRefs(typeNode: TSNode): string[] {
   // list[Item], Optional[Item], dict[str, Item], etc.
   if (typeNode.type === 'subscript') {
     const base = typeNode.childForFieldName('value');
-    const subscriptSlices = typeNode.namedChildren.filter(c => c !== base);
+    const subscriptSlices = typeNode.namedChildren.filter((c) => c !== base);
 
     // For wrapper types (Optional, List, etc.), recurse into subscript args
     const baseName = base?.text ?? '';
@@ -381,7 +439,7 @@ function extractPydanticModels(root: TSNode): PydanticModelInfo[] {
   for (const classDef of findClassDefinitions(root)) {
     const supers = getSuperclasses(classDef);
     // Direct Pydantic base check + allow subclassing other models
-    const isPydantic = supers.some(s => PYDANTIC_BASES.has(s));
+    const isPydantic = supers.some((s) => PYDANTIC_BASES.has(s));
     if (!isPydantic) continue;
 
     const className = getClassName(classDef);
@@ -422,8 +480,16 @@ export class PydanticPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'pydantic_field_type', category: 'pydantic', description: 'BaseModel field → referenced type' } as EdgeTypeDeclaration,
-        { name: 'pydantic_from_orm', category: 'pydantic', description: 'Model with from_attributes → ORM model hint' } as EdgeTypeDeclaration,
+        {
+          name: 'pydantic_field_type',
+          category: 'pydantic',
+          description: 'BaseModel field → referenced type',
+        } as EdgeTypeDeclaration,
+        {
+          name: 'pydantic_from_orm',
+          category: 'pydantic',
+          description: 'Model with from_attributes → ORM model hint',
+        } as EdgeTypeDeclaration,
       ],
     };
   }

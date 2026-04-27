@@ -23,7 +23,13 @@ function insertExportedSymbol(
   });
 }
 
-function insertEdge(store: Store, srcNodeId: number, tgtNodeId: number, edgeType: string, metadata?: Record<string, unknown>): void {
+function insertEdge(
+  store: Store,
+  srcNodeId: number,
+  tgtNodeId: number,
+  edgeType: string,
+  metadata?: Record<string, unknown>,
+): void {
   store.insertEdge(srcNodeId, tgtNodeId, edgeType, true, metadata);
 }
 
@@ -405,7 +411,9 @@ describe('getDeadCodeReachability', () => {
 
     const fLibFileNode = store.getNodeId('file', fLib)!;
     const fTestFileNode = store.getNodeId('file', fTest)!;
-    insertEdge(store, fTestFileNode, fLibFileNode, 'esm_imports', { specifiers: ['reachedViaImport'] });
+    insertEdge(store, fTestFileNode, fLibFileNode, 'esm_imports', {
+      specifiers: ['reachedViaImport'],
+    });
 
     const result = getDeadCodeReachability(store);
     expect(result.dead_symbols.map((s) => s.name)).not.toContain('reachedViaImport');

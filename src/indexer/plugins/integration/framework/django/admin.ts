@@ -22,10 +22,7 @@ interface AdminRegistration {
  * Extract admin registrations from Django source code.
  * Returns edges of type django_admin_registers.
  */
-export function extractAdminRegistrations(
-  source: string,
-  filePath: string,
-): RawEdge[] {
+export function extractAdminRegistrations(source: string, filePath: string): RawEdge[] {
   const edges: RawEdge[] = [];
   const registrations = [
     ...extractDecoratorRegistrations(source),
@@ -62,9 +59,7 @@ function extractDecoratorRegistrations(source: string): AdminRegistration[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
 
-    const decoratorMatch = line.match(
-      /^@admin\.register\s*\(\s*([^)]+)\s*\)/,
-    );
+    const decoratorMatch = line.match(/^@admin\.register\s*\(\s*([^)]+)\s*\)/);
     if (!decoratorMatch) continue;
 
     const argsStr = decoratorMatch[1];
@@ -116,9 +111,7 @@ function extractSiteRegistrations(source: string): AdminRegistration[] {
     const line = lines[i].trim();
 
     // admin.site.register(Model, AdminClass) or admin.site.register(Model)
-    const singleMatch = line.match(
-      /admin\.site\.register\s*\(\s*(\w+)(?:\s*,\s*(\w+))?\s*\)/,
-    );
+    const singleMatch = line.match(/admin\.site\.register\s*\(\s*(\w+)(?:\s*,\s*(\w+))?\s*\)/);
     if (singleMatch) {
       registrations.push({
         modelName: singleMatch[1],
@@ -129,9 +122,7 @@ function extractSiteRegistrations(source: string): AdminRegistration[] {
     }
 
     // admin.site.register([Model1, Model2], AdminClass)
-    const listMatch = line.match(
-      /admin\.site\.register\s*\(\s*\[([^\]]+)\](?:\s*,\s*(\w+))?\s*\)/,
-    );
+    const listMatch = line.match(/admin\.site\.register\s*\(\s*\[([^\]]+)\](?:\s*,\s*(\w+))?\s*\)/);
     if (listMatch) {
       const models = listMatch[1]
         .split(',')

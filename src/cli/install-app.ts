@@ -18,7 +18,11 @@ const isWin = process.platform === 'win32';
 const APP_NAME = isMac ? 'trace-mcp.app' : 'trace-mcp';
 const INSTALL_DIR = isMac
   ? path.join(os.homedir(), 'Applications')
-  : path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'trace-mcp');
+  : path.join(
+      process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'),
+      'Programs',
+      'trace-mcp',
+    );
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -31,7 +35,9 @@ export interface InstallAppResult {
 }
 
 /** Fetch the latest release tag from GitHub API */
-function fetchLatestRelease(timeoutMs = 10000): Promise<{ tag: string; assets: { name: string; url: string }[] }> {
+function fetchLatestRelease(
+  timeoutMs = 10000,
+): Promise<{ tag: string; assets: { name: string; url: string }[] }> {
   return new Promise((resolve, reject) => {
     const req = https.get(
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
@@ -47,7 +53,16 @@ function fetchLatestRelease(timeoutMs = 10000): Promise<{ tag: string; assets: {
           // Follow redirect
           const location = res.headers.location;
           if (location) {
-            https.get(location, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' } }, handleResponse).on('error', reject);
+            https
+              .get(
+                location,
+                {
+                  timeout: timeoutMs,
+                  headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' },
+                },
+                handleResponse,
+              )
+              .on('error', reject);
           } else {
             reject(new Error('Redirect without location'));
           }
@@ -57,7 +72,9 @@ function fetchLatestRelease(timeoutMs = 10000): Promise<{ tag: string; assets: {
 
         function handleResponse(response: typeof res) {
           let body = '';
-          response.on('data', (chunk: string) => { body += chunk; });
+          response.on('data', (chunk: string) => {
+            body += chunk;
+          });
           response.on('end', () => {
             try {
               const release = JSON.parse(body) as {
@@ -83,7 +100,10 @@ function fetchLatestRelease(timeoutMs = 10000): Promise<{ tag: string; assets: {
       },
     );
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('GitHub API request timed out')); });
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('GitHub API request timed out'));
+    });
   });
 }
 
@@ -92,23 +112,31 @@ function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<voi
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
     const doGet = (targetUrl: string, redirects = 0) => {
-      if (redirects > 5) { reject(new Error('Too many redirects')); return; }
-      const mod = targetUrl.startsWith('https') ? https : require('node:http') as typeof https;
-      mod.get(targetUrl, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp' } }, (res) => {
-        if ((res.statusCode === 302 || res.statusCode === 301) && res.headers.location) {
-          doGet(res.headers.location, redirects + 1);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: HTTP ${res.statusCode}`));
-          return;
-        }
-        res.pipe(file);
-        file.on('finish', () => { file.close(); resolve(); });
-      }).on('error', (err) => {
-        fs.unlink(dest, () => {});
-        reject(err);
-      });
+      if (redirects > 5) {
+        reject(new Error('Too many redirects'));
+        return;
+      }
+      const mod = targetUrl.startsWith('https') ? https : (require('node:http') as typeof https);
+      mod
+        .get(targetUrl, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp' } }, (res) => {
+          if ((res.statusCode === 302 || res.statusCode === 301) && res.headers.location) {
+            doGet(res.headers.location, redirects + 1);
+            return;
+          }
+          if (res.statusCode !== 200) {
+            reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+            return;
+          }
+          res.pipe(file);
+          file.on('finish', () => {
+            file.close();
+            resolve();
+          });
+        })
+        .on('error', (err) => {
+          fs.unlink(dest, () => {});
+          reject(err);
+        });
     };
     doGet(url);
   });
@@ -126,10 +154,9 @@ function pinToDock(appPath: string): void {
 
     // Add to Dock
     const entry = `<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>${appPath}</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>`;
-    execSync(
-      `defaults write com.apple.dock persistent-apps -array-add '${entry}'`,
-      { stdio: 'pipe' },
-    );
+    execSync(`defaults write com.apple.dock persistent-apps -array-add '${entry}'`, {
+      stdio: 'pipe',
+    });
     execSync('killall Dock', { stdio: 'pipe' });
   } catch {
     // Non-critical — don't fail the install if Dock pinning doesn't work
@@ -141,7 +168,10 @@ function createStartMenuShortcut(exePath: string): void {
   try {
     const startMenuDir = path.join(
       process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'),
-      'Microsoft', 'Windows', 'Start Menu', 'Programs',
+      'Microsoft',
+      'Windows',
+      'Start Menu',
+      'Programs',
     );
     fs.mkdirSync(startMenuDir, { recursive: true });
     const shortcutPath = path.join(startMenuDir, 'trace-mcp.lnk');
@@ -198,14 +228,18 @@ export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<In
     // Prefer portable zip for silent install
     const winZips = assets.filter((a) => /trace-mcp.*-win.*\.zip$/i.test(a.name));
     if (winZips.length > 0) {
-      return winZips.find((a) => arch === 'arm64' ? /arm64/i.test(a.name) : !/arm64/i.test(a.name))
-        ?? winZips[0];
+      return (
+        winZips.find((a) => (arch === 'arm64' ? /arm64/i.test(a.name) : !/arm64/i.test(a.name))) ??
+        winZips[0]
+      );
     }
     // Fallback: NSIS exe installer
     const exes = assets.filter((a) => /trace-mcp.*\.exe$/i.test(a.name));
     if (exes.length > 0) {
-      return exes.find((a) => arch === 'arm64' ? /arm64/i.test(a.name) : !/arm64/i.test(a.name))
-        ?? exes[0];
+      return (
+        exes.find((a) => (arch === 'arm64' ? /arm64/i.test(a.name) : !/arm64/i.test(a.name))) ??
+        exes[0]
+      );
     }
     return undefined;
   };

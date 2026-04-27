@@ -35,7 +35,9 @@ describe('updateClaudeMd', () => {
 
   it('returns skipped on dry run when file has existing block', () => {
     mockFs.existsSync.mockReturnValue(true);
-    mockFs.readFileSync.mockReturnValue(`Some content\n${START_MARKER}\nold block\n${END_MARKER}\n`);
+    mockFs.readFileSync.mockReturnValue(
+      `Some content\n${START_MARKER}\nold block\n${END_MARKER}\n`,
+    );
 
     const result = updateClaudeMd('/project', { dryRun: true });
     expect(result.action).toBe('skipped');

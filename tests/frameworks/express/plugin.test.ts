@@ -64,10 +64,7 @@ describe('ExpressPlugin', () => {
 
   describe('extractExpressRoutes()', () => {
     it('extracts app.get routes', () => {
-      const source = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/app.ts'),
-        'utf-8',
-      );
+      const source = fs.readFileSync(path.join(FIXTURE_DIR, 'src/app.ts'), 'utf-8');
       const routes = extractExpressRoutes(source);
       expect(routes.length).toBeGreaterThanOrEqual(1);
       const healthRoute = routes.find((r) => r.path === '/health');
@@ -76,10 +73,7 @@ describe('ExpressPlugin', () => {
     });
 
     it('extracts router.get and router.post routes', () => {
-      const source = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/routes/users.ts'),
-        'utf-8',
-      );
+      const source = fs.readFileSync(path.join(FIXTURE_DIR, 'src/routes/users.ts'), 'utf-8');
       const routes = extractExpressRoutes(source);
       expect(routes.length).toBeGreaterThanOrEqual(3);
 
@@ -95,10 +89,7 @@ describe('ExpressPlugin', () => {
 
   describe('extractExpressMiddleware()', () => {
     it('extracts path-based middleware (router mounts)', () => {
-      const source = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/app.ts'),
-        'utf-8',
-      );
+      const source = fs.readFileSync(path.join(FIXTURE_DIR, 'src/app.ts'), 'utf-8');
       const middlewares = extractExpressMiddleware(source);
       const pathMiddlewares = middlewares.filter((m) => !m.isGlobal);
       expect(pathMiddlewares.length).toBeGreaterThanOrEqual(1);
@@ -118,9 +109,7 @@ describe('ExpressPlugin', () => {
 
   describe('extractNodes()', () => {
     it('detects express_router role and routes', () => {
-      const content = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/routes/users.ts'),
-      );
+      const content = fs.readFileSync(path.join(FIXTURE_DIR, 'src/routes/users.ts'));
       const result = plugin.extractNodes('routes/users.ts', content, 'typescript');
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();

@@ -18,16 +18,12 @@ interface EventDispatch {
  * Extract $listen mappings from an EventServiceProvider source.
  * Returns Event -> Listener[] pairs.
  */
-export function extractEventListeners(
-  source: string,
-): EventListenerMapping[] {
+export function extractEventListeners(source: string): EventListenerMapping[] {
   const mappings: EventListenerMapping[] = [];
   const useMap = buildUseMap(source);
 
   // Match: protected $listen = [ EventClass::class => [ ListenerClass::class, ... ], ... ];
-  const listenMatch = source.match(
-    /\$listen\s*=\s*\[([\s\S]*?)\]\s*;/,
-  );
+  const listenMatch = source.match(/\$listen\s*=\s*\[([\s\S]*?)\]\s*;/);
   if (!listenMatch) return mappings;
 
   const body = listenMatch[1];
@@ -58,9 +54,7 @@ export function extractEventListeners(
  * Detect event() and dispatch() calls in a source file.
  * Returns a list of dispatched event class references.
  */
-export function detectEventDispatches(
-  source: string,
-): string[] {
+export function detectEventDispatches(source: string): string[] {
   const useMap = buildUseMap(source);
   const dispatches: string[] = [];
 
@@ -86,9 +80,7 @@ export function detectEventDispatches(
 /**
  * Build listens_to edges from event-listener mappings.
  */
-function buildEventEdges(
-  mappings: EventListenerMapping[],
-): RawEdge[] {
+function buildEventEdges(mappings: EventListenerMapping[]): RawEdge[] {
   const edges: RawEdge[] = [];
 
   for (const mapping of mappings) {
@@ -109,10 +101,7 @@ function buildEventEdges(
 /**
  * Build dispatches edges from detected event dispatches.
  */
-function buildDispatchEdges(
-  sourceFqn: string,
-  dispatches: string[],
-): RawEdge[] {
+function buildDispatchEdges(sourceFqn: string, dispatches: string[]): RawEdge[] {
   return dispatches.map((eventClass) => ({
     edgeType: 'dispatches',
     metadata: {

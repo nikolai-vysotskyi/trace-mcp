@@ -24,12 +24,10 @@ const ROUTE_OBJECT_RE =
   /\.route\s*\(\s*\{[^}]*?method\s*:\s*['"`]([^'"`]+)['"`][^}]*?url\s*:\s*['"`]([^'"`]+)['"`]/g;
 
 // fastify.addHook('onRequest', ...)
-const HOOK_RE =
-  /\.addHook\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const HOOK_RE = /\.addHook\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 // fastify.register(pluginName, ...)
-const REGISTER_RE =
-  /\.register\s*\(\s*([A-Za-z][\w.]*)/g;
+const REGISTER_RE = /\.register\s*\(\s*([A-Za-z][\w.]*)/g;
 
 interface FastifyRoute {
   method: string;

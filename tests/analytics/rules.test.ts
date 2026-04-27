@@ -34,7 +34,7 @@ describe('rules / analyzeOptimizations', () => {
       ];
 
       const report = analyzeOptimizations(calls, 'week');
-      const hit = report.optimizations.find(o => o.rule === 'repeated-file-read');
+      const hit = report.optimizations.find((o) => o.rule === 'repeated-file-read');
       expect(hit).toBeDefined();
       expect(hit!.severity).toBe('high');
       expect(hit!.occurrences).toBe(3);
@@ -49,7 +49,7 @@ describe('rules / analyzeOptimizations', () => {
       ];
 
       const report = analyzeOptimizations(calls, 'all');
-      const hit = report.optimizations.find(o => o.rule === 'repeated-file-read');
+      const hit = report.optimizations.find((o) => o.rule === 'repeated-file-read');
       expect(hit).toBeUndefined();
     });
   });
@@ -76,7 +76,7 @@ describe('rules / analyzeOptimizations', () => {
       ];
 
       const report = analyzeOptimizations(calls, 'all');
-      const hit = report.optimizations.find(o => o.rule === 'bash-grep');
+      const hit = report.optimizations.find((o) => o.rule === 'bash-grep');
       expect(hit).toBeDefined();
       expect(hit!.severity).toBe('high');
       expect(hit!.occurrences).toBe(2);
@@ -93,7 +93,7 @@ describe('rules / analyzeOptimizations', () => {
       ];
 
       const report = analyzeOptimizations(calls, 'all');
-      const hit = report.optimizations.find(o => o.rule === 'bash-grep');
+      const hit = report.optimizations.find((o) => o.rule === 'bash-grep');
       expect(hit).toBeUndefined();
     });
   });
@@ -114,7 +114,7 @@ describe('rules / analyzeOptimizations', () => {
       ];
 
       const report = analyzeOptimizations(calls, 'all');
-      const hit = report.optimizations.find(o => o.rule === 'large-file-read');
+      const hit = report.optimizations.find((o) => o.rule === 'large-file-read');
       expect(hit).toBeDefined();
       expect(hit!.severity).toBe('medium');
       expect(hit!.occurrences).toBe(2);
@@ -123,21 +123,17 @@ describe('rules / analyzeOptimizations', () => {
     });
 
     it('does not trigger for small file reads', () => {
-      const calls: ToolCallRow[] = [
-        makeToolCall({ output_size_chars: 2000 }),
-      ];
+      const calls: ToolCallRow[] = [makeToolCall({ output_size_chars: 2000 })];
 
       const report = analyzeOptimizations(calls, 'all');
-      const hit = report.optimizations.find(o => o.rule === 'large-file-read');
+      const hit = report.optimizations.find((o) => o.rule === 'large-file-read');
       expect(hit).toBeUndefined();
     });
   });
 
   describe('report structure', () => {
     it('has correct structure with period and current usage', () => {
-      const calls: ToolCallRow[] = [
-        makeToolCall({ output_tokens_estimate: 500 }),
-      ];
+      const calls: ToolCallRow[] = [makeToolCall({ output_tokens_estimate: 500 })];
 
       const report = analyzeOptimizations(calls, 'month');
       expect(report.period).toBe('month');
@@ -156,13 +152,17 @@ describe('rules / analyzeOptimizations', () => {
         makeToolCall({ target_file: 'src/x.ts', output_tokens_estimate: 500 }),
         makeToolCall({ target_file: 'src/x.ts', output_tokens_estimate: 500 }),
         // large-file-read (medium)
-        makeToolCall({ target_file: 'src/big.ts', output_size_chars: 10000, output_tokens_estimate: 2857 }),
+        makeToolCall({
+          target_file: 'src/big.ts',
+          output_size_chars: 10000,
+          output_tokens_estimate: 2857,
+        }),
       ];
 
       const report = analyzeOptimizations(calls, 'all');
       expect(report.optimizations.length).toBeGreaterThanOrEqual(2);
 
-      const severities = report.optimizations.map(o => o.severity);
+      const severities = report.optimizations.map((o) => o.severity);
       const highIdx = severities.indexOf('high');
       const mediumIdx = severities.indexOf('medium');
       if (highIdx >= 0 && mediumIdx >= 0) {

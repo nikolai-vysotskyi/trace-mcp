@@ -38,7 +38,7 @@ export class LspBridge {
     }
 
     logger.info(
-      { servers: specs.map(s => s.language), languages: Array.from(indexedLanguages) },
+      { servers: specs.map((s) => s.language), languages: Array.from(indexedLanguages) },
       'Starting LSP enrichment',
     );
 

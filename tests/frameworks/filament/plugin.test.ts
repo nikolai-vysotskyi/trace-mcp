@@ -53,13 +53,27 @@ describe('FilamentPlugin', () => {
       const names = plugin.registerSchema().edgeTypes!.map((e) => e.name);
       expect(names).toHaveLength(21);
       for (const expected of [
-        'filament_panel_resource', 'filament_panel_widget', 'filament_panel_page',
-        'filament_panel_cluster', 'filament_panel_plugin', 'filament_panel_tenant',
-        'filament_resource_model', 'filament_resource_page', 'filament_resource_relation',
-        'filament_resource_action', 'filament_form_field', 'filament_form_layout',
-        'filament_table_column', 'filament_table_filter', 'filament_table_action',
-        'filament_infolist_entry', 'filament_relationship', 'filament_cluster_member',
-        'filament_notification', 'filament_importer', 'filament_exporter',
+        'filament_panel_resource',
+        'filament_panel_widget',
+        'filament_panel_page',
+        'filament_panel_cluster',
+        'filament_panel_plugin',
+        'filament_panel_tenant',
+        'filament_resource_model',
+        'filament_resource_page',
+        'filament_resource_relation',
+        'filament_resource_action',
+        'filament_form_field',
+        'filament_form_layout',
+        'filament_table_column',
+        'filament_table_filter',
+        'filament_table_action',
+        'filament_infolist_entry',
+        'filament_relationship',
+        'filament_cluster_member',
+        'filament_notification',
+        'filament_importer',
+        'filament_exporter',
       ]) {
         expect(names).toContain(expected);
       }
@@ -83,7 +97,9 @@ describe('FilamentPlugin', () => {
     it('extracts registered resources', () => {
       const edges = edgesOfType(data, 'filament_panel_resource');
       expect(edges.length).toBe(2);
-      expect(edges.map((e) => e.target)).toEqual(expect.arrayContaining(['UserResource', 'PostResource']));
+      expect(edges.map((e) => e.target)).toEqual(
+        expect.arrayContaining(['UserResource', 'PostResource']),
+      );
     });
 
     it('extracts registered widgets', () => {
@@ -132,13 +148,17 @@ describe('FilamentPlugin', () => {
     it('extracts form fields (TextInput, Select)', () => {
       const edges = edgesOfType(data, 'filament_form_field');
       expect(edges.length).toBeGreaterThanOrEqual(3);
-      expect(edges.map((e) => e.target)).toEqual(expect.arrayContaining(['name', 'email', 'role_id']));
+      expect(edges.map((e) => e.target)).toEqual(
+        expect.arrayContaining(['name', 'email', 'role_id']),
+      );
     });
 
     it('extracts table columns (TextColumn)', () => {
       const edges = edgesOfType(data, 'filament_table_column');
       expect(edges.length).toBeGreaterThanOrEqual(3);
-      expect(edges.map((e) => e.target)).toEqual(expect.arrayContaining(['name', 'email', 'role.name']));
+      expect(edges.map((e) => e.target)).toEqual(
+        expect.arrayContaining(['name', 'email', 'role.name']),
+      );
     });
 
     it('extracts table filters (SelectFilter)', () => {
@@ -183,7 +203,9 @@ describe('FilamentPlugin', () => {
     it('extracts form layout (Section, Tabs)', () => {
       const edges = edgesOfType(data, 'filament_form_layout');
       expect(edges.length).toBeGreaterThanOrEqual(2);
-      expect(edges.map((e) => e.target)).toEqual(expect.arrayContaining(['Order Details', 'Extra']));
+      expect(edges.map((e) => e.target)).toEqual(
+        expect.arrayContaining(['Order Details', 'Extra']),
+      );
     });
 
     it('extracts form fields (TextInput, DatePicker, Toggle)', () => {
@@ -254,7 +276,9 @@ describe('FilamentPlugin', () => {
   // ── Relation Manager ──────────────────────────────────────────
 
   describe('relation manager — PostsRelationManager.php', () => {
-    const data = extract('app/Filament/Resources/UserResource/RelationManagers/PostsRelationManager.php');
+    const data = extract(
+      'app/Filament/Resources/UserResource/RelationManagers/PostsRelationManager.php',
+    );
 
     it('sets frameworkRole and relationship name', () => {
       expect(data.frameworkRole).toBe('filament_relation_manager');
@@ -326,7 +350,9 @@ class TenantPanel extends PanelProvider {
     return $panel->id('tenant')->path('app')->tenant(Team::class)->resources([]);
   }
 }`;
-      const data = plugin.extractNodes('TenantPanel.php', Buffer.from(source), 'php')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('TenantPanel.php', Buffer.from(source), 'php')
+        ._unsafeUnwrap();
       expect(data.metadata?.tenantModel).toBe('Team');
       expect(edgesOfType(data, 'filament_panel_tenant')[0].target).toBe('Team');
     });
@@ -348,7 +374,9 @@ class X { public function y() { Notification::make()->title('OK')->send(); } }`;
 use Filament\\Notifications\\Notification;
 class X { public function y() { Notification::make()->title('OK')->sendToDatabase($user); } }`;
       const data = plugin.extractNodes('X.php', Buffer.from(source), 'php')._unsafeUnwrap();
-      expect((edgesOfType(data, 'filament_notification')[0].metadata as Record<string, string>).type).toBe('database');
+      expect(
+        (edgesOfType(data, 'filament_notification')[0].metadata as Record<string, string>).type,
+      ).toBe('database');
     });
   });
 
@@ -363,7 +391,9 @@ class OrderExporter extends Exporter {
     return [ ExportColumn::make('id'), ExportColumn::make('total') ];
   }
 }`;
-      const data = plugin.extractNodes('OrderExporter.php', Buffer.from(source), 'php')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('OrderExporter.php', Buffer.from(source), 'php')
+        ._unsafeUnwrap();
       expect(data.frameworkRole).toBe('filament_exporter');
       expect(edgesOfType(data, 'filament_exporter')[0].target).toBe('Order');
       expect(data.metadata?.exportColumns).toEqual(['id', 'total']);
@@ -382,7 +412,9 @@ class MyComponent extends Component implements HasForms {
     return $form->schema([ TextInput::make('search') ]);
   }
 }`;
-      const data = plugin.extractNodes('MyComponent.php', Buffer.from(source), 'php')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('MyComponent.php', Buffer.from(source), 'php')
+        ._unsafeUnwrap();
       expect(data.metadata?.filamentTraits).toEqual(
         expect.arrayContaining(['InteractsWithForms', 'HasForms']),
       );
@@ -408,7 +440,9 @@ class MyPage extends Page { }`;
   });
 
   it('ignores php files without filament imports', () => {
-    const data = plugin.extractNodes('plain.php', Buffer.from('<?php class Foo {}'), 'php')._unsafeUnwrap();
+    const data = plugin
+      .extractNodes('plain.php', Buffer.from('<?php class Foo {}'), 'php')
+      ._unsafeUnwrap();
     expect(data.edges).toBeUndefined();
   });
 });

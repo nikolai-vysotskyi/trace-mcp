@@ -12,9 +12,10 @@ export function resolvePythonHeritageEdges(state: PipelineState): void {
   const { store } = state;
 
   // Get all Python class symbols with bases metadata
-  const changedFileIds = state.isIncremental && state.changedFileIds.size > 0
-    ? Array.from(state.changedFileIds)
-    : undefined;
+  const changedFileIds =
+    state.isIncremental && state.changedFileIds.size > 0
+      ? Array.from(state.changedFileIds)
+      : undefined;
 
   let query: string;
   const params: unknown[] = [];
@@ -35,7 +36,9 @@ export function resolvePythonHeritageEdges(state: PipelineState): void {
   }
 
   const classesWithBases = store.db.prepare(query).all(...params) as Array<{
-    id: number; name: string; metadata: string;
+    id: number;
+    name: string;
+    metadata: string;
   }>;
 
   if (classesWithBases.length === 0) return;
@@ -55,7 +58,9 @@ export function resolvePythonHeritageEdges(state: PipelineState): void {
           }
         }
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
 
   if (neededNames.size === 0) return;
@@ -67,11 +72,13 @@ export function resolvePythonHeritageEdges(state: PipelineState): void {
   for (let i = 0; i < nameArr.length; i += CHUNK) {
     const chunk = nameArr.slice(i, i + CHUNK);
     const ph = chunk.map(() => '?').join(',');
-    const rows = store.db.prepare(
-      `SELECT s.id, s.name FROM symbols s
+    const rows = store.db
+      .prepare(
+        `SELECT s.id, s.name FROM symbols s
        JOIN files f ON s.file_id = f.id
        WHERE f.language = 'python' AND s.kind = 'class' AND s.name IN (${ph})`,
-    ).all(...chunk) as { id: number; name: string }[];
+      )
+      .all(...chunk) as { id: number; name: string }[];
     for (const s of rows) {
       const list = nameIndex.get(s.name) ?? [];
       list.push({ id: s.id });
@@ -91,13 +98,13 @@ export function resolvePythonHeritageEdges(state: PipelineState): void {
     }
   }
 
-  const extendsType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('extends') as { id: number } | undefined;
+  const extendsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('extends') as
+    | { id: number }
+    | undefined;
   // Fallback to py_inherits if generic 'extends' doesn't exist
-  const pyInheritsType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('py_inherits') as { id: number } | undefined;
+  const pyInheritsType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('py_inherits') as { id: number } | undefined;
 
   const edgeTypeId = extendsType?.id ?? pyInheritsType?.id;
   if (edgeTypeId == null) return;
@@ -111,7 +118,11 @@ export function resolvePythonHeritageEdges(state: PipelineState): void {
   store.db.transaction(() => {
     for (const cls of classesWithBases) {
       let meta: Record<string, unknown>;
-      try { meta = JSON.parse(cls.metadata) as Record<string, unknown>; } catch { continue; }
+      try {
+        meta = JSON.parse(cls.metadata) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
       const bases = meta['bases'];
       if (!Array.isArray(bases)) continue;
 

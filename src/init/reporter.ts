@@ -28,9 +28,15 @@ function formatHuman(report: InitReport): string {
     fwByCategory.get(cat)!.push(label);
   }
   const categoryLabels: Record<string, string> = {
-    framework: 'Frameworks', orm: 'ORMs', view: 'UI/View',
-    api: 'API', validation: 'Validation', state: 'State mgmt',
-    realtime: 'Realtime', testing: 'Testing', tooling: 'Tooling',
+    framework: 'Frameworks',
+    orm: 'ORMs',
+    view: 'UI/View',
+    api: 'API',
+    validation: 'Validation',
+    state: 'State mgmt',
+    realtime: 'Realtime',
+    testing: 'Testing',
+    tooling: 'Tooling',
   };
   for (const [cat, items] of fwByCategory) {
     const label = (categoryLabels[cat] ?? cat).padEnd(12);
@@ -65,7 +71,8 @@ function formatHuman(report: InitReport): string {
   if (alreadyOk.length > 0) {
     lines.push('');
     lines.push('  Already configured:');
-    for (const s of alreadyOk) lines.push(`    ${shortPath(s.target).padEnd(24)} ${s.detail ?? ''}`);
+    for (const s of alreadyOk)
+      lines.push(`    ${shortPath(s.target).padEnd(24)} ${s.detail ?? ''}`);
   }
   if (skipped.length > 0) {
     lines.push('');

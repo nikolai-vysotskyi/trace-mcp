@@ -69,9 +69,7 @@ describe('detectWorkspaces', () => {
   it('detects composer path repositories', () => {
     writeJson(path.join(tmpDir, 'composer.json'), {
       name: 'my/monorepo',
-      repositories: [
-        { type: 'path', url: 'packages/*' },
-      ],
+      repositories: [{ type: 'path', url: 'packages/*' }],
     });
     writeJson(path.join(tmpDir, 'packages/auth/composer.json'), { name: 'my/auth' });
     writeJson(path.join(tmpDir, 'packages/billing/composer.json'), { name: 'my/billing' });

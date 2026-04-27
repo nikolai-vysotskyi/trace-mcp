@@ -12,7 +12,11 @@ const _plugin = createRegexLanguagePlugin({
   extensions: ['.glsl', '.vert', '.frag', '.geom', '.tesc', '.tese', '.comp'],
   symbolPatterns: [
     // returnType funcName(...)
-    { kind: 'function', pattern: /^\s*(?:void|float|int|uint|bool|vec[234]|[iu]?vec[234]|mat[234](?:x[234])?|sampler\w+|[\w]+)\s+(\w+)\s*\(/gm },
+    {
+      kind: 'function',
+      pattern:
+        /^\s*(?:void|float|int|uint|bool|vec[234]|[iu]?vec[234]|mat[234](?:x[234])?|sampler\w+|[\w]+)\s+(\w+)\s*\(/gm,
+    },
     // struct Name {
     { kind: 'class', pattern: /^\s*struct\s+(\w+)/gm },
     // uniform type name

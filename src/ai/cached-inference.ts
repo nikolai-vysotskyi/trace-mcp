@@ -12,7 +12,10 @@ export class CachedInferenceService implements InferenceService {
     private model: string,
   ) {}
 
-  async generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string> {
+  async generate(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number },
+  ): Promise<string> {
     const cached = this.cache.get(this.model, prompt);
     if (cached !== null) return cached;
 

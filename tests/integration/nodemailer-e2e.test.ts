@@ -46,9 +46,9 @@ function loadEdges(store: Store, edgeType: string): EdgeWithMeta[] {
       .get(e.source_node_id) as { node_type: string; ref_id: number } | undefined;
     let srcSymbolId: string | null = null;
     if (node?.node_type === 'symbol') {
-      const s = store.db
-        .prepare('SELECT symbol_id FROM symbols WHERE id = ?')
-        .get(node.ref_id) as { symbol_id: string } | undefined;
+      const s = store.db.prepare('SELECT symbol_id FROM symbols WHERE id = ?').get(node.ref_id) as
+        | { symbol_id: string }
+        | undefined;
       if (s) srcSymbolId = s.symbol_id;
     }
     return { meta, srcSymbolId };
@@ -81,14 +81,11 @@ describe('nodemailer E2E', () => {
       }
     });
 
-    it.each(Object.entries(EXPECTED_ROLES))(
-      'tags %s with role %s',
-      (rel, expectedRole) => {
-        const file = fileByRel.get(rel);
-        expect(file, `missing ${rel}`).toBeDefined();
-        expect(file!.framework_role).toBe(expectedRole);
-      },
-    );
+    it.each(Object.entries(EXPECTED_ROLES))('tags %s with role %s', (rel, expectedRole) => {
+      const file = fileByRel.get(rel);
+      expect(file, `missing ${rel}`).toBeDefined();
+      expect(file!.framework_role).toBe(expectedRole);
+    });
 
     it('detects sending files that use a shared transport (no direct nodemailer import)', () => {
       expect(fileByRel.get('src/mailer.ts')!.framework_role).toBe('email_sender');

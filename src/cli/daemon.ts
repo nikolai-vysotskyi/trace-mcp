@@ -26,8 +26,9 @@ export async function ensureDaemonRunning(port = DEFAULT_DAEMON_PORT): Promise<b
   return result.ok;
 }
 
-export const daemonCommand = new Command('daemon')
-  .description('Manage the trace-mcp background daemon');
+export const daemonCommand = new Command('daemon').description(
+  'Manage the trace-mcp background daemon',
+);
 
 daemonCommand
   .command('start')
@@ -84,7 +85,9 @@ daemonCommand
     // reachable, not just that launchd accepted the kickstart.
     const up = await waitForDaemonUp(port, 10_000);
     if (!up) {
-      console.error(`Daemon restart issued but /health did not respond on port ${port} within 10s.`);
+      console.error(
+        `Daemon restart issued but /health did not respond on port ${port} within 10s.`,
+      );
       console.error(`Check logs: trace-mcp daemon logs`);
       process.exit(1);
     }

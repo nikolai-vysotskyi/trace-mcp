@@ -16,9 +16,16 @@ describe('schema', () => {
     const tables = getTableNames(db);
 
     const required = [
-      'node_types', 'edge_types', 'nodes',
-      'files', 'symbols', 'routes', 'components', 'migrations',
-      'edges', 'schema_meta',
+      'node_types',
+      'edge_types',
+      'nodes',
+      'files',
+      'symbols',
+      'routes',
+      'components',
+      'migrations',
+      'edges',
+      'schema_meta',
     ];
 
     for (const table of required) {
@@ -28,16 +35,18 @@ describe('schema', () => {
 
   it('creates symbols_fts virtual table', () => {
     // FTS5 tables appear in sqlite_master with type=table but have VIRTUAL in sql
-    const row = db.prepare(
-      "SELECT sql FROM sqlite_master WHERE name = 'symbols_fts'",
-    ).get() as { sql: string } | undefined;
+    const row = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'symbols_fts'").get() as
+      | { sql: string }
+      | undefined;
 
     expect(row).toBeDefined();
     expect(row!.sql).toContain('fts5');
   });
 
   it('seeds node_types with defaults', () => {
-    const rows = db.prepare('SELECT name FROM node_types ORDER BY name').all() as { name: string }[];
+    const rows = db.prepare('SELECT name FROM node_types ORDER BY name').all() as {
+      name: string;
+    }[];
     const names = rows.map((r) => r.name);
 
     expect(names).toContain('symbol');
@@ -48,7 +57,10 @@ describe('schema', () => {
   });
 
   it('seeds edge_types with defaults', () => {
-    const rows = db.prepare('SELECT name, category FROM edge_types ORDER BY name').all() as { name: string; category: string }[];
+    const rows = db.prepare('SELECT name, category FROM edge_types ORDER BY name').all() as {
+      name: string;
+      category: string;
+    }[];
 
     const byName = new Map(rows.map((r) => [r.name, r.category]));
     expect(byName.get('imports')).toBe('php');
@@ -59,7 +71,9 @@ describe('schema', () => {
   });
 
   it('stores schema version', () => {
-    const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as { value: string };
+    const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
+      value: string;
+    };
     expect(Number(row.value)).toBeGreaterThanOrEqual(1);
   });
 

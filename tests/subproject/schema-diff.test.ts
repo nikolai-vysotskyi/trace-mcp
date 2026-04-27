@@ -47,9 +47,14 @@ describe('diffSchemas', () => {
 
   it('detects newly required fields as breaking', () => {
     const old = { properties: { name: { type: 'string' } } };
-    const next = { properties: { name: { type: 'string' }, token: { type: 'string' } }, required: ['token'] };
+    const next = {
+      properties: { name: { type: 'string' }, token: { type: 'string' } },
+      required: ['token'],
+    };
     const diffs = diffSchemas(old, next);
-    expect(diffs.some((d) => d.type === 'required_added' && d.path === 'token' && d.breaking)).toBe(true);
+    expect(diffs.some((d) => d.type === 'required_added' && d.path === 'token' && d.breaking)).toBe(
+      true,
+    );
   });
 
   it('recurses into nested objects', () => {
@@ -99,20 +104,24 @@ describe('diffSchemas', () => {
 
 describe('diffEndpoints', () => {
   it('detects schema changes for matching endpoints', () => {
-    const old = [{
-      method: 'GET',
-      path: '/api/users',
-      responseSchema: JSON.stringify({
-        properties: { email: { type: 'string' }, name: { type: 'string' } },
-      }),
-    }];
-    const next = [{
-      method: 'GET',
-      path: '/api/users',
-      responseSchema: JSON.stringify({
-        properties: { emailAddress: { type: 'string' }, name: { type: 'string' } },
-      }),
-    }];
+    const old = [
+      {
+        method: 'GET',
+        path: '/api/users',
+        responseSchema: JSON.stringify({
+          properties: { email: { type: 'string' }, name: { type: 'string' } },
+        }),
+      },
+    ];
+    const next = [
+      {
+        method: 'GET',
+        path: '/api/users',
+        responseSchema: JSON.stringify({
+          properties: { emailAddress: { type: 'string' }, name: { type: 'string' } },
+        }),
+      },
+    ];
 
     const diffs = diffEndpoints(old, next);
     expect(diffs).toHaveLength(1);
@@ -128,11 +137,13 @@ describe('diffEndpoints', () => {
   });
 
   it('returns empty when no schema changes', () => {
-    const ep = [{
-      method: 'POST',
-      path: '/api/login',
-      requestSchema: JSON.stringify({ properties: { username: { type: 'string' } } }),
-    }];
+    const ep = [
+      {
+        method: 'POST',
+        path: '/api/login',
+        requestSchema: JSON.stringify({ properties: { username: { type: 'string' } } }),
+      },
+    ];
     expect(diffEndpoints(ep, ep)).toHaveLength(0);
   });
 });

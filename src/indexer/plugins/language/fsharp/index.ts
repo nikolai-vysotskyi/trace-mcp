@@ -37,19 +37,35 @@ const _plugin = createMultiPassPlugin({
       pattern: /^\s*type\s+(?:private\s+|internal\s+|public\s+)?(\w+)(?:<[^>]+>)?\s*(?:\(|=)/gm,
       memberPatterns: [
         // member [access] [self.]name
-        { kind: 'method', pattern: /^\s*member\s+(?:private\s+|internal\s+|public\s+)?(?:\w+\.)?(\w+)/gm },
+        {
+          kind: 'method',
+          pattern: /^\s*member\s+(?:private\s+|internal\s+|public\s+)?(?:\w+\.)?(\w+)/gm,
+        },
         // abstract member name : type
-        { kind: 'method', pattern: /^\s*abstract\s+(?:member\s+)?(\w+)\s*:/gm, meta: { abstract: true } },
+        {
+          kind: 'method',
+          pattern: /^\s*abstract\s+(?:member\s+)?(\w+)\s*:/gm,
+          meta: { abstract: true },
+        },
         // override [self.]name
         { kind: 'method', pattern: /^\s*override\s+(?:\w+\.)?(\w+)/gm, meta: { override: true } },
         // default [self.]name
         { kind: 'method', pattern: /^\s*default\s+(?:\w+\.)?(\w+)/gm, meta: { default: true } },
         // static member [access] [inline] name
-        { kind: 'method', pattern: /^\s*static\s+member\s+(?:private\s+|internal\s+|public\s+)?(?:inline\s+)?(\w+)/gm, meta: { static: true } },
+        {
+          kind: 'method',
+          pattern:
+            /^\s*static\s+member\s+(?:private\s+|internal\s+|public\s+)?(?:inline\s+)?(\w+)/gm,
+          meta: { static: true },
+        },
         // member [self.]Name with get/set (property)
         { kind: 'property', pattern: /^\s*member\s+(?:\w+\.)?(\w+)\s*with\s+(?:get|set)/gm },
         // static property
-        { kind: 'property', pattern: /^\s*static\s+member\s+(?:\w+\.)?(\w+)\s*with\s+(?:get|set)/gm, meta: { static: true } },
+        {
+          kind: 'property',
+          pattern: /^\s*static\s+member\s+(?:\w+\.)?(\w+)\s*with\s+(?:get|set)/gm,
+          meta: { static: true },
+        },
         // val name : type (abstract val)
         { kind: 'property', pattern: /^\s*val\s+(?:mutable\s+)?(\w+)\s*:/gm },
         // DU case: | CaseName [of ...]
@@ -74,7 +90,11 @@ const _plugin = createMultiPassPlugin({
       kind: 'module',
       pattern: /^\s*module\s+(?:rec\s+)?(?:private\s+|internal\s+|public\s+)?([\w.]+)\s*=/gm,
       memberPatterns: [
-        { kind: 'function', pattern: /^\s*let\s+(?:private\s+|internal\s+|public\s+)?(?:rec\s+)?(?:inline\s+)?(\w+)/gm },
+        {
+          kind: 'function',
+          pattern:
+            /^\s*let\s+(?:private\s+|internal\s+|public\s+)?(?:rec\s+)?(?:inline\s+)?(\w+)/gm,
+        },
         { kind: 'type', pattern: /^\s*type\s+(?:private\s+|internal\s+|public\s+)?(\w+)/gm },
       ],
     },
@@ -84,36 +104,70 @@ const _plugin = createMultiPassPlugin({
     // ── Namespaces ─────────────────────────────────────────────────────
     { kind: 'namespace', pattern: /^\s*namespace\s+([\w.]+)/gm },
     // ── Top-level module (no =, just module Name) ──────────────────────
-    { kind: 'module', pattern: /^\s*module\s+(?:rec\s+)?(?:private\s+|internal\s+|public\s+)?([\w.]+)\s*$/gm },
+    {
+      kind: 'module',
+      pattern: /^\s*module\s+(?:rec\s+)?(?:private\s+|internal\s+|public\s+)?([\w.]+)\s*$/gm,
+    },
 
     // ── Functions & Values ─────────────────────────────────────────────
-    { kind: 'function', pattern: /^\s*let\s+(?:private\s+|internal\s+|public\s+)?(?:rec\s+)?(?:inline\s+)?(?:mutable\s+)?(\w+)(?:<[^>]+>)?\s+/gm },
-    { kind: 'variable', pattern: /^\s*let\s+(?:private\s+|internal\s+|public\s+)?(?:mutable\s+)?(\w+)\s*(?::\s*[^=]+)?\s*=/gm },
+    {
+      kind: 'function',
+      pattern:
+        /^\s*let\s+(?:private\s+|internal\s+|public\s+)?(?:rec\s+)?(?:inline\s+)?(?:mutable\s+)?(\w+)(?:<[^>]+>)?\s+/gm,
+    },
+    {
+      kind: 'variable',
+      pattern:
+        /^\s*let\s+(?:private\s+|internal\s+|public\s+)?(?:mutable\s+)?(\w+)\s*(?::\s*[^=]+)?\s*=/gm,
+    },
 
     // ── Active Patterns ────────────────────────────────────────────────
-    { kind: 'function', pattern: /^\s*let\s+\(\|([A-Z]\w+(?:\|[A-Z]\w+)*)\|\)\s/gm, meta: { activePattern: true } },
-    { kind: 'function', pattern: /^\s*let\s+\(\|([A-Z]\w+)\|_\|\)\s/gm, meta: { activePattern: true, partial: true } },
+    {
+      kind: 'function',
+      pattern: /^\s*let\s+\(\|([A-Z]\w+(?:\|[A-Z]\w+)*)\|\)\s/gm,
+      meta: { activePattern: true },
+    },
+    {
+      kind: 'function',
+      pattern: /^\s*let\s+\(\|([A-Z]\w+)\|_\|\)\s/gm,
+      meta: { activePattern: true, partial: true },
+    },
 
     // ── Exceptions ─────────────────────────────────────────────────────
     { kind: 'type', pattern: /^\s*exception\s+(\w+)/gm, meta: { exception: true } },
 
     // ── val Signatures (.fsi) ──────────────────────────────────────────
-    { kind: 'function', pattern: /^\s*val\s+(?:mutable\s+)?(\w+)\s*:/gm, meta: { signature: true } },
+    {
+      kind: 'function',
+      pattern: /^\s*val\s+(?:mutable\s+)?(\w+)\s*:/gm,
+      meta: { signature: true },
+    },
 
     // ── Literals & Measures ────────────────────────────────────────────
     { kind: 'constant', pattern: /^\s*\[<Literal>\]\s*\n\s*let\s+(\w+)/gm },
     { kind: 'type', pattern: /^\s*\[<Measure>\]\s*\n?\s*type\s+(\w+)/gm, meta: { measure: true } },
 
     // ── CE Builder instances ───────────────────────────────────────────
-    { kind: 'variable', pattern: /^\s*let\s+(\w+)\s*=\s*(?:new\s+)?\w+Builder\s*\(/gm, meta: { ceBuilder: true } },
+    {
+      kind: 'variable',
+      pattern: /^\s*let\s+(\w+)\s*=\s*(?:new\s+)?\w+Builder\s*\(/gm,
+      meta: { ceBuilder: true },
+    },
 
     // ── Standalone DU cases (at type level, not inside container) ──────
     { kind: 'enum_case', pattern: /^\s*\|\s+([A-Z]\w*)\s+(?:of\b|$)/gm },
     { kind: 'enum_case', pattern: /^\s*\|\s+([A-Z]\w*)\s*$/gm },
 
     // ── Standalone members (for top-level type augmentations) ──────────
-    { kind: 'method', pattern: /^\s*member\s+(?:private\s+|internal\s+|public\s+)?(?:\w+\.)?(\w+)/gm },
-    { kind: 'method', pattern: /^\s*static\s+member\s+(?:private\s+|internal\s+|public\s+)?(?:inline\s+)?(\w+)/gm, meta: { static: true } },
+    {
+      kind: 'method',
+      pattern: /^\s*member\s+(?:private\s+|internal\s+|public\s+)?(?:\w+\.)?(\w+)/gm,
+    },
+    {
+      kind: 'method',
+      pattern: /^\s*static\s+member\s+(?:private\s+|internal\s+|public\s+)?(?:inline\s+)?(\w+)/gm,
+      meta: { static: true },
+    },
   ],
 
   importPatterns: [

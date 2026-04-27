@@ -65,11 +65,18 @@ export function getRequestFlow(
 
     // Fallback: Python frameworks store just the function name (e.g. "get_user"),
     // not the full FQN. Try name-based lookup from the route's file.
-    if (!controllerSymbol && !methodSymbol && !controllerFqn.includes('.') && !controllerFqn.includes('\\')) {
+    if (
+      !controllerSymbol &&
+      !methodSymbol &&
+      !controllerFqn.includes('.') &&
+      !controllerFqn.includes('\\')
+    ) {
       const routeFileId = route.file_id;
       if (routeFileId) {
         const fileSymbols = store.getSymbolsByFile(routeFileId);
-        const match = fileSymbols.find((s) => s.name === controllerFqn && (s.kind === 'function' || s.kind === 'method'));
+        const match = fileSymbols.find(
+          (s) => s.name === controllerFqn && (s.kind === 'function' || s.kind === 'method'),
+        );
         if (match) {
           controllerSymbol = match;
         }
@@ -87,11 +94,19 @@ export function getRequestFlow(
     // 4. FormRequest — find validates_with edges from controller method
     // 5. Inertia — find inertia_renders edges from controller method OR class
     // Edges may be on the method or on the class symbol, so check both
-    const symbolsToCheck = [methodSymbol, controllerSymbol].filter(Boolean) as typeof controllerSymbol[];
+    const symbolsToCheck = [methodSymbol, controllerSymbol].filter(
+      Boolean,
+    ) as (typeof controllerSymbol)[];
     const seenEdgeTypes = new Set<string>();
 
     // Collect all outgoing edges from both symbols, then batch resolve targets
-    const allOutEdges: Array<{ edge: typeof store extends { getOutgoingEdges(n: number): infer R } ? (R extends Array<infer E> ? E : never) : never; }> = [];
+    const allOutEdges: Array<{
+      edge: typeof store extends { getOutgoingEdges(n: number): infer R }
+        ? R extends Array<infer E>
+          ? E
+          : never
+        : never;
+    }> = [];
     for (const sym of symbolsToCheck) {
       if (!sym) continue;
       const nid = store.getNodeId('symbol', sym.id);
@@ -102,7 +117,9 @@ export function getRequestFlow(
 
     const targetIds = allOutEdges.map((e: any) => e.target_node_id);
     const targetRefs = store.getNodeRefsBatch(targetIds);
-    const symIds = [...targetRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+    const symIds = [...targetRefs.values()]
+      .filter((r) => r.nodeType === 'symbol')
+      .map((r) => r.refId);
     const targetSymMap = symIds.length > 0 ? store.getSymbolsByIds(symIds) : new Map();
     const targetFileIds = [...new Set([...targetSymMap.values()].map((s) => s.file_id))];
     const targetFileMap = targetFileIds.length > 0 ? store.getFilesByIds(targetFileIds) : new Map();
@@ -124,7 +141,7 @@ export function getRequestFlow(
       }
 
       if (edge.edge_type_name === 'inertia_renders') {
-        const meta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
+        const meta = edge.metadata ? (JSON.parse(edge.metadata) as Record<string, unknown>) : {};
         const file = targetFileMap.get(targetSym.file_id);
         const alreadyAdded = steps.some(
           (s: any) => s.type === 'inertia_page' && s.details?.pageName === meta.pageName,

@@ -8,11 +8,16 @@ import { NimLanguagePlugin } from '../../src/indexer/plugins/language/nim/index.
 import { TclLanguagePlugin } from '../../src/indexer/plugins/language/tcl/index.js';
 import { DLanguagePlugin } from '../../src/indexer/plugins/language/dlang/index.js';
 
-async function parse(plugin: { extractSymbols: (f: string, c: Buffer) => any }, source: string, filePath: string): Promise<any> {
+async function parse(
+  plugin: { extractSymbols: (f: string, c: Buffer) => any },
+  source: string,
+  filePath: string,
+): Promise<any> {
   const resultOrPromise = plugin.extractSymbols(filePath, Buffer.from(source));
-  const result = resultOrPromise && typeof resultOrPromise.then === 'function'
-    ? await resultOrPromise
-    : resultOrPromise;
+  const result =
+    resultOrPromise && typeof resultOrPromise.then === 'function'
+      ? await resultOrPromise
+      : resultOrPromise;
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -202,7 +207,9 @@ describe('Tcl', () => {
     expect(speak).toBeDefined();
     expect(speak.kind).toBe('method');
     expect(speak.parentSymbolId).toContain('Animal');
-    expect(r.symbols.some((s: any) => s.name === 'run' && s.parentSymbolId?.includes('Animal'))).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'run' && s.parentSymbolId?.includes('Animal')),
+    ).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'name' && s.kind === 'variable')).toBe(true);
   });
 
@@ -233,9 +240,13 @@ describe('Tcl', () => {
   }
 }`);
     expect(r.symbols.some((s: any) => s.name === 'Vehicle' && s.kind === 'class')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'speed' && s.parentSymbolId?.includes('Vehicle'))).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'speed' && s.parentSymbolId?.includes('Vehicle')),
+    ).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'count' && s.metadata?.static)).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'accelerate' && s.parentSymbolId?.includes('Vehicle'))).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'accelerate' && s.parentSymbolId?.includes('Vehicle')),
+    ).toBe(true);
   });
 
   // ── Snit ───────────────────────────────────────────────────────────
@@ -251,8 +262,12 @@ describe('Tcl', () => {
     return $x
   }
 }`);
-    expect(r.symbols.some((s: any) => s.name === 'Counter' && s.kind === 'class' && s.metadata?.snit)).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'count' && s.parentSymbolId?.includes('Counter'))).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'Counter' && s.kind === 'class' && s.metadata?.snit),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'count' && s.parentSymbolId?.includes('Counter')),
+    ).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'instances' && s.metadata?.static)).toBe(true);
     expect(r.symbols.some((s: any) => s.name === '-step' && s.kind === 'property')).toBe(true);
     const incr = r.symbols.find((s: any) => s.name === 'increment');
@@ -312,7 +327,9 @@ describe('D', () => {
   // ── Module ─────────────────────────────────────────────────────────
   it('extracts module declaration', async () => {
     const r = await p('module app.core.utils;');
-    expect(r.symbols.some((s: any) => s.name === 'app.core.utils' && s.kind === 'namespace')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'app.core.utils' && s.kind === 'namespace')).toBe(
+      true,
+    );
   });
 
   // ── Classes with members ───────────────────────────────────────────
@@ -334,7 +351,9 @@ describe('D', () => {
     expect(speak).toBeDefined();
     expect(speak.kind).toBe('method');
     expect(speak.parentSymbolId).toContain('Animal');
-    expect(r.symbols.some((s: any) => s.name === 'getName' && s.parentSymbolId?.includes('Animal'))).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'getName' && s.parentSymbolId?.includes('Animal')),
+    ).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'this' && s.metadata?.constructor)).toBe(true);
     expect(r.symbols.some((s: any) => s.name === '~this' && s.metadata?.destructor)).toBe(true);
   });
@@ -350,7 +369,9 @@ describe('D', () => {
     const sym = r.symbols.find((s: any) => s.name === 'Point');
     expect(sym).toBeDefined();
     expect(sym.metadata?.struct).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'magnitude' && s.parentSymbolId?.includes('Point'))).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'magnitude' && s.parentSymbolId?.includes('Point')),
+    ).toBe(true);
   });
 
   // ── Interfaces ─────────────────────────────────────────────────────
@@ -360,15 +381,21 @@ describe('D', () => {
   int getLayer();
 }`);
     expect(r.symbols.some((s: any) => s.name === 'Drawable' && s.kind === 'interface')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'draw' && s.parentSymbolId?.includes('Drawable'))).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'draw' && s.parentSymbolId?.includes('Drawable')),
+    ).toBe(true);
   });
 
   // ── Enums ──────────────────────────────────────────────────────────
   it('extracts named enum with members', async () => {
     const r = await p('enum Color {\n  Red,\n  Green,\n  Blue,\n}');
     expect(r.symbols.some((s: any) => s.name === 'Color' && s.kind === 'enum')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'Red' && s.parentSymbolId?.includes('Color'))).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'Green' && s.parentSymbolId?.includes('Color'))).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'Red' && s.parentSymbolId?.includes('Color')),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'Green' && s.parentSymbolId?.includes('Color')),
+    ).toBe(true);
   });
 
   // ── Manifest constants ─────────────────────────────────────────────

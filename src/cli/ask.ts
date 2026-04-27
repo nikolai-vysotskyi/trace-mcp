@@ -66,9 +66,7 @@ async function resolveLocalProject(): Promise<ProjectContext> {
 
   const entry = getProject(projectRoot);
   if (!entry) {
-    throw new Error(
-      `Project not indexed. Run \`trace-mcp add ${projectRoot}\` first.`,
-    );
+    throw new Error(`Project not indexed. Run \`trace-mcp add ${projectRoot}\` first.`);
   }
 
   const configResult = await loadConfig(projectRoot);
@@ -110,8 +108,16 @@ async function resolveRemoteRepo(repo: string): Promise<ProjectContext> {
   process.stderr.write(`Indexed ${result.indexed} files in ${result.durationMs}ms\n`);
 
   const cleanup = () => {
-    try { store.db.close(); } catch { /* already closed */ }
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    try {
+      store.db.close();
+    } catch {
+      /* already closed */
+    }
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
   };
 
   return { projectRoot: tmpDir, config, store, pluginRegistry, cleanup };
@@ -128,7 +134,13 @@ async function askOnce(
   budget: number,
 ): Promise<void> {
   process.stderr.write('Retrieving context...\n');
-  const context = await gatherContext(project.projectRoot, project.store, project.pluginRegistry, question, budget);
+  const context = await gatherContext(
+    project.projectRoot,
+    project.store,
+    project.pluginRegistry,
+    question,
+    budget,
+  );
 
   const messages: ChatMessage[] = [
     { role: 'system', content: buildSystemPrompt(project.projectRoot) },
@@ -178,7 +190,13 @@ async function chatLoop(
     }
 
     process.stderr.write('Retrieving context...\n');
-    const context = await gatherContext(project.projectRoot, project.store, project.pluginRegistry, question, budget);
+    const context = await gatherContext(
+      project.projectRoot,
+      project.store,
+      project.pluginRegistry,
+      question,
+      budget,
+    );
 
     // Strip context from older messages to prevent token bloat
     for (let i = 1; i < history.length; i++) {
@@ -224,40 +242,45 @@ export const askCommand = new Command('ask')
   .option('--provider <name>', 'LLM provider: groq, anthropic, openai (auto-detects from env)')
   .option('--model <name>', 'Override the LLM model name')
   .option('--budget <tokens>', 'Token budget for context retrieval (default: 12000)', '12000')
-  .action(async (questionParts: string[], opts: {
-    chat?: boolean;
-    repo?: string;
-    provider?: string;
-    model?: string;
-    budget: string;
-  }) => {
-    const question = questionParts.join(' ').trim();
+  .action(
+    async (
+      questionParts: string[],
+      opts: {
+        chat?: boolean;
+        repo?: string;
+        provider?: string;
+        model?: string;
+        budget: string;
+      },
+    ) => {
+      const question = questionParts.join(' ').trim();
 
-    if (!opts.chat && !question) {
-      console.error('Usage: trace-mcp ask "your question here"');
-      console.error('       trace-mcp ask --chat');
-      process.exit(1);
-    }
-
-    let project: ProjectContext | undefined;
-    try {
-      project = await resolveProject(opts.repo);
-
-      const provider = resolveProvider(opts, project.config);
-      process.stderr.write(`Using ${provider.name}\n`);
-
-      const budget = parseInt(opts.budget, 10) || 12000;
-
-      if (opts.chat) {
-        await chatLoop(provider, project, budget);
-      } else {
-        await askOnce(provider, project, question, budget);
+      if (!opts.chat && !question) {
+        console.error('Usage: trace-mcp ask "your question here"');
+        console.error('       trace-mcp ask --chat');
+        process.exit(1);
       }
-    } catch (e) {
-      console.error(`Error: ${(e as Error).message}`);
-      process.exit(1);
-    } finally {
-      project?.store?.db?.close();
-      project?.cleanup?.();
-    }
-  });
+
+      let project: ProjectContext | undefined;
+      try {
+        project = await resolveProject(opts.repo);
+
+        const provider = resolveProvider(opts, project.config);
+        process.stderr.write(`Using ${provider.name}\n`);
+
+        const budget = parseInt(opts.budget, 10) || 12000;
+
+        if (opts.chat) {
+          await chatLoop(provider, project, budget);
+        } else {
+          await askOnce(provider, project, question, budget);
+        }
+      } catch (e) {
+        console.error(`Error: ${(e as Error).message}`);
+        process.exit(1);
+      } finally {
+        project?.store?.db?.close();
+        project?.cleanup?.();
+      }
+    },
+  );

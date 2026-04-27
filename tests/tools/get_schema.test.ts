@@ -14,11 +14,7 @@ const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'routes/**/*.php',
-      'database/migrations/**/*.php',
-    ],
+    include: ['app/**/*.php', 'routes/**/*.php', 'database/migrations/**/*.php'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],
@@ -117,7 +113,10 @@ describe('get_schema — ORM (Mongoose/Sequelize) schemas', () => {
   it('filters by model name', () => {
     const fileId = store.insertFile('models/multi.ts', 'typescript', 'h2', 100);
     store.insertOrmModel({ name: 'Post', orm: 'mongoose', collectionOrTable: 'posts' }, fileId);
-    store.insertOrmModel({ name: 'Comment', orm: 'mongoose', collectionOrTable: 'comments' }, fileId);
+    store.insertOrmModel(
+      { name: 'Comment', orm: 'mongoose', collectionOrTable: 'comments' },
+      fileId,
+    );
 
     const result = getSchema(store, 'Post');
     expect(result.isOk()).toBe(true);

@@ -6,7 +6,12 @@
  */
 
 import type { Store } from '../../db/store.js';
-import { extractCFG, cfgToMermaid, cfgToAscii, type CFGResult } from '../../indexer/cfg-extractor.js';
+import {
+  extractCFG,
+  cfgToMermaid,
+  cfgToAscii,
+  type CFGResult,
+} from '../../indexer/cfg-extractor.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, err, notFound, validationError, type TraceMcpResult } from '../../errors.js';
@@ -40,31 +45,29 @@ export function getControlFlow(
   let file: any = null;
 
   if (symbolId) {
-    symbol = store.getSymbolById?.(symbolId) ?? store.db.prepare(
-      'SELECT * FROM symbols WHERE symbol_id = ?',
-    ).get(symbolId);
+    symbol =
+      store.getSymbolById?.(symbolId) ??
+      store.db.prepare('SELECT * FROM symbols WHERE symbol_id = ?').get(symbolId);
   } else if (fqn) {
-    symbol = store.db.prepare(
-      'SELECT * FROM symbols WHERE fqn = ? OR name = ? LIMIT 1',
-    ).get(fqn, fqn);
+    symbol = store.db
+      .prepare('SELECT * FROM symbols WHERE fqn = ? OR name = ? LIMIT 1')
+      .get(fqn, fqn);
   }
 
   if (!symbol) {
     return err(notFound(`symbol:${symbolId ?? fqn}`));
   }
 
-  file = store.getFileById?.(symbol.file_id) ?? store.db.prepare(
-    'SELECT * FROM files WHERE id = ?',
-  ).get(symbol.file_id);
+  file =
+    store.getFileById?.(symbol.file_id) ??
+    store.db.prepare('SELECT * FROM files WHERE id = ?').get(symbol.file_id);
 
   if (!file) {
     return err(notFound(`file for symbol`));
   }
 
   // Read the source
-  const absPath = path.isAbsolute(file.path)
-    ? file.path
-    : path.join(projectRoot, file.path);
+  const absPath = path.isAbsolute(file.path) ? file.path : path.join(projectRoot, file.path);
 
   if (!fs.existsSync(absPath)) {
     return err(validationError(`File not on disk: ${file.path}`));

@@ -3,7 +3,14 @@
  * Languages that don't use tree-sitter can use these helpers for symbol extraction.
  */
 import { ok } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+  RawEdge,
+  SymbolKind,
+} from '../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../errors.js';
 
 /** Get 1-based line number from byte offset. */
@@ -21,7 +28,12 @@ function lineEndOffset(source: string, offset: number): number {
   return nl === -1 ? source.length : nl;
 }
 
-export function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parentName?: string): string {
+export function makeSymbolId(
+  filePath: string,
+  name: string,
+  kind: SymbolKind,
+  parentName?: string,
+): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;
   return `${filePath}::${name}#${kind}`;
 }
@@ -89,7 +101,8 @@ function buildLineIndex(source: string): number[] {
 }
 
 function lineAtFast(lineStarts: number[], offset: number): number {
-  let lo = 0, hi = lineStarts.length - 1;
+  let lo = 0,
+    hi = lineStarts.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
     if (lineStarts[mid] <= offset) lo = mid + 1;
@@ -100,7 +113,10 @@ function lineAtFast(lineStarts: number[], offset: number): number {
 
 // Doc comment extraction
 function extractDocComment(
-  source: string, offset: number, lineStarts: number[], config: DocCommentConfig | undefined,
+  source: string,
+  offset: number,
+  lineStarts: number[],
+  config: DocCommentConfig | undefined,
 ): string | undefined {
   if (!config?.linePrefix?.length) return undefined;
   const symbolLine = lineAtFast(lineStarts, offset);
@@ -128,11 +144,19 @@ function extractDocComment(
 }
 
 // Multi-line signature capture
-function extractFullSignature(source: string, matchStart: number, matchText: string, maxLen = 200): string {
+function extractFullSignature(
+  source: string,
+  matchStart: number,
+  matchText: string,
+  maxLen = 200,
+): string {
   const firstLine = matchText.split('\n')[0].trim();
   const countChar = (s: string, open: string, close: string) => {
     let d = 0;
-    for (const c of s) { if (c === open) d++; else if (c === close) d--; }
+    for (const c of s) {
+      if (c === open) d++;
+      else if (c === close) d--;
+    }
     return d;
   };
   if (countChar(firstLine, '(', ')') === 0 && countChar(firstLine, '[', ']') === 0) {
@@ -189,7 +213,10 @@ export function createRegexLanguagePlugin(config: RegexLanguageConfig): Language
             if (!name) continue;
             // Find block end by indent (for indent-based languages like Nim)
             let pos = source.indexOf('\n', m.index);
-            if (pos === -1) { scopes.push({ name, kind: sp.kind, start: m.index, end: source.length }); continue; }
+            if (pos === -1) {
+              scopes.push({ name, kind: sp.kind, start: m.index, end: source.length });
+              continue;
+            }
             const lineStart = source.lastIndexOf('\n', m.index) + 1;
             const startIndent = m.index - lineStart;
             pos++;
@@ -200,7 +227,10 @@ export function createRegexLanguagePlugin(config: RegexLanguageConfig): Language
               const line = source.substring(pos, lineEnd);
               if (line.trim().length > 0) {
                 const indent = line.length - line.trimStart().length;
-                if (indent <= startIndent) { blockEnd = pos; break; }
+                if (indent <= startIndent) {
+                  blockEnd = pos;
+                  break;
+                }
               }
               pos = lineEnd + 1;
             }
@@ -243,7 +273,7 @@ export function createRegexLanguagePlugin(config: RegexLanguageConfig): Language
           const hasMetadata = Object.keys(meta).length > 0;
 
           const parentKind = parentName
-            ? (scopes.find(s => s.name === parentName)?.kind ?? 'class')
+            ? (scopes.find((s) => s.name === parentName)?.kind ?? 'class')
             : 'class';
 
           symbols.push({

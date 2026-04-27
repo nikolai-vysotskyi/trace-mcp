@@ -21,10 +21,10 @@ function setupWithCorruptedComponent() {
     VALUES (?, 'Broken', 'component', ?, ?, ?, ?, 'vue')
   `).run(
     fileId,
-    '{not valid json',       // malformed props
-    '[also broken',          // malformed emits
-    '{"slots": [broken}',   // malformed slots
-    'not json at all',       // malformed composables
+    '{not valid json', // malformed props
+    '[also broken', // malformed emits
+    '{"slots": [broken}', // malformed slots
+    'not json at all', // malformed composables
   );
 
   return { db, store };
@@ -61,7 +61,15 @@ describe('getComponentTree JSON.parse safety', () => {
     // Add a child file + component with valid JSON
     const childFileId = store.insertFile('src/Child.vue', 'vue', 'def456', 100);
     store.insertComponent(
-      { name: 'Child', kind: 'component', props: { label: 'string' }, emits: [], slots: [], composables: [], framework: 'vue' },
+      {
+        name: 'Child',
+        kind: 'component',
+        props: { label: 'string' },
+        emits: [],
+        slots: [],
+        composables: [],
+        framework: 'vue',
+      },
       childFileId,
     );
 

@@ -41,7 +41,15 @@ function statusLabel(status: string): string {
   return status;
 }
 
-export function ProjectRow({ root, status, error, progress, onReindex, onRemove, onClick }: ProjectRowProps) {
+export function ProjectRow({
+  root,
+  status,
+  error,
+  progress,
+  onReindex,
+  onRemove,
+  onClick,
+}: ProjectRowProps) {
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   return (
@@ -82,7 +90,16 @@ export function ProjectRow({ root, status, error, progress, onReindex, onRemove,
                 style={{ color: 'var(--text-secondary)' }}
                 title="Re-index"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M1.5 2.5v4h4" />
                   <path d="M2.3 10a6 6 0 1 0 .9-5.6L1.5 6.5" />
                 </svg>
@@ -93,7 +110,16 @@ export function ProjectRow({ root, status, error, progress, onReindex, onRemove,
                 style={{ color: 'var(--text-tertiary)' }}
                 title="Remove"
               >
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M4 4l8 8M12 4l-8 8" />
                 </svg>
               </button>
@@ -103,12 +129,19 @@ export function ProjectRow({ root, status, error, progress, onReindex, onRemove,
               <button
                 onClick={() => setConfirmRemove(false)}
                 className="text-[11px] px-1.5 py-0.5 rounded-md font-medium transition-colors hover:bg-[var(--bg-active)]"
-                style={{ color: 'var(--text-secondary)', background: 'var(--bg-tertiary, var(--bg-secondary))', border: '1px solid var(--border)' }}
+                style={{
+                  color: 'var(--text-secondary)',
+                  background: 'var(--bg-tertiary, var(--bg-secondary))',
+                  border: '1px solid var(--border)',
+                }}
               >
                 Cancel
               </button>
               <button
-                onClick={() => { onRemove(); setConfirmRemove(false); }}
+                onClick={() => {
+                  onRemove();
+                  setConfirmRemove(false);
+                }}
                 className="text-[11px] px-1.5 py-0.5 rounded-md font-medium transition-colors"
                 style={{ background: '#ff3b3018', color: '#ff3b30', border: '1px solid #ff3b3040' }}
                 title="Confirm removal"

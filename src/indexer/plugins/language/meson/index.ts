@@ -15,11 +15,23 @@ const _plugin = createRegexLanguagePlugin({
     // project('name', ...)
     { kind: 'module', pattern: /^\s*project\s*\(\s*'([^']+)'/gm },
     // name = executable('target_name', ...)
-    { kind: 'function', pattern: /^\s*\w+\s*=\s*executable\s*\(\s*'([^']+)'/gm, meta: { target: 'executable' } },
+    {
+      kind: 'function',
+      pattern: /^\s*\w+\s*=\s*executable\s*\(\s*'([^']+)'/gm,
+      meta: { target: 'executable' },
+    },
     // name = shared_library / static_library / library / both_libraries
-    { kind: 'function', pattern: /^\s*\w+\s*=\s*(?:shared_|static_|both_)?library\s*\(\s*'([^']+)'/gm, meta: { target: 'library' } },
+    {
+      kind: 'function',
+      pattern: /^\s*\w+\s*=\s*(?:shared_|static_|both_)?library\s*\(\s*'([^']+)'/gm,
+      meta: { target: 'library' },
+    },
     // name = custom_target('target_name', ...)
-    { kind: 'function', pattern: /^\s*\w+\s*=\s*custom_target\s*\(\s*'([^']+)'/gm, meta: { target: 'custom' } },
+    {
+      kind: 'function',
+      pattern: /^\s*\w+\s*=\s*custom_target\s*\(\s*'([^']+)'/gm,
+      meta: { target: 'custom' },
+    },
     // name = dependency('dep_name')
     { kind: 'variable', pattern: /^\s*(\w+)\s*=\s*dependency\s*\(/gm, meta: { dependency: true } },
     // variable assignments: name = ...

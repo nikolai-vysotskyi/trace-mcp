@@ -7,7 +7,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import type { InitStepResult } from './types.js';
-import { GUARD_HOOK_VERSION, REINDEX_HOOK_VERSION, PRECOMPACT_HOOK_VERSION, WORKTREE_HOOK_VERSION } from './types.js';
+import {
+  GUARD_HOOK_VERSION,
+  REINDEX_HOOK_VERSION,
+  PRECOMPACT_HOOK_VERSION,
+  WORKTREE_HOOK_VERSION,
+} from './types.js';
 
 const HOME = os.homedir();
 const IS_WINDOWS = process.platform === 'win32';
@@ -30,8 +35,8 @@ function plainHookCommand(hookPath: string): string {
 // --- Client directories (Claude + Claw) ---
 
 interface ClientDir {
-  configDir: string;    // e.g. '.claude'
-  hooksSubdir: string;  // e.g. '.claude/hooks'
+  configDir: string; // e.g. '.claude'
+  hooksSubdir: string; // e.g. '.claude/hooks'
 }
 
 const CLIENTS: ClientDir[] = [
@@ -42,9 +47,9 @@ const CLIENTS: ClientDir[] = [
 // --- Hook descriptors ---
 
 interface HookDescriptor {
-  scriptName: string;           // e.g. 'trace-mcp-guard'
-  settingsKey: string;          // e.g. 'PreToolUse' or 'PostToolUse' or 'PreCompact'
-  matcher?: string;             // e.g. 'Read|Grep|Glob|Bash|Agent' (optional — PreCompact has none)
+  scriptName: string; // e.g. 'trace-mcp-guard'
+  settingsKey: string; // e.g. 'PreToolUse' or 'PostToolUse' or 'PreCompact'
+  matcher?: string; // e.g. 'Read|Grep|Glob|Bash|Agent' (optional — PreCompact has none)
   version: string;
   dryRunLabel: string;
   /** If true, use plain command (no CLAUDE_TOOL_NAME env var) */
@@ -123,8 +128,8 @@ function findHookSource(scriptName: string): string {
   const filename = `${scriptName}${HOOK_EXT}`;
   const base = import.meta.dirname ?? '.';
   const candidates = [
-    path.resolve(base, '..', '..', 'hooks', filename),  // dev: src/init/ → ../../hooks
-    path.resolve(base, '..', 'hooks', filename),         // bundled: dist/ → ../hooks
+    path.resolve(base, '..', '..', 'hooks', filename), // dev: src/init/ → ../../hooks
+    path.resolve(base, '..', 'hooks', filename), // bundled: dist/ → ../hooks
     path.resolve(process.cwd(), 'hooks', filename),
   ];
   for (const c of candidates) {
@@ -161,19 +166,20 @@ function writeSettings(filePath: string, settings: Record<string, unknown>): voi
   fs.writeFileSync(filePath, JSON.stringify(settings, null, 2) + '\n');
 }
 
-function addHookEntry(
-  settings: Record<string, unknown>,
-  desc: HookDescriptor,
-  dest: string,
-): void {
-  const hooks = settings.hooks as Record<string, unknown[]> | undefined ?? {};
+function addHookEntry(settings: Record<string, unknown>, desc: HookDescriptor, dest: string): void {
+  const hooks = (settings.hooks as Record<string, unknown[]> | undefined) ?? {};
   settings.hooks = hooks;
   if (!hooks[desc.settingsKey]) hooks[desc.settingsKey] = [];
-  const entries = hooks[desc.settingsKey] as { matcher?: string; hooks?: { type?: string; command?: string }[] }[];
+  const entries = hooks[desc.settingsKey] as {
+    matcher?: string;
+    hooks?: { type?: string; command?: string }[];
+  }[];
 
   const expectedCmd = desc.plainCommand ? plainHookCommand(dest) : hookCommand(dest);
 
-  const existing = entries.find((h) => h.hooks?.some((hh) => hh.command?.includes(desc.scriptName)));
+  const existing = entries.find((h) =>
+    h.hooks?.some((hh) => hh.command?.includes(desc.scriptName)),
+  );
   if (existing) {
     // Refresh command (e.g. after removing the obsolete {{tool_name}} template)
     // and matcher in case the schema changed between versions.
@@ -196,12 +202,10 @@ function removeHookEntry(settings: Record<string, unknown>, desc: HookDescriptor
   const entries = hooks[desc.settingsKey];
   if (!Array.isArray(entries)) return;
 
-  hooks[desc.settingsKey] = entries.filter(
-    (h) => {
-      const entry = h as { hooks?: { command?: string }[] };
-      return !entry.hooks?.some((hh) => hh.command?.includes(desc.scriptName));
-    },
-  );
+  hooks[desc.settingsKey] = entries.filter((h) => {
+    const entry = h as { hooks?: { command?: string }[] };
+    return !entry.hooks?.some((hh) => hh.command?.includes(desc.scriptName));
+  });
   if ((hooks[desc.settingsKey] as unknown[]).length === 0) delete hooks[desc.settingsKey];
   if (Object.keys(hooks).length === 0) delete settings.hooks;
 }
@@ -255,10 +259,7 @@ function installHook(
   };
 }
 
-function uninstallHook(
-  desc: HookDescriptor,
-  opts: { global?: boolean },
-): InitStepResult {
+function uninstallHook(desc: HookDescriptor, opts: { global?: boolean }): InitStepResult {
   for (const client of CLIENTS) {
     const sPath = settingsPath(client, !!opts.global);
     if (fs.existsSync(sPath)) {
@@ -284,10 +285,7 @@ function uninstallHook(
 
 // --- Public API ---
 
-export function installGuardHook(opts: {
-  global?: boolean;
-  dryRun?: boolean;
-}): InitStepResult {
+export function installGuardHook(opts: { global?: boolean; dryRun?: boolean }): InitStepResult {
   return installHook(GUARD_HOOK, opts);
 }
 
@@ -303,10 +301,7 @@ export function isHookOutdated(installedVersion: string | null): boolean {
   return installedVersion !== GUARD_HOOK_VERSION;
 }
 
-export function installReindexHook(opts: {
-  global?: boolean;
-  dryRun?: boolean;
-}): InitStepResult {
+export function installReindexHook(opts: { global?: boolean; dryRun?: boolean }): InitStepResult {
   return installHook(REINDEX_HOOK, opts);
 }
 
@@ -326,17 +321,11 @@ export function installWorktreeHook(opts: {
   dryRun?: boolean;
 }): InitStepResult[] {
   // Install both WorktreeCreate and WorktreeRemove — same script handles both events
-  return [
-    installHook(WORKTREE_HOOK, opts),
-    installHook(WORKTREE_REMOVE_HOOK, opts),
-  ];
+  return [installHook(WORKTREE_HOOK, opts), installHook(WORKTREE_REMOVE_HOOK, opts)];
 }
 
 function uninstallWorktreeHook(opts: { global?: boolean }): InitStepResult[] {
-  return [
-    uninstallHook(WORKTREE_HOOK, opts),
-    uninstallHook(WORKTREE_REMOVE_HOOK, opts),
-  ];
+  return [uninstallHook(WORKTREE_HOOK, opts), uninstallHook(WORKTREE_REMOVE_HOOK, opts)];
 }
 
 /**
@@ -345,10 +334,7 @@ function uninstallWorktreeHook(opts: { global?: boolean }): InitStepResult[] {
  * doesn't accumulate orphaned entries pointing at unmanaged scripts (which
  * in turn means the {{tool_name}} template fix never reaches them).
  */
-const LEGACY_HOOK_SCRIPTS = [
-  'trace-mcp-precommit',
-  'trace-mcp-edit-guard',
-] as const;
+const LEGACY_HOOK_SCRIPTS = ['trace-mcp-precommit', 'trace-mcp-edit-guard'] as const;
 
 const LEGACY_HOOK_EVENTS = [
   'PreToolUse',
@@ -360,10 +346,7 @@ const LEGACY_HOOK_EVENTS = [
   'Notification',
 ] as const;
 
-export function cleanupLegacyHooks(opts: {
-  global?: boolean;
-  dryRun?: boolean;
-}): InitStepResult[] {
+export function cleanupLegacyHooks(opts: { global?: boolean; dryRun?: boolean }): InitStepResult[] {
   const results: InitStepResult[] = [];
 
   for (const client of CLIENTS) {

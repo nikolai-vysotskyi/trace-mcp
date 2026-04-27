@@ -64,7 +64,7 @@ describe('listAllSessions — golden lockdown', () => {
     const { listAllSessions } = await import('../../src/analytics/log-parser.js');
 
     const result = listAllSessions()
-      .map(r => ({
+      .map((r) => ({
         rel: path.relative(fakeHome, r.filePath),
         client: r.client,
       }))
@@ -80,7 +80,7 @@ describe('listAllSessions — golden lockdown', () => {
 
   it('client tags are drawn only from the current provider set', async () => {
     const { listAllSessions } = await import('../../src/analytics/log-parser.js');
-    const clients = new Set(listAllSessions().map(r => r.client));
+    const clients = new Set(listAllSessions().map((r) => r.client));
     // Lockdown: new client values must be added deliberately — if this set grows,
     // also update consumers in conversation-miner.ts / session-indexer.ts.
     expect([...clients].sort()).toEqual(['claude-code', 'claw-code']);

@@ -46,7 +46,8 @@ const CALL_PATTERNS: CallPattern[] = [
   // Also catches project-specific wrappers that match `use*Fetch*` / `use*Api*`.
   {
     name: 'nuxt-composable',
-    regex: /\buse(?:Lazy)?(?:Async)?(?:[A-Z]\w*)?(?:Fetch|Api)(?:Mounted)?\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`\s${}]+)['"`]/g,
+    regex:
+      /\buse(?:Lazy)?(?:Async)?(?:[A-Z]\w*)?(?:Fetch|Api)(?:Mounted)?\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`\s${}]+)['"`]/g,
     extractMethod: () => null,
     extractUrl: (m) => m[1],
     confidence: 0.7,
@@ -87,7 +88,7 @@ const CALL_PATTERNS: CallPattern[] = [
   {
     name: 'php-http-client',
     regex: /(?:\$\w+)\s*->\s*(get|post|put|patch|delete|request)\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
-    extractMethod: (m) => m[1].toUpperCase() === 'REQUEST' ? null : m[1].toUpperCase(),
+    extractMethod: (m) => (m[1].toUpperCase() === 'REQUEST' ? null : m[1].toUpperCase()),
     extractUrl: (m) => m[2],
     confidence: 0.6,
   },
@@ -102,7 +103,8 @@ const CALL_PATTERNS: CallPattern[] = [
   // httpx.get/post (Python sync) and httpx.AsyncClient().get/post (async)
   {
     name: 'python-httpx',
-    regex: /httpx\.(?:Async)?(?:Client\s*\([^)]*\)\.)?(get|post|put|patch|delete|head)\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
+    regex:
+      /httpx\.(?:Async)?(?:Client\s*\([^)]*\)\.)?(get|post|put|patch|delete|head)\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
     extractMethod: (m) => m[1].toUpperCase(),
     extractUrl: (m) => m[2],
     confidence: 0.8,
@@ -110,7 +112,8 @@ const CALL_PATTERNS: CallPattern[] = [
   // aiohttp: session.get/post, ClientSession().get/post (Python async)
   {
     name: 'python-aiohttp',
-    regex: /\b(?:aiohttp\.ClientSession\s*\([^)]*\)\.|session\.)(get|post|put|patch|delete|head)\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
+    regex:
+      /\b(?:aiohttp\.ClientSession\s*\([^)]*\)\.|session\.)(get|post|put|patch|delete|head)\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
     extractMethod: (m) => m[1].toUpperCase(),
     extractUrl: (m) => m[2],
     confidence: 0.6,
@@ -135,7 +138,8 @@ const CALL_PATTERNS: CallPattern[] = [
   {
     name: 'java-rest',
     regex: /\.(getForObject|getForEntity|postForObject|exchange)\s*\(\s*"([^"\s]+)"/g,
-    extractMethod: (m) => m[1].startsWith('get') ? 'GET' : m[1].startsWith('post') ? 'POST' : null,
+    extractMethod: (m) =>
+      m[1].startsWith('get') ? 'GET' : m[1].startsWith('post') ? 'POST' : null,
     extractUrl: (m) => m[2],
     confidence: 0.75,
   },
@@ -159,26 +163,49 @@ const CALL_PATTERNS: CallPattern[] = [
 ];
 
 const EXCLUDE_DIRS = new Set([
-  'node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__',
-  '.next', '.nuxt', 'coverage', '.cache', 'tmp',
+  'node_modules',
+  'vendor',
+  '.git',
+  'dist',
+  'build',
+  '__pycache__',
+  '.next',
+  '.nuxt',
+  'coverage',
+  '.cache',
+  'tmp',
   // Exclude test directories — test HTTP calls are not production API dependencies
-  'tests', 'test', 'spec', '__tests__',
+  'tests',
+  'test',
+  'spec',
+  '__tests__',
   // Exclude Laravel storage
   'storage',
 ]);
 
 // Files to skip entirely (generated stubs, IDE helpers, etc.)
-const EXCLUDE_FILES = new Set([
-  '_ide_helper.php',
-  '_ide_helper_models.php',
-  '.phpstorm.meta.php',
-]);
+const EXCLUDE_FILES = new Set(['_ide_helper.php', '_ide_helper_models.php', '.phpstorm.meta.php']);
 
 const CODE_EXTENSIONS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
-  '.php', '.py', '.go', '.java', '.kt', '.kts',
-  '.rb', '.rs', '.cs', '.swift', '.dart',
-  '.vue', '.svelte',
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.php',
+  '.py',
+  '.go',
+  '.java',
+  '.kt',
+  '.kts',
+  '.rb',
+  '.rs',
+  '.cs',
+  '.swift',
+  '.dart',
+  '.vue',
+  '.svelte',
 ]);
 
 // ════════════════════════════════════════════════════════════════════════
@@ -213,7 +240,11 @@ export function scanEndpointLiterals(
   // Normalize endpoint path: strip params, collapse trailing slashes. Matches the
   // normalization used by findBestEndpointMatch() so hits line up downstream.
   const normalize = (p: string): string =>
-    p.replace(/\{[^}]+\}/g, '{*}').replace(/:\w+/g, '{*}').replace(/\[[^\]]+\]/g, '{*}').replace(/\/+$/, '');
+    p
+      .replace(/\{[^}]+\}/g, '{*}')
+      .replace(/:\w+/g, '{*}')
+      .replace(/\[[^\]]+\]/g, '{*}')
+      .replace(/\/+$/, '');
 
   const endpointSet = new Set<string>();
   for (const ep of knownEndpoints) {
@@ -281,7 +312,11 @@ function walkAndInvoke(
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       walkAndInvoke(fullPath, repoRoot, onFile, depth + 1);
-    } else if (entry.isFile() && CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) && !EXCLUDE_FILES.has(entry.name)) {
+    } else if (
+      entry.isFile() &&
+      CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) &&
+      !EXCLUDE_FILES.has(entry.name)
+    ) {
       try {
         const content = fs.readFileSync(fullPath, 'utf-8');
         const relPath = path.relative(repoRoot, fullPath);

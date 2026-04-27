@@ -25,22 +25,22 @@ interface DataflowParam {
 
 interface DataflowSink {
   kind: 'call_arg' | 'return' | 'assign' | 'property_access';
-  target: string;       // function name or variable
+  target: string; // function name or variable
   line: number;
-  symbolId?: string;    // resolved symbol_id if known
+  symbolId?: string; // resolved symbol_id if known
   file?: string;
 }
 
 interface DataflowMutation {
-  expression: string;   // e.g. "order.status = 'processing'"
+  expression: string; // e.g. "order.status = 'processing'"
   line: number;
-  property: string;     // e.g. "status"
+  property: string; // e.g. "status"
 }
 
 interface DataflowReturn {
   expression: string;
   line: number;
-  sources: string[];    // param names or calls that contribute
+  sources: string[]; // param names or calls that contribute
 }
 
 interface DataflowResult {
@@ -76,7 +76,11 @@ export function getDataflow(
   }
 
   if (!['function', 'method', 'arrow_function'].includes(symbol.kind)) {
-    return err(validationError(`Dataflow analysis is only supported for functions/methods, got: ${symbol.kind}`));
+    return err(
+      validationError(
+        `Dataflow analysis is only supported for functions/methods, got: ${symbol.kind}`,
+      ),
+    );
   }
 
   // Read the function source
@@ -114,10 +118,7 @@ export function getDataflow(
       const absLine = startLine + i;
 
       // Detect mutations: param.prop = value  or  param[key] = value
-      const mutationPattern = new RegExp(
-        `\\b${escapeRegex(param.name)}\\.(\\w+)\\s*=(?!=)`,
-        'g',
-      );
+      const mutationPattern = new RegExp(`\\b${escapeRegex(param.name)}\\.(\\w+)\\s*=(?!=)`, 'g');
       let mutMatch;
       while ((mutMatch = mutationPattern.exec(line)) !== null) {
         mutations.push({
@@ -128,15 +129,26 @@ export function getDataflow(
       }
 
       // Detect call arguments: someFunc(param) or someFunc(param.prop)
-      const callPattern = new RegExp(
-        `(\\w+)\\s*\\([^)]*\\b${escapeRegex(param.name)}\\b`,
-        'g',
-      );
+      const callPattern = new RegExp(`(\\w+)\\s*\\([^)]*\\b${escapeRegex(param.name)}\\b`, 'g');
       let callMatch;
       while ((callMatch = callPattern.exec(line)) !== null) {
         const calledFn = callMatch[1];
         // Skip common keywords
-        if (['if', 'while', 'for', 'switch', 'return', 'throw', 'new', 'typeof', 'instanceof', 'await'].includes(calledFn)) continue;
+        if (
+          [
+            'if',
+            'while',
+            'for',
+            'switch',
+            'return',
+            'throw',
+            'new',
+            'typeof',
+            'instanceof',
+            'await',
+          ].includes(calledFn)
+        )
+          continue;
         const resolved = calleeMap.get(calledFn);
         flows_to.push({
           kind: 'call_arg',
@@ -155,7 +167,21 @@ export function getDataflow(
       let propMatch;
       while ((propMatch = propPassPattern.exec(line)) !== null) {
         const calledFn = propMatch[1];
-        if (['if', 'while', 'for', 'switch', 'return', 'throw', 'new', 'typeof', 'instanceof', 'await'].includes(calledFn)) continue;
+        if (
+          [
+            'if',
+            'while',
+            'for',
+            'switch',
+            'return',
+            'throw',
+            'new',
+            'typeof',
+            'instanceof',
+            'await',
+          ].includes(calledFn)
+        )
+          continue;
         // Avoid duplicating if already captured by call pattern
         if (!flows_to.some((f) => f.target === calledFn && f.line === absLine)) {
           const resolved = calleeMap.get(calledFn);
@@ -197,7 +223,9 @@ export function getDataflow(
     if (assignMatch) {
       const [, varName, source] = assignMatch;
       // Only track assignments involving params or function calls
-      const involvesParam = params.some((p) => new RegExp(`\\b${escapeRegex(p.name)}\\b`).test(source));
+      const involvesParam = params.some((p) =>
+        new RegExp(`\\b${escapeRegex(p.name)}\\b`).test(source),
+      );
       if (involvesParam || /\w+\s*\(/.test(source)) {
         localAssignments.push({
           name: varName,
@@ -236,18 +264,21 @@ function parseParameters(signature: string): ParsedParam[] {
   const paramStr = match[1].trim();
   if (!paramStr) return [];
 
-  return paramStr.split(',').map((p) => {
-    const trimmed = p.trim();
-    // Handle TypeScript style: name: type, or name?: type
-    const tsMatch = trimmed.match(/^(\w+)\??\s*:\s*(.+)$/);
-    if (tsMatch) return { name: tsMatch[1], type: tsMatch[2].trim() };
-    // Handle Python style: name: type, or just name
-    const pyMatch = trimmed.match(/^(\w+)(?:\s*:\s*(.+))?$/);
-    if (pyMatch) return { name: pyMatch[1], type: pyMatch[2]?.trim() ?? null };
-    // Fallback: first word is the name
-    const word = trimmed.split(/\s/)[0];
-    return { name: word, type: null };
-  }).filter((p) => p.name && p.name !== '...');
+  return paramStr
+    .split(',')
+    .map((p) => {
+      const trimmed = p.trim();
+      // Handle TypeScript style: name: type, or name?: type
+      const tsMatch = trimmed.match(/^(\w+)\??\s*:\s*(.+)$/);
+      if (tsMatch) return { name: tsMatch[1], type: tsMatch[2].trim() };
+      // Handle Python style: name: type, or just name
+      const pyMatch = trimmed.match(/^(\w+)(?:\s*:\s*(.+))?$/);
+      if (pyMatch) return { name: pyMatch[1], type: pyMatch[2]?.trim() ?? null };
+      // Fallback: first word is the name
+      const word = trimmed.split(/\s/)[0];
+      return { name: word, type: null };
+    })
+    .filter((p) => p.name && p.name !== '...');
 }
 
 interface CalleeInfo {

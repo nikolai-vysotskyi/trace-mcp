@@ -15,9 +15,15 @@ function createMockStore(): Store {
     getSymbolById: () => null,
     getSymbolByName: () => null,
     getStats: () => ({
-      totalFiles: 0, totalSymbols: 0, totalEdges: 0, totalNodes: 0,
-      totalRoutes: 0, totalComponents: 0, totalMigrations: 0,
-      partialFiles: 0, errorFiles: 0,
+      totalFiles: 0,
+      totalSymbols: 0,
+      totalEdges: 0,
+      totalNodes: 0,
+      totalRoutes: 0,
+      totalComponents: 0,
+      totalMigrations: 0,
+      partialFiles: 0,
+      errorFiles: 0,
     }),
     getAllRoutes: () => [],
     searchSymbols: () => ({ items: [], total: 0 }),
@@ -60,7 +66,7 @@ describe('MCP Prompts', () => {
     server.prompt = ((...args: unknown[]) => {
       const name = args[0] as string;
       registeredPrompts.set(name, args);
-      return origPrompt(...args as Parameters<typeof origPrompt>);
+      return origPrompt(...(args as Parameters<typeof origPrompt>));
     }) as typeof server.prompt;
 
     const store = createMockStore();

@@ -14,13 +14,17 @@ describe('VoyageProvider', () => {
   });
 
   it('embedding service posts Bearer auth + voyage body shape', async () => {
-    (globalThis.fetch as any).mockResolvedValue(new Response(
-      JSON.stringify({ data: [
-        { index: 0, embedding: [0.1, 0.2, 0.3] },
-        { index: 1, embedding: [0.4, 0.5, 0.6] },
-      ] }),
-      { status: 200 },
-    ));
+    (globalThis.fetch as any).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { index: 0, embedding: [0.1, 0.2, 0.3] },
+            { index: 1, embedding: [0.4, 0.5, 0.6] },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
 
     const provider = new VoyageProvider({
       apiKey: 'pa-test',
@@ -29,7 +33,10 @@ describe('VoyageProvider', () => {
       embeddingDimensions: 1024,
     });
     const result = await provider.embedding().embedBatch(['hello', 'world']);
-    expect(result).toEqual([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]);
+    expect(result).toEqual([
+      [0.1, 0.2, 0.3],
+      [0.4, 0.5, 0.6],
+    ]);
 
     expect(globalThis.fetch).toHaveBeenCalledOnce();
     const [url, init] = (globalThis.fetch as any).mock.calls[0];
@@ -54,10 +61,9 @@ describe('VoyageProvider', () => {
   });
 
   it('embed(text, "query") sends input_type="query" for retrieval-side calls', async () => {
-    (globalThis.fetch as any).mockResolvedValue(new Response(
-      JSON.stringify({ data: [{ index: 0, embedding: [0.1] }] }),
-      { status: 200 },
-    ));
+    (globalThis.fetch as any).mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1] }] }), { status: 200 }),
+    );
 
     const provider = new VoyageProvider({
       apiKey: 'pa-test',

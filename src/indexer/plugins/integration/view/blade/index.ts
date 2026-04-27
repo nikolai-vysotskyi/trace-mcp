@@ -112,9 +112,10 @@ export function resolveBladeScriptSrc(
   const bladeSegments = bladePath.split('/');
   // Try candidate roots from deepest to shallowest
   const candidates: string[] = [];
-  const vitePrefix = innerPath.startsWith('resources/') || innerPath.startsWith('/resources/')
-    ? innerPath.replace(/^\//, '')
-    : null;
+  const vitePrefix =
+    innerPath.startsWith('resources/') || innerPath.startsWith('/resources/')
+      ? innerPath.replace(/^\//, '')
+      : null;
   const publicPath = innerPath.replace(/^\//, '');
 
   for (let i = bladeSegments.length - 1; i >= 0; i--) {
@@ -165,7 +166,11 @@ export function extractBladeDirectives(source: string): BladeDirective[] {
  * across the whole project. Blade's resolveEdges doesn't know workspace of
  * each file, so we fall back to the closest-by-path heuristic in the caller.
  */
-interface PhpFnRecord { id: number; symbolId: string; filePath: string }
+interface PhpFnRecord {
+  id: number;
+  symbolId: string;
+  filePath: string;
+}
 let _phpFunctionIndex: Map<string, PhpFnRecord[]> | null = null;
 let _phpFunctionIndexCtx: ResolveContext | null = null;
 
@@ -194,7 +199,9 @@ function rebuildPhpFunctionIndex(ctx: ResolveContext): void {
  * helper defined in fair-laravel/ over one in thewed-laravel/.
  */
 function findPhpFunctionByName(
-  name: string, ctx: ResolveContext, callerPath: string,
+  name: string,
+  ctx: ResolveContext,
+  callerPath: string,
 ): { id: number; symbolId: string } | null {
   if (_phpFunctionIndexCtx !== ctx) rebuildPhpFunctionIndex(ctx);
   const candidates = _phpFunctionIndex!.get(name);
@@ -237,22 +244,106 @@ export function extractBladeSections(source: string): string[] {
  */
 const BLADE_BUILTIN_CALLS = new Set([
   // PHP language constructs
-  'echo', 'print', 'isset', 'empty', 'unset', 'list', 'require', 'include',
-  'require_once', 'include_once', 'exit', 'die', 'array',
+  'echo',
+  'print',
+  'isset',
+  'empty',
+  'unset',
+  'list',
+  'require',
+  'include',
+  'require_once',
+  'include_once',
+  'exit',
+  'die',
+  'array',
   // Common PHP functions that are stdlib (we don't index them)
-  'count', 'array_map', 'array_filter', 'array_merge', 'array_keys', 'array_values',
-  'in_array', 'implode', 'explode', 'str_replace', 'strtolower', 'strtoupper',
-  'substr', 'strlen', 'trim', 'json_encode', 'json_decode', 'sprintf', 'printf',
-  'number_format', 'date', 'time', 'strtotime', 'htmlspecialchars', 'nl2br',
-  'e', 'old', 'request', 'session', 'auth', 'config', 'env', 'trans', '__',
-  'route', 'url', 'asset', 'mix', 'vite', 'csrf_token', 'method_field',
-  'view', 'response', 'redirect', 'back', 'abort', 'dd', 'dump',
-  'optional', 'data_get', 'data_set', 'tap', 'with', 'value', 'collect',
-  'app', 'resolve', 'now', 'today', 'cache', 'storage_path', 'base_path',
-  'public_path', 'resource_path', 'app_path', 'config_path', 'database_path',
-  'logger', 'info', 'error', 'throw_if', 'throw_unless',
-  'is_null', 'is_array', 'is_string', 'is_numeric', 'is_bool', 'is_object',
-  'Str', 'Arr', 'Carbon', 'DB', 'Log', 'Cache', 'Storage', 'File',
+  'count',
+  'array_map',
+  'array_filter',
+  'array_merge',
+  'array_keys',
+  'array_values',
+  'in_array',
+  'implode',
+  'explode',
+  'str_replace',
+  'strtolower',
+  'strtoupper',
+  'substr',
+  'strlen',
+  'trim',
+  'json_encode',
+  'json_decode',
+  'sprintf',
+  'printf',
+  'number_format',
+  'date',
+  'time',
+  'strtotime',
+  'htmlspecialchars',
+  'nl2br',
+  'e',
+  'old',
+  'request',
+  'session',
+  'auth',
+  'config',
+  'env',
+  'trans',
+  '__',
+  'route',
+  'url',
+  'asset',
+  'mix',
+  'vite',
+  'csrf_token',
+  'method_field',
+  'view',
+  'response',
+  'redirect',
+  'back',
+  'abort',
+  'dd',
+  'dump',
+  'optional',
+  'data_get',
+  'data_set',
+  'tap',
+  'with',
+  'value',
+  'collect',
+  'app',
+  'resolve',
+  'now',
+  'today',
+  'cache',
+  'storage_path',
+  'base_path',
+  'public_path',
+  'resource_path',
+  'app_path',
+  'config_path',
+  'database_path',
+  'logger',
+  'info',
+  'error',
+  'throw_if',
+  'throw_unless',
+  'is_null',
+  'is_array',
+  'is_string',
+  'is_numeric',
+  'is_bool',
+  'is_object',
+  'Str',
+  'Arr',
+  'Carbon',
+  'DB',
+  'Log',
+  'Cache',
+  'Storage',
+  'File',
 ]);
 
 export interface BladeFunctionCall {
@@ -276,9 +367,9 @@ export function extractBladeFunctionCalls(source: string): BladeFunctionCall[] {
   //   {!! ... !!}
   //   @if (...), @foreach (...), @php ... @endphp, etc.
   const EXPR_REGIONS = [
-    /\{\{([\s\S]*?)\}\}/g,          // {{ expr }}
-    /\{!!([\s\S]*?)!!\}/g,          // {!! expr !!}
-    /@php\b([\s\S]*?)@endphp/g,     // @php ... @endphp
+    /\{\{([\s\S]*?)\}\}/g, // {{ expr }}
+    /\{!!([\s\S]*?)!!\}/g, // {!! expr !!}
+    /@php\b([\s\S]*?)@endphp/g, // @php ... @endphp
     /@(?:if|elseif|while|for|foreach|switch|unless|isset|empty)\s*\(([\s\S]*?)\)/g,
   ];
 
@@ -373,7 +464,11 @@ export class BladePlugin implements FrameworkPlugin {
         { name: 'blade_extends', category: 'blade', description: '@extends directive' },
         { name: 'blade_includes', category: 'blade', description: '@include directive' },
         { name: 'blade_component', category: 'blade', description: '<x-component> or @component' },
-        { name: 'uses_asset', category: 'blade', description: '<script src> / <link href> asset reference' },
+        {
+          name: 'uses_asset',
+          category: 'blade',
+          description: '<script src> / <link href> asset reference',
+        },
       ],
     };
   }
@@ -504,7 +599,9 @@ export class BladePlugin implements FrameworkPlugin {
           if (this.hasBlade(path.join(dir, entry.name))) return true;
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return false;
   }
 }

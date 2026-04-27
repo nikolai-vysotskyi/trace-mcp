@@ -1,5 +1,14 @@
 import type Database from 'better-sqlite3';
-import type { RawSymbol, RawEdge, RawRoute, RawComponent, RawMigration, RawOrmModel, RawOrmAssociation, RawRnScreen } from '../plugin-api/types.js';
+import type {
+  RawSymbol,
+  RawEdge,
+  RawRoute,
+  RawComponent,
+  RawMigration,
+  RawOrmModel,
+  RawOrmAssociation,
+  RawRnScreen,
+} from '../plugin-api/types.js';
 import type { TraceMcpResult } from '../errors.js';
 
 import { FileRepository } from './repositories/file-repository.js';
@@ -34,8 +43,12 @@ export class Store {
     mtimeMs?: number | null,
   ): number {
     return this.files.insertFile(
-      path, language, contentHash, byteLength,
-      workspace ?? null, mtimeMs ?? null,
+      path,
+      language,
+      contentHash,
+      byteLength,
+      workspace ?? null,
+      mtimeMs ?? null,
       (nodeType, refId) => this.graph.createNode(nodeType, refId),
     );
   }
@@ -95,16 +108,14 @@ export class Store {
   // --- Symbols (delegates to SymbolRepository) ---
 
   insertSymbol(fileId: number, sym: RawSymbol, parentIdOverride?: number | null): number {
-    return this.symbols.insertSymbol(
-      fileId, sym, parentIdOverride,
-      (nodeType, refId) => this.graph.createNode(nodeType, refId),
+    return this.symbols.insertSymbol(fileId, sym, parentIdOverride, (nodeType, refId) =>
+      this.graph.createNode(nodeType, refId),
     );
   }
 
   insertSymbols(fileId: number, syms: RawSymbol[]): number[] {
-    return this.symbols.insertSymbols(
-      fileId, syms,
-      (fId, sym, parentId) => this.insertSymbol(fId, sym, parentId),
+    return this.symbols.insertSymbols(fileId, syms, (fId, sym, parentId) =>
+      this.insertSymbol(fId, sym, parentId),
     );
   }
 
@@ -177,7 +188,10 @@ export class Store {
     return this.symbols.countUnembeddedSymbols();
   }
 
-  getUnsummarizedSymbols(kinds: string[], limit: number): {
+  getUnsummarizedSymbols(
+    kinds: string[],
+    limit: number,
+  ): {
     id: number;
     name: string;
     fqn: string | null;
@@ -209,7 +223,15 @@ export class Store {
     isCrossWs?: boolean,
     resolutionTier?: string,
   ): TraceMcpResult<number> {
-    return this.graph.insertEdge(sourceNodeId, targetNodeId, edgeTypeName, resolved, metadata, isCrossWs, resolutionTier);
+    return this.graph.insertEdge(
+      sourceNodeId,
+      targetNodeId,
+      edgeTypeName,
+      resolved,
+      metadata,
+      isCrossWs,
+      resolutionTier,
+    );
   }
 
   deleteEdgesForFileNodes(fileId: number): void {
@@ -277,7 +299,9 @@ export class Store {
   // --- Domain entities (delegates to DomainRepository) ---
 
   insertRoute(route: RawRoute, fileId: number): number {
-    return this.domain.insertRoute(route, fileId, (nodeType, refId) => this.graph.createNode(nodeType, refId));
+    return this.domain.insertRoute(route, fileId, (nodeType, refId) =>
+      this.graph.createNode(nodeType, refId),
+    );
   }
 
   getRouteByUriAndMethod(uri: string, method: string): RouteRow | undefined {
@@ -293,7 +317,9 @@ export class Store {
   }
 
   insertComponent(comp: RawComponent, fileId: number): number {
-    return this.domain.insertComponent(comp, fileId, (nodeType, refId) => this.graph.createNode(nodeType, refId));
+    return this.domain.insertComponent(comp, fileId, (nodeType, refId) =>
+      this.graph.createNode(nodeType, refId),
+    );
   }
 
   getComponentByFileId(fileId: number): ComponentRow | undefined {
@@ -309,7 +335,9 @@ export class Store {
   }
 
   insertMigration(mig: RawMigration, fileId: number): number {
-    return this.domain.insertMigration(mig, fileId, (nodeType, refId) => this.graph.createNode(nodeType, refId));
+    return this.domain.insertMigration(mig, fileId, (nodeType, refId) =>
+      this.graph.createNode(nodeType, refId),
+    );
   }
 
   getMigrationsByTable(tableName: string): MigrationRow[] {
@@ -321,7 +349,9 @@ export class Store {
   }
 
   insertOrmModel(model: RawOrmModel, fileId: number): number {
-    return this.domain.insertOrmModel(model, fileId, (nodeType, refId) => this.graph.createNode(nodeType, refId));
+    return this.domain.insertOrmModel(model, fileId, (nodeType, refId) =>
+      this.graph.createNode(nodeType, refId),
+    );
   }
 
   getOrmModelByName(name: string): OrmModelRow | undefined {
@@ -345,7 +375,15 @@ export class Store {
     fileId?: number,
     line?: number,
   ): number {
-    return this.domain.insertOrmAssociation(sourceModelId, targetModelId, targetModelName, kind, options, fileId, line);
+    return this.domain.insertOrmAssociation(
+      sourceModelId,
+      targetModelId,
+      targetModelName,
+      kind,
+      options,
+      fileId,
+      line,
+    );
   }
 
   getAllOrmAssociations(fileIds?: number[]): OrmAssociationRow[] {
@@ -357,7 +395,9 @@ export class Store {
   }
 
   insertRnScreen(screen: RawRnScreen, fileId: number): number {
-    return this.domain.insertRnScreen(screen, fileId, (nodeType, refId) => this.graph.createNode(nodeType, refId));
+    return this.domain.insertRnScreen(screen, fileId, (nodeType, refId) =>
+      this.graph.createNode(nodeType, refId),
+    );
   }
 
   getRnScreenByName(name: string): RnScreenRow | undefined {
@@ -370,14 +410,17 @@ export class Store {
 
   // --- Analytics (delegates to AnalyticsRepository) ---
 
-  insertEnvVar(fileId: number, entry: {
-    key: string;
-    valueType: string;
-    valueFormat: string | null;
-    comment: string | null;
-    quoted: boolean;
-    line: number;
-  }): number {
+  insertEnvVar(
+    fileId: number,
+    entry: {
+      key: string;
+      valueType: string;
+      valueFormat: string | null;
+      comment: string | null;
+      quoted: boolean;
+      line: number;
+    },
+  ): number {
     return this.analytics.insertEnvVar(fileId, entry);
   }
 
@@ -440,14 +483,40 @@ export class Store {
 
 // --- Row types re-exported from db/types.ts for backward compatibility ---
 export type {
-  FileRow, SymbolRow, EdgeRow, RouteRow, MigrationRow,
-  ComponentRow, OrmModelRow, OrmAssociationRow, RnScreenRow,
-  EnvVarRow, SymbolWithFilePath, EdgeTypeRow, IndexStats,
-  GraphSnapshotRow, WorkspaceStats, CrossWorkspaceEdge, WorkspaceDependency,
+  FileRow,
+  SymbolRow,
+  EdgeRow,
+  RouteRow,
+  MigrationRow,
+  ComponentRow,
+  OrmModelRow,
+  OrmAssociationRow,
+  RnScreenRow,
+  EnvVarRow,
+  SymbolWithFilePath,
+  EdgeTypeRow,
+  IndexStats,
+  GraphSnapshotRow,
+  WorkspaceStats,
+  CrossWorkspaceEdge,
+  WorkspaceDependency,
 } from './types.js';
 import type {
-  FileRow, SymbolRow, EdgeRow, RouteRow, MigrationRow,
-  ComponentRow, OrmModelRow, OrmAssociationRow, RnScreenRow,
-  EnvVarRow, SymbolWithFilePath, EdgeTypeRow, IndexStats,
-  GraphSnapshotRow, WorkspaceStats, CrossWorkspaceEdge, WorkspaceDependency,
+  FileRow,
+  SymbolRow,
+  EdgeRow,
+  RouteRow,
+  MigrationRow,
+  ComponentRow,
+  OrmModelRow,
+  OrmAssociationRow,
+  RnScreenRow,
+  EnvVarRow,
+  SymbolWithFilePath,
+  EdgeTypeRow,
+  IndexStats,
+  GraphSnapshotRow,
+  WorkspaceStats,
+  CrossWorkspaceEdge,
+  WorkspaceDependency,
 } from './types.js';

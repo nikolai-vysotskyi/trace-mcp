@@ -11,8 +11,8 @@ import { EXTENSION_TO_LANGUAGE } from './config.js';
 
 export interface LspPosition {
   uri: string;
-  line: number;      // 0-based
-  character: number;  // 0-based
+  line: number; // 0-based
+  character: number; // 0-based
 }
 
 /**

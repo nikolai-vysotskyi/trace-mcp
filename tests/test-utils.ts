@@ -28,10 +28,7 @@ export function createTmpDir(prefix = 'trace-mcp-test-'): string {
  * Create a temp directory, populate it with files, return the path.
  * Each key in `files` is a relative path; the value is the file content.
  */
-export function createTmpFixture(
-  files: Record<string, string>,
-  prefix = 'trace-mcp-fix-',
-): string {
+export function createTmpFixture(files: Record<string, string>, prefix = 'trace-mcp-fix-'): string {
   const tmpDir = createTmpDir(prefix);
   for (const [relPath, content] of Object.entries(files)) {
     const absPath = path.join(tmpDir, relPath);
@@ -51,11 +48,7 @@ export function removeTmpDir(dirPath: string): void {
 /**
  * Write a file inside a directory, creating intermediate dirs as needed.
  */
-export function writeFixtureFile(
-  baseDir: string,
-  relPath: string,
-  content: string,
-): void {
+export function writeFixtureFile(baseDir: string, relPath: string, content: string): void {
   const absPath = path.join(baseDir, relPath);
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   fs.writeFileSync(absPath, content, 'utf-8');

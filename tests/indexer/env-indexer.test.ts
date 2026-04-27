@@ -7,11 +7,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  createTestStore,
-  createTmpFixture,
-  removeTmpDir,
-} from '../test-utils.js';
+import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 import { EnvIndexer } from '../../src/indexer/env-indexer.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
@@ -52,10 +48,7 @@ describe('EnvIndexer', () => {
         'DB_PORT=5432',
         'API_URL=https://api.example.com',
       ].join('\n'),
-      'services/api/.env': [
-        'SERVICE_NAME=api',
-        'JWT_SECRET="s3cr3t"',
-      ].join('\n'),
+      'services/api/.env': ['SERVICE_NAME=api', 'JWT_SECRET="s3cr3t"'].join('\n'),
       'services/web/.env.production': [
         'PUBLIC_URL=https://web.example.com',
         'FEATURE_FLAG=true',
@@ -80,15 +73,9 @@ describe('EnvIndexer', () => {
       'services/api/.env',
       'services/web/.env.production',
     ]);
-    expect(keysByFile.get('.env')).toEqual([
-      'DB_HOST', 'DB_PORT', 'API_URL',
-    ]);
-    expect(keysByFile.get('services/api/.env')).toEqual([
-      'SERVICE_NAME', 'JWT_SECRET',
-    ]);
-    expect(keysByFile.get('services/web/.env.production')).toEqual([
-      'PUBLIC_URL', 'FEATURE_FLAG',
-    ]);
+    expect(keysByFile.get('.env')).toEqual(['DB_HOST', 'DB_PORT', 'API_URL']);
+    expect(keysByFile.get('services/api/.env')).toEqual(['SERVICE_NAME', 'JWT_SECRET']);
+    expect(keysByFile.get('services/web/.env.production')).toEqual(['PUBLIC_URL', 'FEATURE_FLAG']);
   });
 
   it('stores only keys + inferred types/formats (no raw values leak to DB)', async () => {
@@ -108,7 +95,11 @@ describe('EnvIndexer', () => {
 
     const rows = store.getAllEnvVars();
     expect(rows.map((r) => r.key)).toEqual([
-      'DB_HOST', 'DB_PORT', 'DB_URL', 'ENABLED', 'JWT_SECRET',
+      'DB_HOST',
+      'DB_PORT',
+      'DB_URL',
+      'ENABLED',
+      'JWT_SECRET',
     ]);
 
     const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
@@ -154,6 +145,11 @@ describe('EnvIndexer', () => {
     fs.writeFileSync(path.join(tmp, '.env'), 'A=1\nB=2\n', 'utf-8');
     await indexer.indexEnvFiles(false);
 
-    expect(store.getAllEnvVars().map((r) => r.key).sort()).toEqual(['A', 'B']);
+    expect(
+      store
+        .getAllEnvVars()
+        .map((r) => r.key)
+        .sort(),
+    ).toEqual(['A', 'B']);
   });
 });

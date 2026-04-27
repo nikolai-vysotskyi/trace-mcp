@@ -99,7 +99,17 @@ export class SpanIngester {
   }
 
   private processSpan(
-    span: { traceId: string; spanId: string; parentSpanId?: string; name: string; kind: number; startTimeUnixNano: string; endTimeUnixNano: string; status?: { code?: number; message?: string }; attributes?: unknown[] },
+    span: {
+      traceId: string;
+      spanId: string;
+      parentSpanId?: string;
+      name: string;
+      kind: number;
+      startTimeUnixNano: string;
+      endTimeUnixNano: string;
+      status?: { code?: number; message?: string };
+      attributes?: unknown[];
+    },
     serviceName: string,
     counters: IngestCounters,
   ): void {
@@ -108,7 +118,14 @@ export class SpanIngester {
     const statusCode = span.status?.code ?? 0;
     const kind = SPAN_KIND_MAP[span.kind] ?? 'unspecified';
 
-    const traceRowId = this.ensureTrace(span, serviceName, startedAt, durationUs, statusCode, counters);
+    const traceRowId = this.ensureTrace(
+      span,
+      serviceName,
+      startedAt,
+      durationUs,
+      statusCode,
+      counters,
+    );
 
     this.insertSpan.run(
       traceRowId,
@@ -151,7 +168,10 @@ export class SpanIngester {
   }
 
   /** Prune old data per retention policy */
-  prune(maxSpanAgeDays: number, maxAggregateAgeDays: number): { spans: number; aggregates: number; traces: number } {
+  prune(
+    maxSpanAgeDays: number,
+    maxAggregateAgeDays: number,
+  ): { spans: number; aggregates: number; traces: number } {
     const spanCutoff = new Date(Date.now() - maxSpanAgeDays * 86_400_000).toISOString();
     const aggCutoff = new Date(Date.now() - maxAggregateAgeDays * 86_400_000).toISOString();
 
@@ -166,7 +186,9 @@ export class SpanIngester {
     return { spans: spansDeleted, aggregates: aggsDeleted, traces: tracesDeleted };
   }
 
-  private detectServiceKind(attrs: Array<{ key: string; value: { stringValue?: string } }>): string {
+  private detectServiceKind(
+    attrs: Array<{ key: string; value: { stringValue?: string } }>,
+  ): string {
     const dbSystem = getStringAttr(attrs, 'db.system');
     if (dbSystem) return 'database';
 

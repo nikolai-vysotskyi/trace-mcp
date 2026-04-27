@@ -104,11 +104,11 @@ export interface PlanTurnContext {
 // CORE
 // ═══════════════════════════════════════════════════════════════════
 
-const VERDICT_HIGH_THRESHOLD = 0.40;
+const VERDICT_HIGH_THRESHOLD = 0.4;
 const VERDICT_LOW_THRESHOLD = 0.15;
 const AMBIGUOUS_TIE_RATIO = 0.92;
-const SESSION_FOCUS_BOOST = 0.10;
-const PRIOR_NEGATIVE_BOOST = -0.50;
+const SESSION_FOCUS_BOOST = 0.1;
+const PRIOR_NEGATIVE_BOOST = -0.5;
 
 export async function planTurn(
   ctx: PlanTurnContext,
@@ -173,11 +173,14 @@ export async function planTurn(
 
   // 4. Score & re-rank with session-focus boost; build targets
   const items = searchResult.items.slice(0, maxTargets * 2);
-  const ranked: Array<{ item: typeof items[number]; score: number; why: string[] }> = [];
+  const ranked: Array<{ item: (typeof items)[number]; score: number; why: string[] }> = [];
 
   for (const item of items) {
     let score = item.score;
-    const why: string[] = [searchResult.search_mode === 'hybrid_ai' ? 'hybrid_ai' : 'bm25', 'pagerank'];
+    const why: string[] = [
+      searchResult.search_mode === 'hybrid_ai' ? 'hybrid_ai' : 'bm25',
+      'pagerank',
+    ];
     if (sessionFiles.has(item.file.path)) {
       score += SESSION_FOCUS_BOOST;
       why.push('session_focus');
@@ -205,9 +208,10 @@ export async function planTurn(
   } else if (ranked.length === 0 || topScore < VERDICT_LOW_THRESHOLD) {
     verdict = 'missing';
     confidence = ranked.length === 0 ? 0.9 : 0.7;
-    reasoning = ranked.length === 0
-      ? 'No symbols match this task in the indexed codebase.'
-      : `Best match scored ${topScore.toFixed(2)} — below the existence threshold (${VERDICT_LOW_THRESHOLD}).`;
+    reasoning =
+      ranked.length === 0
+        ? 'No symbols match this task in the indexed codebase.'
+        : `Best match scored ${topScore.toFixed(2)} — below the existence threshold (${VERDICT_LOW_THRESHOLD}).`;
   } else if (topScore < VERDICT_HIGH_THRESHOLD) {
     verdict = 'partial';
     confidence = 0.5 + topScore;
@@ -251,9 +255,10 @@ export async function planTurn(
   }
 
   // 7. Insertion points for missing/partial — framework-aware scaffolds
-  const insertionPoints = (verdict === 'missing' || verdict === 'partial') && intent === 'new_feature'
-    ? suggestInsertionPoints(ctx, task, targets)
-    : [];
+  const insertionPoints =
+    (verdict === 'missing' || verdict === 'partial') && intent === 'new_feature'
+      ? suggestInsertionPoints(ctx, task, targets)
+      : [];
 
   // 8. Budget advisor
   const budget = computeBudget(ctx.savings);

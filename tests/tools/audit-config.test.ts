@@ -50,22 +50,24 @@ describe('Audit Config', () => {
 
   it('detects dead file paths', () => {
     const configPath = path.join(tmpDir, 'CLAUDE.md');
-    fs.writeFileSync(configPath, [
-      '# Config',
-      'Use `src/services/auth.ts` for auth.',
-      'See `src/services/nonexistent.ts` for details.',
-    ].join('\n'));
+    fs.writeFileSync(
+      configPath,
+      [
+        '# Config',
+        'Use `src/services/auth.ts` for auth.',
+        'See `src/services/nonexistent.ts` for details.',
+      ].join('\n'),
+    );
 
     const result = auditConfig(store, tmpDir, { configFiles: [configPath] });
-    expect(result.issues.some((i) => i.category === 'dead_path' && i.issue.includes('nonexistent'))).toBe(true);
+    expect(
+      result.issues.some((i) => i.category === 'dead_path' && i.issue.includes('nonexistent')),
+    ).toBe(true);
   });
 
   it('detects stale symbol references with fuzzy suggestions', () => {
     const configPath = path.join(tmpDir, 'test-stale.md');
-    fs.writeFileSync(configPath, [
-      '# Config',
-      'Use `AuthServce` for authentication.',
-    ].join('\n'));
+    fs.writeFileSync(configPath, ['# Config', 'Use `AuthServce` for authentication.'].join('\n'));
 
     const result = auditConfig(store, tmpDir, { configFiles: [configPath], fixSuggestions: true });
     const staleIssues = result.issues.filter((i) => i.category === 'stale_symbol');
@@ -87,7 +89,8 @@ describe('Audit Config', () => {
   it('detects redundancy between files', () => {
     const config1 = path.join(tmpDir, 'config1.md');
     const config2 = path.join(tmpDir, 'config2.md');
-    const sharedLine = 'Always use trace-mcp search for symbol lookup instead of grep across all files in the project';
+    const sharedLine =
+      'Always use trace-mcp search for symbol lookup instead of grep across all files in the project';
 
     fs.writeFileSync(config1, `# File 1\n${sharedLine}\n`);
     fs.writeFileSync(config2, `# File 2\n${sharedLine}\n`);

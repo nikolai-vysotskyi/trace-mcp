@@ -5,14 +5,14 @@
 
 const GO_MIN_VERSION: Record<string, string> = {
   // Go 1.18 — generics
-  'type_parameter_list': '1.18',
-  'type_constraint': '1.18',
+  type_parameter_list: '1.18',
+  type_constraint: '1.18',
 
   // Go 1.21 — min/max/clear builtins, log/slog
   // (API only, no AST signal)
 
   // Go 1.22 — range over integers, loop variable semantics change
-  'range_over_int': '1.22',
+  range_over_int: '1.22',
 };
 
 /** Source-level patterns for Go features. */

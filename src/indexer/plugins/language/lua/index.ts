@@ -12,7 +12,14 @@
 import { ok, err } from 'neverthrow';
 import Parser from 'web-tree-sitter';
 import { createRequire } from 'node:module';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+  RawEdge,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import type { TSNode } from '../../../../parser/tree-sitter.js';
@@ -56,7 +63,10 @@ export class LuaLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.lua'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await createLuaParser();
       const sourceCode = content.toString('utf-8');

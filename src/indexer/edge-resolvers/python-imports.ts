@@ -20,9 +20,9 @@ export function resolvePythonImportEdges(state: PipelineState): void {
   if (state.pendingImports.size === 0) return;
 
   // Collect all indexed Python files for resolution
-  const allPyFiles = store.db.prepare(
-    `SELECT id, path FROM files WHERE language = 'python'`,
-  ).all() as Array<{ id: number; path: string }>;
+  const allPyFiles = store.db
+    .prepare(`SELECT id, path FROM files WHERE language = 'python'`)
+    .all() as Array<{ id: number; path: string }>;
 
   if (allPyFiles.length === 0) return;
 
@@ -48,9 +48,9 @@ export function resolvePythonImportEdges(state: PipelineState): void {
     }
   }
 
-  const importsEdgeType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('imports') as { id: number } | undefined;
+  const importsEdgeType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('imports') as { id: number } | undefined;
   if (!importsEdgeType) return;
 
   const insertStmt = store.db.prepare(

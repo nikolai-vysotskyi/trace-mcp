@@ -23,7 +23,11 @@ const _plugin = createRegexLanguagePlugin({
     // $: name = (reactive declarations - Svelte 4)
     { kind: 'variable', pattern: /^\s*\$:\s+(\w+)\s*=/gm, meta: { reactive: true } },
     // $derived / $state / $effect (Svelte 5 runes)
-    { kind: 'variable', pattern: /^\s*(?:let|const)\s+(\w+)\s*=\s*\$(?:state|derived|effect)/gm, meta: { rune: true } },
+    {
+      kind: 'variable',
+      pattern: /^\s*(?:let|const)\s+(\w+)\s*=\s*\$(?:state|derived|effect)/gm,
+      meta: { rune: true },
+    },
     // function name (non-exported)
     { kind: 'function', pattern: /^\s*(?:async\s+)?function\s+(\w+)/gm },
     // const name = (non-exported)

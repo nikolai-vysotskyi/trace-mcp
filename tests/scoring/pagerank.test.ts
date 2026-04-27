@@ -95,9 +95,9 @@ describe('computePageRank', () => {
   it('star topology: hub ranks higher than leaves', () => {
     // Hub ← leaf1, leaf2, leaf3 (three inbound edges)
     const hub = makeSymbolNode(store, 'hub');
-    const l1  = makeSymbolNode(store, 'leaf1');
-    const l2  = makeSymbolNode(store, 'leaf2');
-    const l3  = makeSymbolNode(store, 'leaf3');
+    const l1 = makeSymbolNode(store, 'leaf1');
+    const l2 = makeSymbolNode(store, 'leaf2');
+    const l3 = makeSymbolNode(store, 'leaf3');
     store.insertEdge(l1, hub, 'imports', true);
     store.insertEdge(l2, hub, 'imports', true);
     store.insertEdge(l3, hub, 'imports', true);

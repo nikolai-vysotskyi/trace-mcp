@@ -75,15 +75,12 @@ export function packContext(
   registry: PluginRegistry,
   options: PackOptions,
 ): PackResult {
-  const {
-    scope, path: scopePath, query, format, maxTokens, projectRoot,
-  } = options;
+  const { scope, path: scopePath, query, format, maxTokens, projectRoot } = options;
   const strategy: PackStrategy = options.strategy ?? 'most_relevant';
   // compact strategy forces compression and drops the heavy `source` section
   const compress = strategy === 'compact' ? true : options.compress;
-  const include = strategy === 'compact'
-    ? options.include.filter((s) => s !== 'source')
-    : options.include;
+  const include =
+    strategy === 'compact' ? options.include.filter((s) => s !== 'source') : options.include;
 
   const parts: string[] = [];
   const includedSections: string[] = [];
@@ -118,20 +115,27 @@ export function packContext(
 
   // Header
   if (format === 'markdown') {
-    addSection('header', `# Context Pack: ${scope}${scopePath ? ` (${scopePath})` : ''}${query ? ` — "${query}"` : ''}\n`);
+    addSection(
+      'header',
+      `# Context Pack: ${scope}${scopePath ? ` (${scopePath})` : ''}${query ? ` — "${query}"` : ''}\n`,
+    );
   } else if (format === 'xml') {
-    addSection('header', `<context scope="${scope}"${scopePath ? ` path="${scopePath}"` : ''}${query ? ` query="${query}"` : ''}>\n`);
+    addSection(
+      'header',
+      `<context scope="${scope}"${scopePath ? ` path="${scopePath}"` : ''}${query ? ` query="${query}"` : ''}>\n`,
+    );
   }
 
   // --- File Tree ---
   if (include.includes('file_tree')) {
     const files = getAllScopeFiles(store, scope, scopePath);
     const tree = buildFileTree(files.map((f) => f.path));
-    const section = format === 'markdown'
-      ? `## File Tree\n\`\`\`\n${tree}\n\`\`\`\n`
-      : format === 'xml'
-        ? `<file_tree>\n${tree}\n</file_tree>\n`
-        : tree;
+    const section =
+      format === 'markdown'
+        ? `## File Tree\n\`\`\`\n${tree}\n\`\`\`\n`
+        : format === 'xml'
+          ? `<file_tree>\n${tree}\n</file_tree>\n`
+          : tree;
     addSection('file_tree', section);
   }
 
@@ -163,11 +167,12 @@ export function packContext(
         break;
       }
     }
-    const section = format === 'markdown'
-      ? `## Outlines\n${outlineLines.join('\n')}\n`
-      : format === 'xml'
-        ? `<outlines>\n${outlineLines.join('\n')}\n</outlines>\n`
-        : outlineLines.join('\n');
+    const section =
+      format === 'markdown'
+        ? `## Outlines\n${outlineLines.join('\n')}\n`
+        : format === 'xml'
+          ? `<outlines>\n${outlineLines.join('\n')}\n</outlines>\n`
+          : outlineLines.join('\n');
     addSection('outlines', section, {
       items_included: outlineFilesIncluded,
       items_dropped: outlineFilesDropped,
@@ -191,7 +196,9 @@ export function packContext(
       let content: string;
       try {
         content = fs.readFileSync(absPath, 'utf-8');
-      } catch { continue; }
+      } catch {
+        continue;
+      }
 
       if (compress) {
         // In compress mode: keep signatures, strip function bodies
@@ -230,11 +237,12 @@ export function packContext(
     }
 
     if (sourceLines.length > 0) {
-      const section = format === 'markdown'
-        ? `## Source Code\n${sourceLines.join('\n')}\n`
-        : format === 'xml'
-          ? `<source>\n${sourceLines.join('\n')}\n</source>\n`
-          : sourceLines.join('\n');
+      const section =
+        format === 'markdown'
+          ? `## Source Code\n${sourceLines.join('\n')}\n`
+          : format === 'xml'
+            ? `<source>\n${sourceLines.join('\n')}\n</source>\n`
+            : sourceLines.join('\n');
       addSection('source', section, {
         items_included: sourceFilesIncluded,
         items_dropped: Math.max(0, files.length - sourceFilesIncluded),
@@ -252,35 +260,52 @@ export function packContext(
         .slice(0, 100)
         .map((r) => `${r.method} ${r.uri} → ${r.handler}`);
 
-      const section = format === 'markdown'
-        ? `## API Routes\n| Method | Route | Handler |\n|--------|-------|----------|\n${routes.filter((r) => !['STORE', 'SLICE', 'DISPATCH'].includes(r.method)).slice(0, 100).map((r) => `| ${r.method} | ${r.uri} | ${r.handler} |`).join('\n')}\n`
-        : format === 'xml'
-          ? `<routes>\n${routeLines.join('\n')}\n</routes>\n`
-          : routeLines.join('\n');
+      const section =
+        format === 'markdown'
+          ? `## API Routes\n| Method | Route | Handler |\n|--------|-------|----------|\n${routes
+              .filter((r) => !['STORE', 'SLICE', 'DISPATCH'].includes(r.method))
+              .slice(0, 100)
+              .map((r) => `| ${r.method} | ${r.uri} | ${r.handler} |`)
+              .join('\n')}\n`
+          : format === 'xml'
+            ? `<routes>\n${routeLines.join('\n')}\n</routes>\n`
+            : routeLines.join('\n');
       addSection('routes', section);
     }
   }
 
   // --- Models (data model) ---
   if (include.includes('models')) {
-    const classRows = store.db.prepare(`
+    const classRows = store.db
+      .prepare(`
       SELECT s.name, s.fqn, s.line_start, s.signature, f.path as file_path
       FROM symbols s JOIN files f ON f.id = s.file_id
       WHERE s.kind = 'class'
         AND (s.fqn LIKE '%Model%' OR s.fqn LIKE '%Entity%' OR s.fqn LIKE '%Schema%'
           OR f.path LIKE '%model%' OR f.path LIKE '%entity%' OR f.path LIKE '%schema%')
       LIMIT 200
-    `).all() as { name: string; fqn: string | null; line_start: number; signature: string | null; file_path: string }[];
+    `)
+      .all() as {
+      name: string;
+      fqn: string | null;
+      line_start: number;
+      signature: string | null;
+      file_path: string;
+    }[];
 
     if (classRows.length > 0) {
-      const modelLines = classRows.slice(0, 30).map((m) =>
-        `- **${m.name}** (${m.file_path}:${m.line_start})${m.signature ? `: ${m.signature}` : ''}`,
-      );
-      const section = format === 'markdown'
-        ? `## Data Models\n${modelLines.join('\n')}\n`
-        : format === 'xml'
-          ? `<models>\n${modelLines.join('\n')}\n</models>\n`
-          : modelLines.join('\n');
+      const modelLines = classRows
+        .slice(0, 30)
+        .map(
+          (m) =>
+            `- **${m.name}** (${m.file_path}:${m.line_start})${m.signature ? `: ${m.signature}` : ''}`,
+        );
+      const section =
+        format === 'markdown'
+          ? `## Data Models\n${modelLines.join('\n')}\n`
+          : format === 'xml'
+            ? `<models>\n${modelLines.join('\n')}\n</models>\n`
+            : modelLines.join('\n');
       addSection('models', section);
     }
   }
@@ -289,14 +314,15 @@ export function packContext(
   if (include.includes('dependencies')) {
     const ranks = getPageRank(store).slice(0, 20);
     if (ranks.length > 0) {
-      const depLines = ranks.map((r: any) =>
-        `- ${r.file} (importance: ${r.score?.toFixed(3) ?? 'N/A'})`,
+      const depLines = ranks.map(
+        (r: any) => `- ${r.file} (importance: ${r.score?.toFixed(3) ?? 'N/A'})`,
       );
-      const section = format === 'markdown'
-        ? `## Key Dependencies (by importance)\n${depLines.join('\n')}\n`
-        : format === 'xml'
-          ? `<dependencies>\n${depLines.join('\n')}\n</dependencies>\n`
-          : depLines.join('\n');
+      const section =
+        format === 'markdown'
+          ? `## Key Dependencies (by importance)\n${depLines.join('\n')}\n`
+          : format === 'xml'
+            ? `<dependencies>\n${depLines.join('\n')}\n</dependencies>\n`
+            : depLines.join('\n');
       addSection('dependencies', section);
     }
   }
@@ -304,16 +330,17 @@ export function packContext(
   // --- Tests ---
   if (include.includes('tests')) {
     const allFiles = store.getAllFiles();
-    const testFiles = allFiles.filter((f: any) =>
-      /\.(test|spec)\.\w+$/.test(f.path) || f.path.includes('__tests__'),
+    const testFiles = allFiles.filter(
+      (f: any) => /\.(test|spec)\.\w+$/.test(f.path) || f.path.includes('__tests__'),
     );
     if (testFiles.length > 0) {
       const testLines = testFiles.slice(0, 30).map((f: any) => `- ${f.path}`);
-      const section = format === 'markdown'
-        ? `## Test Files (${testFiles.length} total)\n${testLines.join('\n')}\n`
-        : format === 'xml'
-          ? `<tests count="${testFiles.length}">\n${testLines.join('\n')}\n</tests>\n`
-          : testLines.join('\n');
+      const section =
+        format === 'markdown'
+          ? `## Test Files (${testFiles.length} total)\n${testLines.join('\n')}\n`
+          : format === 'xml'
+            ? `<tests count="${testFiles.length}">\n${testLines.join('\n')}\n</tests>\n`
+            : testLines.join('\n');
       addSection('tests', section);
     }
   }
@@ -323,8 +350,9 @@ export function packContext(
     parts.push('</context>');
   }
 
-  const filesIncluded = sectionMeta.source?.items_included
-    ?? (includedSections.includes('source')
+  const filesIncluded =
+    sectionMeta.source?.items_included ??
+    (includedSections.includes('source')
       ? getScopeFiles(store, scope, scopePath, query, 20, strategy).length
       : 0);
 
@@ -352,7 +380,11 @@ export function packContext(
 
 // --- Helpers ---
 
-function getAllScopeFiles(store: Store, scope: string, scopePath?: string): { id: number; path: string }[] {
+function getAllScopeFiles(
+  store: Store,
+  scope: string,
+  scopePath?: string,
+): { id: number; path: string }[] {
   const all = store.getAllFiles() as { id: number; path: string }[];
   if (scope === 'module' && scopePath) {
     return all.filter((f) => f.path.startsWith(scopePath));
@@ -383,8 +415,12 @@ function getScopeFiles(
   const rerankByPageRank = (candidates: { id: number; path: string }[]) => {
     try {
       const ranks = getPageRank(store);
-      const rankMap = new Map(ranks.map((r: { file: string; score?: number }) => [r.file, r.score ?? 0]));
-      return [...candidates].sort((a, b) => (rankMap.get(b.path) ?? 0) - (rankMap.get(a.path) ?? 0));
+      const rankMap = new Map(
+        ranks.map((r: { file: string; score?: number }) => [r.file, r.score ?? 0]),
+      );
+      return [...candidates].sort(
+        (a, b) => (rankMap.get(b.path) ?? 0) - (rankMap.get(a.path) ?? 0),
+      );
     } catch {
       return candidates;
     }

@@ -28,27 +28,30 @@ import type {
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
-const SORTABLE_PACKAGES = [
-  'sortablejs',
-  'sortablejs-vue3',
-  'vue-draggable-next',
-  'vuedraggable',
-];
+const SORTABLE_PACKAGES = ['sortablejs', 'sortablejs-vue3', 'vue-draggable-next', 'vuedraggable'];
 
 const SORTABLE_EVENTS = [
-  'onChoose', 'onUnchoose', 'onStart', 'onEnd',
-  'onAdd', 'onUpdate', 'onSort', 'onRemove',
-  'onFilter', 'onMove', 'onClone', 'onChange',
-  'onSelect', 'onDeselect',
+  'onChoose',
+  'onUnchoose',
+  'onStart',
+  'onEnd',
+  'onAdd',
+  'onUpdate',
+  'onSort',
+  'onRemove',
+  'onFilter',
+  'onMove',
+  'onClone',
+  'onChange',
+  'onSelect',
+  'onDeselect',
 ] as const;
 
 const VUE_DRAGGABLE_TAGS = /<\s*(draggable|Sortable|VueDraggable|VueDraggableNext)\b/i;
 
-const NEW_SORTABLE_RE =
-  /new\s+Sortable\s*\(\s*[^,]+,\s*\{([\s\S]*?)\}\s*\)/g;
+const NEW_SORTABLE_RE = /new\s+Sortable\s*\(\s*[^,]+,\s*\{([\s\S]*?)\}\s*\)/g;
 
-const SORTABLE_CREATE_RE =
-  /Sortable\s*\.\s*create\s*\(\s*[^,]+,\s*\{([\s\S]*?)\}\s*\)/g;
+const SORTABLE_CREATE_RE = /Sortable\s*\.\s*create\s*\(\s*[^,]+,\s*\{([\s\S]*?)\}\s*\)/g;
 
 const SORTABLE_IMPORT_RE =
   /(?:import|require)\s*(?:\(|\{)?\s*[^'"]*['"](?:sortablejs|sortablejs-vue3|vue-draggable-next|vuedraggable)['"]/;
@@ -151,9 +154,21 @@ export class SortablePlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'sortable_event', category: 'sortable', description: 'Sortable component → drag event handler' },
-        { name: 'sortable_group', category: 'sortable', description: 'Sortable component declares named group' },
-        { name: 'sortable_shared_group', category: 'sortable', description: 'Two sortables share a named group (cross-list dnd)' },
+        {
+          name: 'sortable_event',
+          category: 'sortable',
+          description: 'Sortable component → drag event handler',
+        },
+        {
+          name: 'sortable_group',
+          category: 'sortable',
+          description: 'Sortable component declares named group',
+        },
+        {
+          name: 'sortable_shared_group',
+          category: 'sortable',
+          description: 'Two sortables share a named group (cross-list dnd)',
+        },
       ],
     };
   }

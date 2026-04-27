@@ -37,18 +37,53 @@ export interface DuplicationResult {
 
 // ─── Constants ──────────────────────────────────────────────
 
-const CHECKABLE_KINDS = new Set([
-  'function', 'class', 'method', 'interface', 'type_alias', 'enum',
-]);
+const CHECKABLE_KINDS = new Set(['function', 'class', 'method', 'interface', 'type_alias', 'enum']);
 
 const TRIVIAL_NAMES = new Set([
-  'constructor', 'toString', 'toJSON', 'valueOf', 'render', 'setup',
-  'main', 'index', 'default', 'init', 'create', 'get', 'set', 'delete',
-  'update', 'handle', 'process', 'run', 'start', 'stop', 'reset',
-  'configure', 'register', 'execute', 'validate', 'transform',
-  'apply', 'call', 'bind', 'map', 'filter', 'reduce', 'forEach',
-  'connect', 'disconnect', 'open', 'close', 'build', 'destroy',
-  'mount', 'unmount', 'dispose', 'serialize', 'deserialize',
+  'constructor',
+  'toString',
+  'toJSON',
+  'valueOf',
+  'render',
+  'setup',
+  'main',
+  'index',
+  'default',
+  'init',
+  'create',
+  'get',
+  'set',
+  'delete',
+  'update',
+  'handle',
+  'process',
+  'run',
+  'start',
+  'stop',
+  'reset',
+  'configure',
+  'register',
+  'execute',
+  'validate',
+  'transform',
+  'apply',
+  'call',
+  'bind',
+  'map',
+  'filter',
+  'reduce',
+  'forEach',
+  'connect',
+  'disconnect',
+  'open',
+  'close',
+  'build',
+  'destroy',
+  'mount',
+  'unmount',
+  'dispose',
+  'serialize',
+  'deserialize',
 ]);
 
 const TEST_PATH_RE = /(?:^|[/\\])(?:tests?|__tests__|spec)[/\\]|\.(?:test|spec)\.[jt]sx?$/i;
@@ -137,7 +172,7 @@ export function checkFileForDuplicates(
 ): DuplicationResult {
   const file = store.getFile(filePath);
   if (!file) {
-    return { warnings: [], symbols_checked: 0, threshold: options?.threshold ?? 0.70 };
+    return { warnings: [], symbols_checked: 0, threshold: options?.threshold ?? 0.7 };
   }
 
   const symbols = store.getSymbolsByFile(file.id) as SymbolRowExtended[];
@@ -154,20 +189,23 @@ export function checkSymbolForDuplicates(
   query: { symbol_id?: string; name?: string; kind?: string },
   options?: { threshold?: number; maxResults?: number },
 ): DuplicationResult {
-  const threshold = options?.threshold ?? 0.60;
+  const threshold = options?.threshold ?? 0.6;
 
   if (query.symbol_id) {
     // Look up actual symbol
-    const row = db.prepare<[string], SymbolRowExtended>(
-      'SELECT * FROM symbols WHERE symbol_id = ?',
-    ).get(query.symbol_id);
+    const row = db
+      .prepare<[string], SymbolRowExtended>('SELECT * FROM symbols WHERE symbol_id = ?')
+      .get(query.symbol_id);
 
     if (!row) {
       return { warnings: [], symbols_checked: 0, threshold };
     }
 
     const file = store.getFileById(row.file_id);
-    return findDuplicateSymbols(store, db, [row], row.file_id, file?.path ?? '', { threshold, maxResults: options?.maxResults ?? 15 });
+    return findDuplicateSymbols(store, db, [row], row.file_id, file?.path ?? '', {
+      threshold,
+      maxResults: options?.maxResults ?? 15,
+    });
   }
 
   if (query.name) {
@@ -190,7 +228,10 @@ export function checkSymbolForDuplicates(
       param_count: null,
     };
 
-    return findDuplicateSymbols(store, db, [virtual], -1, '', { threshold, maxResults: options?.maxResults ?? 15 });
+    return findDuplicateSymbols(store, db, [virtual], -1, '', {
+      threshold,
+      maxResults: options?.maxResults ?? 15,
+    });
   }
 
   return { warnings: [], symbols_checked: 0, threshold };
@@ -198,8 +239,11 @@ export function checkSymbolForDuplicates(
 
 // ─── Internals ──────────────────────────────────────────────
 
-function getCandidateSymbol(db: Database.Database, symbolId: number): SymbolRowExtended | undefined {
-  return db.prepare<[number], SymbolRowExtended>(
-    'SELECT * FROM symbols WHERE id = ?',
-  ).get(symbolId);
+function getCandidateSymbol(
+  db: Database.Database,
+  symbolId: number,
+): SymbolRowExtended | undefined {
+  return db
+    .prepare<[number], SymbolRowExtended>('SELECT * FROM symbols WHERE id = ?')
+    .get(symbolId);
 }

@@ -36,13 +36,14 @@ export function resolvePythonCallEdges(state: PipelineState): void {
   const { store } = state;
 
   // 1. Get the 'calls' edge type
-  const callsEdgeType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('calls') as { id: number } | undefined;
+  const callsEdgeType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
+    | { id: number }
+    | undefined;
   if (!callsEdgeType) return;
 
   // 2. Get all Python symbols that have callSites in metadata
-  const symbolsWithCalls = store.db.prepare(`
+  const symbolsWithCalls = store.db
+    .prepare(`
     SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
            p.symbol_id AS parent_symbol_id, s.metadata
     FROM symbols s
@@ -51,21 +52,31 @@ export function resolvePythonCallEdges(state: PipelineState): void {
     WHERE f.language = 'python'
       AND s.metadata IS NOT NULL
       AND s.metadata LIKE '%"callSites"%'
-  `).all() as SymbolRow[];
+  `)
+    .all() as SymbolRow[];
 
   if (symbolsWithCalls.length === 0) return;
 
   // 3. Build resolution indexes
 
   // All Python symbols indexed by name → array of {id, symbol_id, file_id, kind, parent_symbol_id}
-  const allPySymbols = store.db.prepare(`
+  const allPySymbols = store.db
+    .prepare(`
     SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
            p.symbol_id AS parent_symbol_id
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     LEFT JOIN symbols p ON s.parent_id = p.id
     WHERE f.language = 'python'
-  `).all() as Array<{ id: number; symbol_id: string; name: string; kind: string; file_id: number; parent_symbol_id: string | null }>;
+  `)
+    .all() as Array<{
+    id: number;
+    symbol_id: string;
+    name: string;
+    kind: string;
+    file_id: number;
+    parent_symbol_id: string | null;
+  }>;
 
   // name → symbols with that name
   const nameIndex = new Map<string, typeof allPySymbols>();
@@ -108,9 +119,9 @@ export function resolvePythonCallEdges(state: PipelineState): void {
   const returnTypeIndex = new Map<string, string>();
   for (const s of allPySymbols) {
     if (s.kind !== 'function' && s.kind !== 'method') continue;
-    const sigRow = store.db.prepare(
-      `SELECT signature FROM symbols WHERE id = ?`,
-    ).get(s.id) as { signature: string | null } | undefined;
+    const sigRow = store.db.prepare(`SELECT signature FROM symbols WHERE id = ?`).get(s.id) as
+      | { signature: string | null }
+      | undefined;
     if (!sigRow?.signature) continue;
     const retMatch = sigRow.signature.match(/-> *([A-Z][A-Za-z0-9_]*)/);
     if (retMatch) {
@@ -133,7 +144,9 @@ export function resolvePythonCallEdges(state: PipelineState): void {
         const meta = JSON.parse(sym.metadata!) as Record<string, unknown>;
         callSites = meta.callSites as CallSiteRow[];
         if (!Array.isArray(callSites)) continue;
-      } catch { continue; }
+      } catch {
+        continue;
+      }
 
       const sourceNodeId = symbolNodeMap.get(sym.id);
       if (sourceNodeId == null) continue;
@@ -148,22 +161,39 @@ export function resolvePythonCallEdges(state: PipelineState): void {
         if (call.metadata?.pattern && call.metadata.prefix && call.receiver) {
           const prefix = call.metadata.prefix;
           const targets = resolvePrefixPattern(
-            prefix, call.receiver, call.isSelfCall ? parentClassId : null,
-            fileSymbols, fileImports, nameIndex, symbolsByFile,
+            prefix,
+            call.receiver,
+            call.isSelfCall ? parentClassId : null,
+            fileSymbols,
+            fileImports,
+            nameIndex,
+            symbolsByFile,
           );
           for (const target of targets) {
             const targetNodeId = symbolNodeMap.get(target.id);
             if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
-            insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id,
-              JSON.stringify({ callee: target.name, line: call.line, pattern: prefix }));
+            insertStmt.run(
+              sourceNodeId,
+              targetNodeId,
+              callsEdgeType.id,
+              JSON.stringify({ callee: target.name, line: call.line, pattern: prefix }),
+            );
             created++;
           }
           continue;
         }
 
         const targetSymbol = resolveCallSite(
-          call, sym, parentClassId, fileSymbols, fileImports,
-          nameIndex, symbolsByFile, symbolById, returnTypeIndex, callSites,
+          call,
+          sym,
+          parentClassId,
+          fileSymbols,
+          fileImports,
+          nameIndex,
+          symbolsByFile,
+          symbolById,
+          returnTypeIndex,
+          callSites,
         );
         if (!targetSymbol) continue;
 
@@ -177,12 +207,7 @@ export function resolvePythonCallEdges(state: PipelineState): void {
           const inferredType = returnTypeIndex.get(call.receiverAssignedFrom);
           if (inferredType) edgeMeta.receiver_type = inferredType;
         }
-        insertStmt.run(
-          sourceNodeId,
-          targetNodeId,
-          callsEdgeType.id,
-          JSON.stringify(edgeMeta),
-        );
+        insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta));
         created++;
       }
     }
@@ -217,10 +242,11 @@ function resolveCallSite(
       // For now, try to find any method with this name that's NOT in this class
       const candidates = nameIndex.get(calleeName);
       if (candidates) {
-        const match = candidates.find((s) =>
-          (s.kind === 'method' || s.kind === 'function')
-          && s.parent_symbol_id !== parentClassId
-          && s.parent_symbol_id != null,
+        const match = candidates.find(
+          (s) =>
+            (s.kind === 'method' || s.kind === 'function') &&
+            s.parent_symbol_id !== parentClassId &&
+            s.parent_symbol_id != null,
         );
         if (match) return match;
       }
@@ -228,16 +254,17 @@ function resolveCallSite(
     }
 
     // Look for method in same class
-    const classMethod = fileSymbols.find((s) =>
-      s.parent_symbol_id === parentClassId
-      && s.name === calleeName
-      && (s.kind === 'method' || s.kind === 'function'),
+    const classMethod = fileSymbols.find(
+      (s) =>
+        s.parent_symbol_id === parentClassId &&
+        s.name === calleeName &&
+        (s.kind === 'method' || s.kind === 'function'),
     );
     if (classMethod) return classMethod;
 
     // Also check properties (could be a callable attribute)
-    const classProp = fileSymbols.find((s) =>
-      s.parent_symbol_id === parentClassId && s.name === calleeName,
+    const classProp = fileSymbols.find(
+      (s) => s.parent_symbol_id === parentClassId && s.name === calleeName,
     );
     if (classProp) return classProp;
 
@@ -245,9 +272,8 @@ function resolveCallSite(
     // (covers self.validate() where validate is defined on a base class)
     const inherited = nameIndex.get(calleeName);
     if (inherited) {
-      const match = inherited.find((s) =>
-        (s.kind === 'method' || s.kind === 'function')
-        && s.parent_symbol_id != null,
+      const match = inherited.find(
+        (s) => (s.kind === 'method' || s.kind === 'function') && s.parent_symbol_id != null,
       );
       if (match) return match;
     }
@@ -258,10 +284,11 @@ function resolveCallSite(
   // ── 2. Bare name call: foo() ──
   if (!receiver) {
     // 2a. Same-file function/class definition
-    const sameFile = fileSymbols.find((s) =>
-      s.name === calleeName
-      && (s.kind === 'function' || s.kind === 'class')
-      && s.parent_symbol_id == null, // top-level only
+    const sameFile = fileSymbols.find(
+      (s) =>
+        s.name === calleeName &&
+        (s.kind === 'function' || s.kind === 'class') &&
+        s.parent_symbol_id == null, // top-level only
     );
     if (sameFile) return sameFile;
 
@@ -271,10 +298,11 @@ function resolveCallSite(
       if (importedFromFiles) {
         for (const targetFileId of importedFromFiles) {
           const targetFileSymbols = symbolsByFile.get(targetFileId) ?? [];
-          const match = targetFileSymbols.find((s) =>
-            s.name === calleeName
-            && (s.kind === 'function' || s.kind === 'class')
-            && s.parent_symbol_id == null,
+          const match = targetFileSymbols.find(
+            (s) =>
+              s.name === calleeName &&
+              (s.kind === 'function' || s.kind === 'class') &&
+              s.parent_symbol_id == null,
           );
           if (match) return match;
         }
@@ -285,10 +313,11 @@ function resolveCallSite(
       if (starImports) {
         for (const targetFileId of starImports) {
           const targetFileSymbols = symbolsByFile.get(targetFileId) ?? [];
-          const match = targetFileSymbols.find((s) =>
-            s.name === calleeName
-            && (s.kind === 'function' || s.kind === 'class')
-            && s.parent_symbol_id == null,
+          const match = targetFileSymbols.find(
+            (s) =>
+              s.name === calleeName &&
+              (s.kind === 'function' || s.kind === 'class') &&
+              s.parent_symbol_id == null,
           );
           if (match) return match;
         }
@@ -298,8 +327,8 @@ function resolveCallSite(
     // 2c. Global name fallback — if there's exactly one function/class with this name
     const globalCandidates = nameIndex.get(calleeName);
     if (globalCandidates) {
-      const topLevel = globalCandidates.filter((s) =>
-        (s.kind === 'function' || s.kind === 'class') && s.parent_symbol_id == null,
+      const topLevel = globalCandidates.filter(
+        (s) => (s.kind === 'function' || s.kind === 'class') && s.parent_symbol_id == null,
       );
       if (topLevel.length === 1) return topLevel[0];
     }
@@ -320,7 +349,14 @@ function resolveCallSite(
   }
 
   if (typeName) {
-    const resolved = resolveMethodOnClass(typeName, calleeName, fileSymbols, fileImports, nameIndex, symbolsByFile);
+    const resolved = resolveMethodOnClass(
+      typeName,
+      calleeName,
+      fileSymbols,
+      fileImports,
+      nameIndex,
+      symbolsByFile,
+    );
     if (resolved) return resolved;
   }
 
@@ -332,9 +368,8 @@ function resolveCallSite(
         const targetFileSymbols = symbolsByFile.get(targetFileId) ?? [];
 
         // Try top-level function/variable with calleeName
-        const topLevelMatch = targetFileSymbols.find((s) =>
-          s.name === calleeName
-          && s.parent_symbol_id == null,
+        const topLevelMatch = targetFileSymbols.find(
+          (s) => s.name === calleeName && s.parent_symbol_id == null,
         );
         if (topLevelMatch) return topLevelMatch;
       }
@@ -348,8 +383,8 @@ function resolveCallSite(
         // Receiver might be a class from a star import
         const cls = targetFileSymbols.find((s) => s.name === receiver && s.kind === 'class');
         if (cls) {
-          const method = targetFileSymbols.find((s) =>
-            s.parent_symbol_id === cls.symbol_id && s.name === calleeName,
+          const method = targetFileSymbols.find(
+            (s) => s.parent_symbol_id === cls.symbol_id && s.name === calleeName,
           );
           if (method) return method;
         }
@@ -358,12 +393,12 @@ function resolveCallSite(
   }
 
   // 3d. Receiver is a class name in same file
-  const receiverClass = fileSymbols.find((s) =>
-    s.name === receiver && s.kind === 'class' && s.parent_symbol_id == null,
+  const receiverClass = fileSymbols.find(
+    (s) => s.name === receiver && s.kind === 'class' && s.parent_symbol_id == null,
   );
   if (receiverClass) {
-    const method = fileSymbols.find((s) =>
-      s.parent_symbol_id === receiverClass.symbol_id && s.name === calleeName,
+    const method = fileSymbols.find(
+      (s) => s.parent_symbol_id === receiverClass.symbol_id && s.name === calleeName,
     );
     if (method) return method;
   }
@@ -376,8 +411,8 @@ function resolveCallSite(
         const targetSymbols = symbolsByFile.get(targetFileId) ?? [];
         const cls = targetSymbols.find((s) => s.name === receiver && s.kind === 'class');
         if (cls) {
-          const method = targetSymbols.find((s) =>
-            s.parent_symbol_id === cls.symbol_id && s.name === calleeName,
+          const method = targetSymbols.find(
+            (s) => s.parent_symbol_id === cls.symbol_id && s.name === calleeName,
           );
           if (method) return method;
         }
@@ -388,7 +423,14 @@ function resolveCallSite(
   return null;
 }
 
-type SymbolEntry = { id: number; symbol_id: string; name: string; kind: string; file_id: number; parent_symbol_id: string | null };
+type SymbolEntry = {
+  id: number;
+  symbol_id: string;
+  name: string;
+  kind: string;
+  file_id: number;
+  parent_symbol_id: string | null;
+};
 
 /**
  * Resolve f-string pattern: getattr(self, f"handle_{x}") → all methods starting with "handle_"
@@ -407,8 +449,11 @@ function resolvePrefixPattern(
   // self/cls → find all methods in same class with prefix
   if ((receiver === 'self' || receiver === 'cls') && parentClassId) {
     for (const s of fileSymbols) {
-      if (s.parent_symbol_id === parentClassId && s.name.startsWith(prefix)
-        && (s.kind === 'method' || s.kind === 'function')) {
+      if (
+        s.parent_symbol_id === parentClassId &&
+        s.name.startsWith(prefix) &&
+        (s.kind === 'method' || s.kind === 'function')
+      ) {
         results.push(s);
       }
     }
@@ -416,8 +461,11 @@ function resolvePrefixPattern(
     if (results.length === 0) {
       for (const [, syms] of nameIndex) {
         for (const s of syms) {
-          if (s.name.startsWith(prefix) && s.parent_symbol_id != null
-            && (s.kind === 'method' || s.kind === 'function')) {
+          if (
+            s.name.startsWith(prefix) &&
+            s.parent_symbol_id != null &&
+            (s.kind === 'method' || s.kind === 'function')
+          ) {
             results.push(s);
           }
         }
@@ -459,8 +507,8 @@ function resolveMethodOnClass(
   // Same-file class
   const localClass = fileSymbols.find((s) => s.name === typeName && s.kind === 'class');
   if (localClass) {
-    const method = fileSymbols.find((s) =>
-      s.parent_symbol_id === localClass.symbol_id && s.name === calleeName,
+    const method = fileSymbols.find(
+      (s) => s.parent_symbol_id === localClass.symbol_id && s.name === calleeName,
     );
     if (method) return method;
   }
@@ -473,8 +521,8 @@ function resolveMethodOnClass(
         const syms = symbolsByFile.get(fid) ?? [];
         const cls = syms.find((s) => s.name === typeName && s.kind === 'class');
         if (cls) {
-          const method = syms.find((s) =>
-            s.parent_symbol_id === cls.symbol_id && s.name === calleeName,
+          const method = syms.find(
+            (s) => s.parent_symbol_id === cls.symbol_id && s.name === calleeName,
           );
           if (method) return method;
         }
@@ -501,9 +549,8 @@ function resolveMethodOnClass(
   // This handles `user.validate()` where User inherits validate from BaseModel.
   const methodCandidates = nameIndex.get(calleeName);
   if (methodCandidates) {
-    const match = methodCandidates.find((s) =>
-      (s.kind === 'method' || s.kind === 'function')
-      && s.parent_symbol_id != null,
+    const match = methodCandidates.find(
+      (s) => (s.kind === 'method' || s.kind === 'function') && s.parent_symbol_id != null,
     );
     if (match) return match;
   }
@@ -523,17 +570,19 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
   const result = new Map<number, Map<string, number[]>>();
 
   // Get file-level import edges for Python files
-  const importEdgeType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('imports') as { id: number } | undefined;
+  const importEdgeType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('imports') as { id: number } | undefined;
   if (!importEdgeType) return result;
 
   // Query import edges with their metadata (which contains specifier names)
-  const importEdges = store.db.prepare(`
+  const importEdges = store.db
+    .prepare(`
     SELECT e.source_node_id, e.target_node_id, e.metadata
     FROM edges e
     WHERE e.edge_type_id = ?
-  `).all(importEdgeType.id) as Array<{
+  `)
+    .all(importEdgeType.id) as Array<{
     source_node_id: number;
     target_node_id: number;
     metadata: string | null;
@@ -559,9 +608,9 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
     for (let i = 0; i < nodeArr.length; i += CHUNK) {
       const chunk = nodeArr.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
-      const rows = store.db.prepare(
-        `SELECT id, ref_id FROM nodes WHERE node_type = 'file' AND id IN (${ph})`,
-      ).all(...chunk) as Array<{ id: number; ref_id: number }>;
+      const rows = store.db
+        .prepare(`SELECT id, ref_id FROM nodes WHERE node_type = 'file' AND id IN (${ph})`)
+        .all(...chunk) as Array<{ id: number; ref_id: number }>;
       for (const r of rows) nodeToFileId.set(r.id, r.ref_id);
     }
   }
@@ -584,7 +633,9 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
           const lastPart = fromPath.split('.').pop();
           if (lastPart) specifiers = [lastPart];
         }
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
 
     let fileMap = result.get(sourceFileId);
@@ -617,9 +668,9 @@ function buildFromPendingImports(state: PipelineState): Map<number, Map<string, 
   const result = new Map<number, Map<string, number[]>>();
 
   // Build module → fileId map
-  const allPyFiles = state.store.db.prepare(
-    `SELECT id, path FROM files WHERE language = 'python'`,
-  ).all() as Array<{ id: number; path: string }>;
+  const allPyFiles = state.store.db
+    .prepare(`SELECT id, path FROM files WHERE language = 'python'`)
+    .all() as Array<{ id: number; path: string }>;
 
   const moduleToFileId = new Map<string, number>();
   for (const f of allPyFiles) {

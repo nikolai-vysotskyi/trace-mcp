@@ -139,9 +139,11 @@ describe('get_change_impact', () => {
   });
 
   it('returns target with symbolName and kind', () => {
-    const i = impact(getChangeImpact(store, {
-      symbolId: 'src/components/UserCard.vue::UserCard#class',
-    }));
+    const i = impact(
+      getChangeImpact(store, {
+        symbolId: 'src/components/UserCard.vue::UserCard#class',
+      }),
+    );
     expect(i.target.symbolName).toBeDefined();
     expect(i.target.kind).toBeDefined();
   });
@@ -171,9 +173,11 @@ describe('get_change_impact', () => {
   // ── Diff-aware mode ──
 
   it('symbol_ids scopes impact to specific symbols', () => {
-    const i = impact(getChangeImpact(store, {
-      symbolIds: ['src/components/UserCard.vue::UserCard#class'],
-    }));
+    const i = impact(
+      getChangeImpact(store, {
+        symbolIds: ['src/components/UserCard.vue::UserCard#class'],
+      }),
+    );
     expect(i.target.path).toBe('src/components/UserCard.vue');
     expect(i.scopedToSymbols).toEqual(['src/components/UserCard.vue::UserCard#class']);
     expect(i.dependents.length).toBeGreaterThan(0);

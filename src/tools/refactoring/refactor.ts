@@ -69,7 +69,9 @@ export function applyRename(
   const check = checkRenameSafe(store, symbolId, newName);
   if (!check.safe) {
     result.error = `Rename conflicts detected: ${check.conflicts.map((c) => `${c.file}:${c.existing_name} (${c.reason})`).join('; ')}`;
-    result.warnings = check.conflicts.map((c) => `Conflict in ${c.file}: existing ${c.kind} "${c.existing_name}" at line ${c.line}`);
+    result.warnings = check.conflicts.map(
+      (c) => `Conflict in ${c.file}: existing ${c.kind} "${c.existing_name}" at line ${c.line}`,
+    );
     return result;
   }
 
@@ -82,10 +84,7 @@ export function applyRename(
 
   const definitionFilePath = path.resolve(projectRoot, symbolFile.path);
   const importingFiles = getImportingFiles(store, symbol.file_id, projectRoot);
-  const allFiles = [
-    { filePath: definitionFilePath, fileId: symbol.file_id },
-    ...importingFiles,
-  ];
+  const allFiles = [{ filePath: definitionFilePath, fileId: symbol.file_id }, ...importingFiles];
 
   const regex = buildRenameRegex(oldName);
   const modifiedFiles = new Set<string>();
@@ -234,12 +233,12 @@ export function removeDeadCode(
   while (actualStart > 0) {
     const prevLine = lines[actualStart - 1].trim();
     if (
-      prevLine.startsWith('@') ||          // decorator
-      prevLine.startsWith('*') ||           // JSDoc continuation
-      prevLine.startsWith('/**') ||         // JSDoc start
-      prevLine === '*/' ||                  // JSDoc end
-      prevLine.startsWith('//') ||          // comment
-      prevLine.startsWith('#')              // Python decorator / comment
+      prevLine.startsWith('@') || // decorator
+      prevLine.startsWith('*') || // JSDoc continuation
+      prevLine.startsWith('/**') || // JSDoc start
+      prevLine === '*/' || // JSDoc end
+      prevLine.startsWith('//') || // comment
+      prevLine.startsWith('#') // Python decorator / comment
     ) {
       actualStart--;
     } else {
@@ -286,8 +285,8 @@ export function removeDeadCode(
     if (importers.length > 0) {
       result.warnings.push(
         `Removed the last exported symbol from ${symbolFile.path}. ` +
-        `${importers.length} file(s) still import from it — review for unused imports: ` +
-        importers.map((f) => path.relative(projectRoot, f.filePath)).join(', '),
+          `${importers.length} file(s) still import from it — review for unused imports: ` +
+          importers.map((f) => path.relative(projectRoot, f.filePath)).join(', '),
       );
     }
   }
@@ -366,9 +365,7 @@ export function extractFunction(
 
   // Variables that the extracted code defines and the remaining code uses
   const usedAfterSet = new Set(usedAfter.used);
-  const returns = [...identifiers.defined].filter(
-    (v) => usedAfterSet.has(v),
-  );
+  const returns = [...identifiers.defined].filter((v) => usedAfterSet.has(v));
 
   // Build the extracted function
   const bodyLines = extractedLines.map((l) => {
@@ -395,7 +392,8 @@ export function extractFunction(
   } else if (lang === 'go') {
     // Go: func name(params) (returns) { ... }
     const paramStr = params.map((p) => `${p} interface{}`).join(', ');
-    const returnTypes = returns.length > 0 ? ` (${returns.map(() => 'interface{}').join(', ')})` : '';
+    const returnTypes =
+      returns.length > 0 ? ` (${returns.map(() => 'interface{}').join(', ')})` : '';
     functionDef = `func ${functionName}(${paramStr})${returnTypes} {\n${bodyLines.join('\n')}`;
     if (returns.length > 0) {
       functionDef += `\n  return ${returns.join(', ')}`;
@@ -454,10 +452,14 @@ export function extractFunction(
   result.files_modified = [filePath];
 
   if (params.length > 0) {
-    result.warnings.push(`Detected ${params.length} parameter(s): ${params.join(', ')} — verify types`);
+    result.warnings.push(
+      `Detected ${params.length} parameter(s): ${params.join(', ')} — verify types`,
+    );
   }
   if (returns.length > 0) {
-    result.warnings.push(`Detected ${returns.length} return value(s): ${returns.join(', ')} — verify correctness`);
+    result.warnings.push(
+      `Detected ${returns.length} return value(s): ${returns.join(', ')} — verify correctness`,
+    );
   }
 
   return result;
@@ -586,7 +588,9 @@ export function applyCodemod(
       while ((m = regex.exec(content)) !== null) {
         matchPositions.push({ index: m.index, match: m[0] });
         matchCount++;
-        if (m[0].length === 0) { regex.lastIndex++; }
+        if (m[0].length === 0) {
+          regex.lastIndex++;
+        }
       }
 
       // For preview, find line numbers of first few matches
@@ -600,7 +604,10 @@ export function applyCodemod(
           line: lineNum,
           original: original.length > 200 ? original.slice(0, 200) + '…' : original,
           replaced: replaced.length > 200 ? replaced.slice(0, 200) + '…' : replaced,
-          context_before: lines.slice(Math.max(0, lineNum - 1 - CODEMOD_CONTEXT_LINES), lineNum - 1),
+          context_before: lines.slice(
+            Math.max(0, lineNum - 1 - CODEMOD_CONTEXT_LINES),
+            lineNum - 1,
+          ),
           context_after: lines.slice(lineNum, lineNum + CODEMOD_CONTEXT_LINES),
         });
       }
@@ -646,7 +653,7 @@ export function applyCodemod(
     result.matches = allMatches;
     result.warnings.push(
       `Affects ${filesWithMatches.size} files (>${CODEMOD_LARGE_THRESHOLD}). ` +
-      `Re-run with confirm_large: true to proceed, or narrow file_pattern.`,
+        `Re-run with confirm_large: true to proceed, or narrow file_pattern.`,
     );
     // Return as dry_run preview regardless
     result.dry_run = true;

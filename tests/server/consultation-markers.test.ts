@@ -21,7 +21,9 @@ afterEach(() => {
   const dir = getMarkerDir();
   try {
     fs.rmSync(dir, { recursive: true, force: true });
-  } catch { /* may not exist */ }
+  } catch {
+    /* may not exist */
+  }
 });
 
 describe('markToolConsultation', () => {
@@ -64,10 +66,7 @@ describe('markToolConsultation', () => {
 
     it('extracts files from get_context_bundle symbol_ids array', () => {
       markToolConsultation(TEST_ROOT, 'get_context_bundle', {
-        symbol_ids: [
-          'src/a.ts::Foo#class',
-          'src/b.ts::Bar#function',
-        ],
+        symbol_ids: ['src/a.ts::Foo#class', 'src/b.ts::Bar#function'],
       });
 
       const dir = getMarkerDir();

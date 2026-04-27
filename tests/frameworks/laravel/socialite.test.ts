@@ -40,7 +40,10 @@ class SocialAuthController extends Controller
 }`;
 
 describe('socialite — controller extraction', () => {
-  const info = extractSocialiteUsage(CONTROLLER_SOURCE, 'app/Http/Controllers/Auth/SocialAuthController.php');
+  const info = extractSocialiteUsage(
+    CONTROLLER_SOURCE,
+    'app/Http/Controllers/Auth/SocialAuthController.php',
+  );
 
   it('detects Socialite usage', () => {
     expect(info).not.toBeNull();
@@ -51,22 +54,30 @@ describe('socialite — controller extraction', () => {
   });
 
   it('detects github provider with redirect', () => {
-    const githubRedirect = info!.providers.find(p => p.name === 'github' && p.usageType === 'redirect');
+    const githubRedirect = info!.providers.find(
+      (p) => p.name === 'github' && p.usageType === 'redirect',
+    );
     expect(githubRedirect).toBeDefined();
   });
 
   it('detects github provider with callback', () => {
-    const githubCallback = info!.providers.find(p => p.name === 'github' && p.usageType === 'callback');
+    const githubCallback = info!.providers.find(
+      (p) => p.name === 'github' && p.usageType === 'callback',
+    );
     expect(githubCallback).toBeDefined();
   });
 
   it('detects google provider with scopes', () => {
-    const googleScopes = info!.providers.find(p => p.name === 'google' && p.usageType === 'scopes');
+    const googleScopes = info!.providers.find(
+      (p) => p.name === 'google' && p.usageType === 'scopes',
+    );
     expect(googleScopes).toBeDefined();
   });
 
   it('detects google provider with stateless', () => {
-    const googleStateless = info!.providers.find(p => p.name === 'google' && p.usageType === 'stateless');
+    const googleStateless = info!.providers.find(
+      (p) => p.name === 'google' && p.usageType === 'stateless',
+    );
     expect(googleStateless).toBeDefined();
   });
 
@@ -79,7 +90,7 @@ describe('socialite — controller extraction', () => {
   it('builds edges', () => {
     const edges = buildSocialiteEdges(info!, 'app/Http/Controllers/Auth/SocialAuthController.php');
     expect(edges.length).toBeGreaterThanOrEqual(4);
-    const githubEdge = edges.find(e => e.metadata.provider === 'github');
+    const githubEdge = edges.find((e) => e.metadata.provider === 'github');
     expect(githubEdge).toBeDefined();
     expect(githubEdge!.edgeType).toBe('socialite_uses_provider');
   });
@@ -132,7 +143,7 @@ describe('socialite — custom provider', () => {
 
   it('builds custom provider edges', () => {
     const edges = buildSocialiteEdges(info!, 'app/Socialite/BitbucketProvider.php');
-    const customEdge = edges.find(e => e.edgeType === 'socialite_custom_provider');
+    const customEdge = edges.find((e) => e.edgeType === 'socialite_custom_provider');
     expect(customEdge).toBeDefined();
     expect(customEdge!.metadata.providerName).toBe('bitbucket');
   });

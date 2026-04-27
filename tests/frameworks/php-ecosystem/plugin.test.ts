@@ -83,7 +83,9 @@ describe('PhpEcosystemPlugin', () => {
     });
 
     it('detects spatie/laravel-translation-loader', () => {
-      expect(plugin.detect(ctxWithRequire({ 'spatie/laravel-translation-loader': '^2.0' }))).toBe(true);
+      expect(plugin.detect(ctxWithRequire({ 'spatie/laravel-translation-loader': '^2.0' }))).toBe(
+        true,
+      );
     });
 
     it('detects titasgailius/search-relations', () => {
@@ -261,7 +263,11 @@ class ReportController {
     return Excel::export(new ReportExport, 'report.xlsx');
   }
 }`);
-      const result = plugin.extractNodes('app/Http/Controllers/ReportController.php', source, 'php');
+      const result = plugin.extractNodes(
+        'app/Http/Controllers/ReportController.php',
+        source,
+        'php',
+      );
       expect(result._unsafeUnwrap().frameworkRole).toBe('maatwebsite_excel_usage');
     });
 
@@ -305,7 +311,11 @@ $img = $manager->read('photo.jpg')->resize(800, 600)->save('out.jpg');`);
       const source = Buffer.from(`<?php
 use Intervention\\Image\\Laravel\\Facades\\Image;
 $img = Image::read($path)->resize(800, 600);`);
-      const result = plugin.extractNodes('app/Http/Controllers/UploadController.php', source, 'php');
+      const result = plugin.extractNodes(
+        'app/Http/Controllers/UploadController.php',
+        source,
+        'php',
+      );
       expect(result._unsafeUnwrap().frameworkRole).toBe('intervention_image_usage');
     });
 

@@ -158,19 +158,11 @@ export function persistCoChanges(
 /**
  * Query co-changes for a specific file.
  */
-export function getCoChanges(
-  store: Store,
-  opts: CoChangeOptions,
-): TraceMcpResult<CoChangeResult> {
-  const {
-    file,
-    minConfidence = 0.3,
-    minCount = 3,
-    windowDays = 180,
-    limit = 20,
-  } = opts;
+export function getCoChanges(store: Store, opts: CoChangeOptions): TraceMcpResult<CoChangeResult> {
+  const { file, minConfidence = 0.3, minCount = 3, windowDays = 180, limit = 20 } = opts;
 
-  const rows = store.db.prepare(`
+  const rows = store.db
+    .prepare(`
     SELECT
       CASE WHEN file_a = ? THEN file_b ELSE file_a END AS co_file,
       co_change_count,
@@ -184,7 +176,8 @@ export function getCoChanges(
       AND window_days = ?
     ORDER BY confidence DESC, co_change_count DESC
     LIMIT ?
-  `).all(file, file, file, file, minConfidence, minCount, windowDays, limit) as Array<{
+  `)
+    .all(file, file, file, file, minConfidence, minCount, windowDays, limit) as Array<{
     co_file: string;
     co_change_count: number;
     co_file_total: number;

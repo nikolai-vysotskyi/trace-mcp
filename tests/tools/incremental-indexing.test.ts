@@ -7,12 +7,7 @@ function insertFile(store: Store, path: string, lang = 'typescript'): number {
   return store.insertFile(path, lang, 'hash_' + path, 100);
 }
 
-function insertSymbol(
-  store: Store,
-  fileId: number,
-  name: string,
-  kind = 'function',
-): number {
+function insertSymbol(store: Store, fileId: number, name: string, kind = 'function'): number {
   return store.insertSymbol(fileId, {
     symbolId: `${name}#${kind}`,
     name,
@@ -121,8 +116,18 @@ describe('Graph Snapshots', () => {
   });
 
   it('inserts and retrieves graph snapshots', () => {
-    store.insertGraphSnapshot('coupling', { ca: 3, ce: 5, instability: 0.625 }, 'abc1234', 'src/foo.ts');
-    store.insertGraphSnapshot('coupling', { ca: 2, ce: 4, instability: 0.667 }, 'def5678', 'src/foo.ts');
+    store.insertGraphSnapshot(
+      'coupling',
+      { ca: 3, ce: 5, instability: 0.625 },
+      'abc1234',
+      'src/foo.ts',
+    );
+    store.insertGraphSnapshot(
+      'coupling',
+      { ca: 2, ce: 4, instability: 0.667 },
+      'def5678',
+      'src/foo.ts',
+    );
 
     const snapshots = store.getGraphSnapshots('coupling', { filePath: 'src/foo.ts' });
     expect(snapshots.length).toBe(2);
@@ -158,10 +163,12 @@ describe('Graph Snapshots', () => {
 
   it('prunes old snapshots', () => {
     // Insert a snapshot with a very old date
-    store.db.prepare(
-      `INSERT INTO graph_snapshots (commit_hash, snapshot_type, file_path, data, created_at)
+    store.db
+      .prepare(
+        `INSERT INTO graph_snapshots (commit_hash, snapshot_type, file_path, data, created_at)
        VALUES (?, ?, ?, ?, datetime('now', '-100 days'))`,
-    ).run('old', 'coupling', 'src/a.ts', '{}');
+      )
+      .run('old', 'coupling', 'src/a.ts', '{}');
 
     store.insertGraphSnapshot('coupling', {}, 'new', 'src/a.ts');
 
@@ -177,9 +184,9 @@ describe('Graph Snapshots', () => {
 describe('Schema migration v13', () => {
   it('creates graph_snapshots table', () => {
     const db = initializeDatabase(':memory:');
-    const tables = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='graph_snapshots'",
-    ).all() as { name: string }[];
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='graph_snapshots'")
+      .all() as { name: string }[];
     expect(tables.length).toBe(1);
     db.close();
   });

@@ -13,9 +13,16 @@ const _plugin = createRegexLanguagePlugin({
   extensions: ['.lean'],
   symbolPatterns: [
     // def name
-    { kind: 'function', pattern: /^\s*(?:noncomputable\s+)?(?:private\s+|protected\s+)?def\s+(\w[\w.]*)/gm },
+    {
+      kind: 'function',
+      pattern: /^\s*(?:noncomputable\s+)?(?:private\s+|protected\s+)?def\s+(\w[\w.]*)/gm,
+    },
     // theorem name / lemma name
-    { kind: 'function', pattern: /^\s*(?:private\s+|protected\s+)?(?:theorem|lemma)\s+(\w[\w.]*)/gm, meta: { proof: true } },
+    {
+      kind: 'function',
+      pattern: /^\s*(?:private\s+|protected\s+)?(?:theorem|lemma)\s+(\w[\w.]*)/gm,
+      meta: { proof: true },
+    },
     // structure Name
     { kind: 'class', pattern: /^\s*(?:private\s+|protected\s+)?structure\s+(\w[\w.]*)/gm },
     // class Name

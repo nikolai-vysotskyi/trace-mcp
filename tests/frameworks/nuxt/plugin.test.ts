@@ -129,8 +129,9 @@ describe('NuxtPlugin', () => {
     });
 
     it('handles nested dynamic routes', () => {
-      expect(filePathToRoute('pages/posts/[postId]/comments/[id].vue'))
-        .toBe('/posts/:postId/comments/:id');
+      expect(filePathToRoute('pages/posts/[postId]/comments/[id].vue')).toBe(
+        '/posts/:postId/comments/:id',
+      );
     });
 
     it('converts app/pages/index.vue to / with srcDir=app', () => {

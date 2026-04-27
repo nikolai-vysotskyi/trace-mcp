@@ -63,7 +63,11 @@ const CSS_SPEC_FEATURES: [RegExp, string, string][] = [
   [/interpolate-size\s*:/, '2024', 'interpolate-size'],
   [/field-sizing\s*:/, '2024', 'field-sizing'],
   [/text-wrap\s*:\s*pretty/, '2024', 'text-wrap: pretty'],
-  [/align-content\s*:\s*(?:center|start|end|space-between)/, '2024', 'align-content on block containers'],
+  [
+    /align-content\s*:\s*(?:center|start|end|space-between)/,
+    '2024',
+    'align-content on block containers',
+  ],
 
   // --- 2025 ---
   [/if\s*\(/, '2025', 'if() inline conditional'],

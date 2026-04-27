@@ -24,7 +24,9 @@ function mkTmpHome(): string {
 describe('launcher config paths', () => {
   let tmp: string;
 
-  beforeEach(() => { tmp = mkTmpHome(); });
+  beforeEach(() => {
+    tmp = mkTmpHome();
+  });
   afterEach(() => {
     delete process.env.TRACE_MCP_HOME;
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -44,7 +46,9 @@ describe('launcher config paths', () => {
 
 describe('writeLauncherConfig / readLauncherConfig', () => {
   let tmp: string;
-  beforeEach(() => { tmp = mkTmpHome(); });
+  beforeEach(() => {
+    tmp = mkTmpHome();
+  });
   afterEach(() => {
     delete process.env.TRACE_MCP_HOME;
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -73,14 +77,12 @@ describe('writeLauncherConfig / readLauncherConfig', () => {
 
   it('ignores comments, blank lines, unknown keys', () => {
     fs.mkdirSync(tmp, { recursive: true });
-    fs.writeFileSync(getLauncherConfigPath(), [
-      '# comment',
-      '',
-      'TRACE_MCP_NODE="/n"',
-      'UNKNOWN_KEY="evil"',
-      'TRACE_MCP_CLI="/c"',
-      '',
-    ].join('\n'));
+    fs.writeFileSync(
+      getLauncherConfigPath(),
+      ['# comment', '', 'TRACE_MCP_NODE="/n"', 'UNKNOWN_KEY="evil"', 'TRACE_MCP_CLI="/c"', ''].join(
+        '\n',
+      ),
+    );
     const cfg = readLauncherConfig();
     expect(cfg.node).toBe('/n');
     expect(cfg.cli).toBe('/c');
@@ -89,9 +91,9 @@ describe('writeLauncherConfig / readLauncherConfig', () => {
   });
 
   it('rejects values containing double quotes', () => {
-    expect(() =>
-      writeLauncherConfig({ node: '/a"b', cli: '/c', version: 'v1' }),
-    ).toThrow(/unsupported character/);
+    expect(() => writeLauncherConfig({ node: '/a"b', cli: '/c', version: 'v1' })).toThrow(
+      /unsupported character/,
+    );
   });
 
   it('overwrites existing file atomically (no partial writes visible)', () => {
@@ -108,7 +110,9 @@ describe('writeLauncherConfig / readLauncherConfig', () => {
 
 describe('installLauncher', () => {
   let tmp: string;
-  beforeEach(() => { tmp = mkTmpHome(); });
+  beforeEach(() => {
+    tmp = mkTmpHome();
+  });
   afterEach(() => {
     delete process.env.TRACE_MCP_HOME;
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -120,7 +124,7 @@ describe('installLauncher', () => {
 
     const p = getLauncherPath();
     expect(fs.existsSync(p)).toBe(true);
-    expect(fs.statSync(p).mode & 0o111).not.toBe(0);  // any exec bit set
+    expect(fs.statSync(p).mode & 0o111).not.toBe(0); // any exec bit set
     expect(readInstalledLauncherVersion()).toBe(LAUNCHER_VERSION);
 
     const body = fs.readFileSync(p, 'utf-8');
@@ -149,7 +153,9 @@ describe('installLauncher', () => {
 
 describe('setupLauncher (install + config)', () => {
   let tmp: string;
-  beforeEach(() => { tmp = mkTmpHome(); });
+  beforeEach(() => {
+    tmp = mkTmpHome();
+  });
   afterEach(() => {
     delete process.env.TRACE_MCP_HOME;
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -157,8 +163,8 @@ describe('setupLauncher (install + config)', () => {
 
   it('installs script and writes launcher.env', () => {
     const steps = setupLauncher({ pkgVersion: '9.9.9' });
-    expect(steps[0].action).toBe('created');           // launcher script
-    expect(steps[1].action).toBe('created');           // config file
+    expect(steps[0].action).toBe('created'); // launcher script
+    expect(steps[1].action).toBe('created'); // config file
 
     const cfg = readLauncherConfig();
     expect(cfg.node).toBe(process.execPath);

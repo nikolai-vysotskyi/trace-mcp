@@ -30,18 +30,23 @@ describe('Taint Analysis', () => {
 
   describe('Express (JS/TS)', () => {
     test('detects req.params → SQL query (SQL injection)', () => {
-      writeFile(store, 'src/routes/user.ts', `
+      writeFile(
+        store,
+        'src/routes/user.ts',
+        `
 app.get('/user/:id', (req, res) => {
   const id = req.params.id;
   db.query(\`SELECT * FROM users WHERE id = \${id}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
       expect(data.flows.length).toBeGreaterThanOrEqual(1);
-      const sqlFlow = data.flows.find(f => f.sink.cwe === 'CWE-89');
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
       expect(sqlFlow).toBeDefined();
       expect(sqlFlow!.source.kind).toBe('http_param');
       expect(sqlFlow!.sink.kind).toBe('sql_query');
@@ -49,60 +54,80 @@ app.get('/user/:id', (req, res) => {
     });
 
     test('detects req.query → exec (command injection)', () => {
-      writeFile(store, 'src/routes/run.ts', `
+      writeFile(
+        store,
+        'src/routes/run.ts',
+        `
 app.get('/run', (req, res) => {
   const cmd = req.query.cmd;
   exec(\`ls \${cmd}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      const execFlow = data.flows.find(f => f.sink.kind === 'exec');
+      const execFlow = data.flows.find((f) => f.sink.kind === 'exec');
       expect(execFlow).toBeDefined();
       expect(execFlow!.source.kind).toBe('http_param');
       expect(execFlow!.sink.cwe).toBe('CWE-78');
     });
 
     test('detects req.body → innerHTML (XSS)', () => {
-      writeFile(store, 'src/routes/render.ts', `
+      writeFile(
+        store,
+        'src/routes/render.ts',
+        `
 app.post('/comment', (req, res) => {
   const body = req.body.content;
   element.innerHTML = body;
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      const xssFlow = data.flows.find(f => f.sink.kind === 'innerHTML');
+      const xssFlow = data.flows.find((f) => f.sink.kind === 'innerHTML');
       expect(xssFlow).toBeDefined();
       expect(xssFlow!.sink.cwe).toBe('CWE-79');
     });
 
     test('detects req.query → redirect (open redirect)', () => {
-      writeFile(store, 'src/routes/auth.ts', `
+      writeFile(
+        store,
+        'src/routes/auth.ts',
+        `
 app.get('/login', (req, res) => {
   const returnUrl = req.query.returnUrl;
   res.redirect(returnUrl);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      const redirectFlow = data.flows.find(f => f.sink.kind === 'redirect');
+      const redirectFlow = data.flows.find((f) => f.sink.kind === 'redirect');
       expect(redirectFlow).toBeDefined();
     });
 
     test('detects req.headers source', () => {
-      writeFile(store, 'src/routes/proxy.ts', `
+      writeFile(
+        store,
+        'src/routes/proxy.ts',
+        `
 app.get('/proxy', (req, res) => {
   const host = req.headers['host'];
   db.query(\`SELECT * FROM hosts WHERE name = \${host}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { sources: ['http_header'] });
       expect(result.isOk()).toBe(true);
@@ -112,12 +137,17 @@ app.get('/proxy', (req, res) => {
     });
 
     test('detects cookies source', () => {
-      writeFile(store, 'src/routes/session.ts', `
+      writeFile(
+        store,
+        'src/routes/session.ts',
+        `
 app.get('/dashboard', (req, res) => {
   const token = req.cookies['session'];
   eval(token);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { sources: ['cookie'] });
       expect(result.isOk()).toBe(true);
@@ -127,12 +157,17 @@ app.get('/dashboard', (req, res) => {
     });
 
     test('detects headers via dot notation (req.headers.host)', () => {
-      writeFile(store, 'src/routes/dot-headers.ts', `
+      writeFile(
+        store,
+        'src/routes/dot-headers.ts',
+        `
 app.get('/test', (req, res) => {
   const host = req.headers.host;
   db.query(\`SELECT * FROM t WHERE host = \${host}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { sources: ['http_header'] });
       expect(result.isOk()).toBe(true);
@@ -142,12 +177,17 @@ app.get('/test', (req, res) => {
     });
 
     test('detects cookies via dot notation (req.cookies.session)', () => {
-      writeFile(store, 'src/routes/dot-cookies.ts', `
+      writeFile(
+        store,
+        'src/routes/dot-cookies.ts',
+        `
 app.get('/test', (req, res) => {
   const token = req.cookies.session;
   eval(token);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { sources: ['cookie'] });
       expect(result.isOk()).toBe(true);
@@ -163,31 +203,41 @@ app.get('/test', (req, res) => {
 
   describe('sanitizers', () => {
     test('marks flow as sanitized when parseInt is used', () => {
-      writeFile(store, 'src/routes/safe.ts', `
+      writeFile(
+        store,
+        'src/routes/safe.ts',
+        `
 app.get('/user/:id', (req, res) => {
   const id = req.params.id;
   const safeId = parseInt(id);
   db.query(\`SELECT * FROM users WHERE id = \${safeId}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { includeSanitized: true });
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
       // With includeSanitized=true, we should see flows
-      const sanitizedFlows = data.flows.filter(f => f.sanitized);
+      const sanitizedFlows = data.flows.filter((f) => f.sanitized);
       // parseInt sanitizes the id
       expect(sanitizedFlows.length).toBeGreaterThanOrEqual(0); // may or may not track through safeId
     });
 
     test('excludes sanitized flows by default', () => {
-      writeFile(store, 'src/routes/safe.ts', `
+      writeFile(
+        store,
+        'src/routes/safe.ts',
+        `
 app.get('/user/:id', (req, res) => {
   const id = req.params.id;
   const safeId = parseInt(id);
   db.query(\`SELECT * FROM users WHERE id = \${safeId}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -199,18 +249,25 @@ app.get('/user/:id', (req, res) => {
     });
 
     test('recognizes DOMPurify as sanitizer', () => {
-      writeFile(store, 'src/routes/xss.ts', `
+      writeFile(
+        store,
+        'src/routes/xss.ts',
+        `
 app.post('/comment', (req, res) => {
   const body = req.body.content;
   const clean = DOMPurify.sanitize(body);
   element.innerHTML = clean;
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { includeSanitized: true });
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      const sanitizedFlows = data.flows.filter(f => f.sanitized && f.sanitizer === 'DOMPurify.sanitize');
+      const sanitizedFlows = data.flows.filter(
+        (f) => f.sanitized && f.sanitizer === 'DOMPurify.sanitize',
+      );
       expect(sanitizedFlows.length).toBeGreaterThanOrEqual(0); // depends on flow tracking
     });
   });
@@ -221,13 +278,18 @@ app.post('/comment', (req, res) => {
 
   describe('variable flow tracking', () => {
     test('tracks taint through variable assignment', () => {
-      writeFile(store, 'src/routes/chain.ts', `
+      writeFile(
+        store,
+        'src/routes/chain.ts',
+        `
 app.get('/search', (req, res) => {
   const q = req.query.q;
   const term = q;
   db.query(\`SELECT * FROM products WHERE name = \${term}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -239,13 +301,18 @@ app.get('/search', (req, res) => {
     });
 
     test('does not propagate taint to unrelated variables', () => {
-      writeFile(store, 'src/routes/safe.ts', `
+      writeFile(
+        store,
+        'src/routes/safe.ts',
+        `
 app.get('/search', (req, res) => {
   const q = req.query.q;
   const hardcoded = "safe_value";
   db.query(\`SELECT * FROM products WHERE name = \${hardcoded}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -261,11 +328,16 @@ app.get('/search', (req, res) => {
 
   describe('Django (Python)', () => {
     test('detects request.GET → execute (SQL injection)', () => {
-      writeFile(store, 'src/views.py', `
+      writeFile(
+        store,
+        'src/views.py',
+        `
 def search(request):
     query = request.GET['q']
     cursor.execute(f"SELECT * FROM products WHERE name = {query}")
-`, 'python');
+`,
+        'python',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -276,16 +348,21 @@ def search(request):
     });
 
     test('detects request.POST.get → os.system (command injection)', () => {
-      writeFile(store, 'src/admin.py', `
+      writeFile(
+        store,
+        'src/admin.py',
+        `
 def run_report(request):
     name = request.POST.get('report_name')
     os.system(f"generate-report {name}")
-`, 'python');
+`,
+        'python',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      const cmdFlow = data.flows.find(f => f.sink.kind === 'exec');
+      const cmdFlow = data.flows.find((f) => f.sink.kind === 'exec');
       expect(cmdFlow).toBeDefined();
     });
   });
@@ -296,12 +373,17 @@ def run_report(request):
 
   describe('Laravel (PHP)', () => {
     test('detects $request->input → query with variable interpolation (SQL injection)', () => {
-      writeFile(store, 'src/UserController.php', `<?php
+      writeFile(
+        store,
+        'src/UserController.php',
+        `<?php
 public function search(Request $request) {
     $query = $request->input('search');
     $db->query("SELECT * FROM users WHERE name = $query");
 }
-`, 'php');
+`,
+        'php',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -312,12 +394,17 @@ public function search(Request $request) {
     });
 
     test('detects $request->input → query with dot concatenation', () => {
-      writeFile(store, 'src/UserController2.php', `<?php
+      writeFile(
+        store,
+        'src/UserController2.php',
+        `<?php
 public function search(Request $request) {
     $query = $request->input('search');
     $db->query("SELECT * FROM users WHERE name = " . $query);
 }
-`, 'php');
+`,
+        'php',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -327,29 +414,39 @@ public function search(Request $request) {
     });
 
     test('detects $_GET → eval (code injection)', () => {
-      writeFile(store, 'src/exec.php', `<?php
+      writeFile(
+        store,
+        'src/exec.php',
+        `<?php
 $cmd = $_GET['cmd'];
 eval($cmd);
-`, 'php');
+`,
+        'php',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      const evalFlow = data.flows.find(f => f.sink.kind === 'eval');
+      const evalFlow = data.flows.find((f) => f.sink.kind === 'eval');
       expect(evalFlow).toBeDefined();
       expect(evalFlow!.sink.cwe).toBe('CWE-95');
     });
 
     test('detects $_GET → shell_exec with interpolation', () => {
-      writeFile(store, 'src/shell.php', `<?php
+      writeFile(
+        store,
+        'src/shell.php',
+        `<?php
 $input = $_GET['cmd'];
 shell_exec("ls $input");
-`, 'php');
+`,
+        'php',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      const execFlow = data.flows.find(f => f.sink.kind === 'exec');
+      const execFlow = data.flows.find((f) => f.sink.kind === 'exec');
       expect(execFlow).toBeDefined();
     });
   });
@@ -360,12 +457,17 @@ shell_exec("ls $input");
 
   describe('Go (Gin)', () => {
     test('detects c.Query → Exec (SQL injection)', () => {
-      writeFile(store, 'src/handlers.go', `
+      writeFile(
+        store,
+        'src/handlers.go',
+        `
 func SearchHandler(c *gin.Context) {
     name := c.Query("name")
     db.Exec("SELECT * FROM t WHERE x = " + name)
 }
-`, 'go');
+`,
+        'go',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -380,14 +482,19 @@ func SearchHandler(c *gin.Context) {
 
   describe('options', () => {
     test('filters by source kind', () => {
-      writeFile(store, 'src/routes/mixed.ts', `
+      writeFile(
+        store,
+        'src/routes/mixed.ts',
+        `
 app.get('/test', (req, res) => {
   const id = req.params.id;
   const host = req.headers['host'];
   db.query(\`SELECT * FROM users WHERE id = \${id}\`);
   db.query(\`SELECT * FROM hosts WHERE name = \${host}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { sources: ['http_header'] });
       expect(result.isOk()).toBe(true);
@@ -398,13 +505,18 @@ app.get('/test', (req, res) => {
     });
 
     test('filters by sink kind', () => {
-      writeFile(store, 'src/routes/multi.ts', `
+      writeFile(
+        store,
+        'src/routes/multi.ts',
+        `
 app.get('/test', (req, res) => {
   const cmd = req.query.cmd;
   exec(\`run \${cmd}\`);
   db.query(\`SELECT * FROM t WHERE x = \${cmd}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { sinks: ['exec'] });
       expect(result.isOk()).toBe(true);
@@ -415,18 +527,28 @@ app.get('/test', (req, res) => {
     });
 
     test('respects scope filter', () => {
-      writeFile(store, 'src/routes/a.ts', `
+      writeFile(
+        store,
+        'src/routes/a.ts',
+        `
 app.get('/a', (req, res) => {
   const id = req.params.id;
   db.query(\`SELECT * FROM t WHERE id = \${id}\`);
 });
-`, 'typescript');
-      writeFile(store, 'lib/routes/b.ts', `
+`,
+        'typescript',
+      );
+      writeFile(
+        store,
+        'lib/routes/b.ts',
+        `
 app.get('/b', (req, res) => {
   const id = req.params.id;
   db.query(\`SELECT * FROM t WHERE id = \${id}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { scope: 'src/' });
       expect(result.isOk()).toBe(true);
@@ -439,12 +561,17 @@ app.get('/b', (req, res) => {
     test('respects limit', () => {
       // Create 5 files each with a tainted flow
       for (let i = 0; i < 5; i++) {
-        writeFile(store, `src/routes/route${i}.ts`, `
+        writeFile(
+          store,
+          `src/routes/route${i}.ts`,
+          `
 app.get('/r${i}', (req, res) => {
   const id = req.params.id;
   db.query(\`SELECT * FROM t${i} WHERE id = \${id}\`);
 });
-`, 'typescript');
+`,
+          'typescript',
+        );
       }
 
       const result = taintAnalysis(store, TEST_DIR, { limit: 2 });
@@ -453,12 +580,17 @@ app.get('/r${i}', (req, res) => {
     });
 
     test('returns correct summary', () => {
-      writeFile(store, 'src/routes/vuln.ts', `
+      writeFile(
+        store,
+        'src/routes/vuln.ts',
+        `
 app.get('/vuln', (req, res) => {
   const id = req.params.id;
   db.query(\`SELECT * FROM t WHERE id = \${id}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -475,22 +607,35 @@ app.get('/vuln', (req, res) => {
   describe('inter-procedural', () => {
     test('detects taint flow across files via function call', () => {
       // File A: controller that receives user input and passes to helper
-      writeFile(store, 'src/routes/controller.ts', `
+      writeFile(
+        store,
+        'src/routes/controller.ts',
+        `
 app.get('/search', (req, res) => {
   const query = req.params.query;
   performSearch(query);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       // File B: helper function that uses the parameter unsafely
-      const helperFileId = store.insertFile('src/helpers/search.ts', 'typescript', 'hash-helper', 200);
+      const helperFileId = store.insertFile(
+        'src/helpers/search.ts',
+        'typescript',
+        'hash-helper',
+        200,
+      );
       const absHelper = path.join(TEST_DIR, 'src/helpers/search.ts');
       mkdirSync(path.dirname(absHelper), { recursive: true });
-      writeFileSync(absHelper, `
+      writeFileSync(
+        absHelper,
+        `
 export function performSearch(term: string) {
   db.query(\`SELECT * FROM products WHERE name = \${term}\`);
 }
-`);
+`,
+      );
 
       // Insert symbol for the helper function so it's discoverable
       store.insertSymbol(helperFileId, {
@@ -509,7 +654,7 @@ export function performSearch(term: string) {
       const data = result._unsafeUnwrap();
 
       // Should find cross-file flow: req.params.query → performSearch(query) → db.query
-      const crossFileFlows = data.flows.filter(f => f.file.includes('→'));
+      const crossFileFlows = data.flows.filter((f) => f.file.includes('→'));
       expect(crossFileFlows.length).toBeGreaterThanOrEqual(1);
       if (crossFileFlows.length > 0) {
         expect(crossFileFlows[0].confidence).toBe('low'); // cross-file = low confidence
@@ -518,22 +663,30 @@ export function performSearch(term: string) {
     });
 
     test('does not report cross-file flow when target has sanitizer', () => {
-      writeFile(store, 'src/routes/safe-controller.ts', `
+      writeFile(
+        store,
+        'src/routes/safe-controller.ts',
+        `
 app.get('/user/:id', (req, res) => {
   const id = req.params.id;
   fetchUser(id);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const helperFileId = store.insertFile('src/helpers/user.ts', 'typescript', 'hash-user', 200);
       const absHelper = path.join(TEST_DIR, 'src/helpers/user.ts');
       mkdirSync(path.dirname(absHelper), { recursive: true });
-      writeFileSync(absHelper, `
+      writeFileSync(
+        absHelper,
+        `
 export function fetchUser(userId: string) {
   const safeId = parseInt(userId);
   db.query(\`SELECT * FROM users WHERE id = \${safeId}\`);
 }
-`);
+`,
+      );
 
       store.insertSymbol(helperFileId, {
         symbolId: 'helpers/user.ts::fetchUser#function',
@@ -550,7 +703,7 @@ export function fetchUser(userId: string) {
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
       // Cross-file flows with sanitizers should be excluded by default
-      const unsanitizedCrossFile = data.flows.filter(f => f.file.includes('→') && !f.sanitized);
+      const unsanitizedCrossFile = data.flows.filter((f) => f.file.includes('→') && !f.sanitized);
       expect(unsanitizedCrossFile).toHaveLength(0);
     });
   });
@@ -561,11 +714,16 @@ export function fetchUser(userId: string) {
 
   describe('edge cases', () => {
     test('returns empty for file with no sources', () => {
-      writeFile(store, 'src/utils.ts', `
+      writeFile(
+        store,
+        'src/utils.ts',
+        `
 function add(a: number, b: number): number {
   return a + b;
 }
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -573,13 +731,18 @@ function add(a: number, b: number): number {
     });
 
     test('returns empty for file with sources but no sinks', () => {
-      writeFile(store, 'src/routes/safe.ts', `
+      writeFile(
+        store,
+        'src/routes/safe.ts',
+        `
 app.get('/user/:id', (req, res) => {
   const id = req.params.id;
   console.log(id);
   res.json({ id });
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -594,12 +757,17 @@ app.get('/user/:id', (req, res) => {
     });
 
     test('flow path includes source and sink steps', () => {
-      writeFile(store, 'src/routes/flow.ts', `
+      writeFile(
+        store,
+        'src/routes/flow.ts',
+        `
 app.get('/user/:id', (req, res) => {
   const id = req.params.id;
   db.query(\`SELECT * FROM users WHERE id = \${id}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -612,12 +780,17 @@ app.get('/user/:id', (req, res) => {
     });
 
     test('confidence is high for direct source→sink flow', () => {
-      writeFile(store, 'src/routes/direct.ts', `
+      writeFile(
+        store,
+        'src/routes/direct.ts',
+        `
 app.get('/user/:id', (req, res) => {
   const id = req.params.id;
   db.query(\`SELECT * FROM users WHERE id = \${id}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -634,12 +807,17 @@ app.get('/user/:id', (req, res) => {
 
   describe('destructured params', () => {
     test('detects destructured req.params', () => {
-      writeFile(store, 'src/routes/destructured.ts', `
+      writeFile(
+        store,
+        'src/routes/destructured.ts',
+        `
 app.get('/user/:id', (req, res) => {
   const { id } = req.params;
   db.query(\`SELECT * FROM users WHERE id = \${id}\`);
 });
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, {});
       expect(result.isOk()).toBe(true);
@@ -654,10 +832,15 @@ app.get('/user/:id', (req, res) => {
 
   describe('env sources', () => {
     test('detects process.env → exec', () => {
-      writeFile(store, 'src/startup.ts', `
+      writeFile(
+        store,
+        'src/startup.ts',
+        `
 const dbHost = process.env.DB_HOST;
 exec(\`ping \${dbHost}\`);
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = taintAnalysis(store, TEST_DIR, { sources: ['env'] });
       expect(result.isOk()).toBe(true);

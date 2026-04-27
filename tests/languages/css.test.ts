@@ -20,9 +20,11 @@ describe('CssLanguagePlugin', () => {
     it('extracts @import edges', async () => {
       const r = await parse('@import "reset.css";\n@import url("fonts.css");');
       expect(r.edges).toHaveLength(2);
-      expect(r.edges).toContainEqual(expect.objectContaining({
-        metadata: { from: 'reset.css', kind: 'stylesheet' },
-      }));
+      expect(r.edges).toContainEqual(
+        expect.objectContaining({
+          metadata: { from: 'reset.css', kind: 'stylesheet' },
+        }),
+      );
     });
 
     it('extracts @keyframes', async () => {
@@ -32,11 +34,17 @@ describe('CssLanguagePlugin', () => {
 
     it('extracts @font-face', async () => {
       const r = await parse('@font-face { font-family: "MyFont"; src: url("myfont.woff2"); }');
-      expect(r.symbols.some((s) => s.name === '@font-face MyFont' && s.metadata?.fontFamily === 'MyFont')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.name === '@font-face MyFont' && s.metadata?.fontFamily === 'MyFont',
+        ),
+      ).toBe(true);
     });
 
     it('extracts class selectors (deduplicated)', async () => {
-      const r = await parse('.btn { color: red; }\n.btn:hover { color: blue; }\n.card { padding: 1rem; }');
+      const r = await parse(
+        '.btn { color: red; }\n.btn:hover { color: blue; }\n.card { padding: 1rem; }',
+      );
       expect(r.symbols.some((s) => s.name === '.btn')).toBe(true);
       expect(r.symbols.some((s) => s.name === '.card')).toBe(true);
       const btnCount = r.symbols.filter((s) => s.name === '.btn').length;
@@ -62,8 +70,13 @@ describe('CssLanguagePlugin', () => {
     });
 
     it('extracts @mixin definitions', async () => {
-      const r = await parse('@mixin flex-center { display: flex; align-items: center; }', 'mixins.scss');
-      expect(r.symbols.some((s) => s.name === '@mixin flex-center' && s.metadata?.mixin)).toBe(true);
+      const r = await parse(
+        '@mixin flex-center { display: flex; align-items: center; }',
+        'mixins.scss',
+      );
+      expect(r.symbols.some((s) => s.name === '@mixin flex-center' && s.metadata?.mixin)).toBe(
+        true,
+      );
     });
 
     it('extracts @use as import edge', async () => {
@@ -88,16 +101,23 @@ describe('CssLanguagePlugin', () => {
 
     it('emits imports edge for @extend', async () => {
       const r = await parse('.btn { @extend %base-btn; }', 'button.scss');
-      expect(r.edges?.some((e) =>
-        e.edgeType === 'imports' && (e.metadata as any)?.module === '%base-btn' && (e.metadata as any)?.kind === 'scss-extend'
-      )).toBe(true);
+      expect(
+        r.edges?.some(
+          (e) =>
+            e.edgeType === 'imports' &&
+            (e.metadata as any)?.module === '%base-btn' &&
+            (e.metadata as any)?.kind === 'scss-extend',
+        ),
+      ).toBe(true);
     });
 
     it('emits calls edge for @include', async () => {
       const r = await parse('.card { @include shadow(2px); }', 'card.scss');
-      expect(r.edges?.some((e) =>
-        e.edgeType === 'calls' && (e.metadata as any)?.module === '@mixin shadow'
-      )).toBe(true);
+      expect(
+        r.edges?.some(
+          (e) => e.edgeType === 'calls' && (e.metadata as any)?.module === '@mixin shadow',
+        ),
+      ).toBe(true);
     });
 
     it('returns language scss', async () => {
@@ -113,7 +133,10 @@ describe('CssLanguagePlugin', () => {
     });
 
     it('extracts @function and %placeholder in indented SASS', async () => {
-      const r = await parse('@function scale($n)\n  @return $n * 1rem\n\n%center\n  display: flex\n', 'theme.sass');
+      const r = await parse(
+        '@function scale($n)\n  @return $n * 1rem\n\n%center\n  display: flex\n',
+        'theme.sass',
+      );
       expect(r.symbols.some((s) => s.name === '@function scale')).toBe(true);
       expect(r.symbols.some((s) => s.name === '%center')).toBe(true);
     });
@@ -122,7 +145,9 @@ describe('CssLanguagePlugin', () => {
   describe('LESS', () => {
     it('extracts LESS variables', async () => {
       const r = await parse('@brand-color: #4a90d9;\n@font-stack: Helvetica;', 'vars.less');
-      expect(r.symbols.some((s) => s.name === '@brand-color' && s.metadata?.lessVariable)).toBe(true);
+      expect(r.symbols.some((s) => s.name === '@brand-color' && s.metadata?.lessVariable)).toBe(
+        true,
+      );
       expect(r.symbols.some((s) => s.name === '@font-stack')).toBe(true);
     });
 

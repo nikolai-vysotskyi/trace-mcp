@@ -24,17 +24,24 @@ describe('VertexAIProvider', () => {
   };
 
   it('embedding service routes to the correct region host + :predict verb', async () => {
-    (globalThis.fetch as any).mockResolvedValue(new Response(
-      JSON.stringify({ predictions: [
-        { embeddings: { values: [0.1, 0.2] } },
-        { embeddings: { values: [0.3, 0.4] } },
-      ] }),
-      { status: 200 },
-    ));
+    (globalThis.fetch as any).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          predictions: [
+            { embeddings: { values: [0.1, 0.2] } },
+            { embeddings: { values: [0.3, 0.4] } },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
 
     const provider = new VertexAIProvider(baseConfig);
     const result = await provider.embedding().embedBatch(['a', 'b']);
-    expect(result).toEqual([[0.1, 0.2], [0.3, 0.4]]);
+    expect(result).toEqual([
+      [0.1, 0.2],
+      [0.3, 0.4],
+    ]);
 
     const [url, init] = (globalThis.fetch as any).mock.calls[0];
     expect(url).toBe(
@@ -50,12 +57,14 @@ describe('VertexAIProvider', () => {
   });
 
   it('inference hits :generateContent on the same regional host', async () => {
-    (globalThis.fetch as any).mockResolvedValue(new Response(
-      JSON.stringify({
-        candidates: [{ content: { parts: [{ text: 'hello from vertex' }] } }],
-      }),
-      { status: 200 },
-    ));
+    (globalThis.fetch as any).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'hello from vertex' }] } }],
+        }),
+        { status: 200 },
+      ),
+    );
 
     const provider = new VertexAIProvider(baseConfig);
     const result = await provider.inference().generate('ping');
@@ -76,10 +85,11 @@ describe('VertexAIProvider', () => {
   });
 
   it('embed(text, "query") sends task_type=RETRIEVAL_QUERY instead of RETRIEVAL_DOCUMENT', async () => {
-    (globalThis.fetch as any).mockResolvedValue(new Response(
-      JSON.stringify({ predictions: [{ embeddings: { values: [1] } }] }),
-      { status: 200 },
-    ));
+    (globalThis.fetch as any).mockResolvedValue(
+      new Response(JSON.stringify({ predictions: [{ embeddings: { values: [1] } }] }), {
+        status: 200,
+      }),
+    );
 
     const provider = new VertexAIProvider(baseConfig);
     await provider.embedding().embed('user query', 'query');
@@ -90,10 +100,11 @@ describe('VertexAIProvider', () => {
   });
 
   it('uses the configured location for request routing', async () => {
-    (globalThis.fetch as any).mockResolvedValue(new Response(
-      JSON.stringify({ predictions: [{ embeddings: { values: [1] } }] }),
-      { status: 200 },
-    ));
+    (globalThis.fetch as any).mockResolvedValue(
+      new Response(JSON.stringify({ predictions: [{ embeddings: { values: [1] } }] }), {
+        status: 200,
+      }),
+    );
 
     const provider = new VertexAIProvider({ ...baseConfig, location: 'europe-west4' });
     await provider.embedding().embed('hi');

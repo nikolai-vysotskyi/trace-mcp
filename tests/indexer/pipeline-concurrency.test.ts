@@ -43,8 +43,14 @@ describe('IndexingPipeline serialization lock', () => {
     // Monkey-patch runPipeline indirectly: intercept at public API level
     // Both calls should complete without throwing and produce valid results
     const [r1, r2] = await Promise.all([
-      pipeline.indexAll().then((r) => { order.push('indexAll'); return r; }),
-      pipeline.indexFiles(['src/utils.ts']).then((r) => { order.push('indexFiles'); return r; }),
+      pipeline.indexAll().then((r) => {
+        order.push('indexAll');
+        return r;
+      }),
+      pipeline.indexFiles(['src/utils.ts']).then((r) => {
+        order.push('indexFiles');
+        return r;
+      }),
     ]);
 
     // Both completed
@@ -59,10 +65,7 @@ describe('IndexingPipeline serialization lock', () => {
   it('concurrent indexAll calls do not throw', async () => {
     const { pipeline } = makeSetup();
 
-    const [r1, r2] = await Promise.all([
-      pipeline.indexAll(),
-      pipeline.indexAll(),
-    ]);
+    const [r1, r2] = await Promise.all([pipeline.indexAll(), pipeline.indexAll()]);
 
     expect(r1.errors).toBe(0);
     expect(r2.errors).toBe(0);

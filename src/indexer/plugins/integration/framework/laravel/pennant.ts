@@ -118,7 +118,11 @@ export function extractFeatureMiddlewareUsages(source: string): PennantFeatureUs
     // May be comma-separated: 'features:flag1,flag2'
     const flags = match[1].split(',');
     for (const flag of flags) {
-      usages.push({ name: flag.trim(), usageType: 'middleware', line: lineAt(source, match.index) });
+      usages.push({
+        name: flag.trim(),
+        usageType: 'middleware',
+        line: lineAt(source, match.index),
+      });
     }
   }
 

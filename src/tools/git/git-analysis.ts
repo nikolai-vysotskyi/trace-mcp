@@ -7,7 +7,11 @@
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
-import { classifyConfidence, type ConfidenceLevel, type Methodology } from '../shared/confidence.js';
+import {
+  classifyConfidence,
+  type ConfidenceLevel,
+  type Methodology,
+} from '../shared/confidence.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -45,7 +49,7 @@ interface HotspotEntry {
 
 /** A signal "fires" when its raw value crosses this threshold. */
 const HOTSPOT_COMPLEXITY_FIRE = 10; // matches the high-complexity boundary used by assessment
-const HOTSPOT_CHURN_FIRE = 5;       // > 5 commits in the analysis window
+const HOTSPOT_CHURN_FIRE = 5; // > 5 commits in the analysis window
 
 export const HOTSPOT_METHODOLOGY: Methodology = {
   algorithm: 'tornhill_complexity_churn_hotspots',
@@ -95,10 +99,7 @@ export function isGitRepo(cwd: string): boolean {
  * Get per-file git log data: commit count, authors, date range.
  * Uses a single `git log` call with --name-only for efficiency.
  */
-function getGitFileStats(
-  cwd: string,
-  sinceDays?: number,
-): Map<string, GitLogEntry> {
+function getGitFileStats(cwd: string, sinceDays?: number): Map<string, GitLogEntry> {
   const args = [
     'log',
     '--pretty=format:__COMMIT__%H|%aI|%aN',
@@ -241,8 +242,7 @@ export function getHotspots(
     else assessment = 'high';
 
     const signalsFired =
-      (maxCyclomatic > HOTSPOT_COMPLEXITY_FIRE ? 1 : 0) +
-      (commits > HOTSPOT_CHURN_FIRE ? 1 : 0);
+      (maxCyclomatic > HOTSPOT_COMPLEXITY_FIRE ? 1 : 0) + (commits > HOTSPOT_CHURN_FIRE ? 1 : 0);
 
     entries.push({
       file,
@@ -265,13 +265,15 @@ export function getHotspots(
 
 /** Get the maximum cyclomatic complexity per file from the symbols table. */
 function getMaxCyclomaticPerFile(store: Store): Map<string, number> {
-  const rows = store.db.prepare(`
+  const rows = store.db
+    .prepare(`
     SELECT f.path, MAX(s.cyclomatic) as max_cyclomatic
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.cyclomatic IS NOT NULL
     GROUP BY f.path
-  `).all() as Array<{ path: string; max_cyclomatic: number }>;
+  `)
+    .all() as Array<{ path: string; max_cyclomatic: number }>;
 
   const result = new Map<string, number>();
   for (const row of rows) {

@@ -26,7 +26,9 @@ function createManager(): { manager: SubprojectManager; topoStore: TopologyStore
 }
 
 export const subprojectCommand = new Command('subproject')
-  .description('Manage subprojects — link repositories in your project ecosystem (microservices, frontends, backends, shared libs, etc.)')
+  .description(
+    'Manage subprojects — link repositories in your project ecosystem (microservices, frontends, backends, shared libs, etc.)',
+  )
   .alias('sub');
 
 // ── subproject add ──────────────────────────────────────────────────
@@ -110,7 +112,9 @@ subprojectCommand
       for (const repo of graph.repos) {
         console.log(`  ${repo.name}`);
         console.log(`    Root: ${repo.repoRoot}`);
-        console.log(`    Services: ${repo.services} | Endpoints: ${repo.endpoints} | Client calls: ${repo.clientCalls}`);
+        console.log(
+          `    Services: ${repo.services} | Endpoints: ${repo.endpoints} | Client calls: ${repo.clientCalls}`,
+        );
         console.log(`    Last synced: ${repo.lastSynced ?? 'never'}`);
         console.log();
       }
@@ -119,13 +123,17 @@ subprojectCommand
         console.log('Cross-Repo Dependencies:\n');
         for (const edge of graph.edges) {
           console.log(`  ${edge.source} → ${edge.target}`);
-          console.log(`    Calls: ${edge.callCount} (${edge.linkedCount} linked) via ${edge.callTypes.join(', ')}`);
+          console.log(
+            `    Calls: ${edge.callCount} (${edge.linkedCount} linked) via ${edge.callTypes.join(', ')}`,
+          );
         }
         console.log();
       }
 
-      console.log(`Stats: ${graph.stats.repos} repos, ${graph.stats.totalEndpoints} endpoints, ` +
-        `${graph.stats.totalClientCalls} client calls (${graph.stats.linkedCallsPercent}% linked)`);
+      console.log(
+        `Stats: ${graph.stats.repos} repos, ${graph.stats.totalEndpoints} endpoints, ` +
+          `${graph.stats.totalClientCalls} client calls (${graph.stats.linkedCallsPercent}% linked)`,
+      );
     } finally {
       topoStore.close();
     }
@@ -194,9 +202,14 @@ subprojectCommand
 
       console.log('Cross-Repo Impact Analysis:\n');
       for (const r of results) {
-        const risk = r.riskLevel === 'critical' ? '🔴 CRITICAL'
-          : r.riskLevel === 'high' ? '🟠 HIGH'
-          : r.riskLevel === 'medium' ? '🟡 MEDIUM' : '🟢 LOW';
+        const risk =
+          r.riskLevel === 'critical'
+            ? '🔴 CRITICAL'
+            : r.riskLevel === 'high'
+              ? '🟠 HIGH'
+              : r.riskLevel === 'medium'
+                ? '🟡 MEDIUM'
+                : '🟢 LOW';
 
         console.log(`  ${r.endpoint.method ?? '*'} ${r.endpoint.path} (${r.endpoint.service})`);
         console.log(`  Risk: ${risk}`);
@@ -204,7 +217,9 @@ subprojectCommand
 
         for (const client of r.clients) {
           const loc = client.line ? `${client.filePath}:${client.line}` : client.filePath;
-          console.log(`    [${client.repo}] ${loc} (${client.callType}, confidence: ${(client.confidence * 100).toFixed(0)}%)`);
+          console.log(
+            `    [${client.repo}] ${loc} (${client.callType}, confidence: ${(client.confidence * 100).toFixed(0)}%)`,
+          );
           for (const sym of client.symbols) {
             console.log(`      → ${sym.kind} ${sym.fqn ?? sym.name}`);
           }

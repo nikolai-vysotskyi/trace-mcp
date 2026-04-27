@@ -50,7 +50,14 @@ export class FileRepository {
     mtimeMs: number | null,
     createNode: (nodeType: string, refId: number) => number,
   ): number {
-    const row = this._stmts.insertFile.get(path, language, contentHash, byteLength, workspace, mtimeMs) as { id: number };
+    const row = this._stmts.insertFile.get(
+      path,
+      language,
+      contentHash,
+      byteLength,
+      workspace,
+      mtimeMs,
+    ) as { id: number };
     const fileId = row.id;
     createNode('file', fileId);
     return fileId;
@@ -107,9 +114,11 @@ export class FileRepository {
       ['orm_models', 'orm_model'],
       ['rn_screens', 'rn_screen'],
     ] as const) {
-      this.db.prepare(
-        `DELETE FROM nodes WHERE node_type = ? AND ref_id IN (SELECT id FROM ${table} WHERE file_id = ?)`,
-      ).run(nodeType, fileId);
+      this.db
+        .prepare(
+          `DELETE FROM nodes WHERE node_type = ? AND ref_id IN (SELECT id FROM ${table} WHERE file_id = ?)`,
+        )
+        .run(nodeType, fileId);
       this.db.prepare(`DELETE FROM ${table} WHERE file_id = ?`).run(fileId);
     }
   }
@@ -121,9 +130,9 @@ export class FileRepository {
     for (let i = 0; i < ids.length; i += CHUNK) {
       const chunk = ids.slice(i, i + CHUNK);
       const placeholders = chunk.map(() => '?').join(',');
-      const rows = this.db.prepare(
-        `SELECT * FROM files WHERE id IN (${placeholders})`,
-      ).all(...chunk) as FileRow[];
+      const rows = this.db
+        .prepare(`SELECT * FROM files WHERE id IN (${placeholders})`)
+        .all(...chunk) as FileRow[];
       for (const row of rows) map.set(row.id, row);
     }
     return map;
@@ -136,9 +145,9 @@ export class FileRepository {
     for (let i = 0; i < paths.length; i += CHUNK) {
       const chunk = paths.slice(i, i + CHUNK);
       const placeholders = chunk.map(() => '?').join(',');
-      const rows = this.db.prepare(
-        `SELECT * FROM files WHERE path IN (${placeholders})`,
-      ).all(...chunk) as FileRow[];
+      const rows = this.db
+        .prepare(`SELECT * FROM files WHERE path IN (${placeholders})`)
+        .all(...chunk) as FileRow[];
       for (const row of rows) map.set(row.path, row);
     }
     return map;

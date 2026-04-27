@@ -63,7 +63,10 @@ describe('hybridSearch', () => {
     const vectorStore = new BlobVectorStore(db);
 
     // Get all symbols and give them embeddings
-    const symbols = db.prepare('SELECT id, name FROM symbols').all() as { id: number; name: string }[];
+    const symbols = db.prepare('SELECT id, name FROM symbols').all() as {
+      id: number;
+      name: string;
+    }[];
     for (const sym of symbols) {
       // Create a unique vector for each symbol
       const vec = new Array(3).fill(0);
@@ -73,10 +76,18 @@ describe('hybridSearch', () => {
 
     // Mock embedding service that returns a fixed query vector
     const mockEmbedding: EmbeddingService = {
-      async embed(_text: string) { return [1, 0, 0]; },
-      async embedBatch(texts: string[]) { return texts.map(() => [1, 0, 0]); },
-      dimensions() { return 3; },
-    modelName() { return 'mock-model'; },
+      async embed(_text: string) {
+        return [1, 0, 0];
+      },
+      async embedBatch(texts: string[]) {
+        return texts.map(() => [1, 0, 0]);
+      },
+      dimensions() {
+        return 3;
+      },
+      modelName() {
+        return 'mock-model';
+      },
     };
 
     const results = await hybridSearch(db, 'User', vectorStore, mockEmbedding, 20);

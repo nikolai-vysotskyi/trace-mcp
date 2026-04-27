@@ -15,21 +15,17 @@ interface DINode {
 
 interface DITreeResult {
   service: DINode;
-  injects: DINode[];     // what this service depends on
-  injectedBy: DINode[];  // what depends on this service
+  injects: DINode[]; // what this service depends on
+  injectedBy: DINode[]; // what depends on this service
 }
 
 /**
  * Build a DI tree for a NestJS service.
  * Uses nest_injects edges from the graph.
  */
-export function getDITree(
-  store: Store,
-  serviceName: string,
-): TraceMcpResult<DITreeResult> {
+export function getDITree(store: Store, serviceName: string): TraceMcpResult<DITreeResult> {
   // Find the service symbol by name or FQN
-  const symbol = store.getSymbolByFqn(serviceName)
-    ?? findSymbolByName(store, serviceName);
+  const symbol = store.getSymbolByFqn(serviceName) ?? findSymbolByName(store, serviceName);
 
   if (!symbol) {
     return err(notFound(serviceName, ['Service not found. Try using the full class name.']));
@@ -48,7 +44,9 @@ export function getDITree(
   }
 
   // What this service injects + who injects it — batch resolved
-  const outEdges = store.getOutgoingEdges(nodeId).filter((e) => e.edge_type_name === 'nest_injects');
+  const outEdges = store
+    .getOutgoingEdges(nodeId)
+    .filter((e) => e.edge_type_name === 'nest_injects');
   const inEdges = store.getIncomingEdges(nodeId).filter((e) => e.edge_type_name === 'nest_injects');
 
   // Batch resolve all referenced nodes
@@ -57,7 +55,9 @@ export function getDITree(
     ...inEdges.map((e) => e.source_node_id),
   ];
   const nodeRefs = store.getNodeRefsBatch(allNodeIds);
-  const symRefIds = [...nodeRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const symRefIds = [...nodeRefs.values()]
+    .filter((r) => r.nodeType === 'symbol')
+    .map((r) => r.refId);
   const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
   const fileIds = [...new Set([...symMap.values()].map((s) => s.file_id))];
   const fileMap = fileIds.length > 0 ? store.getFilesByIds(fileIds) : new Map();
@@ -77,15 +77,16 @@ export function getDITree(
     if (!ref || ref.nodeType !== 'symbol') continue;
     const sym = symMap.get(ref.refId);
     if (!sym) continue;
-    injectedBy.push({ name: sym.name, symbolId: sym.symbol_id, file: fileMap.get(sym.file_id)?.path });
+    injectedBy.push({
+      name: sym.name,
+      symbolId: sym.symbol_id,
+      file: fileMap.get(sym.file_id)?.path,
+    });
   }
 
   return ok({ service, injects, injectedBy });
 }
 
-function findSymbolByName(
-  store: Store,
-  name: string,
-): ReturnType<Store['getSymbolByFqn']> {
+function findSymbolByName(store: Store, name: string): ReturnType<Store['getSymbolByFqn']> {
   return store.getSymbolByName(name, 'class');
 }

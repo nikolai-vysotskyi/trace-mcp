@@ -16,10 +16,10 @@ export interface EdgeTypeDeclaration {
 // --- Raw symbols from LanguagePlugin ---
 
 export interface RawSymbol {
-  symbolId: string;       // 'app/Models/User.php::User#class'
+  symbolId: string; // 'app/Models/User.php::User#class'
   name: string;
   kind: SymbolKind;
-  fqn?: string;           // 'App\Models\User'
+  fqn?: string; // 'App\Models\User'
   parentSymbolId?: string;
   signature?: string;
   byteStart: number;
@@ -30,9 +30,18 @@ export interface RawSymbol {
 }
 
 export type SymbolKind =
-  | 'class' | 'method' | 'function' | 'constant' | 'property'
-  | 'interface' | 'trait' | 'enum' | 'type' | 'variable'
-  | 'enum_case' | 'namespace'
+  | 'class'
+  | 'method'
+  | 'function'
+  | 'constant'
+  | 'property'
+  | 'interface'
+  | 'trait'
+  | 'enum'
+  | 'type'
+  | 'variable'
+  | 'enum_case'
+  | 'namespace'
   | 'decorator';
 
 // --- Raw edges from FrameworkPlugin ---
@@ -98,7 +107,7 @@ export interface RawOrmModel {
 export interface RawOrmAssociation {
   sourceModelName: string;
   targetModelName: string;
-  kind: string;  // 'hasMany', 'belongsTo', 'ref', 'discriminator', etc.
+  kind: string; // 'hasMany', 'belongsTo', 'ref', 'discriminator', etc.
   options?: Record<string, unknown>;
   line?: number;
 }
@@ -132,12 +141,21 @@ export interface FileParseResult {
 
 // --- Plugin manifest ---
 
-type PluginCategory = 'framework' | 'orm' | 'validation' | 'state' | 'api' | 'realtime' | 'testing' | 'tooling' | 'view';
+type PluginCategory =
+  | 'framework'
+  | 'orm'
+  | 'validation'
+  | 'state'
+  | 'api'
+  | 'realtime'
+  | 'testing'
+  | 'tooling'
+  | 'view';
 
 export interface PluginManifest {
   name: string;
   version: string;
-  priority: number;        // lower = earlier
+  priority: number; // lower = earlier
   dependencies?: string[]; // names of plugins this depends on
   category?: PluginCategory;
 }
@@ -146,15 +164,15 @@ export interface PluginManifest {
 
 /** Detected runtime/language version from manifest files. */
 export interface DetectedVersion {
-  runtime: string;       // 'node', 'php', 'python', 'ruby', 'go', 'java', 'rust'
-  version?: string;      // e.g. '20.11.0', '>=8.2', '^3.12'
-  source: string;        // file that provided this version, e.g. '.nvmrc', 'package.json#engines.node'
+  runtime: string; // 'node', 'php', 'python', 'ruby', 'go', 'java', 'rust'
+  version?: string; // e.g. '20.11.0', '>=8.2', '^3.12'
+  source: string; // file that provided this version, e.g. '.nvmrc', 'package.json#engines.node'
 }
 
 /** Parsed dependency entry from any manifest. */
 export interface ParsedDependency {
   name: string;
-  version?: string;      // raw version constraint, e.g. '^3.5.0', '>=1.21'
+  version?: string; // raw version constraint, e.g. '^3.5.0', '>=1.21'
   dev?: boolean;
 }
 
@@ -188,8 +206,11 @@ export interface ProjectContext {
 export interface LanguagePlugin {
   manifest: PluginManifest;
   supportedExtensions: string[];
-  supportedVersions?: string[];  // e.g. ['7.0', '7.1', ..., '8.4'] or ['3.9', ..., '3.14']
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> | Promise<TraceMcpResult<FileParseResult>>;
+  supportedVersions?: string[]; // e.g. ['7.0', '7.1', ..., '8.4'] or ['3.9', ..., '3.14']
+  extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): TraceMcpResult<FileParseResult> | Promise<TraceMcpResult<FileParseResult>>;
 }
 
 // --- Framework Plugin ---
@@ -198,7 +219,11 @@ export interface FrameworkPlugin {
   manifest: PluginManifest;
   detect(ctx: ProjectContext): boolean;
   registerSchema(): { nodeTypes?: NodeTypeDeclaration[]; edgeTypes?: EdgeTypeDeclaration[] };
-  extractNodes?(filePath: string, content: Buffer, language: string): TraceMcpResult<FileParseResult>;
+  extractNodes?(
+    filePath: string,
+    content: Buffer,
+    language: string,
+  ): TraceMcpResult<FileParseResult>;
   resolveEdges?(ctx: ResolveContext): TraceMcpResult<RawEdge[]>;
   configure?(config: Record<string, unknown>): void;
 }
@@ -208,7 +233,16 @@ export interface FrameworkPlugin {
 export interface ResolveContext {
   rootPath: string;
   getAllFiles(): { id: number; path: string; language: string | null }[];
-  getSymbolsByFile(fileId: number): { id: number; symbolId: string; name: string; kind: string; fqn: string | null; lineStart?: number | null; lineEnd?: number | null; metadata?: Record<string, unknown> | null }[];
+  getSymbolsByFile(fileId: number): {
+    id: number;
+    symbolId: string;
+    name: string;
+    kind: string;
+    fqn: string | null;
+    lineStart?: number | null;
+    lineEnd?: number | null;
+    metadata?: Record<string, unknown> | null;
+  }[];
   getSymbolByFqn(fqn: string): { id: number; symbolId: string } | undefined;
   getNodeId(nodeType: string, refId: number): number | undefined;
   createNodeIfNeeded(nodeType: string, refId: number): number;

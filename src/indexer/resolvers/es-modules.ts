@@ -46,7 +46,10 @@ function findTsconfig(startDir: string, stopDir: string): string | undefined {
         if (raw.extends) {
           const extendsPath = path.resolve(path.dirname(candidate), raw.extends);
           if (!fs.existsSync(extendsPath)) {
-            logger.debug({ tsconfig: candidate, extends: raw.extends }, 'Skipping tsconfig with missing extends');
+            logger.debug(
+              { tsconfig: candidate, extends: raw.extends },
+              'Skipping tsconfig with missing extends',
+            );
             continue;
           }
         }
@@ -137,7 +140,10 @@ export class EsModuleResolver {
         try {
           this.resolvers.set(absWsPath, buildResolver(absWsPath, rootPath));
         } catch (e) {
-          logger.warn({ workspace: absWsPath, error: e }, 'Failed to create resolver for workspace');
+          logger.warn(
+            { workspace: absWsPath, error: e },
+            'Failed to create resolver for workspace',
+          );
         }
       }
     }

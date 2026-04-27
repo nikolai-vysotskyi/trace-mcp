@@ -61,7 +61,7 @@ describe('tool-gate annotations injection', () => {
     // The captured call should have annotations spliced in before callback
     // Original: (name, desc, schema, cb) → 4 args
     // After gate: (name, desc, schema, annotations, cb) → 5 args
-    const call = capturedCalls.find(c => c.name === 'search');
+    const call = capturedCalls.find((c) => c.name === 'search');
     expect(call, 'search should have been registered').toBeTruthy();
     expect(call!.args.length).toBe(5); // name, desc, schema, annotations, wrappedCb
 
@@ -89,7 +89,7 @@ describe('tool-gate annotations injection', () => {
 
     server.tool('apply_codemod' as any, 'Bulk regex', {}, async () => ({ content: [] }));
 
-    const call = capturedCalls.find(c => c.name === 'apply_codemod');
+    const call = capturedCalls.find((c) => c.name === 'apply_codemod');
     expect(call).toBeTruthy();
 
     const annotations = call!.args[3] as Record<string, boolean>;
@@ -116,7 +116,7 @@ describe('tool-gate annotations injection', () => {
 
     server.tool('reindex' as any, 'Reindex project', {}, async () => ({ content: [] }));
 
-    const call = capturedCalls.find(c => c.name === 'reindex');
+    const call = capturedCalls.find((c) => c.name === 'reindex');
     expect(call).toBeTruthy();
 
     const annotations = call!.args[3] as Record<string, boolean>;
@@ -143,7 +143,7 @@ describe('tool-gate annotations injection', () => {
     // Simulate session.ts calling _originalTool directly (bypasses gate)
     (_originalTool as any)('batch', 'Execute multiple tools', {}, async () => ({ content: [] }));
 
-    const call = capturedCalls.find(c => c.name === 'batch');
+    const call = capturedCalls.find((c) => c.name === 'batch');
     expect(call, 'batch should have been registered via _originalTool').toBeTruthy();
     expect(call!.args.length).toBe(5); // annotations injected
 

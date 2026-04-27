@@ -148,7 +148,10 @@ service UserService {
       openapi: '3.0.0',
       components: {
         schemas: {
-          User: { type: 'object', properties: { id: { type: 'number' }, name: { type: 'string' } } },
+          User: {
+            type: 'object',
+            properties: { id: { type: 'number' }, name: { type: 'string' } },
+          },
         },
       },
       paths: {
@@ -178,10 +181,13 @@ service UserService {
   it('ignores files in node_modules', () => {
     const nmDir = path.join(tmpDir, 'node_modules', 'some-pkg');
     fs.mkdirSync(nmDir, { recursive: true });
-    fs.writeFileSync(path.join(nmDir, 'openapi.json'), JSON.stringify({
-      openapi: '3.0.0',
-      paths: { '/ignored': { get: {} } },
-    }));
+    fs.writeFileSync(
+      path.join(nmDir, 'openapi.json'),
+      JSON.stringify({
+        openapi: '3.0.0',
+        paths: { '/ignored': { get: {} } },
+      }),
+    );
 
     expect(parseContracts(tmpDir)).toEqual([]);
   });

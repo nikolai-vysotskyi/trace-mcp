@@ -9,7 +9,7 @@ function createMockServer() {
   const server = {
     tool: vi.fn((...args: unknown[]) => {
       const name = args[0] as string;
-      const desc = typeof args[1] === 'string' ? args[1] as string : undefined;
+      const desc = typeof args[1] === 'string' ? (args[1] as string) : undefined;
       const schemaIdx = typeof args[1] === 'string' ? 2 : 1;
       const schema = args.length > schemaIdx + 1 ? args[schemaIdx] : undefined;
       const cb = args[args.length - 1] as Function;

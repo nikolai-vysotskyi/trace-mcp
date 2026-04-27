@@ -3,7 +3,11 @@ import { SpringPlugin } from '../../../src/indexer/plugins/integration/framework
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 function makeCtx(overrides: Partial<ProjectContext> = {}): ProjectContext {
-  return { rootPath: '/tmp/spring-project', configFiles: ['pom.xml', 'application.yml'], ...overrides };
+  return {
+    rootPath: '/tmp/spring-project',
+    configFiles: ['pom.xml', 'application.yml'],
+    ...overrides,
+  };
 }
 
 describe('SpringPlugin — detection', () => {

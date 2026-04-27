@@ -125,10 +125,7 @@ export function extractReexportEdges(root: TSNode, filePath: string): RawEdge[] 
 // ─── Type annotation edges ───────────────────────────────────
 
 /** Extract parameter type and return type edges from a function node. */
-export function extractTypeAnnotationEdges(
-  funcNode: TSNode,
-  symbolId: string,
-): RawEdge[] {
+export function extractTypeAnnotationEdges(funcNode: TSNode, symbolId: string): RawEdge[] {
   const edges: RawEdge[] = [];
 
   // Parameter types
@@ -167,10 +164,7 @@ export function extractTypeAnnotationEdges(
 // ─── Decorator edges ─────────────────────────────────────────
 
 /** Emit py_uses_decorator edges for a symbol with decorators. */
-export function extractDecoratorEdges(
-  decorators: string[],
-  symbolId: string,
-): RawEdge[] {
+export function extractDecoratorEdges(decorators: string[], symbolId: string): RawEdge[] {
   return decorators.map((d) => ({
     sourceSymbolId: symbolId,
     edgeType: 'py_uses_decorator',
@@ -181,10 +175,7 @@ export function extractDecoratorEdges(
 // ─── Inheritance edges ───���───────────────────────────────────
 
 /** Emit py_inherits edges from class bases. */
-export function extractInheritanceEdges(
-  bases: string[],
-  classSymbolId: string,
-): RawEdge[] {
+export function extractInheritanceEdges(bases: string[], classSymbolId: string): RawEdge[] {
   return bases.map((base) => ({
     sourceSymbolId: classSymbolId,
     edgeType: 'py_inherits',
@@ -232,9 +223,7 @@ function isNameMainCondition(node: TSNode): boolean {
   const text = node.text;
   // Covers both  __name__ == "__main__"  and  "__main__" == __name__
   // Also handles single-quoted variants
-  return (
-    (text.includes('__name__') && (text.includes('"__main__"') || text.includes("'__main__'")))
-  );
+  return text.includes('__name__') && (text.includes('"__main__"') || text.includes("'__main__'"));
 }
 
 /** Recursively collect callee names from a block (handles sys.exit(main()) etc.) */
@@ -341,7 +330,10 @@ function extractImportEdgesFromNode(node: TSNode): RawEdge[] {
       if (moduleNode) moduleName = moduleNode.text;
       else {
         for (const child of node.namedChildren) {
-          if (child.type === 'dotted_name') { moduleName = child.text; break; }
+          if (child.type === 'dotted_name') {
+            moduleName = child.text;
+            break;
+          }
         }
       }
     }
@@ -363,7 +355,8 @@ function extractImportEdgesFromNode(node: TSNode): RawEdge[] {
     edges.push({
       edgeType: 'py_imports',
       metadata: {
-        from: fromPath, specifiers,
+        from: fromPath,
+        specifiers,
         ...(isRelative ? { relative: true } : {}),
       },
     });
@@ -377,8 +370,14 @@ function extractImportEdgesFromNode(node: TSNode): RawEdge[] {
 /** Detect special typing module patterns on class bases. */
 export function detectTypingPatterns(bases: string[], meta: Record<string, unknown>): void {
   if (bases.some((b) => b === 'NamedTuple' || b === 'typing.NamedTuple')) meta.namedTuple = true;
-  if (bases.some((b) => b === 'TypedDict' || b === 'typing.TypedDict' || b === 'typing_extensions.TypedDict')) meta.typedDict = true;
-  if (bases.some((b) => /^Generic(\[.+\])?$/.test(b) || /^typing\.Generic(\[.+\])?$/.test(b))) meta.generic = true;
+  if (
+    bases.some(
+      (b) => b === 'TypedDict' || b === 'typing.TypedDict' || b === 'typing_extensions.TypedDict',
+    )
+  )
+    meta.typedDict = true;
+  if (bases.some((b) => /^Generic(\[.+\])?$/.test(b) || /^typing\.Generic(\[.+\])?$/.test(b)))
+    meta.generic = true;
 }
 
 // ─── __slots__ / metaclass detection ─────────────────────────
@@ -442,9 +441,10 @@ export function extractNestedDefinitions(
 
     if (child.type === 'decorated_definition') {
       decorators = extractDecorators(child);
-      defNode = child.namedChildren.find(
-        (c) => c.type === 'function_definition' || c.type === 'class_definition',
-      ) ?? child;
+      defNode =
+        child.namedChildren.find(
+          (c) => c.type === 'function_definition' || c.type === 'class_definition',
+        ) ?? child;
     }
 
     if (defNode.type === 'function_definition') {
@@ -595,9 +595,7 @@ export function makeFqn(parts: string[]): string {
 
 /** Convert a file path to a Python module path. */
 export function filePathToModule(filePath: string): string {
-  let module = filePath
-    .replace(/\\/g, '/')
-    .replace(/\.pyi?$/, '');
+  let module = filePath.replace(/\\/g, '/').replace(/\.pyi?$/, '');
   // __init__ → use parent package
   if (module.endsWith('/__init__')) {
     module = module.slice(0, -'/__init__'.length);
@@ -771,7 +769,9 @@ export function getNodeName(node: TSNode): string | undefined {
  * Returns a RawSymbol for the type alias or undefined if not a valid type alias.
  */
 export function extractTypeAlias(
-  node: TSNode, filePath: string, modulePath: string,
+  node: TSNode,
+  filePath: string,
+  modulePath: string,
 ): RawSymbol | undefined {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return undefined;
@@ -861,9 +861,7 @@ export function extractClassMethods(
     } else if (child.type === 'decorated_definition') {
       decorators = extractDecorators(child);
       // Unwrap to get the actual function_definition
-      funcNode = child.namedChildren.find(
-        (c) => c.type === 'function_definition',
-      ) ?? null;
+      funcNode = child.namedChildren.find((c) => c.type === 'function_definition') ?? null;
     }
 
     if (!funcNode) continue;
@@ -1055,8 +1053,11 @@ export function extractCallSites(body: TSNode): PythonCallSite[] {
     }
 
     for (const child of node.namedChildren) {
-      if (child.type === 'function_definition' || child.type === 'class_definition'
-        || child.type === 'decorated_definition') {
+      if (
+        child.type === 'function_definition' ||
+        child.type === 'class_definition' ||
+        child.type === 'decorated_definition'
+      ) {
         continue;
       }
       walk(child);
@@ -1078,7 +1079,11 @@ export function extractCallSites(body: TSNode): PythonCallSite[] {
  * - getattr(obj, name) where name = "literal" → obj.literal
  * - getattr(obj, name) where name iterates ["a","b"] → obj.a, obj.b
  */
-function parseGetattrCall(args: TSNode, line: number, localStrings: Map<string, string[]>): PythonCallSite[] {
+function parseGetattrCall(
+  args: TSNode,
+  line: number,
+  localStrings: Map<string, string[]>,
+): PythonCallSite[] {
   const argNodes = args.namedChildren;
   if (argNodes.length < 2) return [];
 
@@ -1088,11 +1093,21 @@ function parseGetattrCall(args: TSNode, line: number, localStrings: Map<string, 
   const isSelfCall = receiver === 'self' || receiver === 'cls';
 
   // getattr(obj, f"prefix_{var}") — check f-string BEFORE plain string
-  if (nameNode.type === 'string' && (nameNode.text.startsWith('f"') || nameNode.text.startsWith("f'"))) {
+  if (
+    nameNode.type === 'string' &&
+    (nameNode.text.startsWith('f"') || nameNode.text.startsWith("f'"))
+  ) {
     const prefix = extractFStringPrefix(nameNode);
     if (prefix) {
-      return [{ calleeName: `${prefix}*`, line, receiver, isSelfCall: isSelfCall || undefined,
-        metadata: { pattern: true, prefix } }];
+      return [
+        {
+          calleeName: `${prefix}*`,
+          line,
+          receiver,
+          isSelfCall: isSelfCall || undefined,
+          metadata: { pattern: true, prefix },
+        },
+      ];
     }
   }
 
@@ -1109,7 +1124,10 @@ function parseGetattrCall(args: TSNode, line: number, localStrings: Map<string, 
     const strings = localStrings.get(nameNode.text);
     if (strings) {
       return strings.map((s) => ({
-        calleeName: s, line, receiver, isSelfCall: isSelfCall || undefined,
+        calleeName: s,
+        line,
+        receiver,
+        isSelfCall: isSelfCall || undefined,
       }));
     }
   }
@@ -1124,7 +1142,10 @@ function extractStringLiteral(node: TSNode): string | null {
   if (content) return content.text;
   // Fallback: strip quotes
   const text = node.text;
-  if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
+  if (
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
+  ) {
     return text.slice(1, -1);
   }
   return null;
@@ -1148,9 +1169,17 @@ function extractFStringPrefix(node: TSNode): string | null {
  * - Direct: `{"create": create_user, "delete": delete_user}[action]()`
  * - Via variable: `handlers = {"create": create_user, ...}; handlers[action]()`
  */
-function parseDictDispatch(subscriptNode: TSNode, line: number, localStrings: Map<string, string[]>, body: TSNode): PythonCallSite[] {
+function parseDictDispatch(
+  subscriptNode: TSNode,
+  line: number,
+  localStrings: Map<string, string[]>,
+  body: TSNode,
+): PythonCallSite[] {
   // tree-sitter-python uses 'value' for the object in subscript: x[y] → value=x, subscript=y
-  const obj = subscriptNode.childForFieldName('value') ?? subscriptNode.childForFieldName('object') ?? subscriptNode.namedChildren[0];
+  const obj =
+    subscriptNode.childForFieldName('value') ??
+    subscriptNode.childForFieldName('object') ??
+    subscriptNode.namedChildren[0];
   if (!obj) return [];
 
   let dictNode: TSNode | null = null;
@@ -1162,7 +1191,6 @@ function parseDictDispatch(subscriptNode: TSNode, line: number, localStrings: Ma
   // Variable reference: `handlers[key]()` — find `handlers = {...}` in body
   else if (obj.type === 'identifier') {
     dictNode = findDictAssignment(obj.text, body);
-
   }
 
   if (!dictNode) return [];
@@ -1297,16 +1325,22 @@ function inferLocalTypes(body: TSNode): Map<string, LocalVarInfo> {
   // Extract parameter type annotations from the enclosing function/method definition.
   // `body` is the function's body block; its parent is the function_definition node.
   const funcDef = body.parent;
-  if (funcDef && (funcDef.type === 'function_definition' || funcDef.type === 'decorated_definition')) {
-    const defNode = funcDef.type === 'decorated_definition'
-      ? funcDef.namedChildren.find((c) => c.type === 'function_definition')
-      : funcDef;
+  if (
+    funcDef &&
+    (funcDef.type === 'function_definition' || funcDef.type === 'decorated_definition')
+  ) {
+    const defNode =
+      funcDef.type === 'decorated_definition'
+        ? funcDef.namedChildren.find((c) => c.type === 'function_definition')
+        : funcDef;
     if (defNode) {
       const params = defNode.childForFieldName('parameters');
       if (params) {
         for (const param of params.namedChildren) {
           if (param.type === 'typed_parameter' || param.type === 'typed_default_parameter') {
-            const nameNode = param.childForFieldName('name') ?? param.namedChildren.find((c) => c.type === 'identifier');
+            const nameNode =
+              param.childForFieldName('name') ??
+              param.namedChildren.find((c) => c.type === 'identifier');
             const typeNode = param.childForFieldName('type');
             if (nameNode && typeNode) {
               const paramName = nameNode.text;
@@ -1420,7 +1454,16 @@ function extractParamAnnotationType(typeNode: TSNode): string | null {
     for (const child of typeNode.namedChildren) {
       if (child.type === 'identifier' && child.text[0] >= 'A' && child.text[0] <= 'Z') {
         // Skip wrapper types like Optional, List, etc.
-        const WRAPPER_TYPES = new Set(['Optional', 'List', 'Set', 'Dict', 'Tuple', 'Type', 'Sequence', 'Iterable']);
+        const WRAPPER_TYPES = new Set([
+          'Optional',
+          'List',
+          'Set',
+          'Dict',
+          'Tuple',
+          'Type',
+          'Sequence',
+          'Iterable',
+        ]);
         if (!WRAPPER_TYPES.has(child.text)) return child.text;
       }
     }
@@ -1435,7 +1478,11 @@ function extractParamAnnotationType(typeNode: TSNode): string | null {
 }
 
 /** Parse a call's `function` field into a PythonCallSite. */
-function parseCallTarget(fn: TSNode, line: number, localTypes: Map<string, LocalVarInfo>): PythonCallSite | null {
+function parseCallTarget(
+  fn: TSNode,
+  line: number,
+  localTypes: Map<string, LocalVarInfo>,
+): PythonCallSite | null {
   if (fn.type === 'identifier') {
     const name = fn.text;
     if (PYTHON_BUILTINS.has(name)) return null;
@@ -1482,20 +1529,102 @@ function parseCallTarget(fn: TSNode, line: number, localTypes: Map<string, Local
 
 /** Python builtins that should not create call edges (they're never in user code). */
 const PYTHON_BUILTINS = new Set([
-  'print', 'len', 'range', 'int', 'str', 'float', 'bool', 'list', 'dict', 'set',
-  'tuple', 'type', 'isinstance', 'issubclass', 'hasattr', 'getattr', 'setattr',
-  'delattr', 'callable', 'super', 'property', 'staticmethod', 'classmethod',
-  'abs', 'all', 'any', 'bin', 'chr', 'ord', 'hex', 'oct', 'id', 'hash',
-  'iter', 'next', 'reversed', 'sorted', 'enumerate', 'zip', 'map', 'filter',
-  'min', 'max', 'sum', 'round', 'pow', 'divmod', 'input', 'open', 'repr',
-  'vars', 'dir', 'globals', 'locals', 'exec', 'eval', 'compile',
-  'format', 'ascii', 'bytes', 'bytearray', 'memoryview', 'frozenset',
-  'object', 'slice', 'complex', 'breakpoint', 'exit', 'quit',
-  'Exception', 'ValueError', 'TypeError', 'KeyError', 'IndexError',
-  'AttributeError', 'ImportError', 'RuntimeError', 'StopIteration',
-  'NotImplementedError', 'OSError', 'IOError', 'FileNotFoundError',
-  'PermissionError', 'AssertionError', 'ZeroDivisionError', 'OverflowError',
-  'NameError', 'SyntaxError', 'UnicodeError', 'UnicodeDecodeError',
-  'UnicodeEncodeError', 'SystemExit', 'KeyboardInterrupt', 'GeneratorExit',
-  'Warning', 'DeprecationWarning', 'FutureWarning', 'UserWarning',
+  'print',
+  'len',
+  'range',
+  'int',
+  'str',
+  'float',
+  'bool',
+  'list',
+  'dict',
+  'set',
+  'tuple',
+  'type',
+  'isinstance',
+  'issubclass',
+  'hasattr',
+  'getattr',
+  'setattr',
+  'delattr',
+  'callable',
+  'super',
+  'property',
+  'staticmethod',
+  'classmethod',
+  'abs',
+  'all',
+  'any',
+  'bin',
+  'chr',
+  'ord',
+  'hex',
+  'oct',
+  'id',
+  'hash',
+  'iter',
+  'next',
+  'reversed',
+  'sorted',
+  'enumerate',
+  'zip',
+  'map',
+  'filter',
+  'min',
+  'max',
+  'sum',
+  'round',
+  'pow',
+  'divmod',
+  'input',
+  'open',
+  'repr',
+  'vars',
+  'dir',
+  'globals',
+  'locals',
+  'exec',
+  'eval',
+  'compile',
+  'format',
+  'ascii',
+  'bytes',
+  'bytearray',
+  'memoryview',
+  'frozenset',
+  'object',
+  'slice',
+  'complex',
+  'breakpoint',
+  'exit',
+  'quit',
+  'Exception',
+  'ValueError',
+  'TypeError',
+  'KeyError',
+  'IndexError',
+  'AttributeError',
+  'ImportError',
+  'RuntimeError',
+  'StopIteration',
+  'NotImplementedError',
+  'OSError',
+  'IOError',
+  'FileNotFoundError',
+  'PermissionError',
+  'AssertionError',
+  'ZeroDivisionError',
+  'OverflowError',
+  'NameError',
+  'SyntaxError',
+  'UnicodeError',
+  'UnicodeDecodeError',
+  'UnicodeEncodeError',
+  'SystemExit',
+  'KeyboardInterrupt',
+  'GeneratorExit',
+  'Warning',
+  'DeprecationWarning',
+  'FutureWarning',
+  'UserWarning',
 ]);

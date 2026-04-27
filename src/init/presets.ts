@@ -9,17 +9,18 @@ interface IncludePreset {
 }
 
 /** Base excludes applied to all projects. */
-export const BASE_EXCLUDE = [
-  'node_modules/**', '.git/**', '**/.env', '**/.env.*',
-];
+export const BASE_EXCLUDE = ['node_modules/**', '.git/**', '**/.env', '**/.env.*'];
 
 /** Framework-specific presets. Keys match plugin manifest names. */
 export const FRAMEWORK_PRESETS: Record<string, IncludePreset> = {
   // PHP frameworks
   laravel: {
     include: [
-      'app/**/*.php', 'routes/**/*.php', 'database/migrations/**/*.php',
-      'config/**/*.php', 'tests/**/*.php',
+      'app/**/*.php',
+      'routes/**/*.php',
+      'database/migrations/**/*.php',
+      'config/**/*.php',
+      'tests/**/*.php',
     ],
     exclude: ['vendor/**', 'storage/**', 'bootstrap/cache/**'],
   },
@@ -53,24 +54,36 @@ export const FRAMEWORK_PRESETS: Record<string, IncludePreset> = {
   },
   nextjs: {
     include: [
-      'src/**/*.{ts,tsx,js,jsx}', 'app/**/*.{ts,tsx,js,jsx}',
-      'pages/**/*.{ts,tsx,js,jsx}', 'components/**/*.{ts,tsx,js,jsx}',
+      'src/**/*.{ts,tsx,js,jsx}',
+      'app/**/*.{ts,tsx,js,jsx}',
+      'pages/**/*.{ts,tsx,js,jsx}',
+      'components/**/*.{ts,tsx,js,jsx}',
       'lib/**/*.{ts,tsx,js,jsx}',
     ],
     exclude: ['.next/**', 'out/**'],
   },
   nuxt: {
     include: [
-      'app/**/*.{vue,ts}', 'components/**/*.vue', 'composables/**/*.ts',
-      'layouts/**/*.vue', 'middleware/**/*.ts', 'pages/**/*.vue',
-      'plugins/**/*.ts', 'server/**/*.ts', 'stores/**/*.ts',
+      'app/**/*.{vue,ts}',
+      'components/**/*.vue',
+      'composables/**/*.ts',
+      'layouts/**/*.vue',
+      'middleware/**/*.ts',
+      'pages/**/*.vue',
+      'plugins/**/*.ts',
+      'server/**/*.ts',
+      'stores/**/*.ts',
     ],
     exclude: ['.nuxt/**', '.output/**'],
   },
   rails: {
     include: [
-      'app/**/*.rb', 'config/**/*.rb', 'db/migrate/**/*.rb',
-      'lib/**/*.rb', 'test/**/*.rb', 'spec/**/*.rb',
+      'app/**/*.rb',
+      'config/**/*.rb',
+      'db/migrate/**/*.rb',
+      'lib/**/*.rb',
+      'test/**/*.rb',
+      'spec/**/*.rb',
     ],
     exclude: ['tmp/**', 'log/**', 'public/assets/**'],
   },
@@ -156,7 +169,12 @@ export const FRAMEWORK_PRESETS: Record<string, IncludePreset> = {
 /** Language-based fallback presets (used when no frameworks detected). */
 export const LANGUAGE_PRESETS: Record<string, IncludePreset> = {
   typescript: {
-    include: ['src/**/*.{ts,tsx}', 'lib/**/*.{ts,tsx}', 'test/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}'],
+    include: [
+      'src/**/*.{ts,tsx}',
+      'lib/**/*.{ts,tsx}',
+      'test/**/*.{ts,tsx}',
+      'tests/**/*.{ts,tsx}',
+    ],
     exclude: ['dist/**', 'build/**'],
   },
   javascript: {

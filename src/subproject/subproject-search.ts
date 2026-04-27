@@ -69,13 +69,20 @@ export function subprojectSearch(
       const rankSpread = maxRank - minRank || 1;
 
       const symbolIds = ftsResults.map((r) => r.symbolId);
-      const symbolRows = db.prepare(
-        `SELECT s.id, s.symbol_id, s.name, s.kind, s.fqn, s.signature, s.line_start, f.path as file_path
+      const symbolRows = db
+        .prepare(
+          `SELECT s.id, s.symbol_id, s.name, s.kind, s.fqn, s.signature, s.line_start, f.path as file_path
          FROM symbols s JOIN files f ON f.id = s.file_id
          WHERE s.id IN (${symbolIds.map(() => '?').join(',')})`,
-      ).all(...symbolIds) as Array<{
-        id: number; symbol_id: string; name: string; kind: string;
-        fqn: string | null; signature: string | null; line_start: number | null;
+        )
+        .all(...symbolIds) as Array<{
+        id: number;
+        symbol_id: string;
+        name: string;
+        kind: string;
+        fqn: string | null;
+        signature: string | null;
+        line_start: number | null;
         file_path: string;
       }>;
 

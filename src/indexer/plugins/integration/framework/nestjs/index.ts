@@ -74,7 +74,10 @@ export function extractControllerRoutes(
       const inner = gm.match(/@UseGuards\(\s*([^)]+)\s*\)/);
       if (inner) {
         guards.push(
-          ...inner[1].split(',').map((s) => s.trim()).filter(Boolean),
+          ...inner[1]
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
         );
       }
     }
@@ -107,7 +110,9 @@ function extractGatewayEvents(source: string): string[] {
   return events;
 }
 
-function extractMicroservicePatterns(source: string): { type: 'message' | 'event'; pattern: string }[] {
+function extractMicroservicePatterns(
+  source: string,
+): { type: 'message' | 'event'; pattern: string }[] {
   const results: { type: 'message' | 'event'; pattern: string }[] = [];
   const eventRe = new RegExp(EVENT_PATTERN_RE.source, 'g');
   let m: RegExpExecArray | null;
@@ -179,15 +184,39 @@ export class NestJSPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'nest_module_imports', category: 'nestjs', description: 'Module imports another module' },
+        {
+          name: 'nest_module_imports',
+          category: 'nestjs',
+          description: 'Module imports another module',
+        },
         { name: 'nest_provides', category: 'nestjs', description: 'Module provides a service' },
-        { name: 'nest_injects', category: 'nestjs', description: 'Constructor dependency injection' },
+        {
+          name: 'nest_injects',
+          category: 'nestjs',
+          description: 'Constructor dependency injection',
+        },
         { name: 'nest_guards', category: 'nestjs', description: 'UseGuards on controller/method' },
         { name: 'nest_pipes', category: 'nestjs', description: 'UsePipes on controller/method' },
-        { name: 'nest_interceptors', category: 'nestjs', description: 'UseInterceptors on controller/method' },
-        { name: 'nest_gateway_event', category: 'nestjs', description: 'WebSocket gateway @SubscribeMessage handler' },
-        { name: 'nest_message_pattern', category: 'nestjs', description: 'Microservice @MessagePattern handler' },
-        { name: 'nest_event_pattern', category: 'nestjs', description: 'Microservice @EventPattern handler' },
+        {
+          name: 'nest_interceptors',
+          category: 'nestjs',
+          description: 'UseInterceptors on controller/method',
+        },
+        {
+          name: 'nest_gateway_event',
+          category: 'nestjs',
+          description: 'WebSocket gateway @SubscribeMessage handler',
+        },
+        {
+          name: 'nest_message_pattern',
+          category: 'nestjs',
+          description: 'Microservice @MessagePattern handler',
+        },
+        {
+          name: 'nest_event_pattern',
+          category: 'nestjs',
+          description: 'Microservice @EventPattern handler',
+        },
       ],
     };
   }
@@ -271,8 +300,7 @@ export class NestJSPlugin implements FrameworkPlugin {
     }
 
     /** Try FQN first (PHP-style), fall back to plain class name (TypeScript). */
-    const resolve = (name: string) =>
-      ctx.getSymbolByFqn(name) ?? classSymbolByName.get(name);
+    const resolve = (name: string) => ctx.getSymbolByFqn(name) ?? classSymbolByName.get(name);
 
     for (const file of allFiles) {
       if (file.language !== 'typescript') continue;

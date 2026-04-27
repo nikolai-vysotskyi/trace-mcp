@@ -43,16 +43,18 @@ const QualityGateRuleSchema = z.object({
 export const QualityGatesConfigSchema = z.object({
   enabled: z.boolean().default(true),
   fail_on: z.enum(['error', 'warning', 'none']).default('error'),
-  rules: z.object({
-    max_cyclomatic_complexity: QualityGateRuleSchema.optional(),
-    max_coupling_instability: QualityGateRuleSchema.optional(),
-    max_circular_import_chains: QualityGateRuleSchema.optional(),
-    max_dead_exports_percent: QualityGateRuleSchema.optional(),
-    max_tech_debt_grade: QualityGateRuleSchema.optional(),
-    max_security_critical_findings: QualityGateRuleSchema.optional(),
-    max_antipattern_count: QualityGateRuleSchema.optional(),
-    max_code_smell_count: QualityGateRuleSchema.optional(),
-  }).prefault({}),
+  rules: z
+    .object({
+      max_cyclomatic_complexity: QualityGateRuleSchema.optional(),
+      max_coupling_instability: QualityGateRuleSchema.optional(),
+      max_circular_import_chains: QualityGateRuleSchema.optional(),
+      max_dead_exports_percent: QualityGateRuleSchema.optional(),
+      max_tech_debt_grade: QualityGateRuleSchema.optional(),
+      max_security_critical_findings: QualityGateRuleSchema.optional(),
+      max_antipattern_count: QualityGateRuleSchema.optional(),
+      max_code_smell_count: QualityGateRuleSchema.optional(),
+    })
+    .prefault({}),
 });
 
 export type QualityGatesConfig = z.infer<typeof QualityGatesConfigSchema>;
@@ -112,11 +114,13 @@ export function evaluateQualityGates(
   if (rules.max_cyclomatic_complexity) {
     const rule = rules.max_cyclomatic_complexity;
     const threshold = Number(rule.threshold);
-    const rows = store.db.prepare(`
+    const rows = store.db
+      .prepare(`
       SELECT MAX(s.cyclomatic) as max_cc
       FROM symbols s
       WHERE s.cyclomatic IS NOT NULL
-    `).get() as { max_cc: number | null } | undefined;
+    `)
+      .get() as { max_cc: number | null } | undefined;
     const actual = rows?.max_cc ?? 0;
     gates.push({
       rule: 'max_cyclomatic_complexity',
@@ -140,9 +144,10 @@ export function evaluateQualityGates(
       actual: Math.round(maxInstability * 1000) / 1000,
       threshold,
       message: rule.message,
-      details: maxInstability > threshold
-        ? `Most unstable: ${couplingMetrics.sort((a, b) => b.instability - a.instability)[0]?.file} (${Math.round(maxInstability * 100)}%)`
-        : undefined,
+      details:
+        maxInstability > threshold
+          ? `Most unstable: ${couplingMetrics.sort((a, b) => b.instability - a.instability)[0]?.file} (${Math.round(maxInstability * 100)}%)`
+          : undefined,
     });
   }
 
@@ -158,9 +163,13 @@ export function evaluateQualityGates(
       actual,
       threshold,
       message: rule.message,
-      details: actual > threshold
-        ? `Cycles: ${cycles.slice(0, 3).map(c => c.files.join(' → ')).join('; ')}`
-        : undefined,
+      details:
+        actual > threshold
+          ? `Cycles: ${cycles
+              .slice(0, 3)
+              .map((c) => c.files.join(' → '))
+              .join('; ')}`
+          : undefined,
     });
   }
 
@@ -169,21 +178,25 @@ export function evaluateQualityGates(
     const rule = rules.max_dead_exports_percent;
     const threshold = Number(rule.threshold);
     const deadResult = getDeadCodeV2(store, { threshold: 0.5 });
-    const totalExported = store.db.prepare(`
+    const totalExported = store.db
+      .prepare(`
       SELECT COUNT(*) as cnt FROM symbols WHERE is_exported = 1 AND kind != 'method'
-    `).get() as { cnt: number };
-    const deadPercent = totalExported.cnt > 0
-      ? Math.round((deadResult.dead_symbols.length / totalExported.cnt) * 1000) / 10
-      : 0;
+    `)
+      .get() as { cnt: number };
+    const deadPercent =
+      totalExported.cnt > 0
+        ? Math.round((deadResult.dead_symbols.length / totalExported.cnt) * 1000) / 10
+        : 0;
     gates.push({
       rule: 'max_dead_exports_percent',
       status: deadPercent > threshold ? rule.severity : 'pass',
       actual: deadPercent,
       threshold,
       message: rule.message,
-      details: deadPercent > threshold
-        ? `${deadResult.dead_symbols.length} dead of ${totalExported.cnt} exports (${deadPercent}%)`
-        : undefined,
+      details:
+        deadPercent > threshold
+          ? `${deadResult.dead_symbols.length} dead of ${totalExported.cnt} exports (${deadPercent}%)`
+          : undefined,
     });
   }
 
@@ -278,9 +291,9 @@ export function evaluateQualityGates(
   }
 
   // Compute summary
-  const errors = gates.filter(g => g.status === 'error').length;
-  const warnings = gates.filter(g => g.status === 'warning').length;
-  const passed = gates.filter(g => g.status === 'pass').length;
+  const errors = gates.filter((g) => g.status === 'error').length;
+  const warnings = gates.filter((g) => g.status === 'warning').length;
+  const passed = gates.filter((g) => g.status === 'pass').length;
 
   let result: 'PASS' | 'FAIL' = 'PASS';
   if (fail_on === 'error' && errors > 0) result = 'FAIL';

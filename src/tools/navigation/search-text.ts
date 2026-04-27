@@ -74,7 +74,9 @@ export function searchText(
   // Get file list from DB (single query, no N+1)
   let files: FileRow[];
   if (language) {
-    files = store.db.prepare('SELECT * FROM files WHERE language = ? AND status != ?').all(language, 'error') as FileRow[];
+    files = store.db
+      .prepare('SELECT * FROM files WHERE language = ? AND status != ?')
+      .all(language, 'error') as FileRow[];
   } else {
     files = store.db.prepare('SELECT * FROM files WHERE status != ?').all('error') as FileRow[];
   }

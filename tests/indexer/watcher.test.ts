@@ -25,7 +25,7 @@ function makeControlledTimer() {
 
   const set = vi.fn((fn: () => void | Promise<void>, _ms: number) => {
     pendingFn = fn;
-    return (++timerId) as unknown as ReturnType<typeof setTimeout>;
+    return ++timerId as unknown as ReturnType<typeof setTimeout>;
   });
 
   const clear = vi.fn(() => {

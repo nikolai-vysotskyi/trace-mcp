@@ -18,7 +18,15 @@ function writeFile(store: Store, relPath: string, content: string, language: str
 function insertSymbol(
   store: Store,
   fileId: number,
-  opts: { name: string; kind: string; byteStart: number; byteEnd: number; lineStart: number; lineEnd: number; signature?: string },
+  opts: {
+    name: string;
+    kind: string;
+    byteStart: number;
+    byteEnd: number;
+    lineStart: number;
+    lineEnd: number;
+    signature?: string;
+  },
 ): void {
   store.insertSymbol(fileId, {
     symbolId: `test::${opts.name}#${opts.kind}`,
@@ -47,14 +55,19 @@ describe('Code Smells Scanner', () => {
 
   describe('todo_comment', () => {
     test('detects TODO comments in JS/TS', () => {
-      writeFile(store, 'src/utils.ts', `
+      writeFile(
+        store,
+        'src/utils.ts',
+        `
 // TODO: implement caching
 function fetchData() {
   return fetch('/api');
 }
 // FIXME: this breaks on empty arrays
 function process(items: any[]) {}
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
       expect(result.isOk()).toBe(true);
@@ -67,13 +80,18 @@ function process(items: any[]) {}
     });
 
     test('detects HACK and XXX comments', () => {
-      writeFile(store, 'src/hack.py', `
+      writeFile(
+        store,
+        'src/hack.py',
+        `
 # HACK: monkey-patching to work around library bug
 import something
 # XXX: this needs refactoring
 def do_stuff():
     pass
-`, 'python');
+`,
+        'python',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
       expect(result.isOk()).toBe(true);
@@ -84,13 +102,21 @@ def do_stuff():
     });
 
     test('filters by tag', () => {
-      writeFile(store, 'src/mixed.ts', `
+      writeFile(
+        store,
+        'src/mixed.ts',
+        `
 // TODO: add tests
 // FIXME: broken
 // HACK: workaround
-`, 'typescript');
+`,
+        'typescript',
+      );
 
-      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'], tags: ['FIXME'] });
+      const result = scanCodeSmells(store, TEST_DIR, {
+        category: ['todo_comment'],
+        tags: ['FIXME'],
+      });
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
       expect(data.findings).toHaveLength(1);
@@ -98,10 +124,15 @@ def do_stuff():
     });
 
     test('skips test files by default', () => {
-      writeFile(store, 'src/app.test.ts', `
+      writeFile(
+        store,
+        'src/app.test.ts',
+        `
 // TODO: add more assertions
 test('basic', () => {});
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
       expect(result.isOk()).toBe(true);
@@ -109,24 +140,37 @@ test('basic', () => {});
     });
 
     test('includes test files when opted in', () => {
-      writeFile(store, 'src/app.test.ts', `
+      writeFile(
+        store,
+        'src/app.test.ts',
+        `
 // TODO: add more assertions
 test('basic', () => {});
-`, 'typescript');
+`,
+        'typescript',
+      );
 
-      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'], include_tests: true });
+      const result = scanCodeSmells(store, TEST_DIR, {
+        category: ['todo_comment'],
+        include_tests: true,
+      });
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap().findings).toHaveLength(1);
     });
 
     test('skips markdown files (CHANGELOG headings must not match BUG tag)', () => {
-      writeFile(store, 'CHANGELOG.md', `
+      writeFile(
+        store,
+        'CHANGELOG.md',
+        `
 ## [1.29.0] - 2026-04-22
 
 ### Bug Fixes
 
 * something was broken
-`, 'markdown');
+`,
+        'markdown',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
       expect(result.isOk()).toBe(true);
@@ -226,9 +270,14 @@ test('basic', () => {});
 
   describe('hardcoded_value', () => {
     test('detects hardcoded IP address', () => {
-      writeFile(store, 'src/config.ts', `
+      writeFile(
+        store,
+        'src/config.ts',
+        `
 const server = '192.168.1.100';
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
       expect(result.isOk()).toBe(true);
@@ -238,9 +287,14 @@ const server = '192.168.1.100';
     });
 
     test('detects hardcoded credentials', () => {
-      writeFile(store, 'src/db.ts', `
+      writeFile(
+        store,
+        'src/db.ts',
+        `
 const password = 'super_secret_123';
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
       expect(result.isOk()).toBe(true);
@@ -251,10 +305,15 @@ const password = 'super_secret_123';
     });
 
     test('does not flag localhost/127.0.0.1', () => {
-      writeFile(store, 'src/dev.ts', `
+      writeFile(
+        store,
+        'src/dev.ts',
+        `
 const host = '127.0.0.1';
 const bind = '0.0.0.0';
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
       expect(result.isOk()).toBe(true);
@@ -264,9 +323,14 @@ const bind = '0.0.0.0';
     });
 
     test('does not flag credentials in test files', () => {
-      writeFile(store, 'src/auth.test.ts', `
+      writeFile(
+        store,
+        'src/auth.test.ts',
+        `
 const password = 'test_password';
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       // test files are skipped by default
       const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
@@ -275,9 +339,14 @@ const password = 'test_password';
     });
 
     test('detects hardcoded URL', () => {
-      writeFile(store, 'src/api.ts', `
+      writeFile(
+        store,
+        'src/api.ts',
+        `
 const endpoint = 'https://api.production-server.com/v2/data';
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
       expect(result.isOk()).toBe(true);
@@ -287,10 +356,15 @@ const endpoint = 'https://api.production-server.com/v2/data';
     });
 
     test('does not flag github/npm URLs', () => {
-      writeFile(store, 'src/deps.ts', `
+      writeFile(
+        store,
+        'src/deps.ts',
+        `
 const repo = 'https://github.com/user/repo';
 const pkg = 'https://npmjs.org/package/foo';
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
       expect(result.isOk()).toBe(true);
@@ -331,11 +405,16 @@ const apiKey = 'sk-1234567890abcdef';
     });
 
     test('respects priority threshold', () => {
-      writeFile(store, 'src/priorities.ts', `
+      writeFile(
+        store,
+        'src/priorities.ts',
+        `
 // TODO: low-ish priority
 // FIXME: high priority
 // REFACTOR: low priority
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, {
         category: ['todo_comment'],
@@ -376,11 +455,16 @@ const apiKey = 'sk-1234567890abcdef';
     });
 
     test('returns correct summary counts', () => {
-      writeFile(store, 'src/summary.ts', `
+      writeFile(
+        store,
+        'src/summary.ts',
+        `
 // TODO: first
 // FIXME: second
 // HACK: third
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
       expect(result.isOk()).toBe(true);
@@ -398,13 +482,18 @@ const apiKey = 'sk-1234567890abcdef';
 
   describe('debug_artifact', () => {
     test('detects console.log / debugger in TypeScript', () => {
-      writeFile(store, 'src/app.ts', `
+      writeFile(
+        store,
+        'src/app.ts',
+        `
 function handler(req) {
   console.log('got request', req);
   debugger;
   return { ok: true };
 }
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
       expect(result.isOk()).toBe(true);
@@ -416,14 +505,19 @@ function handler(req) {
     });
 
     test('detects Python pdb / breakpoint', () => {
-      writeFile(store, 'src/debug.py', `
+      writeFile(
+        store,
+        'src/debug.py',
+        `
 import pdb
 
 def run():
     breakpoint()
     pdb.set_trace()
     return 1
-`, 'python');
+`,
+        'python',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
       expect(result.isOk()).toBe(true);
@@ -435,14 +529,19 @@ def run():
     });
 
     test('detects PHP var_dump / dd / xdebug_break', () => {
-      writeFile(store, 'src/debug.php', `<?php
+      writeFile(
+        store,
+        'src/debug.php',
+        `<?php
 function handle($x) {
     var_dump($x);
     dd($x);
     xdebug_break();
     return $x;
 }
-`, 'php');
+`,
+        'php',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
       expect(result.isOk()).toBe(true);
@@ -454,14 +553,19 @@ function handle($x) {
     });
 
     test('detects Ruby binding.pry and byebug', () => {
-      writeFile(store, 'app/debug.rb', `
+      writeFile(
+        store,
+        'app/debug.rb',
+        `
 class Service
   def call
     binding.pry
     byebug
   end
 end
-`, 'ruby');
+`,
+        'ruby',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
       expect(result.isOk()).toBe(true);
@@ -472,12 +576,17 @@ end
     });
 
     test('detects Rust dbg! macro', () => {
-      writeFile(store, 'src/lib.rs', `
+      writeFile(
+        store,
+        'src/lib.rs',
+        `
 fn compute(x: i32) -> i32 {
     dbg!(x);
     x * 2
 }
-`, 'rust');
+`,
+        'rust',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
       expect(result.isOk()).toBe(true);
@@ -486,12 +595,17 @@ fn compute(x: i32) -> i32 {
     });
 
     test('ignores debug artifacts inside comments', () => {
-      writeFile(store, 'src/safe.ts', `
+      writeFile(
+        store,
+        'src/safe.ts',
+        `
 // console.log('old debug line, now commented out')
 function legit() {
   return 1;
 }
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
       expect(result.isOk()).toBe(true);
@@ -500,12 +614,17 @@ function legit() {
     });
 
     test('ignores debug artifacts in test files by default', () => {
-      writeFile(store, 'src/app.test.ts', `
+      writeFile(
+        store,
+        'src/app.test.ts',
+        `
 function runTest() {
   console.log('testing', 123);
   debugger;
 }
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['debug_artifact'] });
       expect(result.isOk()).toBe(true);
@@ -513,11 +632,16 @@ function runTest() {
     });
 
     test('includes artifacts in test files when include_tests=true', () => {
-      writeFile(store, 'src/app.test.ts', `
+      writeFile(
+        store,
+        'src/app.test.ts',
+        `
 function runTest() {
   debugger;
 }
-`, 'typescript');
+`,
+        'typescript',
+      );
 
       const result = scanCodeSmells(store, TEST_DIR, {
         category: ['debug_artifact'],

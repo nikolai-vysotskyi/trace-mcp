@@ -49,15 +49,30 @@ interface SbomResult {
 // ---------------------------------------------------------------------------
 
 const COPYLEFT_LICENSES = new Set([
-  'GPL-2.0', 'GPL-2.0-only', 'GPL-2.0-or-later',
-  'GPL-3.0', 'GPL-3.0-only', 'GPL-3.0-or-later',
-  'AGPL-3.0', 'AGPL-3.0-only', 'AGPL-3.0-or-later',
-  'LGPL-2.1', 'LGPL-2.1-only', 'LGPL-2.1-or-later',
-  'LGPL-3.0', 'LGPL-3.0-only', 'LGPL-3.0-or-later',
-  'SSPL-1.0', 'EUPL-1.2',
+  'GPL-2.0',
+  'GPL-2.0-only',
+  'GPL-2.0-or-later',
+  'GPL-3.0',
+  'GPL-3.0-only',
+  'GPL-3.0-or-later',
+  'AGPL-3.0',
+  'AGPL-3.0-only',
+  'AGPL-3.0-or-later',
+  'LGPL-2.1',
+  'LGPL-2.1-only',
+  'LGPL-2.1-or-later',
+  'LGPL-3.0',
+  'LGPL-3.0-only',
+  'LGPL-3.0-or-later',
+  'SSPL-1.0',
+  'EUPL-1.2',
 ]);
 
-function checkLicenseWarning(name: string, version: string, license: string | undefined): LicenseWarning | null {
+function checkLicenseWarning(
+  name: string,
+  version: string,
+  license: string | undefined,
+): LicenseWarning | null {
   if (!license) {
     return { component: name, version, license: 'UNKNOWN', reason: 'No license specified' };
   }
@@ -66,7 +81,12 @@ function checkLicenseWarning(name: string, version: string, license: string | un
   for (const part of parts) {
     const trimmed = part.trim().replace(/^\(|\)$/g, '');
     if (COPYLEFT_LICENSES.has(trimmed)) {
-      return { component: name, version, license: trimmed, reason: 'Copyleft license — may require source disclosure' };
+      return {
+        component: name,
+        version,
+        license: trimmed,
+        reason: 'Copyleft license — may require source disclosure',
+      };
     }
   }
   return null;
@@ -109,7 +129,10 @@ function parseNpm(root: string, includeDev: boolean, includeTransitive: boolean)
   const lock = readJson(lockPath) as Record<string, unknown> | null;
   if (lock && includeTransitive) {
     // npm lockfile v2/v3 has "packages" key
-    const packages = (lock.packages ?? lock.dependencies ?? {}) as Record<string, Record<string, unknown>>;
+    const packages = (lock.packages ?? lock.dependencies ?? {}) as Record<
+      string,
+      Record<string, unknown>
+    >;
     for (const [key, info] of Object.entries(packages)) {
       if (!key || key === '') continue; // root package
       const name = key.startsWith('node_modules/') ? key.slice('node_modules/'.length) : key;
@@ -143,7 +166,11 @@ function parseNpm(root: string, includeDev: boolean, includeTransitive: boolean)
 }
 
 /** Composer: composer.json + composer.lock */
-function parseComposer(root: string, includeDev: boolean, includeTransitive: boolean): SbomComponent[] {
+function parseComposer(
+  root: string,
+  includeDev: boolean,
+  includeTransitive: boolean,
+): SbomComponent[] {
   const lockPath = path.join(root, 'composer.lock');
   const manifestPath = path.join(root, 'composer.json');
   const manifest = readJson(manifestPath) as Record<string, unknown> | null;
@@ -243,8 +270,16 @@ function parsePip(root: string, includeDev: boolean, includeTransitive: boolean)
       }
     }
     // Push last
-    if (currentName && !new Set(components.map((c) => c.name.toLowerCase())).has(currentName.toLowerCase())) {
-      components.push({ name: currentName, version: currentVersion, ecosystem: 'pip', direct: false });
+    if (
+      currentName &&
+      !new Set(components.map((c) => c.name.toLowerCase())).has(currentName.toLowerCase())
+    ) {
+      components.push({
+        name: currentName,
+        version: currentVersion,
+        ecosystem: 'pip',
+        direct: false,
+      });
     }
   }
 
@@ -262,8 +297,14 @@ function parseGo(root: string, _includeDev: boolean, includeTransitive: boolean)
 
   for (const line of readLines(modPath)) {
     const trimmed = line.trim();
-    if (trimmed === 'require (') { inRequire = true; continue; }
-    if (trimmed === ')') { inRequire = false; continue; }
+    if (trimmed === 'require (') {
+      inRequire = true;
+      continue;
+    }
+    if (trimmed === ')') {
+      inRequire = false;
+      continue;
+    }
 
     if (inRequire || trimmed.startsWith('require ')) {
       const match = trimmed.match(/^\s*(?:require\s+)?(\S+)\s+(v\S+)/);
@@ -285,7 +326,11 @@ function parseGo(root: string, _includeDev: boolean, includeTransitive: boolean)
 }
 
 /** Cargo: Cargo.toml + Cargo.lock */
-function parseCargo(root: string, _includeDev: boolean, includeTransitive: boolean): SbomComponent[] {
+function parseCargo(
+  root: string,
+  _includeDev: boolean,
+  includeTransitive: boolean,
+): SbomComponent[] {
   const lockPath = path.join(root, 'Cargo.lock');
   if (!existsSync(lockPath)) {
     // Fallback to Cargo.toml
@@ -294,8 +339,14 @@ function parseCargo(root: string, _includeDev: boolean, includeTransitive: boole
     const components: SbomComponent[] = [];
     let inDeps = false;
     for (const line of readLines(tomlPath)) {
-      if (line.match(/^\[(?:dev-)?dependencies\]/)) { inDeps = true; continue; }
-      if (line.startsWith('[')) { inDeps = false; continue; }
+      if (line.match(/^\[(?:dev-)?dependencies\]/)) {
+        inDeps = true;
+        continue;
+      }
+      if (line.startsWith('[')) {
+        inDeps = false;
+        continue;
+      }
       if (inDeps) {
         const match = line.match(/^(\S+)\s*=\s*(?:"([^"]+)"|{.*version\s*=\s*"([^"]+)")/);
         if (match) {
@@ -355,8 +406,14 @@ function parseCargo(root: string, _includeDev: boolean, includeTransitive: boole
       const directNames = new Set<string>();
       let inDeps = false;
       for (const line of readLines(tomlPath)) {
-        if (line.match(/^\[(?:dev-)?dependencies\]/)) { inDeps = true; continue; }
-        if (line.startsWith('[')) { inDeps = false; continue; }
+        if (line.match(/^\[(?:dev-)?dependencies\]/)) {
+          inDeps = true;
+          continue;
+        }
+        if (line.startsWith('[')) {
+          inDeps = false;
+          continue;
+        }
         if (inDeps) {
           const match = line.match(/^(\S+)\s*=/);
           if (match) directNames.add(match[1]);
@@ -371,7 +428,11 @@ function parseCargo(root: string, _includeDev: boolean, includeTransitive: boole
 }
 
 /** Bundler: Gemfile + Gemfile.lock */
-function parseBundler(root: string, _includeDev: boolean, includeTransitive: boolean): SbomComponent[] {
+function parseBundler(
+  root: string,
+  _includeDev: boolean,
+  includeTransitive: boolean,
+): SbomComponent[] {
   const lockPath = path.join(root, 'Gemfile.lock');
   if (!existsSync(lockPath)) return [];
 
@@ -379,8 +440,13 @@ function parseBundler(root: string, _includeDev: boolean, includeTransitive: boo
   let inSpecs = false;
 
   for (const line of readLines(lockPath)) {
-    if (line.trim() === 'specs:') { inSpecs = true; continue; }
-    if (inSpecs && line.match(/^\S/)) { inSpecs = false; }
+    if (line.trim() === 'specs:') {
+      inSpecs = true;
+      continue;
+    }
+    if (inSpecs && line.match(/^\S/)) {
+      inSpecs = false;
+    }
 
     if (inSpecs) {
       // Direct deps have 4 spaces, transitive have 6+
@@ -412,7 +478,11 @@ function parseBundler(root: string, _includeDev: boolean, includeTransitive: boo
 }
 
 /** Maven: pom.xml (basic parsing) */
-function parseMaven(root: string, _includeDev: boolean, _includeTransitive: boolean): SbomComponent[] {
+function parseMaven(
+  root: string,
+  _includeDev: boolean,
+  _includeTransitive: boolean,
+): SbomComponent[] {
   const pomPath = path.join(root, 'pom.xml');
   if (!existsSync(pomPath)) return [];
 
@@ -420,7 +490,8 @@ function parseMaven(root: string, _includeDev: boolean, _includeTransitive: bool
   const components: SbomComponent[] = [];
 
   // Match <dependency> blocks
-  const depRegex = /<dependency>\s*<groupId>([^<]+)<\/groupId>\s*<artifactId>([^<]+)<\/artifactId>\s*(?:<version>([^<]+)<\/version>)?/gs;
+  const depRegex =
+    /<dependency>\s*<groupId>([^<]+)<\/groupId>\s*<artifactId>([^<]+)<\/artifactId>\s*(?:<version>([^<]+)<\/version>)?/gs;
   let match: RegExpExecArray | null;
   while ((match = depRegex.exec(content)) !== null) {
     components.push({
@@ -490,7 +561,13 @@ export function generateSbom(
   const allComponents: SbomComponent[] = [];
 
   const parsers = [
-    parseNpm, parseComposer, parsePip, parseGo, parseCargo, parseBundler, parseMaven,
+    parseNpm,
+    parseComposer,
+    parsePip,
+    parseGo,
+    parseCargo,
+    parseBundler,
+    parseMaven,
   ];
 
   for (const parser of parsers) {
@@ -499,7 +576,11 @@ export function generateSbom(
   }
 
   if (allComponents.length === 0) {
-    return err(validationError('No package manifests found (package.json, composer.json, requirements.txt, go.mod, Cargo.toml, Gemfile.lock, pom.xml)'));
+    return err(
+      validationError(
+        'No package manifests found (package.json, composer.json, requirements.txt, go.mod, Cargo.toml, Gemfile.lock, pom.xml)',
+      ),
+    );
   }
 
   // Deduplicate by name+ecosystem

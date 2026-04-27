@@ -322,12 +322,10 @@ describe('search() — fuzzy auto-fallback', () => {
   it('finds symbols with explicit fuzzy=true for typo variants', async () => {
     // "calculateTotall" has edit distance 1 from "calculateTotal" (extra 'l').
     // Trigram similarity is high (shares most 3-grams with the target).
-    const r = await search(
-      store, 'calculateTotall',
-      undefined, 20, 0,
-      undefined,
-      { fuzzy: true, maxEditDistance: 2 },
-    );
+    const r = await search(store, 'calculateTotall', undefined, 20, 0, undefined, {
+      fuzzy: true,
+      maxEditDistance: 2,
+    });
     // fuzzy should find calculateTotal even with the typo
     expect(r.items.length).toBeGreaterThan(0);
     expect(r.items.some((i) => i.symbol.name === 'calculateTotal')).toBe(true);
@@ -338,8 +336,11 @@ describe('search() — fuzzy auto-fallback', () => {
     const r = await search(store, 'calculatTotal');
     // auto-fallback: search_mode should indicate fuzzy was used
     if (r.items.length > 0) {
-      expect(['fuzzy', 'fts_fuzzy_fallback', 'symbol_miss_text_fallback'].some(m => r.search_mode?.includes(m)
-        || r.search_mode === m)).toBe(true);
+      expect(
+        ['fuzzy', 'fts_fuzzy_fallback', 'symbol_miss_text_fallback'].some(
+          (m) => r.search_mode?.includes(m) || r.search_mode === m,
+        ),
+      ).toBe(true);
     }
   });
 });

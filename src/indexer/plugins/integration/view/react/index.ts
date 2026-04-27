@@ -129,13 +129,41 @@ export class ReactPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'react_renders', category: 'react', description: 'Parent component renders child via JSX' },
-        { name: 'react_context_provides', category: 'react', description: 'Context.Provider usage' },
-        { name: 'react_context_consumes', category: 'react', description: 'useContext() or use() call' },
-        { name: 'react_lazy_loads', category: 'react', description: 'React.lazy(() => import("./X"))' },
-        { name: 'react_custom_hook_uses', category: 'react', description: 'Component calls a custom hook' },
-        { name: 'react_use_client', category: 'react', description: "'use client' directive (React 19)" },
-        { name: 'react_use_server', category: 'react', description: "'use server' directive (React 19)" },
+        {
+          name: 'react_renders',
+          category: 'react',
+          description: 'Parent component renders child via JSX',
+        },
+        {
+          name: 'react_context_provides',
+          category: 'react',
+          description: 'Context.Provider usage',
+        },
+        {
+          name: 'react_context_consumes',
+          category: 'react',
+          description: 'useContext() or use() call',
+        },
+        {
+          name: 'react_lazy_loads',
+          category: 'react',
+          description: 'React.lazy(() => import("./X"))',
+        },
+        {
+          name: 'react_custom_hook_uses',
+          category: 'react',
+          description: 'Component calls a custom hook',
+        },
+        {
+          name: 'react_use_client',
+          category: 'react',
+          description: "'use client' directive (React 19)",
+        },
+        {
+          name: 'react_use_server',
+          category: 'react',
+          description: "'use server' directive (React 19)",
+        },
       ],
     };
   }

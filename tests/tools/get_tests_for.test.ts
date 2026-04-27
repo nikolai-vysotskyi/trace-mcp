@@ -48,7 +48,9 @@ describe('get_tests_for', () => {
       // Unrelated test
       store.insertFile('tests/services/OrderService.test.ts', 'typescript', 'h3', 50);
 
-      const result = getTestsFor(store, { symbolId: 'src/services/UserService.ts::UserService#class' });
+      const result = getTestsFor(store, {
+        symbolId: 'src/services/UserService.ts::UserService#class',
+      });
       expect(result.isOk()).toBe(true);
       const { tests } = result._unsafeUnwrap();
 
@@ -132,7 +134,12 @@ describe('get_tests_for', () => {
       });
 
       // Test file (no name-matching to source — purely graph-based)
-      const testFileId = store.insertFile('tests/integration/orders.test.ts', 'typescript', 'h2', 50);
+      const testFileId = store.insertFile(
+        'tests/integration/orders.test.ts',
+        'typescript',
+        'h2',
+        50,
+      );
 
       // Create test_covers edge: test file node → source file node
       const testFileNodeId = store.getNodeId('file', testFileId)!;
@@ -140,9 +147,13 @@ describe('get_tests_for', () => {
       expect(testFileNodeId).toBeDefined();
       expect(srcFileNodeId).toBeDefined();
 
-      store.insertEdge(testFileNodeId, srcFileNodeId, 'test_covers', true, { test_file: 'tests/integration/orders.test.ts' });
+      store.insertEdge(testFileNodeId, srcFileNodeId, 'test_covers', true, {
+        test_file: 'tests/integration/orders.test.ts',
+      });
 
-      const result = getTestsFor(store, { symbolId: 'src/services/OrderService.ts::OrderService#class' });
+      const result = getTestsFor(store, {
+        symbolId: 'src/services/OrderService.ts::OrderService#class',
+      });
       expect(result.isOk()).toBe(true);
       const { tests } = result._unsafeUnwrap();
 
@@ -171,7 +182,9 @@ describe('get_tests_for', () => {
       expect(testFileNodeId).toBeDefined();
       expect(symNodeId).toBeDefined();
 
-      store.insertEdge(testFileNodeId, symNodeId, 'test_covers', true, { test_file: 'tests/math-helpers.test.ts' });
+      store.insertEdge(testFileNodeId, symNodeId, 'test_covers', true, {
+        test_file: 'tests/math-helpers.test.ts',
+      });
 
       const result = getTestsFor(store, { symbolId: 'src/utils/calc.ts::add#function' });
       expect(result.isOk()).toBe(true);
@@ -199,7 +212,9 @@ describe('get_tests_for', () => {
       // Create test_covers edge too
       const testFileNodeId = store.getNodeId('file', testFileId)!;
       const srcFileNodeId = store.getNodeId('file', srcFileId)!;
-      store.insertEdge(testFileNodeId, srcFileNodeId, 'test_covers', true, { test_file: 'tests/auth.test.ts' });
+      store.insertEdge(testFileNodeId, srcFileNodeId, 'test_covers', true, {
+        test_file: 'tests/auth.test.ts',
+      });
 
       const result = getTestsFor(store, { symbolId: 'sym:login' });
       expect(result.isOk()).toBe(true);
@@ -213,11 +228,18 @@ describe('get_tests_for', () => {
     it('finds tests via file-level edge when querying by file_path', () => {
       const srcFileId = store.insertFile('src/config.ts', 'typescript', 'h1', 100);
       // Test file with non-matching name
-      const testFileId = store.insertFile('tests/e2e/configuration.test.ts', 'typescript', 'h2', 50);
+      const testFileId = store.insertFile(
+        'tests/e2e/configuration.test.ts',
+        'typescript',
+        'h2',
+        50,
+      );
 
       const testFileNodeId = store.getNodeId('file', testFileId)!;
       const srcFileNodeId = store.getNodeId('file', srcFileId)!;
-      store.insertEdge(testFileNodeId, srcFileNodeId, 'test_covers', true, { test_file: 'tests/e2e/configuration.test.ts' });
+      store.insertEdge(testFileNodeId, srcFileNodeId, 'test_covers', true, {
+        test_file: 'tests/e2e/configuration.test.ts',
+      });
 
       const result = getTestsFor(store, { filePath: 'src/config.ts' });
       expect(result.isOk()).toBe(true);

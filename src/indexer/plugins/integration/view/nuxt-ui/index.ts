@@ -34,7 +34,7 @@ import type { TraceMcpResult } from '../../../../../errors.js';
 
 interface NuxtUiThemeOverride {
   componentName: string;
-  keys: string[];       // customized keys like 'base', 'color', 'size', 'variant'
+  keys: string[]; // customized keys like 'base', 'color', 'size', 'variant'
 }
 
 interface NuxtUiFormDef {
@@ -45,40 +45,115 @@ interface NuxtUiFormDef {
 }
 
 interface NuxtUiComponentUsage {
-  name: string;             // e.g. 'UButton', 'UCard'
-  propsUsed: string[];      // props explicitly set
-  variants: string[];       // variant prop values
+  name: string; // e.g. 'UButton', 'UCard'
+  propsUsed: string[]; // props explicitly set
+  variants: string[]; // variant prop values
 }
 
 // ── Known Nuxt UI components ──────────────────────────────────────────────
 
 /** Nuxt UI v3 core components (U-prefixed in templates). */
 const NUXT_UI_V3_COMPONENTS = new Set([
-  'UAccordion', 'UAlert', 'UAvatar', 'UAvatarGroup', 'UBadge', 'UBreadcrumb',
-  'UButton', 'UButtonGroup', 'UCalendar', 'UCard', 'UCarousel', 'UCheckbox',
-  'UChip', 'UCollapsible', 'UColorPicker', 'UCommandPalette', 'UContainer',
-  'UContextMenu', 'UDatePicker', 'UDrawer', 'UDropdownMenu', 'UForm',
-  'UFormField', 'UIcon', 'UInput', 'UInputMenu', 'UInputNumber', 'UKbd',
-  'ULink', 'UModal', 'UNavigationMenu', 'UPagination', 'UPinInput',
-  'UPopover', 'UProgress', 'URadioGroup', 'USelect', 'USelectMenu',
-  'USeparator', 'USkeleton', 'USlider', 'USlideover', 'UStepper',
-  'USwitch', 'UTable', 'UTabs', 'UTextarea', 'UToast', 'UTooltip', 'UTree',
+  'UAccordion',
+  'UAlert',
+  'UAvatar',
+  'UAvatarGroup',
+  'UBadge',
+  'UBreadcrumb',
+  'UButton',
+  'UButtonGroup',
+  'UCalendar',
+  'UCard',
+  'UCarousel',
+  'UCheckbox',
+  'UChip',
+  'UCollapsible',
+  'UColorPicker',
+  'UCommandPalette',
+  'UContainer',
+  'UContextMenu',
+  'UDatePicker',
+  'UDrawer',
+  'UDropdownMenu',
+  'UForm',
+  'UFormField',
+  'UIcon',
+  'UInput',
+  'UInputMenu',
+  'UInputNumber',
+  'UKbd',
+  'ULink',
+  'UModal',
+  'UNavigationMenu',
+  'UPagination',
+  'UPinInput',
+  'UPopover',
+  'UProgress',
+  'URadioGroup',
+  'USelect',
+  'USelectMenu',
+  'USeparator',
+  'USkeleton',
+  'USlider',
+  'USlideover',
+  'UStepper',
+  'USwitch',
+  'UTable',
+  'UTabs',
+  'UTextarea',
+  'UToast',
+  'UTooltip',
+  'UTree',
 ]);
 
 /** Nuxt UI Pro components. */
 const NUXT_UI_PRO_COMPONENTS = new Set([
-  'UPage', 'UPageBody', 'UPageCard', 'UPageColumns', 'UPageGrid',
-  'UPageHeader', 'UPageHero', 'UPageLinks', 'UPageList', 'UPageSearch',
-  'UDashboard', 'UDashboardGroup', 'UDashboardLayout',
-  'UDashboardNavbar', 'UDashboardPanel', 'UDashboardSearch',
-  'UDashboardSidebar', 'UDashboardToolbar',
-  'UContentNavigation', 'UContentSearch', 'UContentSurround', 'UContentToc',
-  'UAuthForm', 'UBlogList', 'UBlogPost', 'UColorModeButton', 'UColorModeSelect',
-  'UFooter', 'UFooterColumns', 'UHeader', 'UHeaderLinks', 'UHeaderPopover',
-  'ULandingCard', 'ULandingCTA', 'ULandingFAQ', 'ULandingFeature',
-  'ULandingGrid', 'ULandingHero', 'ULandingLogos', 'ULandingSection',
-  'ULandingTestimonial', 'UMain', 'UNavigationTree', 'UPricingCard',
-  'UPricingGrid', 'UPricingToggle',
+  'UPage',
+  'UPageBody',
+  'UPageCard',
+  'UPageColumns',
+  'UPageGrid',
+  'UPageHeader',
+  'UPageHero',
+  'UPageLinks',
+  'UPageList',
+  'UPageSearch',
+  'UDashboard',
+  'UDashboardGroup',
+  'UDashboardLayout',
+  'UDashboardNavbar',
+  'UDashboardPanel',
+  'UDashboardSearch',
+  'UDashboardSidebar',
+  'UDashboardToolbar',
+  'UContentNavigation',
+  'UContentSearch',
+  'UContentSurround',
+  'UContentToc',
+  'UAuthForm',
+  'UBlogList',
+  'UBlogPost',
+  'UColorModeButton',
+  'UColorModeSelect',
+  'UFooter',
+  'UFooterColumns',
+  'UHeader',
+  'UHeaderLinks',
+  'UHeaderPopover',
+  'ULandingCard',
+  'ULandingCTA',
+  'ULandingFAQ',
+  'ULandingFeature',
+  'ULandingGrid',
+  'ULandingHero',
+  'ULandingLogos',
+  'ULandingSection',
+  'ULandingTestimonial',
+  'UMain',
+  'UNavigationTree',
+  'UPricingCard',
+  'UPricingGrid',
+  'UPricingToggle',
 ]);
 
 // ── Extraction functions ──────────────────────────────────────────────────
@@ -179,13 +254,18 @@ function extractNuxtUiFormSchemas(source: string): NuxtUiFormDef[] {
 
     // Determine schema type from the source
     let schemaType: NuxtUiFormDef['schemaType'] = 'unknown';
-    if (source.includes('z.object') || source.includes('z.string') || source.includes('from \'zod\'') || source.includes('from "zod"')) {
+    if (
+      source.includes('z.object') ||
+      source.includes('z.string') ||
+      source.includes("from 'zod'") ||
+      source.includes('from "zod"')
+    ) {
       schemaType = 'zod';
-    } else if (source.includes('yup.object') || source.includes('from \'yup\'')) {
+    } else if (source.includes('yup.object') || source.includes("from 'yup'")) {
       schemaType = 'yup';
-    } else if (source.includes('Joi.object') || source.includes('from \'joi\'')) {
+    } else if (source.includes('Joi.object') || source.includes("from 'joi'")) {
       schemaType = 'joi';
-    } else if (source.includes('v.object') || source.includes('from \'valibot\'')) {
+    } else if (source.includes('v.object') || source.includes("from 'valibot'")) {
       schemaType = 'valibot';
     }
 
@@ -209,7 +289,9 @@ function extractNuxtUiFormSchemas(source: string): NuxtUiFormDef[] {
 }
 
 /** Extract tailwind-variants tv() definitions. */
-function extractTvDefinitions(source: string): { name: string; variants: Record<string, string[]>; slots: string[] }[] {
+function extractTvDefinitions(
+  source: string,
+): { name: string; variants: Record<string, string[]>; slots: string[] }[] {
   const defs: { name: string; variants: Record<string, string[]>; slots: string[] }[] = [];
   const tvRe = /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*tv\s*\(/g;
   let match: RegExpExecArray | null;
@@ -258,9 +340,9 @@ function extractTvDefinitions(source: string): { name: string; variants: Record<
 
 /** Extract useColorMode() and color-mode related patterns. */
 function extractColorModeUsage(source: string): boolean {
-  return /\buseColorMode\b/.test(source) ||
-    /\bcolorMode\b/.test(source) ||
-    /\$colorMode/.test(source);
+  return (
+    /\buseColorMode\b/.test(source) || /\bcolorMode\b/.test(source) || /\$colorMode/.test(source)
+  );
 }
 
 // ── Plugin ────────────────────────────────────────────────────────────────
@@ -269,7 +351,7 @@ export class NuxtUiPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
     name: 'nuxt-ui',
     version: '1.0.0',
-    priority: 16,    // just after nuxt (15)
+    priority: 16, // just after nuxt (15)
     category: 'view',
     dependencies: ['nuxt'],
   };
@@ -297,7 +379,9 @@ export class NuxtUiPlugin implements FrameworkPlugin {
         const configPath = path.join(ctx.rootPath, 'nuxt.config.ts');
         const configContent = fs.readFileSync(configPath, 'utf-8');
         if (/@nuxt\/ui/.test(configContent)) return true;
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     return true;
@@ -306,11 +390,31 @@ export class NuxtUiPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'nuxt_ui_component', category: 'ui-library', description: 'Nuxt UI component usage' },
-        { name: 'nuxt_ui_pro_component', category: 'ui-library', description: 'Nuxt UI Pro component usage' },
-        { name: 'nuxt_ui_theme', category: 'ui-library', description: 'app.config.ts theme override' },
-        { name: 'nuxt_ui_form', category: 'ui-library', description: 'UForm with validation schema' },
-        { name: 'nuxt_ui_variant', category: 'ui-library', description: 'Tailwind Variants definition (tv())' },
+        {
+          name: 'nuxt_ui_component',
+          category: 'ui-library',
+          description: 'Nuxt UI component usage',
+        },
+        {
+          name: 'nuxt_ui_pro_component',
+          category: 'ui-library',
+          description: 'Nuxt UI Pro component usage',
+        },
+        {
+          name: 'nuxt_ui_theme',
+          category: 'ui-library',
+          description: 'app.config.ts theme override',
+        },
+        {
+          name: 'nuxt_ui_form',
+          category: 'ui-library',
+          description: 'UForm with validation schema',
+        },
+        {
+          name: 'nuxt_ui_variant',
+          category: 'ui-library',
+          description: 'Tailwind Variants definition (tv())',
+        },
       ],
     };
   }
@@ -453,8 +557,8 @@ export class NuxtUiPlugin implements FrameworkPlugin {
     const allFiles = ctx.getAllFiles();
 
     // Find app.config.ts theme definitions
-    const appConfig = allFiles.find((f) =>
-      f.path === 'app.config.ts' || f.path === 'app.config.js',
+    const appConfig = allFiles.find(
+      (f) => f.path === 'app.config.ts' || f.path === 'app.config.js',
     );
 
     if (!appConfig) return ok(edges);

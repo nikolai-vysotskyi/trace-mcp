@@ -13,7 +13,8 @@ import { installGuardHook, installWorktreeHook, isHookOutdated } from '../init/h
 import { setupLauncher } from '../init/launcher.js';
 
 declare const PKG_VERSION_INJECTED: string;
-const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+const PKG_VERSION =
+  typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
@@ -25,148 +26,169 @@ import { getDbPath, ensureGlobalDirs } from '../global.js';
 import type { InitStepResult } from '../init/types.js';
 
 export const upgradeCommand = new Command('upgrade')
-  .description('Upgrade trace-mcp: run DB migrations, reindex with latest plugins, update hooks and CLAUDE.md')
+  .description(
+    'Upgrade trace-mcp: run DB migrations, reindex with latest plugins, update hooks and CLAUDE.md',
+  )
   .argument('[dir]', 'Project directory (omit to upgrade all registered projects)')
   .option('--skip-hooks', 'Do not update guard hooks')
   .option('--skip-reindex', 'Do not trigger reindex')
   .option('--skip-claude-md', 'Do not update CLAUDE.md block')
   .option('--dry-run', 'Show what would be done without writing files')
   .option('--json', 'Output results as JSON')
-  .action(async (dir: string | undefined, opts: {
-    skipHooks?: boolean;
-    skipReindex?: boolean;
-    skipClaudeMd?: boolean;
-    dryRun?: boolean;
-    json?: boolean;
-  }) => {
-    // Determine which projects to upgrade
-    const projectRoots: string[] = [];
+  .action(
+    async (
+      dir: string | undefined,
+      opts: {
+        skipHooks?: boolean;
+        skipReindex?: boolean;
+        skipClaudeMd?: boolean;
+        dryRun?: boolean;
+        json?: boolean;
+      },
+    ) => {
+      // Determine which projects to upgrade
+      const projectRoots: string[] = [];
 
-    if (dir) {
-      projectRoots.push(path.resolve(dir));
-    } else {
-      const projects = listProjects();
-      for (const p of projects) {
-        if (fs.existsSync(p.root)) {
-          projectRoots.push(p.root);
-        } else {
-          logger.warn({ root: p.root }, 'Skipping stale project (directory not found)');
-        }
-      }
-      // Note: no projects is allowed — global work (launcher, hooks,
-      // CLAUDE.md) still runs so `npm i -g trace-mcp@new && trace-mcp upgrade`
-      // refreshes the shim even before any project is registered.
-    }
-
-    const allSteps: Array<{ projectRoot: string; steps: InitStepResult[] }> = [];
-
-    for (const projectRoot of projectRoots) {
-      const steps: InitStepResult[] = [];
-
-      // Load config for this project
-      const configResult = await loadConfig(projectRoot);
-      if (configResult.isErr()) {
-        logger.error({ error: configResult.error, project: projectRoot }, 'Failed to load config');
-        steps.push({ target: projectRoot, action: 'skipped', detail: 'Config load failed' });
-        allSteps.push({ projectRoot, steps });
-        continue;
-      }
-      const config = configResult.value;
-
-      // Resolve DB path
-      const dbPath = getDbPath(projectRoot);
-      ensureGlobalDirs();
-
-      if (!opts.dryRun) {
-        try {
-          // Run migrations
-          const db = initializeDatabase(dbPath);
-          const store = new Store(db);
-
-          const versionRow = db.prepare('SELECT value FROM schema_meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
-          const currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
-          steps.push({
-            target: dbPath, action: 'updated',
-            detail: `Schema v${currentVersion}`,
-          });
-
-          // Force reindex
-          if (!opts.skipReindex) {
-            const registry = PluginRegistry.createWithDefaults();
-
-            const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
-            const result = await pipeline.indexAll(true);
-            steps.push({
-              target: projectRoot, action: 'updated',
-              detail: `Reindexed: ${result.indexed} files, ${result.skipped} skipped, ${result.errors} errors`,
-            });
-            updateLastIndexed(projectRoot);
-          }
-
-          db.close();
-        } catch (err) {
-          logger.error({ error: (err as Error).message, project: projectRoot }, 'Upgrade failed');
-          steps.push({ target: projectRoot, action: 'skipped', detail: `Upgrade failed: ${(err as Error).message}` });
-        }
+      if (dir) {
+        projectRoots.push(path.resolve(dir));
       } else {
-        steps.push({ target: dbPath, action: 'skipped', detail: 'Would run migrations' });
-        if (!opts.skipReindex) {
-          steps.push({ target: projectRoot, action: 'skipped', detail: 'Would force reindex' });
+        const projects = listProjects();
+        for (const p of projects) {
+          if (fs.existsSync(p.root)) {
+            projectRoots.push(p.root);
+          } else {
+            logger.warn({ root: p.root }, 'Skipping stale project (directory not found)');
+          }
         }
+        // Note: no projects is allowed — global work (launcher, hooks,
+        // CLAUDE.md) still runs so `npm i -g trace-mcp@new && trace-mcp upgrade`
+        // refreshes the shim even before any project is registered.
       }
 
-      allSteps.push({ projectRoot, steps });
-    }
+      const allSteps: Array<{ projectRoot: string; steps: InitStepResult[] }> = [];
 
-    // Global steps run regardless of whether any projects are registered.
-    // Ensure a bucket exists so they surface in output even with no projects.
-    let globalSteps: InitStepResult[];
-    if (allSteps.length > 0) {
-      globalSteps = allSteps[0].steps;
-    } else {
-      globalSteps = [];
-      allSteps.push({ projectRoot: '(global)', steps: globalSteps });
-    }
+      for (const projectRoot of projectRoots) {
+        const steps: InitStepResult[] = [];
 
-    // Refresh the stable launcher shim + config. Must run on every upgrade —
-    // launcher.env embeds absolute node + cli paths, and those change whenever
-    // trace-mcp is reinstalled under a different Node version.
-    globalSteps.push(...setupLauncher({
-      dryRun: opts.dryRun,
-      force: false,
-      pkgVersion: PKG_VERSION,
-    }));
+        // Load config for this project
+        const configResult = await loadConfig(projectRoot);
+        if (configResult.isErr()) {
+          logger.error(
+            { error: configResult.error, project: projectRoot },
+            'Failed to load config',
+          );
+          steps.push({ target: projectRoot, action: 'skipped', detail: 'Config load failed' });
+          allSteps.push({ projectRoot, steps });
+          continue;
+        }
+        const config = configResult.value;
 
-    // Global: update guard hook if outdated
-    if (!opts.skipHooks) {
-      const { hasGuardHook, guardHookVersion } = detectGuardHook();
-      if (hasGuardHook && isHookOutdated(guardHookVersion)) {
-        globalSteps.push(installGuardHook({ dryRun: opts.dryRun }));
+        // Resolve DB path
+        const dbPath = getDbPath(projectRoot);
+        ensureGlobalDirs();
+
+        if (!opts.dryRun) {
+          try {
+            // Run migrations
+            const db = initializeDatabase(dbPath);
+            const store = new Store(db);
+
+            const versionRow = db
+              .prepare('SELECT value FROM schema_meta WHERE key = ?')
+              .get('schema_version') as { value: string } | undefined;
+            const currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
+            steps.push({
+              target: dbPath,
+              action: 'updated',
+              detail: `Schema v${currentVersion}`,
+            });
+
+            // Force reindex
+            if (!opts.skipReindex) {
+              const registry = PluginRegistry.createWithDefaults();
+
+              const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+              const result = await pipeline.indexAll(true);
+              steps.push({
+                target: projectRoot,
+                action: 'updated',
+                detail: `Reindexed: ${result.indexed} files, ${result.skipped} skipped, ${result.errors} errors`,
+              });
+              updateLastIndexed(projectRoot);
+            }
+
+            db.close();
+          } catch (err) {
+            logger.error({ error: (err as Error).message, project: projectRoot }, 'Upgrade failed');
+            steps.push({
+              target: projectRoot,
+              action: 'skipped',
+              detail: `Upgrade failed: ${(err as Error).message}`,
+            });
+          }
+        } else {
+          steps.push({ target: dbPath, action: 'skipped', detail: 'Would run migrations' });
+          if (!opts.skipReindex) {
+            steps.push({ target: projectRoot, action: 'skipped', detail: 'Would force reindex' });
+          }
+        }
+
+        allSteps.push({ projectRoot, steps });
       }
-      // Always ensure worktree hooks are installed (new in this version)
-      globalSteps.push(...installWorktreeHook({ dryRun: opts.dryRun }));
-    }
 
-    // Global: refresh CLAUDE.md
-    if (!opts.skipClaudeMd) {
-      globalSteps.push(updateClaudeMd(process.cwd(), { dryRun: opts.dryRun, scope: 'global' }));
-    }
+      // Global steps run regardless of whether any projects are registered.
+      // Ensure a bucket exists so they surface in output even with no projects.
+      let globalSteps: InitStepResult[];
+      if (allSteps.length > 0) {
+        globalSteps = allSteps[0].steps;
+      } else {
+        globalSteps = [];
+        allSteps.push({ projectRoot: '(global)', steps: globalSteps });
+      }
 
-    // Report
-    const header = opts.dryRun ? 'trace-mcp upgrade (dry run)' : 'trace-mcp upgrade';
-    if (opts.json) {
-      console.log(JSON.stringify(allSteps, null, 2));
-    } else {
-      console.log(header);
-      for (const { projectRoot, steps } of allSteps) {
-        const header = projectRoot === '(global)'
-          ? '\n  Global'
-          : `\n  Project: ${path.basename(projectRoot)} (${projectRoot})`;
+      // Refresh the stable launcher shim + config. Must run on every upgrade —
+      // launcher.env embeds absolute node + cli paths, and those change whenever
+      // trace-mcp is reinstalled under a different Node version.
+      globalSteps.push(
+        ...setupLauncher({
+          dryRun: opts.dryRun,
+          force: false,
+          pkgVersion: PKG_VERSION,
+        }),
+      );
+
+      // Global: update guard hook if outdated
+      if (!opts.skipHooks) {
+        const { hasGuardHook, guardHookVersion } = detectGuardHook();
+        if (hasGuardHook && isHookOutdated(guardHookVersion)) {
+          globalSteps.push(installGuardHook({ dryRun: opts.dryRun }));
+        }
+        // Always ensure worktree hooks are installed (new in this version)
+        globalSteps.push(...installWorktreeHook({ dryRun: opts.dryRun }));
+      }
+
+      // Global: refresh CLAUDE.md
+      if (!opts.skipClaudeMd) {
+        globalSteps.push(updateClaudeMd(process.cwd(), { dryRun: opts.dryRun, scope: 'global' }));
+      }
+
+      // Report
+      const header = opts.dryRun ? 'trace-mcp upgrade (dry run)' : 'trace-mcp upgrade';
+      if (opts.json) {
+        console.log(JSON.stringify(allSteps, null, 2));
+      } else {
         console.log(header);
-        for (const step of steps) {
-          console.log(`    ${step.action}: ${step.detail ?? step.target}`);
+        for (const { projectRoot, steps } of allSteps) {
+          const header =
+            projectRoot === '(global)'
+              ? '\n  Global'
+              : `\n  Project: ${path.basename(projectRoot)} (${projectRoot})`;
+          console.log(header);
+          for (const step of steps) {
+            console.log(`    ${step.action}: ${step.detail ?? step.target}`);
+          }
         }
+        console.log();
       }
-      console.log();
-    }
-  });
+    },
+  );

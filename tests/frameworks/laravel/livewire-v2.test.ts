@@ -41,24 +41,18 @@ describe('Livewire v2 — OrderList component', () => {
   });
 
   it('computes convention view path', () => {
-    expect(info!.conventionViewPath).toBe(
-      'resources/views/livewire/order-list.blade.php',
-    );
+    expect(info!.conventionViewPath).toBe('resources/views/livewire/order-list.blade.php');
   });
 
   it('extracts $listeners as listeners', () => {
     expect(info!.listeners.length).toBeGreaterThan(0);
-    const orderCreated = info!.listeners.find(
-      (l) => l.eventName === 'order-created',
-    );
+    const orderCreated = info!.listeners.find((l) => l.eventName === 'order-created');
     expect(orderCreated).toBeDefined();
     expect(orderCreated!.handlerMethod).toBe('refreshList');
   });
 
   it('extracts second listener entry', () => {
-    const cancelled = info!.listeners.find(
-      (l) => l.eventName === 'orderCancelled',
-    );
+    const cancelled = info!.listeners.find((l) => l.eventName === 'orderCancelled');
     expect(cancelled).toBeDefined();
     expect(cancelled!.handlerMethod).toBe('handleCancel');
   });
@@ -99,9 +93,7 @@ describe('Livewire v2 — SearchBar component', () => {
   });
 
   it('maps emit to its method', () => {
-    const searchExecuted = info!.dispatches.find(
-      (d) => d.eventName === 'search-executed',
-    );
+    const searchExecuted = info!.dispatches.find((d) => d.eventName === 'search-executed');
     expect(searchExecuted?.method).toBe('search');
   });
 

@@ -31,16 +31,14 @@ describe('getComplexityTrend', () => {
 
   it('returns trend with current and historical snapshots', () => {
     const simpleSource = 'function foo() {\n  return 1;\n}\n';
-    const complexSource = 'function foo(x) {\n  if (x > 0) {\n    for (const i of arr) {\n      if (i && valid) {\n        process(i);\n      }\n    }\n  }\n  return x;\n}\n';
+    const complexSource =
+      'function foo(x) {\n  if (x > 0) {\n    for (const i of arr) {\n      if (i && valid) {\n        process(i);\n      }\n    }\n  }\n  return x;\n}\n';
 
     mockExecFileSync.mockImplementation((cmd: string, args: readonly string[] | undefined) => {
       const argList = args as string[];
       if (argList[0] === 'rev-parse') return Buffer.from('true');
       if (argList[0] === 'log') {
-        return Buffer.from([
-          'abc123|2026-03-01',
-          'def456|2026-01-15',
-        ].join('\n'));
+        return Buffer.from(['abc123|2026-03-01', 'def456|2026-01-15'].join('\n'));
       }
       if (argList[0] === 'show') {
         const ref = argList[1];

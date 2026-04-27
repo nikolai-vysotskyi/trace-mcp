@@ -16,8 +16,20 @@ import { notFound } from '../../errors.js';
 
 interface MiddlewareEntry {
   name: string;
-  scope: 'global' | 'router' | 'route' | 'guard' | 'pipe' | 'interceptor' | 'filter'
-    | 'before_request' | 'after_request' | 'error_handler' | 'depends' | 'middleware' | 'view_decorator';
+  scope:
+    | 'global'
+    | 'router'
+    | 'route'
+    | 'guard'
+    | 'pipe'
+    | 'interceptor'
+    | 'filter'
+    | 'before_request'
+    | 'after_request'
+    | 'error_handler'
+    | 'depends'
+    | 'middleware'
+    | 'view_decorator';
   path?: string;
   file?: string;
 }
@@ -44,7 +56,7 @@ export function getMiddlewareChain(
     const pattern = r.uri
       .replace(/:[^/]+/g, '\0PARAM\0')
       .replace(/\{[^}]+\}/g, '\0PARAM\0')
-      .replace(/<[^>]+>/g, '\0PARAM\0')    // Django/Flask: <int:pk>
+      .replace(/<[^>]+>/g, '\0PARAM\0') // Django/Flask: <int:pk>
       .split('\0PARAM\0')
       .map(escapeRegExp)
       .join('[^/]+');
@@ -120,11 +132,13 @@ function buildExpressChain(
   allFiles: FileInfo[],
   chain: MiddlewareEntry[],
 ): void {
-  const GLOBAL_MW_RE = /(?:app|router)\s*\.\s*use\s*\(\s*([A-Za-z][\w.]*(?:\s*\(\s*[^)]*\))?)\s*[,)]/g;
+  const GLOBAL_MW_RE =
+    /(?:app|router)\s*\.\s*use\s*\(\s*([A-Za-z][\w.]*(?:\s*\(\s*[^)]*\))?)\s*[,)]/g;
   const PATH_MW_RE = /(?:app|router)\s*\.\s*use\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*([A-Za-z][\w.]*)/g;
 
   for (const file of allFiles) {
-    if (file.framework_role !== 'express_router' && file.framework_role !== 'express_middleware') continue;
+    if (file.framework_role !== 'express_router' && file.framework_role !== 'express_middleware')
+      continue;
     const source = readSource(rootPath, file.path);
     if (!source) continue;
 
@@ -170,7 +184,10 @@ function buildNestChain(
       const re = new RegExp(regex.source, 'g');
       let m: RegExpExecArray | null;
       while ((m = re.exec(source)) !== null) {
-        const items = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+        const items = m[1]
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
         for (const item of items) {
           chain.push({ name: item, scope, file: file.path });
         }
@@ -235,7 +252,8 @@ function buildFlaskChain(
     if (!source) continue;
 
     // @login_required, @auth.login_required etc. before route handlers
-    const decoratorRe = /@([\w.]+)\s*(?:\([^)]*\))?\s*\n\s*(?:@\w[\w.]*\s*(?:\([^)]*\))?\s*\n\s*)*def\s+\w+/g;
+    const decoratorRe =
+      /@([\w.]+)\s*(?:\([^)]*\))?\s*\n\s*(?:@\w[\w.]*\s*(?:\([^)]*\))?\s*\n\s*)*def\s+\w+/g;
     let m: RegExpExecArray | null;
     while ((m = decoratorRe.exec(source)) !== null) {
       const dec = m[1];
@@ -321,7 +339,8 @@ function buildDjangoChain(
     const source = readSource(rootPath, file.path);
     if (!source) continue;
 
-    const decoratorRe = /@([\w.]+)\s*(?:\([^)]*\))?\s*\n\s*(?:@\w[\w.]*\s*(?:\([^)]*\))?\s*\n\s*)*(?:def|class)\s+\w+/g;
+    const decoratorRe =
+      /@([\w.]+)\s*(?:\([^)]*\))?\s*\n\s*(?:@\w[\w.]*\s*(?:\([^)]*\))?\s*\n\s*)*(?:def|class)\s+\w+/g;
     let m: RegExpExecArray | null;
     while ((m = decoratorRe.exec(source)) !== null) {
       const dec = m[1];

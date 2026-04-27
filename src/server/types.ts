@@ -4,7 +4,12 @@ import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
 import type { SessionTracker } from '../session/tracker.js';
 import type { SessionJournal } from '../session/journal.js';
-import type { AIProvider, RerankerService, EmbeddingService, BlobVectorStore } from '../ai/index.js';
+import type {
+  AIProvider,
+  RerankerService,
+  EmbeddingService,
+  BlobVectorStore,
+} from '../ai/index.js';
 import type { ProgressState } from '../progress.js';
 import type { TopologyStore } from '../topology/topology-db.js';
 import type { DecisionStore } from '../memory/decision-store.js';

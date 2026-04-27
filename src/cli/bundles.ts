@@ -15,8 +15,9 @@ function resolveDbPath(projectRoot: string): string {
   return getDbPath(projectRoot);
 }
 
-export const bundlesCommand = new Command('bundles')
-  .description('Manage pre-indexed bundles for dependency libraries');
+export const bundlesCommand = new Command('bundles').description(
+  'Manage pre-indexed bundles for dependency libraries',
+);
 
 bundlesCommand
   .command('list')

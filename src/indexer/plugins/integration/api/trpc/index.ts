@@ -20,8 +20,7 @@ import type {
 const PROCEDURE_RE =
   /(\w+)\s*:\s*\w*[Pp]rocedure[\s\S]{0,500}?\.(query|mutation|subscription)\s*\(/g;
 
-const ROUTER_RE =
-  /(?:t\.router|router)\s*\(\s*\{/g;
+const ROUTER_RE = /(?:t\.router|router)\s*\(\s*\{/g;
 
 interface TrpcProcedure {
   name: string;

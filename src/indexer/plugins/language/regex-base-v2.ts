@@ -10,7 +10,14 @@
  * - **Multi-line signatures**: looks ahead to capture complete signatures
  */
 import { ok } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+  RawEdge,
+  SymbolKind,
+} from '../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../errors.js';
 
 // ---------------------------------------------------------------------------
@@ -104,7 +111,8 @@ function buildLineIndex(source: string): number[] {
 }
 
 function lineAtFast(lineStarts: number[], offset: number): number {
-  let lo = 0, hi = lineStarts.length - 1;
+  let lo = 0,
+    hi = lineStarts.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
     if (lineStarts[mid] <= offset) lo = mid + 1;
@@ -127,7 +135,10 @@ const DEFAULT_COMMENT_STYLE: CommentStyle = {
   strings: ['"', "'"],
 };
 
-export function stripCommentsAndStrings(source: string, style: CommentStyle = DEFAULT_COMMENT_STYLE): string {
+export function stripCommentsAndStrings(
+  source: string,
+  style: CommentStyle = DEFAULT_COMMENT_STYLE,
+): string {
   const chars = [...source];
   const len = source.length;
   let i = 0;
@@ -142,8 +153,14 @@ export function stripCommentsAndStrings(source: string, style: CommentStyle = DE
           i += delim.length;
           // Find closing delimiter (handle escape with backslash)
           while (i < len) {
-            if (source[i] === '\\') { i += 2; continue; }
-            if (source.startsWith(delim, i)) { i += delim.length; break; }
+            if (source[i] === '\\') {
+              i += 2;
+              continue;
+            }
+            if (source.startsWith(delim, i)) {
+              i += delim.length;
+              break;
+            }
             i++;
           }
           // Blank out the string (keep newlines for line counting)
@@ -221,8 +238,10 @@ function findBraceBlockEnd(source: string, start: number): number {
   let depth = 0;
   let foundOpen = false;
   for (let i = start; i < source.length; i++) {
-    if (source[i] === '{') { depth++; foundOpen = true; }
-    else if (source[i] === '}') {
+    if (source[i] === '{') {
+      depth++;
+      foundOpen = true;
+    } else if (source[i] === '}') {
       depth--;
       if (foundOpen && depth === 0) return i + 1;
     }
@@ -335,7 +354,12 @@ function extractSignature(text: string, maxLen = 120): string {
   return sig.length > maxLen ? sig.slice(0, maxLen) + '…' : sig;
 }
 
-function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parentName?: string): string {
+function makeSymbolId(
+  filePath: string,
+  name: string,
+  kind: SymbolKind,
+  parentName?: string,
+): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;
   return `${filePath}::${name}#${kind}`;
 }
@@ -364,7 +388,8 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
       const seen = new Set<string>();
 
       // Track container ranges for memberOnly filtering
-      const containerRanges: Array<{ name: string; kind: SymbolKind; start: number; end: number }> = [];
+      const containerRanges: Array<{ name: string; kind: SymbolKind; start: number; end: number }> =
+        [];
 
       // ── Pass 1: Containers ───────────────────────────────────────────
       if (config.containerPatterns) {
@@ -412,8 +437,10 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
             const bodyText = stripped.substring(bodyStart, blockEnd);
             const bodyOriginal = originalSource.substring(bodyStart, blockEnd);
 
-            for (const mp of (cp.memberPatterns ?? [])) {
-              const mFlags = mp.pattern.flags.includes('g') ? mp.pattern.flags : mp.pattern.flags + 'g';
+            for (const mp of cp.memberPatterns ?? []) {
+              const mFlags = mp.pattern.flags.includes('g')
+                ? mp.pattern.flags
+                : mp.pattern.flags + 'g';
               const mRe = new RegExp(mp.pattern.source, mFlags);
               let mm: RegExpExecArray | null;
 
@@ -426,7 +453,12 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
                 seen.add(mSid);
 
                 const absOffset = bodyStart + mm.index;
-                const memberDoc = extractDocComment(originalSource, absOffset, lineStarts, config.docComments);
+                const memberDoc = extractDocComment(
+                  originalSource,
+                  absOffset,
+                  lineStarts,
+                  config.docComments,
+                );
                 const memberMeta = { ...mp.meta };
                 if (memberDoc) memberMeta.doc = memberDoc;
                 const hasMemberMeta = Object.keys(memberMeta).length > 0;
@@ -463,7 +495,7 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
 
             // Check if inside a container
             const insideContainer = containerRanges.find(
-              c => m!.index >= c.start && m!.index < c.end,
+              (c) => m!.index >= c.start && m!.index < c.end,
             );
 
             // memberOnly patterns only match inside containers

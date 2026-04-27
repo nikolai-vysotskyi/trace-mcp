@@ -25,14 +25,12 @@ const ZOD_OBJECT_RE =
  * Match individual fields inside z.object({ ... })
  * e.g., name: z.string(), age: z.number().optional()
  */
-const ZOD_FIELD_RE =
-  /(\w+)\s*:\s*z\.(\w+)\s*\(([^)]*)\)([.\w()]*)/g;
+const ZOD_FIELD_RE = /(\w+)\s*:\s*z\.(\w+)\s*\(([^)]*)\)([.\w()]*)/g;
 
 /**
  * Match type inference: type X = z.infer<typeof schemaName>
  */
-const ZOD_INFER_RE =
-  /type\s+(\w+)\s*=\s*z\.infer\s*<\s*typeof\s+(\w+)\s*>/g;
+const ZOD_INFER_RE = /type\s+(\w+)\s*=\s*z\.infer\s*<\s*typeof\s+(\w+)\s*>/g;
 
 interface ZodField {
   name: string;
@@ -140,9 +138,7 @@ export class ZodPlugin implements FrameworkPlugin {
 
   registerSchema() {
     return {
-      edgeTypes: [
-        { name: 'zod_schema', category: 'zod', description: 'Zod schema definition' },
-      ],
+      edgeTypes: [{ name: 'zod_schema', category: 'zod', description: 'Zod schema definition' }],
     };
   }
 

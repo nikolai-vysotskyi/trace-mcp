@@ -10,7 +10,10 @@ const TRACE_MCP_HOME = path.join(os.homedir(), '.trace-mcp');
 
 describe('trace-mcp-precompact.sh', () => {
   // Use realpath to match what pwd -L returns from within execSync
-  const testProjectDir = path.join(fs.realpathSync(os.tmpdir()), `trace-mcp-hook-test-${Date.now()}`);
+  const testProjectDir = path.join(
+    fs.realpathSync(os.tmpdir()),
+    `trace-mcp-hook-test-${Date.now()}`,
+  );
   let projectHash: string;
   let snapshotPath: string;
 
@@ -48,7 +51,8 @@ describe('trace-mcp-precompact.sh', () => {
 
     const snapshotData = {
       timestamp: Date.now(),
-      markdown: '## Session Snapshot (trace-mcp)\n**Duration:** 5m | **Files explored:** 10 | **Tool calls:** 25',
+      markdown:
+        '## Session Snapshot (trace-mcp)\n**Duration:** 5m | **Files explored:** 10 | **Tool calls:** 25',
       structured: { total_calls: 25, files_explored: 10 },
       estimated_tokens: 50,
     };

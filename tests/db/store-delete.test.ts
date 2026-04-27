@@ -86,10 +86,7 @@ describe('Store.deleteSymbolsByFile', () => {
 
     // Re-index: delete then insert new symbols
     store.deleteSymbolsByFile(fileId);
-    store.insertSymbols(fileId, [
-      makeSymbol('foo::new1', 'new1'),
-      makeSymbol('foo::new2', 'new2'),
-    ]);
+    store.insertSymbols(fileId, [makeSymbol('foo::new1', 'new1'), makeSymbol('foo::new2', 'new2')]);
 
     const symbols = store.getSymbolsByFile(fileId);
     expect(symbols).toHaveLength(2);

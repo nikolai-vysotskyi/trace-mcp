@@ -97,7 +97,9 @@ async def fetch(pool):
     async with pool.acquire() as conn:
         return await conn.fetch("SELECT 1")
 `);
-    const tryNode = cfg.nodes.find((n) => n.kind === 'try' && n.code_snippet.includes('async with'));
+    const tryNode = cfg.nodes.find(
+      (n) => n.kind === 'try' && n.code_snippet.includes('async with'),
+    );
     expect(tryNode).toBeDefined();
   });
 

@@ -44,17 +44,25 @@ function getHistoricalCommits(
   count: number,
 ): Array<{ hash: string; date: string }> {
   try {
-    const output = execFileSync('git', [
-      'log', '--pretty=format:%H|%aI', '--follow',
-      `--max-count=${count * 3}`, // over-fetch to sample evenly
-      '--', filePath,
-    ], {
-      cwd,
-      stdio: 'pipe',
-      timeout: 10_000,
-    }).toString('utf-8');
+    const output = execFileSync(
+      'git',
+      [
+        'log',
+        '--pretty=format:%H|%aI',
+        '--follow',
+        `--max-count=${count * 3}`, // over-fetch to sample evenly
+        '--',
+        filePath,
+      ],
+      {
+        cwd,
+        stdio: 'pipe',
+        timeout: 10_000,
+      },
+    ).toString('utf-8');
 
-    const all = output.split('\n')
+    const all = output
+      .split('\n')
       .filter(Boolean)
       .map((line) => {
         const [hash, date] = line.split('|');
@@ -89,20 +97,20 @@ function getFileAtCommit(cwd: string, filePath: string, commitHash: string): str
     }).toString('utf-8');
   } catch (e) {
     // File may not exist at this commit (e.g., before creation or rename)
-    logger.debug({ file: filePath, commit: commitHash, error: e }, 'git show failed (file may not exist at this commit)');
+    logger.debug(
+      { file: filePath, commit: commitHash, error: e },
+      'git show failed (file may not exist at this commit)',
+    );
     return null;
   }
 }
 
 /** Compute complexity snapshot from raw file content. */
-function computeSnapshot(
-  content: string,
-  commitHash: string,
-  date: string,
-): ComplexitySnapshot {
+function computeSnapshot(content: string, commitHash: string, date: string): ComplexitySnapshot {
   // Split into function-like blocks using a simple heuristic:
   // find lines matching function/method signatures
-  const funcPattern = /^(?:export\s+)?(?:async\s+)?(?:function|const\s+\w+\s*=|(?:public|private|protected)\s+(?:async\s+)?(?:static\s+)?\w+\s*\()/;
+  const funcPattern =
+    /^(?:export\s+)?(?:async\s+)?(?:function|const\s+\w+\s*=|(?:public|private|protected)\s+(?:async\s+)?(?:static\s+)?\w+\s*\()/;
   const lines = content.split('\n');
   const funcStarts: number[] = [];
 
@@ -139,7 +147,8 @@ function computeSnapshot(
   }
 
   const maxCc = Math.max(...complexities);
-  const avgCc = Math.round((complexities.reduce((a, b) => a + b, 0) / complexities.length) * 100) / 100;
+  const avgCc =
+    Math.round((complexities.reduce((a, b) => a + b, 0) / complexities.length) * 100) / 100;
 
   return {
     date,
@@ -169,17 +178,20 @@ export function getComplexityTrend(
   const file = store.getFile(filePath);
   if (!file) return null;
 
-  const currentSymbols = store.db.prepare(`
+  const currentSymbols = store.db
+    .prepare(`
     SELECT cyclomatic, max_nesting FROM symbols
     WHERE file_id = ? AND cyclomatic IS NOT NULL
-  `).all(file.id) as Array<{ cyclomatic: number; max_nesting: number }>;
+  `)
+    .all(file.id) as Array<{ cyclomatic: number; max_nesting: number }>;
 
   let currentSnapshot: ComplexitySnapshot;
   if (currentSymbols.length > 0) {
     const maxCc = Math.max(...currentSymbols.map((s) => s.cyclomatic));
-    const avgCc = Math.round(
-      (currentSymbols.reduce((sum, s) => sum + s.cyclomatic, 0) / currentSymbols.length) * 100,
-    ) / 100;
+    const avgCc =
+      Math.round(
+        (currentSymbols.reduce((sum, s) => sum + s.cyclomatic, 0) / currentSymbols.length) * 100,
+      ) / 100;
     const maxNest = Math.max(...currentSymbols.map((s) => s.max_nesting));
     currentSnapshot = {
       date: new Date().toISOString().split('T')[0],

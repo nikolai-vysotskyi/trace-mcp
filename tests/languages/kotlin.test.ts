@@ -123,7 +123,7 @@ import java.util.ArrayList as MutableList
     const edges = result.edges ?? [];
     const specifiers = edges.flatMap((e) => {
       const meta = e.metadata as Record<string, unknown> | undefined;
-      return Array.isArray(meta?.specifiers) ? meta.specifiers as string[] : [];
+      return Array.isArray(meta?.specifiers) ? (meta.specifiers as string[]) : [];
     });
     // Should contain "launch" and "ArrayList", NOT "launchCoroutine" or "MutableList"
     expect(specifiers).toContain('launch');

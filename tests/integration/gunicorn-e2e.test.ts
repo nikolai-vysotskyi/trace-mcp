@@ -51,14 +51,11 @@ describe('gunicorn E2E', () => {
   });
 
   describe('framework roles', () => {
-    it.each(Object.entries(EXPECTED_ROLES))(
-      'tags %s with role %s',
-      (rel, expectedRole) => {
-        const file = fileByRel.get(rel);
-        expect(file, `missing ${rel}`).toBeDefined();
-        expect(file!.framework_role).toBe(expectedRole);
-      },
-    );
+    it.each(Object.entries(EXPECTED_ROLES))('tags %s with role %s', (rel, expectedRole) => {
+      const file = fileByRel.get(rel);
+      expect(file, `missing ${rel}`).toBeDefined();
+      expect(file!.framework_role).toBe(expectedRole);
+    });
   });
 
   describe('edges', () => {

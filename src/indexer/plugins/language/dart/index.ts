@@ -92,17 +92,48 @@ interface RegexSymbolPattern {
 
 const SYMBOL_PATTERNS: RegexSymbolPattern[] = [
   { kind: 'class', pattern: /^[ \t]*(?:(?:abstract|sealed|base|final|mixin)\s+)*class\s+(\w+)/gm },
-  { kind: 'trait', pattern: /^[ \t]*(?:base\s+)?mixin\s+(?!class\b)(\w+)/gm, meta: { dartKind: 'mixin' } },
+  {
+    kind: 'trait',
+    pattern: /^[ \t]*(?:base\s+)?mixin\s+(?!class\b)(\w+)/gm,
+    meta: { dartKind: 'mixin' },
+  },
   { kind: 'class', pattern: /^[ \t]*extension\s+(\w+)\s+on\b/gm, meta: { dartKind: 'extension' } },
-  { kind: 'class', pattern: /^[ \t]*extension\s+type\s+(\w+)/gm, meta: { dartKind: 'extension_type' } },
+  {
+    kind: 'class',
+    pattern: /^[ \t]*extension\s+type\s+(\w+)/gm,
+    meta: { dartKind: 'extension_type' },
+  },
   { kind: 'enum', pattern: /^[ \t]*enum\s+(\w+)/gm },
   { kind: 'type', pattern: /^[ \t]*typedef\s+(?:\w+\s+)?(\w+)\s*[=(]/gm },
-  { kind: 'function', pattern: /^[ \t]*(?:(?:static|external|abstract|override)\s+)*(?:(?:Future|Stream|FutureOr|Iterable|List|Map|Set)<[^>]*>\s+|(?:void|int|double|bool|String|num|dynamic|Object|Never|Null)\s+)(\w+)\s*(?:<[^>]*>)?\s*\(/gm },
-  { kind: 'property', pattern: /^[ \t]*(?:(?:static|external|abstract|override)\s+)*(?:\w[\w<>,?\s]*\s+)?get\s+(\w+)/gm, meta: { dartKind: 'getter' } },
-  { kind: 'property', pattern: /^[ \t]*(?:(?:static|external|abstract|override)\s+)*set\s+(\w+)\s*\(/gm, meta: { dartKind: 'setter' } },
-  { kind: 'method', pattern: /^[ \t]*(?:const\s+)?factory\s+(\w+)(?:\.\w+)?\s*\(/gm, meta: { dartKind: 'factory' } },
-  { kind: 'constant', pattern: /^[ \t]*(?:(?:static|external)\s+)?const\s+(?:[\w<>,?\s]+\s+)?(\w+)\s*=/gm },
-  { kind: 'variable', pattern: /^[ \t]*(?:(?:static|late|external)\s+)*final\s+(?:[\w<>,?\s]+\s+)?(\w+)\s*[=;]/gm },
+  {
+    kind: 'function',
+    pattern:
+      /^[ \t]*(?:(?:static|external|abstract|override)\s+)*(?:(?:Future|Stream|FutureOr|Iterable|List|Map|Set)<[^>]*>\s+|(?:void|int|double|bool|String|num|dynamic|Object|Never|Null)\s+)(\w+)\s*(?:<[^>]*>)?\s*\(/gm,
+  },
+  {
+    kind: 'property',
+    pattern:
+      /^[ \t]*(?:(?:static|external|abstract|override)\s+)*(?:\w[\w<>,?\s]*\s+)?get\s+(\w+)/gm,
+    meta: { dartKind: 'getter' },
+  },
+  {
+    kind: 'property',
+    pattern: /^[ \t]*(?:(?:static|external|abstract|override)\s+)*set\s+(\w+)\s*\(/gm,
+    meta: { dartKind: 'setter' },
+  },
+  {
+    kind: 'method',
+    pattern: /^[ \t]*(?:const\s+)?factory\s+(\w+)(?:\.\w+)?\s*\(/gm,
+    meta: { dartKind: 'factory' },
+  },
+  {
+    kind: 'constant',
+    pattern: /^[ \t]*(?:(?:static|external)\s+)?const\s+(?:[\w<>,?\s]+\s+)?(\w+)\s*=/gm,
+  },
+  {
+    kind: 'variable',
+    pattern: /^[ \t]*(?:(?:static|late|external)\s+)*final\s+(?:[\w<>,?\s]+\s+)?(\w+)\s*[=;]/gm,
+  },
   { kind: 'variable', pattern: /^[ \t]*(?:(?:static|late)\s+)*var\s+(\w+)\s*[=;]/gm },
 ];
 
@@ -167,14 +198,28 @@ export class DartLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.dart'];
   supportedVersions = [
-    '1.0', '2.0', '2.12', '2.17', '2.19',
-    '3.0', '3.1', '3.2', '3.3', '3.4', '3.5', '3.6', '3.7',
+    '1.0',
+    '2.0',
+    '2.12',
+    '2.17',
+    '2.19',
+    '3.0',
+    '3.1',
+    '3.2',
+    '3.3',
+    '3.4',
+    '3.5',
+    '3.6',
+    '3.7',
   ];
 
   /** Cache to avoid retrying tree-sitter init when the WASM is incompatible. */
   private treeSitterAvailable: boolean | undefined;
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     const sourceCode = content.toString('utf-8');
 
     // Try tree-sitter first
@@ -360,11 +405,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
   }
 
   /** Try to extract symbols from a generic declaration node. */
-  private extractDeclarationNode(
-    node: TSNode,
-    filePath: string,
-    symbols: RawSymbol[],
-  ): void {
+  private extractDeclarationNode(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
     const text = node.text.trimStart();
 
     if (text.startsWith('const ') || text.match(/^(?:static\s+)?const\s/)) {
@@ -411,7 +452,10 @@ export class DartLanguagePlugin implements LanguagePlugin {
     // Superclass
     const superclass = node.childForFieldName('superclass');
     if (superclass) {
-      const superName = superclass.text.replace(/^extends\s+/, '').trim().split(/[\s<{]/, 1)[0];
+      const superName = superclass.text
+        .replace(/^extends\s+/, '')
+        .trim()
+        .split(/[\s<{]/, 1)[0];
       if (superName) meta.extends = superName;
     }
 
@@ -419,7 +463,10 @@ export class DartLanguagePlugin implements LanguagePlugin {
     const interfaces = node.childForFieldName('interfaces');
     if (interfaces) {
       const implText = interfaces.text.replace(/^implements\s+/, '').trim();
-      const impls = implText.split(',').map(s => s.trim().split(/[\s<]/, 1)[0]).filter(Boolean);
+      const impls = implText
+        .split(',')
+        .map((s) => s.trim().split(/[\s<]/, 1)[0])
+        .filter(Boolean);
       if (impls.length > 0) meta.implements = impls;
     }
 
@@ -427,7 +474,10 @@ export class DartLanguagePlugin implements LanguagePlugin {
     const withClause = this.findChildByType(node, 'mixins');
     if (withClause) {
       const withText = withClause.text.replace(/^with\s+/, '').trim();
-      const mixins = withText.split(',').map(s => s.trim().split(/[\s<]/, 1)[0]).filter(Boolean);
+      const mixins = withText
+        .split(',')
+        .map((s) => s.trim().split(/[\s<]/, 1)[0])
+        .filter(Boolean);
       if (mixins.length > 0) meta.mixins = mixins;
     }
 
@@ -461,7 +511,10 @@ export class DartLanguagePlugin implements LanguagePlugin {
     const onClause = this.findChildByType(node, 'on_clause', 'superclass');
     if (onClause) {
       const onText = onClause.text.replace(/^on\s+/, '').trim();
-      const bases = onText.split(',').map(s => s.trim().split(/[\s<]/, 1)[0]).filter(Boolean);
+      const bases = onText
+        .split(',')
+        .map((s) => s.trim().split(/[\s<]/, 1)[0])
+        .filter(Boolean);
       if (bases.length > 0) meta.on = bases;
     }
 
@@ -718,5 +771,4 @@ export class DartLanguagePlugin implements LanguagePlugin {
       lineEnd: node.endPosition.row + 1,
     });
   }
-
 }

@@ -26,7 +26,15 @@ describe('HclLanguagePlugin', () => {
       const r = parse(`resource "aws_s3_bucket" "my_bucket" {
   bucket = "my-bucket-name"
 }`);
-      expect(r.symbols.some(s => s.name === 'my_bucket' && s.kind === 'class' && s.metadata?.hclKind === 'resource' && s.metadata?.resourceType === 'aws_s3_bucket')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) =>
+            s.name === 'my_bucket' &&
+            s.kind === 'class' &&
+            s.metadata?.hclKind === 'resource' &&
+            s.metadata?.resourceType === 'aws_s3_bucket',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -37,7 +45,15 @@ describe('HclLanguagePlugin', () => {
       const r = parse(`data "aws_ami" "latest_ubuntu" {
   most_recent = true
 }`);
-      expect(r.symbols.some(s => s.name === 'latest_ubuntu' && s.kind === 'class' && s.metadata?.hclKind === 'data' && s.metadata?.resourceType === 'aws_ami')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) =>
+            s.name === 'latest_ubuntu' &&
+            s.kind === 'class' &&
+            s.metadata?.hclKind === 'data' &&
+            s.metadata?.resourceType === 'aws_ami',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -49,14 +65,24 @@ describe('HclLanguagePlugin', () => {
   source = "./modules/vpc"
   cidr   = "10.0.0.0/16"
 }`);
-      expect(r.symbols.some(s => s.name === 'vpc' && s.kind === 'namespace' && s.metadata?.hclKind === 'module')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.name === 'vpc' && s.kind === 'namespace' && s.metadata?.hclKind === 'module',
+        ),
+      ).toBe(true);
     });
 
     it('extracts module source as import edge', () => {
       const r = parse(`module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
 }`);
-      expect(r.edges!.some(e => e.edgeType === 'imports' && (e.metadata as any).module === 'terraform-aws-modules/vpc/aws')).toBe(true);
+      expect(
+        r.edges!.some(
+          (e) =>
+            e.edgeType === 'imports' &&
+            (e.metadata as any).module === 'terraform-aws-modules/vpc/aws',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -69,7 +95,9 @@ describe('HclLanguagePlugin', () => {
   default     = "t3.micro"
   description = "EC2 instance type"
 }`);
-      const sym = r.symbols.find(s => s.name === 'instance_type' && s.metadata?.hclKind === 'variable');
+      const sym = r.symbols.find(
+        (s) => s.name === 'instance_type' && s.metadata?.hclKind === 'variable',
+      );
       expect(sym).toBeDefined();
       expect(sym!.kind).toBe('variable');
       expect(sym!.metadata?.type).toBe('string');
@@ -85,7 +113,11 @@ describe('HclLanguagePlugin', () => {
       const r = parse(`output "vpc_id" {
   value = module.vpc.id
 }`);
-      expect(r.symbols.some(s => s.name === 'vpc_id' && s.kind === 'variable' && s.metadata?.hclKind === 'output')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.name === 'vpc_id' && s.kind === 'variable' && s.metadata?.hclKind === 'output',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -97,8 +129,16 @@ describe('HclLanguagePlugin', () => {
   region = "us-east-1"
   env    = "prod"
 }`);
-      expect(r.symbols.some(s => s.name === 'region' && s.kind === 'variable' && s.metadata?.hclKind === 'local')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'env' && s.kind === 'variable' && s.metadata?.hclKind === 'local')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.name === 'region' && s.kind === 'variable' && s.metadata?.hclKind === 'local',
+        ),
+      ).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.name === 'env' && s.kind === 'variable' && s.metadata?.hclKind === 'local',
+        ),
+      ).toBe(true);
     });
 
     it('does NOT extract keys outside locals block', () => {
@@ -110,8 +150,10 @@ resource "aws_instance" "web" {
   ami = "ami-12345"
 }`);
       // 'region' is a local, 'ami' should NOT be extracted as local
-      expect(r.symbols.some(s => s.name === 'region' && s.metadata?.hclKind === 'local')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'ami')).toBe(false);
+      expect(r.symbols.some((s) => s.name === 'region' && s.metadata?.hclKind === 'local')).toBe(
+        true,
+      );
+      expect(r.symbols.some((s) => s.name === 'ami')).toBe(false);
     });
   });
 
@@ -131,8 +173,22 @@ resource "aws_instance" "web" {
     }
   }
 }`);
-      expect(r.symbols.some(s => s.name === 'aws' && s.kind === 'constant' && s.metadata?.hclKind === 'required_provider')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'random' && s.kind === 'constant' && s.metadata?.hclKind === 'required_provider')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) =>
+            s.name === 'aws' &&
+            s.kind === 'constant' &&
+            s.metadata?.hclKind === 'required_provider',
+        ),
+      ).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) =>
+            s.name === 'random' &&
+            s.kind === 'constant' &&
+            s.metadata?.hclKind === 'required_provider',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -155,10 +211,18 @@ output "instance_id" {
 locals {
   tags = { Name = "web" }
 }`);
-      expect(r.symbols.some(s => s.name === 'name' && s.metadata?.hclKind === 'variable')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'web' && s.metadata?.hclKind === 'resource')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'instance_id' && s.metadata?.hclKind === 'output')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'tags' && s.metadata?.hclKind === 'local')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'name' && s.metadata?.hclKind === 'variable')).toBe(
+        true,
+      );
+      expect(r.symbols.some((s) => s.name === 'web' && s.metadata?.hclKind === 'resource')).toBe(
+        true,
+      );
+      expect(
+        r.symbols.some((s) => s.name === 'instance_id' && s.metadata?.hclKind === 'output'),
+      ).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'tags' && s.metadata?.hclKind === 'local')).toBe(
+        true,
+      );
     });
   });
 });

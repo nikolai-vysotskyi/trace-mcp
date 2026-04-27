@@ -37,8 +37,8 @@ import type { TraceMcpResult } from '../../../../../errors.js';
 
 interface ShadcnConfig {
   $schema?: string;
-  style?: string;                    // 'default' | 'new-york'
-  rsc?: boolean;                     // React Server Components
+  style?: string; // 'default' | 'new-york'
+  rsc?: boolean; // React Server Components
   tsx?: boolean;
   tailwind?: {
     config?: string;
@@ -54,8 +54,8 @@ interface ShadcnConfig {
     lib?: string;
     hooks?: string;
   };
-  registryUrl?: string;              // Custom registry URL
-  iconLibrary?: string;              // 'lucide' | 'radix-icons' etc.
+  registryUrl?: string; // Custom registry URL
+  iconLibrary?: string; // 'lucide' | 'radix-icons' etc.
 }
 
 interface CvaDefinition {
@@ -63,7 +63,7 @@ interface CvaDefinition {
   baseClasses: string;
   variants: Record<string, string[]>;
   defaultVariants: Record<string, string>;
-  compoundVariants: number;           // count of compound variant rules
+  compoundVariants: number; // count of compound variant rules
 }
 
 interface TvDefinition {
@@ -76,16 +76,16 @@ interface TvDefinition {
 interface ShadcnComponentInfo {
   name: string;
   hasForwardRef: boolean;
-  usesSlot: boolean;                  // @radix-ui/react-slot
+  usesSlot: boolean; // @radix-ui/react-slot
   cvaVariants: string | null;
   tvVariants: string | null;
-  radixImports: string[];             // Radix primitives used
-  internalImports: string[];          // other shadcn components imported
-  propsInterface: string | null;      // name of the props type
-  propFields: string[];               // individual prop names
-  subComponents: string[];            // exported sub-components (DialogTrigger, etc.)
-  usesClassName: boolean;             // accepts className prop
-  usesCn: boolean;                    // uses cn() utility
+  radixImports: string[]; // Radix primitives used
+  internalImports: string[]; // other shadcn components imported
+  propsInterface: string | null; // name of the props type
+  propFields: string[]; // individual prop names
+  subComponents: string[]; // exported sub-components (DialogTrigger, etc.)
+  usesClassName: boolean; // accepts className prop
+  usesCn: boolean; // uses cn() utility
 }
 
 interface InstalledComponent {
@@ -96,8 +96,7 @@ interface InstalledComponent {
 
 // ── CVA extraction ────────────────────────────────────────────────────────
 
-const CVA_RE =
-  /(?:export\s+(?:default\s+)?)?(?:const|let)\s+(\w+)\s*=\s*cva\s*\(/g;
+const CVA_RE = /(?:export\s+(?:default\s+)?)?(?:const|let)\s+(\w+)\s*=\s*cva\s*\(/g;
 
 /** Extract CVA variant definitions from source code. */
 function extractCvaDefinitions(source: string): CvaDefinition[] {
@@ -165,8 +164,7 @@ function extractCvaDefinitions(source: string): CvaDefinition[] {
 
 // ── Tailwind Variants (tv) extraction ─────────────────────────────────────
 
-const TV_RE =
-  /(?:export\s+(?:default\s+)?)?(?:const|let)\s+(\w+)\s*=\s*tv\s*\(/g;
+const TV_RE = /(?:export\s+(?:default\s+)?)?(?:const|let)\s+(\w+)\s*=\s*tv\s*\(/g;
 
 /** Extract tailwind-variants tv() definitions. */
 function extractTvDefinitions(source: string): TvDefinition[] {
@@ -343,12 +341,16 @@ interface ShadcnVueComponentInfo {
 }
 
 /** Extract shadcn-vue component info from a .vue SFC. */
-function extractShadcnVueComponent(source: string, filePath: string): ShadcnVueComponentInfo | null {
+function extractShadcnVueComponent(
+  source: string,
+  filePath: string,
+): ShadcnVueComponentInfo | null {
   const fileName = path.basename(filePath, path.extname(filePath));
   const name = toPascalCase(fileName);
 
   // Check if this is a shadcn-vue component
-  const hasRadixVue = /from\s+['"]radix-vue['"]/.test(source) || /from\s+['"]reka-ui['"]/.test(source);
+  const hasRadixVue =
+    /from\s+['"]radix-vue['"]/.test(source) || /from\s+['"]reka-ui['"]/.test(source);
   const hasCn = /\bcn\s*\(/.test(source);
   if (!hasRadixVue && !hasCn) return null;
 
@@ -393,7 +395,15 @@ function extractShadcnVueComponent(source: string, filePath: string): ShadcnVueC
   const rvRe = /import\s*\{([^}]+)\}\s*from\s*["'](?:radix-vue|reka-ui)["']/g;
   let rvm: RegExpExecArray | null;
   while ((rvm = rvRe.exec(source)) !== null) {
-    const names = rvm[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = rvm[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     radixVueImports.push(...names);
   }
 
@@ -428,7 +438,15 @@ function extractRadixImports(source: string): string[] {
   const namedRe = /import\s*\{([^}]+)\}\s*from\s*["']@radix-ui\/react-([\w-]+)["']/g;
   while ((m = namedRe.exec(source)) !== null) {
     const pkg = m[2];
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     for (const name of names) imports.push(`${pkg}/${name}`);
   }
 
@@ -441,7 +459,15 @@ function extractInternalShadcnImports(source: string): string[] {
   const re = /import\s*\{([^}]+)\}\s*from\s*["']\.\/(\w+)["']/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     imports.push(...names);
   }
   return imports;
@@ -459,7 +485,16 @@ function extractSubComponentExports(source: string): string[] {
   // Pattern 2: export { DialogTrigger, DialogContent }
   const exportRe = /export\s*\{([^}]+)\}/g;
   while ((m = exportRe.exec(source)) !== null) {
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/).pop()!.trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)
+          .pop()!
+          .trim(),
+      )
+      .filter(Boolean);
     for (const name of names) {
       if (/^[A-Z]/.test(name) && !subs.includes(name)) subs.push(name);
     }
@@ -490,7 +525,10 @@ function extractPropFieldsFromBody(body: string): string[] {
   if (dm) {
     const items = dm[1].split(',').map((s) => s.trim());
     for (const item of items) {
-      const name = item.replace(/^\.\.\./, '').split(/\s*[=:]/)[0].trim();
+      const name = item
+        .replace(/^\.\.\./, '')
+        .split(/\s*[=:]/)[0]
+        .trim();
       if (name && /^\w+$/.test(name)) fields.push(name);
     }
   }
@@ -498,7 +536,9 @@ function extractPropFieldsFromBody(body: string): string[] {
 }
 
 /** Extract imports from shadcn/ui component paths. */
-function extractShadcnImports(source: string): { name: string; path: string; isDefault: boolean }[] {
+function extractShadcnImports(
+  source: string,
+): { name: string; path: string; isDefault: boolean }[] {
   const imports: { name: string; path: string; isDefault: boolean }[] = [];
 
   // Named: import { Button } from "@/components/ui/button"
@@ -506,15 +546,22 @@ function extractShadcnImports(source: string): { name: string; path: string; isD
     /import\s*\{([^}]+)\}\s*from\s*["']([^"']*(?:components\/ui|@\/ui|~\/ui|\.\.\/ui)[^"']*)["']/g;
   let m: RegExpExecArray | null;
   while ((m = namedRe.exec(source)) !== null) {
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     for (const name of names) {
       imports.push({ name, path: m[2], isDefault: false });
     }
   }
 
   // Default: import Button from "@/components/ui/button"
-  const defaultRe =
-    /import\s+(\w+)\s+from\s*["']([^"']*(?:components\/ui|@\/ui|~\/ui)[^"']*)["']/g;
+  const defaultRe = /import\s+(\w+)\s+from\s*["']([^"']*(?:components\/ui|@\/ui|~\/ui)[^"']*)["']/g;
   while ((m = defaultRe.exec(source)) !== null) {
     imports.push({ name: m[1], path: m[2], isDefault: true });
   }
@@ -525,7 +572,10 @@ function extractShadcnImports(source: string): { name: string; path: string; isD
 // ── Installed component scanning ──────────────────────────────────────────
 
 /** Scan the UI components directory to list installed shadcn components. */
-function scanInstalledComponents(rootPath: string, config: ShadcnConfig | null): InstalledComponent[] {
+function scanInstalledComponents(
+  rootPath: string,
+  config: ShadcnConfig | null,
+): InstalledComponent[] {
   const components: InstalledComponent[] = [];
 
   // Determine the UI directory from config or defaults
@@ -571,11 +621,15 @@ function scanInstalledComponents(rootPath: string, config: ShadcnConfig | null):
                 });
               }
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       }
       if (components.length > 0) break; // found the UI directory
-    } catch { /* directory doesn't exist, try next */ }
+    } catch {
+      /* directory doesn't exist, try next */
+    }
   }
 
   return components;
@@ -613,7 +667,9 @@ export class ShadcnPlugin implements FrameworkPlugin {
       this.config = JSON.parse(raw) as ShadcnConfig;
       this.scanComponents(ctx);
       return true;
-    } catch { /* not found or parse error */ }
+    } catch {
+      /* not found or parse error */
+    }
 
     const deps = {
       ...(ctx.packageJson?.dependencies as Record<string, string> | undefined),
@@ -649,7 +705,8 @@ export class ShadcnPlugin implements FrameworkPlugin {
 
     // Detect Vue mode from config or file extensions
     if (!this.isVue) {
-      this.isVue = this.config?.tsx === false ||
+      this.isVue =
+        this.config?.tsx === false ||
         this.installedComponents.some((c) => c.fileName.endsWith('.vue'));
     }
   }
@@ -657,12 +714,36 @@ export class ShadcnPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'shadcn_component', category: 'ui-library', description: 'shadcn/ui component definition' },
-        { name: 'shadcn_variant', category: 'ui-library', description: 'CVA/TV variant definition' },
-        { name: 'shadcn_sub_component', category: 'ui-library', description: 'Compound sub-component export' },
-        { name: 'shadcn_uses_radix', category: 'ui-library', description: 'Component wraps Radix primitive' },
-        { name: 'shadcn_internal_dep', category: 'ui-library', description: 'Component imports another shadcn component' },
-        { name: 'uses_shadcn_component', category: 'ui-library', description: 'File imports/uses a shadcn/ui component' },
+        {
+          name: 'shadcn_component',
+          category: 'ui-library',
+          description: 'shadcn/ui component definition',
+        },
+        {
+          name: 'shadcn_variant',
+          category: 'ui-library',
+          description: 'CVA/TV variant definition',
+        },
+        {
+          name: 'shadcn_sub_component',
+          category: 'ui-library',
+          description: 'Compound sub-component export',
+        },
+        {
+          name: 'shadcn_uses_radix',
+          category: 'ui-library',
+          description: 'Component wraps Radix primitive',
+        },
+        {
+          name: 'shadcn_internal_dep',
+          category: 'ui-library',
+          description: 'Component imports another shadcn component',
+        },
+        {
+          name: 'uses_shadcn_component',
+          category: 'ui-library',
+          description: 'File imports/uses a shadcn/ui component',
+        },
       ],
     };
   }
@@ -672,7 +753,9 @@ export class ShadcnPlugin implements FrameworkPlugin {
     content: Buffer,
     language: string,
   ): TraceMcpResult<FileParseResult> {
-    if (!['typescript', 'javascript', 'typescriptreact', 'javascriptreact', 'vue'].includes(language)) {
+    if (
+      !['typescript', 'javascript', 'typescriptreact', 'javascriptreact', 'vue'].includes(language)
+    ) {
       return ok({ status: 'ok', symbols: [] });
     }
 
@@ -921,7 +1004,9 @@ export class ShadcnPlugin implements FrameworkPlugin {
     }
 
     // Link consumer imports to component definitions
-    const consumerFiles = allFiles.filter((f) => !this.installedComponentPaths.has(f.path.replace(/\\/g, '/')));
+    const consumerFiles = allFiles.filter(
+      (f) => !this.installedComponentPaths.has(f.path.replace(/\\/g, '/')),
+    );
     for (const file of consumerFiles) {
       const source = ctx.readFile(file.path);
       if (!source) continue;

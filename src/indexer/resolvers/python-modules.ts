@@ -55,11 +55,7 @@ export class PyModuleResolver {
    * @param name - The module name after the dots, or null for bare relative (`from . import X`)
    * @param importingFile - Path of the file containing the import, relative to project root
    */
-  resolveRelative(
-    dots: number,
-    name: string | null,
-    importingFile: string,
-  ): string | null {
+  resolveRelative(dots: number, name: string | null, importingFile: string): string | null {
     const normFile = importingFile.replace(/\\/g, '/');
 
     // Determine the package directory of the importing file.
@@ -202,9 +198,7 @@ export class PyModuleResolver {
 
     // [tool.poetry.packages] → [{include = "myapp", from = "src"}]
     // This is an array of inline tables — extract `from` values
-    const poetryPkgSection = content.match(
-      /\[tool\.poetry\][^\[]*?packages\s*=\s*\[([^\]]*)\]/s,
-    );
+    const poetryPkgSection = content.match(/\[tool\.poetry\][^\[]*?packages\s*=\s*\[([^\]]*)\]/s);
     if (poetryPkgSection) {
       const fromMatches = poetryPkgSection[1].matchAll(/from\s*=\s*"([^"]*)"/g);
       for (const m of fromMatches) {

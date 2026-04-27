@@ -37,7 +37,12 @@ export const DEFAULT_DAEMON_PORT = 3741;
 export const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');
 
 /** launchd plist path for auto-start on macOS. */
-export const LAUNCHD_PLIST_PATH = path.join(os.homedir(), 'Library', 'LaunchAgents', 'com.trace-mcp.server.plist');
+export const LAUNCHD_PLIST_PATH = path.join(
+  os.homedir(),
+  'Library',
+  'LaunchAgents',
+  'com.trace-mcp.server.plist',
+);
 
 /**
  * Default global config template with all supported parameters.

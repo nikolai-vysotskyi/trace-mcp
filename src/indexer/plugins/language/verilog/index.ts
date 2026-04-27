@@ -30,11 +30,19 @@ const _plugin = createRegexLanguagePlugin({
     // interface [automatic] name
     { kind: 'interface', pattern: /^\s*(?:extern\s+)?interface\s+(?:automatic\s+)?(\w+)/gm },
     // program [automatic] name
-    { kind: 'module', pattern: /^\s*(?:extern\s+)?program\s+(?:automatic\s+)?(\w+)/gm, meta: { verilogKind: 'program' } },
+    {
+      kind: 'module',
+      pattern: /^\s*(?:extern\s+)?program\s+(?:automatic\s+)?(\w+)/gm,
+      meta: { verilogKind: 'program' },
+    },
     // package name
     { kind: 'namespace', pattern: /^\s*package\s+(?:automatic\s+)?(\w+)/gm },
     // class [virtual] [automatic] name [extends parent]
-    { kind: 'class', pattern: /^\s*(?:virtual\s+)?class\s+(?:automatic\s+)?(\w+)(?:\s+extends\s+(\w+))?/gm, meta: { verilogKind: 'class' } },
+    {
+      kind: 'class',
+      pattern: /^\s*(?:virtual\s+)?class\s+(?:automatic\s+)?(\w+)(?:\s+extends\s+(\w+))?/gm,
+      meta: { verilogKind: 'class' },
+    },
     // checker name
     { kind: 'class', pattern: /^\s*checker\s+(\w+)/gm, meta: { verilogKind: 'checker' } },
 
@@ -43,37 +51,76 @@ const _plugin = createRegexLanguagePlugin({
     // ═══════════════════════════════════════════════════════════════
 
     // function [automatic|static] [return_type] name
-    { kind: 'function', pattern: /^\s*(?:extern\s+)?(?:virtual\s+)?(?:protected\s+|local\s+)?(?:static\s+)?function\s+(?:automatic\s+|static\s+)?(?:void\s+|(?:(?:bit|logic|reg|int|integer|real|shortint|longint|byte|shortreal|string|chandle)\s*(?:\[[\w:$\s\-+`]+\]\s*)?)?)?(\w+)\s*[;(]/gm },
+    {
+      kind: 'function',
+      pattern:
+        /^\s*(?:extern\s+)?(?:virtual\s+)?(?:protected\s+|local\s+)?(?:static\s+)?function\s+(?:automatic\s+|static\s+)?(?:void\s+|(?:(?:bit|logic|reg|int|integer|real|shortint|longint|byte|shortreal|string|chandle)\s*(?:\[[\w:$\s\-+`]+\]\s*)?)?)?(\w+)\s*[;(]/gm,
+    },
     // task [automatic|static] name
-    { kind: 'function', pattern: /^\s*(?:extern\s+)?(?:virtual\s+)?(?:protected\s+|local\s+)?(?:static\s+)?task\s+(?:automatic\s+|static\s+)?(\w+)/gm, meta: { task: true } },
+    {
+      kind: 'function',
+      pattern:
+        /^\s*(?:extern\s+)?(?:virtual\s+)?(?:protected\s+|local\s+)?(?:static\s+)?task\s+(?:automatic\s+|static\s+)?(\w+)/gm,
+      meta: { task: true },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // Parameters & Constants
     // ═══════════════════════════════════════════════════════════════
 
     // parameter [type] NAME = value
-    { kind: 'constant', pattern: /^\s*parameter\s+(?:(?:bit|logic|reg|int|integer|real|signed|unsigned|shortint|longint|byte)\s*(?:\[[\w:$\s\-+`]+\]\s*)?)?(\w+)\s*=/gm, meta: { verilogKind: 'parameter' } },
+    {
+      kind: 'constant',
+      pattern:
+        /^\s*parameter\s+(?:(?:bit|logic|reg|int|integer|real|signed|unsigned|shortint|longint|byte)\s*(?:\[[\w:$\s\-+`]+\]\s*)?)?(\w+)\s*=/gm,
+      meta: { verilogKind: 'parameter' },
+    },
     // localparam [type] NAME = value
-    { kind: 'constant', pattern: /^\s*localparam\s+(?:(?:bit|logic|reg|int|integer|real|signed|unsigned|shortint|longint|byte)\s*(?:\[[\w:$\s\-+`]+\]\s*)?)?(\w+)\s*=/gm, meta: { verilogKind: 'localparam' } },
+    {
+      kind: 'constant',
+      pattern:
+        /^\s*localparam\s+(?:(?:bit|logic|reg|int|integer|real|signed|unsigned|shortint|longint|byte)\s*(?:\[[\w:$\s\-+`]+\]\s*)?)?(\w+)\s*=/gm,
+      meta: { verilogKind: 'localparam' },
+    },
     // `define NAME
     { kind: 'constant', pattern: /^\s*`define\s+(\w+)/gm, meta: { macro: true } },
     // specparam NAME = value
-    { kind: 'constant', pattern: /^\s*specparam\s+(\w+)\s*=/gm, meta: { verilogKind: 'specparam' } },
+    {
+      kind: 'constant',
+      pattern: /^\s*specparam\s+(\w+)\s*=/gm,
+      meta: { verilogKind: 'specparam' },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // Types
     // ═══════════════════════════════════════════════════════════════
 
     // typedef enum {...} name;
-    { kind: 'type', pattern: /^\s*typedef\s+enum\b[^;]*\}\s*(\w+)\s*;/gm, meta: { verilogKind: 'enum' } },
+    {
+      kind: 'type',
+      pattern: /^\s*typedef\s+enum\b[^;]*\}\s*(\w+)\s*;/gm,
+      meta: { verilogKind: 'enum' },
+    },
     // typedef struct/union [packed] {...} name;
-    { kind: 'type', pattern: /^\s*typedef\s+(?:struct|union)\s*(?:packed\s*)?(?:signed\s+|unsigned\s+)?\{[^}]*\}\s*(\w+)\s*;/gm },
+    {
+      kind: 'type',
+      pattern:
+        /^\s*typedef\s+(?:struct|union)\s*(?:packed\s*)?(?:signed\s+|unsigned\s+)?\{[^}]*\}\s*(\w+)\s*;/gm,
+    },
     // typedef class name;  (forward declaration)
     { kind: 'type', pattern: /^\s*typedef\s+class\s+(\w+)\s*;/gm },
     // typedef interface class name;  (interface class forward)
-    { kind: 'type', pattern: /^\s*typedef\s+interface\s+class\s+(\w+)\s*;/gm, meta: { verilogKind: 'interface_class' } },
+    {
+      kind: 'type',
+      pattern: /^\s*typedef\s+interface\s+class\s+(\w+)\s*;/gm,
+      meta: { verilogKind: 'interface_class' },
+    },
     // typedef simple_type name; (simple alias — no braces)
-    { kind: 'type', pattern: /^\s*typedef\s+(?!enum\b|struct\b|union\b|class\b|interface\b)[\w\s[\]:$`]+?\s+(\w+)\s*;/gm },
+    {
+      kind: 'type',
+      pattern:
+        /^\s*typedef\s+(?!enum\b|struct\b|union\b|class\b|interface\b)[\w\s[\]:$`]+?\s+(\w+)\s*;/gm,
+    },
     // nettype name  (user-defined net type, SV-2012)
     { kind: 'type', pattern: /^\s*nettype\s+\w+\s+(\w+)/gm, meta: { verilogKind: 'nettype' } },
     // let name = expression  (SV let construct)
@@ -84,17 +131,42 @@ const _plugin = createRegexLanguagePlugin({
     // ═══════════════════════════════════════════════════════════════
 
     // input/output/inout [wire|reg|logic] [signed] [range] name
-    { kind: 'property', pattern: /^\s*(?:input|output|inout)\s+(?:wire\s+|reg\s+|logic\s+)?(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm, meta: { verilogKind: 'port' } },
+    {
+      kind: 'property',
+      pattern:
+        /^\s*(?:input|output|inout)\s+(?:wire\s+|reg\s+|logic\s+)?(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm,
+      meta: { verilogKind: 'port' },
+    },
     // ref [type] name (SystemVerilog pass-by-reference)
-    { kind: 'property', pattern: /^\s*ref\s+(?:\w+\s+)?(\w+)/gm, meta: { verilogKind: 'ref_port' } },
+    {
+      kind: 'property',
+      pattern: /^\s*ref\s+(?:\w+\s+)?(\w+)/gm,
+      meta: { verilogKind: 'ref_port' },
+    },
     // wire [range] name (standalone wire declarations)
-    { kind: 'variable', pattern: /^\s*wire\s+(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm, meta: { verilogKind: 'wire' } },
+    {
+      kind: 'variable',
+      pattern: /^\s*wire\s+(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm,
+      meta: { verilogKind: 'wire' },
+    },
     // reg [range] name
-    { kind: 'variable', pattern: /^\s*reg\s+(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm, meta: { verilogKind: 'reg' } },
+    {
+      kind: 'variable',
+      pattern: /^\s*reg\s+(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm,
+      meta: { verilogKind: 'reg' },
+    },
     // logic [range] name
-    { kind: 'variable', pattern: /^\s*logic\s+(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm, meta: { verilogKind: 'logic' } },
+    {
+      kind: 'variable',
+      pattern: /^\s*logic\s+(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm,
+      meta: { verilogKind: 'logic' },
+    },
     // bit [range] name
-    { kind: 'variable', pattern: /^\s*bit\s+(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm, meta: { verilogKind: 'bit' } },
+    {
+      kind: 'variable',
+      pattern: /^\s*bit\s+(?:signed\s+)?(?:\[[\w:$\s\-+`]+\]\s*)?(\w+)/gm,
+      meta: { verilogKind: 'bit' },
+    },
     // integer name
     { kind: 'variable', pattern: /^\s*integer\s+(\w+)/gm, meta: { verilogKind: 'integer' } },
     // real/realtime name
@@ -111,11 +183,23 @@ const _plugin = createRegexLanguagePlugin({
     // genvar name
     { kind: 'variable', pattern: /^\s*genvar\s+(\w+)/gm },
     // label : always_ff @(...)
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*always_ff\b/gm, meta: { verilogKind: 'always_ff' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*always_ff\b/gm,
+      meta: { verilogKind: 'always_ff' },
+    },
     // label : always_comb
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*always_comb\b/gm, meta: { verilogKind: 'always_comb' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*always_comb\b/gm,
+      meta: { verilogKind: 'always_comb' },
+    },
     // label : always_latch
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*always_latch\b/gm, meta: { verilogKind: 'always_latch' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*always_latch\b/gm,
+      meta: { verilogKind: 'always_latch' },
+    },
     // label : always @(...)
     { kind: 'function', pattern: /^\s*(\w+)\s*:\s*always\s*@/gm, meta: { verilogKind: 'always' } },
 
@@ -126,51 +210,115 @@ const _plugin = createRegexLanguagePlugin({
     // covergroup name
     { kind: 'class', pattern: /^\s*covergroup\s+(\w+)/gm, meta: { verilogKind: 'covergroup' } },
     // constraint name { ... }
-    { kind: 'function', pattern: /^\s*(?:extern\s+)?constraint\s+(\w+)/gm, meta: { verilogKind: 'constraint' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(?:extern\s+)?constraint\s+(\w+)/gm,
+      meta: { verilogKind: 'constraint' },
+    },
     // property name
     { kind: 'function', pattern: /^\s*property\s+(\w+)/gm, meta: { verilogKind: 'property' } },
     // sequence name
     { kind: 'function', pattern: /^\s*sequence\s+(\w+)/gm, meta: { verilogKind: 'sequence' } },
     // label : assert property (...)
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*assert\s+property\b/gm, meta: { verilogKind: 'assertion' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*assert\s+property\b/gm,
+      meta: { verilogKind: 'assertion' },
+    },
     // label : assume property (...)
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*assume\s+property\b/gm, meta: { verilogKind: 'assumption' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*assume\s+property\b/gm,
+      meta: { verilogKind: 'assumption' },
+    },
     // label : cover property (...)
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*cover\s+property\b/gm, meta: { verilogKind: 'cover' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*cover\s+property\b/gm,
+      meta: { verilogKind: 'cover' },
+    },
     // label : cover sequence (...)
-    { kind: 'function', pattern: /^\s*(\w+)\s*:\s*cover\s+sequence\b/gm, meta: { verilogKind: 'cover_sequence' } },
+    {
+      kind: 'function',
+      pattern: /^\s*(\w+)\s*:\s*cover\s+sequence\b/gm,
+      meta: { verilogKind: 'cover_sequence' },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // UVM Macros
     // ═══════════════════════════════════════════════════════════════
 
     // `uvm_component_utils(ClassName)
-    { kind: 'constant', pattern: /^\s*`uvm_component_utils\s*\(\s*(\w+)/gm, meta: { verilogKind: 'uvm_component' } },
+    {
+      kind: 'constant',
+      pattern: /^\s*`uvm_component_utils\s*\(\s*(\w+)/gm,
+      meta: { verilogKind: 'uvm_component' },
+    },
     // `uvm_component_utils_begin(ClassName)
-    { kind: 'constant', pattern: /^\s*`uvm_component_utils_begin\s*\(\s*(\w+)/gm, meta: { verilogKind: 'uvm_component' } },
+    {
+      kind: 'constant',
+      pattern: /^\s*`uvm_component_utils_begin\s*\(\s*(\w+)/gm,
+      meta: { verilogKind: 'uvm_component' },
+    },
     // `uvm_object_utils(ClassName)
-    { kind: 'constant', pattern: /^\s*`uvm_object_utils\s*\(\s*(\w+)/gm, meta: { verilogKind: 'uvm_object' } },
+    {
+      kind: 'constant',
+      pattern: /^\s*`uvm_object_utils\s*\(\s*(\w+)/gm,
+      meta: { verilogKind: 'uvm_object' },
+    },
     // `uvm_object_utils_begin(ClassName)
-    { kind: 'constant', pattern: /^\s*`uvm_object_utils_begin\s*\(\s*(\w+)/gm, meta: { verilogKind: 'uvm_object' } },
+    {
+      kind: 'constant',
+      pattern: /^\s*`uvm_object_utils_begin\s*\(\s*(\w+)/gm,
+      meta: { verilogKind: 'uvm_object' },
+    },
     // `uvm_component_param_utils(ClassName)
-    { kind: 'constant', pattern: /^\s*`uvm_component_param_utils\s*\(\s*(\w+)/gm, meta: { verilogKind: 'uvm_component' } },
+    {
+      kind: 'constant',
+      pattern: /^\s*`uvm_component_param_utils\s*\(\s*(\w+)/gm,
+      meta: { verilogKind: 'uvm_component' },
+    },
     // `uvm_object_param_utils(ClassName)
-    { kind: 'constant', pattern: /^\s*`uvm_object_param_utils\s*\(\s*(\w+)/gm, meta: { verilogKind: 'uvm_object' } },
+    {
+      kind: 'constant',
+      pattern: /^\s*`uvm_object_param_utils\s*\(\s*(\w+)/gm,
+      meta: { verilogKind: 'uvm_object' },
+    },
     // `uvm_analysis_imp_decl(_SUFFIX)
-    { kind: 'constant', pattern: /^\s*`uvm_analysis_imp_decl\s*\(\s*_(\w+)/gm, meta: { verilogKind: 'uvm_analysis_imp' } },
+    {
+      kind: 'constant',
+      pattern: /^\s*`uvm_analysis_imp_decl\s*\(\s*_(\w+)/gm,
+      meta: { verilogKind: 'uvm_analysis_imp' },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // DPI (Direct Programming Interface)
     // ═══════════════════════════════════════════════════════════════
 
     // import "DPI-C" [context|pure] function type name
-    { kind: 'function', pattern: /^\s*import\s+"DPI(?:-C)?"\s+(?:context\s+|pure\s+)?function\s+(?:\w+\s+)?(\w+)/gm, meta: { verilogKind: 'dpi_import' } },
+    {
+      kind: 'function',
+      pattern: /^\s*import\s+"DPI(?:-C)?"\s+(?:context\s+|pure\s+)?function\s+(?:\w+\s+)?(\w+)/gm,
+      meta: { verilogKind: 'dpi_import' },
+    },
     // import "DPI-C" [context] task name
-    { kind: 'function', pattern: /^\s*import\s+"DPI(?:-C)?"\s+(?:context\s+)?task\s+(\w+)/gm, meta: { verilogKind: 'dpi_import', task: true } },
+    {
+      kind: 'function',
+      pattern: /^\s*import\s+"DPI(?:-C)?"\s+(?:context\s+)?task\s+(\w+)/gm,
+      meta: { verilogKind: 'dpi_import', task: true },
+    },
     // export "DPI-C" function name
-    { kind: 'function', pattern: /^\s*export\s+"DPI(?:-C)?"\s+function\s+(\w+)/gm, meta: { verilogKind: 'dpi_export' } },
+    {
+      kind: 'function',
+      pattern: /^\s*export\s+"DPI(?:-C)?"\s+function\s+(\w+)/gm,
+      meta: { verilogKind: 'dpi_export' },
+    },
     // export "DPI-C" task name
-    { kind: 'function', pattern: /^\s*export\s+"DPI(?:-C)?"\s+task\s+(\w+)/gm, meta: { verilogKind: 'dpi_export', task: true } },
+    {
+      kind: 'function',
+      pattern: /^\s*export\s+"DPI(?:-C)?"\s+task\s+(\w+)/gm,
+      meta: { verilogKind: 'dpi_export', task: true },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // Bind & Instantiation
@@ -186,7 +334,11 @@ const _plugin = createRegexLanguagePlugin({
     // modport name (inside interface)
     { kind: 'interface', pattern: /^\s*modport\s+(\w+)/gm, meta: { verilogKind: 'modport' } },
     // clocking name
-    { kind: 'class', pattern: /^\s*(?:default\s+)?clocking\s+(\w+)/gm, meta: { verilogKind: 'clocking' } },
+    {
+      kind: 'class',
+      pattern: /^\s*(?:default\s+)?clocking\s+(\w+)/gm,
+      meta: { verilogKind: 'clocking' },
+    },
 
     // ═══════════════════════════════════════════════════════════════
     // Enum members (standalone enum)

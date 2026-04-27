@@ -15,12 +15,21 @@ function createLargeIndex(fileCount: number) {
     `INSERT INTO symbols (file_id, symbol_id, name, kind, fqn, byte_start, byte_end, line_start, line_end)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  const insertNode = db.prepare(
-    `INSERT OR IGNORE INTO nodes (node_type, ref_id) VALUES (?, ?)`,
-  );
+  const insertNode = db.prepare(`INSERT OR IGNORE INTO nodes (node_type, ref_id) VALUES (?, ?)`);
 
   const kinds = ['class', 'function', 'method', 'interface', 'variable'];
-  const prefixes = ['User', 'Auth', 'Payment', 'Order', 'Product', 'Cart', 'Invoice', 'Notification', 'Setting', 'Report'];
+  const prefixes = [
+    'User',
+    'Auth',
+    'Payment',
+    'Order',
+    'Product',
+    'Cart',
+    'Invoice',
+    'Notification',
+    'Setting',
+    'Report',
+  ];
 
   db.transaction(() => {
     for (let i = 0; i < fileCount; i++) {
@@ -51,7 +60,9 @@ function createLargeIndex(fileCount: number) {
 function createEdgesForGraph(store: Store, edgeCount: number) {
   // Create edges between consecutive file nodes
   const files = store.getAllFiles();
-  const edgeType = store.db.prepare("SELECT id FROM edge_types WHERE name = 'imports'").get() as { id: number };
+  const edgeType = store.db.prepare("SELECT id FROM edge_types WHERE name = 'imports'").get() as {
+    id: number;
+  };
 
   const insertEdge = store.db.prepare(
     `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved)
@@ -77,7 +88,9 @@ describe('Performance benchmarks — edge batch inserts', () => {
     createEdgesForGraph(store, 200);
 
     const files = store.getAllFiles();
-    const edgeType = db.prepare("SELECT id FROM edge_types WHERE name = 'imports'").get() as { id: number };
+    const edgeType = db.prepare("SELECT id FROM edge_types WHERE name = 'imports'").get() as {
+      id: number;
+    };
     const insertStmt = db.prepare(
       `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved)
        VALUES (?, ?, ?, 1)`,
@@ -110,7 +123,9 @@ describe('Performance benchmarks — edge batch inserts', () => {
     })();
     const elapsedBatched = Date.now() - startBatched;
 
-    console.log(`Edge inserts (${pairs.length} edges): individual=${elapsedIndividual}ms, batched=${elapsedBatched}ms, speedup=${(elapsedIndividual / Math.max(elapsedBatched, 1)).toFixed(1)}x`);
+    console.log(
+      `Edge inserts (${pairs.length} edges): individual=${elapsedIndividual}ms, batched=${elapsedBatched}ms, speedup=${(elapsedIndividual / Math.max(elapsedBatched, 1)).toFixed(1)}x`,
+    );
 
     // Batched should be at least 2x faster (typically 10-50x on SQLite)
     expect(elapsedBatched).toBeLessThanOrEqual(elapsedIndividual);

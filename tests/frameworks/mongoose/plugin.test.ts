@@ -64,10 +64,7 @@ describe('MongoosePlugin', () => {
 
 describe('Mongoose schema extraction', () => {
   describe('User model (full-featured)', () => {
-    const source = fs.readFileSync(
-      path.join(M8_FIXTURE, 'models/user.ts'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(M8_FIXTURE, 'models/user.ts'), 'utf-8');
     const result = extractMongooseSchema(source, 'models/user.ts');
 
     it('extracts model', () => {
@@ -149,10 +146,7 @@ describe('Mongoose schema extraction', () => {
   });
 
   describe('Post model', () => {
-    const source = fs.readFileSync(
-      path.join(M8_FIXTURE, 'models/post.ts'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(M8_FIXTURE, 'models/post.ts'), 'utf-8');
     const result = extractMongooseSchema(source, 'models/post.ts');
 
     it('extracts model', () => {

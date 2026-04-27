@@ -34,7 +34,11 @@ export class TqdmPyPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'progress_bar', category: 'tooling', description: 'tqdm progress bar instrumentation' },
+        {
+          name: 'progress_bar',
+          category: 'tooling',
+          description: 'tqdm progress bar instrumentation',
+        },
       ],
     };
   }

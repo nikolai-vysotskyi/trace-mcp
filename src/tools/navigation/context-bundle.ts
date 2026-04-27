@@ -14,14 +14,17 @@ import {
 import { readByteRange } from '../../utils/source-reader.js';
 
 /** Import-category edge types to follow for dependency resolution */
-const IMPORT_EDGES = new Set([
-  'esm_imports', 'imports', 'py_imports', 'py_reexports',
-]);
+const IMPORT_EDGES = new Set(['esm_imports', 'imports', 'py_imports', 'py_reexports']);
 
 /** Call/reference edge types for caller resolution */
 const CALL_EDGES = new Set([
-  'calls', 'references', 'dispatches', 'routes_to', 'validates_with',
-  'nest_injects', 'graphql_resolves',
+  'calls',
+  'references',
+  'dispatches',
+  'routes_to',
+  'validates_with',
+  'nest_injects',
+  'graphql_resolves',
 ]);
 
 interface BundleSymbolItem {
@@ -65,11 +68,7 @@ class FileReadCache {
   }
 }
 
-function readSource(
-  sym: SymbolRow,
-  file: FileRow,
-  rootPath: string,
-): string | undefined {
+function readSource(sym: SymbolRow, file: FileRow, rootPath: string): string | undefined {
   try {
     const absPath = path.resolve(rootPath, file.path);
     return readByteRange(absPath, sym.byte_start, sym.byte_end, !!file.gitignored) ?? undefined;
@@ -78,7 +77,12 @@ function readSource(
   }
 }
 
-function toContextItem(sym: SymbolRow, file: FileRow, rootPath: string, score: number): ContextItem {
+function toContextItem(
+  sym: SymbolRow,
+  file: FileRow,
+  rootPath: string,
+  score: number,
+): ContextItem {
   return {
     id: sym.symbol_id,
     score,
@@ -88,7 +92,13 @@ function toContextItem(sym: SymbolRow, file: FileRow, rootPath: string, score: n
   };
 }
 
-function toContextItemCached(sym: SymbolRow, file: FileRow, cache: FileReadCache, score: number, signatureOnly: boolean): ContextItem {
+function toContextItemCached(
+  sym: SymbolRow,
+  file: FileRow,
+  cache: FileReadCache,
+  score: number,
+  signatureOnly: boolean,
+): ContextItem {
   return {
     id: sym.symbol_id,
     score,
@@ -130,12 +140,16 @@ export function getContextBundle(
   }
 
   if (ids.length === 0) {
-    return err({ code: 'VALIDATION_ERROR' as const, message: 'Provide symbol_id, symbol_ids, or fqn' });
+    return err({
+      code: 'VALIDATION_ERROR' as const,
+      message: 'Provide symbol_id, symbol_ids, or fqn',
+    });
   }
 
   const primarySymbols: Array<{ sym: SymbolRow; file: FileRow }> = [];
   for (const id of ids) {
-    const sym = store.getSymbolBySymbolId(id) ?? (id.includes('\\') ? store.getSymbolByFqn(id) : undefined);
+    const sym =
+      store.getSymbolBySymbolId(id) ?? (id.includes('\\') ? store.getSymbolByFqn(id) : undefined);
     if (!sym) {
       return err({ code: 'NOT_FOUND' as const, id });
     }
@@ -196,9 +210,9 @@ export function getContextBundle(
     if (fileRefIds.length > 0) {
       const depFileMap = store.getFilesByIds(fileRefIds);
       const placeholders = fileRefIds.map(() => '?').join(',');
-      const allFileSyms = store.db.prepare(
-        `SELECT * FROM symbols WHERE file_id IN (${placeholders}) AND parent_id IS NULL`,
-      ).all(...fileRefIds) as SymbolRow[];
+      const allFileSyms = store.db
+        .prepare(`SELECT * FROM symbols WHERE file_id IN (${placeholders}) AND parent_id IS NULL`)
+        .all(...fileRefIds) as SymbolRow[];
       for (const sym of allFileSyms) {
         if (seenDepIds.has(sym.id)) continue;
         seenDepIds.add(sym.id);
@@ -270,8 +284,12 @@ export function getContextBundle(
 
   const result: ContextBundleResult = {
     primary: primarySymbols.map((p) => toBundleItem(p.sym, p.file)),
-    dependencies: depSymbols.slice(0, assembled.dependencies.length).map((d) => toBundleItem(d.sym, d.file)),
-    callers: callerSymbols.slice(0, assembled.callers.length).map((c) => toBundleItem(c.sym, c.file)),
+    dependencies: depSymbols
+      .slice(0, assembled.dependencies.length)
+      .map((d) => toBundleItem(d.sym, d.file)),
+    callers: callerSymbols
+      .slice(0, assembled.callers.length)
+      .map((c) => toBundleItem(c.sym, c.file)),
     totalTokens: assembled.totalTokens,
     truncated: assembled.truncated,
   };

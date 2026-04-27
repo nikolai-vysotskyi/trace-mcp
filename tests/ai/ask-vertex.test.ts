@@ -30,7 +30,12 @@ describe('createVertexAIProvider (Ask streaming)', () => {
     ]);
     (globalThis.fetch as any).mockResolvedValue(new Response(body, { status: 200 }));
 
-    const provider = createVertexAIProvider('ya29.test', 'demo-project', 'us-central1', 'gemini-2.5-flash');
+    const provider = createVertexAIProvider(
+      'ya29.test',
+      'demo-project',
+      'us-central1',
+      'gemini-2.5-flash',
+    );
     const out: string[] = [];
     for await (const chunk of provider.streamChat([
       { role: 'system', content: 'you are a helper' },
@@ -44,9 +49,16 @@ describe('createVertexAIProvider (Ask streaming)', () => {
   it('routes to :streamGenerateContent on the regional host with Bearer auth', async () => {
     (globalThis.fetch as any).mockResolvedValue(new Response(sseBody([]), { status: 200 }));
 
-    const provider = createVertexAIProvider('ya29.test', 'demo-project', 'europe-west4', 'gemini-2.5-pro');
+    const provider = createVertexAIProvider(
+      'ya29.test',
+      'demo-project',
+      'europe-west4',
+      'gemini-2.5-pro',
+    );
     // Consume the stream so fetch fires.
-    for await (const _ of provider.streamChat([{ role: 'user', content: 'hi' }])) { void _; }
+    for await (const _ of provider.streamChat([{ role: 'user', content: 'hi' }])) {
+      void _;
+    }
 
     const [url, init] = (globalThis.fetch as any).mock.calls[0];
     expect(url).toBe(
@@ -58,11 +70,18 @@ describe('createVertexAIProvider (Ask streaming)', () => {
   it('puts system message into systemInstruction (Gemini schema), not into contents', async () => {
     (globalThis.fetch as any).mockResolvedValue(new Response(sseBody([]), { status: 200 }));
 
-    const provider = createVertexAIProvider('ya29.test', 'demo-project', 'us-central1', 'gemini-2.5-flash');
+    const provider = createVertexAIProvider(
+      'ya29.test',
+      'demo-project',
+      'us-central1',
+      'gemini-2.5-flash',
+    );
     for await (const _ of provider.streamChat([
       { role: 'system', content: 'you are a helper' },
       { role: 'user', content: 'hi' },
-    ])) { void _; }
+    ])) {
+      void _;
+    }
 
     const [, init] = (globalThis.fetch as any).mock.calls[0];
     const body = JSON.parse(init.body);
@@ -73,12 +92,19 @@ describe('createVertexAIProvider (Ask streaming)', () => {
   it('maps assistant role to Gemini-native "model" role', async () => {
     (globalThis.fetch as any).mockResolvedValue(new Response(sseBody([]), { status: 200 }));
 
-    const provider = createVertexAIProvider('ya29.test', 'demo-project', 'us-central1', 'gemini-2.5-flash');
+    const provider = createVertexAIProvider(
+      'ya29.test',
+      'demo-project',
+      'us-central1',
+      'gemini-2.5-flash',
+    );
     for await (const _ of provider.streamChat([
       { role: 'user', content: 'hi' },
       { role: 'assistant', content: 'hello' },
       { role: 'user', content: 'how are you?' },
-    ])) { void _; }
+    ])) {
+      void _;
+    }
 
     const [, init] = (globalThis.fetch as any).mock.calls[0];
     const body = JSON.parse(init.body);

@@ -6,7 +6,17 @@
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { RawSymbol, RawEdge, RawRoute, RawComponent, RawMigration, RawOrmModel, RawOrmAssociation, RawRnScreen, FileParseResult } from '../plugin-api/types.js';
+import type {
+  RawSymbol,
+  RawEdge,
+  RawRoute,
+  RawComponent,
+  RawMigration,
+  RawOrmModel,
+  RawOrmAssociation,
+  RawRnScreen,
+  FileParseResult,
+} from '../plugin-api/types.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
 

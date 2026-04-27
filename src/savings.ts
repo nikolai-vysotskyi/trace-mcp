@@ -76,15 +76,21 @@ interface PersistentSavings {
   sessions: number;
   first_session: string;
   last_session: string;
-  per_project: Record<string, {
-    tokens_saved: number;
-    calls: number;
-    last_used: string;
-  }>;
-  per_tool: Record<string, {
-    calls: number;
-    tokens_saved: number;
-  }>;
+  per_project: Record<
+    string,
+    {
+      tokens_saved: number;
+      calls: number;
+      last_used: string;
+    }
+  >;
+  per_tool: Record<
+    string,
+    {
+      calls: number;
+      tokens_saved: number;
+    }
+  >;
 }
 
 export class SavingsTracker {
@@ -115,7 +121,7 @@ export class SavingsTracker {
     this.session.total_actual_tokens += actual;
     this.session.total_tokens_saved += saved;
 
-    const rec = this.session.per_tool[toolName] ??= { calls: 0, tokens_saved: 0, raw_tokens: 0 };
+    const rec = (this.session.per_tool[toolName] ??= { calls: 0, tokens_saved: 0, raw_tokens: 0 });
     rec.calls++;
     rec.tokens_saved += saved;
     rec.raw_tokens += rawCost;
@@ -123,14 +129,18 @@ export class SavingsTracker {
 
   /** Get current session stats */
   getSessionStats(): SessionStats & { reduction_pct: number } {
-    const reduction = this.session.total_raw_tokens > 0
-      ? Math.round((this.session.total_tokens_saved / this.session.total_raw_tokens) * 100)
-      : 0;
+    const reduction =
+      this.session.total_raw_tokens > 0
+        ? Math.round((this.session.total_tokens_saved / this.session.total_raw_tokens) * 100)
+        : 0;
     return { ...this.session, reduction_pct: reduction };
   }
 
   /** Get combined session + cumulative stats */
-  getFullStats(): { session: SessionStats & { reduction_pct: number }; cumulative: PersistentSavings | null } {
+  getFullStats(): {
+    session: SessionStats & { reduction_pct: number };
+    cumulative: PersistentSavings | null;
+  } {
     return {
       session: this.getSessionStats(),
       cumulative: loadPersistentSavings(),
@@ -167,20 +177,23 @@ export class SavingsTracker {
 
       // Per-project
       const projKey = this.projectRoot;
-      const proj = merged.per_project[projKey] ??= { tokens_saved: 0, calls: 0, last_used: now };
+      const proj = (merged.per_project[projKey] ??= { tokens_saved: 0, calls: 0, last_used: now });
       proj.tokens_saved += this.session.total_tokens_saved;
       proj.calls += this.session.total_calls;
       proj.last_used = now;
 
       // Per-tool
       for (const [tool, rec] of Object.entries(this.session.per_tool)) {
-        const t = merged.per_tool[tool] ??= { calls: 0, tokens_saved: 0 };
+        const t = (merged.per_tool[tool] ??= { calls: 0, tokens_saved: 0 });
         t.calls += rec.calls;
         t.tokens_saved += rec.tokens_saved;
       }
 
       savePersistentSavings(merged);
-      logger.debug({ calls: this.session.total_calls, saved: this.session.total_tokens_saved }, 'Session savings flushed');
+      logger.debug(
+        { calls: this.session.total_calls, saved: this.session.total_tokens_saved },
+        'Session savings flushed',
+      );
     } catch (e) {
       logger.warn({ error: e }, 'Failed to flush savings to disk');
     }

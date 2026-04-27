@@ -89,8 +89,12 @@ export function migrateGlobalConfig(): MigrateResult {
     if (key in existing) {
       // Key exists — check for missing nested keys (one level deep)
       if (
-        typeof defaults[key] === 'object' && defaults[key] !== null && !Array.isArray(defaults[key]) &&
-        typeof existing[key] === 'object' && existing[key] !== null && !Array.isArray(existing[key])
+        typeof defaults[key] === 'object' &&
+        defaults[key] !== null &&
+        !Array.isArray(defaults[key]) &&
+        typeof existing[key] === 'object' &&
+        existing[key] !== null &&
+        !Array.isArray(existing[key])
       ) {
         const defaultSub = defaults[key] as Record<string, unknown>;
         const existingSub = existing[key] as Record<string, unknown>;

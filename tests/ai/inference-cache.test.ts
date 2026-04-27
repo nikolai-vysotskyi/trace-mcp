@@ -52,9 +52,7 @@ describe('InferenceCache', () => {
   it('evictExpired removes expired entries', () => {
     cache.set('model-a', 'expired-prompt', 'response');
     // Manually set created_at to 100 days ago
-    db.prepare(
-      `UPDATE inference_cache SET created_at = datetime('now', '-100 days')`,
-    ).run();
+    db.prepare(`UPDATE inference_cache SET created_at = datetime('now', '-100 days')`).run();
     const evicted = cache.evictExpired();
     expect(evicted).toBe(1);
     expect(cache.get('model-a', 'expired-prompt')).toBeNull();

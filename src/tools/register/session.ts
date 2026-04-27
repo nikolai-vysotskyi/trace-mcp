@@ -19,11 +19,23 @@ import { decisionsForTask, decisionsForResume } from '../../memory/enrichment.js
 
 export function registerSessionTools(server: McpServer, ctx: MetaContext): void {
   const {
-    store, registry, config, projectRoot, savings, journal,
-    aiProvider, vectorStore, embeddingService, reranker,
+    store,
+    registry,
+    config,
+    projectRoot,
+    savings,
+    journal,
+    aiProvider,
+    vectorStore,
+    embeddingService,
+    reranker,
     has,
-    j, jh,
-    _originalTool, registeredToolNames, toolHandlers, presetName,
+    j,
+    jh,
+    _originalTool,
+    registeredToolNames,
+    toolHandlers,
+    presetName,
   } = ctx;
 
   // --- Resources ---
@@ -73,17 +85,33 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'Search pre-indexed bundles for symbols from popular libraries (React, Express, etc.). Returns symbol definitions from dependency bundles — useful for go-to-definition into node_modules/vendor. Install bundles via CLI: `trace-mcp bundles export`. For project source code search use search instead. Read-only. Returns JSON: { results: [{ name, kind, signature, bundle }], bundles_searched }.',
     {
       query: z.string().min(1).max(256).describe('Symbol name or FQN to search'),
-      kind: z.string().max(64).optional().describe('Filter by symbol kind (function, class, interface, etc.)'),
+      kind: z
+        .string()
+        .max(64)
+        .optional()
+        .describe('Filter by symbol kind (function, class, interface, etc.)'),
       limit: z.number().int().min(1).max(50).optional().describe('Max results (default: 20)'),
     },
     async ({ query, kind, limit }) => {
       const bundles = loadAllBundles();
       if (bundles.length === 0) {
-        return { content: [{ type: 'text', text: j({ message: 'No bundles installed. Use `trace-mcp bundles export` to create bundles from indexed dependencies.' }) }] };
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                message:
+                  'No bundles installed. Use `trace-mcp bundles export` to create bundles from indexed dependencies.',
+              }),
+            },
+          ],
+        };
       }
       const results = searchBundles(bundles, query, { kind, limit });
       for (const b of bundles) b.db.close();
-      return { content: [{ type: 'text', text: j({ results, bundles_searched: bundles.length }) }] };
+      return {
+        content: [{ type: 'text', text: j({ results, bundles_searched: bundles.length }) }],
+      };
     },
   );
 
@@ -106,15 +134,17 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     async () => {
       const presets = listPresets();
       return {
-        content: [{
-          type: 'text',
-          text: j({
-            active_preset: presetName,
-            registered_tools: registeredToolNames.length,
-            tool_names: registeredToolNames,
-            available_presets: presets,
-          }),
-        }],
+        content: [
+          {
+            type: 'text',
+            text: j({
+              active_preset: presetName,
+              registered_tools: registeredToolNames.length,
+              tool_names: registeredToolNames,
+              available_presets: presets,
+            }),
+          },
+        ],
       };
     },
   );
@@ -124,20 +154,32 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'get_session_analytics',
     'Analyze AI agent session logs: token usage, cost breakdown by tool/server, top files, models used. Parses Claude Code JSONL logs automatically. Read-only. For waste detection use get_optimization_report; for cost trends use get_usage_trends. Returns JSON: { sessions, tokens, cost_usd, tools, models, topFiles }.',
     {
-      period: z.enum(['today', 'week', 'month', 'all']).optional().describe('Time period (default: week)'),
+      period: z
+        .enum(['today', 'week', 'month', 'all'])
+        .optional()
+        .describe('Time period (default: week)'),
       session_id: z.string().max(128).optional().describe('Specific session ID to analyze'),
     },
     async ({ period, session_id }) => {
       try {
         const analyticsStore = new AnalyticsStore();
         try {
-          const result = getSessionAnalytics(analyticsStore, { period, sessionId: session_id, projectPath: projectRoot });
+          const result = getSessionAnalytics(analyticsStore, {
+            period,
+            sessionId: session_id,
+            projectPath: projectRoot,
+          });
           return { content: [{ type: 'text', text: j(result) }] };
         } finally {
           analyticsStore.close();
         }
       } catch (e) {
-        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+        return {
+          content: [
+            { type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) },
+          ],
+          isError: true,
+        };
       }
     },
   );
@@ -147,19 +189,30 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'get_optimization_report',
     'Detect token waste patterns in AI agent sessions: repeated file reads, Bash grep instead of search, large file reads, unused trace-mcp tools. Provides savings estimates. Read-only. For usage/cost overview use get_session_analytics; for A/B savings comparison use get_real_savings. Returns JSON: { patterns: [{ type, description, savings_estimate }], total_waste }.',
     {
-      period: z.enum(['today', 'week', 'month', 'all']).optional().describe('Time period (default: week)'),
+      period: z
+        .enum(['today', 'week', 'month', 'all'])
+        .optional()
+        .describe('Time period (default: week)'),
     },
     async ({ period }) => {
       try {
         const analyticsStore = new AnalyticsStore();
         try {
-          const result = getOptimizationReport(analyticsStore, { period, projectPath: projectRoot });
+          const result = getOptimizationReport(analyticsStore, {
+            period,
+            projectPath: projectRoot,
+          });
           return { content: [{ type: 'text', text: j(result) }] };
         } finally {
           analyticsStore.close();
         }
       } catch (e) {
-        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+        return {
+          content: [
+            { type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) },
+          ],
+          isError: true,
+        };
       }
     },
   );
@@ -169,7 +222,13 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'benchmark_project',
     'Synthetic token efficiency benchmark: compare raw file reads vs trace-mcp compact responses across symbol lookup, file exploration, search, and impact analysis scenarios. Read-only, no side effects. Use to quantify token savings. Returns JSON: { scenarios: [{ name, raw_tokens, compact_tokens, savings_pct }], summary }.',
     {
-      queries: z.number().int().min(1).max(50).optional().describe('Queries per scenario (default 10)'),
+      queries: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .optional()
+        .describe('Queries per scenario (default 10)'),
       seed: z.number().int().optional().describe('Random seed for reproducibility (default 42)'),
       format: z.enum(['json', 'markdown']).optional().describe('Output format (default: json)'),
     },
@@ -192,7 +251,12 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         const result = detectCoverage(projectRoot);
         return { content: [{ type: 'text', text: j(result) }] };
       } catch (e) {
-        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+        return {
+          content: [
+            { type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) },
+          ],
+          isError: true,
+        };
       }
     },
   );
@@ -202,21 +266,32 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'get_real_savings',
     'A/B comparison: how many tokens could be saved by using trace-mcp instead of raw Read/Bash file reads. Per-file breakdown. Read-only. For pattern-based waste detection use get_optimization_report instead. Returns JSON: { files: [{ file, raw_tokens, compact_tokens, savings }], total_savings }.',
     {
-      period: z.enum(['today', 'week', 'month', 'all']).optional().describe('Time period (default: week)'),
+      period: z
+        .enum(['today', 'week', 'month', 'all'])
+        .optional()
+        .describe('Time period (default: week)'),
     },
     async ({ period }) => {
       try {
         const analyticsStore = new AnalyticsStore();
         try {
           syncAnalytics(analyticsStore);
-          const toolCalls = analyticsStore.getToolCallsForOptimization({ projectPath: projectRoot, period: period ?? 'week' });
+          const toolCalls = analyticsStore.getToolCallsForOptimization({
+            projectPath: projectRoot,
+            period: period ?? 'week',
+          });
           const result = analyzeRealSavings(store, toolCalls, period ?? 'week');
           return { content: [{ type: 'text', text: j(result) }] };
         } finally {
           analyticsStore.close();
         }
       } catch (e) {
-        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+        return {
+          content: [
+            { type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) },
+          ],
+          isError: true,
+        };
       }
     },
   );
@@ -226,7 +301,13 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'get_usage_trends',
     'Daily token usage time-series: sessions, tokens, estimated cost, tool calls per day. For spotting cost spikes. Read-only. For detailed session breakdown use get_session_analytics instead. Returns JSON: { days, daily: [{ date, sessions, tokens, cost_usd, tool_calls }], totals }.',
     {
-      days: z.number().int().min(1).max(365).optional().describe('Number of days to show (default: 30)'),
+      days: z
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .optional()
+        .describe('Number of days to show (default: 30)'),
     },
     async ({ days }) => {
       try {
@@ -234,18 +315,30 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         try {
           syncAnalytics(analyticsStore);
           const trends = analyticsStore.getUsageTrends(days ?? 30);
-          const total = trends.reduce((s, d) => ({
-            sessions: s.sessions + d.sessions,
-            tokens: s.tokens + d.tokens,
-            cost_usd: s.cost_usd + d.cost_usd,
-            tool_calls: s.tool_calls + d.tool_calls,
-          }), { sessions: 0, tokens: 0, cost_usd: 0, tool_calls: 0 });
-          return { content: [{ type: 'text', text: j({ days: days ?? 30, daily: trends, totals: total }) }] };
+          const total = trends.reduce(
+            (s, d) => ({
+              sessions: s.sessions + d.sessions,
+              tokens: s.tokens + d.tokens,
+              cost_usd: s.cost_usd + d.cost_usd,
+              tool_calls: s.tool_calls + d.tool_calls,
+            }),
+            { sessions: 0, tokens: 0, cost_usd: 0, tool_calls: 0 },
+          );
+          return {
+            content: [
+              { type: 'text', text: j({ days: days ?? 30, daily: trends, totals: total }) },
+            ],
+          };
         } finally {
           analyticsStore.close();
         }
       } catch (e) {
-        return { content: [{ type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) }], isError: true };
+        return {
+          content: [
+            { type: 'text', text: j({ error: e instanceof Error ? e.message : String(e) }) },
+          ],
+          isError: true,
+        };
       }
     },
   );
@@ -259,13 +352,15 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       const stats = savings.getFullStats();
       const dedupTokens = journal.getDedupSavedTokens();
       return {
-        content: [{
-          type: 'text',
-          text: j({
-            ...stats,
-            dedup_saved_tokens: dedupTokens,
-          }),
-        }],
+        content: [
+          {
+            type: 'text',
+            text: j({
+              ...stats,
+              dedup_saved_tokens: dedupTokens,
+            }),
+          },
+        ],
       };
     },
   );
@@ -277,7 +372,14 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     {},
     async () => {
       const summary = journal.getSummary();
-      return { content: [{ type: 'text', text: j({ ...summary, dedup_saved_tokens: journal.getDedupSavedTokens() }) }] };
+      return {
+        content: [
+          {
+            type: 'text',
+            text: j({ ...summary, dedup_saved_tokens: journal.getDedupSavedTokens() }),
+          },
+        ],
+      };
     },
   );
 
@@ -285,10 +387,31 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'get_session_snapshot',
     'Compact session snapshot (~200 tokens) for context recovery after compaction. Returns focus files (by read count), edited files, key searches, and dead ends. Also used by the PreCompact hook to preserve session orientation automatically. Read-only. For full journal use get_session_journal; for cross-session context use get_session_resume. Returns JSON: { focusFiles, editedFiles, keySearches, deadEnds }.',
     {
-      max_files: z.number().int().min(1).max(50).optional().describe('Max focus files to include (default: 10)'),
-      max_searches: z.number().int().min(1).max(20).optional().describe('Max key searches to include (default: 5)'),
-      max_edits: z.number().int().min(1).max(50).optional().describe('Max edited files to include (default: 10)'),
-      include_negative_evidence: z.boolean().optional().describe('Include dead-end searches (default: true)'),
+      max_files: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .optional()
+        .describe('Max focus files to include (default: 10)'),
+      max_searches: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .describe('Max key searches to include (default: 5)'),
+      max_edits: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .optional()
+        .describe('Max edited files to include (default: 10)'),
+      include_negative_evidence: z
+        .boolean()
+        .optional()
+        .describe('Include dead-end searches (default: true)'),
     },
     async ({ max_files, max_searches, max_edits, include_negative_evidence }) => {
       const snapshot = journal.getSnapshot({
@@ -305,7 +428,13 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'get_session_resume',
     'Cross-session context carryover: shows what was explored in recent past sessions (files touched, tools used, dead-end searches). Call at session start to orient yourself without re-reading files. Much cheaper than re-exploring the codebase. Read-only. For decision-aware wake-up use get_wake_up instead. Returns JSON: { sessions: [{ files, tools, deadEnds }], active_decisions }.',
     {
-      max_sessions: z.number().int().min(1).max(20).optional().describe('Number of past sessions to include (default: 5)'),
+      max_sessions: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .describe('Number of past sessions to include (default: 5)'),
     },
     async ({ max_sessions }) => {
       const resume = getSessionResume(projectRoot, max_sessions ?? 5);
@@ -327,10 +456,28 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'plan_turn',
     'Opening-move router for new tasks. Combines BM25/PageRank search + session journal (negative evidence + focus signals) + framework-aware insertion-point suggestions + change-risk + turn-budget advisor into ONE call. Returns verdict (exists/partial/missing/ambiguous), confidence, ranked targets with provenance, scaffold hints when missing, and recommended next tool calls. Call this FIRST on a new task to break the empty-result hallucination chain. Read-only. For broader task context with source code use get_task_context instead. Returns JSON: { verdict, confidence, targets, scaffoldHints, nextSteps }.',
     {
-      task: z.string().min(1).max(512).describe('Natural-language task description (e.g. "add a webhook endpoint for stripe payments")'),
-      intent: z.enum(['bugfix', 'new_feature', 'refactor', 'understand']).optional().describe('Optional intent hint; auto-classified from task if omitted'),
-      max_targets: z.number().int().min(1).max(20).optional().describe('Cap on returned targets (default 5)'),
-      skip_risk: z.boolean().optional().describe('Skip change-risk assessment for the top target (default false)'),
+      task: z
+        .string()
+        .min(1)
+        .max(512)
+        .describe(
+          'Natural-language task description (e.g. "add a webhook endpoint for stripe payments")',
+        ),
+      intent: z
+        .enum(['bugfix', 'new_feature', 'refactor', 'understand'])
+        .optional()
+        .describe('Optional intent hint; auto-classified from task if omitted'),
+      max_targets: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .describe('Cap on returned targets (default 5)'),
+      skip_risk: z
+        .boolean()
+        .optional()
+        .describe('Skip change-risk assessment for the top target (default false)'),
     },
     async ({ task, intent, max_targets, skip_risk }) => {
       const result = await planTurn(
@@ -341,9 +488,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
           savings,
           registry,
           has,
-          ai: config.ai?.enabled
-            ? { vectorStore, embeddingService, reranker }
-            : undefined,
+          ai: config.ai?.enabled ? { vectorStore, embeddingService, reranker } : undefined,
         },
         { task, intent, maxTargets: max_targets, skipRisk: skip_risk },
       );
@@ -351,7 +496,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       const payload: Record<string, unknown> = { ...result };
       const ds = ctx.decisionStore;
       if (ds) {
-        const targetFiles = result.targets?.map(t => t.file).filter(Boolean);
+        const targetFiles = result.targets?.map((t) => t.file).filter(Boolean);
         const linked = decisionsForTask(ds, projectRoot, task, targetFiles);
         if (linked.length > 0) {
           payload.related_decisions = linked;
@@ -366,10 +511,16 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'batch',
     'Execute multiple trace-mcp tools in a single MCP request. Returns results for all calls. Use to reduce round-trips when you need several independent queries (e.g., get_outline for 3 files, or search + get_symbol together). Read-only (delegates to other tools). Returns JSON: { batch_results: [{ tool, result }], total }.',
     {
-      calls: z.array(z.object({
-        tool: z.string().describe('Tool name (e.g., "get_outline", "get_symbol", "search")'),
-        args: z.record(z.unknown()).describe('Tool arguments'),
-      })).min(1).max(10).describe('Array of tool calls to execute (max 10)'),
+      calls: z
+        .array(
+          z.object({
+            tool: z.string().describe('Tool name (e.g., "get_outline", "get_symbol", "search")'),
+            args: z.record(z.unknown()).describe('Tool arguments'),
+          }),
+        )
+        .min(1)
+        .max(10)
+        .describe('Array of tool calls to execute (max 10)'),
     },
     async ({ calls }) => {
       const results: { tool: string; result?: unknown; error?: string }[] = [];
@@ -407,7 +558,9 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
           results.push({ tool: call.tool, error: e instanceof Error ? e.message : String(e) });
         }
       }
-      return { content: [{ type: 'text', text: j({ batch_results: results, total: results.length }) }] };
+      return {
+        content: [{ type: 'text', text: j({ batch_results: results, total: results.length }) }],
+      };
     },
   );
 

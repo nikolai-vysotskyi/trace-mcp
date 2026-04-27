@@ -90,13 +90,22 @@ export class StdioSession {
     // where N stdio sessions would otherwise each build their own DB.
     if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
       const spawnTimeoutMs = this.opts.autoSpawnTimeoutMs ?? 5_000;
-      logger.info({ port: this.opts.daemonPort, timeoutMs: spawnTimeoutMs }, 'StdioSession: attempting daemon auto-spawn');
+      logger.info(
+        { port: this.opts.daemonPort, timeoutMs: spawnTimeoutMs },
+        'StdioSession: attempting daemon auto-spawn',
+      );
       const result = await tryAutoSpawnDaemon(this.opts.daemonPort, spawnTimeoutMs);
       if (result.ok) {
         daemonActive = true;
-        logger.info({ alreadyRunning: result.alreadyRunning }, 'StdioSession: daemon is reachable after auto-spawn');
+        logger.info(
+          { alreadyRunning: result.alreadyRunning },
+          'StdioSession: daemon is reachable after auto-spawn',
+        );
       } else {
-        logger.warn({ error: result.error }, 'StdioSession: daemon auto-spawn failed, falling back to local mode');
+        logger.warn(
+          { error: result.error },
+          'StdioSession: daemon auto-spawn failed, falling back to local mode',
+        );
       }
     }
 
@@ -114,12 +123,15 @@ export class StdioSession {
     this.resetIdleTimer();
 
     await this.stdio.start();
-    logger.info({
-      mode: this.desiredMode,
-      projectRoot: this.opts.projectRoot,
-      idleTimeoutMs: this.opts.idleTimeoutMs,
-      daemonStabilityMs: this.opts.daemonStabilityMs,
-    }, 'StdioSession bootstrapped');
+    logger.info(
+      {
+        mode: this.desiredMode,
+        projectRoot: this.opts.projectRoot,
+        idleTimeoutMs: this.opts.idleTimeoutMs,
+        daemonStabilityMs: this.opts.daemonStabilityMs,
+      },
+      'StdioSession bootstrapped',
+    );
   }
 
   /**
@@ -151,7 +163,11 @@ export class StdioSession {
       ]);
     }
 
-    try { await this.stdio.close(); } catch { /* best-effort */ }
+    try {
+      await this.stdio.close();
+    } catch {
+      /* best-effort */
+    }
   }
 
   // ── Internals ───────────────────────────────────────────────────────
@@ -160,10 +176,10 @@ export class StdioSession {
     if (this.shuttingDown) return;
     const currentKind = this.router.getActiveKind();
     if (nowActive) {
-      if (currentKind === 'proxy') return;  // already proxying
+      if (currentKind === 'proxy') return; // already proxying
       await this.swapTo(this.buildProxyBackend(), 'daemon-appeared');
     } else {
-      if (currentKind === 'local') return;  // already local
+      if (currentKind === 'local') return; // already local
       await this.swapTo(this.buildLocalBackend(), 'daemon-disappeared');
     }
   }
@@ -177,12 +193,18 @@ export class StdioSession {
     } catch (err) {
       logger.error({ err: String(err) }, 'StdioSession: swap failed');
       // Try to still stop the new backend to avoid leaks.
-      try { await next.stop(); } catch { /* best-effort */ }
+      try {
+        await next.stop();
+      } catch {
+        /* best-effort */
+      }
       return;
     }
     if (prev?.backgroundDispose) {
       this.pendingBackgroundDisposes.add(prev.backgroundDispose);
-      prev.backgroundDispose.finally(() => this.pendingBackgroundDisposes.delete(prev.backgroundDispose!));
+      prev.backgroundDispose.finally(() =>
+        this.pendingBackgroundDisposes.delete(prev.backgroundDispose!),
+      );
     }
   }
 
@@ -209,10 +231,12 @@ export class StdioSession {
     }
     logger.info('StdioSession: idle — releasing local backend resources');
     const prev = this.router.getActiveBackend();
-    await this.router.shutdown();  // stops old backend, leaves no active backend
+    await this.router.shutdown(); // stops old backend, leaves no active backend
     if (prev?.backgroundDispose) {
       this.pendingBackgroundDisposes.add(prev.backgroundDispose);
-      prev.backgroundDispose.finally(() => this.pendingBackgroundDisposes.delete(prev.backgroundDispose!));
+      prev.backgroundDispose.finally(() =>
+        this.pendingBackgroundDisposes.delete(prev.backgroundDispose!),
+      );
     }
     this.desiredMode = 'dormant';
     // Note: router now has no active backend. ingestFromClient() will queue

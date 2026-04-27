@@ -74,7 +74,11 @@ describe('search-cache (pure)', () => {
 
   it('put + get roundtrips a non-empty result', () => {
     const key = 'k1';
-    const value = { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1, search_mode: 'fts' as const };
+    const value = {
+      items: [{ symbol: {} as any, file: {} as any, score: 1 }],
+      total: 1,
+      search_mode: 'fts' as const,
+    };
     putCachedSearch(key, value, 100);
     const got = getCachedSearch(key, 100);
     expect(got).not.toBeNull();
@@ -89,7 +93,11 @@ describe('search-cache (pure)', () => {
 
   it('staleness: symbol count change invalidates entry', () => {
     const key = 'k-stale';
-    putCachedSearch(key, { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 }, 100);
+    putCachedSearch(
+      key,
+      { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
+      100,
+    );
     expect(getCachedSearch(key, 101)).toBeNull(); // stale → miss
     expect(getCachedSearch(key, 100)).toBeNull(); // and now also gone
   });
@@ -97,7 +105,11 @@ describe('search-cache (pure)', () => {
   it('LRU eviction: oldest entry is dropped when over MAX', () => {
     // MAX = 128. Insert 130 to force 2 evictions.
     for (let i = 0; i < 130; i++) {
-      putCachedSearch(`k-${i}`, { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 }, 100);
+      putCachedSearch(
+        `k-${i}`,
+        { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
+        100,
+      );
     }
     const stats = getSearchCacheStats();
     expect(stats.size).toBe(128);
@@ -110,13 +122,25 @@ describe('search-cache (pure)', () => {
   });
 
   it('LRU bump: hit moves entry to most-recent', () => {
-    putCachedSearch('a', { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 }, 100);
-    putCachedSearch('b', { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 }, 100);
+    putCachedSearch(
+      'a',
+      { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
+      100,
+    );
+    putCachedSearch(
+      'b',
+      { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
+      100,
+    );
     // Touch 'a' so it becomes most-recent
     getCachedSearch('a', 100);
     // Fill remaining slots
     for (let i = 0; i < 127; i++) {
-      putCachedSearch(`k-${i}`, { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 }, 100);
+      putCachedSearch(
+        `k-${i}`,
+        { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
+        100,
+      );
     }
     // 'b' should have been evicted (oldest), 'a' should still be present
     expect(getCachedSearch('b', 100)).toBeNull();
@@ -124,7 +148,11 @@ describe('search-cache (pure)', () => {
   });
 
   it('invalidateSearchCache clears all entries', () => {
-    putCachedSearch('a', { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 }, 100);
+    putCachedSearch(
+      'a',
+      { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
+      100,
+    );
     expect(getSearchCacheStats().size).toBe(1);
     invalidateSearchCache();
     expect(getSearchCacheStats().size).toBe(0);

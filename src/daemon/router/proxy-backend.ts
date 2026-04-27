@@ -5,10 +5,10 @@ import { resolveRegisteredAncestor } from '../../registry.js';
 import type { Backend } from './types.js';
 
 export interface ProxyBackendOptions {
-  daemonUrl: string;        // e.g. "http://127.0.0.1:3741"
-  projectRoot: string;      // absolute path used to scope /mcp
-  clientId: string;         // stable uuid for this stdio session (for /api/clients)
-  clientTransportKind?: string;  // "stdio-proxy" by default
+  daemonUrl: string; // e.g. "http://127.0.0.1:3741"
+  projectRoot: string; // absolute path used to scope /mcp
+  clientId: string; // stable uuid for this stdio session (for /api/clients)
+  clientTransportKind?: string; // "stdio-proxy" by default
 }
 
 /**
@@ -52,7 +52,9 @@ export class ProxyBackend implements Backend {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: projectRoot }),
-    }).catch(() => { /* daemon may already know */ });
+    }).catch(() => {
+      /* daemon may already know */
+    });
 
     // Best-effort client registration for the menu bar UI.
     fetch(`${daemonUrl}/api/clients`, {
@@ -63,7 +65,9 @@ export class ProxyBackend implements Backend {
         project: projectRoot,
         transport: this.opts.clientTransportKind ?? 'stdio-proxy',
       }),
-    }).catch(() => { /* non-fatal */ });
+    }).catch(() => {
+      /* non-fatal */
+    });
 
     const transport = new StreamableHTTPClientTransport(new URL(mcpUrl));
     transport.onmessage = (msg) => {

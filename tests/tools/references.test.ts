@@ -3,9 +3,15 @@ import { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { findReferences } from '../../src/tools/framework/references.js';
 
-function addSymbol(store: Store, opts: {
-  filePath: string; name: string; kind: string; fqn?: string;
-}): { fileId: number; symbolDbId: number; nodeId: number } {
+function addSymbol(
+  store: Store,
+  opts: {
+    filePath: string;
+    name: string;
+    kind: string;
+    fqn?: string;
+  },
+): { fileId: number; symbolDbId: number; nodeId: number } {
   let file = store.getFile(opts.filePath);
   const fileId = file ? file.id : store.insertFile(opts.filePath, 'typescript', null, null);
   const symbolDbId = store.insertSymbol(fileId, {
@@ -13,7 +19,10 @@ function addSymbol(store: Store, opts: {
     name: opts.name,
     kind: opts.kind as any,
     fqn: opts.fqn,
-    byteStart: 0, byteEnd: 100, lineStart: 1, lineEnd: 10,
+    byteStart: 0,
+    byteEnd: 100,
+    lineStart: 1,
+    lineEnd: 10,
   });
   return { fileId, symbolDbId, nodeId: store.getNodeId('symbol', symbolDbId)! };
 }
@@ -44,8 +53,16 @@ describe('findReferences', () => {
 
   it('finds multiple incoming edges of different types', () => {
     const target = addSymbol(store, { filePath: 'src/target.ts', name: 'Target', kind: 'class' });
-    const caller = addSymbol(store, { filePath: 'src/caller.ts', name: 'caller', kind: 'function' });
-    const importer = addSymbol(store, { filePath: 'src/importer.ts', name: 'importer', kind: 'function' });
+    const caller = addSymbol(store, {
+      filePath: 'src/caller.ts',
+      name: 'caller',
+      kind: 'function',
+    });
+    const importer = addSymbol(store, {
+      filePath: 'src/importer.ts',
+      name: 'importer',
+      kind: 'function',
+    });
 
     store.insertEdge(caller.nodeId, target.nodeId, 'calls');
     store.insertEdge(importer.nodeId, target.nodeId, 'references');
@@ -60,7 +77,12 @@ describe('findReferences', () => {
   });
 
   it('finds references by fqn', () => {
-    const target = addSymbol(store, { filePath: 'src/svc.ts', name: 'UserService', kind: 'class', fqn: 'app.UserService' });
+    const target = addSymbol(store, {
+      filePath: 'src/svc.ts',
+      name: 'UserService',
+      kind: 'class',
+      fqn: 'app.UserService',
+    });
     const user = addSymbol(store, { filePath: 'src/ctrl.ts', name: 'ctrl', kind: 'function' });
     store.insertEdge(user.nodeId, target.nodeId, 'calls');
 
@@ -72,7 +94,11 @@ describe('findReferences', () => {
   it('finds references by filePath', () => {
     const fileId = store.insertFile('src/data.ts', 'typescript', null, null);
     const fileNodeId = store.getNodeId('file', fileId)!;
-    const importer = addSymbol(store, { filePath: 'src/importer.ts', name: 'imp', kind: 'function' });
+    const importer = addSymbol(store, {
+      filePath: 'src/importer.ts',
+      name: 'imp',
+      kind: 'function',
+    });
     store.insertEdge(importer.nodeId, fileNodeId, 'imports');
 
     const result = findReferences(store, { filePath: 'src/data.ts' });

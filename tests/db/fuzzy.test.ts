@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTestStore } from '../test-utils.js';
-import { generateTrigrams, fuzzySearch, indexTrigramsBatch, deleteTrigramsByFile } from '../../src/db/fuzzy.js';
+import {
+  generateTrigrams,
+  fuzzySearch,
+  indexTrigramsBatch,
+  deleteTrigramsByFile,
+} from '../../src/db/fuzzy.js';
 import type Database from 'better-sqlite3';
 import type { Store } from '../../src/db/store.js';
 
@@ -19,14 +24,62 @@ describe('Fuzzy search', () => {
 
     // Insert test symbols
     const symbols = [
-      { fileId: fileId1, symbolId: 'user-1', name: 'getUserProfile', kind: 'function', fqn: 'UserService.getUserProfile' },
-      { fileId: fileId1, symbolId: 'user-2', name: 'getUserProfiles', kind: 'function', fqn: 'UserService.getUserProfiles' },
-      { fileId: fileId1, symbolId: 'user-3', name: 'setUserProfile', kind: 'function', fqn: 'UserService.setUserProfile' },
-      { fileId: fileId1, symbolId: 'user-4', name: 'UserService', kind: 'class', fqn: 'UserService' },
-      { fileId: fileId2, symbolId: 'pay-1', name: 'processPayment', kind: 'function', fqn: 'PaymentService.processPayment' },
-      { fileId: fileId2, symbolId: 'pay-2', name: 'PaymentService', kind: 'class', fqn: 'PaymentService' },
-      { fileId: fileId3, symbolId: 'fmt-1', name: 'formatCurrency', kind: 'function', fqn: 'format.formatCurrency' },
-      { fileId: fileId3, symbolId: 'fmt-2', name: 'formatDate', kind: 'function', fqn: 'format.formatDate' },
+      {
+        fileId: fileId1,
+        symbolId: 'user-1',
+        name: 'getUserProfile',
+        kind: 'function',
+        fqn: 'UserService.getUserProfile',
+      },
+      {
+        fileId: fileId1,
+        symbolId: 'user-2',
+        name: 'getUserProfiles',
+        kind: 'function',
+        fqn: 'UserService.getUserProfiles',
+      },
+      {
+        fileId: fileId1,
+        symbolId: 'user-3',
+        name: 'setUserProfile',
+        kind: 'function',
+        fqn: 'UserService.setUserProfile',
+      },
+      {
+        fileId: fileId1,
+        symbolId: 'user-4',
+        name: 'UserService',
+        kind: 'class',
+        fqn: 'UserService',
+      },
+      {
+        fileId: fileId2,
+        symbolId: 'pay-1',
+        name: 'processPayment',
+        kind: 'function',
+        fqn: 'PaymentService.processPayment',
+      },
+      {
+        fileId: fileId2,
+        symbolId: 'pay-2',
+        name: 'PaymentService',
+        kind: 'class',
+        fqn: 'PaymentService',
+      },
+      {
+        fileId: fileId3,
+        symbolId: 'fmt-1',
+        name: 'formatCurrency',
+        kind: 'function',
+        fqn: 'format.formatCurrency',
+      },
+      {
+        fileId: fileId3,
+        symbolId: 'fmt-2',
+        name: 'formatDate',
+        kind: 'function',
+        fqn: 'format.formatDate',
+      },
     ];
 
     // Use raw inserts for test symbols since we need specific IDs
@@ -131,7 +184,11 @@ describe('Fuzzy search', () => {
 
     it('handles multiple results without N+1', () => {
       // fuzzySearch uses batch SQL — single candidate query + batch metadata
-      const results = fuzzySearch(db, 'formatCurrencyy', { limit: 50, threshold: 0.1, maxEditDistance: 5 });
+      const results = fuzzySearch(db, 'formatCurrencyy', {
+        limit: 50,
+        threshold: 0.1,
+        maxEditDistance: 5,
+      });
       // Should find formatCurrency and formatDate
       expect(results.length).toBeGreaterThan(0);
       expect(results.some((r) => r.name === 'formatCurrency')).toBe(true);

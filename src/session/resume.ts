@@ -114,7 +114,10 @@ export function flushSessionSummary(opts: {
   existing.push(summary);
   saveSessions(opts.projectRoot, existing);
 
-  logger.debug({ calls: opts.totalCalls, files: opts.filesTouched.length }, 'Session summary saved');
+  logger.debug(
+    { calls: opts.totalCalls, files: opts.filesTouched.length },
+    'Session summary saved',
+  );
 }
 
 /**
@@ -176,7 +179,7 @@ export function getSessionResume(projectRoot: string, maxSessions = 5): SessionR
   return {
     project: path.basename(projectRoot),
     sessions_available: allSessions.length,
-    recent_sessions: recent.map(s => {
+    recent_sessions: recent.map((s) => {
       const start = new Date(s.started_at).getTime();
       const end = new Date(s.ended_at).getTime();
       return {

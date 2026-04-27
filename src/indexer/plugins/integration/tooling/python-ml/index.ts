@@ -34,8 +34,7 @@ const MODULE_SUBCLASS_RE =
   /^\s*class\s+([A-Z]\w+)\s*\(\s*(?:[\w.]*\.)?(?:nn\.Module|Module|PreTrainedModel|LightningModule)\b/gm;
 
 // AutoModel.from_pretrained('name') | AutoTokenizer.from_pretrained('name')
-const FROM_PRETRAINED_RE =
-  /\b(\w+)\s*\.\s*from_pretrained\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
+const FROM_PRETRAINED_RE = /\b(\w+)\s*\.\s*from_pretrained\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
 
 // torch.load('path') | torch.save(obj, 'path')
 const TORCH_IO_RE = /\btorch\s*\.\s*(load|save)\s*\(/g;
@@ -67,10 +66,26 @@ export class PythonMLPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'ml_model_load', category: 'ml', description: 'Model load/serialize (from_pretrained, torch.load, joblib.load)' },
-        { name: 'ml_model_class', category: 'ml', description: 'Class subclasses nn.Module / PreTrainedModel' },
-        { name: 'ml_train', category: 'ml', description: 'Model training call (.fit, .train, pipeline())' },
-        { name: 'ml_predict', category: 'ml', description: 'Model inference call (.predict, .forward, pipeline())' },
+        {
+          name: 'ml_model_load',
+          category: 'ml',
+          description: 'Model load/serialize (from_pretrained, torch.load, joblib.load)',
+        },
+        {
+          name: 'ml_model_class',
+          category: 'ml',
+          description: 'Class subclasses nn.Module / PreTrainedModel',
+        },
+        {
+          name: 'ml_train',
+          category: 'ml',
+          description: 'Model training call (.fit, .train, pipeline())',
+        },
+        {
+          name: 'ml_predict',
+          category: 'ml',
+          description: 'Model inference call (.predict, .forward, pipeline())',
+        },
       ],
     };
   }
@@ -103,14 +118,26 @@ export class PythonMLPlugin implements FrameworkPlugin {
     for (const m of source.matchAll(FROM_PRETRAINED_RE)) {
       result.edges!.push({
         edgeType: 'ml_model_load',
-        metadata: { loader: m[1], model: m[2], kind: 'from_pretrained', filePath, line: findLine(m.index ?? 0) },
+        metadata: {
+          loader: m[1],
+          model: m[2],
+          kind: 'from_pretrained',
+          filePath,
+          line: findLine(m.index ?? 0),
+        },
       });
     }
 
     for (const m of source.matchAll(SENTENCE_TRANSFORMER_RE)) {
       result.edges!.push({
         edgeType: 'ml_model_load',
-        metadata: { loader: m[1], model: m[2], kind: 'sentence_transformer', filePath, line: findLine(m.index ?? 0) },
+        metadata: {
+          loader: m[1],
+          model: m[2],
+          kind: 'sentence_transformer',
+          filePath,
+          line: findLine(m.index ?? 0),
+        },
       });
     }
 
@@ -131,7 +158,13 @@ export class PythonMLPlugin implements FrameworkPlugin {
     for (const m of source.matchAll(PIPELINE_RE)) {
       result.edges!.push({
         edgeType: 'ml_predict',
-        metadata: { task: m[1], model: m[2] ?? '', kind: 'pipeline', filePath, line: findLine(m.index ?? 0) },
+        metadata: {
+          task: m[1],
+          model: m[2] ?? '',
+          kind: 'pipeline',
+          filePath,
+          line: findLine(m.index ?? 0),
+        },
       });
     }
 

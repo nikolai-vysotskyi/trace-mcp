@@ -29,16 +29,97 @@ interface FeatureContextItem {
 }
 
 const STOPWORDS = new Set([
-  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'can', 'shall', 'to', 'of', 'in', 'for',
-  'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during',
-  'and', 'or', 'but', 'not', 'no', 'nor', 'so', 'yet', 'both', 'either',
-  'neither', 'each', 'every', 'all', 'any', 'few', 'more', 'most', 'other',
-  'some', 'such', 'than', 'too', 'very', 'just', 'about', 'above', 'after',
-  'before', 'between', 'under', 'over', 'out', 'up', 'down', 'off', 'then',
-  'once', 'here', 'there', 'when', 'where', 'why', 'how', 'what', 'which',
-  'who', 'whom', 'this', 'that', 'these', 'those', 'it', 'its',
+  'the',
+  'a',
+  'an',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'can',
+  'shall',
+  'to',
+  'of',
+  'in',
+  'for',
+  'on',
+  'with',
+  'at',
+  'by',
+  'from',
+  'as',
+  'into',
+  'through',
+  'during',
+  'and',
+  'or',
+  'but',
+  'not',
+  'no',
+  'nor',
+  'so',
+  'yet',
+  'both',
+  'either',
+  'neither',
+  'each',
+  'every',
+  'all',
+  'any',
+  'few',
+  'more',
+  'most',
+  'other',
+  'some',
+  'such',
+  'than',
+  'too',
+  'very',
+  'just',
+  'about',
+  'above',
+  'after',
+  'before',
+  'between',
+  'under',
+  'over',
+  'out',
+  'up',
+  'down',
+  'off',
+  'then',
+  'once',
+  'here',
+  'there',
+  'when',
+  'where',
+  'why',
+  'how',
+  'what',
+  'which',
+  'who',
+  'whom',
+  'this',
+  'that',
+  'these',
+  'those',
+  'it',
+  'its',
 ]);
 
 /**
@@ -93,7 +174,8 @@ export function getFeatureContext(
     gitignored: number;
   }
 
-  const ftsResults = store.db.prepare(`
+  const ftsResults = store.db
+    .prepare(`
     SELECT
       s.id        AS symbolId,
       s.symbol_id AS symbolIdStr,
@@ -114,7 +196,8 @@ export function getFeatureContext(
     WHERE symbols_fts MATCH ?
     ORDER BY rank
     LIMIT 100
-  `).all(ftsQuery) as FtsFullRow[];
+  `)
+    .all(ftsQuery) as FtsFullRow[];
 
   if (ftsResults.length === 0) {
     return { description, items: [], totalTokens: 0, truncated: false };
@@ -186,24 +269,31 @@ export function getFeatureContext(
   // Batch-resolve node IDs for top results (1 query)
   const topSymIds = topResults.map((item) => item.symbol.id);
   const topNodeMap = store.getNodeIdsBatch('symbol', topSymIds);
-  const topNodeIds = topResults.map((item) => topNodeMap.get(item.symbol.id)).filter((id): id is number => id != null);
+  const topNodeIds = topResults
+    .map((item) => topNodeMap.get(item.symbol.id))
+    .filter((id): id is number => id != null);
 
   // Fetch all adjacent edges in one query, then batch-resolve refs/symbols/files
   const allEdges = store.getEdgesForNodesBatch(topNodeIds);
 
-  const otherNodeIds = [...new Set(allEdges.map((e) =>
-    e.pivot_node_id === e.source_node_id ? e.target_node_id : e.source_node_id,
-  ))];
+  const otherNodeIds = [
+    ...new Set(
+      allEdges.map((e) =>
+        e.pivot_node_id === e.source_node_id ? e.target_node_id : e.source_node_id,
+      ),
+    ),
+  ];
   const nodeRefs = store.getNodeRefsBatch(otherNodeIds);
-  const symbolRefIds = [...nodeRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const symbolRefIds = [...nodeRefs.values()]
+    .filter((r) => r.nodeType === 'symbol')
+    .map((r) => r.refId);
   const symbolMap = store.getSymbolsByIds(symbolRefIds);
   const fileIds = [...new Set([...symbolMap.values()].map((s) => s.file_id))];
   const fileMap = store.getFilesByIds(fileIds);
 
   for (const edge of allEdges) {
-    const otherNodeId = edge.pivot_node_id === edge.source_node_id
-      ? edge.target_node_id
-      : edge.source_node_id;
+    const otherNodeId =
+      edge.pivot_node_id === edge.source_node_id ? edge.target_node_id : edge.source_node_id;
 
     const nodeRef = nodeRefs.get(otherNodeId);
     if (!nodeRef || nodeRef.nodeType !== 'symbol') continue;
@@ -236,8 +326,15 @@ export function getFeatureContext(
     let source: string | undefined;
     try {
       const absPath = path.resolve(rootPath, item.file.path);
-      source = readByteRange(absPath, item.symbol.byte_start, item.symbol.byte_end, !!item.file.gitignored);
-    } catch { /* source unavailable */ }
+      source = readByteRange(
+        absPath,
+        item.symbol.byte_start,
+        item.symbol.byte_end,
+        !!item.file.gitignored,
+      );
+    } catch {
+      /* source unavailable */
+    }
 
     return {
       id: item.symbol.symbol_id,

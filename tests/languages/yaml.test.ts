@@ -22,18 +22,20 @@ describe('YamlLanguagePlugin', () => {
 
   describe('generic', () => {
     it('extracts top-level keys as constants', async () => {
-      const r = await parse('database:\n  host: localhost\nlogging:\n  level: debug\nserver:\n  port: 8080');
-      expect(r.symbols.some(s => s.name === 'database' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'logging' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'server' && s.kind === 'constant')).toBe(true);
+      const r = await parse(
+        'database:\n  host: localhost\nlogging:\n  level: debug\nserver:\n  port: 8080',
+      );
+      expect(r.symbols.some((s) => s.name === 'database' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'logging' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'server' && s.kind === 'constant')).toBe(true);
       // metadata is undefined for generic dialect
       expect(r.metadata?.yamlDialect).toBeUndefined();
     });
 
     it('ignores comments and indented keys', async () => {
       const r = await parse('# comment\ntop_key:\n  nested: val');
-      expect(r.symbols.some(s => s.name === 'top_key')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'nested')).toBe(false);
+      expect(r.symbols.some((s) => s.name === 'top_key')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'nested')).toBe(false);
     });
 
     it('handles empty file', async () => {
@@ -60,12 +62,12 @@ describe('YamlLanguagePlugin', () => {
       );
 
       expect(r.metadata?.yamlDialect).toBe('docker-compose');
-      expect(r.symbols.some(s => s.name === 'web' && s.kind === 'class')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'db' && s.kind === 'class')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'web' && s.kind === 'class')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'db' && s.kind === 'class')).toBe(true);
       // image constants
-      expect(r.symbols.some(s => s.name === 'web:image' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'web:image' && s.kind === 'constant')).toBe(true);
       // depends_on edge
-      expect(r.edges!.some(e => e.edgeType === 'depends_on')).toBe(true);
+      expect(r.edges!.some((e) => e.edgeType === 'depends_on')).toBe(true);
     });
   });
 
@@ -87,9 +89,13 @@ jobs:
       );
 
       expect(r.metadata?.yamlDialect).toBe('github-actions');
-      expect(r.symbols.some(s => s.name === 'build' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'Run tests' && s.kind === 'constant')).toBe(true);
-      expect(r.edges!.some(e => e.edgeType === 'imports' && (e.metadata as any).module === 'actions/checkout@v4')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'build' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'Run tests' && s.kind === 'constant')).toBe(true);
+      expect(
+        r.edges!.some(
+          (e) => e.edgeType === 'imports' && (e.metadata as any).module === 'actions/checkout@v4',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -115,10 +121,10 @@ test_job:
       );
 
       expect(r.metadata?.yamlDialect).toBe('gitlab-ci');
-      expect(r.symbols.some(s => s.name === 'build' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'test' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'build_job' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'test_job' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'build' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'test' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'build_job' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'test_job' && s.kind === 'function')).toBe(true);
     });
   });
 
@@ -136,8 +142,8 @@ spec:
       );
 
       expect(r.metadata?.yamlDialect).toBe('kubernetes');
-      expect(r.symbols.some(s => s.name === 'Deployment' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'my-app' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'Deployment' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'my-app' && s.kind === 'constant')).toBe(true);
     });
   });
 
@@ -164,10 +170,10 @@ components:
       );
 
       expect(r.metadata?.yamlDialect).toBe('openapi');
-      expect(r.symbols.some(s => s.name === 'GET /users' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'POST /users' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'User' && s.kind === 'type')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'Error' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'GET /users' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'POST /users' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'User' && s.kind === 'type')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'Error' && s.kind === 'type')).toBe(true);
     });
 
     it('extracts operationId, tags and $ref edges', async () => {
@@ -199,26 +205,36 @@ components:
       );
 
       // operationId is a separate, searchable symbol
-      const opSym = r.symbols.find(s => s.name === 'getUserById');
+      const opSym = r.symbols.find((s) => s.name === 'getUserById');
       expect(opSym).toBeDefined();
       expect(opSym?.kind).toBe('function');
       expect(opSym?.metadata?.yamlKind).toBe('operationId');
       expect(opSym?.metadata?.path).toBe('/users/{id}');
 
       // endpoint label has tags + operationId in metadata
-      const endpoint = r.symbols.find(s => s.name === 'GET /users/{id}');
+      const endpoint = r.symbols.find((s) => s.name === 'GET /users/{id}');
       expect(endpoint?.metadata?.operationId).toBe('getUserById');
       expect(endpoint?.metadata?.tags).toEqual(['users', 'public']);
 
       // $ref → User in operation responses
-      expect(r.edges?.some(e =>
-        e.edgeType === 'imports' && (e.metadata as any)?.module === 'User' && (e.metadata as any)?.dialect === 'openapi'
-      )).toBe(true);
+      expect(
+        r.edges?.some(
+          (e) =>
+            e.edgeType === 'imports' &&
+            (e.metadata as any)?.module === 'User' &&
+            (e.metadata as any)?.dialect === 'openapi',
+        ),
+      ).toBe(true);
 
       // schema-to-schema $ref: User → Profile
-      expect(r.edges?.some(e =>
-        e.edgeType === 'imports' && (e.metadata as any)?.module === 'Profile' && (e.metadata as any)?.from === 'User'
-      )).toBe(true);
+      expect(
+        r.edges?.some(
+          (e) =>
+            e.edgeType === 'imports' &&
+            (e.metadata as any)?.module === 'Profile' &&
+            (e.metadata as any)?.from === 'User',
+        ),
+      ).toBe(true);
     });
   });
 
@@ -240,8 +256,8 @@ components:
 
       expect(r.metadata?.yamlDialect).toBe('ansible-playbook');
       // tasks are indented, so kind=function
-      expect(r.symbols.some(s => s.name === 'Install nginx' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'Start nginx' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'Install nginx' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'Start nginx' && s.kind === 'function')).toBe(true);
     });
   });
 
@@ -266,8 +282,8 @@ jobs:
       );
 
       expect(r.metadata?.yamlDialect).toBe('circleci');
-      expect(r.symbols.some(s => s.name === 'build' && s.kind === 'function')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'test' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'build' && s.kind === 'function')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'test' && s.kind === 'function')).toBe(true);
     });
   });
 
@@ -285,8 +301,8 @@ Resources:
       );
 
       expect(r.metadata?.yamlDialect).toBe('cloudformation');
-      expect(r.symbols.some(s => s.name === 'MyBucket' && s.kind === 'class')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'MyFunction' && s.kind === 'class')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'MyBucket' && s.kind === 'class')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'MyFunction' && s.kind === 'class')).toBe(true);
     });
   });
 
@@ -306,10 +322,12 @@ dependencies:
       );
 
       expect(r.metadata?.yamlDialect).toBe('helm-chart');
-      expect(r.symbols.some(s => s.name === 'my-chart' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === '1.2.3' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'redis' && s.kind === 'constant')).toBe(true);
-      expect(r.edges!.some(e => e.edgeType === 'imports' && (e.metadata as any).module === 'redis')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'my-chart' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === '1.2.3' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'redis' && s.kind === 'constant')).toBe(true);
+      expect(
+        r.edges!.some((e) => e.edgeType === 'imports' && (e.metadata as any).module === 'redis'),
+      ).toBe(true);
     });
   });
 
@@ -327,8 +345,10 @@ dependencies:
         'docker-compose.yml',
       );
 
-      expect(r.symbols.some(s => s.metadata?.yamlKind === 'volume')).toBe(true);
-      expect(r.symbols.some(s => (s.metadata as any)?.value?.includes('/usr/share/nginx/html'))).toBe(true);
+      expect(r.symbols.some((s) => s.metadata?.yamlKind === 'volume')).toBe(true);
+      expect(
+        r.symbols.some((s) => (s.metadata as any)?.value?.includes('/usr/share/nginx/html')),
+      ).toBe(true);
     });
 
     it('extracts networks from services', async () => {
@@ -342,8 +362,16 @@ dependencies:
         'docker-compose.yml',
       );
 
-      expect(r.symbols.some(s => s.metadata?.yamlKind === 'network' && (s.metadata as any).value === 'frontend')).toBe(true);
-      expect(r.symbols.some(s => s.metadata?.yamlKind === 'network' && (s.metadata as any).value === 'backend')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.metadata?.yamlKind === 'network' && (s.metadata as any).value === 'frontend',
+        ),
+      ).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.metadata?.yamlKind === 'network' && (s.metadata as any).value === 'backend',
+        ),
+      ).toBe(true);
     });
 
     it('extracts environment variables from services', async () => {
@@ -357,8 +385,17 @@ dependencies:
         'docker-compose.yml',
       );
 
-      expect(r.symbols.some(s => s.metadata?.yamlKind === 'envVar' && (s.metadata as any).key === 'POSTGRES_USER')).toBe(true);
-      expect(r.symbols.some(s => s.metadata?.yamlKind === 'envVar' && (s.metadata as any).key === 'POSTGRES_PASSWORD')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.metadata?.yamlKind === 'envVar' && (s.metadata as any).key === 'POSTGRES_USER',
+        ),
+      ).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) =>
+            s.metadata?.yamlKind === 'envVar' && (s.metadata as any).key === 'POSTGRES_PASSWORD',
+        ),
+      ).toBe(true);
     });
 
     it('extracts top-level volume and network definitions', async () => {
@@ -379,10 +416,18 @@ networks:
         'docker-compose.yml',
       );
 
-      expect(r.symbols.some(s => s.name === 'data' && s.metadata?.yamlKind === 'volumeDef')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'cache' && s.metadata?.yamlKind === 'volumeDef')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'frontend' && s.metadata?.yamlKind === 'networkDef')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'backend' && s.metadata?.yamlKind === 'networkDef')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'data' && s.metadata?.yamlKind === 'volumeDef')).toBe(
+        true,
+      );
+      expect(
+        r.symbols.some((s) => s.name === 'cache' && s.metadata?.yamlKind === 'volumeDef'),
+      ).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'frontend' && s.metadata?.yamlKind === 'networkDef'),
+      ).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'backend' && s.metadata?.yamlKind === 'networkDef'),
+      ).toBe(true);
     });
   });
 
@@ -404,7 +449,9 @@ spec:
               name: config-vol`,
       );
 
-      expect(r.symbols.some(s => s.name === 'mount:/config' && s.metadata?.yamlKind === 'volumeMount')).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'mount:/config' && s.metadata?.yamlKind === 'volumeMount'),
+      ).toBe(true);
     });
 
     it('extracts configMapRef and creates edges', async () => {
@@ -423,8 +470,12 @@ spec:
                 name: app-config`,
       );
 
-      expect(r.symbols.some(s => s.name === 'configMap:app-config')).toBe(true);
-      expect(r.edges!.some(e => e.edgeType === 'depends_on' && (e.metadata as any).refKind === 'configMap')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'configMap:app-config')).toBe(true);
+      expect(
+        r.edges!.some(
+          (e) => e.edgeType === 'depends_on' && (e.metadata as any).refKind === 'configMap',
+        ),
+      ).toBe(true);
     });
 
     it('extracts secretRef and creates edges', async () => {
@@ -443,8 +494,12 @@ spec:
                 name: db-credentials`,
       );
 
-      expect(r.symbols.some(s => s.name === 'secret:db-credentials')).toBe(true);
-      expect(r.edges!.some(e => e.edgeType === 'depends_on' && (e.metadata as any).refKind === 'secret')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'secret:db-credentials')).toBe(true);
+      expect(
+        r.edges!.some(
+          (e) => e.edgeType === 'depends_on' && (e.metadata as any).refKind === 'secret',
+        ),
+      ).toBe(true);
     });
 
     it('extracts service selector', async () => {
@@ -460,7 +515,11 @@ spec:
     - port: 80`,
       );
 
-      expect(r.symbols.some(s => s.name === 'selector:my-app' && s.metadata?.yamlKind === 'serviceSelector')).toBe(true);
+      expect(
+        r.symbols.some(
+          (s) => s.name === 'selector:my-app' && s.metadata?.yamlKind === 'serviceSelector',
+        ),
+      ).toBe(true);
     });
   });
 });

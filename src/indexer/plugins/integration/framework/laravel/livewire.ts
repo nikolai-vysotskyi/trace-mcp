@@ -60,7 +60,7 @@ interface LivewireBladeUsage {
 
 interface LivewireWireDirective {
   directive: string; // 'click', 'submit', 'model'
-  value: string;     // method name or property name
+  value: string; // method name or property name
   line: number;
 }
 
@@ -86,18 +86,27 @@ const EMIT_RE = /\$this->emit(?:To|Up|Self)?\(\s*(?:['"][\w.-]+['"]\s*,\s*)?['"]
 const LISTENERS_PROP_RE = /protected\s+\$listeners\s*=\s*\[([\s\S]*?)\]\s*;/;
 
 /** render() method returning view('livewire.xxx') */
-const RENDER_VIEW_RE = /function\s+render\s*\([\s\S]*?\)\s*(?::\s*[\w\\|]+\s*)?\{[\s\S]*?view\(\s*['"]([\w.-]+)['"]\s*\)/;
+const RENDER_VIEW_RE =
+  /function\s+render\s*\([\s\S]*?\)\s*(?::\s*[\w\\|]+\s*)?\{[\s\S]*?view\(\s*['"]([\w.-]+)['"]\s*\)/;
 
 /** Public method detection (callable actions) — excludes lifecycle hooks */
 const PUBLIC_METHOD_RE = /public\s+function\s+(\w+)\s*\(/g;
 const LIFECYCLE_METHODS = new Set([
-  'mount', 'hydrate', 'dehydrate', 'render', 'updating', 'updated',
-  'boot', 'booted', '__construct',
+  'mount',
+  'hydrate',
+  'dehydrate',
+  'render',
+  'updating',
+  'updated',
+  'boot',
+  'booted',
+  '__construct',
   // v2 computed getter pattern
 ]);
 
 /** Public property detection */
-const PUBLIC_PROP_RE = /(?:#\[([\w,\s()'":]+)\]\s*)*public\s+(?:(?:readonly\s+)?(\?\s*)?(\w[\w\\|]*)\s+)?\$(\w+)/g;
+const PUBLIC_PROP_RE =
+  /(?:#\[([\w,\s()'":]+)\]\s*)*public\s+(?:(?:readonly\s+)?(\?\s*)?(\w[\w\\|]*)\s+)?\$(\w+)/g;
 
 /** v3 #[Computed] attribute */
 const COMPUTED_ATTR_RE = /#\[Computed(?:\(.*?\))?\]/;
@@ -263,9 +272,7 @@ export function processLivewireNode(
  * Build edges from Livewire component info.
  * Creates livewire_renders, livewire_dispatches, livewire_listens edges.
  */
-function buildLivewireEdges(
-  component: LivewireComponentInfo,
-): RawEdge[] {
+function buildLivewireEdges(component: LivewireComponentInfo): RawEdge[] {
   const edges: RawEdge[] = [];
 
   // Component → View (livewire_renders)
@@ -468,19 +475,14 @@ export function resolveLivewireBladeEdges(
  * Resolve a kebab-case component name to a class FQN.
  * 'order-form' → 'App\Livewire\OrderForm' (v3) or 'App\Http\Livewire\OrderForm' (v2)
  */
-export function resolveComponentName(
-  name: string,
-  version: 2 | 3,
-): string {
+export function resolveComponentName(name: string, version: 2 | 3): string {
   // kebab-case → PascalCase: 'order-form' → 'OrderForm'
   const pascal = name
     .split(/[.-]/)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join('');
 
-  return version === 3
-    ? `App\\Livewire\\${pascal}`
-    : `App\\Http\\Livewire\\${pascal}`;
+  return version === 3 ? `App\\Livewire\\${pascal}` : `App\\Http\\Livewire\\${pascal}`;
 }
 
 // ─── Internal helpers ────────────────────────────────────────
@@ -641,10 +643,7 @@ function extractListeners(source: string, version: 2 | 3): LivewireListenerRef[]
   return listeners;
 }
 
-function extractFormProperty(
-  source: string,
-  useMap: Map<string, string>,
-): LivewireFormRef | null {
+function extractFormProperty(source: string, useMap: Map<string, string>): LivewireFormRef | null {
   // Look for typed public property whose type extends Form
   // Pattern: public SomeForm $form (or $propertyName)
   const formPropRe = /public\s+(\w+)\s+\$(\w+)/g;

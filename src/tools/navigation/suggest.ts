@@ -54,17 +54,21 @@ export function suggestQueries(store: Store): SuggestQueriesResult {
   const stats = store.getStats();
 
   // Language breakdown
-  const languages = store.db.prepare(`
+  const languages = store.db
+    .prepare(`
     SELECT language, COUNT(*) as files FROM files
     WHERE language IS NOT NULL
     GROUP BY language ORDER BY files DESC
-  `).all() as LanguageStat[];
+  `)
+    .all() as LanguageStat[];
 
   // Symbol kind breakdown
-  const symbol_kinds = store.db.prepare(`
+  const symbol_kinds = store.db
+    .prepare(`
     SELECT kind, COUNT(*) as count FROM symbols
     GROUP BY kind ORDER BY count DESC LIMIT 15
-  `).all() as SymbolKindStat[];
+  `)
+    .all() as SymbolKindStat[];
 
   // Top imported files (by in-degree)
   const graph = buildFileGraph(store);
@@ -155,7 +159,8 @@ export function suggestQueries(store: Store): SuggestQueriesResult {
   if (top_symbols.length > 0) {
     example_queries.push({
       tool: 'search',
-      description: 'Signal Fusion search — best ranking via multi-channel WRR (BM25 + PageRank + identity)',
+      description:
+        'Signal Fusion search — best ranking via multi-channel WRR (BM25 + PageRank + identity)',
       params: { query: top_symbols[0].name, fusion: true },
     });
   }

@@ -25,9 +25,9 @@ import { logger } from '../../logger.js';
 export function resolveFileProjectionEdges(state: PipelineState): void {
   const { store } = state;
 
-  const importsType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('imports') as { id: number } | undefined;
+  const importsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('imports') as
+    | { id: number }
+    | undefined;
   if (!importsType) {
     logger.warn({ edgeType: 'imports' }, 'edge_types row missing — skipping file projection.');
     return;
@@ -108,12 +108,20 @@ export function resolveFileProjectionEdges(state: PipelineState): void {
       AND e.edge_type_id NOT IN (${[...excludedSet].map(() => '?').join(',') || 'SELECT -1'})
   `);
 
-  const before = (store.db.prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`).get(importsType.id) as { c: number }).c;
+  const before = (
+    store.db
+      .prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`)
+      .get(importsType.id) as { c: number }
+  ).c;
   store.db.transaction(() => {
     stmt.run(importsType.id, ...excludedSet);
     stmtFileSym.run(importsType.id, ...excludedSet);
   })();
-  const after = (store.db.prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`).get(importsType.id) as { c: number }).c;
+  const after = (
+    store.db
+      .prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`)
+      .get(importsType.id) as { c: number }
+  ).c;
 
   const added = after - before;
   if (added > 0) {
@@ -151,7 +159,8 @@ export function purgeForbiddenCrossWorkspaceEdges(state: PipelineState): void {
   const ALLOWED = ['workspace', 'runtime'];
   const placeholders = ALLOWED.map(() => '?').join(',');
 
-  const result = store.db.prepare(`
+  const result = store.db
+    .prepare(`
     DELETE FROM edges
     WHERE id IN (
       SELECT e.id
@@ -168,7 +177,8 @@ export function purgeForbiddenCrossWorkspaceEdges(state: PipelineState): void {
         AND sf.workspace <> tf.workspace
         AND et.category NOT IN (${placeholders})
     )
-  `).run(...ALLOWED);
+  `)
+    .run(...ALLOWED);
 
   const deleted = Number(result.changes ?? 0);
   if (deleted > 0) {

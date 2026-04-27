@@ -16,9 +16,17 @@ import { CobolLanguagePlugin } from '../../src/indexer/plugins/language/cobol/in
 import { CommonLispLanguagePlugin } from '../../src/indexer/plugins/language/common-lisp/index.js';
 import { stripCommentsAndStrings } from '../../src/indexer/plugins/language/regex-base-v2.js';
 
-function parse(plugin: { extractSymbols: (f: string, c: Buffer) => any }, source: string, filePath: string): any {
+function parse(
+  plugin: { extractSymbols: (f: string, c: Buffer) => any },
+  source: string,
+  filePath: string,
+): any {
   const r = plugin.extractSymbols(filePath, Buffer.from(source));
-  if (r && typeof r.then === 'function') return r.then((res: any) => { expect(res.isOk()).toBe(true); return res._unsafeUnwrap(); });
+  if (r && typeof r.then === 'function')
+    return r.then((res: any) => {
+      expect(res.isOk()).toBe(true);
+      return res._unsafeUnwrap();
+    });
   expect(r.isOk()).toBe(true);
   return r._unsafeUnwrap();
 }
@@ -45,7 +53,9 @@ describe('stripCommentsAndStrings', () => {
 
   it('strips string contents', () => {
     const result = stripCommentsAndStrings('const s = "function fake() {}";', {
-      line: ['//'], block: [['/*', '*/']], strings: ['"'],
+      line: ['//'],
+      block: [['/*', '*/']],
+      strings: ['"'],
     });
     expect(result).not.toContain('fake');
   });
@@ -59,7 +69,9 @@ describe('stripCommentsAndStrings', () => {
 
   it('handles Ada -- comments', () => {
     const result = stripCommentsAndStrings('procedure Init; -- initialize\nprocedure Run;', {
-      line: ['--'], block: [] as [string, string][], strings: ['"'],
+      line: ['--'],
+      block: [] as [string, string][],
+      strings: ['"'],
     });
     expect(result).toContain('procedure Init;');
     expect(result).not.toContain('initialize');
@@ -68,7 +80,9 @@ describe('stripCommentsAndStrings', () => {
 
   it('handles Lisp ; comments and #| |# blocks', () => {
     const result = stripCommentsAndStrings('(defun foo () ; comment\n  #| block |# 42)', {
-      line: [';'], block: [['#|', '|#']] as [string, string][], strings: [],
+      line: [';'],
+      block: [['#|', '|#']] as [string, string][],
+      strings: [],
     });
     expect(result).toContain('(defun foo ()');
     expect(result).not.toContain('comment');
@@ -77,9 +91,17 @@ describe('stripCommentsAndStrings', () => {
   });
 
   it('handles Pascal { } and (* *) comments', () => {
-    const result = stripCommentsAndStrings('procedure X; { old comment }\nprocedure Y; (* block *)', {
-      line: ['//'], block: [['{', '}'], ['(*', '*)']], strings: ["'"],
-    });
+    const result = stripCommentsAndStrings(
+      'procedure X; { old comment }\nprocedure Y; (* block *)',
+      {
+        line: ['//'],
+        block: [
+          ['{', '}'],
+          ['(*', '*)'],
+        ],
+        strings: ["'"],
+      },
+    );
     expect(result).toContain('procedure X;');
     expect(result).not.toContain('old comment');
     expect(result).toContain('procedure Y;');

@@ -18,20 +18,16 @@ import { hasPythonDep } from '../../_shared/python-deps.js';
 const IMPORT_RE = /^\s*(?:from\s+jinja2(?:\.\w+)?\s+import|import\s+jinja2)\b/m;
 
 // env.get_template('name.html') | Environment(...).get_template('x')
-const GET_TEMPLATE_RE =
-  /\.get_template\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
+const GET_TEMPLATE_RE = /\.get_template\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
 
 // template.render(...) — catch only if preceded by get_template call (heuristic: same file)
-const RENDER_CALL_RE =
-  /\.render(?:_async)?\s*\(/g;
+const RENDER_CALL_RE = /\.render(?:_async)?\s*\(/g;
 
 // Flask integration: render_template('name.html')
-const RENDER_TEMPLATE_RE =
-  /\brender_template(?:_string)?\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
+const RENDER_TEMPLATE_RE = /\brender_template(?:_string)?\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
 
 // select_template(['a.html', 'b.html'])
-const SELECT_TEMPLATE_RE =
-  /\.select_template\s*\(\s*\[\s*([^\]]+)\]/g;
+const SELECT_TEMPLATE_RE = /\.select_template\s*\(\s*\[\s*([^\]]+)\]/g;
 
 export class Jinja2Plugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -49,7 +45,11 @@ export class Jinja2Plugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'jinja2_render', category: 'view', description: 'Jinja2 template render (get_template / render_template)' },
+        {
+          name: 'jinja2_render',
+          category: 'view',
+          description: 'Jinja2 template render (get_template / render_template)',
+        },
       ],
     };
   }
@@ -69,7 +69,11 @@ export class Jinja2Plugin implements FrameworkPlugin {
     }
 
     const source = content.toString('utf-8');
-    if (!IMPORT_RE.test(source) && !source.includes('render_template') && !source.includes('get_template')) {
+    if (
+      !IMPORT_RE.test(source) &&
+      !source.includes('render_template') &&
+      !source.includes('get_template')
+    ) {
       return ok({ status: 'ok', symbols: [] });
     }
 
@@ -86,16 +90,26 @@ export class Jinja2Plugin implements FrameworkPlugin {
     for (const m of source.matchAll(RENDER_TEMPLATE_RE)) {
       result.edges!.push({
         edgeType: 'jinja2_render',
-        metadata: { template: m[1], via: 'render_template', filePath, line: findLine(m.index ?? 0) },
+        metadata: {
+          template: m[1],
+          via: 'render_template',
+          filePath,
+          line: findLine(m.index ?? 0),
+        },
       });
     }
 
     for (const m of source.matchAll(SELECT_TEMPLATE_RE)) {
-      const names = [...m[1].matchAll(/["']([^"']+)["']/g)].map(x => x[1]);
+      const names = [...m[1].matchAll(/["']([^"']+)["']/g)].map((x) => x[1]);
       for (const name of names) {
         result.edges!.push({
           edgeType: 'jinja2_render',
-          metadata: { template: name, via: 'select_template', filePath, line: findLine(m.index ?? 0) },
+          metadata: {
+            template: name,
+            via: 'select_template',
+            filePath,
+            line: findLine(m.index ?? 0),
+          },
         });
       }
     }

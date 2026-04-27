@@ -5,7 +5,8 @@
 import { describe, it, expect } from 'vitest';
 
 // Re-create the regex from tests.ts to test it in isolation
-const TEST_PATH_RE = /\.(test|spec)\.[jt]sx?$|__tests__\/|(?:^|[/\\])test_[^/\\]+\.py$|(?:^|[/\\])[^/\\]+_test\.py$|conftest\.py$/;
+const TEST_PATH_RE =
+  /\.(test|spec)\.[jt]sx?$|__tests__\/|(?:^|[/\\])test_[^/\\]+\.py$|(?:^|[/\\])[^/\\]+_test\.py$|conftest\.py$/;
 
 describe('TEST_PATH_RE — Python file matching', () => {
   // Python test files that SHOULD match

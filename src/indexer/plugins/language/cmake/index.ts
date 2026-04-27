@@ -18,11 +18,19 @@ const _plugin = createRegexLanguagePlugin({
     // project(name ...)
     { kind: 'module', pattern: /^\s*project\s*\(\s*(\w+)/gim },
     // add_executable(name ...)
-    { kind: 'function', pattern: /^\s*add_executable\s*\(\s*(\w+)/gim, meta: { target: 'executable' } },
+    {
+      kind: 'function',
+      pattern: /^\s*add_executable\s*\(\s*(\w+)/gim,
+      meta: { target: 'executable' },
+    },
     // add_library(name ...)
     { kind: 'function', pattern: /^\s*add_library\s*\(\s*(\w+)/gim, meta: { target: 'library' } },
     // add_custom_target(name ...)
-    { kind: 'function', pattern: /^\s*add_custom_target\s*\(\s*(\w+)/gim, meta: { target: 'custom' } },
+    {
+      kind: 'function',
+      pattern: /^\s*add_custom_target\s*\(\s*(\w+)/gim,
+      meta: { target: 'custom' },
+    },
     // set(NAME value)
     { kind: 'variable', pattern: /^\s*set\s*\(\s*(\w+)/gim },
     // option(NAME "description" DEFAULT)

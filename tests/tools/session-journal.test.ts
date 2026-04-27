@@ -13,7 +13,12 @@ describe('SessionJournal — dedup', () => {
 
     // First call — record with compact result
     j.record('get_symbol', params, 1, {
-      compactResult: { symbol_id: 'src/a.ts::Foo#class', name: 'Foo', kind: 'class', _result_count: 1 },
+      compactResult: {
+        symbol_id: 'src/a.ts::Foo#class',
+        name: 'Foo',
+        kind: 'class',
+        _result_count: 1,
+      },
       resultTokens: 800,
     });
 
@@ -145,7 +150,9 @@ describe('SessionJournal — optimization hints', () => {
       j.record('get_symbol', { symbol_id: `src/server.ts::func${i}#function` }, 1);
     }
 
-    const hint = j.getOptimizationHint('get_symbol', { symbol_id: 'src/server.ts::func7#function' });
+    const hint = j.getOptimizationHint('get_symbol', {
+      symbol_id: 'src/server.ts::func7#function',
+    });
     expect(hint).not.toBeNull();
     // Pattern 1 (same-file bulk reads) fires — recommends get_context_bundle or Read
     expect(hint).toContain('get_context_bundle');
@@ -172,8 +179,8 @@ describe('SessionJournal — prefetch boosts', () => {
     const boosts = j.getPrefetchBoosts();
     // src/server.ts was accessed 3 times as follow-up → should be a boost
     expect(boosts.length).toBeGreaterThan(0);
-    expect(boosts.find(b => b.file === 'src/server.ts')).toBeDefined();
-    expect(boosts.find(b => b.file === 'src/server.ts')!.frequency).toBe(3);
+    expect(boosts.find((b) => b.file === 'src/server.ts')).toBeDefined();
+    expect(boosts.find((b) => b.file === 'src/server.ts')!.frequency).toBe(3);
   });
 
   it('ignores infrequent follow-ups', () => {
@@ -183,6 +190,6 @@ describe('SessionJournal — prefetch boosts', () => {
 
     const boosts = j.getPrefetchBoosts();
     // a.ts accessed only once → not a boost (needs >= 2)
-    expect(boosts.find(b => b.file === 'a.ts')).toBeUndefined();
+    expect(boosts.find((b) => b.file === 'a.ts')).toBeUndefined();
   });
 });

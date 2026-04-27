@@ -46,9 +46,9 @@ function loadEdges(store: Store, edgeType: string): EdgeWithMeta[] {
       .get(e.source_node_id) as { node_type: string; ref_id: number } | undefined;
     let srcSymbolId: string | null = null;
     if (node?.node_type === 'symbol') {
-      const s = store.db
-        .prepare('SELECT symbol_id FROM symbols WHERE id = ?')
-        .get(node.ref_id) as { symbol_id: string } | undefined;
+      const s = store.db.prepare('SELECT symbol_id FROM symbols WHERE id = ?').get(node.ref_id) as
+        | { symbol_id: string }
+        | undefined;
       if (s) srcSymbolId = s.symbol_id;
     }
     return { meta, srcSymbolId };
@@ -81,14 +81,11 @@ describe('AWS S3 E2E', () => {
       }
     });
 
-    it.each(Object.entries(EXPECTED_ROLES))(
-      'tags %s with role %s',
-      (rel, expectedRole) => {
-        const file = fileByRel.get(rel);
-        expect(file, `missing ${rel}`).toBeDefined();
-        expect(file!.framework_role).toBe(expectedRole);
-      },
-    );
+    it.each(Object.entries(EXPECTED_ROLES))('tags %s with role %s', (rel, expectedRole) => {
+      const file = fileByRel.get(rel);
+      expect(file, `missing ${rel}`).toBeDefined();
+      expect(file!.framework_role).toBe(expectedRole);
+    });
   });
 
   describe('edges — v3 commands', () => {
@@ -110,14 +107,18 @@ describe('AWS S3 E2E', () => {
     });
 
     it('emits delete edge for DeleteObjectCommand', () => {
-      const edges = loadEdges(store, 's3_access').filter((e) => e.meta.kind === 'DeleteObjectCommand');
+      const edges = loadEdges(store, 's3_access').filter(
+        (e) => e.meta.kind === 'DeleteObjectCommand',
+      );
       expect(edges).toHaveLength(1);
       expect(edges[0].meta.op).toBe('delete');
       expect(edges[0].meta.bucket).toBe('avatars');
     });
 
     it('emits list edge for ListObjectsV2Command with a different bucket', () => {
-      const edges = loadEdges(store, 's3_access').filter((e) => e.meta.kind === 'ListObjectsV2Command');
+      const edges = loadEdges(store, 's3_access').filter(
+        (e) => e.meta.kind === 'ListObjectsV2Command',
+      );
       expect(edges).toHaveLength(1);
       expect(edges[0].meta.op).toBe('list');
       expect(edges[0].meta.bucket).toBe('logs');

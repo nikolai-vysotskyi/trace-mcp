@@ -70,19 +70,39 @@ export interface ExportSecurityContextOpts {
 
 const CATEGORY_PATTERNS: Array<{ pattern: RegExp; category: SecurityCategory }> = [
   // file_read
-  { pattern: /^(?:readFile|readFileSync|readdir|readdirSync|createReadStream|promises\.readFile)$/, category: 'file_read' },
+  {
+    pattern: /^(?:readFile|readFileSync|readdir|readdirSync|createReadStream|promises\.readFile)$/,
+    category: 'file_read',
+  },
   { pattern: /^(?:fs\.read|fs\.promises\.read|fsPromises\.read)/, category: 'file_read' },
 
   // file_write
-  { pattern: /^(?:writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream|promises\.writeFile)$/, category: 'file_write' },
-  { pattern: /^(?:unlink|unlinkSync|rm|rmSync|rmdir|rmdirSync|rename|renameSync|copyFile|copyFileSync)$/, category: 'file_write' },
-  { pattern: /^(?:fs\.write|fs\.promises\.write|fs\.unlink|fs\.rm|fsPromises\.write)/, category: 'file_write' },
+  {
+    pattern:
+      /^(?:writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream|promises\.writeFile)$/,
+    category: 'file_write',
+  },
+  {
+    pattern:
+      /^(?:unlink|unlinkSync|rm|rmSync|rmdir|rmdirSync|rename|renameSync|copyFile|copyFileSync)$/,
+    category: 'file_write',
+  },
+  {
+    pattern: /^(?:fs\.write|fs\.promises\.write|fs\.unlink|fs\.rm|fsPromises\.write)/,
+    category: 'file_write',
+  },
   { pattern: /^(?:mkdir|mkdirSync|promises\.mkdir)$/, category: 'file_write' },
 
   // network_outbound
   { pattern: /^(?:fetch|request|got|axios)$/, category: 'network_outbound' },
-  { pattern: /^(?:http\.request|https\.request|http\.get|https\.get)$/, category: 'network_outbound' },
-  { pattern: /^(?:net\.connect|net\.createConnection|tls\.connect)$/, category: 'network_outbound' },
+  {
+    pattern: /^(?:http\.request|https\.request|http\.get|https\.get)$/,
+    category: 'network_outbound',
+  },
+  {
+    pattern: /^(?:net\.connect|net\.createConnection|tls\.connect)$/,
+    category: 'network_outbound',
+  },
   { pattern: /^(?:XMLHttpRequest|WebSocket)$/, category: 'network_outbound' },
 
   // env_read
@@ -90,11 +110,18 @@ const CATEGORY_PATTERNS: Array<{ pattern: RegExp; category: SecurityCategory }> 
   { pattern: /^(?:getenv|os\.environ|dotenv)/, category: 'env_read' },
 
   // shell_exec
-  { pattern: /^(?:exec|execSync|execFile|execFileSync|spawn|spawnSync|fork)$/, category: 'shell_exec' },
+  {
+    pattern: /^(?:exec|execSync|execFile|execFileSync|spawn|spawnSync|fork)$/,
+    category: 'shell_exec',
+  },
   { pattern: /^(?:child_process\.|cp\.)/, category: 'shell_exec' },
 
   // crypto
-  { pattern: /^(?:createHash|createCipher|createCipheriv|createDecipher|createDecipheriv|createSign|createVerify|createHmac)$/, category: 'crypto' },
+  {
+    pattern:
+      /^(?:createHash|createCipher|createCipheriv|createDecipher|createDecipheriv|createSign|createVerify|createHmac)$/,
+    category: 'crypto',
+  },
   { pattern: /^(?:crypto\.)/, category: 'crypto' },
 
   // serialization
@@ -135,7 +162,10 @@ function parseAnnotations(source: string, toolCallIndex: number): Record<string,
 }
 
 // More flexible: match individual hint fields anywhere near the tool call
-function parseAnnotationsFlexible(source: string, toolCallIndex: number): Record<string, boolean> | null {
+function parseAnnotationsFlexible(
+  source: string,
+  toolCallIndex: number,
+): Record<string, boolean> | null {
   const searchRegion = source.slice(toolCallIndex, toolCallIndex + 3000);
 
   // Check if there's any annotation hint in this region
@@ -194,19 +224,43 @@ function collectCallsFromGraph(
 // ── Inline handler scanning ────────────────────────────────────────────
 
 // Direct security-sensitive call patterns
-const SECURITY_CALL_RE = /\b((?:fs|http|https|net|crypto|child_process|cp)\.\w+|fetch|exec|execSync|spawn|spawnSync|eval|require|writeFile\w*|readFile\w*|unlink\w*|request|axios|got)\s*\(/g;
+const SECURITY_CALL_RE =
+  /\b((?:fs|http|https|net|crypto|child_process|cp)\.\w+|fetch|exec|execSync|spawn|spawnSync|eval|require|writeFile\w*|readFile\w*|unlink\w*|request|axios|got)\s*\(/g;
 const ENV_ACCESS_RE = /process\.env\b/g;
 
 // Generic function call pattern — captures any function call for symbol lookup
 const GENERIC_CALL_RE = /\b([a-zA-Z_$]\w*)\s*\(/g;
 // Skip known non-function keywords
 const SKIP_KEYWORDS = new Set([
-  'if', 'for', 'while', 'switch', 'catch', 'return', 'typeof', 'new',
-  'async', 'await', 'function', 'const', 'let', 'var', 'class', 'import',
-  'export', 'throw', 'delete', 'void', 'yield', 'as', 'from',
+  'if',
+  'for',
+  'while',
+  'switch',
+  'catch',
+  'return',
+  'typeof',
+  'new',
+  'async',
+  'await',
+  'function',
+  'const',
+  'let',
+  'var',
+  'class',
+  'import',
+  'export',
+  'throw',
+  'delete',
+  'void',
+  'yield',
+  'as',
+  'from',
 ]);
 
-function findHandlerBounds(source: string, toolCallIndex: number): { start: number; end: number } | null {
+function findHandlerBounds(
+  source: string,
+  toolCallIndex: number,
+): { start: number; end: number } | null {
   const region = source.slice(toolCallIndex, toolCallIndex + 10000);
 
   // Find async handler: match the full `async (...) => {` pattern
@@ -227,7 +281,10 @@ function findHandlerBounds(source: string, toolCallIndex: number): { start: numb
     if (afterBrace[i] === '{') depth++;
     else if (afterBrace[i] === '}') {
       depth--;
-      if (depth === 0) { end = i + 1; break; }
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
     }
   }
   if (end === -1) end = Math.min(afterBrace.length, 5000);
@@ -269,7 +326,12 @@ function scanInlineHandler(
   const envRe = new RegExp(ENV_ACCESS_RE.source, 'g');
   while ((m = envRe.exec(handlerBody)) !== null) {
     const lineOffset = source.slice(0, bounds.start + m.index).split('\n').length;
-    results.push({ function: 'process.env', file: filePath, line: lineOffset, category: 'env_read' });
+    results.push({
+      function: 'process.env',
+      file: filePath,
+      line: lineOffset,
+      category: 'env_read',
+    });
   }
 
   // 3. Generic function calls — look up in store and trace call graphs
@@ -281,8 +343,8 @@ function scanInlineHandler(
     seenFuncs.add(funcName);
 
     // Look up symbol in the store
-    const sym = store.getSymbolByName(funcName, 'function')
-      ?? store.getSymbolByName(funcName, 'method');
+    const sym =
+      store.getSymbolByName(funcName, 'function') ?? store.getSymbolByName(funcName, 'method');
     if (!sym) continue;
 
     calledSymbolIds.push(sym.symbol_id);
@@ -304,7 +366,9 @@ function scanInlineHandler(
         const lines = symSource.split('\n');
         const symBody = lines.slice(sym.line_start - 1, sym.line_end).join('\n');
         scanSourceForSecurityCalls(symBody, file.path, sym.line_start, results);
-      } catch { /* file unreadable */ }
+      } catch {
+        /* file unreadable */
+      }
     }
   }
 
@@ -333,14 +397,20 @@ function scanSourceForSecurityCalls(
   const envRe = new RegExp(ENV_ACCESS_RE.source, 'g');
   while ((m = envRe.exec(body)) !== null) {
     const lineOffset = startLine + body.slice(0, m.index).split('\n').length - 1;
-    results.push({ function: 'process.env', file: filePath, line: lineOffset, category: 'env_read' });
+    results.push({
+      function: 'process.env',
+      file: filePath,
+      line: lineOffset,
+      category: 'env_read',
+    });
   }
 }
 
 // ── Main export ────────────────────────────────────────────────────────
 
 declare const PKG_VERSION_INJECTED: string;
-const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+const PKG_VERSION =
+  typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 
 export function exportSecurityContext(
   store: Store,
@@ -355,7 +425,9 @@ export function exportSecurityContext(
   const toolRoutes = allRoutes.filter((r: RouteRow) => r.method === 'TOOL');
 
   if (toolRoutes.length === 0) {
-    warnings.push('No MCP tool registrations found in the index. Ensure the project uses @modelcontextprotocol/sdk and has been indexed.');
+    warnings.push(
+      'No MCP tool registrations found in the index. Ensure the project uses @modelcontextprotocol/sdk and has been indexed.',
+    );
   }
 
   // Step 2-4: Process each tool registration
@@ -382,12 +454,12 @@ export function exportSecurityContext(
     const toolCallRe = new RegExp(`\\.tool\\(\\s*['"]${toolNameEscaped}['"]`);
     const toolCallMatch = toolCallRe.exec(source);
     const toolCallIndex = toolCallMatch?.index ?? 0;
-    const toolLine = toolCallIndex > 0
-      ? source.slice(0, toolCallIndex).split('\n').length
-      : (route.line ?? 0);
+    const toolLine =
+      toolCallIndex > 0 ? source.slice(0, toolCallIndex).split('\n').length : (route.line ?? 0);
 
     // Parse annotations
-    const annotations = parseAnnotationsFlexible(source, toolCallIndex) ?? parseAnnotations(source, toolCallIndex);
+    const annotations =
+      parseAnnotationsFlexible(source, toolCallIndex) ?? parseAnnotations(source, toolCallIndex);
 
     // Build call graph from handler
     let handlerCalls: HandlerCall[] = [];
@@ -396,7 +468,14 @@ export function exportSecurityContext(
     // Scan inline handler body: extract direct security calls + look up
     // called functions in the store and trace their call graphs
     if (toolCallIndex > 0) {
-      const scanResult = scanInlineHandler(source, toolCallIndex, fileRow.path, store, projectRoot, depth);
+      const scanResult = scanInlineHandler(
+        source,
+        toolCallIndex,
+        fileRow.path,
+        store,
+        projectRoot,
+        depth,
+      );
       handlerCalls = scanResult.calls;
       handlerResolved = handlerCalls.length > 0 || scanResult.calledSymbolIds.length > 0;
     }

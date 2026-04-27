@@ -11,7 +11,9 @@ describe('RailsPlugin — detection', () => {
     expect(new RailsPlugin().detect(makeCtx())).toBe(true);
   });
   it('detects via config/application.rb', () => {
-    expect(new RailsPlugin().detect(makeCtx({ configFiles: ['config/application.rb'] }))).toBe(true);
+    expect(new RailsPlugin().detect(makeCtx({ configFiles: ['config/application.rb'] }))).toBe(
+      true,
+    );
   });
   it('rejects without Rails markers', () => {
     expect(new RailsPlugin().detect(makeCtx({ configFiles: ['package.json'] }))).toBe(false);
@@ -97,7 +99,11 @@ class UsersController < ApplicationController
 end
     `;
     const plugin = new RailsPlugin();
-    const result = await plugin.extractNodes!('app/controllers/users_controller.rb', Buffer.from(source), 'ruby');
+    const result = await plugin.extractNodes!(
+      'app/controllers/users_controller.rb',
+      Buffer.from(source),
+      'ruby',
+    );
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.frameworkRole).toBe('controller');
@@ -120,7 +126,11 @@ class CreateUsers < ActiveRecord::Migration[7.0]
 end
     `;
     const plugin = new RailsPlugin();
-    const result = await plugin.extractNodes!('db/migrate/20230101000000_create_users.rb', Buffer.from(source), 'ruby');
+    const result = await plugin.extractNodes!(
+      'db/migrate/20230101000000_create_users.rb',
+      Buffer.from(source),
+      'ruby',
+    );
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.frameworkRole).toBe('migration');

@@ -20,12 +20,24 @@ import { logger } from '../../logger.js';
 // ---------------------------------------------------------------------------
 
 export type TaintSourceKind =
-  | 'http_param' | 'http_body' | 'http_header' | 'cookie'
-  | 'env' | 'file_read' | 'db_result' | 'user_input';
+  | 'http_param'
+  | 'http_body'
+  | 'http_header'
+  | 'cookie'
+  | 'env'
+  | 'file_read'
+  | 'db_result'
+  | 'user_input';
 
 export type TaintSinkKind =
-  | 'sql_query' | 'exec' | 'eval' | 'innerHTML' | 'redirect'
-  | 'file_write' | 'response_body' | 'template_raw';
+  | 'sql_query'
+  | 'exec'
+  | 'eval'
+  | 'innerHTML'
+  | 'redirect'
+  | 'file_write'
+  | 'response_body'
+  | 'template_raw';
 
 interface TaintSource {
   kind: TaintSourceKind;
@@ -89,50 +101,161 @@ const ALL = new Set(['typescript', 'javascript', 'python', 'php', 'ruby', 'java'
 
 const SOURCE_PATTERNS: SourcePattern[] = [
   // Express / Node.js
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.(params|query|body)\[?['"]?(\w*)['"]?\]?/g, kind: 'http_param', languages: JS_TS, varExtractor: m => m[1] },
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.(?:params|query|body)\.(\w+)/g, kind: 'http_param', languages: JS_TS, varExtractor: m => m[1] },
-  { regex: /req\.(params|query|body)\[?['"]?(\w+)['"]?\]?/g, kind: 'http_param', languages: JS_TS, varExtractor: m => `req.${m[1]}.${m[2]}` },
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.headers\[?['"]?(\w+)['"]?\]?/g, kind: 'http_header', languages: JS_TS, varExtractor: m => m[1] },
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.headers\.(\w+)/g, kind: 'http_header', languages: JS_TS, varExtractor: m => m[1] },
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.cookies\[?['"]?(\w+)['"]?\]?/g, kind: 'cookie', languages: JS_TS, varExtractor: m => m[1] },
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.cookies\.(\w+)/g, kind: 'cookie', languages: JS_TS, varExtractor: m => m[1] },
+  {
+    regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.(params|query|body)\[?['"]?(\w*)['"]?\]?/g,
+    kind: 'http_param',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.(?:params|query|body)\.(\w+)/g,
+    kind: 'http_param',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /req\.(params|query|body)\[?['"]?(\w+)['"]?\]?/g,
+    kind: 'http_param',
+    languages: JS_TS,
+    varExtractor: (m) => `req.${m[1]}.${m[2]}`,
+  },
+  {
+    regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.headers\[?['"]?(\w+)['"]?\]?/g,
+    kind: 'http_header',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.headers\.(\w+)/g,
+    kind: 'http_header',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.cookies\[?['"]?(\w+)['"]?\]?/g,
+    kind: 'cookie',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(?:const|let|var)\s+(\w+)\s*=\s*req\.cookies\.(\w+)/g,
+    kind: 'cookie',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
 
   // Destructured params: const { id, name } = req.params
-  { regex: /(?:const|let|var)\s+\{\s*([^}]+)\}\s*=\s*req\.(params|query|body)/g, kind: 'http_param', languages: JS_TS, varExtractor: m => m[1].split(',').map(s => s.trim().split(':')[0].trim())[0] },
+  {
+    regex: /(?:const|let|var)\s+\{\s*([^}]+)\}\s*=\s*req\.(params|query|body)/g,
+    kind: 'http_param',
+    languages: JS_TS,
+    varExtractor: (m) => m[1].split(',').map((s) => s.trim().split(':')[0].trim())[0],
+  },
 
   // FastAPI
-  { regex: /(\w+)\s*:\s*\w+\s*=\s*(?:Query|Path|Body|Header|Cookie)\s*\(/g, kind: 'http_param', languages: PY, varExtractor: m => m[1] },
+  {
+    regex: /(\w+)\s*:\s*\w+\s*=\s*(?:Query|Path|Body|Header|Cookie)\s*\(/g,
+    kind: 'http_param',
+    languages: PY,
+    varExtractor: (m) => m[1],
+  },
 
   // Django
-  { regex: /(\w+)\s*=\s*request\.(GET|POST|data|FILES)\[?['"]?(\w+)['"]?\]?/g, kind: 'http_param', languages: PY, varExtractor: m => m[1] },
-  { regex: /(\w+)\s*=\s*request\.(?:GET|POST)\.get\(['"](\w+)['"]/g, kind: 'http_param', languages: PY, varExtractor: m => m[1] },
+  {
+    regex: /(\w+)\s*=\s*request\.(GET|POST|data|FILES)\[?['"]?(\w+)['"]?\]?/g,
+    kind: 'http_param',
+    languages: PY,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(\w+)\s*=\s*request\.(?:GET|POST)\.get\(['"](\w+)['"]/g,
+    kind: 'http_param',
+    languages: PY,
+    varExtractor: (m) => m[1],
+  },
 
   // Flask
-  { regex: /(\w+)\s*=\s*request\.(args|form|json)\[?\.?['"]?(\w+)['"]?\]?/g, kind: 'http_param', languages: PY, varExtractor: m => m[1] },
+  {
+    regex: /(\w+)\s*=\s*request\.(args|form|json)\[?\.?['"]?(\w+)['"]?\]?/g,
+    kind: 'http_param',
+    languages: PY,
+    varExtractor: (m) => m[1],
+  },
 
   // Laravel / PHP
-  { regex: /(\$\w+)\s*=\s*\$request->(input|get|query|post|all)\s*\(\s*['"](\w+)['"]/g, kind: 'http_param', languages: PHP, varExtractor: m => m[1] },
-  { regex: /(\$\w+)\s*=\s*\$_(?:GET|POST|REQUEST)\[['"](\w+)['"]\]/g, kind: 'http_param', languages: PHP, varExtractor: m => m[1] },
-  { regex: /(\$\w+)\s*=\s*request\(\)\s*->\s*(?:input|get|query)\s*\(\s*['"](\w+)['"]/g, kind: 'http_param', languages: PHP, varExtractor: m => m[1] },
+  {
+    regex: /(\$\w+)\s*=\s*\$request->(input|get|query|post|all)\s*\(\s*['"](\w+)['"]/g,
+    kind: 'http_param',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(\$\w+)\s*=\s*\$_(?:GET|POST|REQUEST)\[['"](\w+)['"]\]/g,
+    kind: 'http_param',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(\$\w+)\s*=\s*request\(\)\s*->\s*(?:input|get|query)\s*\(\s*['"](\w+)['"]/g,
+    kind: 'http_param',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
 
   // Rails / Ruby
-  { regex: /(\w+)\s*=\s*params\[?:(\w+)\]?/g, kind: 'http_param', languages: RUBY, varExtractor: m => m[1] },
+  {
+    regex: /(\w+)\s*=\s*params\[?:(\w+)\]?/g,
+    kind: 'http_param',
+    languages: RUBY,
+    varExtractor: (m) => m[1],
+  },
 
   // Go (Gin/Echo)
-  { regex: /(\w+)\s*:?=\s*c\.(?:Param|Query|PostForm|FormValue)\s*\(\s*"(\w+)"/g, kind: 'http_param', languages: GO, varExtractor: m => m[1] },
+  {
+    regex: /(\w+)\s*:?=\s*c\.(?:Param|Query|PostForm|FormValue)\s*\(\s*"(\w+)"/g,
+    kind: 'http_param',
+    languages: GO,
+    varExtractor: (m) => m[1],
+  },
 
   // Java (Spring)
-  { regex: /@(?:RequestParam|PathVariable|RequestBody)[^)]*\)\s*(?:\w+\s+)?(\w+)/g, kind: 'http_param', languages: JAVA, varExtractor: m => m[1] },
+  {
+    regex: /@(?:RequestParam|PathVariable|RequestBody)[^)]*\)\s*(?:\w+\s+)?(\w+)/g,
+    kind: 'http_param',
+    languages: JAVA,
+    varExtractor: (m) => m[1],
+  },
 
   // Environment variables
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*process\.env\[?\.?['"]?(\w+)['"]?\]?/g, kind: 'env', languages: JS_TS, varExtractor: m => m[1] },
-  { regex: /(\w+)\s*=\s*os\.(?:getenv|environ\.get)\s*\(\s*['"](\w+)['"]/g, kind: 'env', languages: PY, varExtractor: m => m[1] },
+  {
+    regex: /(?:const|let|var)\s+(\w+)\s*=\s*process\.env\[?\.?['"]?(\w+)['"]?\]?/g,
+    kind: 'env',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(\w+)\s*=\s*os\.(?:getenv|environ\.get)\s*\(\s*['"](\w+)['"]/g,
+    kind: 'env',
+    languages: PY,
+    varExtractor: (m) => m[1],
+  },
 
   // File reads
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*(?:fs\.readFileSync|await\s+fs\.promises\.readFile)\s*\(/g, kind: 'file_read', languages: JS_TS, varExtractor: m => m[1] },
+  {
+    regex:
+      /(?:const|let|var)\s+(\w+)\s*=\s*(?:fs\.readFileSync|await\s+fs\.promises\.readFile)\s*\(/g,
+    kind: 'file_read',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
 
   // User input
-  { regex: /(?:const|let|var)\s+(\w+)\s*=\s*(?:prompt|readline|input)\s*\(/g, kind: 'user_input', languages: ALL, varExtractor: m => m[1] },
+  {
+    regex: /(?:const|let|var)\s+(\w+)\s*=\s*(?:prompt|readline|input)\s*\(/g,
+    kind: 'user_input',
+    languages: ALL,
+    varExtractor: (m) => m[1],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -149,38 +272,158 @@ interface SinkPattern {
 
 const SINK_PATTERNS: SinkPattern[] = [
   // SQL Injection (CWE-89)
-  { regex: /\.(query|exec|execute|raw|rawQuery)\s*\(\s*`[^`]*\$\{(\w+)/g, kind: 'sql_query', cwe: 'CWE-89', languages: JS_TS, varExtractor: (m) => m[2] },
-  { regex: /\.(query|exec|execute|raw)\s*\(\s*['"][^'"]*['"]\s*\+\s*(\w+)/g, kind: 'sql_query', cwe: 'CWE-89', languages: JS_TS, varExtractor: (m) => m[2] },
-  { regex: /\.(execute|executemany)\s*\(\s*f["'][^"']*\{(\w+)/g, kind: 'sql_query', cwe: 'CWE-89', languages: PY, varExtractor: (m) => m[2] },
+  {
+    regex: /\.(query|exec|execute|raw|rawQuery)\s*\(\s*`[^`]*\$\{(\w+)/g,
+    kind: 'sql_query',
+    cwe: 'CWE-89',
+    languages: JS_TS,
+    varExtractor: (m) => m[2],
+  },
+  {
+    regex: /\.(query|exec|execute|raw)\s*\(\s*['"][^'"]*['"]\s*\+\s*(\w+)/g,
+    kind: 'sql_query',
+    cwe: 'CWE-89',
+    languages: JS_TS,
+    varExtractor: (m) => m[2],
+  },
+  {
+    regex: /\.(execute|executemany)\s*\(\s*f["'][^"']*\{(\w+)/g,
+    kind: 'sql_query',
+    cwe: 'CWE-89',
+    languages: PY,
+    varExtractor: (m) => m[2],
+  },
   // PHP: concat after closing quote: ->query("..." . $var) or interpolation: ->query("...$var")
-  { regex: /->(?:query|whereRaw|selectRaw)\s*\(\s*["'][^"']*["']\s*\.\s*(\$\w+)/g, kind: 'sql_query', cwe: 'CWE-89', languages: PHP, varExtractor: (m) => m[1] },
-  { regex: /->(?:query|whereRaw|selectRaw)\s*\(\s*"[^"]*(\$\w+)/g, kind: 'sql_query', cwe: 'CWE-89', languages: PHP, varExtractor: (m) => m[1] },
-  { regex: /DB::(?:raw|select|statement)\s*\(\s*["'][^"']*["']\s*\.\s*(\$\w+)/g, kind: 'sql_query', cwe: 'CWE-89', languages: PHP, varExtractor: (m) => m[1] },
-  { regex: /DB::(?:raw|select|statement)\s*\(\s*"[^"]*(\$\w+)/g, kind: 'sql_query', cwe: 'CWE-89', languages: PHP, varExtractor: (m) => m[1] },
-  { regex: /\.(?:Query|Exec|QueryRow)\s*\(\s*(?:fmt\.Sprintf\s*\([^,)]*,\s*|"[^"]*"\s*\+\s*)(\w+)/g, kind: 'sql_query', cwe: 'CWE-89', languages: GO, varExtractor: (m) => m[1] },
+  {
+    regex: /->(?:query|whereRaw|selectRaw)\s*\(\s*["'][^"']*["']\s*\.\s*(\$\w+)/g,
+    kind: 'sql_query',
+    cwe: 'CWE-89',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /->(?:query|whereRaw|selectRaw)\s*\(\s*"[^"]*(\$\w+)/g,
+    kind: 'sql_query',
+    cwe: 'CWE-89',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /DB::(?:raw|select|statement)\s*\(\s*["'][^"']*["']\s*\.\s*(\$\w+)/g,
+    kind: 'sql_query',
+    cwe: 'CWE-89',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /DB::(?:raw|select|statement)\s*\(\s*"[^"]*(\$\w+)/g,
+    kind: 'sql_query',
+    cwe: 'CWE-89',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /\.(?:Query|Exec|QueryRow)\s*\(\s*(?:fmt\.Sprintf\s*\([^,)]*,\s*|"[^"]*"\s*\+\s*)(\w+)/g,
+    kind: 'sql_query',
+    cwe: 'CWE-89',
+    languages: GO,
+    varExtractor: (m) => m[1],
+  },
 
   // Command Injection (CWE-78)
-  { regex: /(?:exec|execSync|spawn|spawnSync)\s*\(\s*`[^`]*\$\{(\w+)/g, kind: 'exec', cwe: 'CWE-78', languages: JS_TS, varExtractor: (m) => m[1] },
-  { regex: /(?:exec|execSync|spawn)\s*\(\s*['"][^'"]*['"]\s*\+\s*(\w+)/g, kind: 'exec', cwe: 'CWE-78', languages: JS_TS, varExtractor: (m) => m[1] },
-  { regex: /os\.(?:system|popen)\s*\(\s*f?["'][^"']*(?:\{(\w+)|["']\s*\+\s*(\w+))/g, kind: 'exec', cwe: 'CWE-78', languages: PY, varExtractor: (m) => m[1] || m[2] },
-  { regex: /subprocess\.(?:run|call|Popen)\s*\(\s*f?["'][^"']*(?:\{(\w+)|["']\s*\+\s*(\w+))/g, kind: 'exec', cwe: 'CWE-78', languages: PY, varExtractor: (m) => m[1] || m[2] },
+  {
+    regex: /(?:exec|execSync|spawn|spawnSync)\s*\(\s*`[^`]*\$\{(\w+)/g,
+    kind: 'exec',
+    cwe: 'CWE-78',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(?:exec|execSync|spawn)\s*\(\s*['"][^'"]*['"]\s*\+\s*(\w+)/g,
+    kind: 'exec',
+    cwe: 'CWE-78',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /os\.(?:system|popen)\s*\(\s*f?["'][^"']*(?:\{(\w+)|["']\s*\+\s*(\w+))/g,
+    kind: 'exec',
+    cwe: 'CWE-78',
+    languages: PY,
+    varExtractor: (m) => m[1] || m[2],
+  },
+  {
+    regex: /subprocess\.(?:run|call|Popen)\s*\(\s*f?["'][^"']*(?:\{(\w+)|["']\s*\+\s*(\w+))/g,
+    kind: 'exec',
+    cwe: 'CWE-78',
+    languages: PY,
+    varExtractor: (m) => m[1] || m[2],
+  },
   // PHP: shell_exec("cmd" . $var) or shell_exec("cmd $var")
-  { regex: /(?:shell_exec|exec|system|passthru)\s*\(\s*["'][^"']*["']\s*\.\s*(\$\w+)/g, kind: 'exec', cwe: 'CWE-78', languages: PHP, varExtractor: (m) => m[1] },
-  { regex: /(?:shell_exec|exec|system|passthru)\s*\(\s*"[^"]*(\$\w+)/g, kind: 'exec', cwe: 'CWE-78', languages: PHP, varExtractor: (m) => m[1] },
+  {
+    regex: /(?:shell_exec|exec|system|passthru)\s*\(\s*["'][^"']*["']\s*\.\s*(\$\w+)/g,
+    kind: 'exec',
+    cwe: 'CWE-78',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /(?:shell_exec|exec|system|passthru)\s*\(\s*"[^"]*(\$\w+)/g,
+    kind: 'exec',
+    cwe: 'CWE-78',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
 
   // Eval (CWE-95) — \$?\w+ to capture PHP $vars too
-  { regex: /eval\s*\(\s*(\$?\w+)/g, kind: 'eval', cwe: 'CWE-95', languages: ALL, varExtractor: (m) => m[1] },
+  {
+    regex: /eval\s*\(\s*(\$?\w+)/g,
+    kind: 'eval',
+    cwe: 'CWE-95',
+    languages: ALL,
+    varExtractor: (m) => m[1],
+  },
 
   // XSS (CWE-79)
-  { regex: /\.innerHTML\s*=\s*(\w+)/g, kind: 'innerHTML', cwe: 'CWE-79', languages: JS_TS, varExtractor: (m) => m[1] },
-  { regex: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(\w+)/g, kind: 'innerHTML', cwe: 'CWE-79', languages: JS_TS, varExtractor: (m) => m[1] },
-  { regex: /\{!!\s*(\$\w+)\s*!!\}/g, kind: 'template_raw', cwe: 'CWE-79', languages: PHP, varExtractor: (m) => m[1] },
+  {
+    regex: /\.innerHTML\s*=\s*(\w+)/g,
+    kind: 'innerHTML',
+    cwe: 'CWE-79',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(\w+)/g,
+    kind: 'innerHTML',
+    cwe: 'CWE-79',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
+  {
+    regex: /\{!!\s*(\$\w+)\s*!!\}/g,
+    kind: 'template_raw',
+    cwe: 'CWE-79',
+    languages: PHP,
+    varExtractor: (m) => m[1],
+  },
 
   // Open Redirect (CWE-601)
-  { regex: /(?:res\.redirect|redirect|location\.href\s*=)\s*\(?\s*(\w+)/g, kind: 'redirect', cwe: 'CWE-601', languages: ALL, varExtractor: (m) => m[1] },
+  {
+    regex: /(?:res\.redirect|redirect|location\.href\s*=)\s*\(?\s*(\w+)/g,
+    kind: 'redirect',
+    cwe: 'CWE-601',
+    languages: ALL,
+    varExtractor: (m) => m[1],
+  },
 
   // File Write (CWE-73)
-  { regex: /(?:fs\.writeFileSync|fs\.promises\.writeFile|writeFile)\s*\(\s*(\w+)/g, kind: 'file_write', cwe: 'CWE-73', languages: JS_TS, varExtractor: (m) => m[1] },
+  {
+    regex: /(?:fs\.writeFileSync|fs\.promises\.writeFile|writeFile)\s*\(\s*(\w+)/g,
+    kind: 'file_write',
+    cwe: 'CWE-73',
+    languages: JS_TS,
+    varExtractor: (m) => m[1],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -266,7 +509,8 @@ function trackVariableFlow(lines: string[], _language: string): VarAssignment[] 
       pattern.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(line)) !== null) {
-        if (match[1] !== match[2]) { // avoid self-assignment
+        if (match[1] !== match[2]) {
+          // avoid self-assignment
           assignments.push({
             variable: match[1],
             fromVariable: match[2],
@@ -285,11 +529,7 @@ function trackVariableFlow(lines: string[], _language: string): VarAssignment[] 
 // Core analysis
 // ---------------------------------------------------------------------------
 
-function analyzeFile(
-  content: string,
-  filePath: string,
-  language: string,
-): TaintFlow[] {
+function analyzeFile(content: string, filePath: string, language: string): TaintFlow[] {
   const lines = content.split('\n');
   const flows: TaintFlow[] = [];
 
@@ -357,7 +597,11 @@ function analyzeFile(
       changed = false;
       pass++;
       for (const assign of assignments) {
-        if (assign.line > source.line && taintedVars.has(assign.fromVariable) && !taintedVars.has(assign.variable)) {
+        if (
+          assign.line > source.line &&
+          taintedVars.has(assign.fromVariable) &&
+          !taintedVars.has(assign.variable)
+        ) {
           taintedVars.add(assign.variable);
           changed = true;
         }
@@ -400,7 +644,11 @@ function analyzeFile(
 
       // Add intermediate assignments
       for (const assign of assignments) {
-        if (assign.line > source.line && assign.line < sink.line && taintedVars.has(assign.fromVariable)) {
+        if (
+          assign.line > source.line &&
+          assign.line < sink.line &&
+          taintedVars.has(assign.fromVariable)
+        ) {
           flowPath.push({ expression: assign.expression, line: assign.line, type: 'assignment' });
         }
       }
@@ -470,10 +718,13 @@ function findTaintedCalls(
         // Skip known sinks (already caught by intra-file analysis)
         if (/^(query|exec|execute|eval|system|innerHTML)$/i.test(funcName)) continue;
 
-        const args = argsStr.split(',').map(a => a.trim());
+        const args = argsStr.split(',').map((a) => a.trim());
         for (let i = 0; i < args.length; i++) {
           // Extract the variable name from the argument (strip method calls, property access)
-          const argVar = args[i].replace(/^[&*]/, '').split(/[.[\->(]/)[0].trim();
+          const argVar = args[i]
+            .replace(/^[&*]/, '')
+            .split(/[.[\->(]/)[0]
+            .trim();
           if (taintedVars.has(argVar)) {
             const key = `${funcName}:${lineIdx}`;
             if (!seen.has(key)) {
@@ -554,8 +805,19 @@ function checkFunctionForSinks(
           }
 
           return {
-            source: { kind: 'http_param', expression: `parameter: ${paramName}`, variable: paramName, line: 0 },
-            sink: { kind: skp.kind, expression: line.trim(), variable, line: lineIdx + 1, cwe: skp.cwe },
+            source: {
+              kind: 'http_param',
+              expression: `parameter: ${paramName}`,
+              variable: paramName,
+              line: 0,
+            },
+            sink: {
+              kind: skp.kind,
+              expression: line.trim(),
+              variable,
+              line: lineIdx + 1,
+              cwe: skp.cwe,
+            },
             path: [
               { expression: `parameter: ${paramName}`, line: 0, type: 'source' },
               { expression: line.trim(), line: lineIdx + 1, type: 'sink' },
@@ -577,7 +839,10 @@ function checkFunctionForSinks(
 function interProceduralAnalysis(
   store: Store,
   projectRoot: string,
-  perFileResults: Map<string, { sources: TaintSource[]; taintedVars: Set<string>; language: string }>,
+  perFileResults: Map<
+    string,
+    { sources: TaintSource[]; taintedVars: Set<string>; language: string }
+  >,
   limit: number,
 ): TaintFlow[] {
   const crossFileFlows: TaintFlow[] = [];
@@ -589,7 +854,11 @@ function interProceduralAnalysis(
     // Read the file to find function calls with tainted args
     const absPath = path.join(projectRoot, filePath);
     let content: string;
-    try { content = readFileSync(absPath, 'utf-8'); } catch { continue; }
+    try {
+      content = readFileSync(absPath, 'utf-8');
+    } catch {
+      continue;
+    }
     const lines = content.split('\n');
 
     const taintedCalls = findTaintedCalls(lines, fileData.taintedVars, 0);
@@ -600,17 +869,27 @@ function interProceduralAnalysis(
       if (crossFileFlows.length >= limit) break;
 
       // Search for the function symbol in the index
-      const symbols = store.db.prepare(
-        `SELECT s.id, s.name, s.kind, s.symbol_id, s.byte_start, s.byte_end,
+      const symbols = store.db
+        .prepare(
+          `SELECT s.id, s.name, s.kind, s.symbol_id, s.byte_start, s.byte_end,
                 s.line_start, s.line_end, s.signature, f.path as file_path, f.language
          FROM symbols s JOIN files f ON s.file_id = f.id
          WHERE s.name = ? AND s.kind IN ('function', 'method')
          AND f.path != ? AND f.gitignored = 0
          LIMIT 5`,
-      ).all(call.funcName, filePath) as Array<{
-        id: number; name: string; kind: string; symbol_id: string;
-        byte_start: number; byte_end: number; line_start: number | null; line_end: number | null;
-        signature: string | null; file_path: string; language: string;
+        )
+        .all(call.funcName, filePath) as Array<{
+        id: number;
+        name: string;
+        kind: string;
+        symbol_id: string;
+        byte_start: number;
+        byte_end: number;
+        line_start: number | null;
+        line_end: number | null;
+        signature: string | null;
+        file_path: string;
+        language: string;
       }>;
 
       for (const sym of symbols) {
@@ -619,7 +898,11 @@ function interProceduralAnalysis(
         // Read the target file and extract function body
         const targetPath = path.join(projectRoot, sym.file_path);
         let targetContent: string;
-        try { targetContent = readFileSync(targetPath, 'utf-8'); } catch { continue; }
+        try {
+          targetContent = readFileSync(targetPath, 'utf-8');
+        } catch {
+          continue;
+        }
 
         const targetLines = targetContent.split('\n');
         if (!sym.line_start || !sym.line_end) continue;
@@ -631,7 +914,7 @@ function interProceduralAnalysis(
         const sig = sym.signature ?? '';
         const paramMatch = sig.match(/\(([^)]*)\)/);
         if (paramMatch) {
-          const params = paramMatch[1].split(',').map(p => {
+          const params = paramMatch[1].split(',').map((p) => {
             // Extract bare param name from typed params like "name: string", "name string", "$name"
             const trimmed = p.trim();
             const parts = trimmed.split(/[\s:]+/);
@@ -652,9 +935,17 @@ function interProceduralAnalysis(
           sink: sinkFlow.sink,
           path: [
             { expression: originalSource.expression, line: originalSource.line, type: 'source' },
-            { expression: `→ ${call.funcName}(${call.taintedArgName}) in ${filePath}:${call.callLine}`, line: call.callLine, type: 'assignment' },
-            { expression: `→ ${sym.name}(${paramName}) in ${sym.file_path}`, line: sym.line_start, type: 'assignment' },
-            ...sinkFlow.path.filter(s => s.type === 'sink'),
+            {
+              expression: `→ ${call.funcName}(${call.taintedArgName}) in ${filePath}:${call.callLine}`,
+              line: call.callLine,
+              type: 'assignment',
+            },
+            {
+              expression: `→ ${sym.name}(${paramName}) in ${sym.file_path}`,
+              line: sym.line_start,
+              type: 'assignment',
+            },
+            ...sinkFlow.path.filter((s) => s.type === 'sink'),
           ],
           sanitized: sinkFlow.sanitized,
           sanitizer: sinkFlow.sanitizer,
@@ -693,18 +984,27 @@ export function taintAnalysis(
   // Get indexed files
   const scope = opts.scope?.replace(/\/+$/, '');
   const files: { path: string; language: string }[] = scope
-    ? store.db.prepare("SELECT path, language FROM files WHERE path LIKE ? AND (status = 'ok' OR status IS NULL)").all(`${scope}%`) as { path: string; language: string }[]
-    : store.db.prepare("SELECT path, language FROM files WHERE (status = 'ok' OR status IS NULL)").all() as { path: string; language: string }[];
+    ? (store.db
+        .prepare(
+          "SELECT path, language FROM files WHERE path LIKE ? AND (status = 'ok' OR status IS NULL)",
+        )
+        .all(`${scope}%`) as { path: string; language: string }[])
+    : (store.db
+        .prepare("SELECT path, language FROM files WHERE (status = 'ok' OR status IS NULL)")
+        .all() as { path: string; language: string }[]);
 
   // Filter out test files
   const isTest = (p: string) => /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.\w+$/.test(p);
-  const sourceFiles = files.filter(f => !isTest(f.path) && f.language);
+  const sourceFiles = files.filter((f) => !isTest(f.path) && f.language);
 
   let allFlows: TaintFlow[] = [];
   let analyzed = 0;
 
   // Phase 1: Intra-file taint analysis
-  const perFileData = new Map<string, { sources: TaintSource[]; taintedVars: Set<string>; language: string }>();
+  const perFileData = new Map<
+    string,
+    { sources: TaintSource[]; taintedVars: Set<string>; language: string }
+  >();
 
   for (const file of sourceFiles) {
     if (allFlows.length >= limit) break;
@@ -729,7 +1029,12 @@ export function taintAnalysis(
       // Include all tainted vars from the flow path
       for (const step of flow.path) {
         const words = step.expression.match(/\b\w+\b/g);
-        if (words) words.forEach(w => { if (flow.source.variable !== w) { /* only direct taints */ } });
+        if (words)
+          words.forEach((w) => {
+            if (flow.source.variable !== w) {
+              /* only direct taints */
+            }
+          });
       }
     }
 
@@ -742,7 +1047,12 @@ export function taintAnalysis(
         let match: RegExpExecArray | null;
         while ((match = sp.regex.exec(lines[lineIdx])) !== null) {
           const varName = sp.varExtractor(match);
-          fileSources.push({ kind: sp.kind, expression: lines[lineIdx].trim(), variable: varName, line: lineIdx + 1 });
+          fileSources.push({
+            kind: sp.kind,
+            expression: lines[lineIdx].trim(),
+            variable: varName,
+            line: lineIdx + 1,
+          });
           fileTaintedVars.add(varName);
         }
       }
@@ -766,7 +1076,11 @@ export function taintAnalysis(
     }
 
     if (fileSources.length > 0) {
-      perFileData.set(file.path, { sources: fileSources, taintedVars: fileTaintedVars, language: file.language });
+      perFileData.set(file.path, {
+        sources: fileSources,
+        taintedVars: fileTaintedVars,
+        language: file.language,
+      });
     }
 
     for (const flow of flows) {
@@ -793,8 +1107,8 @@ export function taintAnalysis(
     }
   }
 
-  const critical = allFlows.filter(f => !f.sanitized).length;
-  const sanitized = allFlows.filter(f => f.sanitized).length;
+  const critical = allFlows.filter((f) => !f.sanitized).length;
+  const sanitized = allFlows.filter((f) => f.sanitized).length;
 
   return ok({
     files_analyzed: analyzed,

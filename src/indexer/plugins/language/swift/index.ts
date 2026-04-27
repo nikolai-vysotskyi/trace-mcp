@@ -16,7 +16,14 @@
  *   `mutation_modifier`, and `attribute` children.
  */
 import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+  RawEdge,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
@@ -80,7 +87,7 @@ function detectClassKeyword(node: TSNode): 'class' | 'struct' | 'enum' | 'extens
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child || child.isNamed) continue; // skip named children
-    const text = child.type;                // anonymous nodes use their text as type
+    const text = child.type; // anonymous nodes use their text as type
     if (text === 'struct') return 'struct';
     if (text === 'enum') return 'enum';
     if (text === 'extension') return 'extension';
@@ -133,8 +140,12 @@ function extractInheritance(node: TSNode): string[] {
  */
 function findBody(node: TSNode): TSNode | undefined {
   for (const child of node.namedChildren) {
-    if (child.type === 'class_body' || child.type === 'enum_class_body' ||
-        child.type === 'protocol_body' || child.type.endsWith('_body')) {
+    if (
+      child.type === 'class_body' ||
+      child.type === 'enum_class_body' ||
+      child.type === 'protocol_body' ||
+      child.type.endsWith('_body')
+    ) {
       return child;
     }
   }
@@ -149,7 +160,7 @@ function findBody(node: TSNode): TSNode | undefined {
 function extractPropertyName(node: TSNode): string | undefined {
   for (const child of node.namedChildren) {
     if (child.type === 'pattern') {
-      const id = child.namedChildren.find(c => c.type === 'simple_identifier');
+      const id = child.namedChildren.find((c) => c.type === 'simple_identifier');
       return id?.text ?? child.text;
     }
   }
@@ -168,9 +179,25 @@ export class SwiftLanguagePlugin implements LanguagePlugin {
   };
 
   supportedExtensions = ['.swift'];
-  supportedVersions = ['5.0', '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', '5.7', '5.8', '5.9', '5.10', '6.0'];
+  supportedVersions = [
+    '5.0',
+    '5.1',
+    '5.2',
+    '5.3',
+    '5.4',
+    '5.5',
+    '5.6',
+    '5.7',
+    '5.8',
+    '5.9',
+    '5.10',
+    '6.0',
+  ];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('swift');
       const sourceCode = content.toString('utf-8');
@@ -286,7 +313,9 @@ export class SwiftLanguagePlugin implements LanguagePlugin {
 
   private extractImport(node: TSNode, edges: RawEdge[]): void {
     const text = node.text.trim();
-    const match = text.match(/^import\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?([\w.]+)/);
+    const match = text.match(
+      /^import\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?([\w.]+)/,
+    );
     if (match) {
       edges.push({
         edgeType: 'imports',
@@ -335,7 +364,7 @@ export class SwiftLanguagePlugin implements LanguagePlugin {
     const vis = extractVisibility(mods);
     if (vis) meta.visibility = vis;
 
-    const modKeywords = mods.filter(m => ['final', 'open', 'indirect'].includes(m));
+    const modKeywords = mods.filter((m) => ['final', 'open', 'indirect'].includes(m));
     if (modKeywords.length > 0) meta.modifiers = modKeywords;
 
     const heritage = extractInheritance(node);
@@ -436,9 +465,9 @@ export class SwiftLanguagePlugin implements LanguagePlugin {
 
     const vis = extractVisibility(mods);
     if (vis) meta.visibility = vis;
-    if (mods.some(m => m === 'static' || m === 'class')) meta.static = true;
-    if (mods.some(m => m === 'override')) meta.override = true;
-    if (mods.some(m => m === 'mutating')) meta.mutating = true;
+    if (mods.some((m) => m === 'static' || m === 'class')) meta.static = true;
+    if (mods.some((m) => m === 'override')) meta.override = true;
+    if (mods.some((m) => m === 'mutating')) meta.mutating = true;
 
     const fqnParts = parentName ? [parentName, name] : [name];
 
@@ -471,8 +500,8 @@ export class SwiftLanguagePlugin implements LanguagePlugin {
 
     const vis = extractVisibility(mods);
     if (vis) meta.visibility = vis;
-    if (mods.some(m => m === 'convenience')) meta.convenience = true;
-    if (mods.some(m => m === 'required')) meta.required = true;
+    if (mods.some((m) => m === 'convenience')) meta.convenience = true;
+    if (mods.some((m) => m === 'required')) meta.required = true;
 
     const line = node.startPosition.row + 1;
     const uniqueName = parentName ? `init_L${line}` : 'init';
@@ -531,7 +560,7 @@ export class SwiftLanguagePlugin implements LanguagePlugin {
 
     const vis = extractVisibility(mods);
     if (vis) meta.visibility = vis;
-    if (mods.some(m => m === 'static' || m === 'class')) meta.static = true;
+    if (mods.some((m) => m === 'static' || m === 'class')) meta.static = true;
 
     symbols.push({
       symbolId: makeSymbolId(filePath, `subscript_L${line}`, 'method', parentName),
@@ -636,11 +665,11 @@ export class SwiftLanguagePlugin implements LanguagePlugin {
 
     const vis = extractVisibility(mods);
     if (vis) meta.visibility = vis;
-    if (mods.some(m => m === 'static' || m === 'class')) meta.static = true;
-    if (mods.some(m => m === 'lazy')) meta.lazy = true;
-    if (mods.some(m => m === 'weak')) meta.weak = true;
-    if (mods.some(m => m === 'unowned')) meta.unowned = true;
-    if (mods.some(m => m === 'override')) meta.override = true;
+    if (mods.some((m) => m === 'static' || m === 'class')) meta.static = true;
+    if (mods.some((m) => m === 'lazy')) meta.lazy = true;
+    if (mods.some((m) => m === 'weak')) meta.weak = true;
+    if (mods.some((m) => m === 'unowned')) meta.unowned = true;
+    if (mods.some((m) => m === 'override')) meta.override = true;
 
     symbols.push({
       symbolId: makeSymbolId(filePath, name, kind, parentName),

@@ -99,7 +99,11 @@ export class PollingDaemonWatcher implements DaemonWatcher {
         this.currentReported = next;
         logger.info({ from: prev, to: next }, 'DaemonWatcher: stable state change');
         for (const cb of this.subscribers) {
-          try { cb(next); } catch (err) { logger.warn({ err }, 'DaemonWatcher: subscriber threw'); }
+          try {
+            cb(next);
+          } catch (err) {
+            logger.warn({ err }, 'DaemonWatcher: subscriber threw');
+          }
         }
       }
     }, this.stabilityMs);

@@ -5,7 +5,13 @@
  * type specs, callbacks, and import edges (-include, -include_lib).
  */
 import { ok } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge } from '../../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+  RawEdge,
+} from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { lineAt, makeSymbolId } from '../regex-base.js';
 
@@ -25,15 +31,25 @@ export const ErlangLanguagePlugin = class implements LanguagePlugin {
     const edges: RawEdge[] = [];
     const seen = new Set<string>();
 
-    const add = (name: string, kind: RawSymbol['kind'], m: RegExpExecArray, meta?: Record<string, unknown>) => {
+    const add = (
+      name: string,
+      kind: RawSymbol['kind'],
+      m: RegExpExecArray,
+      meta?: Record<string, unknown>,
+    ) => {
       const sid = makeSymbolId(filePath, name, kind);
       if (seen.has(sid)) return;
       seen.add(sid);
       symbols.push({
-        symbolId: sid, name, kind, fqn: name,
+        symbolId: sid,
+        name,
+        kind,
+        fqn: name,
         signature: m[0].split('\n')[0].trim().slice(0, 120),
-        byteStart: m.index, byteEnd: m.index + m[0].length,
-        lineStart: lineAt(source, m.index), lineEnd: lineAt(source, m.index + m[0].length),
+        byteStart: m.index,
+        byteEnd: m.index + m[0].length,
+        lineStart: lineAt(source, m.index),
+        lineEnd: lineAt(source, m.index + m[0].length),
         metadata: meta,
       });
     };
@@ -51,7 +67,8 @@ export const ErlangLanguagePlugin = class implements LanguagePlugin {
     }
 
     // -record(name, {...}).
-    for (const m of source.matchAll(/^-record\((\w+)\s*,/gm)) add(m[1], 'class', m, { record: true });
+    for (const m of source.matchAll(/^-record\((\w+)\s*,/gm))
+      add(m[1], 'class', m, { record: true });
 
     // -define(NAME, ...).
     for (const m of source.matchAll(/^-define\((\w+)/gm)) add(m[1], 'constant', m, { macro: true });
@@ -59,12 +76,15 @@ export const ErlangLanguagePlugin = class implements LanguagePlugin {
     // -type name() ::
     for (const m of source.matchAll(/^-type\s+(\w+)\s*\(/gm)) add(m[1], 'type', m);
     // -opaque name() ::
-    for (const m of source.matchAll(/^-opaque\s+(\w+)\s*\(/gm)) add(m[1], 'type', m, { opaque: true });
+    for (const m of source.matchAll(/^-opaque\s+(\w+)\s*\(/gm))
+      add(m[1], 'type', m, { opaque: true });
 
     // -spec name(...)
-    for (const m of source.matchAll(/^-spec\s+(\w+)\s*\(/gm)) add(m[1], 'function', m, { spec: true });
+    for (const m of source.matchAll(/^-spec\s+(\w+)\s*\(/gm))
+      add(m[1], 'function', m, { spec: true });
     // -callback name(...)
-    for (const m of source.matchAll(/^-callback\s+(\w+)\s*\(/gm)) add(m[1], 'function', m, { callback: true });
+    for (const m of source.matchAll(/^-callback\s+(\w+)\s*\(/gm))
+      add(m[1], 'function', m, { callback: true });
 
     // Top-level function clauses: name(... — must be lowercase atom at column 0 (no leading whitespace)
     // Only extract if name is exported OR if no -export found (header file)
@@ -72,7 +92,12 @@ export const ErlangLanguagePlugin = class implements LanguagePlugin {
     for (const m of source.matchAll(/^([a-z_]\w*)\s*\(/gm)) {
       const name = m[1];
       // Skip common false positives (Erlang keywords, directives we already captured)
-      if (['if', 'case', 'receive', 'try', 'catch', 'begin', 'when', 'end', 'of', 'after'].includes(name)) continue;
+      if (
+        ['if', 'case', 'receive', 'try', 'catch', 'begin', 'when', 'end', 'of', 'after'].includes(
+          name,
+        )
+      )
+        continue;
       if (!hasExports || exported.has(name)) {
         add(name, 'function', m, hasExports && exported.has(name) ? { exported: true } : undefined);
       }

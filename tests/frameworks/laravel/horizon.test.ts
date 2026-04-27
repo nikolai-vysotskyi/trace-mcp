@@ -57,12 +57,12 @@ describe('horizon — config extraction', () => {
 
   it('extracts environments', () => {
     expect(config!.environments).toHaveLength(2);
-    expect(config!.environments.map(e => e.name)).toContain('production');
-    expect(config!.environments.map(e => e.name)).toContain('local');
+    expect(config!.environments.map((e) => e.name)).toContain('production');
+    expect(config!.environments.map((e) => e.name)).toContain('local');
   });
 
   it('extracts supervisors', () => {
-    const prod = config!.environments.find(e => e.name === 'production')!;
+    const prod = config!.environments.find((e) => e.name === 'production')!;
     expect(prod.supervisors).toHaveLength(2);
     expect(prod.supervisors[0].name).toBe('supervisor-1');
     expect(prod.supervisors[0].queues).toEqual(['default', 'emails']);
@@ -73,7 +73,7 @@ describe('horizon — config extraction', () => {
   it('builds config edges', () => {
     const edges = buildHorizonConfigEdges(config!);
     expect(edges.length).toBeGreaterThanOrEqual(3);
-    const queueEdge = edges.find(e => e.metadata.queue === 'emails');
+    const queueEdge = edges.find((e) => e.metadata.queue === 'emails');
     expect(queueEdge).toBeDefined();
     expect(queueEdge!.edgeType).toBe('horizon_supervises_queue');
   });
@@ -81,7 +81,7 @@ describe('horizon — config extraction', () => {
   it('builds config symbols', () => {
     const symbols = buildHorizonConfigSymbols(config!);
     expect(symbols.length).toBeGreaterThanOrEqual(3);
-    const sup1 = symbols.find(s => s.name === 'production:supervisor-1');
+    const sup1 = symbols.find((s) => s.name === 'production:supervisor-1');
     expect(sup1).toBeDefined();
     expect(sup1!.metadata!.frameworkRole).toBe('horizon_supervisor');
   });

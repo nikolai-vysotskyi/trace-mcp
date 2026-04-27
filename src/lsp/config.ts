@@ -30,8 +30,7 @@ const KNOWN_SERVERS: KnownServer[] = [
     command: 'npx',
     args: ['typescript-language-server', '--stdio'],
     detect: (root) =>
-      existsSync(join(root, 'tsconfig.json')) ||
-      existsSync(join(root, 'package.json')),
+      existsSync(join(root, 'tsconfig.json')) || existsSync(join(root, 'package.json')),
     initializationOptions: {
       preferences: { includeInlayParameterNameHints: 'none' },
     },
@@ -63,7 +62,7 @@ const KNOWN_SERVERS: KnownServer[] = [
 export const EXTENSION_TO_LANGUAGE: Record<string, string> = {
   '.ts': 'typescript',
   '.tsx': 'typescript',
-  '.js': 'typescript',  // tsserver handles JS too
+  '.js': 'typescript', // tsserver handles JS too
   '.jsx': 'typescript',
   '.mts': 'typescript',
   '.cts': 'typescript',
@@ -117,7 +116,10 @@ export function resolveServers(
       seen.add(language);
 
       if (!isCommandAvailable(serverConfig.command)) {
-        logger.info({ language, command: serverConfig.command }, 'LSP server command not found, skipping');
+        logger.info(
+          { language, command: serverConfig.command },
+          'LSP server command not found, skipping',
+        );
         continue;
       }
 
@@ -125,7 +127,9 @@ export function resolveServers(
         language,
         command: serverConfig.command,
         args: serverConfig.args ?? [],
-        initializationOptions: serverConfig.initializationOptions as Record<string, unknown> | undefined,
+        initializationOptions: serverConfig.initializationOptions as
+          | Record<string, unknown>
+          | undefined,
         timeoutMs: serverConfig.timeout_ms ?? 30_000,
       });
     }
@@ -138,7 +142,10 @@ export function resolveServers(
       if (!indexedLanguages.has(known.language)) continue;
       if (!known.detect(rootPath)) continue;
       if (!isCommandAvailable(known.command)) {
-        logger.debug({ language: known.language, command: known.command }, 'LSP server not installed');
+        logger.debug(
+          { language: known.language, command: known.command },
+          'LSP server not installed',
+        );
         continue;
       }
 

@@ -21,28 +21,68 @@ import { getParser, type TSNode } from '../../parser/tree-sitter.js';
 // Languages we hash. A language is only useful here if its tree-sitter
 // grammar is available via getParser().
 const SUPPORTED_LANGUAGES = new Set([
-  'typescript', 'javascript', 'python', 'ruby', 'go', 'java', 'rust',
-  'php', 'c', 'cpp', 'csharp', 'swift', 'kotlin', 'scala', 'elixir',
+  'typescript',
+  'javascript',
+  'python',
+  'ruby',
+  'go',
+  'java',
+  'rust',
+  'php',
+  'c',
+  'cpp',
+  'csharp',
+  'swift',
+  'kotlin',
+  'scala',
+  'elixir',
 ]);
 
 // Nodes replaced with a '$' placeholder during normalization. This makes the
 // signature Type-2: insensitive to renamed identifiers and changed literals.
 const NORMALIZED_NODE_TYPES = new Set([
   // identifiers
-  'identifier', 'property_identifier', 'type_identifier', 'field_identifier',
-  'shorthand_property_identifier', 'shorthand_property_identifier_pattern',
-  'variable_name', 'constant', 'simple_identifier',
+  'identifier',
+  'property_identifier',
+  'type_identifier',
+  'field_identifier',
+  'shorthand_property_identifier',
+  'shorthand_property_identifier_pattern',
+  'variable_name',
+  'constant',
+  'simple_identifier',
   // literals
-  'string', 'string_literal', 'string_content', 'template_string',
-  'raw_string', 'raw_string_literal', 'interpreted_string_literal',
-  'number', 'integer', 'integer_literal', 'float', 'float_literal',
-  'decimal_integer_literal', 'hex_integer_literal',
-  'true', 'false', 'null', 'none', 'nil', 'undefined', 'null_literal',
-  'character', 'character_literal',
+  'string',
+  'string_literal',
+  'string_content',
+  'template_string',
+  'raw_string',
+  'raw_string_literal',
+  'interpreted_string_literal',
+  'number',
+  'integer',
+  'integer_literal',
+  'float',
+  'float_literal',
+  'decimal_integer_literal',
+  'hex_integer_literal',
+  'true',
+  'false',
+  'null',
+  'none',
+  'nil',
+  'undefined',
+  'null_literal',
+  'character',
+  'character_literal',
 ]);
 
 const COMMENT_NODE_TYPES = new Set([
-  'comment', 'line_comment', 'block_comment', 'doc_comment', 'documentation_comment',
+  'comment',
+  'line_comment',
+  'block_comment',
+  'doc_comment',
+  'documentation_comment',
 ]);
 
 interface CloneCandidate {
@@ -130,7 +170,8 @@ export async function detectAstClones(
   const minNodes = opts.min_nodes ?? 30;
   const limit = opts.limit ?? 100;
 
-  const callables = store.db.prepare(`
+  const callables = store.db
+    .prepare(`
     SELECT s.symbol_id, s.name, s.kind, s.byte_start, s.byte_end,
            s.line_start, s.line_end, f.path as file_path, f.language, f.id as file_id
     FROM symbols s
@@ -141,11 +182,18 @@ export async function detectAstClones(
       AND (s.line_end - s.line_start) >= ?
       AND f.gitignored = 0
     ORDER BY f.id, s.byte_start
-  `).all(minLoc) as Array<{
-    symbol_id: string; name: string; kind: string;
-    byte_start: number; byte_end: number;
-    line_start: number; line_end: number;
-    file_path: string; language: string; file_id: number;
+  `)
+    .all(minLoc) as Array<{
+    symbol_id: string;
+    name: string;
+    kind: string;
+    byte_start: number;
+    byte_end: number;
+    line_start: number;
+    line_end: number;
+    file_path: string;
+    language: string;
+    file_id: number;
   }>;
 
   const fileContentCache = new Map<number, string>();
@@ -196,7 +244,10 @@ export async function detectAstClones(
       // Ensure we get a reasonable containing node — if the descendant is a
       // tiny leaf inside the function signature, walk up.
       let target: TSNode = node;
-      while (target.parent && (target.endIndex - target.startIndex) < (c.byte_end - c.byte_start) * 0.6) {
+      while (
+        target.parent &&
+        target.endIndex - target.startIndex < (c.byte_end - c.byte_start) * 0.6
+      ) {
         target = target.parent;
       }
 

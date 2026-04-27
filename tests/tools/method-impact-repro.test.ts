@@ -59,7 +59,8 @@ describe('Issue #54: method-level impact analysis', () => {
 
   it('resolves method calls on parameter-annotated instances to edges', () => {
     // verify_and_save(user: User, ...) calls user.save() and user.validate()
-    const callEdges = store.db.prepare(`
+    const callEdges = store.db
+      .prepare(`
       SELECT s1.name AS caller, s2.name AS callee
       FROM edges e
       JOIN nodes n1 ON e.source_node_id = n1.id
@@ -68,7 +69,8 @@ describe('Issue #54: method-level impact analysis', () => {
       JOIN symbols s2 ON n2.node_type = 'symbol' AND n2.ref_id = s2.id
       JOIN edge_types et ON e.edge_type_id = et.id
       WHERE et.name = 'calls' AND s1.name = 'verify_and_save'
-    `).all() as { caller: string; callee: string }[];
+    `)
+      .all() as { caller: string; callee: string }[];
 
     const callees = callEdges.map((e) => e.callee);
     // user.save() where user: User comes from parameter annotation
@@ -115,9 +117,7 @@ describe('Issue #54: method-level impact analysis', () => {
 
     // Get unique files from find_usages (calls edges only)
     const refFiles = new Set(
-      refs.references
-        .filter((r) => r.edge_type === 'calls')
-        .map((r) => r.file),
+      refs.references.filter((r) => r.edge_type === 'calls').map((r) => r.file),
     );
 
     // Get files from get_change_impact

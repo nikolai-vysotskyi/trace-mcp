@@ -65,7 +65,10 @@ export function getRelatedSymbols(
   }
 
   // Score map: symbol_id -> { co_location, shared_importers, name_overlap }
-  const scores = new Map<number, { co_location: number; shared_importers: number; name_overlap: number }>();
+  const scores = new Map<
+    number,
+    { co_location: number; shared_importers: number; name_overlap: number }
+  >();
 
   const ensureEntry = (id: number) => {
     if (!scores.has(id)) scores.set(id, { co_location: 0, shared_importers: 0, name_overlap: 0 });
@@ -82,7 +85,8 @@ export function getRelatedSymbols(
   // 2. Shared importers via SQL
   const targetFileNodeId = store.getNodeId('file', target.file_id);
   if (targetFileNodeId !== undefined) {
-    const sharedImporterRows = store.db.prepare(`
+    const sharedImporterRows = store.db
+      .prepare(`
       WITH importers AS (
         SELECT DISTINCT e.source_node_id
         FROM edges e
@@ -107,7 +111,12 @@ export function getRelatedSymbols(
       FROM co_imported_files cif, total_importers ti
       ORDER BY cif.shared_count DESC
       LIMIT 50
-    `).all(targetFileNodeId, targetFileNodeId) as Array<{ node_id: number; shared_count: number; total_importers: number }>;
+    `)
+      .all(targetFileNodeId, targetFileNodeId) as Array<{
+      node_id: number;
+      shared_count: number;
+      total_importers: number;
+    }>;
 
     if (sharedImporterRows.length > 0) {
       // Resolve node IDs to file IDs, then get symbols from those files
@@ -126,9 +135,18 @@ export function getRelatedSymbols(
       const coFileIds = [...fileNodeMap.keys()];
       if (coFileIds.length > 0) {
         const placeholders = coFileIds.map(() => '?').join(',');
-        const allCoSymbols = store.db.prepare(
-          `SELECT * FROM symbols WHERE file_id IN (${placeholders})`,
-        ).all(...coFileIds) as Array<{ id: number; file_id: number; name: string; kind: string; symbol_id: string; fqn: string | null; signature: string | null; line_start: number | null }>;
+        const allCoSymbols = store.db
+          .prepare(`SELECT * FROM symbols WHERE file_id IN (${placeholders})`)
+          .all(...coFileIds) as Array<{
+          id: number;
+          file_id: number;
+          name: string;
+          kind: string;
+          symbol_id: string;
+          fqn: string | null;
+          signature: string | null;
+          line_start: number | null;
+        }>;
         for (const sym of allCoSymbols) {
           if (sym.id === target.id) continue;
           const info = fileNodeMap.get(sym.file_id);

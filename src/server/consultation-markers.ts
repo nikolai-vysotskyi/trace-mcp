@@ -29,7 +29,9 @@ function markConsulted(projectRoot: string, relPath: string): void {
     const dir = markerDir(projectRoot);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, fileHash(relPath)), '', { flag: 'w' });
-  } catch { /* best-effort — never block tool execution */ }
+  } catch {
+    /* best-effort — never block tool execution */
+  }
 }
 
 /** Extract file paths from tool params that indicate file consultation. */

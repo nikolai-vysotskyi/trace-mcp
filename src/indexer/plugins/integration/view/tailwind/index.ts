@@ -81,22 +81,26 @@ interface TailwindConfigMeta {
 }
 
 interface TailwindClassInventory {
-  static: string[];   // definite static classes
-  dynamic: string[];  // classes extracted from cn/clsx/cva args
-  helpers: string[];  // which helpers are used: cn, clsx, twMerge, cva, tv
+  static: string[]; // definite static classes
+  dynamic: string[]; // classes extracted from cn/clsx/cva args
+  helpers: string[]; // which helpers are used: cn, clsx, twMerge, cva, tv
 }
 
 // ─── Config file patterns ─────────────────────────────────────
 
 const CONFIG_FILE_NAMES = [
-  'tailwind.config.js', 'tailwind.config.ts',
-  'tailwind.config.mjs', 'tailwind.config.cjs',
+  'tailwind.config.js',
+  'tailwind.config.ts',
+  'tailwind.config.mjs',
+  'tailwind.config.cjs',
   'tailwind.js', // v1
 ];
 
 const POSTCSS_CONFIG_NAMES = [
-  'postcss.config.js', 'postcss.config.ts',
-  'postcss.config.mjs', 'postcss.config.cjs',
+  'postcss.config.js',
+  'postcss.config.ts',
+  'postcss.config.mjs',
+  'postcss.config.cjs',
 ];
 
 // ─── Regex patterns: v4 CSS-first ────────────────────────────
@@ -141,8 +145,10 @@ const SCREENS_RE = /\bscreens\s*:\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)}/;
 const VARIANTS_CONFIG_RE = /\bvariants\s*:\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)}/;
 const CORE_PLUGINS_RE = /\bcorePlugins\s*:\s*\{([^}]*)\}/;
 const MODULES_RE = /\bmodules\s*:\s*\{([^}]*)\}/;
-const PLUGIN_REQUIRE_RE = /require\(\s*['"](@tailwindcss\/[\w-]+|tailwindcss\/[\w-]+|[\w@/-]+)['"]\s*\)/g;
-const PLUGIN_IMPORT_RE = /import\s+\w+\s+from\s+['"](@tailwindcss\/[\w-]+|tailwindcss\/[\w-]+)["']/g;
+const PLUGIN_REQUIRE_RE =
+  /require\(\s*['"](@tailwindcss\/[\w-]+|tailwindcss\/[\w-]+|[\w@/-]+)['"]\s*\)/g;
+const PLUGIN_IMPORT_RE =
+  /import\s+\w+\s+from\s+['"](@tailwindcss\/[\w-]+|tailwindcss\/[\w-]+)["']/g;
 const INLINE_PLUGIN_WITH_NAME_RE = /\bplugin\s*\(\s*function\s+(\w+)/g;
 const INLINE_PLUGIN_RE = /\bplugin\s*\(\s*(?:function|{|\()/g;
 const V1_TEXT_COLORS_RE = /\btextColors\s*:\s*\{/;
@@ -189,10 +195,12 @@ const STRING_LITERAL_RE = /["'`]([^"'`\n]{2,120})["'`]/g;
 // Tailwind utility detector — tests the core utility (without modifier prefix).
 // Spacing: p-4 px-2 py-6 pt-0 etc. — must be followed by digit, bracket, auto, full, etc.
 // We require spacing utilities to end in a digit, word char (not open-ended prefix match).
-const TW_UTIL_RE = /^(?:flex(?:$|-\w)|grid(?:$|-\w)|block$|inline(?:$|-\w)|hidden$|container(?:$|-\w)|overflow-|prose(?:$|-\w)|z-\d|px?-\w|py?-\w|pt-\w|pb-\w|pl-\w|pr-\w|mx?-\w|my?-\w|mt-\w|mb-\w|ml-\w|mr-\w|gap-\w|gap-x-\w|gap-y-\w|space-[xy]-\w|w-\w|h-\w|min-w-\w|min-h-\w|max-w-\w|max-h-\w|size-\w|text-\w|font-\w|leading-\w|tracking-\w|decoration-\w|bg-\w|bg-opacity-\w|border(?:$|-\w)|ring(?:$|-\w)|shadow(?:$|-\w)|rounded(?:$|-\w)|opacity-\w|transition(?:$|-\w)|duration-\w|ease-\w|delay-\w|scale-\w|rotate-\w|translate-[xy]-\w|skew-[xy]-\w|origin-\w|cursor-\w|select-\w|pointer-events-\w|appearance-\w|resize(?:$|-\w)|outline(?:$|-\w)|scroll-\w|snap-\w|touch-\w|will-change-\w|aspect-\w|columns-\w|break-\w|box-\w|object-\w|float-\w|clear-\w|isolate$|table(?:$|-\w)|caption-\w|sr-only$|not-sr-only$|col-\w|col-span-\w|row-\w|row-span-\w|order-\w|place-\w|self-\w|justify-\w|items-\w|content-\w|grow(?:$|-\w)|shrink(?:$|-\w)|basis-\w|static$|fixed$|absolute$|relative$|sticky$|top-\w|right-\w|bottom-\w|left-\w|inset-\w|visible$|invisible$|truncate$|whitespace-\w|line-clamp-\w|list-\w|from-\w|via-\w|to-\w|blur(?:$|-\w)|brightness-\w|contrast-\w|drop-shadow(?:$|-\w)|grayscale(?:$|-\w)|hue-rotate-\w|invert(?:$|-\w)|saturate-\w|sepia(?:$|-\w)|backdrop-\w|fill-\w|stroke-\w|animate-\w|divide-\w|placeholder-\w|caret-\w|accent-\w|underline$|overline$|line-through$|no-underline$|uppercase$|lowercase$|capitalize$|normal-case$|italic$|not-italic$|antialiased$|subpixel-antialiased$|\[.+\])/;
+const TW_UTIL_RE =
+  /^(?:flex(?:$|-\w)|grid(?:$|-\w)|block$|inline(?:$|-\w)|hidden$|container(?:$|-\w)|overflow-|prose(?:$|-\w)|z-\d|px?-\w|py?-\w|pt-\w|pb-\w|pl-\w|pr-\w|mx?-\w|my?-\w|mt-\w|mb-\w|ml-\w|mr-\w|gap-\w|gap-x-\w|gap-y-\w|space-[xy]-\w|w-\w|h-\w|min-w-\w|min-h-\w|max-w-\w|max-h-\w|size-\w|text-\w|font-\w|leading-\w|tracking-\w|decoration-\w|bg-\w|bg-opacity-\w|border(?:$|-\w)|ring(?:$|-\w)|shadow(?:$|-\w)|rounded(?:$|-\w)|opacity-\w|transition(?:$|-\w)|duration-\w|ease-\w|delay-\w|scale-\w|rotate-\w|translate-[xy]-\w|skew-[xy]-\w|origin-\w|cursor-\w|select-\w|pointer-events-\w|appearance-\w|resize(?:$|-\w)|outline(?:$|-\w)|scroll-\w|snap-\w|touch-\w|will-change-\w|aspect-\w|columns-\w|break-\w|box-\w|object-\w|float-\w|clear-\w|isolate$|table(?:$|-\w)|caption-\w|sr-only$|not-sr-only$|col-\w|col-span-\w|row-\w|row-span-\w|order-\w|place-\w|self-\w|justify-\w|items-\w|content-\w|grow(?:$|-\w)|shrink(?:$|-\w)|basis-\w|static$|fixed$|absolute$|relative$|sticky$|top-\w|right-\w|bottom-\w|left-\w|inset-\w|visible$|invisible$|truncate$|whitespace-\w|line-clamp-\w|list-\w|from-\w|via-\w|to-\w|blur(?:$|-\w)|brightness-\w|contrast-\w|drop-shadow(?:$|-\w)|grayscale(?:$|-\w)|hue-rotate-\w|invert(?:$|-\w)|saturate-\w|sepia(?:$|-\w)|backdrop-\w|fill-\w|stroke-\w|animate-\w|divide-\w|placeholder-\w|caret-\w|accent-\w|underline$|overline$|line-through$|no-underline$|uppercase$|lowercase$|capitalize$|normal-case$|italic$|not-italic$|antialiased$|subpixel-antialiased$|\[.+\])/;
 
 // State/responsive modifiers
-const TW_MODIFIER_RE = /^(?:hover|focus|active|disabled|visited|checked|placeholder|first|last|odd|even|group-hover|group-focus|peer-hover|focus-within|focus-visible|dark|light|print|motion-safe|motion-reduce|sm|md|lg|xl|2xl|container|max-sm|max-md|max-lg|max-xl|[\w-]+):/;
+const TW_MODIFIER_RE =
+  /^(?:hover|focus|active|disabled|visited|checked|placeholder|first|last|odd|even|group-hover|group-focus|peer-hover|focus-within|focus-visible|dark|light|print|motion-safe|motion-reduce|sm|md|lg|xl|2xl|container|max-sm|max-md|max-lg|max-xl|[\w-]+):/;
 
 function isTailwindClass(token: string): boolean {
   if (!token || token.length < 2) return false;
@@ -284,23 +292,75 @@ export class TailwindPlugin implements FrameworkPlugin {
     return {
       edgeTypes: [
         // Config-level
-        { name: 'tailwind_uses_plugin',     category: 'tailwind', description: 'Tailwind config uses a plugin' },
-        { name: 'tailwind_postcss_plugin',  category: 'tailwind', description: 'PostCSS config registers tailwindcss plugin' },
+        {
+          name: 'tailwind_uses_plugin',
+          category: 'tailwind',
+          description: 'Tailwind config uses a plugin',
+        },
+        {
+          name: 'tailwind_postcss_plugin',
+          category: 'tailwind',
+          description: 'PostCSS config registers tailwindcss plugin',
+        },
         // CSS-level
-        { name: 'tailwind_applies',         category: 'tailwind', description: 'CSS file uses @apply directive' },
-        { name: 'tailwind_custom_class',    category: 'tailwind', description: 'Custom class defined via @layer / @responsive / @variants' },
-        { name: 'tailwind_screen_ref',      category: 'tailwind', description: '@screen directive references a breakpoint' },
-        { name: 'tailwind_variant_group',   category: 'tailwind', description: '@variants / @responsive directive groups utilities' },
-        { name: 'tailwind_container_query', category: 'tailwind', description: '@container query in CSS' },
+        {
+          name: 'tailwind_applies',
+          category: 'tailwind',
+          description: 'CSS file uses @apply directive',
+        },
+        {
+          name: 'tailwind_custom_class',
+          category: 'tailwind',
+          description: 'Custom class defined via @layer / @responsive / @variants',
+        },
+        {
+          name: 'tailwind_screen_ref',
+          category: 'tailwind',
+          description: '@screen directive references a breakpoint',
+        },
+        {
+          name: 'tailwind_variant_group',
+          category: 'tailwind',
+          description: '@variants / @responsive directive groups utilities',
+        },
+        {
+          name: 'tailwind_container_query',
+          category: 'tailwind',
+          description: '@container query in CSS',
+        },
         // v4 CSS-level
-        { name: 'tailwind_v4_utility',      category: 'tailwind', description: '@utility defines a custom utility (v4)' },
-        { name: 'tailwind_v4_variant',      category: 'tailwind', description: '@variant / @custom-variant defines a custom variant (v4)' },
+        {
+          name: 'tailwind_v4_utility',
+          category: 'tailwind',
+          description: '@utility defines a custom utility (v4)',
+        },
+        {
+          name: 'tailwind_v4_variant',
+          category: 'tailwind',
+          description: '@variant / @custom-variant defines a custom variant (v4)',
+        },
         // Template-level
-        { name: 'tailwind_class_usage',     category: 'tailwind', description: 'Template file uses Tailwind classes in class attribute' },
-        { name: 'tailwind_cn_call',         category: 'tailwind', description: 'File uses cn/clsx/twMerge class composition helper' },
-        { name: 'tailwind_cva_call',        category: 'tailwind', description: 'File uses cva/tv class-variance-authority helper' },
+        {
+          name: 'tailwind_class_usage',
+          category: 'tailwind',
+          description: 'Template file uses Tailwind classes in class attribute',
+        },
+        {
+          name: 'tailwind_cn_call',
+          category: 'tailwind',
+          description: 'File uses cn/clsx/twMerge class composition helper',
+        },
+        {
+          name: 'tailwind_cva_call',
+          category: 'tailwind',
+          description: 'File uses cva/tv class-variance-authority helper',
+        },
         // Cross-file
-        { name: 'tailwind_config_used_by',  category: 'tailwind', description: 'Config file is used by a CSS entry point' },
+        {
+          name: 'tailwind_config_used_by',
+          category: 'tailwind',
+          description: 'Config file is used by a CSS entry point',
+        },
       ],
     };
   }
@@ -391,8 +451,7 @@ export class TailwindPlugin implements FrameworkPlugin {
 
       if (!cssSource) continue;
 
-      const hasDirective = TAILWIND_DIRECTIVE_RE.test(cssSource)
-        || V4_IMPORT_RE.test(cssSource);
+      const hasDirective = TAILWIND_DIRECTIVE_RE.test(cssSource) || V4_IMPORT_RE.test(cssSource);
       if (hasDirective) {
         edges.push({
           edgeType: 'tailwind_config_used_by',
@@ -427,7 +486,9 @@ export class TailwindPlugin implements FrameworkPlugin {
 
     // Theme sections
     for (const section of this.extractThemeSections(source)) {
-      const key = section.isExtend ? `tailwind:theme.extend.${section.category}` : `tailwind:theme.${section.category}`;
+      const key = section.isExtend
+        ? `tailwind:theme.extend.${section.category}`
+        : `tailwind:theme.${section.category}`;
       result.symbols.push({
         name: key,
         kind: 'variable',
@@ -452,7 +513,7 @@ export class TailwindPlugin implements FrameworkPlugin {
       result.symbols.push({
         name: 'tailwind:screens',
         kind: 'variable',
-        signature: `screens { ${screens.map(s => `${s.name}:${s.value}`).join(', ')} }`,
+        signature: `screens { ${screens.map((s) => `${s.name}:${s.value}`).join(', ')} }`,
         metadata: { frameworkRole: 'tailwind_screens', screens },
       });
     }
@@ -463,7 +524,11 @@ export class TailwindPlugin implements FrameworkPlugin {
         name: `tailwind:variants:${v.utility}`,
         kind: 'variable',
         signature: `variants.${v.utility} [${v.variants.join(', ')}]`,
-        metadata: { frameworkRole: 'tailwind_variants_config', utility: v.utility, variants: v.variants },
+        metadata: {
+          frameworkRole: 'tailwind_variants_config',
+          utility: v.utility,
+          variants: v.variants,
+        },
       });
     }
 
@@ -477,7 +542,11 @@ export class TailwindPlugin implements FrameworkPlugin {
         name: `tailwind:plugin:${plugin.name}`,
         kind: 'variable',
         signature: plugin.isInline ? `plugin(function ${plugin.name})` : `plugin ${plugin.name}`,
-        metadata: { frameworkRole: 'tailwind_plugin', pluginName: plugin.name, isInline: plugin.isInline },
+        metadata: {
+          frameworkRole: 'tailwind_plugin',
+          pluginName: plugin.name,
+          isInline: plugin.isInline,
+        },
       });
     }
 
@@ -527,7 +596,7 @@ export class TailwindPlugin implements FrameworkPlugin {
     let tMatch: RegExpExecArray | null;
     while ((tMatch = themeRe.exec(source)) !== null) {
       const modMatch = V4_THEME_MODIFIER_RE.exec(tMatch[0]);
-      const modifier: 'inline' | 'reference' | null = modMatch?.[1] as any ?? null;
+      const modifier: 'inline' | 'reference' | null = (modMatch?.[1] as any) ?? null;
       const body = extractBraceBody(source, tMatch.index + tMatch[0].length);
 
       // Group custom properties by prefix
@@ -562,7 +631,10 @@ export class TailwindPlugin implements FrameworkPlugin {
     let plMatch: RegExpExecArray | null;
     while ((plMatch = pluginRe.exec(source)) !== null) {
       const line = lineAt(source, plMatch.index);
-      result.edges!.push({ edgeType: 'tailwind_uses_plugin', metadata: { pluginName: plMatch[1], line } });
+      result.edges!.push({
+        edgeType: 'tailwind_uses_plugin',
+        metadata: { pluginName: plMatch[1], line },
+      });
       result.symbols.push({
         name: `tailwind:plugin:${plMatch[1]}`,
         kind: 'variable',
@@ -589,7 +661,11 @@ export class TailwindPlugin implements FrameworkPlugin {
         name: 'tailwind:v4:source',
         kind: 'variable',
         signature: `@source [${sourcePaths.join(', ')}]${sourceExcluded.length ? ` (excluded: ${sourceExcluded.join(', ')})` : ''}`,
-        metadata: { frameworkRole: 'tailwind_v4_source', paths: sourcePaths, excluded: sourceExcluded },
+        metadata: {
+          frameworkRole: 'tailwind_v4_source',
+          paths: sourcePaths,
+          excluded: sourceExcluded,
+        },
       });
     }
 
@@ -598,7 +674,10 @@ export class TailwindPlugin implements FrameworkPlugin {
     let uMatch: RegExpExecArray | null;
     while ((uMatch = utilityRe.exec(source)) !== null) {
       const line = lineAt(source, uMatch.index);
-      result.edges!.push({ edgeType: 'tailwind_v4_utility', metadata: { name: uMatch[1], filePath, line } });
+      result.edges!.push({
+        edgeType: 'tailwind_v4_utility',
+        metadata: { name: uMatch[1], filePath, line },
+      });
       result.symbols.push({
         name: `tailwind:utility:${uMatch[1]}`,
         kind: 'function',
@@ -613,7 +692,10 @@ export class TailwindPlugin implements FrameworkPlugin {
     let vMatch: RegExpExecArray | null;
     while ((vMatch = variantRe.exec(source)) !== null) {
       const line = lineAt(source, vMatch.index);
-      result.edges!.push({ edgeType: 'tailwind_v4_variant', metadata: { name: vMatch[1], filePath, line } });
+      result.edges!.push({
+        edgeType: 'tailwind_v4_variant',
+        metadata: { name: vMatch[1], filePath, line },
+      });
       result.symbols.push({
         name: `tailwind:variant:${vMatch[1]}`,
         kind: 'variable',
@@ -627,7 +709,10 @@ export class TailwindPlugin implements FrameworkPlugin {
     const customVariantRe = new RegExp(V4_CUSTOM_VARIANT_RE.source, 'g');
     while ((vMatch = customVariantRe.exec(source)) !== null) {
       const line = lineAt(source, vMatch.index);
-      result.edges!.push({ edgeType: 'tailwind_v4_variant', metadata: { name: vMatch[1], filePath, line, isCustom: true } });
+      result.edges!.push({
+        edgeType: 'tailwind_v4_variant',
+        metadata: { name: vMatch[1], filePath, line, isCustom: true },
+      });
       result.symbols.push({
         name: `tailwind:variant:${vMatch[1]}`,
         kind: 'variable',
@@ -709,9 +794,12 @@ export class TailwindPlugin implements FrameworkPlugin {
     const staticClasses = new Set<string>();
     const isVue = language === 'vue' || filePath.endsWith('.vue');
     const isSvelte = language === 'svelte' || filePath.endsWith('.svelte');
-    const isJsx = language === 'typescriptreact' || language === 'javascriptreact'
-      || filePath.endsWith('.tsx') || filePath.endsWith('.jsx')
-      || filePath.endsWith('.mdx'); // MDX contains JSX syntax
+    const isJsx =
+      language === 'typescriptreact' ||
+      language === 'javascriptreact' ||
+      filePath.endsWith('.tsx') ||
+      filePath.endsWith('.jsx') ||
+      filePath.endsWith('.mdx'); // MDX contains JSX syntax
 
     // ── Static class="..." (HTML, Blade, Vue, Svelte, any HTML-like)
     for (const re of [HTML_CLASS_ATTR_RE]) {
@@ -746,7 +834,7 @@ export class TailwindPlugin implements FrameworkPlugin {
       const tmplRe = /\bclassName\s*=\s*\{`([^`]*)`\}/g;
       while ((m = tmplRe.exec(source)) !== null) {
         // Split on ${...} and extract static parts
-        const segments = m[1].split(/\$\{[^}]*\}/).flatMap(s => s.split(/\s+/));
+        const segments = m[1].split(/\$\{[^}]*\}/).flatMap((s) => s.split(/\s+/));
         for (const cls of segments) {
           if (cls && isTailwindClass(cls)) staticClasses.add(cls);
         }
@@ -957,31 +1045,72 @@ export class TailwindPlugin implements FrameworkPlugin {
     let m: RegExpExecArray | null;
     while ((m = re.exec(source)) !== null) {
       const line = lineAt(source, m.index);
-      result.edges!.push({ edgeType: 'tailwind_screen_ref', metadata: { screen: m[1], filePath, line } });
+      result.edges!.push({
+        edgeType: 'tailwind_screen_ref',
+        metadata: { screen: m[1], filePath, line },
+      });
       const body = extractBraceBody(source, m.index + m[0].length);
-      this.extractClassesFromBlock(body, 'utilities', filePath, source, m.index + m[0].length, result);
+      this.extractClassesFromBlock(
+        body,
+        'utilities',
+        filePath,
+        source,
+        m.index + m[0].length,
+        result,
+      );
     }
   }
 
-  private extractVariantsDirectives(source: string, filePath: string, result: FileParseResult): void {
+  private extractVariantsDirectives(
+    source: string,
+    filePath: string,
+    result: FileParseResult,
+  ): void {
     const re = new RegExp(VARIANTS_DIRECTIVE_RE.source, 'g');
     let m: RegExpExecArray | null;
     while ((m = re.exec(source)) !== null) {
-      const variants = m[1].split(',').map(v => v.trim()).filter(Boolean);
+      const variants = m[1]
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
       const line = lineAt(source, m.index);
-      result.edges!.push({ edgeType: 'tailwind_variant_group', metadata: { variants, filePath, line } });
+      result.edges!.push({
+        edgeType: 'tailwind_variant_group',
+        metadata: { variants, filePath, line },
+      });
       const body = extractBraceBody(source, m.index + m[0].length);
-      this.extractClassesFromBlock(body, 'utilities', filePath, source, m.index + m[0].length, result);
+      this.extractClassesFromBlock(
+        body,
+        'utilities',
+        filePath,
+        source,
+        m.index + m[0].length,
+        result,
+      );
     }
   }
 
-  private extractResponsiveDirective(source: string, filePath: string, result: FileParseResult): void {
+  private extractResponsiveDirective(
+    source: string,
+    filePath: string,
+    result: FileParseResult,
+  ): void {
     const re = new RegExp(RESPONSIVE_DIRECTIVE_RE.source, 'g');
     let m: RegExpExecArray | null;
     while ((m = re.exec(source)) !== null) {
-      result.edges!.push({ edgeType: 'tailwind_variant_group', metadata: { variants: ['responsive'], filePath, line: lineAt(source, m.index) } });
+      result.edges!.push({
+        edgeType: 'tailwind_variant_group',
+        metadata: { variants: ['responsive'], filePath, line: lineAt(source, m.index) },
+      });
       const body = extractBraceBody(source, m.index + m[0].length);
-      this.extractClassesFromBlock(body, 'utilities', filePath, source, m.index + m[0].length, result);
+      this.extractClassesFromBlock(
+        body,
+        'utilities',
+        filePath,
+        source,
+        m.index + m[0].length,
+        result,
+      );
     }
   }
 
@@ -1008,7 +1137,14 @@ export class TailwindPlugin implements FrameworkPlugin {
         },
       });
       const body = extractBraceBody(source, m.index + m[0].length);
-      this.extractClassesFromBlock(body, 'utilities', filePath, source, m.index + m[0].length, result);
+      this.extractClassesFromBlock(
+        body,
+        'utilities',
+        filePath,
+        source,
+        m.index + m[0].length,
+        result,
+      );
     }
   }
 
@@ -1024,7 +1160,10 @@ export class TailwindPlugin implements FrameworkPlugin {
     let m: RegExpExecArray | null;
     while ((m = classRe.exec(body)) !== null) {
       const line = lineAt(fullSource, blockStart + m.index);
-      result.edges!.push({ edgeType: 'tailwind_custom_class', metadata: { className: m[1], layer, filePath, line } });
+      result.edges!.push({
+        edgeType: 'tailwind_custom_class',
+        metadata: { className: m[1], layer, filePath, line },
+      });
       result.symbols.push({
         name: m[1],
         kind: 'variable',
@@ -1088,7 +1227,9 @@ export class TailwindPlugin implements FrameworkPlugin {
       const brace = after.indexOf('{');
       if (brace !== -1) {
         const body = extractBraceBody(after, brace + 1);
-        results.push(...extractSectionsFromBody(body, false).filter(s => s.category !== 'extend'));
+        results.push(
+          ...extractSectionsFromBody(body, false).filter((s) => s.category !== 'extend'),
+        );
       }
     }
 
@@ -1121,9 +1262,10 @@ export class TailwindPlugin implements FrameworkPlugin {
   // ═══════════════════════════════════════════════════════════
 
   private extractPostCssConfig(source: string, filePath: string, result: FileParseResult): void {
-    const hasTailwind = /['"]tailwindcss['"]/.test(source)
-      || /\btailwindcss\s*[:(,]/.test(source)
-      || /\btailwindcss\s*\(\)/.test(source);
+    const hasTailwind =
+      /['"]tailwindcss['"]/.test(source) ||
+      /\btailwindcss\s*[:(,]/.test(source) ||
+      /\btailwindcss\s*\(\)/.test(source);
     if (!hasTailwind) return;
 
     result.frameworkRole = 'tailwind_postcss_config';
@@ -1200,7 +1342,8 @@ function isJsLike(language: string): boolean {
 
 function isTemplateLike(language: string, filePath: string): boolean {
   if (['html', 'vue', 'svelte', 'blade', 'php', 'astro'].includes(language)) return true;
-  if (/\.(html|vue|svelte|blade\.php|astro|njk|hbs|ejs|liquid|twig|jinja|mdx)$/.test(filePath)) return true;
+  if (/\.(html|vue|svelte|blade\.php|astro|njk|hbs|ejs|liquid|twig|jinja|mdx)$/.test(filePath))
+    return true;
   // JSX/TSX also contain templates
   if (['typescriptreact', 'javascriptreact'].includes(language)) return true;
   if (/\.(tsx|jsx)$/.test(filePath)) return true;
@@ -1267,7 +1410,7 @@ function extractScreens(source: string): TailwindScreenDef[] {
   // Object format: desktop: { min: '1280px', max: '1535px' }
   const obj = /['"]?([\w-]+)['"]?\s*:\s*\{([^}]+)\}/g;
   while ((m = obj.exec(body)) !== null) {
-    if (screens.some(s => s.name === m![1])) continue;
+    if (screens.some((s) => s.name === m![1])) continue;
     const inner = m[2];
     const min = inner.match(/\bmin\s*:\s*['"]([^'"]+)['"]/)?.[1];
     const max = inner.match(/\bmax\s*:\s*['"]([^'"]+)['"]/)?.[1];
@@ -1284,7 +1427,7 @@ function extractVariantsConfig(source: string): Array<{ utility: string; variant
   const re = /['"]?([\w-]+)['"]?\s*:\s*\[([^\]]+)\]/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(match[1])) !== null) {
-    const variants = m[2].match(/['"]([^'"]+)['"]/g)?.map(s => s.replace(/['"]/g, '')) ?? [];
+    const variants = m[2].match(/['"]([^'"]+)['"]/g)?.map((s) => s.replace(/['"]/g, '')) ?? [];
     if (variants.length > 0) results.push({ utility: m[1], variants });
   }
   return results;
@@ -1297,23 +1440,33 @@ function extractPluginRefs(source: string): TailwindPluginRef[] {
   const reqRe = new RegExp(PLUGIN_REQUIRE_RE.source, 'g');
   let m: RegExpExecArray | null;
   while ((m = reqRe.exec(source)) !== null) {
-    if (!seen.has(m[1])) { seen.add(m[1]); results.push({ name: m[1], line: lineAt(source, m.index), isInline: false }); }
+    if (!seen.has(m[1])) {
+      seen.add(m[1]);
+      results.push({ name: m[1], line: lineAt(source, m.index), isInline: false });
+    }
   }
   const impRe = new RegExp(PLUGIN_IMPORT_RE.source, 'g');
   while ((m = impRe.exec(source)) !== null) {
-    if (!seen.has(m[1])) { seen.add(m[1]); results.push({ name: m[1], line: lineAt(source, m.index), isInline: false }); }
+    if (!seen.has(m[1])) {
+      seen.add(m[1]);
+      results.push({ name: m[1], line: lineAt(source, m.index), isInline: false });
+    }
   }
   const namedRe = new RegExp(INLINE_PLUGIN_WITH_NAME_RE.source, 'g');
   while ((m = namedRe.exec(source)) !== null) {
     const name = `inline:${m[1]}`;
-    if (!seen.has(name)) { seen.add(name); results.push({ name, line: lineAt(source, m.index), isInline: true }); }
+    if (!seen.has(name)) {
+      seen.add(name);
+      results.push({ name, line: lineAt(source, m.index), isInline: true });
+    }
   }
   // Count anonymous inline plugins
   const allInlineRe = new RegExp(INLINE_PLUGIN_RE.source, 'g');
   let anonCount = 0;
   while ((m = allInlineRe.exec(source)) !== null) anonCount++;
-  anonCount -= results.filter(r => r.isInline).length;
-  if (anonCount > 0) results.push({ name: `inline:anonymous (${anonCount})`, line: 0, isInline: true });
+  anonCount -= results.filter((r) => r.isInline).length;
+  if (anonCount > 0)
+    results.push({ name: `inline:anonymous (${anonCount})`, line: 0, isInline: true });
 
   return results;
 }

@@ -26,7 +26,11 @@ describe('env-parser', () => {
     it('strips inline comments for unquoted values', () => {
       const entries = parseEnvFile('PORT=3000 # default port\n');
       expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({ key: 'PORT', valueType: 'number', valueFormat: 'integer' });
+      expect(entries[0]).toMatchObject({
+        key: 'PORT',
+        valueType: 'number',
+        valueFormat: 'integer',
+      });
     });
 
     it('preserves comments as context', () => {
@@ -82,14 +86,29 @@ describe('env-parser', () => {
     });
 
     it('detects URLs', () => {
-      expect(infer('https://example.com')).toMatchObject({ valueType: 'string', valueFormat: 'url' });
-      expect(infer('redis://localhost:6379')).toMatchObject({ valueType: 'string', valueFormat: 'url' });
-      expect(infer('mysql://user:pass@host/db')).toMatchObject({ valueType: 'string', valueFormat: 'url' });
-      expect(infer('mongodb+srv://cluster.example.net')).toMatchObject({ valueType: 'string', valueFormat: 'url' });
+      expect(infer('https://example.com')).toMatchObject({
+        valueType: 'string',
+        valueFormat: 'url',
+      });
+      expect(infer('redis://localhost:6379')).toMatchObject({
+        valueType: 'string',
+        valueFormat: 'url',
+      });
+      expect(infer('mysql://user:pass@host/db')).toMatchObject({
+        valueType: 'string',
+        valueFormat: 'url',
+      });
+      expect(infer('mongodb+srv://cluster.example.net')).toMatchObject({
+        valueType: 'string',
+        valueFormat: 'url',
+      });
     });
 
     it('detects emails', () => {
-      expect(infer('user@example.com')).toMatchObject({ valueType: 'string', valueFormat: 'email' });
+      expect(infer('user@example.com')).toMatchObject({
+        valueType: 'string',
+        valueFormat: 'email',
+      });
     });
 
     it('detects IPs', () => {
@@ -97,11 +116,17 @@ describe('env-parser', () => {
     });
 
     it('detects host:port', () => {
-      expect(infer('localhost:6379')).toMatchObject({ valueType: 'string', valueFormat: 'host:port' });
+      expect(infer('localhost:6379')).toMatchObject({
+        valueType: 'string',
+        valueFormat: 'host:port',
+      });
     });
 
     it('detects UUIDs', () => {
-      expect(infer('550e8400-e29b-41d4-a716-446655440000')).toMatchObject({ valueType: 'string', valueFormat: 'uuid' });
+      expect(infer('550e8400-e29b-41d4-a716-446655440000')).toMatchObject({
+        valueType: 'string',
+        valueFormat: 'uuid',
+      });
     });
 
     it('detects paths', () => {

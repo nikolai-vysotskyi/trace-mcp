@@ -50,9 +50,11 @@ describe('assembleWakeUp', () => {
     const ctx = assembleWakeUp(store, '/projects/myapp');
     expect(ctx.decisions.total_active).toBe(2);
     expect(ctx.decisions.recent).toHaveLength(2);
-    expect(ctx.decisions.recent.some(d => d.title === 'Use PostgreSQL')).toBe(true);
-    expect(ctx.decisions.recent.find(d => d.title === 'Use PostgreSQL')?.symbol).toBe('src/db.ts::Pool#class');
-    expect(ctx.decisions.recent.find(d => d.title === 'Use PostgreSQL')?.file).toBe('src/db.ts');
+    expect(ctx.decisions.recent.some((d) => d.title === 'Use PostgreSQL')).toBe(true);
+    expect(ctx.decisions.recent.find((d) => d.title === 'Use PostgreSQL')?.symbol).toBe(
+      'src/db.ts::Pool#class',
+    );
+    expect(ctx.decisions.recent.find((d) => d.title === 'Use PostgreSQL')?.file).toBe('src/db.ts');
   });
 
   it('excludes invalidated decisions from wake-up', () => {
@@ -100,14 +102,16 @@ describe('assembleWakeUp', () => {
       source: 'mined',
     });
     store.markSessionMined('/fake/session.jsonl', 1);
-    store.addSessionChunks([{
-      session_id: 'sess-1',
-      project_root: '/projects/myapp',
-      chunk_index: 0,
-      role: 'user',
-      content: 'Some session content here.',
-      timestamp: '2025-06-01T10:00:00Z',
-    }]);
+    store.addSessionChunks([
+      {
+        session_id: 'sess-1',
+        project_root: '/projects/myapp',
+        chunk_index: 0,
+        role: 'user',
+        content: 'Some session content here.',
+        timestamp: '2025-06-01T10:00:00Z',
+      },
+    ]);
 
     const ctx = assembleWakeUp(store, '/projects/myapp');
     expect(ctx.memory.total_decisions).toBe(1);

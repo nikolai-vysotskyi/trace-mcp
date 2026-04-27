@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
-import { visualizeGraph, getDependencyDiagram, buildGraphData } from '../../src/tools/analysis/visualize.js';
+import {
+  visualizeGraph,
+  getDependencyDiagram,
+  buildGraphData,
+} from '../../src/tools/analysis/visualize.js';
 import { TopologyStore } from '../../src/topology/topology-db.js';
 
 describe('visualizeGraph', () => {
@@ -22,16 +26,34 @@ describe('visualizeGraph', () => {
 
     // Insert symbols
     const s1 = store.insertSymbol(f1, {
-      symbolId: 'src/auth.ts::login#function', name: 'login', kind: 'function',
-      fqn: 'login', byteStart: 0, byteEnd: 50, lineStart: 1, lineEnd: 5,
+      symbolId: 'src/auth.ts::login#function',
+      name: 'login',
+      kind: 'function',
+      fqn: 'login',
+      byteStart: 0,
+      byteEnd: 50,
+      lineStart: 1,
+      lineEnd: 5,
     });
     const s2 = store.insertSymbol(f2, {
-      symbolId: 'src/user.ts::User#class', name: 'User', kind: 'class',
-      fqn: 'User', byteStart: 0, byteEnd: 100, lineStart: 1, lineEnd: 20,
+      symbolId: 'src/user.ts::User#class',
+      name: 'User',
+      kind: 'class',
+      fqn: 'User',
+      byteStart: 0,
+      byteEnd: 100,
+      lineStart: 1,
+      lineEnd: 20,
     });
     const s3 = store.insertSymbol(f3, {
-      symbolId: 'src/db.ts::query#function', name: 'query', kind: 'function',
-      fqn: 'query', byteStart: 0, byteEnd: 40, lineStart: 1, lineEnd: 5,
+      symbolId: 'src/db.ts::query#function',
+      name: 'query',
+      kind: 'function',
+      fqn: 'query',
+      byteStart: 0,
+      byteEnd: 40,
+      lineStart: 1,
+      lineEnd: 5,
     });
 
     // Create edges between files
@@ -170,12 +192,22 @@ describe('getDependencyDiagram', () => {
     const f2 = store.insertFile('src/user.ts', 'typescript', 'h2', 300);
 
     store.insertSymbol(f1, {
-      symbolId: 'src/auth.ts::login#function', name: 'login', kind: 'function',
-      byteStart: 0, byteEnd: 50, lineStart: 1, lineEnd: 5,
+      symbolId: 'src/auth.ts::login#function',
+      name: 'login',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 50,
+      lineStart: 1,
+      lineEnd: 5,
     });
     store.insertSymbol(f2, {
-      symbolId: 'src/user.ts::User#class', name: 'User', kind: 'class',
-      byteStart: 0, byteEnd: 100, lineStart: 1, lineEnd: 20,
+      symbolId: 'src/user.ts::User#class',
+      name: 'User',
+      kind: 'class',
+      byteStart: 0,
+      byteEnd: 100,
+      lineStart: 1,
+      lineEnd: 20,
     });
 
     const n1 = store.getNodeId('file', f1)!;

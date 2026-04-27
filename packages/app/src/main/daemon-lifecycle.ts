@@ -22,7 +22,10 @@ function resolveTraceMcpBinary(): string {
   }
 }
 
-function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): { ok: boolean; error?: string } {
+function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
+  ok: boolean;
+  error?: string;
+} {
   try {
     const bin = resolveTraceMcpBinary();
     // execFileSync avoids shell-injection concerns around the resolved path.

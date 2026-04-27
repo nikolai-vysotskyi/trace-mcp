@@ -46,10 +46,26 @@ export class ZustandReduxPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'zustand_store', category: 'state-management', description: 'Zustand store definition' },
-        { name: 'redux_slice', category: 'state-management', description: 'Redux Toolkit slice definition' },
-        { name: 'dispatches_action', category: 'state-management', description: 'Component dispatches a Redux/Zustand action' },
-        { name: 'selects_state', category: 'state-management', description: 'Component selects state from store' },
+        {
+          name: 'zustand_store',
+          category: 'state-management',
+          description: 'Zustand store definition',
+        },
+        {
+          name: 'redux_slice',
+          category: 'state-management',
+          description: 'Redux Toolkit slice definition',
+        },
+        {
+          name: 'dispatches_action',
+          category: 'state-management',
+          description: 'Component dispatches a Redux/Zustand action',
+        },
+        {
+          name: 'selects_state',
+          category: 'state-management',
+          description: 'Component selects state from store',
+        },
       ],
     };
   }
@@ -142,7 +158,8 @@ export function extractZustandStores(source: string): ZustandStore[] {
 
   // Pattern: export const useXxxStore = create((...) => ({ ... }))
   // or: export const useXxxStore = create<XxxState>()((...) => ({ ... }))
-  const storeRegex = /(?:export\s+)?(?:const|let)\s+(use\w+Store|\w+Store)\s*=\s*create(?:<[^>]+>)?(?:\(\))?\s*\(/g;
+  const storeRegex =
+    /(?:export\s+)?(?:const|let)\s+(use\w+Store|\w+Store)\s*=\s*create(?:<[^>]+>)?(?:\(\))?\s*\(/g;
   let match: RegExpExecArray | null;
 
   while ((match = storeRegex.exec(source)) !== null) {

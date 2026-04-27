@@ -22,16 +22,13 @@ const ROUTE_RE =
   /\b(\w+)\s*\.\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|CONNECT|TRACE)\s*\(\s*"([^"]+)"/g;
 
 // g := e.Group("/api")
-const GROUP_RE =
-  /\b(\w+)\s*\.\s*Group\s*\(\s*"([^"]+)"/g;
+const GROUP_RE = /\b(\w+)\s*\.\s*Group\s*\(\s*"([^"]+)"/g;
 
 // e.Use(middleware) or e.Pre(middleware)
-const MIDDLEWARE_RE =
-  /\b(\w+)\s*\.\s*(?:Use|Pre)\s*\(\s*(\w[\w.]*)/g;
+const MIDDLEWARE_RE = /\b(\w+)\s*\.\s*(?:Use|Pre)\s*\(\s*(\w[\w.]*)/g;
 
 // e.Static("/assets", "./public")
-const STATIC_RE =
-  /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
+const STATIC_RE = /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
 
 interface EchoRoute {
   method: string;

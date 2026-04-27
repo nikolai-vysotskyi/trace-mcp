@@ -29,7 +29,14 @@ export function isTransientError(error: unknown): boolean {
     const msg = error.message.toLowerCase();
     // AbortError = timeout, fetch failures
     if (error.name === 'AbortError' || error.name === 'TimeoutError') return true;
-    if (msg.includes('fetch failed') || msg.includes('network') || msg.includes('econnrefused') || msg.includes('econnreset') || msg.includes('socket hang up')) return true;
+    if (
+      msg.includes('fetch failed') ||
+      msg.includes('network') ||
+      msg.includes('econnrefused') ||
+      msg.includes('econnreset') ||
+      msg.includes('socket hang up')
+    )
+      return true;
     // HTTP status codes in error messages
     if (/\b(429|500|502|503|504)\b/.test(msg)) return true;
   }
@@ -42,10 +49,7 @@ export function isTransientError(error: unknown): boolean {
  * @example
  * const result = await withRetry(() => fetch(url), { label: 'embeddings', maxAttempts: 3 });
  */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options?: RetryOptions,
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
   const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   const initialDelay = options?.initialDelayMs ?? DEFAULT_INITIAL_DELAY_MS;
   const backoffFactor = options?.backoffFactor ?? DEFAULT_BACKOFF_FACTOR;
@@ -70,7 +74,12 @@ export async function withRetry<T>(
       const jitter = delay * (0.75 + Math.random() * 0.5);
 
       logger.warn(
-        { attempt, maxAttempts, delayMs: Math.round(jitter), error: error instanceof Error ? error.message : String(error) },
+        {
+          attempt,
+          maxAttempts,
+          delayMs: Math.round(jitter),
+          error: error instanceof Error ? error.message : String(error),
+        },
         `${label}: transient failure, retrying`,
       );
 

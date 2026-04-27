@@ -29,7 +29,10 @@ export class EmbeddingPipeline {
     const dim = this.embeddingService.dimensions();
     const model = this.embeddingService.modelName();
     // Skip for fallback/no-op services — they produce no vectors.
-    if (dim === 0) { this.consistent = true; return; }
+    if (dim === 0) {
+      this.consistent = true;
+      return;
+    }
 
     const meta = this.vectorStore.getMeta();
     if (!meta) {
@@ -66,7 +69,11 @@ export class EmbeddingPipeline {
     if (totalToEmbed === 0) return 0;
 
     this.progress?.update('embedding', {
-      phase: 'running', processed: 0, total: totalToEmbed, startedAt: Date.now(), completedAt: 0,
+      phase: 'running',
+      processed: 0,
+      total: totalToEmbed,
+      startedAt: Date.now(),
+      completedAt: 0,
     });
 
     let totalIndexed = 0;
@@ -82,11 +89,14 @@ export class EmbeddingPipeline {
       } while (batch > 0);
 
       this.progress?.update('embedding', {
-        phase: 'completed', processed: totalIndexed, completedAt: Date.now(),
+        phase: 'completed',
+        processed: totalIndexed,
+        completedAt: Date.now(),
       });
     } catch (e) {
       this.progress?.update('embedding', {
-        phase: 'error', error: e instanceof Error ? e.message : String(e),
+        phase: 'error',
+        error: e instanceof Error ? e.message : String(e),
       });
       throw e;
     }
@@ -99,13 +109,15 @@ export class EmbeddingPipeline {
    * Returns the number of symbols embedded in this batch.
    */
   private async embedBatch(batchSize: number): Promise<number> {
-    const unembedded = this.store.db.prepare(`
+    const unembedded = this.store.db
+      .prepare(`
       SELECT s.id, s.name, s.fqn, s.kind, s.signature, s.summary
       FROM symbols s
       LEFT JOIN symbol_embeddings se ON se.symbol_id = s.id
       WHERE se.symbol_id IS NULL
       LIMIT ?
-    `).all(batchSize) as {
+    `)
+      .all(batchSize) as {
       id: number;
       name: string;
       fqn: string | null;

@@ -308,7 +308,10 @@ describe('Store', () => {
       store.insertRnScreen(
         {
           name: 'Camera',
-          metadata: { nativeModules: ['CameraModule'], platformSpecific: { ios: 'Camera.ios.tsx' } },
+          metadata: {
+            nativeModules: ['CameraModule'],
+            platformSpecific: { ios: 'Camera.ios.tsx' },
+          },
         },
         fileId,
       );

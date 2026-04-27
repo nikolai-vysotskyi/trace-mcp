@@ -3,7 +3,13 @@
  * Supports embeddings (text-embedding-004) and inference (gemini-2.0-flash, etc.).
  * Uses fetch directly; no SDK dependency required.
  */
-import type { AIProvider, ChatMessage, EmbeddingService, EmbeddingTask, InferenceService } from './interfaces.js';
+import type {
+  AIProvider,
+  ChatMessage,
+  EmbeddingService,
+  EmbeddingTask,
+  InferenceService,
+} from './interfaces.js';
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 
@@ -31,34 +37,39 @@ class GeminiEmbeddingService implements EmbeddingService {
 
   async embedBatch(texts: string[], task: EmbeddingTask = 'document'): Promise<number[][]> {
     const taskType = task === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT';
-    return withRetry(async () => {
-      // Gemini batch embed API
-      const requests = texts.map(text => ({
-        model: `models/${this.model}`,
-        content: { parts: [{ text }] },
-        outputDimensionality: this.dims,
-        taskType,
-      }));
+    return withRetry(
+      async () => {
+        // Gemini batch embed API
+        const requests = texts.map((text) => ({
+          model: `models/${this.model}`,
+          content: { parts: [{ text }] },
+          outputDimensionality: this.dims,
+          taskType,
+        }));
 
-      const resp = await fetch(
-        `${BASE_URL}/v1beta/models/${this.model}:batchEmbedContents?key=${this.apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requests }),
-          signal: AbortSignal.timeout(30_000),
-        },
-      );
+        const resp = await fetch(
+          `${BASE_URL}/v1beta/models/${this.model}:batchEmbedContents?key=${this.apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requests }),
+            signal: AbortSignal.timeout(30_000),
+          },
+        );
 
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '');
-        const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
-        throw new Error(`Gemini embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
-      }
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => '');
+          const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+          throw new Error(
+            `Gemini embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`,
+          );
+        }
 
-      const data = (await resp.json()) as { embeddings: { values: number[] }[] };
-      return data.embeddings.map(e => e.values);
-    }, { label: 'Gemini embeddings' });
+        const data = (await resp.json()) as { embeddings: { values: number[] }[] };
+        return data.embeddings.map((e) => e.values);
+      },
+      { label: 'Gemini embeddings' },
+    );
   }
 
   dimensions(): number {
@@ -80,34 +91,39 @@ class GeminiInferenceService implements InferenceService {
     prompt: string,
     options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
-    return withRetry(async () => {
-      const resp = await fetch(
-        `${BASE_URL}/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              ...(options?.maxTokens ? { maxOutputTokens: options.maxTokens } : {}),
-              ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-            },
-          }),
-          signal: AbortSignal.timeout(60_000),
-        },
-      );
+    return withRetry(
+      async () => {
+        const resp = await fetch(
+          `${BASE_URL}/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                ...(options?.maxTokens ? { maxOutputTokens: options.maxTokens } : {}),
+                ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+              },
+            }),
+            signal: AbortSignal.timeout(60_000),
+          },
+        );
 
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '');
-        const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
-        throw new Error(`Gemini generate failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
-      }
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => '');
+          const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+          throw new Error(
+            `Gemini generate failed: ${resp.status} ${resp.statusText} — ${safeBody}`,
+          );
+        }
 
-      const data = (await resp.json()) as {
-        candidates: { content: { parts: { text: string }[] } }[];
-      };
-      return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    }, { label: 'Gemini generate' });
+        const data = (await resp.json()) as {
+          candidates: { content: { parts: { text: string }[] } }[];
+        };
+        return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      },
+      { label: 'Gemini generate' },
+    );
   }
 
   async *generateStream(
@@ -115,7 +131,7 @@ class GeminiInferenceService implements InferenceService {
     options?: { maxTokens?: number; temperature?: number },
   ): AsyncIterable<string> {
     // Convert ChatMessage[] to Gemini format
-    const contents = messages.map(m => ({
+    const contents = messages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
@@ -163,7 +179,9 @@ class GeminiInferenceService implements InferenceService {
           };
           const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
           if (text) yield text;
-        } catch { /* skip unparseable */ }
+        } catch {
+          /* skip unparseable */
+        }
       }
     }
   }
@@ -178,10 +196,9 @@ export class GeminiProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      const resp = await fetch(
-        `${BASE_URL}/v1beta/models?key=${this.config.apiKey}`,
-        { signal: AbortSignal.timeout(3000) },
-      );
+      const resp = await fetch(`${BASE_URL}/v1beta/models?key=${this.config.apiKey}`, {
+        signal: AbortSignal.timeout(3000),
+      });
       return resp.ok;
     } catch {
       logger.debug('Gemini not available');

@@ -34,20 +34,13 @@ const MAIL_PACKAGES = [
   'mailersend',
 ];
 
-const TRANSPORT_RE =
-  /(?:nodemailer\s*\.\s*)?createTransport\s*\(/g;
-const SEND_MAIL_RE =
-  /\.\s*sendMail\s*\(/g;
-const SENDGRID_RE =
-  /\b(?:sgMail|sendgrid)\s*\.\s*(?:send|setApiKey)\s*\(/g;
-const RESEND_SEND_RE =
-  /\bresend\s*\.\s*emails\s*\.\s*send\s*\(/g;
-const POSTMARK_RE =
-  /\.\s*sendEmail(?:Batch|WithTemplate)?\s*\(/g;
-const MAILGUN_RE =
-  /\bmg\s*\.\s*messages\s*\.\s*create\s*\(/g;
-const TEMPLATE_HINT_RE =
-  /\b(?:template|html|text)\s*:\s*['"`]/g;
+const TRANSPORT_RE = /(?:nodemailer\s*\.\s*)?createTransport\s*\(/g;
+const SEND_MAIL_RE = /\.\s*sendMail\s*\(/g;
+const SENDGRID_RE = /\b(?:sgMail|sendgrid)\s*\.\s*(?:send|setApiKey)\s*\(/g;
+const RESEND_SEND_RE = /\bresend\s*\.\s*emails\s*\.\s*send\s*\(/g;
+const POSTMARK_RE = /\.\s*sendEmail(?:Batch|WithTemplate)?\s*\(/g;
+const MAILGUN_RE = /\bmg\s*\.\s*messages\s*\.\s*create\s*\(/g;
+const TEMPLATE_HINT_RE = /\b(?:template|html|text)\s*:\s*['"`]/g;
 const MAIL_IMPORT_RE =
   /(?:import|require)\s*(?:\(|{)?\s*.*['"](?:nodemailer|@sendgrid\/mail|mailgun\.js|mailgun-js|resend|postmark|@aws-sdk\/client-ses|mailersend)['"]/;
 
@@ -60,8 +53,7 @@ const PROVIDER_IMPORT_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: 'mailersend', re: /['"]mailersend['"]/ },
 ];
 
-const CREATE_TRANSPORT_BLOCK_RE =
-  /createTransport\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
+const CREATE_TRANSPORT_BLOCK_RE = /createTransport\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
 const HOST_KEY_RE = /\bhost\s*:\s*['"`]([^'"`]+)['"`]/;
 const SERVICE_KEY_RE = /\bservice\s*:\s*['"`]([^'"`]+)['"`]/;
 
@@ -211,10 +203,13 @@ export class NodemailerPlugin implements FrameworkPlugin {
       while ((m = importRe.exec(source)) !== null) {
         const raw = m[1];
         const providerName =
-          raw === '@sendgrid/mail' ? 'sendgrid'
-            : raw === '@aws-sdk/client-ses' ? 'aws-ses'
-            : raw === 'mailgun.js' || raw === 'mailgun-js' ? 'mailgun'
-            : raw; // resend / postmark / mailersend
+          raw === '@sendgrid/mail'
+            ? 'sendgrid'
+            : raw === '@aws-sdk/client-ses'
+              ? 'aws-ses'
+              : raw === 'mailgun.js' || raw === 'mailgun-js'
+                ? 'mailgun'
+                : raw; // resend / postmark / mailersend
         if (seenProviders.has(providerName)) continue;
         seenProviders.add(providerName);
         const line = lineOfIndex(source, m.index);

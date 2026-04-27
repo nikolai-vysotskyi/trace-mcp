@@ -23,40 +23,84 @@ const _plugin = createRegexLanguagePlugin({
     { kind: 'function', pattern: /\(\s*defn\s+([\w*+!\-'?<>=/.]+)/gm, meta: { public: true } },
     { kind: 'function', pattern: /\(\s*defn-\s+([\w*+!\-'?<>=/.]+)/gm, meta: { private: true } },
     { kind: 'function', pattern: /\(\s*defmacro\s+([\w*+!\-'?<>=/.]+)/gm, meta: { macro: true } },
-    { kind: 'function', pattern: /\(\s*defmulti\s+([\w*+!\-'?<>=/.]+)/gm, meta: { multimethod: true } },
+    {
+      kind: 'function',
+      pattern: /\(\s*defmulti\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { multimethod: true },
+    },
     { kind: 'method', pattern: /\(\s*defmethod\s+([\w*+!\-'?<>=/.]+)/gm },
 
     // ─── Variables & Constants ─────────────────────────────────────────
     { kind: 'variable', pattern: /\(\s*def\s+([\w*+!\-'?<>=/.]+)/gm },
     { kind: 'variable', pattern: /\(\s*defonce\s+([\w*+!\-'?<>=/.]+)/gm, meta: { once: true } },
     { kind: 'constant', pattern: /\(\s*def\s+\^:const\s+([\w*+!\-'?<>=/.]+)/gm },
-    { kind: 'variable', pattern: /\(\s*def\s+\^:dynamic\s+([\w*+!\-'?<>=/.]+)/gm, meta: { dynamic: true } },
-    { kind: 'variable', pattern: /\(\s*def\s+\^:private\s+([\w*+!\-'?<>=/.]+)/gm, meta: { private: true } },
+    {
+      kind: 'variable',
+      pattern: /\(\s*def\s+\^:dynamic\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { dynamic: true },
+    },
+    {
+      kind: 'variable',
+      pattern: /\(\s*def\s+\^:private\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { private: true },
+    },
 
     // ─── Protocols & Interfaces ────────────────────────────────────────
     { kind: 'interface', pattern: /\(\s*defprotocol\s+([\w*+!\-'?<>=/.]+)/gm },
-    { kind: 'interface', pattern: /\(\s*definterface\s+([\w*+!\-'?<>=/.]+)/gm, meta: { java: true } },
+    {
+      kind: 'interface',
+      pattern: /\(\s*definterface\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { java: true },
+    },
 
     // ─── Types & Records ───────────────────────────────────────────────
     { kind: 'class', pattern: /\(\s*defrecord\s+([\w*+!\-'?<>=/.]+)/gm, meta: { record: true } },
     { kind: 'class', pattern: /\(\s*deftype\s+([\w*+!\-'?<>=/.]+)/gm },
-    { kind: 'class', pattern: /\(\s*defstruct\s+([\w*+!\-'?<>=/.]+)/gm, meta: { struct: true, legacy: true } },
+    {
+      kind: 'class',
+      pattern: /\(\s*defstruct\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { struct: true, legacy: true },
+    },
 
     // ─── Protocol Extensions ───────────────────────────────────────────
-    { kind: 'class', pattern: /\(\s*extend-type\s+([\w*+!\-'?<>=/.]+)/gm, meta: { extension: true } },
-    { kind: 'interface', pattern: /\(\s*extend-protocol\s+([\w*+!\-'?<>=/.]+)/gm, meta: { extension: true } },
+    {
+      kind: 'class',
+      pattern: /\(\s*extend-type\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { extension: true },
+    },
+    {
+      kind: 'interface',
+      pattern: /\(\s*extend-protocol\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { extension: true },
+    },
 
     // ─── Specs (clojure.spec.alpha) ────────────────────────────────────
-    { kind: 'type', pattern: /\(\s*(?:s|spec(?:\.alpha)?)\/def\s+::([\w*+!\-'?<>=/.]+)/gm, meta: { spec: true } },
-    { kind: 'type', pattern: /\(\s*(?:s|spec(?:\.alpha)?)\/fdef\s+([\w*+!\-'?<>=/.]+)/gm, meta: { fspec: true } },
+    {
+      kind: 'type',
+      pattern: /\(\s*(?:s|spec(?:\.alpha)?)\/def\s+::([\w*+!\-'?<>=/.]+)/gm,
+      meta: { spec: true },
+    },
+    {
+      kind: 'type',
+      pattern: /\(\s*(?:s|spec(?:\.alpha)?)\/fdef\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { fspec: true },
+    },
 
     // ─── ClojureScript specifics ───────────────────────────────────────
     { kind: 'class', pattern: /\(\s*defui\s+([\w*+!\-'?<>=/.]+)/gm, meta: { component: true } },
-    { kind: 'class', pattern: /\(\s*defcomponent\s+([\w*+!\-'?<>=/.]+)/gm, meta: { component: true } },
+    {
+      kind: 'class',
+      pattern: /\(\s*defcomponent\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { component: true },
+    },
 
     // ─── Test definitions ──────────────────────────────────────────────
     { kind: 'function', pattern: /\(\s*deftest\s+([\w*+!\-'?<>=/.]+)/gm, meta: { test: true } },
-    { kind: 'function', pattern: /\(\s*defspec\s+([\w*+!\-'?<>=/.]+)/gm, meta: { test: true, generative: true } },
+    {
+      kind: 'function',
+      pattern: /\(\s*defspec\s+([\w*+!\-'?<>=/.]+)/gm,
+      meta: { test: true, generative: true },
+    },
   ],
   importPatterns: [
     { pattern: /\(:require\s+\[?([\w.\-]+)/gm },

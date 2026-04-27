@@ -4,8 +4,13 @@
 
 export { DecisionStore } from './decision-store.js';
 export type {
-  DecisionRow, DecisionInput, DecisionQuery, DecisionType,
-  DecisionTimelineEntry, SessionChunkRow, SessionChunkInput,
+  DecisionRow,
+  DecisionInput,
+  DecisionQuery,
+  DecisionType,
+  DecisionTimelineEntry,
+  SessionChunkRow,
+  SessionChunkInput,
   SessionSearchResult,
 } from './decision-store.js';
 export { mineSessions } from './conversation-miner.js';

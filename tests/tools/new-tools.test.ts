@@ -47,7 +47,11 @@ describe('get_middleware_chain', () => {
     });
 
     it('returns NOT_FOUND for unknown URL when no routes match', () => {
-      const result = getMiddlewareChain(store, EXPRESS_FIXTURE, '/this/url/does/not/exist/anywhere/xyz123');
+      const result = getMiddlewareChain(
+        store,
+        EXPRESS_FIXTURE,
+        '/this/url/does/not/exist/anywhere/xyz123',
+      );
       // Either NOT_FOUND or empty chain is acceptable
       if (result.isErr()) {
         expect(result.error.code).toBe('NOT_FOUND');

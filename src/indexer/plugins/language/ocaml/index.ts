@@ -20,9 +20,7 @@ import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
 
 function makeSymbolId(filePath: string, name: string, kind: string, parent?: string): string {
-  return parent
-    ? `${filePath}::${parent}.${name}#${kind}`
-    : `${filePath}::${name}#${kind}`;
+  return parent ? `${filePath}::${parent}.${name}#${kind}` : `${filePath}::${name}#${kind}`;
 }
 
 function extractSignature(node: TSNode, maxLen = 120): string {
@@ -76,8 +74,11 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
       }
 
       const addSymbol = (
-        name: string, kind: SymbolKind, node: TSNode,
-        meta?: Record<string, unknown>, parent?: string,
+        name: string,
+        kind: SymbolKind,
+        node: TSNode,
+        meta?: Record<string, unknown>,
+        parent?: string,
       ): void => {
         const sid = makeSymbolId(filePath, name, kind, parent);
         if (seen.has(sid)) return;
@@ -116,7 +117,13 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
 
   private visitNode(
     node: TSNode,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parent?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parent?: string,
+    ) => void,
     edges: RawEdge[],
     parentModule?: string,
   ): void {
@@ -131,8 +138,13 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
             if (name && /^\w+$/.test(name)) {
               const meta: Record<string, unknown> = {};
               if (isRec) meta.recursive = true;
-              addSymbol(name, 'function', child,
-                Object.keys(meta).length > 0 ? meta : undefined, parentModule);
+              addSymbol(
+                name,
+                'function',
+                child,
+                Object.keys(meta).length > 0 ? meta : undefined,
+                parentModule,
+              );
             }
           }
         }
@@ -175,11 +187,16 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
             const innerName = extractName(child, 'module_name');
             if (innerName) {
               moduleName = innerName;
-              const isFunctor = child.namedChildren.some(cc => cc.type === 'module_parameter');
+              const isFunctor = child.namedChildren.some((cc) => cc.type === 'module_parameter');
               const meta: Record<string, unknown> = {};
               if (isFunctor) meta.functor = true;
-              addSymbol(innerName, 'module', node,
-                Object.keys(meta).length > 0 ? meta : undefined, parentModule);
+              addSymbol(
+                innerName,
+                'module',
+                node,
+                Object.keys(meta).length > 0 ? meta : undefined,
+                parentModule,
+              );
             }
           }
         }
@@ -242,7 +259,8 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
           for (const child of node.namedChildren) {
             if (child.type === 'constructor_declaration') {
               const innerName = extractName(child, 'constructor_name');
-              if (innerName) addSymbol(innerName, 'constant', node, { exception: true }, parentModule);
+              if (innerName)
+                addSymbol(innerName, 'constant', node, { exception: true }, parentModule);
             }
           }
         }
@@ -252,7 +270,11 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
       // ── open statements (import edges) ─────────────────────────
       case 'open_statement':
       case 'open_module': {
-        const modNode = findChildByTypes(node, ['module_path', 'module_name', 'extended_module_path']);
+        const modNode = findChildByTypes(node, [
+          'module_path',
+          'module_name',
+          'extended_module_path',
+        ]);
         if (modNode) {
           edges.push({ edgeType: 'imports', metadata: { module: modNode.text } });
         }
@@ -262,7 +284,11 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
       // ── include statements ─────────────────────────────────────
       case 'include_statement':
       case 'include_module': {
-        const modNode = findChildByTypes(node, ['module_path', 'module_name', 'extended_module_path']);
+        const modNode = findChildByTypes(node, [
+          'module_path',
+          'module_name',
+          'extended_module_path',
+        ]);
         if (modNode) {
           edges.push({ edgeType: 'imports', metadata: { module: modNode.text, include: true } });
         }
@@ -271,7 +297,11 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
 
       // For structure/signature wrapper nodes, recurse
       default: {
-        if (node.type === 'structure' || node.type === 'signature' || node.type === 'module_expression') {
+        if (
+          node.type === 'structure' ||
+          node.type === 'signature' ||
+          node.type === 'module_expression'
+        ) {
           for (const child of node.namedChildren) {
             this.visitNode(child, addSymbol, edges, parentModule);
           }
@@ -283,8 +313,15 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
 
   /** Extract record fields and variant constructors from a type binding. */
   private extractTypeMembers(
-    typeBinding: TSNode, typeName: string,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parent?: string) => void,
+    typeBinding: TSNode,
+    typeName: string,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parent?: string,
+    ) => void,
     parentModule?: string,
   ): void {
     const qualifiedParent = parentModule ? `${parentModule}.${typeName}` : typeName;
@@ -295,8 +332,13 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
             const fieldName = extractName(field, 'field_name');
             if (fieldName) {
               const isMutable = field.text.includes('mutable');
-              addSymbol(fieldName, 'property', field,
-                isMutable ? { mutable: true } : undefined, qualifiedParent);
+              addSymbol(
+                fieldName,
+                'property',
+                field,
+                isMutable ? { mutable: true } : undefined,
+                qualifiedParent,
+              );
             }
           }
         }
@@ -318,8 +360,15 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
 
   /** Extract methods and instance variables from an OCaml class body. */
   private extractClassMembers(
-    classBinding: TSNode, className: string,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parent?: string) => void,
+    classBinding: TSNode,
+    className: string,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parent?: string,
+    ) => void,
     parentModule?: string,
   ): void {
     const qualifiedParent = parentModule ? `${parentModule}.${className}` : className;
@@ -332,15 +381,25 @@ export class OcamlLanguagePlugin implements LanguagePlugin {
           const meta: Record<string, unknown> = {};
           if (child.text.includes('virtual')) meta.virtual = true;
           if (child.text.includes('private')) meta.private = true;
-          addSymbol(methodName, 'method', child,
-            Object.keys(meta).length > 0 ? meta : undefined, qualifiedParent);
+          addSymbol(
+            methodName,
+            'method',
+            child,
+            Object.keys(meta).length > 0 ? meta : undefined,
+            qualifiedParent,
+          );
         }
       } else if (child.type === 'instance_variable_definition') {
         const valName = extractName(child, 'instance_variable_name', 'value_name');
         if (valName) {
           const isMutable = child.text.includes('mutable');
-          addSymbol(valName, 'property', child,
-            isMutable ? { mutable: true } : undefined, qualifiedParent);
+          addSymbol(
+            valName,
+            'property',
+            child,
+            isMutable ? { mutable: true } : undefined,
+            qualifiedParent,
+          );
         }
       } else if (child.namedChildren.length > 0) {
         for (const c of child.namedChildren) stack.push(c);

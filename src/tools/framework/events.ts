@@ -25,10 +25,7 @@ interface EventGraphResult {
   events: EventNode[];
 }
 
-export function getEventGraph(
-  store: Store,
-  eventName?: string,
-): TraceMcpResult<EventGraphResult> {
+export function getEventGraph(store: Store, eventName?: string): TraceMcpResult<EventGraphResult> {
   const events: EventNode[] = [];
 
   // Edge types that represent event-like relationships across frameworks
@@ -86,9 +83,9 @@ function findEventSymbol(store: Store, name: string): SymbolRow | undefined {
   if (sym) return sym;
 
   // Search by name
-  const results = store.db.prepare(
-    "SELECT * FROM symbols WHERE name = ? AND kind = 'class'",
-  ).all(name) as SymbolRow[];
+  const results = store.db
+    .prepare("SELECT * FROM symbols WHERE name = ? AND kind = 'class'")
+    .all(name) as SymbolRow[];
   return results[0];
 }
 
@@ -108,7 +105,9 @@ function buildEventNode(
     // Batch resolve all source nodes and symbols
     const sourceIds = inEdges.map((e) => e.source_node_id);
     const sourceRefs = store.getNodeRefsBatch(sourceIds);
-    const symRefIds = [...sourceRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+    const symRefIds = [...sourceRefs.values()]
+      .filter((r) => r.nodeType === 'symbol')
+      .map((r) => r.refId);
     const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
 
     for (const edge of inEdges) {
@@ -135,20 +134,27 @@ function buildEventNode(
     let payloadFields: string[] | undefined;
 
     for (const edge of outEdges) {
-      const meta = edge.metadata ? JSON.parse(edge.metadata) as Record<string, unknown> : {};
+      const meta = edge.metadata ? (JSON.parse(edge.metadata) as Record<string, unknown>) : {};
       if (edge.edge_type_name === 'broadcasts_on') {
-        channels.push({ name: String(meta.channelName ?? ''), type: String(meta.channelType ?? 'public') });
+        channels.push({
+          name: String(meta.channelName ?? ''),
+          type: String(meta.channelType ?? 'public'),
+        });
       } else if (edge.edge_type_name === 'broadcast_as') {
         broadcastAs = String(meta.broadcastAs ?? '');
       }
     }
 
     try {
-      const symMeta = eventSymbol.metadata ? JSON.parse(eventSymbol.metadata) as Record<string, unknown> : {};
+      const symMeta = eventSymbol.metadata
+        ? (JSON.parse(eventSymbol.metadata) as Record<string, unknown>)
+        : {};
       if (Array.isArray(symMeta.payloadFields)) {
         payloadFields = symMeta.payloadFields as string[];
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     if (channels.length > 0) {
       broadcasting = { channels, broadcastAs, payloadFields };

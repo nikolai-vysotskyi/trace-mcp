@@ -31,7 +31,13 @@ describe('tool-annotations', () => {
   });
 
   it('marks index-mutating tools as non-read-only but idempotent', () => {
-    for (const tool of ['reindex', 'register_edit', 'embed_repo', 'subproject_sync', 'refresh_co_changes']) {
+    for (const tool of [
+      'reindex',
+      'register_edit',
+      'embed_repo',
+      'subproject_sync',
+      'refresh_co_changes',
+    ]) {
       const ann = getToolAnnotations(tool);
       expect(ann.readOnlyHint, `${tool} should not be read-only`).toBe(false);
       expect(ann.idempotentHint, `${tool} should be idempotent`).toBe(true);
@@ -40,7 +46,12 @@ describe('tool-annotations', () => {
   });
 
   it('marks runtime tools as open-world', () => {
-    for (const tool of ['get_runtime_profile', 'get_runtime_call_graph', 'get_endpoint_analytics', 'get_runtime_deps']) {
+    for (const tool of [
+      'get_runtime_profile',
+      'get_runtime_call_graph',
+      'get_endpoint_analytics',
+      'get_runtime_deps',
+    ]) {
       const ann = getToolAnnotations(tool);
       expect(ann.openWorldHint, `${tool} should be open-world`).toBe(true);
       expect(ann.readOnlyHint, `${tool} should be read-only`).toBe(true);
@@ -48,7 +59,14 @@ describe('tool-annotations', () => {
   });
 
   it('marks read-only tools correctly', () => {
-    for (const tool of ['search', 'get_outline', 'get_symbol', 'get_call_graph', 'find_usages', 'get_project_map']) {
+    for (const tool of [
+      'search',
+      'get_outline',
+      'get_symbol',
+      'get_call_graph',
+      'find_usages',
+      'get_project_map',
+    ]) {
       const ann = getToolAnnotations(tool);
       expect(ann.readOnlyHint, `${tool} should be read-only`).toBe(true);
       expect(ann.idempotentHint, `${tool} should be idempotent`).toBe(true);

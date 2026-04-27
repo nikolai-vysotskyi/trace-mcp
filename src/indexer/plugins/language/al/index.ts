@@ -15,46 +15,46 @@ const _plugin = createRegexLanguagePlugin({
     // table N "Name"
     {
       kind: 'class',
-      pattern: /^\s*table\s+\d+\s+"([^"]+)"/gmi,
+      pattern: /^\s*table\s+\d+\s+"([^"]+)"/gim,
       meta: { alKind: 'table' },
     },
     // page N "Name"
     {
       kind: 'class',
-      pattern: /^\s*page\s+\d+\s+"([^"]+)"/gmi,
+      pattern: /^\s*page\s+\d+\s+"([^"]+)"/gim,
       meta: { alKind: 'page' },
     },
     // codeunit N "Name"
     {
       kind: 'class',
-      pattern: /^\s*codeunit\s+\d+\s+"([^"]+)"/gmi,
+      pattern: /^\s*codeunit\s+\d+\s+"([^"]+)"/gim,
       meta: { alKind: 'codeunit' },
     },
     // report N "Name"
     {
       kind: 'class',
-      pattern: /^\s*report\s+\d+\s+"([^"]+)"/gmi,
+      pattern: /^\s*report\s+\d+\s+"([^"]+)"/gim,
       meta: { alKind: 'report' },
     },
     // enum N "Name"
     {
       kind: 'enum',
-      pattern: /^\s*enum\s+\d+\s+"([^"]+)"/gmi,
+      pattern: /^\s*enum\s+\d+\s+"([^"]+)"/gim,
     },
     // interface "Name"
     {
       kind: 'interface',
-      pattern: /^\s*interface\s+"([^"]+)"/gmi,
+      pattern: /^\s*interface\s+"([^"]+)"/gim,
     },
     // procedure Name(
     {
       kind: 'function',
-      pattern: /^\s*(?:local\s+|internal\s+)?procedure\s+(\w+)\s*\(/gmi,
+      pattern: /^\s*(?:local\s+|internal\s+)?procedure\s+(\w+)\s*\(/gim,
     },
     // trigger Name(
     {
       kind: 'function',
-      pattern: /^\s*trigger\s+(\w+)\s*\(/gmi,
+      pattern: /^\s*trigger\s+(\w+)\s*\(/gim,
       meta: { trigger: true },
     },
   ],

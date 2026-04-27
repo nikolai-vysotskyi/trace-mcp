@@ -16,16 +16,14 @@ import type {
 } from '../../../../../plugin-api/types.js';
 
 // socket.on('eventName', handler) or io.on('connection', ...)
-const LISTENER_RE =
-  /(?:socket|io|server|namespace)\s*\.\s*on\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const LISTENER_RE = /(?:socket|io|server|namespace)\s*\.\s*on\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 // socket.emit('eventName', ...) or io.emit(...) or socket.broadcast.emit(...)
 const EMITTER_RE =
   /(?:socket|io|server|namespace)(?:\.broadcast)?\s*\.\s*emit\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 // io.of('/namespace')
-const NAMESPACE_RE =
-  /(?:io|server)\s*\.\s*of\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const NAMESPACE_RE = /(?:io|server)\s*\.\s*of\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 interface SocketEvent {
   name: string;

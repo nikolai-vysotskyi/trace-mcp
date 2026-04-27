@@ -330,13 +330,13 @@ describe('extractImportEdges', () => {
   it('extracts wildcard import', async () => {
     const root = await parse(`from mymodule import *`);
     const edges = extractImportEdges(root);
-    expect((edges[0].metadata?.specifiers as string[])).toContain('*');
+    expect(edges[0].metadata?.specifiers as string[]).toContain('*');
   });
 
   it('extracts aliased import (stores original name)', async () => {
     const root = await parse(`from foo import Bar as Baz`);
     const edges = extractImportEdges(root);
-    expect((edges[0].metadata?.specifiers as string[])).toContain('Bar');
+    expect(edges[0].metadata?.specifiers as string[]).toContain('Bar');
   });
 });
 
@@ -586,7 +586,9 @@ describe('utility functions', () => {
   });
 
   it('makeSymbolId with parent', () => {
-    expect(makeSymbolId('file.py', 'method', 'method', 'Class')).toBe('file.py::Class::method#method');
+    expect(makeSymbolId('file.py', 'method', 'method', 'Class')).toBe(
+      'file.py::Class::method#method',
+    );
   });
 
   it('makeSymbolId without parent', () => {

@@ -27,21 +27,24 @@ class OllamaEmbeddingService implements EmbeddingService {
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
-    return withRetry(async () => {
-      const resp = await fetch(`${this.baseUrl}/api/embed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: this.model, input: texts }),
-        signal: AbortSignal.timeout(30_000),
-      });
+    return withRetry(
+      async () => {
+        const resp = await fetch(`${this.baseUrl}/api/embed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: this.model, input: texts }),
+          signal: AbortSignal.timeout(30_000),
+        });
 
-      if (!resp.ok) {
-        throw new Error(`Ollama embed batch failed: ${resp.status} ${resp.statusText}`);
-      }
+        if (!resp.ok) {
+          throw new Error(`Ollama embed batch failed: ${resp.status} ${resp.statusText}`);
+        }
 
-      const data = (await resp.json()) as { embeddings: number[][] };
-      return data.embeddings;
-    }, { label: 'Ollama embeddings' });
+        const data = (await resp.json()) as { embeddings: number[][] };
+        return data.embeddings;
+      },
+      { label: 'Ollama embeddings' },
+    );
   }
 
   dimensions(): number {
@@ -59,35 +62,41 @@ class OllamaInferenceService implements InferenceService {
     private model: string,
   ) {}
 
-  async generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string> {
-    return withRetry(async () => {
-      const body: Record<string, unknown> = {
-        model: this.model,
-        prompt,
-        stream: false,
-      };
-
-      if (options?.maxTokens || options?.temperature !== undefined) {
-        body.options = {
-          ...(options.maxTokens ? { num_predict: options.maxTokens } : {}),
-          ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+  async generate(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number },
+  ): Promise<string> {
+    return withRetry(
+      async () => {
+        const body: Record<string, unknown> = {
+          model: this.model,
+          prompt,
+          stream: false,
         };
-      }
 
-      const resp = await fetch(`${this.baseUrl}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60_000),
-      });
+        if (options?.maxTokens || options?.temperature !== undefined) {
+          body.options = {
+            ...(options.maxTokens ? { num_predict: options.maxTokens } : {}),
+            ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+          };
+        }
 
-      if (!resp.ok) {
-        throw new Error(`Ollama generate failed: ${resp.status} ${resp.statusText}`);
-      }
+        const resp = await fetch(`${this.baseUrl}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(60_000),
+        });
 
-      const data = (await resp.json()) as { response: string };
-      return data.response;
-    }, { label: 'Ollama generate' });
+        if (!resp.ok) {
+          throw new Error(`Ollama generate failed: ${resp.status} ${resp.statusText}`);
+        }
+
+        const data = (await resp.json()) as { response: string };
+        return data.response;
+      },
+      { label: 'Ollama generate' },
+    );
   }
 
   async *generateStream(
@@ -150,16 +159,10 @@ export class OllamaProvider implements AIProvider {
   }
 
   inference(): InferenceService {
-    return new OllamaInferenceService(
-      this.config.baseUrl,
-      this.config.inferenceModel,
-    );
+    return new OllamaInferenceService(this.config.baseUrl, this.config.inferenceModel);
   }
 
   fastInference(): InferenceService {
-    return new OllamaInferenceService(
-      this.config.baseUrl,
-      this.config.fastModel,
-    );
+    return new OllamaInferenceService(this.config.baseUrl, this.config.fastModel);
   }
 }

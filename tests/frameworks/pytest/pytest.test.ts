@@ -6,7 +6,9 @@ const plugin = new PytestPlugin();
 async function extract(code: string, filePath = 'tests/test_users.py') {
   const result = await plugin.extractNodes(filePath, Buffer.from(code), 'python');
   if (!result.isOk()) {
-    throw new Error(`PytestPlugin extractNodes failed: ${JSON.stringify(result._unsafeUnwrapErr())}`);
+    throw new Error(
+      `PytestPlugin extractNodes failed: ${JSON.stringify(result._unsafeUnwrapErr())}`,
+    );
   }
   return result._unsafeUnwrap();
 }
@@ -24,10 +26,13 @@ describe('PytestPlugin', () => {
   });
 
   it('skips non-test Python files', async () => {
-    const result = await extract(`
+    const result = await extract(
+      `
 def my_function():
     pass
-`, 'myapp/models.py');
+`,
+      'myapp/models.py',
+    );
     expect(result.symbols!.length).toBe(0);
   });
 
@@ -133,7 +138,8 @@ def test_increment(input, expected):
 
   describe('fixtures', () => {
     it('extracts conftest.py fixtures', async () => {
-      const result = await extract(`
+      const result = await extract(
+        `
 import pytest
 
 @pytest.fixture
@@ -145,7 +151,9 @@ def db_session():
 @pytest.fixture(scope="module")
 def app():
     return create_app()
-      `, 'tests/conftest.py');
+      `,
+        'tests/conftest.py',
+      );
 
       expect(result.frameworkRole).toBe('conftest');
       const fixtures = result.symbols!.filter((s) => s.metadata?.pytest_fixture);
@@ -161,13 +169,16 @@ def app():
     });
 
     it('extracts autouse fixtures', async () => {
-      const result = await extract(`
+      const result = await extract(
+        `
 import pytest
 
 @pytest.fixture(autouse=True, scope="session")
 def setup_logging():
     configure_logging()
-      `, 'tests/conftest.py');
+      `,
+        'tests/conftest.py',
+      );
 
       const fix = result.symbols!.find((s) => s.name === 'setup_logging');
       expect(fix).toBeDefined();

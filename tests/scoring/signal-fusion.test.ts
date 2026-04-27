@@ -15,7 +15,9 @@ describe('computeIdentityScore', () => {
   });
 
   it('returns 1.0 for exact FQN match', () => {
-    expect(computeIdentityScore('src/nav.ts::search#function', 'search', 'src/nav.ts::search#function')).toBe(1.0);
+    expect(
+      computeIdentityScore('src/nav.ts::search#function', 'search', 'src/nav.ts::search#function'),
+    ).toBe(1.0);
   });
 
   it('returns 0.9 for FQN ends with query', () => {
@@ -49,12 +51,16 @@ describe('computeIdentityScore', () => {
 
   it('returns 0.2 for substring containment in FQN only', () => {
     // 'scoring' appears as FQN segment → 0.6
-    expect(computeIdentityScore('scoring', 'hybridScore', 'src/scoring/hybrid.ts::hybridScore')).toBe(0.6);
+    expect(
+      computeIdentityScore('scoring', 'hybridScore', 'src/scoring/hybrid.ts::hybridScore'),
+    ).toBe(0.6);
   });
 
   it('returns 0 for no match', () => {
     expect(computeIdentityScore('xyz', 'hybridScore')).toBe(0);
-    expect(computeIdentityScore('xyz', 'hybridScore', 'src/scoring/hybrid.ts::hybridScore')).toBe(0);
+    expect(computeIdentityScore('xyz', 'hybridScore', 'src/scoring/hybrid.ts::hybridScore')).toBe(
+      0,
+    );
   });
 });
 
@@ -140,13 +146,13 @@ describe('signalFusion', () => {
     const channels: FusionChannels = {
       lexical: {
         items: [
-          { id: 'a' },  // rank 0
-          { id: 'b' },  // rank 1
+          { id: 'a' }, // rank 0
+          { id: 'b' }, // rank 1
         ],
       },
       structural: {
         items: [
-          { id: 'b' },  // rank 0 — b appears in both channels
+          { id: 'b' }, // rank 0 — b appears in both channels
         ],
       },
     };

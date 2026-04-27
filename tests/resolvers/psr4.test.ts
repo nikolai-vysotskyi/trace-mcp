@@ -8,20 +8,15 @@ describe('PSR-4 resolver', () => {
   // ---------- forward resolution ----------
 
   it('resolves FQN to file path (basic)', () => {
-    const resolver = new Psr4Resolver(
-      new Map([['App\\', 'app/']]),
-      '/project',
-    );
+    const resolver = new Psr4Resolver(new Map([['App\\', 'app/']]), '/project');
     expect(resolver.resolve('App\\Models\\User')).toBe('app/Models/User.php');
   });
 
   it('resolves FQN with nested namespace', () => {
-    const resolver = new Psr4Resolver(
-      new Map([['App\\', 'app/']]),
-      '/project',
+    const resolver = new Psr4Resolver(new Map([['App\\', 'app/']]), '/project');
+    expect(resolver.resolve('App\\Http\\Controllers\\Auth\\LoginController')).toBe(
+      'app/Http/Controllers/Auth/LoginController.php',
     );
-    expect(resolver.resolve('App\\Http\\Controllers\\Auth\\LoginController'))
-      .toBe('app/Http/Controllers/Auth/LoginController.php');
   });
 
   it('matches longest prefix first', () => {
@@ -39,44 +34,29 @@ describe('PSR-4 resolver', () => {
   });
 
   it('returns undefined for unresolvable FQN', () => {
-    const resolver = new Psr4Resolver(
-      new Map([['App\\', 'app/']]),
-      '/project',
-    );
+    const resolver = new Psr4Resolver(new Map([['App\\', 'app/']]), '/project');
     expect(resolver.resolve('Vendor\\Package\\Foo')).toBeUndefined();
   });
 
   // ---------- reverse resolution ----------
 
   it('resolves file path to FQN', () => {
-    const resolver = new Psr4Resolver(
-      new Map([['App\\', 'app/']]),
-      '/project',
-    );
+    const resolver = new Psr4Resolver(new Map([['App\\', 'app/']]), '/project');
     expect(resolver.resolveToFqn('app/Models/User.php')).toBe('App\\Models\\User');
   });
 
   it('resolves absolute file path to FQN (strips root)', () => {
-    const resolver = new Psr4Resolver(
-      new Map([['App\\', 'app/']]),
-      '/project',
-    );
+    const resolver = new Psr4Resolver(new Map([['App\\', 'app/']]), '/project');
     expect(resolver.resolveToFqn('/project/app/Models/User.php')).toBe('App\\Models\\User');
   });
 
   it('returns undefined for non-PHP file', () => {
-    const resolver = new Psr4Resolver(
-      new Map([['App\\', 'app/']]),
-      '/project',
-    );
+    const resolver = new Psr4Resolver(new Map([['App\\', 'app/']]), '/project');
     expect(resolver.resolveToFqn('app/Models/User.js')).toBeUndefined();
   });
 
   it('returns undefined for path outside any mapping', () => {
-    const resolver = new Psr4Resolver(
-      new Map([['App\\', 'app/']]),
-      '/project',
-    );
+    const resolver = new Psr4Resolver(new Map([['App\\', 'app/']]), '/project');
     expect(resolver.resolveToFqn('vendor/other/Foo.php')).toBeUndefined();
   });
 
@@ -134,10 +114,7 @@ describe('PSR-4 resolver', () => {
   // ---------- normalisation ----------
 
   it('normalises prefix without trailing backslash', () => {
-    const resolver = new Psr4Resolver(
-      new Map([['App', 'app']]),
-      '/project',
-    );
+    const resolver = new Psr4Resolver(new Map([['App', 'app']]), '/project');
     expect(resolver.resolve('App\\Models\\User')).toBe('app/Models/User.php');
   });
 });

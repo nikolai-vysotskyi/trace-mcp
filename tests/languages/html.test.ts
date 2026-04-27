@@ -12,10 +12,12 @@ async function parse(source: string, filePath = 'index.html') {
 describe('HtmlLanguagePlugin', () => {
   it('extracts script src as import edge', async () => {
     const r = await parse('<script src="app.js"></script>');
-    expect(r.edges).toContainEqual(expect.objectContaining({
-      edgeType: 'imports',
-      metadata: { from: 'app.js', kind: 'script' },
-    }));
+    expect(r.edges).toContainEqual(
+      expect.objectContaining({
+        edgeType: 'imports',
+        metadata: { from: 'app.js', kind: 'script' },
+      }),
+    );
   });
 
   it('extracts inline script blocks', async () => {
@@ -25,9 +27,11 @@ describe('HtmlLanguagePlugin', () => {
 
   it('extracts link stylesheet as import edge', async () => {
     const r = await parse('<link rel="stylesheet" href="style.css">');
-    expect(r.edges).toContainEqual(expect.objectContaining({
-      metadata: expect.objectContaining({ from: 'style.css', kind: 'stylesheet' }),
-    }));
+    expect(r.edges).toContainEqual(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ from: 'style.css', kind: 'stylesheet' }),
+      }),
+    );
   });
 
   it('extracts HTML IDs', async () => {
@@ -50,7 +54,11 @@ describe('HtmlLanguagePlugin', () => {
 
   it('extracts meta tags', async () => {
     const r = await parse('<meta name="description" content="Hello world">');
-    expect(r.symbols.some((s) => s.name === 'meta:description' && s.metadata?.metaContent === 'Hello world')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s) => s.name === 'meta:description' && s.metadata?.metaContent === 'Hello world',
+      ),
+    ).toBe(true);
   });
 
   it('extracts form elements with name', async () => {
@@ -61,9 +69,11 @@ describe('HtmlLanguagePlugin', () => {
 
   it('extracts img src as import edge', async () => {
     const r = await parse('<img src="logo.png" alt="Logo">');
-    expect(r.edges).toContainEqual(expect.objectContaining({
-      metadata: { from: 'logo.png', kind: 'image' },
-    }));
+    expect(r.edges).toContainEqual(
+      expect.objectContaining({
+        metadata: { from: 'logo.png', kind: 'image' },
+      }),
+    );
   });
 
   it('returns language html', async () => {

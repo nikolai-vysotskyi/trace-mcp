@@ -14,7 +14,10 @@ async function extract(code: string, filePath = 'src/Program.cs') {
 describe('CSharpLanguagePlugin', () => {
   beforeAll(async () => {
     const probe = await plugin.extractSymbols('probe.cs', Buffer.from('class Probe {}\n'));
-    expect(probe.isOk(), `C# parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+    expect(
+      probe.isOk(),
+      `C# parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`,
+    ).toBe(true);
   });
 
   it('has correct manifest', () => {

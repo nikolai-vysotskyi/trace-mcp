@@ -83,7 +83,7 @@ describe('benchmark', () => {
       expect(result.index_stats.symbols).toBeGreaterThan(0);
 
       expect(result.scenarios.length).toBeGreaterThanOrEqual(4);
-      const scenarioNames = result.scenarios.map(s => s.name);
+      const scenarioNames = result.scenarios.map((s) => s.name);
       expect(scenarioNames).toContain('symbol_lookup');
       expect(scenarioNames).toContain('file_exploration');
       expect(scenarioNames).toContain('search');
@@ -114,7 +114,12 @@ describe('benchmark', () => {
 
   describe('formatBenchmarkMarkdown', () => {
     it('produces valid markdown', () => {
-      const result = runBenchmark(store, { queries: 2, seed: 42, projectName: 'md-test', frameworks: ['express'] });
+      const result = runBenchmark(store, {
+        queries: 2,
+        seed: 42,
+        projectName: 'md-test',
+        frameworks: ['express'],
+      });
       const md = formatBenchmarkMarkdown(result);
 
       expect(md).toContain('## trace-mcp Token Efficiency Benchmark');

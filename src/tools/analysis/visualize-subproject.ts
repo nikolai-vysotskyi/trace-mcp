@@ -45,7 +45,10 @@ interface VisualizeSubprojectResult {
 // BUILD GRAPH DATA
 // ════════════════════════════════════════════════════════════════════════
 
-function buildSubprojectData(topoStore: TopologyStore): { nodes: SubVizNode[]; edges: SubVizEdge[] } {
+function buildSubprojectData(topoStore: TopologyStore): {
+  nodes: SubVizNode[];
+  edges: SubVizEdge[];
+} {
   const services = topoStore.getAllServices();
   const allEndpoints = topoStore.getAllEndpoints();
   const crossEdges = topoStore.getAllCrossServiceEdges();
@@ -69,14 +72,17 @@ function buildSubprojectData(topoStore: TopologyStore): { nodes: SubVizNode[]; e
       if (edge.confidence >= 0.7) linkedCount++;
     }
 
-    const linkedPercent = endpoints.length > 0
-      ? Math.round((linkedCount / Math.max(endpoints.length, 1)) * 100)
-      : 0;
+    const linkedPercent =
+      endpoints.length > 0 ? Math.round((linkedCount / Math.max(endpoints.length, 1)) * 100) : 0;
 
-    const health: SubVizNode['health'] = endpoints.length === 0 ? 'critical'
-      : linkedPercent >= 80 ? 'healthy'
-      : linkedPercent >= 50 ? 'warning'
-      : 'critical';
+    const health: SubVizNode['health'] =
+      endpoints.length === 0
+        ? 'critical'
+        : linkedPercent >= 80
+          ? 'healthy'
+          : linkedPercent >= 50
+            ? 'warning'
+            : 'critical';
 
     return {
       id: svc.name,
@@ -134,7 +140,9 @@ function generateSubprojectHtml(nodes: SubVizNode[], edges: SubVizEdge[], layout
   const repoList = [...new Set(nodes.map((n) => n.repo))];
   const repoColors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#84cc16'];
   const repoColorMap: Record<string, string> = {};
-  repoList.forEach((r, i) => { repoColorMap[r] = repoColors[i % repoColors.length]; });
+  repoList.forEach((r, i) => {
+    repoColorMap[r] = repoColors[i % repoColors.length];
+  });
 
   const data = JSON.stringify({ nodes, edges, repoColorMap });
 
@@ -333,12 +341,15 @@ export function visualizeSubprojectTopology(
   const { nodes, edges } = buildSubprojectData(topoStore);
 
   if (nodes.length === 0) {
-    return err(validationError('No services found. Add repos as subprojects first (subproject_add_repo).'));
+    return err(
+      validationError('No services found. Add repos as subprojects first (subproject_add_repo).'),
+    );
   }
 
   const layout = opts?.layout ?? 'force';
   const html = generateSubprojectHtml(nodes, edges, layout);
-  const outputPath = opts?.output ?? path.join(process.env.TMPDIR ?? '/tmp', 'trace-mcp-subproject-topology.html');
+  const outputPath =
+    opts?.output ?? path.join(process.env.TMPDIR ?? '/tmp', 'trace-mcp-subproject-topology.html');
 
   fs.writeFileSync(outputPath, html, 'utf-8');
 

@@ -134,7 +134,11 @@ def send_welcome_email(sender, instance, created, **kwargs):
 
   it('extracts signal receiver edges', async () => {
     const plugin = new DjangoPlugin();
-    const result = await plugin.extractNodes!('myapp/signals.py', Buffer.from(signalCode), 'python');
+    const result = await plugin.extractNodes!(
+      'myapp/signals.py',
+      Buffer.from(signalCode),
+      'python',
+    );
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
 

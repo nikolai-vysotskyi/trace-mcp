@@ -115,14 +115,12 @@ describe('description_verbosity config', () => {
       return match ? match[0] : description.split('\n')[0];
     }
 
-    expect(applyVerbosity('Search symbols by name. Supports fuzzy matching and filters.', 'minimal'))
-      .toBe('Search symbols by name.');
-    expect(applyVerbosity('Get outline\nMore details here', 'minimal'))
-      .toBe('Get outline');
-    expect(applyVerbosity('No period at all', 'minimal'))
-      .toBe('No period at all');
-    expect(applyVerbosity('Any description.', 'none'))
-      .toBe('');
+    expect(
+      applyVerbosity('Search symbols by name. Supports fuzzy matching and filters.', 'minimal'),
+    ).toBe('Search symbols by name.');
+    expect(applyVerbosity('Get outline\nMore details here', 'minimal')).toBe('Get outline');
+    expect(applyVerbosity('No period at all', 'minimal')).toBe('No period at all');
+    expect(applyVerbosity('Any description.', 'none')).toBe('');
   });
 
   it('minimal and none strip Zod param descriptions', () => {
@@ -194,8 +192,17 @@ describe('meta_fields config', () => {
 
   it('stripMetaFields removes all keys when false', () => {
     // Simulate the logic from server.ts
-    const META_KEYS = ['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_meta'] as const;
-    function stripMetaFields(obj: Record<string, unknown>, metaFieldsConfig: boolean | string[]): void {
+    const META_KEYS = [
+      '_hints',
+      '_budget_warning',
+      '_budget_level',
+      '_duplicate_warning',
+      '_meta',
+    ] as const;
+    function stripMetaFields(
+      obj: Record<string, unknown>,
+      metaFieldsConfig: boolean | string[],
+    ): void {
       if (metaFieldsConfig === true) return;
       if (metaFieldsConfig === false) {
         for (const key of META_KEYS) delete obj[key];
@@ -207,11 +214,21 @@ describe('meta_fields config', () => {
       }
     }
 
-    const obj1 = { data: 'test', _hints: [{ tool: 'x' }], _budget_warning: 'high', _meta: { warnings: [] } };
+    const obj1 = {
+      data: 'test',
+      _hints: [{ tool: 'x' }],
+      _budget_warning: 'high',
+      _meta: { warnings: [] },
+    };
     stripMetaFields(obj1, false);
     expect(obj1).toEqual({ data: 'test' });
 
-    const obj2 = { data: 'test', _hints: [{ tool: 'x' }], _budget_warning: 'high', _meta: { warnings: [] } };
+    const obj2 = {
+      data: 'test',
+      _hints: [{ tool: 'x' }],
+      _budget_warning: 'high',
+      _meta: { warnings: [] },
+    };
     stripMetaFields(obj2, ['_hints']);
     expect(obj2).toEqual({ data: 'test', _hints: [{ tool: 'x' }] });
 

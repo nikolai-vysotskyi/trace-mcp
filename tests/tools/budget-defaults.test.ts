@@ -11,10 +11,7 @@
  *  - Returned `applied` records carry param + forced value + reason
  */
 import { describe, it, expect } from 'vitest';
-import {
-  applyBudgetDefaults,
-  computeBudgetLevel,
-} from '../../src/server/budget-defaults.js';
+import { applyBudgetDefaults, computeBudgetLevel } from '../../src/server/budget-defaults.js';
 
 describe('computeBudgetLevel', () => {
   it.each([

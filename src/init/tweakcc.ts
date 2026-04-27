@@ -23,10 +23,7 @@ function getTweakccConfigDir(): string | null {
   const envDir = process.env.TWEAKCC_CONFIG_DIR?.trim();
   if (envDir) return envDir;
 
-  const candidates = [
-    DEFAULT_TWEAKCC_DIR,
-    path.join(os.homedir(), '.claude', 'tweakcc'),
-  ];
+  const candidates = [DEFAULT_TWEAKCC_DIR, path.join(os.homedir(), '.claude', 'tweakcc')];
 
   const xdg = process.env.XDG_CONFIG_HOME;
   if (xdg) candidates.push(path.join(xdg, 'tweakcc'));
@@ -72,16 +69,18 @@ export function isTweakccInstalled(): boolean {
   }
 }
 
-export function detectTweakccPrompts(): { installed: boolean; promptsDir: string | null; hasOurPrompts: boolean } {
+export function detectTweakccPrompts(): {
+  installed: boolean;
+  promptsDir: string | null;
+  hasOurPrompts: boolean;
+} {
   const promptsDir = getTweakccSystemPromptsDir();
   if (!promptsDir || !fs.existsSync(promptsDir)) {
     return { installed: isTweakccInstalled(), promptsDir, hasOurPrompts: false };
   }
 
   // Check if any of our prompt files already exist
-  const hasOurs = PROMPT_FILES.some(
-    (pf) => fs.existsSync(path.join(promptsDir, pf.filename)),
-  );
+  const hasOurs = PROMPT_FILES.some((pf) => fs.existsSync(path.join(promptsDir, pf.filename)));
 
   return { installed: true, promptsDir, hasOurPrompts: hasOurs };
 }
@@ -219,9 +218,7 @@ ${pf.content}
 `;
 }
 
-export function installTweakccPrompts(opts: {
-  dryRun?: boolean;
-}): InitStepResult[] {
+export function installTweakccPrompts(opts: { dryRun?: boolean }): InitStepResult[] {
   const results: InitStepResult[] = [];
   const promptsDir = resolveOrBootstrapPromptsDir();
 
@@ -280,7 +277,8 @@ export function installTweakccPrompts(opts: {
       results.push({
         target: 'tweakcc --apply',
         action: 'skipped',
-        detail: 'Prompt files written but `npx tweakcc --apply` failed — run it manually (may need Claude Code not running)',
+        detail:
+          'Prompt files written but `npx tweakcc --apply` failed — run it manually (may need Claude Code not running)',
       });
     }
   }
@@ -288,9 +286,7 @@ export function installTweakccPrompts(opts: {
   return results;
 }
 
-export function uninstallTweakccPrompts(opts: {
-  dryRun?: boolean;
-}): InitStepResult[] {
+export function uninstallTweakccPrompts(opts: { dryRun?: boolean }): InitStepResult[] {
   const results: InitStepResult[] = [];
   const promptsDir = getTweakccSystemPromptsDir();
   if (!promptsDir) return results;

@@ -75,18 +75,26 @@ describe('CHA — expandMethodViaCha', () => {
   it('finds ancestor method via extends metadata', () => {
     // BaseClass.verify_token + SubClass extends BaseClass + SubClass.verify_token
     const base = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'BaseClass', kind: 'class',
+      filePath: 'src/base.ts',
+      name: 'BaseClass',
+      kind: 'class',
     });
     const baseMethod = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'verify_token', kind: 'method',
+      filePath: 'src/base.ts',
+      name: 'verify_token',
+      kind: 'method',
       parentSymbolId: base.symbolId,
     });
     const sub = addSymbol(store, {
-      filePath: 'src/sub.ts', name: 'SubClass', kind: 'class',
+      filePath: 'src/sub.ts',
+      name: 'SubClass',
+      kind: 'class',
       metadata: { extends: 'BaseClass' },
     });
     const subMethod = addSymbol(store, {
-      filePath: 'src/sub.ts', name: 'verify_token', kind: 'method',
+      filePath: 'src/sub.ts',
+      name: 'verify_token',
+      kind: 'method',
       parentSymbolId: sub.symbolId,
     });
 
@@ -109,18 +117,26 @@ describe('CHA — expandMethodViaCha', () => {
   it('finds descendant method via class hierarchy', () => {
     // BaseClass.process() → SubClass extends BaseClass → SubClass.process()
     const base = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'BaseClass', kind: 'class',
+      filePath: 'src/base.ts',
+      name: 'BaseClass',
+      kind: 'class',
     });
     const baseMethod = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'process', kind: 'method',
+      filePath: 'src/base.ts',
+      name: 'process',
+      kind: 'method',
       parentSymbolId: base.symbolId,
     });
     const sub = addSymbol(store, {
-      filePath: 'src/sub.ts', name: 'SubClass', kind: 'class',
+      filePath: 'src/sub.ts',
+      name: 'SubClass',
+      kind: 'class',
       metadata: { extends: 'BaseClass' },
     });
     const subMethod = addSymbol(store, {
-      filePath: 'src/sub.ts', name: 'process', kind: 'method',
+      filePath: 'src/sub.ts',
+      name: 'process',
+      kind: 'method',
       parentSymbolId: sub.symbolId,
     });
 
@@ -139,18 +155,26 @@ describe('CHA — expandMethodViaCha', () => {
   it('finds methods across interface implementation', () => {
     // IAuthProvider.verify() + HubAuthProvider implements IAuthProvider + HubAuthProvider.verify()
     const iface = addSymbol(store, {
-      filePath: 'src/auth.ts', name: 'IAuthProvider', kind: 'interface',
+      filePath: 'src/auth.ts',
+      name: 'IAuthProvider',
+      kind: 'interface',
     });
     const ifaceMethod = addSymbol(store, {
-      filePath: 'src/auth.ts', name: 'verify', kind: 'method',
+      filePath: 'src/auth.ts',
+      name: 'verify',
+      kind: 'method',
       parentSymbolId: iface.symbolId,
     });
     const impl = addSymbol(store, {
-      filePath: 'src/hub.ts', name: 'HubAuthProvider', kind: 'class',
+      filePath: 'src/hub.ts',
+      name: 'HubAuthProvider',
+      kind: 'class',
       metadata: { implements: ['IAuthProvider'] },
     });
     const implMethod = addSymbol(store, {
-      filePath: 'src/hub.ts', name: 'verify', kind: 'method',
+      filePath: 'src/hub.ts',
+      name: 'verify',
+      kind: 'method',
       parentSymbolId: impl.symbolId,
     });
 
@@ -174,17 +198,36 @@ describe('CHA — expandMethodViaCha', () => {
   it('handles multi-level hierarchy', () => {
     // A.m() → B extends A → B.m() → C extends B → C.m()
     const a = addSymbol(store, { filePath: 'src/a.ts', name: 'A', kind: 'class' });
-    const am = addSymbol(store, { filePath: 'src/a.ts', name: 'm', kind: 'method', parentSymbolId: a.symbolId });
+    const am = addSymbol(store, {
+      filePath: 'src/a.ts',
+      name: 'm',
+      kind: 'method',
+      parentSymbolId: a.symbolId,
+    });
     const b = addSymbol(store, {
-      filePath: 'src/b.ts', name: 'B', kind: 'class',
+      filePath: 'src/b.ts',
+      name: 'B',
+      kind: 'class',
       metadata: { extends: 'A' },
     });
-    const bm = addSymbol(store, { filePath: 'src/b.ts', name: 'm', kind: 'method', parentSymbolId: b.symbolId });
+    const bm = addSymbol(store, {
+      filePath: 'src/b.ts',
+      name: 'm',
+      kind: 'method',
+      parentSymbolId: b.symbolId,
+    });
     const c = addSymbol(store, {
-      filePath: 'src/c.ts', name: 'C', kind: 'class',
+      filePath: 'src/c.ts',
+      name: 'C',
+      kind: 'class',
       metadata: { extends: 'B' },
     });
-    const cm = addSymbol(store, { filePath: 'src/c.ts', name: 'm', kind: 'method', parentSymbolId: c.symbolId });
+    const cm = addSymbol(store, {
+      filePath: 'src/c.ts',
+      name: 'm',
+      kind: 'method',
+      parentSymbolId: c.symbolId,
+    });
 
     store.insertEdge(b.nodeId, a.nodeId, 'ts_extends');
     store.insertEdge(c.nodeId, b.nodeId, 'ts_extends');
@@ -213,18 +256,26 @@ describe('CHA — find_usages integration', () => {
   it('finds callers of base class method when querying override (the core issue)', () => {
     // Setup: OAuthProvider.verify_token() + HubAuthProvider extends OAuthProvider + HubAuthProvider.verify_token()
     const base = addSymbol(store, {
-      filePath: 'src/oauth.ts', name: 'OAuthProvider', kind: 'class',
+      filePath: 'src/oauth.ts',
+      name: 'OAuthProvider',
+      kind: 'class',
     });
     const baseMethod = addSymbol(store, {
-      filePath: 'src/oauth.ts', name: 'verify_token', kind: 'method',
+      filePath: 'src/oauth.ts',
+      name: 'verify_token',
+      kind: 'method',
       parentSymbolId: base.symbolId,
     });
     const sub = addSymbol(store, {
-      filePath: 'src/hub.ts', name: 'HubAuthProvider', kind: 'class',
+      filePath: 'src/hub.ts',
+      name: 'HubAuthProvider',
+      kind: 'class',
       metadata: { extends: 'OAuthProvider' },
     });
     const subMethod = addSymbol(store, {
-      filePath: 'src/hub.ts', name: 'verify_token', kind: 'method',
+      filePath: 'src/hub.ts',
+      name: 'verify_token',
+      kind: 'method',
       parentSymbolId: sub.symbolId,
     });
 
@@ -232,7 +283,9 @@ describe('CHA — find_usages integration', () => {
 
     // Caller references OAuthProvider.verify_token (base class)
     const caller = addSymbol(store, {
-      filePath: 'src/api_proxy.ts', name: 'proxyRequest', kind: 'function',
+      filePath: 'src/api_proxy.ts',
+      name: 'proxyRequest',
+      kind: 'function',
     });
     store.insertEdge(caller.nodeId, baseMethod.nodeId, 'calls');
 
@@ -254,18 +307,26 @@ describe('CHA — find_usages integration', () => {
 
   it('finds callers of override when querying base class method', () => {
     const base = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'Base', kind: 'class',
+      filePath: 'src/base.ts',
+      name: 'Base',
+      kind: 'class',
     });
     const baseMethod = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'handle', kind: 'method',
+      filePath: 'src/base.ts',
+      name: 'handle',
+      kind: 'method',
       parentSymbolId: base.symbolId,
     });
     const sub = addSymbol(store, {
-      filePath: 'src/sub.ts', name: 'Sub', kind: 'class',
+      filePath: 'src/sub.ts',
+      name: 'Sub',
+      kind: 'class',
       metadata: { extends: 'Base' },
     });
     const subMethod = addSymbol(store, {
-      filePath: 'src/sub.ts', name: 'handle', kind: 'method',
+      filePath: 'src/sub.ts',
+      name: 'handle',
+      kind: 'method',
       parentSymbolId: sub.symbolId,
     });
 
@@ -273,7 +334,9 @@ describe('CHA — find_usages integration', () => {
 
     // Caller references Sub.handle (override)
     const caller = addSymbol(store, {
-      filePath: 'src/app.ts', name: 'main', kind: 'function',
+      filePath: 'src/app.ts',
+      name: 'main',
+      kind: 'function',
     });
     store.insertEdge(caller.nodeId, subMethod.nodeId, 'calls');
 
@@ -297,18 +360,26 @@ describe('CHA — get_call_graph integration', () => {
 
   it('includes callers of base class method in override call graph', () => {
     const base = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'Animal', kind: 'class',
+      filePath: 'src/base.ts',
+      name: 'Animal',
+      kind: 'class',
     });
     const baseMethod = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'speak', kind: 'method',
+      filePath: 'src/base.ts',
+      name: 'speak',
+      kind: 'method',
       parentSymbolId: base.symbolId,
     });
     const sub = addSymbol(store, {
-      filePath: 'src/dog.ts', name: 'Dog', kind: 'class',
+      filePath: 'src/dog.ts',
+      name: 'Dog',
+      kind: 'class',
       metadata: { extends: 'Animal' },
     });
     const subMethod = addSymbol(store, {
-      filePath: 'src/dog.ts', name: 'speak', kind: 'method',
+      filePath: 'src/dog.ts',
+      name: 'speak',
+      kind: 'method',
       parentSymbolId: sub.symbolId,
     });
 
@@ -316,7 +387,9 @@ describe('CHA — get_call_graph integration', () => {
 
     // Caller calls Animal.speak (base class)
     const caller = addSymbol(store, {
-      filePath: 'src/app.ts', name: 'makeNoise', kind: 'function',
+      filePath: 'src/app.ts',
+      name: 'makeNoise',
+      kind: 'function',
     });
     store.insertEdge(caller.nodeId, baseMethod.nodeId, 'calls');
 
@@ -331,18 +404,26 @@ describe('CHA — get_call_graph integration', () => {
 
   it('includes callees of base class method in override call graph', () => {
     const base = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'Processor', kind: 'class',
+      filePath: 'src/base.ts',
+      name: 'Processor',
+      kind: 'class',
     });
     const baseMethod = addSymbol(store, {
-      filePath: 'src/base.ts', name: 'run', kind: 'method',
+      filePath: 'src/base.ts',
+      name: 'run',
+      kind: 'method',
       parentSymbolId: base.symbolId,
     });
     const sub = addSymbol(store, {
-      filePath: 'src/impl.ts', name: 'ConcreteProcessor', kind: 'class',
+      filePath: 'src/impl.ts',
+      name: 'ConcreteProcessor',
+      kind: 'class',
       metadata: { extends: 'Processor' },
     });
     const subMethod = addSymbol(store, {
-      filePath: 'src/impl.ts', name: 'run', kind: 'method',
+      filePath: 'src/impl.ts',
+      name: 'run',
+      kind: 'method',
       parentSymbolId: sub.symbolId,
     });
 
@@ -350,7 +431,9 @@ describe('CHA — get_call_graph integration', () => {
 
     // Base method calls a helper
     const helper = addSymbol(store, {
-      filePath: 'src/utils.ts', name: 'validate', kind: 'function',
+      filePath: 'src/utils.ts',
+      name: 'validate',
+      kind: 'function',
     });
     store.insertEdge(baseMethod.nodeId, helper.nodeId, 'calls');
 

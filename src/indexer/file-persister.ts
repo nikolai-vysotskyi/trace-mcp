@@ -74,7 +74,14 @@ export class FilePersister {
       store.updateFileStatus(fileId, ext.status, ext.frameworkRole);
       if (ext.workspace) store.updateFileWorkspace(fileId, ext.workspace);
     } else {
-      fileId = store.insertFile(ext.relPath, ext.language, ext.hash, ext.contentSize, ext.workspace, ext.mtimeMs);
+      fileId = store.insertFile(
+        ext.relPath,
+        ext.language,
+        ext.hash,
+        ext.contentSize,
+        ext.workspace,
+        ext.mtimeMs,
+      );
       this.state.changedFileIds.add(fileId);
       if (ext.status !== 'ok' || ext.frameworkRole) {
         store.updateFileStatus(fileId, ext.status, ext.frameworkRole);
@@ -94,7 +101,13 @@ export class FilePersister {
 
     // Persist framework extract results
     for (const fwResult of ext.frameworkExtracts) {
-      this.persistSymbolsAndEntities(fileId, ext.relPath, fwResult.symbols, fwResult.edges ?? [], fwResult);
+      this.persistSymbolsAndEntities(
+        fileId,
+        ext.relPath,
+        fwResult.symbols,
+        fwResult.edges ?? [],
+        fwResult,
+      );
       if (fwResult.frameworkRole) {
         store.updateFileStatus(fileId, fwResult.status, fwResult.frameworkRole);
       }
@@ -168,28 +181,47 @@ export class FilePersister {
 
     // Only viable when there are no framework-injected symbols, edges, or entities
     // that would also need to be diffed.
-    if (ext.frameworkExtracts.some((fw) =>
-      fw.symbols.length > 0
-      || (fw.edges?.length ?? 0) > 0
-      || (fw.routes?.length ?? 0) > 0
-      || (fw.components?.length ?? 0) > 0
-      || (fw.migrations?.length ?? 0) > 0
-      || (fw.ormModels?.length ?? 0) > 0
-      || (fw.rnScreens?.length ?? 0) > 0
-    )) return false;
+    if (
+      ext.frameworkExtracts.some(
+        (fw) =>
+          fw.symbols.length > 0 ||
+          (fw.edges?.length ?? 0) > 0 ||
+          (fw.routes?.length ?? 0) > 0 ||
+          (fw.components?.length ?? 0) > 0 ||
+          (fw.migrations?.length ?? 0) > 0 ||
+          (fw.ormModels?.length ?? 0) > 0 ||
+          (fw.rnScreens?.length ?? 0) > 0,
+      )
+    )
+      return false;
 
     // Also skip fast path if language plugin produced entities (routes, components, etc.)
-    if (ext.routes.length > 0 || ext.components.length > 0 || ext.migrations.length > 0
-      || ext.ormModels.length > 0 || ext.rnScreens.length > 0) return false;
+    if (
+      ext.routes.length > 0 ||
+      ext.components.length > 0 ||
+      ext.migrations.length > 0 ||
+      ext.ormModels.length > 0 ||
+      ext.rnScreens.length > 0
+    )
+      return false;
 
     const existing = store.getSymbolsByFile(fileId);
     if (existing.length !== ext.symbols.length) return false;
     if (existing.length === 0) return false;
 
     // Build symbolId → existing row map
-    const existingMap = new Map<string, { id: number; name: string; kind: string; fqn: string | null; signature: string | null }>();
+    const existingMap = new Map<
+      string,
+      { id: number; name: string; kind: string; fqn: string | null; signature: string | null }
+    >();
     for (const s of existing) {
-      existingMap.set(s.symbol_id, { id: s.id, name: s.name, kind: s.kind, fqn: s.fqn, signature: s.signature });
+      existingMap.set(s.symbol_id, {
+        id: s.id,
+        name: s.name,
+        kind: s.kind,
+        fqn: s.fqn,
+        signature: s.signature,
+      });
     }
 
     // Verify all new symbols match an existing symbol structurally
@@ -212,13 +244,26 @@ export class FilePersister {
 
     for (const sym of ext.symbols) {
       const ex = existingMap.get(sym.symbolId)!;
-      const cyclomatic = (sym.metadata as Record<string, unknown> | undefined)?.['cyclomatic'] as number | undefined ?? null;
-      const maxNesting = (sym.metadata as Record<string, unknown> | undefined)?.['max_nesting'] as number | undefined ?? null;
-      const paramCount = (sym.metadata as Record<string, unknown> | undefined)?.['param_count'] as number | undefined ?? null;
+      const cyclomatic =
+        ((sym.metadata as Record<string, unknown> | undefined)?.['cyclomatic'] as
+          | number
+          | undefined) ?? null;
+      const maxNesting =
+        ((sym.metadata as Record<string, unknown> | undefined)?.['max_nesting'] as
+          | number
+          | undefined) ?? null;
+      const paramCount =
+        ((sym.metadata as Record<string, unknown> | undefined)?.['param_count'] as
+          | number
+          | undefined) ?? null;
       updateStmt.run(
-        sym.byteStart, sym.byteEnd,
-        sym.lineStart ?? null, sym.lineEnd ?? null,
-        cyclomatic, maxNesting, paramCount,
+        sym.byteStart,
+        sym.byteEnd,
+        sym.lineStart ?? null,
+        sym.lineEnd ?? null,
+        cyclomatic,
+        maxNesting,
+        paramCount,
         sym.metadata ? JSON.stringify(sym.metadata) : null,
         ex.id,
       );
@@ -243,13 +288,14 @@ export class FilePersister {
 
     // Insert associations — resolve target ID best-effort (may be null if not indexed yet)
     for (const assoc of associations) {
-      const sourceId = modelIdMap.get(assoc.sourceModelName)
-        ?? store.getOrmModelByName(assoc.sourceModelName)?.id;
+      const sourceId =
+        modelIdMap.get(assoc.sourceModelName) ?? store.getOrmModelByName(assoc.sourceModelName)?.id;
       if (sourceId == null) continue;
 
-      const targetId = modelIdMap.get(assoc.targetModelName)
-        ?? store.getOrmModelByName(assoc.targetModelName)?.id
-        ?? null;
+      const targetId =
+        modelIdMap.get(assoc.targetModelName) ??
+        store.getOrmModelByName(assoc.targetModelName)?.id ??
+        null;
 
       store.insertOrmAssociation(
         sourceId,

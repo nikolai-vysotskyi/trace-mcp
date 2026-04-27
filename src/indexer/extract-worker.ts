@@ -56,7 +56,9 @@ function getExtractor(rootPath: string, workspaces: WorkspaceInfo[]): FileExtrac
   return e;
 }
 
-interface InternalRequest extends ExtractRequest { id: number }
+interface InternalRequest extends ExtractRequest {
+  id: number;
+}
 
 parentPort.on('message', async (req: InternalRequest) => {
   let result: ExtractResponse;

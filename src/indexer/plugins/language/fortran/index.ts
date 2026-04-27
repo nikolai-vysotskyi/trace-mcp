@@ -15,40 +15,41 @@ const _plugin = createRegexLanguagePlugin({
     // SUBROUTINE name
     {
       kind: 'function',
-      pattern: /^\s*(?:recursive\s+|pure\s+|elemental\s+|impure\s+)*subroutine\s+(\w+)/gmi,
+      pattern: /^\s*(?:recursive\s+|pure\s+|elemental\s+|impure\s+)*subroutine\s+(\w+)/gim,
       meta: { subroutine: true },
     },
     // FUNCTION name(
     {
       kind: 'function',
-      pattern: /^\s*(?:recursive\s+|pure\s+|elemental\s+|impure\s+)*(?:integer|real|double\s+precision|complex|character|logical|type\s*\([^)]*\))?\s*function\s+(\w+)\s*\(/gmi,
+      pattern:
+        /^\s*(?:recursive\s+|pure\s+|elemental\s+|impure\s+)*(?:integer|real|double\s+precision|complex|character|logical|type\s*\([^)]*\))?\s*function\s+(\w+)\s*\(/gim,
     },
     // MODULE name
     {
       kind: 'namespace',
-      pattern: /^\s*module\s+(\w+)/gmi,
+      pattern: /^\s*module\s+(\w+)/gim,
     },
     // PROGRAM name
     {
       kind: 'namespace',
-      pattern: /^\s*program\s+(\w+)/gmi,
+      pattern: /^\s*program\s+(\w+)/gim,
       meta: { program: true },
     },
     // TYPE :: Name
     {
       kind: 'type',
-      pattern: /^\s*type\s*(?:,\s*[^:]+)?\s*::\s*(\w+)/gmi,
+      pattern: /^\s*type\s*(?:,\s*[^:]+)?\s*::\s*(\w+)/gim,
     },
     // INTERFACE name
     {
       kind: 'interface',
-      pattern: /^\s*interface\s+(\w+)/gmi,
+      pattern: /^\s*interface\s+(\w+)/gim,
     },
   ],
   importPatterns: [
     // USE module_name
     {
-      pattern: /^\s*use\s+(\w+)/gmi,
+      pattern: /^\s*use\s+(\w+)/gim,
     },
   ],
 });

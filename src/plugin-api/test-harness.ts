@@ -17,9 +17,7 @@ interface PluginTestHarness {
  * Create an in-memory test harness for testing plugins in isolation.
  * Provides a Store, Registry, and helpers for indexing files and inspecting results.
  */
-export function createTestHarness(
-  plugin: LanguagePlugin | FrameworkPlugin,
-): PluginTestHarness {
+export function createTestHarness(plugin: LanguagePlugin | FrameworkPlugin): PluginTestHarness {
   const db = initializeDatabase(':memory:');
   const store = new Store(db);
   const registry = new PluginRegistry();

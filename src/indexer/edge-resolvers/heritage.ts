@@ -5,9 +5,10 @@ import { PhantomSymbolFactory } from './phantom-externals.js';
 
 export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
   const { store } = state;
-  const changedFileIds = state.isIncremental && state.changedFileIds.size > 0
-    ? Array.from(state.changedFileIds)
-    : undefined;
+  const changedFileIds =
+    state.isIncremental && state.changedFileIds.size > 0
+      ? Array.from(state.changedFileIds)
+      : undefined;
   const symbolsWithHeritage = store.getSymbolsWithHeritage(changedFileIds);
   if (symbolsWithHeritage.length === 0) return;
 
@@ -23,9 +24,9 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
     for (let i = 0; i < ids.length; i += CHUNK) {
       const chunk = ids.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
-      const rows = store.db.prepare(
-        `SELECT id, workspace FROM files WHERE id IN (${ph})`,
-      ).all(...chunk) as Array<{ id: number; workspace: string | null }>;
+      const rows = store.db
+        .prepare(`SELECT id, workspace FROM files WHERE id IN (${ph})`)
+        .all(...chunk) as Array<{ id: number; workspace: string | null }>;
       for (const r of rows) fileWorkspaceMap.set(r.id, r.workspace);
     }
   }
@@ -39,11 +40,19 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
       if (!sym.metadata) continue;
       const meta = JSON.parse(sym.metadata) as Record<string, unknown>;
       const ext = meta['extends'];
-      if (Array.isArray(ext)) for (const n of ext) { if (typeof n === 'string') neededNames.add(n); }
+      if (Array.isArray(ext))
+        for (const n of ext) {
+          if (typeof n === 'string') neededNames.add(n);
+        }
       else if (typeof ext === 'string') neededNames.add(ext);
       const impl = meta['implements'];
-      if (Array.isArray(impl)) for (const n of impl) { if (typeof n === 'string') neededNames.add(n); }
-    } catch { /* skip malformed metadata */ }
+      if (Array.isArray(impl))
+        for (const n of impl) {
+          if (typeof n === 'string') neededNames.add(n);
+        }
+    } catch {
+      /* skip malformed metadata */
+    }
   }
 
   // Build name → {id, kind, workspace} index — include workspace so we can
@@ -56,12 +65,14 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
     for (let i = 0; i < nameArr.length; i += CHUNK) {
       const chunk = nameArr.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
-      const rows = store.db.prepare(
-        `SELECT s.id, s.name, s.kind, f.workspace
+      const rows = store.db
+        .prepare(
+          `SELECT s.id, s.name, s.kind, f.workspace
            FROM symbols s
            JOIN files f ON f.id = s.file_id
           WHERE s.kind IN ('class', 'interface') AND s.name IN (${ph})`,
-      ).all(...chunk) as { id: number; name: string; kind: string; workspace: string | null }[];
+        )
+        .all(...chunk) as { id: number; name: string; kind: string; workspace: string | null }[];
       for (const s of rows) {
         const list = nameIndex.get(s.name) ?? [];
         list.push({ id: s.id, kind: s.kind, workspace: s.workspace });
@@ -71,10 +82,12 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
   }
 
   // Pre-load symbol node IDs
-  const allNeededIds = [...new Set([
-    ...symbolsWithHeritage.map((s) => s.id),
-    ...[...nameIndex.values()].flat().map((s) => s.id),
-  ])];
+  const allNeededIds = [
+    ...new Set([
+      ...symbolsWithHeritage.map((s) => s.id),
+      ...[...nameIndex.values()].flat().map((s) => s.id),
+    ]),
+  ];
   const symbolNodeMap = new Map<number, number>();
   const CHUNK = 500;
   for (let i = 0; i < allNeededIds.length; i += CHUNK) {
@@ -83,8 +96,12 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
     }
   }
 
-  const tsExtendsType = store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('ts_extends') as { id: number } | undefined;
-  const tsImplementsType = store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('ts_implements') as { id: number } | undefined;
+  const tsExtendsType = store.db
+    .prepare('SELECT id FROM edge_types WHERE name = ?')
+    .get('ts_extends') as { id: number } | undefined;
+  const tsImplementsType = store.db
+    .prepare('SELECT id FROM edge_types WHERE name = ?')
+    .get('ts_implements') as { id: number } | undefined;
   if (!tsExtendsType || !tsImplementsType) return;
 
   let created = 0;
@@ -96,13 +113,21 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
   store.db.transaction(() => {
     for (const sym of symbolsWithHeritage) {
       let meta: Record<string, unknown> = {};
-      try { if (sym.metadata) meta = JSON.parse(sym.metadata) as Record<string, unknown>; } catch { continue; }
+      try {
+        if (sym.metadata) meta = JSON.parse(sym.metadata) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
       const sourceNodeId = symbolNodeMap.get(sym.id);
       if (sourceNodeId == null) continue;
 
       const sourceWs = fileWorkspaceMap.get(sym.file_id) ?? null;
 
-      const emitPhantomEdge = (targetName: string, edgeTypeId: number, phantomKind: 'class' | 'interface'): void => {
+      const emitPhantomEdge = (
+        targetName: string,
+        edgeTypeId: number,
+        phantomKind: 'class' | 'interface',
+      ): void => {
         const before = phantoms.peek(targetName, sourceWs);
         const phantom = phantoms.ensure(targetName, sourceWs, phantomKind);
         if (!before) phantomNodesCreated++;
@@ -114,13 +139,19 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
       // Strict workspace isolation: a candidate only matches if it shares
       // the source's workspace. Falling back to phantom externals keeps the
       // graph dense without smearing edges across independent projects.
-      const pickSameWs = (candidates: { id: number; kind: string; workspace: string | null }[] | undefined) => {
+      const pickSameWs = (
+        candidates: { id: number; kind: string; workspace: string | null }[] | undefined,
+      ) => {
         if (!candidates || candidates.length === 0) return null;
         return candidates.filter((c) => c.workspace === sourceWs);
       };
 
       const ext = meta['extends'];
-      const extNames = Array.isArray(ext) ? ext as string[] : typeof ext === 'string' ? [ext] : [];
+      const extNames = Array.isArray(ext)
+        ? (ext as string[])
+        : typeof ext === 'string'
+          ? [ext]
+          : [];
       for (const targetName of extNames) {
         if (typeof targetName !== 'string' || !targetName) continue;
         const sameWsTargets = pickSameWs(nameIndex.get(targetName));

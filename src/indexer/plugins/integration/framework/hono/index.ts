@@ -23,8 +23,7 @@ const ROUTE_RE =
   /(?:app|router|hono)\s*\.\s*(get|post|put|delete|patch|head|options|all)\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 // app.on('GET', '/path', handler) or app.on('POST', '/path', handler)
-const ON_RE =
-  /(?:app|router|hono)\s*\.\s*on\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*['"`]([^'"`]+)['"`]/g;
+const ON_RE = /(?:app|router|hono)\s*\.\s*on\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*['"`]([^'"`]+)['"`]/g;
 
 // app.route('/api', subApp)
 const ROUTE_GROUP_RE =
@@ -39,8 +38,7 @@ const MIDDLEWARE_GLOBAL_RE =
   /(?:app|router|hono)\s*\.\s*use\s*\(\s*([A-Za-z][\w.]*(?:\s*\(\s*[^)]*\))?)\s*[,)]/g;
 
 // app.basePath('/v1')
-const BASEPATH_RE =
-  /(?:app|router|hono)\s*\.\s*basePath\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const BASEPATH_RE = /(?:app|router|hono)\s*\.\s*basePath\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 interface HonoRoute {
   method: string;

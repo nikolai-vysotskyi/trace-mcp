@@ -14,7 +14,10 @@ async function extract(code: string, filePath = 'src/lib.rs') {
 describe('RustLanguagePlugin', () => {
   beforeAll(async () => {
     const probe = await plugin.extractSymbols('probe.rs', Buffer.from('fn probe() {}\n'));
-    expect(probe.isOk(), `Rust parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+    expect(
+      probe.isOk(),
+      `Rust parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`,
+    ).toBe(true);
   });
 
   it('has correct manifest', () => {
@@ -131,7 +134,9 @@ impl Service for MyService {
     }
 }
     `);
-    const method = result.symbols.find((s) => s.name === 'run' && s.kind === 'method' && s.metadata?.implTrait);
+    const method = result.symbols.find(
+      (s) => s.name === 'run' && s.kind === 'method' && s.metadata?.implTrait,
+    );
     expect(method).toBeDefined();
     expect(method!.metadata?.implTrait).toBe('Service');
   });

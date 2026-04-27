@@ -15,11 +15,7 @@ const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'src/**/*.ts',
-      'components/**/*.vue',
-    ],
+    include: ['app/**/*.php', 'src/**/*.ts', 'components/**/*.vue'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],

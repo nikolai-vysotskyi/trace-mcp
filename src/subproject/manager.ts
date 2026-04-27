@@ -118,10 +118,14 @@ export class SubprojectManager {
    * @param projectRoot - the project this subproject belongs to
    * @param opts - optional name, contract paths
    */
-  add(repoRoot: string, projectRoot: string, opts?: {
-    name?: string;
-    contractPaths?: string[];
-  }): SubprojectAddResult {
+  add(
+    repoRoot: string,
+    projectRoot: string,
+    opts?: {
+      name?: string;
+      contractPaths?: string[];
+    },
+  ): SubprojectAddResult {
     const absRoot = path.resolve(repoRoot);
     const absProjectRoot = path.resolve(projectRoot);
     if (!fs.existsSync(absRoot)) {
@@ -176,9 +180,12 @@ export class SubprojectManager {
    * Unlike add(), this doesn't add the project itself — it discovers
    * sub-services (from docker-compose, workspace structure, or root markers).
    */
-  autoDiscoverSubprojects(projectRoot: string, opts?: {
-    contractPaths?: string[];
-  }): { services: SubprojectAddResult[] } {
+  autoDiscoverSubprojects(
+    projectRoot: string,
+    opts?: {
+      contractPaths?: string[];
+    },
+  ): { services: SubprojectAddResult[] } {
     const absProjectRoot = path.resolve(projectRoot);
     if (!fs.existsSync(absProjectRoot)) {
       throw new Error(`Project path does not exist: ${absProjectRoot}`);
@@ -221,7 +228,12 @@ export class SubprojectManager {
 
       const clientCalls = this.scanAndLinkClientCalls(repoId, svc.repoRoot);
       this.topoStore.updateSubprojectSyncTime(repoId);
-      registered.push({ repoId, serviceId, repoRoot: svc.repoRoot, projectGroup: svc.projectGroup ?? null });
+      registered.push({
+        repoId,
+        serviceId,
+        repoRoot: svc.repoRoot,
+        projectGroup: svc.projectGroup ?? null,
+      });
 
       const stats = this.topoStore.getTopologyStats();
       results.push({
@@ -247,7 +259,12 @@ export class SubprojectManager {
    * (e.g. Nuxt `useApiFetch(API.home())` with the path table in `useAppRoutes.ts`).
    */
   private scanCrossServiceEndpointLiterals(
-    registered: Array<{ repoId: number; serviceId: number; repoRoot: string; projectGroup: string | null }>,
+    registered: Array<{
+      repoId: number;
+      serviceId: number;
+      repoRoot: string;
+      projectGroup: string | null;
+    }>,
   ): void {
     if (registered.length < 2) return;
 
@@ -266,15 +283,17 @@ export class SubprojectManager {
       const literalCalls = scanEndpointLiterals(repo.repoRoot, crossServiceEndpoints);
       if (literalCalls.length === 0) continue;
 
-      this.topoStore.insertClientCalls(literalCalls.map((c) => ({
-        sourceRepoId: repo.repoId,
-        filePath: c.filePath,
-        line: c.line,
-        callType: c.callType,
-        method: c.method == null ? undefined : c.method,
-        urlPattern: c.urlPattern,
-        confidence: c.confidence,
-      })));
+      this.topoStore.insertClientCalls(
+        literalCalls.map((c) => ({
+          sourceRepoId: repo.repoId,
+          filePath: c.filePath,
+          line: c.line,
+          callType: c.callType,
+          method: c.method == null ? undefined : c.method,
+          urlPattern: c.urlPattern,
+          confidence: c.confidence,
+        })),
+      );
       totalInserted += literalCalls.length;
     }
 
@@ -298,9 +317,7 @@ export class SubprojectManager {
     this.topoStore.deleteClientCallsByRepo(repo.id);
 
     // Remove associated services
-    const services = this.topoStore.getAllServices().filter(
-      (s) => s.repo_root === repo.repo_root,
-    );
+    const services = this.topoStore.getAllServices().filter((s) => s.repo_root === repo.repo_root);
     for (const svc of services) {
       this.topoStore.deleteService(svc.id);
     }
@@ -338,13 +355,16 @@ export class SubprojectManager {
     });
 
     // Build edges: aggregate client calls by source_repo → target_repo
-    const edgeMap = new Map<string, {
-      source: string;
-      target: string;
-      callCount: number;
-      linkedCount: number;
-      callTypes: Set<string>;
-    }>();
+    const edgeMap = new Map<
+      string,
+      {
+        source: string;
+        target: string;
+        callCount: number;
+        linkedCount: number;
+        callTypes: Set<string>;
+      }
+    >();
 
     for (const repo of repos) {
       const calls = this.topoStore.getClientCallsByRepo(repo.id);
@@ -380,9 +400,10 @@ export class SubprojectManager {
         repos: subStats.repos,
         totalEndpoints: allEndpoints.length,
         totalClientCalls: subStats.clientCalls,
-        linkedCallsPercent: subStats.clientCalls > 0
-          ? Math.round((subStats.linkedCalls / subStats.clientCalls) * 100)
-          : 0,
+        linkedCallsPercent:
+          subStats.clientCalls > 0
+            ? Math.round((subStats.linkedCalls / subStats.clientCalls) * 100)
+            : 0,
       },
     };
   }
@@ -400,7 +421,10 @@ export class SubprojectManager {
 
     for (const repo of repos) {
       if (!fs.existsSync(repo.repo_root)) {
-        logger.warn({ repo: repo.name, root: repo.repo_root }, 'Subproject repo no longer exists, skipping');
+        logger.warn(
+          { repo: repo.name, root: repo.repo_root },
+          'Subproject repo no longer exists, skipping',
+        );
         continue;
       }
 
@@ -502,9 +526,9 @@ export class SubprojectManager {
         const absContract = path.resolve(repoRoot, cp);
         if (fs.existsSync(absContract)) {
           const additional = parseContracts(path.dirname(absContract));
-          contracts.push(...additional.filter(
-            (c) => path.resolve(repoRoot, c.specPath) === absContract,
-          ));
+          contracts.push(
+            ...additional.filter((c) => path.resolve(repoRoot, c.specPath) === absContract),
+          );
         }
       }
     }
@@ -538,7 +562,9 @@ export class SubprojectManager {
         parsedSpec: JSON.stringify({ endpoints: contract.endpoints, events: contract.events }),
       });
 
-      this.topoStore.insertEndpoints(contractId, serviceId,
+      this.topoStore.insertEndpoints(
+        contractId,
+        serviceId,
         contract.endpoints.map((e) => ({
           method: e.method ?? undefined,
           path: e.path,
@@ -549,7 +575,9 @@ export class SubprojectManager {
       );
 
       if (contract.events.length > 0) {
-        this.topoStore.insertEventChannels(contractId, serviceId,
+        this.topoStore.insertEventChannels(
+          contractId,
+          serviceId,
           contract.events.map((e) => ({
             channelName: e.channelName,
             direction: e.direction,
@@ -574,19 +602,24 @@ export class SubprojectManager {
   }
 
   /** Scan repo for client calls, insert them, link to endpoints, and build edges. */
-  private scanAndLinkClientCalls(repoId: number, repoRoot: string): { scanned: number; linked: number } {
+  private scanAndLinkClientCalls(
+    repoId: number,
+    repoRoot: string,
+  ): { scanned: number; linked: number } {
     this.topoStore.deleteClientCallsByRepo(repoId);
     const clientCalls = scanClientCalls(repoRoot);
     if (clientCalls.length > 0) {
-      this.topoStore.insertClientCalls(clientCalls.map((c) => ({
-        sourceRepoId: repoId,
-        filePath: c.filePath,
-        line: c.line,
-        callType: c.callType,
-        method: c.method == null ? undefined : c.method,
-        urlPattern: c.urlPattern,
-        confidence: c.confidence,
-      })));
+      this.topoStore.insertClientCalls(
+        clientCalls.map((c) => ({
+          sourceRepoId: repoId,
+          filePath: c.filePath,
+          line: c.line,
+          callType: c.callType,
+          method: c.method == null ? undefined : c.method,
+          urlPattern: c.urlPattern,
+          confidence: c.confidence,
+        })),
+      );
     }
     const linked = this.topoStore.linkClientCallsToEndpoints();
     this.buildCrossServiceEdges();
@@ -603,7 +636,9 @@ export class SubprojectManager {
       endpoints = endpoints.filter((ep) => ep.method?.toUpperCase() === opts.method!.toUpperCase());
     }
     if (opts.service) {
-      endpoints = endpoints.filter((ep) => ep.service_name.toLowerCase() === opts.service!.toLowerCase());
+      endpoints = endpoints.filter(
+        (ep) => ep.service_name.toLowerCase() === opts.service!.toLowerCase(),
+      );
     }
     return endpoints;
   }
@@ -620,9 +655,10 @@ export class SubprojectManager {
     for (const [repoName, calls] of byRepo) {
       const repo = this.topoStore.getSubproject(repoName);
       for (const call of calls) {
-        const symbols = repo?.db_path && fs.existsSync(repo.db_path)
-          ? resolveSymbolsAtLocation(repo.db_path, call.file_path, call.line)
-          : [];
+        const symbols =
+          repo?.db_path && fs.existsSync(repo.db_path)
+            ? resolveSymbolsAtLocation(repo.db_path, call.file_path, call.line)
+            : [];
         clients.push({
           repo: repoName,
           filePath: call.file_path,
@@ -636,7 +672,12 @@ export class SubprojectManager {
     return clients;
   }
 
-  private detectBreakingChanges(ep: { id: number; method: string | null; path: string; service_id: number }): EndpointSchemaDiff[] | undefined {
+  private detectBreakingChanges(ep: {
+    id: number;
+    method: string | null;
+    path: string;
+    service_id: number;
+  }): EndpointSchemaDiff[] | undefined {
     return _detectBreakingChanges(this.topoStore, ep);
   }
 
@@ -663,7 +704,9 @@ export class SubprojectManager {
 
       for (const call of linkedCalls) {
         // Find target service from the matched endpoint
-        const targetEndpoint = this.topoStore.getAllEndpoints().find((e) => e.id === call.matched_endpoint_id);
+        const targetEndpoint = this.topoStore
+          .getAllEndpoints()
+          .find((e) => e.id === call.matched_endpoint_id);
         if (!targetEndpoint) continue;
 
         // Find source service: exact match first, then longest prefix match (handles
@@ -692,4 +735,3 @@ export class SubprojectManager {
     }
   }
 }
-

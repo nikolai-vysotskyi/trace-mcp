@@ -55,7 +55,12 @@ describe('get_event_graph', () => {
     beforeEach(() => {
       eventSymId = insertSymbol(store, fileId, 'OrderShipped', 'App\\Events\\OrderShipped');
 
-      listenerFileId = store.insertFile('app/Listeners/SendShipmentNotification.php', 'php', 'h2', 100);
+      listenerFileId = store.insertFile(
+        'app/Listeners/SendShipmentNotification.php',
+        'php',
+        'h2',
+        100,
+      );
       listenerSymId = insertSymbol(
         store,
         listenerFileId,
@@ -111,7 +116,12 @@ describe('get_event_graph', () => {
     beforeEach(() => {
       eventSymId = insertSymbol(store, fileId, 'OrderShipped', 'App\\Events\\OrderShipped');
 
-      controllerFileId = store.insertFile('app/Http/Controllers/OrderController.php', 'php', 'h3', 100);
+      controllerFileId = store.insertFile(
+        'app/Http/Controllers/OrderController.php',
+        'php',
+        'h3',
+        100,
+      );
       controllerSymId = insertSymbol(
         store,
         controllerFileId,
@@ -152,8 +162,16 @@ describe('get_event_graph', () => {
       const listenerFile = store.insertFile('app/Listeners/NotifyAdmin.php', 'php', 'h5', 100);
       const l1 = insertSymbol(store, listenerFile, 'NotifyAdmin', 'App\\Listeners\\NotifyAdmin');
 
-      store.insertEdge(store.getNodeId('symbol', l1)!, store.getNodeId('symbol', e1)!, 'listens_to');
-      store.insertEdge(store.getNodeId('symbol', l1)!, store.getNodeId('symbol', e2)!, 'listens_to');
+      store.insertEdge(
+        store.getNodeId('symbol', l1)!,
+        store.getNodeId('symbol', e1)!,
+        'listens_to',
+      );
+      store.insertEdge(
+        store.getNodeId('symbol', l1)!,
+        store.getNodeId('symbol', e2)!,
+        'listens_to',
+      );
     });
 
     it('returns all events with listens_to edges', () => {

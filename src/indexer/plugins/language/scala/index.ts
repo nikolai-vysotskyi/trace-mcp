@@ -6,7 +6,13 @@
  * Supports both Scala 2 and Scala 3 constructs.
  */
 import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
+import type {
+  LanguagePlugin,
+  PluginManifest,
+  FileParseResult,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
@@ -39,7 +45,10 @@ export class ScalaLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.scala', '.sc'];
   supportedVersions = ['2.11', '2.12', '2.13', '3.0', '3.1', '3.2', '3.3', '3.4', '3.5'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('scala');
       const sourceCode = content.toString('utf-8');
@@ -485,7 +494,14 @@ export class ScalaLanguagePlugin implements LanguagePlugin {
     // Scala 3 given definitions: `given intOrd: Ord[Int]` or anonymous `given Ord[Int]`
     const name = getNodeName(node);
     // Anonymous givens get a synthetic name from the first line
-    const effectiveName = name ?? node.text.split('\n')[0].trim().replace(/^given\s+/, '').split(/[\s:(]/)[0] ?? '<anonymous>';
+    const effectiveName =
+      name ??
+      node.text
+        .split('\n')[0]
+        .trim()
+        .replace(/^given\s+/, '')
+        .split(/[\s:(]/)[0] ??
+      '<anonymous>';
 
     const meta: Record<string, unknown> = { given: true };
 

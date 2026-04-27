@@ -70,7 +70,10 @@ const _plugin = createMultiPassPlugin({
     // workflow Name {
     { kind: 'function', pattern: /^\s*workflow\s+([\w-]+)/gim },
     // Set-Variable / New-Variable with -Option Constant/ReadOnly
-    { kind: 'constant', pattern: /(?:Set|New)-Variable\s+(?:-Name\s+)?(\w+).*-Option\s+(?:Constant|ReadOnly)/gim },
+    {
+      kind: 'constant',
+      pattern: /(?:Set|New)-Variable\s+(?:-Name\s+)?(\w+).*-Option\s+(?:Constant|ReadOnly)/gim,
+    },
     // $script:VarName or $global:VarName (module-level vars)
     { kind: 'variable', pattern: /\$(?:script|global):(\w+)\s*=/gm },
     // param() block parameter declarations: [Type]$ParamName

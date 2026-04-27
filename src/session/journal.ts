@@ -80,7 +80,7 @@ interface SessionSnapshotStructured {
 
 /** Full snapshot result returned by getSnapshot() */
 interface SessionSnapshot {
-  snapshot: string;   // compact markdown for context injection
+  snapshot: string; // compact markdown for context injection
   structured: SessionSnapshotStructured;
   estimated_tokens: number;
 }
@@ -101,10 +101,19 @@ export class SessionJournal {
 
   /** Tools whose results are content-heavy and safe to dedup (deterministic for same params) */
   private static readonly DEDUP_TOOLS = new Set([
-    'get_symbol', 'get_outline', 'get_context_bundle', 'get_call_graph',
-    'get_type_hierarchy', 'get_import_graph', 'get_dependency_diagram',
-    'get_component_tree', 'get_dataflow', 'get_control_flow',
-    'get_middleware_chain', 'get_di_tree', 'get_model_context',
+    'get_symbol',
+    'get_outline',
+    'get_context_bundle',
+    'get_call_graph',
+    'get_type_hierarchy',
+    'get_import_graph',
+    'get_dependency_diagram',
+    'get_component_tree',
+    'get_dataflow',
+    'get_control_flow',
+    'get_middleware_chain',
+    'get_di_tree',
+    'get_model_context',
     'get_schema',
   ]);
 
@@ -195,7 +204,11 @@ export class SessionJournal {
 
     // Periodic snapshot flush for PreCompact hook
     if (this.snapshotPath && this.entries.length % this.snapshotFlushInterval === 0) {
-      try { this.flushSnapshotFile(this.snapshotPath); } catch { /* best-effort */ }
+      try {
+        this.flushSnapshotFile(this.snapshotPath);
+      } catch {
+        /* best-effort */
+      }
     }
   }
 
@@ -244,7 +257,7 @@ export class SessionJournal {
 
     for (const tcTimestamp of this.taskContextTimestamps) {
       // Find the index of this task context call
-      const tcIdx = this.entries.findIndex(e => e.timestamp === tcTimestamp);
+      const tcIdx = this.entries.findIndex((e) => e.timestamp === tcTimestamp);
       if (tcIdx < 0) continue;
 
       // Look at the next FOLLOW_UP_WINDOW entries
@@ -294,7 +307,9 @@ export class SessionJournal {
       total_entries: this.entries.length,
       files_read: [...this.filesRead],
       searches_with_zero_results: [...this.zeroResultQueries.values()],
-      duplicate_queries: [...duplicateHashes].map(h => this.allHashes.get(h)?.params_summary ?? h),
+      duplicate_queries: [...duplicateHashes].map(
+        (h) => this.allHashes.get(h)?.params_summary ?? h,
+      ),
     };
   }
 
@@ -315,7 +330,7 @@ export class SessionJournal {
       const currentFile = this.extractFile(currentParams);
       if (currentFile) {
         const sameFileReads = recentEntries.filter(
-          e => e.tool === 'get_symbol' && e.params_summary.includes(currentFile),
+          (e) => e.tool === 'get_symbol' && e.params_summary.includes(currentFile),
         ).length;
         if (sameFileReads >= 4) {
           return `You've read ${sameFileReads} symbols from "${currentFile}" individually. Consider using get_context_bundle with multiple symbol_ids[] or Read for the full file — it would be cheaper.`;
@@ -325,8 +340,8 @@ export class SessionJournal {
 
     // Pattern 2: search → get_symbol chain when get_task_context would be better
     if (currentTool === 'get_symbol') {
-      const recentSearches = recentEntries.filter(e => e.tool === 'search').length;
-      const recentGetSymbol = recentEntries.filter(e => e.tool === 'get_symbol').length;
+      const recentSearches = recentEntries.filter((e) => e.tool === 'search').length;
+      const recentGetSymbol = recentEntries.filter((e) => e.tool === 'get_symbol').length;
       if (recentSearches >= 2 && recentGetSymbol >= 3 && this.entries.length <= 10) {
         return 'You\'re chaining search → get_symbol calls. Consider starting with get_task_context("your task description") — it returns all relevant context in one call.';
       }
@@ -335,22 +350,22 @@ export class SessionJournal {
     // Pattern 3: Multiple independent tool calls → suggest batch
     if (this.entries.length >= 6) {
       const lastN = this.entries.slice(-6);
-      const uniqueTools = new Set(lastN.map(e => e.tool));
-      const allIndependent = lastN.every(e =>
+      const uniqueTools = new Set(lastN.map((e) => e.tool));
+      const allIndependent = lastN.every((e) =>
         ['get_outline', 'get_symbol', 'search', 'find_usages'].includes(e.tool),
       );
       if (uniqueTools.size >= 3 && allIndependent) {
-        return 'You\'re making many small independent queries. Consider using the batch tool to combine them into a single request — reduces round-trips.';
+        return "You're making many small independent queries. Consider using the batch tool to combine them into a single request — reduces round-trips.";
       }
     }
 
     // Pattern 4: get_outline followed by get_symbol for every symbol in it
     if (currentTool === 'get_symbol') {
-      const lastOutline = [...this.entries].reverse().find(e => e.tool === 'get_outline');
+      const lastOutline = [...this.entries].reverse().find((e) => e.tool === 'get_outline');
       if (lastOutline) {
-        const symbolCallsAfterOutline = this.entries
-          .filter(e => e.timestamp >= lastOutline.timestamp && e.tool === 'get_symbol')
-          .length;
+        const symbolCallsAfterOutline = this.entries.filter(
+          (e) => e.timestamp >= lastOutline.timestamp && e.tool === 'get_symbol',
+        ).length;
         if (symbolCallsAfterOutline >= 5) {
           return `You fetched an outline then read ${symbolCallsAfterOutline} symbols individually. For bulk reading, use get_context_bundle with symbol_ids[] or Read the full file.`;
         }
@@ -435,7 +450,9 @@ export class SessionJournal {
     if (this.landmarkProvider) {
       try {
         landmarks = this.landmarkProvider();
-      } catch { /* best-effort — don't break snapshot on landmark failure */ }
+      } catch {
+        /* best-effort — don't break snapshot on landmark failure */
+      }
     }
 
     const structured: SessionSnapshotStructured = {
@@ -451,11 +468,11 @@ export class SessionJournal {
 
     // Build compact markdown
     const lines: string[] = [];
-    const durationStr = durationSec >= 60
-      ? `${Math.floor(durationSec / 60)}m`
-      : `${durationSec}s`;
+    const durationStr = durationSec >= 60 ? `${Math.floor(durationSec / 60)}m` : `${durationSec}s`;
     lines.push(`## Session Snapshot (trace-mcp)`);
-    lines.push(`**Duration:** ${durationStr} | **Files explored:** ${this.filesRead.size} | **Tool calls:** ${this.entries.length}`);
+    lines.push(
+      `**Duration:** ${durationStr} | **Files explored:** ${this.filesRead.size} | **Tool calls:** ${this.entries.length}`,
+    );
 
     if (focusFiles.length > 0) {
       lines.push('');
@@ -525,12 +542,15 @@ export class SessionJournal {
     const snapshot = this.getSnapshot();
     const dir = path.dirname(snapshotPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(snapshotPath, JSON.stringify({
-      timestamp: Date.now(),
-      markdown: snapshot.snapshot,
-      structured: snapshot.structured,
-      estimated_tokens: snapshot.estimated_tokens,
-    }));
+    fs.writeFileSync(
+      snapshotPath,
+      JSON.stringify({
+        timestamp: Date.now(),
+        markdown: snapshot.snapshot,
+        structured: snapshot.structured,
+        estimated_tokens: snapshot.estimated_tokens,
+      }),
+    );
   }
 
   private extractFile(params: Record<string, unknown>): string | null {
@@ -542,11 +562,24 @@ export class SessionJournal {
   }
 
   private isSearchTool(tool: string): boolean {
-    return ['search', 'get_feature_context', 'query_by_intent', 'find_usages', 'search_text'].includes(tool);
+    return [
+      'search',
+      'get_feature_context',
+      'query_by_intent',
+      'find_usages',
+      'search_text',
+    ].includes(tool);
   }
 
   private buildSummary(tool: string, params: Record<string, unknown>): string {
-    const key = params.query ?? params.description ?? params.symbol_id ?? params.fqn ?? params.file_path ?? params.path ?? '';
+    const key =
+      params.query ??
+      params.description ??
+      params.symbol_id ??
+      params.fqn ??
+      params.file_path ??
+      params.path ??
+      '';
     return `${tool}("${String(key).slice(0, 80)}")`;
   }
 
@@ -562,7 +595,11 @@ export class SessionJournal {
   /** Free session memory. Flushes final snapshot before clearing. */
   dispose(): void {
     if (this.snapshotPath && this.entries.length > 0) {
-      try { this.flushSnapshotFile(this.snapshotPath); } catch { /* best-effort */ }
+      try {
+        this.flushSnapshotFile(this.snapshotPath);
+      } catch {
+        /* best-effort */
+      }
     }
     this.entries.length = 0;
     this.allHashes.clear();

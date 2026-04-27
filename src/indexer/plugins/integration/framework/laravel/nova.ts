@@ -56,8 +56,16 @@ interface NovaMetricInfo {
 // ─── Relationship field types (stable v2→v5) ─────────────────
 
 const RELATIONSHIP_FIELDS = new Set([
-  'BelongsTo', 'HasMany', 'HasOne', 'HasOneThrough', 'HasManyThrough',
-  'BelongsToMany', 'MorphTo', 'MorphMany', 'MorphOne', 'MorphToMany',
+  'BelongsTo',
+  'HasMany',
+  'HasOne',
+  'HasOneThrough',
+  'HasManyThrough',
+  'BelongsToMany',
+  'MorphTo',
+  'MorphMany',
+  'MorphOne',
+  'MorphToMany',
 ]);
 
 const METRIC_BASES = new Set(['Value', 'Trend', 'Partition', 'Progress']);
@@ -78,10 +86,7 @@ const EXTENDS_METRIC_RE = new RegExp(
 
 // ─── Resource extraction ──────────────────────────────────────
 
-export function extractNovaResource(
-  source: string,
-  _filePath: string,
-): NovaResourceInfo | null {
+export function extractNovaResource(source: string, _filePath: string): NovaResourceInfo | null {
   if (!EXTENDS_RESOURCE_RE.test(source)) return null;
 
   // Exclude Filament/Moonshine/Backpack resources that also extend Resource
@@ -97,9 +102,7 @@ export function extractNovaResource(
   const fqn = namespace ? `${namespace}\\${className}` : className;
 
   // $model property: public static $model = Model::class;
-  const modelMatch = source.match(
-    /public\s+static\s+\$model\s*=\s*([\w\\]+)::class/,
-  );
+  const modelMatch = source.match(/public\s+static\s+\$model\s*=\s*([\w\\]+)::class/);
   const modelFqn = modelMatch ? resolveClass(modelMatch[1], useMap) : null;
 
   // Collect all field method bodies (v2–v3: fields(), v4–v5: + fieldsFor*)
@@ -117,15 +120,22 @@ export function extractNovaResource(
     ...extractRegisteredClasses(source, 'metrics', useMap),
   ];
 
-  return { className, namespace, fqn, modelFqn, fieldRelationships, actions, filters, lenses, metrics };
+  return {
+    className,
+    namespace,
+    fqn,
+    modelFqn,
+    fieldRelationships,
+    actions,
+    filters,
+    lenses,
+    metrics,
+  };
 }
 
 // ─── Metric extraction ────────────────────────────────────────
 
-export function extractNovaMetric(
-  source: string,
-  _filePath: string,
-): NovaMetricInfo | null {
+export function extractNovaMetric(source: string, _filePath: string): NovaMetricInfo | null {
   if (!EXTENDS_METRIC_RE.test(source)) return null;
 
   const useMap = buildUseMap(source);
@@ -145,11 +155,7 @@ export function extractNovaMetric(
 // ─── Node & edge processing (called from LaravelPlugin) ──────
 
 /** Pass-1: extract Nova metadata edges from a single file. */
-export function processNovaNode(
-  source: string,
-  filePath: string,
-  result: FileParseResult,
-): void {
+export function processNovaNode(source: string, filePath: string, result: FileParseResult): void {
   result.edges = result.edges ?? [];
 
   const resource = extractNovaResource(source, filePath);
@@ -181,13 +187,26 @@ export function resolveNovaEdges(
     if (resource.modelFqn) {
       const modelSymbol = ctx.getSymbolByFqn(resource.modelFqn);
       if (modelSymbol) {
-        edges.push({ sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id, targetNodeType: 'symbol', targetRefId: modelSymbol.id, edgeType: 'nova_resource_for' });
+        edges.push({
+          sourceNodeType: 'symbol',
+          sourceRefId: sourceSymbol.id,
+          targetNodeType: 'symbol',
+          targetRefId: modelSymbol.id,
+          edgeType: 'nova_resource_for',
+        });
       }
     }
     for (const rel of resource.fieldRelationships) {
       const targetSymbol = ctx.getSymbolByFqn(rel.targetResourceFqn);
       if (targetSymbol) {
-        edges.push({ sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id, targetNodeType: 'symbol', targetRefId: targetSymbol.id, edgeType: 'nova_field_relationship', metadata: { fieldType: rel.fieldType } });
+        edges.push({
+          sourceNodeType: 'symbol',
+          sourceRefId: sourceSymbol.id,
+          targetNodeType: 'symbol',
+          targetRefId: targetSymbol.id,
+          edgeType: 'nova_field_relationship',
+          metadata: { fieldType: rel.fieldType },
+        });
       }
     }
     return;
@@ -200,7 +219,13 @@ export function resolveNovaEdges(
     for (const modelFqn of metric.queriedModels) {
       const modelSymbol = ctx.getSymbolByFqn(modelFqn);
       if (modelSymbol) {
-        edges.push({ sourceNodeType: 'symbol', sourceRefId: metricSymbol.id, targetNodeType: 'symbol', targetRefId: modelSymbol.id, edgeType: 'nova_metric_queries' });
+        edges.push({
+          sourceNodeType: 'symbol',
+          sourceRefId: metricSymbol.id,
+          targetNodeType: 'symbol',
+          targetRefId: modelSymbol.id,
+          edgeType: 'nova_metric_queries',
+        });
       }
     }
   }
@@ -287,7 +312,13 @@ function resolveClass(ref: string, useMap: Map<string, string>): string {
  * v4+: also handles Panel::make('label', [...fields...]) nesting.
  */
 function collectFieldBodies(source: string): string {
-  const FIELD_METHODS = ['fields', 'fieldsForIndex', 'fieldsForDetail', 'fieldsForCreate', 'fieldsForUpdate'];
+  const FIELD_METHODS = [
+    'fields',
+    'fieldsForIndex',
+    'fieldsForDetail',
+    'fieldsForCreate',
+    'fieldsForUpdate',
+  ];
   const parts: string[] = [];
 
   for (const method of FIELD_METHODS) {
@@ -377,7 +408,8 @@ function extractRegisteredClasses(
 function extractMetricModels(source: string, useMap: Map<string, string>): string[] {
   const results: string[] = [];
 
-  const re = /\$this->(?:count|trend|partition|countByDays|countByWeeks|countByMonths|sumByDays|averageByDays)\s*\([^,]+,\s*([\w\\]+)::class/g;
+  const re =
+    /\$this->(?:count|trend|partition|countByDays|countByWeeks|countByMonths|sumByDays|averageByDays)\s*\([^,]+,\s*([\w\\]+)::class/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(source)) !== null) {
     results.push(resolveClass(match[1], useMap));

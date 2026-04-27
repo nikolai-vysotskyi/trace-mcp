@@ -38,7 +38,11 @@ const _plugin = createMultiPassPlugin({
       kind: 'namespace',
       pattern: new RegExp(`\\(\\s*defpackage\\s+[:#]?(${SYM_RE})`, 'gim'),
       memberPatterns: [
-        { kind: 'function', pattern: /(?::export[^)]*?)[:#](\w[\w*+!\-<>=/.?]*)/gim, meta: { exported: true } },
+        {
+          kind: 'function',
+          pattern: /(?::export[^)]*?)[:#](\w[\w*+!\-<>=/.?]*)/gim,
+          meta: { exported: true },
+        },
       ],
     },
     // (defclass name (supers) ((slot ...) ...))
@@ -46,7 +50,14 @@ const _plugin = createMultiPassPlugin({
       kind: 'class',
       pattern: new RegExp(`\\(\\s*defclass\\s+(${SYM_RE})`, 'gim'),
       memberPatterns: [
-        { kind: 'property', pattern: new RegExp(`\\(\\s*:?(${SYM_RE})\\s+:(?:accessor|reader|writer|initarg|initform|type|allocation|documentation)`, 'gim'), meta: { slot: true } },
+        {
+          kind: 'property',
+          pattern: new RegExp(
+            `\\(\\s*:?(${SYM_RE})\\s+:(?:accessor|reader|writer|initarg|initform|type|allocation|documentation)`,
+            'gim',
+          ),
+          meta: { slot: true },
+        },
         { kind: 'property', pattern: new RegExp(`\\(\\s*(${SYM_RE})\\s*\\)`, 'gim') },
       ],
     },
@@ -54,9 +65,7 @@ const _plugin = createMultiPassPlugin({
     {
       kind: 'class',
       pattern: new RegExp(`\\(\\s*defstruct\\s+(?:\\([^)]*\\)\\s+)?(${SYM_RE})`, 'gim'),
-      memberPatterns: [
-        { kind: 'property', pattern: new RegExp(`\\(\\s*(${SYM_RE})\\s`, 'gim') },
-      ],
+      memberPatterns: [{ kind: 'property', pattern: new RegExp(`\\(\\s*(${SYM_RE})\\s`, 'gim') }],
     },
     // (defsystem "name" ...) — ASDF
     {
@@ -68,19 +77,45 @@ const _plugin = createMultiPassPlugin({
 
   symbolPatterns: [
     { kind: 'function', pattern: new RegExp(`\\(\\s*defun\\s+(${SYM_RE})`, 'gim') },
-    { kind: 'function', pattern: new RegExp(`\\(\\s*defmacro\\s+(${SYM_RE})`, 'gim'), meta: { macro: true } },
-    { kind: 'function', pattern: new RegExp(`\\(\\s*define-compiler-macro\\s+(${SYM_RE})`, 'gim'), meta: { compilerMacro: true } },
+    {
+      kind: 'function',
+      pattern: new RegExp(`\\(\\s*defmacro\\s+(${SYM_RE})`, 'gim'),
+      meta: { macro: true },
+    },
+    {
+      kind: 'function',
+      pattern: new RegExp(`\\(\\s*define-compiler-macro\\s+(${SYM_RE})`, 'gim'),
+      meta: { compilerMacro: true },
+    },
     { kind: 'function', pattern: new RegExp(`\\(\\s*defgeneric\\s+(${SYM_RE})`, 'gim') },
     { kind: 'method', pattern: new RegExp(`\\(\\s*defmethod\\s+(${SYM_RE})`, 'gim') },
     { kind: 'namespace', pattern: new RegExp(`\\(\\s*in-package\\s+[:#]?(${SYM_RE})`, 'gim') },
-    { kind: 'variable', pattern: new RegExp(`\\(\\s*def(?:var|parameter)\\s+(\\*${SYM_RE}\\*)`, 'gim') },
+    {
+      kind: 'variable',
+      pattern: new RegExp(`\\(\\s*def(?:var|parameter)\\s+(\\*${SYM_RE}\\*)`, 'gim'),
+    },
     { kind: 'constant', pattern: new RegExp(`\\(\\s*defconstant\\s+(\\+?${SYM_RE}\\+?)`, 'gim') },
     { kind: 'type', pattern: new RegExp(`\\(\\s*deftype\\s+(${SYM_RE})`, 'gim') },
     { kind: 'class', pattern: new RegExp(`\\(\\s*define-condition\\s+(${SYM_RE})`, 'gim') },
-    { kind: 'function', pattern: new RegExp(`\\(\\s*define-setf-expander\\s+(${SYM_RE})`, 'gim'), meta: { setf: true } },
-    { kind: 'function', pattern: new RegExp(`\\(\\s*define-method-combination\\s+(${SYM_RE})`, 'gim') },
-    { kind: 'variable', pattern: new RegExp(`\\(\\s*define-symbol-macro\\s+(${SYM_RE})`, 'gim'), meta: { symbolMacro: true } },
-    { kind: 'function', pattern: new RegExp(`\\(\\s*(?:flet|labels)\\s+\\(\\s*\\(\\s*(${SYM_RE})`, 'gim'), meta: { local: true } },
+    {
+      kind: 'function',
+      pattern: new RegExp(`\\(\\s*define-setf-expander\\s+(${SYM_RE})`, 'gim'),
+      meta: { setf: true },
+    },
+    {
+      kind: 'function',
+      pattern: new RegExp(`\\(\\s*define-method-combination\\s+(${SYM_RE})`, 'gim'),
+    },
+    {
+      kind: 'variable',
+      pattern: new RegExp(`\\(\\s*define-symbol-macro\\s+(${SYM_RE})`, 'gim'),
+      meta: { symbolMacro: true },
+    },
+    {
+      kind: 'function',
+      pattern: new RegExp(`\\(\\s*(?:flet|labels)\\s+\\(\\s*\\(\\s*(${SYM_RE})`, 'gim'),
+      meta: { local: true },
+    },
   ],
 
   importPatterns: [

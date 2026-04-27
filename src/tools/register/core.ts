@@ -9,7 +9,19 @@ import { checkFileForDuplicates } from '../analysis/duplication.js';
 import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
 
 export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
-  const { store, registry, config, projectRoot, guardPath, j, jh, journal, vectorStore, embeddingService, progress } = ctx;
+  const {
+    store,
+    registry,
+    config,
+    projectRoot,
+    guardPath,
+    j,
+    jh,
+    journal,
+    vectorStore,
+    embeddingService,
+    progress,
+  } = ctx;
 
   // --- Core Tools (always registered) ---
 
@@ -30,7 +42,11 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     'reindex',
     'Trigger (re)indexing of the project or a subdirectory. Mutates the local index (SQLite). Use after major file changes; for single-file updates prefer register_edit instead. Idempotent — safe to re-run. Returns JSON: { status, totalFiles, indexed, skipped, errors, durationMs }.',
     {
-      path: z.string().max(512).optional().describe('Subdirectory to index (default: project root)'),
+      path: z
+        .string()
+        .max(512)
+        .optional()
+        .describe('Subdirectory to index (default: project root)'),
       force: z.boolean().optional().describe('Skip hash check and reindex all files'),
     },
     async ({ path: indexPath, force }) => {
@@ -53,52 +69,76 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     'embed_repo',
     'Precompute and cache symbol embeddings for semantic / hybrid search. Embeddings are also computed lazily on first semantic query, but calling this once after a fresh index avoids the first-query latency spike. Requires AI provider to be enabled in config (ollama/openai). Set force=true to drop and recompute all existing embeddings. Mutates the vector store; idempotent. Use after reindex when you plan to use semantic search. Returns JSON: { status, indexed_this_run, total_embedded, coverage_pct, duration_ms }.',
     {
-      batch_size: z.number().int().min(1).max(500).optional().describe('Symbols per embedding API batch (default 50)'),
-      force: z.boolean().optional().describe('Drop existing embeddings and re-embed everything (default false — incremental)'),
+      batch_size: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe('Symbols per embedding API batch (default 50)'),
+      force: z
+        .boolean()
+        .optional()
+        .describe('Drop existing embeddings and re-embed everything (default false — incremental)'),
     },
     async ({ batch_size, force }) => {
       if (!vectorStore || !embeddingService) {
         return {
-          content: [{
-            type: 'text',
-            text: j({
-              status: 'disabled',
-              message: 'Semantic search disabled. Enable an AI provider in trace-mcp.config.json (ai.enabled=true, ai.provider=ollama|openai).',
-            }),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: j({
+                status: 'disabled',
+                message:
+                  'Semantic search disabled. Enable an AI provider in trace-mcp.config.json (ai.enabled=true, ai.provider=ollama|openai).',
+              }),
+            },
+          ],
           isError: true,
         };
       }
       logger.info({ force, batch_size }, 'embed_repo requested');
-      const pipeline = new EmbeddingPipeline(store, embeddingService, vectorStore, progress ?? undefined);
+      const pipeline = new EmbeddingPipeline(
+        store,
+        embeddingService,
+        vectorStore,
+        progress ?? undefined,
+      );
       try {
         const startedAt = Date.now();
-        const indexed = force ? await pipeline.reindexAll() : await pipeline.indexUnembedded(batch_size ?? 50);
+        const indexed = force
+          ? await pipeline.reindexAll()
+          : await pipeline.indexUnembedded(batch_size ?? 50);
         const totalEmbedded = vectorStore.count();
         const totalSymbols = store.getStats().totalSymbols;
         return {
-          content: [{
-            type: 'text',
-            text: j({
-              status: 'completed',
-              indexed_this_run: indexed,
-              total_embedded: totalEmbedded,
-              total_symbols: totalSymbols,
-              coverage_pct: totalSymbols > 0 ? Math.round((totalEmbedded / totalSymbols) * 100) : 0,
-              duration_ms: Date.now() - startedAt,
-              force: !!force,
-            }),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: j({
+                status: 'completed',
+                indexed_this_run: indexed,
+                total_embedded: totalEmbedded,
+                total_symbols: totalSymbols,
+                coverage_pct:
+                  totalSymbols > 0 ? Math.round((totalEmbedded / totalSymbols) * 100) : 0,
+                duration_ms: Date.now() - startedAt,
+                force: !!force,
+              }),
+            },
+          ],
         };
       } catch (e) {
         return {
-          content: [{
-            type: 'text',
-            text: j({
-              status: 'error',
-              error: e instanceof Error ? e.message : String(e),
-            }),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: j({
+                status: 'error',
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            },
+          ],
           isError: true,
         };
       }
@@ -122,27 +162,39 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       journal.record('register_edit', { file_path: filePath }, 1);
 
       // Best-effort duplication check — never fails register_edit
-      let dupWarnings: { message: string; score: number; duplicate_symbol_id: string; duplicate_file: string }[] = [];
+      let dupWarnings: {
+        message: string;
+        score: number;
+        duplicate_symbol_id: string;
+        duplicate_file: string;
+      }[] = [];
       try {
-        const dup = checkFileForDuplicates(store, store.db, filePath, { threshold: 0.70, maxResults: 5 });
+        const dup = checkFileForDuplicates(store, store.db, filePath, {
+          threshold: 0.7,
+          maxResults: 5,
+        });
         dupWarnings = dup.warnings.map((w) => ({
           message: `"${w.source_name}" is similar to "${w.duplicate_name}" in ${w.duplicate_file}:${w.duplicate_line ?? '?'}`,
           score: w.score,
           duplicate_symbol_id: w.duplicate_symbol_id,
           duplicate_file: w.duplicate_file,
         }));
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
 
       return {
-        content: [{
-          type: 'text',
-          text: j({
-            status: 'reindexed',
-            file: filePath,
-            ...result,
-            ...(dupWarnings.length > 0 ? { _duplication_warnings: dupWarnings } : {}),
-          }),
-        }],
+        content: [
+          {
+            type: 'text',
+            text: j({
+              status: 'reindexed',
+              file: filePath,
+              ...result,
+              ...(dupWarnings.length > 0 ? { _duplication_warnings: dupWarnings } : {}),
+            }),
+          },
+        ],
       };
     },
   );
@@ -151,7 +203,10 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     'get_project_map',
     'Get project overview: detected frameworks, languages, file counts, structure. Read-only, no side effects. Call with summary_only=true at session start to orient yourself before diving into code. Use instead of manual ls/find. Returns JSON: { frameworks, languages, fileCount, symbolCount, structure }.',
     {
-      summary_only: z.boolean().optional().describe('Return only framework list + counts (default false)'),
+      summary_only: z
+        .boolean()
+        .optional()
+        .describe('Return only framework list + counts (default false)'),
     },
     async ({ summary_only }) => {
       const ctx = buildProjectContext(projectRoot);
@@ -166,7 +221,11 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     'get_env_vars',
     'List environment variable keys from .env files with inferred value types/formats. Never exposes actual values — only keys, types (string/number/boolean/empty), and formats (url/email/ip/path/uuid/json/base64/csv/dsn/etc). Read-only, no side effects, safe for secrets. Use to understand project configuration without accessing actual values. Returns JSON grouped by file: { [file]: [{ key, type, format, comment }] }.',
     {
-      pattern: z.string().max(256).optional().describe('Filter keys by pattern (e.g. "DB_" or "REDIS")'),
+      pattern: z
+        .string()
+        .max(256)
+        .optional()
+        .describe('Filter keys by pattern (e.g. "DB_" or "REDIS")'),
       file: z.string().max(512).optional().describe('Filter by specific .env file path'),
     },
     async ({ pattern, file }) => {
@@ -177,13 +236,20 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       }
 
       if (vars.length === 0) {
-        return { content: [{ type: 'text', text: 'No env vars found. Run indexing first or adjust the filter.' }] };
+        return {
+          content: [
+            { type: 'text', text: 'No env vars found. Run indexing first or adjust the filter.' },
+          ],
+        };
       }
 
       // Group by file
-      const grouped: Record<string, { key: string; type: string; format: string | null; comment: string | null }[]> = {};
+      const grouped: Record<
+        string,
+        { key: string; type: string; format: string | null; comment: string | null }[]
+      > = {};
       for (const v of vars) {
-        const arr = grouped[v.file_path] ??= [];
+        const arr = (grouped[v.file_path] ??= []);
         arr.push({
           key: v.key,
           type: v.value_type,

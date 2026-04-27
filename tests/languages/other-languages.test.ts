@@ -29,7 +29,11 @@ import { BladeLanguagePlugin } from '../../src/indexer/plugins/language/blade/in
 import { EjsLanguagePlugin } from '../../src/indexer/plugins/language/ejs/index.js';
 
 // Helper to parse and unwrap (handles both sync and async extractSymbols)
-function parse(plugin: { extractSymbols: (f: string, c: Buffer) => any }, source: string, filePath: string): any {
+function parse(
+  plugin: { extractSymbols: (f: string, c: Buffer) => any },
+  source: string,
+  filePath: string,
+): any {
   const resultOrPromise = plugin.extractSymbols(filePath, Buffer.from(source));
   // If the plugin returns a Promise, resolve it first
   if (resultOrPromise && typeof resultOrPromise.then === 'function') {
@@ -206,8 +210,12 @@ describe('Bash', () => {
 
   it('extracts readonly and export', async () => {
     const r = await p('readonly MAX_RETRIES=5\nexport PATH_PREFIX=/usr/local');
-    expect(r.symbols.some((s: any) => s.name === 'MAX_RETRIES' && s.kind === 'constant')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'PATH_PREFIX' && s.kind === 'variable')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'MAX_RETRIES' && s.kind === 'constant')).toBe(
+      true,
+    );
+    expect(r.symbols.some((s: any) => s.name === 'PATH_PREFIX' && s.kind === 'variable')).toBe(
+      true,
+    );
   });
 });
 
@@ -253,12 +261,16 @@ describe('Perl', () => {
 
   it('extracts sub', () => {
     const r = p('sub process_data {\n  my ($arg) = @_;\n}');
-    expect(r.symbols.some((s: any) => s.name === 'process_data' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'process_data' && s.kind === 'function')).toBe(
+      true,
+    );
   });
 
   it('extracts package', () => {
     const r = p('package My::Module;');
-    expect(r.symbols.some((s: any) => s.name === 'My::Module' && s.kind === 'namespace')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'My::Module' && s.kind === 'namespace')).toBe(
+      true,
+    );
   });
 
   it('extracts use edge', () => {
@@ -284,7 +296,9 @@ describe('GDScript', () => {
   it('extracts enum and signal', () => {
     const r = p('enum Direction {\n  UP, DOWN\n}\nsignal health_changed');
     expect(r.symbols.some((s: any) => s.name === 'Direction' && s.kind === 'enum')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'health_changed' && s.kind === 'property')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'health_changed' && s.kind === 'property')).toBe(
+      true,
+    );
   });
 
   it('extracts const and var', () => {
@@ -375,7 +389,9 @@ describe('SQL', () => {
 
   it('extracts WITH cte AS', () => {
     const r = p('WITH active_users AS (\n  SELECT * FROM users\n)\nSELECT * FROM active_users;');
-    expect(r.symbols.some((s: any) => s.name === 'active_users' && s.kind === 'variable')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'active_users' && s.kind === 'variable')).toBe(
+      true,
+    );
   });
 
   it('extracts CREATE VIEW', () => {
@@ -397,7 +413,9 @@ describe('HCL', () => {
   });
 
   it('extracts variable and output', () => {
-    const r = p('variable "region" {\n  default = "us-east-1"\n}\noutput "ip" {\n  value = "1.2.3.4"\n}');
+    const r = p(
+      'variable "region" {\n  default = "us-east-1"\n}\noutput "ip" {\n  value = "1.2.3.4"\n}',
+    );
     expect(r.symbols.some((s: any) => s.name === 'region' && s.kind === 'variable')).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'ip' && s.kind === 'variable')).toBe(true);
   });
@@ -423,13 +441,17 @@ describe('Protobuf', () => {
 
   it('extracts service and rpc', () => {
     const r = p('service UserService {\n  rpc GetUser(GetUserRequest) returns (User);\n}');
-    expect(r.symbols.some((s: any) => s.name === 'UserService' && s.kind === 'interface')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'UserService' && s.kind === 'interface')).toBe(
+      true,
+    );
     expect(r.symbols.some((s: any) => s.name === 'GetUser' && s.kind === 'method')).toBe(true);
   });
 
   it('extracts import edge', () => {
     const r = p('import "google/protobuf/timestamp.proto";');
-    expect(r.edges?.some((e: any) => e.metadata?.module === 'google/protobuf/timestamp.proto')).toBe(true);
+    expect(
+      r.edges?.some((e: any) => e.metadata?.module === 'google/protobuf/timestamp.proto'),
+    ).toBe(true);
   });
 });
 
@@ -444,7 +466,9 @@ describe('YAML', () => {
     const r = p('name: my-app\nversion: 1.0\ndependencies:\n  lodash: "^4"');
     expect(r.symbols.some((s: any) => s.name === 'name' && s.kind === 'constant')).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'version' && s.kind === 'constant')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'dependencies' && s.kind === 'constant')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'dependencies' && s.kind === 'constant')).toBe(
+      true,
+    );
   });
 });
 
@@ -471,7 +495,9 @@ describe('TOML', () => {
 
   it('extracts [table] and key = value', async () => {
     const r = await p('name = "my-app"\n\n[dependencies]\nlodash = "^4"');
-    expect(r.symbols.some((s: any) => s.name === 'dependencies' && s.kind === 'namespace')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'dependencies' && s.kind === 'namespace')).toBe(
+      true,
+    );
     expect(r.symbols.some((s: any) => s.name === 'name' && s.kind === 'constant')).toBe(true);
   });
 
@@ -501,7 +527,9 @@ describe('Assembly', () => {
 
   it('extracts EQU and .global', () => {
     const r = p('BUFFER_SIZE EQU 1024\n.global _start');
-    expect(r.symbols.some((s: any) => s.name === 'BUFFER_SIZE' && s.kind === 'constant')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'BUFFER_SIZE' && s.kind === 'constant')).toBe(
+      true,
+    );
     expect(r.symbols.some((s: any) => s.name === '_start' && s.kind === 'function')).toBe(true);
   });
 });
@@ -525,7 +553,9 @@ describe('Fortran', () => {
 
   it('extracts MODULE and USE edge', () => {
     const r = p('module math_utils\n  use iso_fortran_env\nend module');
-    expect(r.symbols.some((s: any) => s.name === 'math_utils' && s.kind === 'namespace')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'math_utils' && s.kind === 'namespace')).toBe(
+      true,
+    );
     expect(r.edges?.some((e: any) => e.metadata?.module === 'iso_fortran_env')).toBe(true);
   });
 });
@@ -581,12 +611,16 @@ describe('AL', () => {
 
   it('extracts codeunit', () => {
     const r = p('codeunit 50100 "Sales Processor"\n{\n}');
-    expect(r.symbols.some((s: any) => s.name === 'Sales Processor' && s.kind === 'class')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'Sales Processor' && s.kind === 'class')).toBe(
+      true,
+    );
   });
 
   it('extracts procedure', () => {
     const r = p('  procedure ProcessOrder(\n    OrderNo: Code[20])');
-    expect(r.symbols.some((s: any) => s.name === 'ProcessOrder' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'ProcessOrder' && s.kind === 'function')).toBe(
+      true,
+    );
   });
 });
 

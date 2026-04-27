@@ -8,7 +8,16 @@ interface IndexesProps {
 }
 
 export function Indexes({ onOpenProject }: IndexesProps) {
-  const { projects, loading, connected, restarting, addProject, removeProject, reindexProject, restartDaemon } = useDaemon();
+  const {
+    projects,
+    loading,
+    connected,
+    restarting,
+    addProject,
+    removeProject,
+    reindexProject,
+    restartDaemon,
+  } = useDaemon();
   const [showAddInput, setShowAddInput] = useState(false);
   const [addPath, setAddPath] = useState('');
 
@@ -92,9 +101,19 @@ export function Indexes({ onOpenProject }: IndexesProps) {
             placeholder="/path/to/project"
             value={addPath}
             onChange={(e) => setAddPath(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAddManual(); if (e.key === 'Escape') { setShowAddInput(false); setAddPath(''); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAddManual();
+              if (e.key === 'Escape') {
+                setShowAddInput(false);
+                setAddPath('');
+              }
+            }}
             className="flex-1 text-xs px-2 py-1 rounded-md outline-none"
-            style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            style={{
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border)',
+            }}
           />
           <button
             onClick={handleAddManual}
@@ -104,7 +123,10 @@ export function Indexes({ onOpenProject }: IndexesProps) {
             OK
           </button>
           <button
-            onClick={() => { setShowAddInput(false); setAddPath(''); }}
+            onClick={() => {
+              setShowAddInput(false);
+              setAddPath('');
+            }}
             className="text-xs px-2 py-1 rounded-md"
             style={{ color: 'var(--text-secondary)' }}
           >
@@ -135,7 +157,10 @@ export function Indexes({ onOpenProject }: IndexesProps) {
               error={p.error}
               progress={p.progress}
               onReindex={() => reindexProject(p.root)}
-              onRemove={() => { removeProject(p.root); removeRecentProject(p.root); }}
+              onRemove={() => {
+                removeProject(p.root);
+                removeRecentProject(p.root);
+              }}
               onClick={() => onOpenProject(p.root)}
             />
           ))}

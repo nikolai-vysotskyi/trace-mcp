@@ -30,9 +30,7 @@ export function createExploredTracker(projectRoot: string): ExploredTracker {
 
   return {
     markExplored(filePath: string): void {
-      const absPath = path.isAbsolute(filePath)
-        ? filePath
-        : path.resolve(projectRoot, filePath);
+      const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath);
       const fileHash = crypto.createHash('sha256').update(absPath).digest('hex');
       try {
         fs.writeFileSync(path.join(markerDir, fileHash), absPath);

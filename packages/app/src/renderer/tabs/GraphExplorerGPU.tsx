@@ -1,4 +1,12 @@
-import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useImperativeHandle,
+  forwardRef,
+  useMemo,
+} from 'react';
 import { Graph } from '@cosmos.gl/graph';
 
 const BASE = 'http://127.0.0.1:3741';
@@ -58,8 +66,16 @@ interface VizEdge {
   bottleneckScore?: number;
   isBridge?: boolean;
 }
-interface VizCommunity { id: number; label: string; color: string; }
-interface GraphPayload { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[]; }
+interface VizCommunity {
+  id: number;
+  label: string;
+  color: string;
+}
+interface GraphPayload {
+  nodes: VizNode[];
+  edges: VizEdge[];
+  communities: VizCommunity[];
+}
 
 // ── Theme helpers ─────────────────────────────────────────────────────────
 interface Theme {
@@ -99,30 +115,70 @@ function detectTheme(): 'light' | 'dark' {
 //    These arrays go directly to the GPU buffer unchanged. Passing 0–255 silently clamps to white.
 function hexToRgb01(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
-  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+  const n = parseInt(
+    h.length === 3
+      ? h
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : h,
+    16,
+  );
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 function hexToRgb255(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
-  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+  const n = parseInt(
+    h.length === 3
+      ? h
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : h,
+    16,
+  );
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 const LANG_COLORS: Record<string, string> = {
-  typescript: '#3178c6', javascript: '#f7df1e', tsx: '#3178c6', jsx: '#f7df1e',
-  vue: '#41b883', svelte: '#ff3e00',
-  php: '#787cb5', python: '#3776ab', go: '#00add8', rust: '#ce412b',
-  java: '#ed8b00', kotlin: '#7f52ff', ruby: '#cc342d',
-  html: '#e34f26', css: '#1572b6',
-  json: '#cbcb41', yaml: '#cb171e', blade: '#f05340',
+  typescript: '#3178c6',
+  javascript: '#f7df1e',
+  tsx: '#3178c6',
+  jsx: '#f7df1e',
+  vue: '#41b883',
+  svelte: '#ff3e00',
+  php: '#787cb5',
+  python: '#3776ab',
+  go: '#00add8',
+  rust: '#ce412b',
+  java: '#ed8b00',
+  kotlin: '#7f52ff',
+  ruby: '#cc342d',
+  html: '#e34f26',
+  css: '#1572b6',
+  json: '#cbcb41',
+  yaml: '#cb171e',
+  blade: '#f05340',
 };
 const FRAMEWORK_PALETTE = [
-  '#ef476f', '#ffd166', '#06d6a0', '#118ab2', '#7209b7',
-  '#f78c6b', '#00b4d8', '#9381ff', '#e76f51', '#2a9d8f',
+  '#ef476f',
+  '#ffd166',
+  '#06d6a0',
+  '#118ab2',
+  '#7209b7',
+  '#f78c6b',
+  '#00b4d8',
+  '#9381ff',
+  '#e76f51',
+  '#2a9d8f',
 ];
 
 /** Returns normalized (0–1) RGB for a node's current color mode — for Float32Array buffers. */
-function nodeColor01(node: VizNode, mode: GraphGPUSettings['colorBy'], commColors: Map<number, string>): [number, number, number] {
+function nodeColor01(
+  node: VizNode,
+  mode: GraphGPUSettings['colorBy'],
+  commColors: Map<number, string>,
+): [number, number, number] {
   if (mode === 'language') {
     return hexToRgb01(LANG_COLORS[node.language ?? ''] ?? '#888888');
   }
@@ -153,9 +209,9 @@ function computeTintedLinkColors(
   const [br, bgc, bb] = bgRgb01;
   for (let i = 0; i < numLinks; i++) {
     const si = (linkPairs[i * 2] | 0) * 4;
-    out[i * 4]     = br  + (pointColors[si]     - br)  * mix;
+    out[i * 4] = br + (pointColors[si] - br) * mix;
     out[i * 4 + 1] = bgc + (pointColors[si + 1] - bgc) * mix;
-    out[i * 4 + 2] = bb  + (pointColors[si + 2] - bb)  * mix;
+    out[i * 4 + 2] = bb + (pointColors[si + 2] - bb) * mix;
     out[i * 4 + 3] = alpha;
   }
   return out;
@@ -184,7 +240,7 @@ function bottleneckColor01(score: number): [number, number, number] {
  * instead of drowning in a blue fog.
  */
 function bottleneckNodeColor01(score: number): [number, number, number] {
-  if (score < 0.05) return [0.18, 0.20, 0.24];
+  if (score < 0.05) return [0.18, 0.2, 0.24];
   return bottleneckColor01(score);
 }
 
@@ -344,13 +400,13 @@ function FpsBadge({ show }: { show: boolean }) {
  * Values are 0-1 RGB + alpha, matching setPointColors' Float32Array format.
  */
 const DEPTH_COLORS: [number, number, number, number][] = [
-  [1.00, 1.00, 1.00, 1.0],  // 0: seed — pure white
-  [1.00, 0.40, 0.30, 1.0],  // 1: red-orange
-  [1.00, 0.75, 0.20, 1.0],  // 2: gold
-  [0.60, 0.90, 0.40, 1.0],  // 3: green
-  [0.30, 0.70, 1.00, 1.0],  // 4: blue
-  [0.70, 0.50, 1.00, 1.0],  // 5: purple
-  [0.55, 0.55, 0.70, 1.0],  // 6+: muted slate
+  [1.0, 1.0, 1.0, 1.0], // 0: seed — pure white
+  [1.0, 0.4, 0.3, 1.0], // 1: red-orange
+  [1.0, 0.75, 0.2, 1.0], // 2: gold
+  [0.6, 0.9, 0.4, 1.0], // 3: green
+  [0.3, 0.7, 1.0, 1.0], // 4: blue
+  [0.7, 0.5, 1.0, 1.0], // 5: purple
+  [0.55, 0.55, 0.7, 1.0], // 6+: muted slate
 ];
 
 // Attach the top stack frame to an error message so the banner points at the
@@ -361,7 +417,10 @@ const DEPTH_COLORS: [number, number, number, number][] = [
 function decorateErr(err: unknown): Error {
   const e = err instanceof Error ? err : new Error(String(err));
   const stack = e.stack ?? '';
-  const lines = stack.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = stack
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   const frame = lines.find((l) => l.startsWith('at ')) ?? lines[1] ?? '';
   return frame && !e.message.includes(' · ') ? new Error(`${e.message}  ·  ${frame}`) : e;
 }
@@ -481,7 +540,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const t = window.setTimeout(() => setError(null), 7000);
     return () => window.clearTimeout(t);
   }, [error]);
-  const [stats, setStats] = useState<{ nodes: number; edges: number; communities: number } | null>(null);
+  const [stats, setStats] = useState<{ nodes: number; edges: number; communities: number } | null>(
+    null,
+  );
   const [hovered, setHovered] = useState<VizNode | null>(null);
   const [selected, setSelected] = useState<VizNode | null>(null);
   // When the user clicks a specific edge row in the hotspots sidebar we also
@@ -502,7 +563,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // IDE integration — populated once from main process; last-used remembered.
   const [ides, setIdes] = useState<{ id: string; name: string; bundlePath: string }[]>([]);
   const [lastIdeId, setLastIdeId] = useState<string>(() => {
-    try { return localStorage.getItem('trace-mcp.lastIde') ?? ''; } catch { return ''; }
+    try {
+      return localStorage.getItem('trace-mcp.lastIde') ?? '';
+    } catch {
+      return '';
+    }
   });
   const [copied, setCopied] = useState<boolean>(false);
   const [promptCopied, setPromptCopied] = useState<boolean>(false);
@@ -514,8 +579,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   const [brokenEdgeKeys, setBrokenEdgeKeys] = useState<Set<string>>(new Set());
   // Component stats for the HUD — recomputed via union-find whenever
   // brokenEdgeKeys changes. Fractions are relative to total node count.
-  const [componentStats, setComponentStats] = useState<{ count: number; largestFrac: number; isolated: number }>({
-    count: 1, largestFrac: 1, isolated: 0,
+  const [componentStats, setComponentStats] = useState<{
+    count: number;
+    largestFrac: number;
+    isolated: number;
+  }>({
+    count: 1,
+    largestFrac: 1,
+    isolated: 0,
   });
   // Edge currently being broken — set by breakNextEdge, cleared when the
   // pre-break flash animation commits the removal. Non-null = an animation
@@ -578,20 +649,42 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const api = window.electronAPI;
     if (!api?.detectIdeApps) return;
     let alive = true;
-    api.detectIdeApps().then((list) => { if (alive) setIdes(list); }).catch(() => { if (alive) setIdes([]); });
-    return () => { alive = false; };
+    api
+      .detectIdeApps()
+      .then((list) => {
+        if (alive) setIdes(list);
+      })
+      .catch(() => {
+        if (alive) setIdes([]);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
   const [theme, setTheme] = useState<'light' | 'dark'>(detectTheme());
   const [searchQuery, setSearchQuery] = useState('');
-  const [live, setLive] = useState(true);           // Live = simulation running + breathing
+  const [live, setLive] = useState(true); // Live = simulation running + breathing
   const [simRunning, setSimRunning] = useState(true); // polled from cosmos.gl
   // Synchronous mirror of `live` — onSimulationTick (fired from cosmos.gl's
   // RAF loop) reads this to decide whether to seamlessly re-heat alpha when
   // it decays; skipped when the user has paused via the Live toggle.
   const liveRef = useRef(live);
-  useEffect(() => { liveRef.current = live; }, [live]);
+  useEffect(() => {
+    liveRef.current = live;
+  }, [live]);
 
-  const { scope, granularity, hideIsolated, symbolKinds, maxNodes, colorBy, showLabels, showFPS, bottlenecks, stressTest } = settings;
+  const {
+    scope,
+    granularity,
+    hideIsolated,
+    symbolKinds,
+    maxNodes,
+    colorBy,
+    showLabels,
+    showFPS,
+    bottlenecks,
+    stressTest,
+  } = settings;
   const HIGHLIGHT_DEPTH = 1;
   // Mirror `showLabels` into a ref so the RAF tick reads the latest value
   // directly without relying on useCallback dep propagation. Belt-and-suspenders
@@ -619,9 +712,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     mq.addEventListener('change', resync);
 
     const observer = new MutationObserver(resync);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
 
-    const onStorage = (e: StorageEvent) => { if (e.key === 'trace-mcp-theme') resync(); };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'trace-mcp-theme') resync();
+    };
     window.addEventListener('storage', onStorage);
 
     return () => {
@@ -645,11 +743,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // Source = white-hot anchor, target = hot-red (same red we use for the
     // edge itself, so the gradient reads "flow starts white, ends red").
     const colors = new Float32Array(orig);
-    colors[srcIdx * 4]     = 1.0;
+    colors[srcIdx * 4] = 1.0;
     colors[srcIdx * 4 + 1] = 1.0;
     colors[srcIdx * 4 + 2] = 1.0;
     colors[srcIdx * 4 + 3] = 1.0;
-    colors[tgtIdx * 4]     = 1.0;
+    colors[tgtIdx * 4] = 1.0;
     colors[tgtIdx * 4 + 1] = 0.38;
     colors[tgtIdx * 4 + 2] = 0.38;
     colors[tgtIdx * 4 + 3] = 1.0;
@@ -665,7 +763,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       const s = linkPairs[i * 2] | 0;
       const t = linkPairs[i * 2 + 1] | 0;
       if ((s === srcIdx && t === tgtIdx) || (s === tgtIdx && t === srcIdx)) {
-        linkColors[i * 4]     = 1.0;
+        linkColors[i * 4] = 1.0;
         linkColors[i * 4 + 1] = 0.38;
         linkColors[i * 4 + 2] = 0.38;
         linkColors[i * 4 + 3] = 1.0;
@@ -687,19 +785,22 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // Fits BOTH endpoints in view so the zoom level is natural (fitting to a
   // single point zooms to the max pixel size, which is what felt "too
   // strong"). Used by the hotspots sidebar.
-  const focusBottleneckEdge = useCallback((edge: VizEdge) => {
-    const graph = graphRef.current;
-    const indexById = indexByIdRef.current;
-    if (!graph) return;
-    const srcIdx = indexById.get(edge.source);
-    const tgtIdx = indexById.get(edge.target);
-    if (srcIdx == null || tgtIdx == null) return;
-    graph.fitViewByPointIndices([srcIdx, tgtIdx], 500, 0.3);
-    const node = nodesRef.current[srcIdx];
-    if (node) setSelected(node);
-    setSelectedEdge(edge);
-    highlightSingleEdge(srcIdx, tgtIdx);
-  }, [highlightSingleEdge]);
+  const focusBottleneckEdge = useCallback(
+    (edge: VizEdge) => {
+      const graph = graphRef.current;
+      const indexById = indexByIdRef.current;
+      if (!graph) return;
+      const srcIdx = indexById.get(edge.source);
+      const tgtIdx = indexById.get(edge.target);
+      if (srcIdx == null || tgtIdx == null) return;
+      graph.fitViewByPointIndices([srcIdx, tgtIdx], 500, 0.3);
+      const node = nodesRef.current[srcIdx];
+      if (node) setSelected(node);
+      setSelectedEdge(edge);
+      highlightSingleEdge(srcIdx, tgtIdx);
+    },
+    [highlightSingleEdge],
+  );
 
   // ── Bottleneck-only highlight (node-scoped) ────────────────────
   // Unlike highlightNeighborhood (which paints every 1-hop neighbor), this
@@ -753,7 +854,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // the gradient signal survives (red vs amber other ends still readable).
     const highlighted = [seedIdx, ...otherEnds];
     const colors = new Float32Array(orig);
-    colors[seedIdx * 4]     = 1.0;
+    colors[seedIdx * 4] = 1.0;
     colors[seedIdx * 4 + 1] = 1.0;
     colors[seedIdx * 4 + 2] = 1.0;
     colors[seedIdx * 4 + 3] = 1.0;
@@ -772,7 +873,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       const tgtId = data.nodes[t]?.id;
       if (srcId == null || tgtId == null) continue;
       if (hotEdgeKeys.has(srcId + '|' + tgtId)) {
-        linkColors[i * 4]     = 1.0;
+        linkColors[i * 4] = 1.0;
         linkColors[i * 4 + 1] = 0.38;
         linkColors[i * 4 + 2] = 0.38;
         linkColors[i * 4 + 3] = 1.0;
@@ -792,22 +893,25 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, []);
 
   // ── focusNode (for imperative handle) ─────────────────────────
-  const focusNode = useCallback((id: string) => {
-    const graph = graphRef.current;
-    const idx = indexByIdRef.current.get(id);
-    if (!graph || idx == null) return;
-    graph.fitViewByPointIndices([idx], 500, 0.3);
-    const node = nodesRef.current[idx];
-    if (node) setSelected(node);
-    setSelectedEdge(null);
-    // In bottleneck mode, show only the hot edges of this node. Otherwise
-    // fall back to the normal 1-hop BFS neighborhood highlight.
-    if (settings.bottlenecks || settings.stressTest) {
-      highlightBottleneckEdgesFor(idx);
-    } else {
-      highlightNeighborhood([idx]);
-    }
-  }, [settings.bottlenecks, settings.stressTest, highlightBottleneckEdgesFor]);
+  const focusNode = useCallback(
+    (id: string) => {
+      const graph = graphRef.current;
+      const idx = indexByIdRef.current.get(id);
+      if (!graph || idx == null) return;
+      graph.fitViewByPointIndices([idx], 500, 0.3);
+      const node = nodesRef.current[idx];
+      if (node) setSelected(node);
+      setSelectedEdge(null);
+      // In bottleneck mode, show only the hot edges of this node. Otherwise
+      // fall back to the normal 1-hop BFS neighborhood highlight.
+      if (settings.bottlenecks || settings.stressTest) {
+        highlightBottleneckEdgesFor(idx);
+      } else {
+        highlightNeighborhood([idx]);
+      }
+    },
+    [settings.bottlenecks, settings.stressTest, highlightBottleneckEdgesFor],
+  );
   useImperativeHandle(ref, () => ({ focusNode }), [focusNode]);
 
   // ── BFS-expand seeds to N hops, tinting each layer its own palette color ──
@@ -833,7 +937,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         const adj = graph.getAdjacentIndices(idx);
         if (!adj) continue;
         for (const n of adj) {
-          if (!depthMap.has(n)) { depthMap.set(n, d); next.push(n); }
+          if (!depthMap.has(n)) {
+            depthMap.set(n, d);
+            next.push(n);
+          }
         }
       }
       frontier = next;
@@ -844,7 +951,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const colors = new Float32Array(orig);
     for (const [idx, d] of depthMap) {
       const [r, g, b, a] = DEPTH_COLORS[Math.min(d, DEPTH_COLORS.length - 1)];
-      colors[idx * 4]     = r;
+      colors[idx * 4] = r;
       colors[idx * 4 + 1] = g;
       colors[idx * 4 + 2] = b;
       colors[idx * 4 + 3] = a;
@@ -871,7 +978,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         const td = depthMap.get(t);
         const isTreeEdge = sd != null && td != null && sd !== td && Math.max(sd, td) <= depth;
         if (isTreeEdge) {
-          linkColors[i * 4]     = hr;
+          linkColors[i * 4] = hr;
           linkColors[i * 4 + 1] = hg;
           linkColors[i * 4 + 2] = hb;
           linkColors[i * 4 + 3] = ha;
@@ -879,7 +986,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           // Non-tree edge (incl. sibling cross-edges between two neighbors at the
           // same BFS depth). Render fully transparent — we only want edges that
           // physically connect seed→neighbor to show at depth=1.
-          linkColors[i * 4]     = 0;
+          linkColors[i * 4] = 0;
           linkColors[i * 4 + 1] = 0;
           linkColors[i * 4 + 2] = 0;
           linkColors[i * 4 + 3] = 0;
@@ -934,7 +1041,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         highlightNeighborhood([idx]);
       }
     };
-  }, [settings.bottlenecks, settings.stressTest, highlightBottleneckEdgesFor, highlightNeighborhood]);
+  }, [
+    settings.bottlenecks,
+    settings.stressTest,
+    highlightBottleneckEdgesFor,
+    highlightNeighborhood,
+  ]);
 
   // ── Label overlay rendering ───────────────────────────────────
   // Updates HTML label positions every animation frame based on point screen positions.
@@ -1080,7 +1192,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       const screen = graph.spaceToScreenPosition([sx, sy]);
       const el = pool[i];
       const sectionText = sectionLabelByIndexRef.current.get(idx);
-      const isSection = sectionText != null && !highlightActive && hovered?.id !== node.id && selected?.id !== node.id;
+      const isSection =
+        sectionText != null &&
+        !highlightActive &&
+        hovered?.id !== node.id &&
+        selected?.id !== node.id;
       el.textContent = isSection ? sectionText : shortLabel(node);
       el.dataset.kind = isSection ? 'section' : 'node';
       el.style.transform = `translate(${screen[0]}px, ${screen[1]}px)`;
@@ -1115,7 +1231,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           const sy = pos[1];
           if (!Number.isFinite(sx)) continue;
           const [hx, hy] = graph.spaceToScreenPosition([sx, sy]);
-          const r = orig[idx * 4]     * 255;
+          const r = orig[idx * 4] * 255;
           const g = orig[idx * 4 + 1] * 255;
           const b = orig[idx * 4 + 2] * 255;
           // Halo radius scales with importance × current zoom so glows track
@@ -1123,9 +1239,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           const imp = nodes[idx]?.importance ?? 0;
           const radius = (8 + imp * 18) * Math.max(0.6, Math.min(3, zoom));
           const grad = ctx.createRadialGradient(hx, hy, 0, hx, hy, radius);
-          grad.addColorStop(0,    `rgba(${r|0}, ${g|0}, ${b|0}, 0.35)`);
-          grad.addColorStop(0.45, `rgba(${r|0}, ${g|0}, ${b|0}, 0.10)`);
-          grad.addColorStop(1,    `rgba(${r|0}, ${g|0}, ${b|0}, 0)`);
+          grad.addColorStop(0, `rgba(${r | 0}, ${g | 0}, ${b | 0}, 0.35)`);
+          grad.addColorStop(0.45, `rgba(${r | 0}, ${g | 0}, ${b | 0}, 0.10)`);
+          grad.addColorStop(1, `rgba(${r | 0}, ${g | 0}, ${b | 0}, 0)`);
           ctx.fillStyle = grad;
           ctx.beginPath();
           ctx.arc(hx, hy, radius, 0, Math.PI * 2);
@@ -1203,7 +1319,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       layout: 'force',
     });
     if (debouncedSymbolKinds.trim()) params.set('symbolKinds', debouncedSymbolKinds.trim());
-    if (debouncedMaxNodes.trim()) params.set(granularity === 'symbol' ? 'maxNodes' : 'maxFiles', debouncedMaxNodes.trim());
+    if (debouncedMaxNodes.trim())
+      params.set(granularity === 'symbol' ? 'maxNodes' : 'maxFiles', debouncedMaxNodes.trim());
     if (settings.bottlenecks || settings.stressTest) params.set('includeBottlenecks', 'true');
 
     // Retry on 429 with exponential backoff. The daemon exempts localhost,
@@ -1234,7 +1351,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           console.error('[graph] renderGraph failed', renderErr);
           throw decorateErr(renderErr);
         }
-        setStats({ nodes: data.nodes.length, edges: data.edges.length, communities: data.communities.length });
+        setStats({
+          nodes: data.nodes.length,
+          edges: data.edges.length,
+          communities: data.communities.length,
+        });
         setLoading(false);
         return;
       } catch (e: unknown) {
@@ -1245,544 +1366,573 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     }
     setError(lastErr ? lastErr.message : 'Failed to load graph');
     setLoading(false);
-  }, [root, scope, granularity, hideIsolated, debouncedSymbolKinds, debouncedMaxNodes, settings.bottlenecks, settings.stressTest]);
+  }, [
+    root,
+    scope,
+    granularity,
+    hideIsolated,
+    debouncedSymbolKinds,
+    debouncedMaxNodes,
+    settings.bottlenecks,
+    settings.stressTest,
+  ]);
 
   // Render (or re-render) the graph from a payload. Reuses existing Graph instance.
-  const renderGraph = useCallback((data: GraphPayload) => {
-    const container = containerRef.current;
-    if (!container) return;
+  const renderGraph = useCallback(
+    (data: GraphPayload) => {
+      const container = containerRef.current;
+      if (!container) return;
 
-    // Adaptive perf knobs — scale detail down as the graph grows so GPU
-    // fragment-shader cost stays roughly flat across sizes.
-    const nCount = data.nodes.length;
-    const bigGraph = nCount > 3000;
-    const hugeGraph = nCount > 8000;
-    const adaptivePointSize = hugeGraph ? 3 : bigGraph ? 4 : 6;
-    const adaptiveLinkWidth = hugeGraph ? 0.5 : bigGraph ? 0.7 : 0.9;
-    const adaptiveLinkArrows = !bigGraph; // arrows are a separate pass — kill them on large graphs
-    // cosmos.gl simulates in a square "space" whose size controls the size
-    // of the force textures (position/velocity/link). Larger space = larger
-    // textures = slower simulation and more GPU memory. Nearest power-of-two
-    // that comfortably holds the node cloud keeps textures small.
-    const adaptiveSpaceSize = hugeGraph ? 8192 : bigGraph ? 4096 : 2048;
+      // Adaptive perf knobs — scale detail down as the graph grows so GPU
+      // fragment-shader cost stays roughly flat across sizes.
+      const nCount = data.nodes.length;
+      const bigGraph = nCount > 3000;
+      const hugeGraph = nCount > 8000;
+      const adaptivePointSize = hugeGraph ? 3 : bigGraph ? 4 : 6;
+      const adaptiveLinkWidth = hugeGraph ? 0.5 : bigGraph ? 0.7 : 0.9;
+      const adaptiveLinkArrows = !bigGraph; // arrows are a separate pass — kill them on large graphs
+      // cosmos.gl simulates in a square "space" whose size controls the size
+      // of the force textures (position/velocity/link). Larger space = larger
+      // textures = slower simulation and more GPU memory. Nearest power-of-two
+      // that comfortably holds the node cloud keeps textures small.
+      const adaptiveSpaceSize = hugeGraph ? 8192 : bigGraph ? 4096 : 2048;
 
-    // Snapshot the previous render's settled positions BEFORE we potentially
-    // destroy the Graph instance — see carry-over loop below. cosmos.gl's
-    // internal state sometimes mis-recurses ("Maximum call stack size") when
-    // setPointPositions is called with a very different N on an existing
-    // graph, so we prefer destroy+create on re-render over in-place mutation.
-    // Invalidate cached link pairs — a new render will push fresh links
-    // through finalize. Clicking between now and finalize has no subgraph
-    // to color, which is the right behavior (old links are gone).
-    linkPairsRef.current = null;
-    // Stale highlight depth references indices into the OLD node array —
-    // updateLabels would otherwise iterate them, reading positions that no
-    // longer correspond to the same nodes. Clear before the swap.
-    highlightedDepthRef.current = null;
-    // Reset the fit-done flag BEFORE the new Graph() is constructed.
-    // cosmos.gl starts its RAF/tick loop immediately on construction, so
-    // onSimulationTick can fire before finalize() runs — if frozenRef is
-    // stale from the previous render, the freshly-built graph would skip
-    // its one initial fit-view pass.
-    frozenRef.current = false;
-    userInteractedRef.current = false;
+      // Snapshot the previous render's settled positions BEFORE we potentially
+      // destroy the Graph instance — see carry-over loop below. cosmos.gl's
+      // internal state sometimes mis-recurses ("Maximum call stack size") when
+      // setPointPositions is called with a very different N on an existing
+      // graph, so we prefer destroy+create on re-render over in-place mutation.
+      // Invalidate cached link pairs — a new render will push fresh links
+      // through finalize. Clicking between now and finalize has no subgraph
+      // to color, which is the right behavior (old links are gone).
+      linkPairsRef.current = null;
+      // Stale highlight depth references indices into the OLD node array —
+      // updateLabels would otherwise iterate them, reading positions that no
+      // longer correspond to the same nodes. Clear before the swap.
+      highlightedDepthRef.current = null;
+      // Reset the fit-done flag BEFORE the new Graph() is constructed.
+      // cosmos.gl starts its RAF/tick loop immediately on construction, so
+      // onSimulationTick can fire before finalize() runs — if frozenRef is
+      // stale from the previous render, the freshly-built graph would skip
+      // its one initial fit-view pass.
+      frozenRef.current = false;
+      userInteractedRef.current = false;
 
-    const prevGraph = graphRef.current;
-    let carryPositions: number[] | Float32Array | null = null;
-    if (prevGraph) {
-      try {
-        const p = prevGraph.getPointPositions();
-        if (p && p.length > 0) carryPositions = p;
-      } catch { /* ignore — fall through to random */ }
-      try { prevGraph.destroy?.(); } catch { /* ignore */ }
-      graphRef.current = null;
-      container.innerHTML = ''; // remove the old canvas so the new Graph mounts cleanly
-    }
-
-    let graph = graphRef.current;
-    if (!graph) {
-      graph = new Graph(container, {
-        backgroundColor: themeSpec.background,
-        pointDefaultColor: themeSpec.pointDefaultColor,
-        linkDefaultColor: themeSpec.linkColor,
-        hoveredLinkColor: themeSpec.hoveredLink,
-        pointDefaultSize: adaptivePointSize,
-        linkDefaultWidth: adaptiveLinkWidth,
-        linkDefaultArrows: adaptiveLinkArrows,
-        linkArrowsSizeScale: 0.6,
-        // Higher floor = fewer near-camera link fragments shaded every frame.
-        // Wider far end = distant links fade smoothly instead of pop-culling.
-        linkVisibilityDistanceRange: [100, 400],
-        linkVisibilityMinTransparency: 0.05,
-        scalePointsOnZoom: true,
-        spaceSize: adaptiveSpaceSize,
-        renderHoveredPointRing: true,
-        hoveredPointRingColor: themeSpec.hoveredLink,
-        // Greyout — applied automatically when any points are selected.
-        pointGreyoutOpacity: 0.08,
-        linkGreyoutOpacity: 0.05,
-        // Force-directed tuning. Gravity/repulsion balance governs how
-        // tightly clusters pack: too much gravity → one dense ball with
-        // no visible sub-structure; too little → cloud escapes spaceSize.
-        // 2.0 gravity + 1.2 repulsion + 16 link distance gives communities
-        // visible breathing room while keeping isolated (linkless) nodes in
-        // the main mass's halo. Link distance 16 (2× old 8) is the primary
-        // knob for inter-cluster separation — longer springs pull connected
-        // components apart into readable sub-clusters.
-        simulationGravity: 2.0,
-        // Repulsion shader grows as ~c/sqrt(dist) at close range, so any
-        // initial cluster of near-neighbors gets huge first-tick deltas —
-        // the visible "jumping". Holding repulsion at 0.9 (down from 1.2)
-        // keeps sub-community structure readable (gravity still wins at
-        // large distances) while capping the short-range force spike that
-        // makes individual points pop between frames.
-        simulationRepulsion: 0.9,
-        // Friction is a per-tick velocity retention multiplier (higher = less
-        // damping). 0.85 keeps motion visibly dynamic but filters the big
-        // first-tick kicks that made points "teleport" — the rendered frame
-        // delta is ~15% smaller than at 0.92, enough to read as smooth flow
-        // instead of snapping.
-        simulationFriction: 0.85,
-        simulationLinkSpring: 1.0,
-        simulationLinkDistance: 16,
-        // Fixed gentle decay — no user slider. Higher value = alpha decays
-        // slower = longer, gentler settle. 2500 gives ~5s of visible motion
-        // on a laptop before the alpha<0.2 freeze kicks in; earlier 0.5×
-        // slider default mapped to 4000 which was unnecessarily long.
-        simulationDecay: 2500,
-        // Start pre-zoomed-out so random-disc init is centered on screen and
-        // the whole spaceSize is visible. No auto-fit while sim runs — camera
-        // chase was jerky, better to let the cloud expand within the frame
-        // and fit smoothly ONCE at the end.
-        initialZoomLevel: initialZoomFromSpaceSize(adaptiveSpaceSize, container),
-        fitViewOnInit: false,
-        // Three jobs, all throttled against cosmos.gl's RAF-driven tick rate:
-        //   1. Live-track the expanding cloud with instant (0 ms) refits
-        //      every 500 ms so the user doesn't wait for settle to end
-        //      before the view is framed on the actual layout.
-        //   2. Fit-and-mark at alpha < 0.15 (frozenRef flips true) — one
-        //      smooth final fit once the cloud has mostly settled. The
-        //      simulation keeps running; frozenRef just gates further fits.
-        // Continuous motion is handled in a separate wall-clock interval
-        // (see the breathing useEffect below) — not here — because
-        // onSimulationTick stops firing once cosmos.gl considers the sim
-        // ended (alpha < ALPHA_MIN), so a callback-driven re-heat can
-        // never recover from a full decay.
-        // try/catch is load-bearing: this callback is invoked from inside
-        // cosmos.gl's RAF loop, outside our render-time error boundary —
-        // a throw here would otherwise escape to the host and kill the app.
-        onSimulationTick: (alpha: number) => {
-          try {
-            const g = graphRef.current;
-            if (!g) return;
-            // One-shot final fit when the initial settle is "done enough".
-            if (!frozenRef.current && alpha < 0.15) {
-              frozenRef.current = true;
-              if (!userInteractedRef.current) g.fitView(800, 0.2);
-            }
-            if (frozenRef.current) return;
-            // Live-fit — disabled after any user zoom/pan so scroll-to-zoom
-            // isn't clobbered by the next throttled refit.
-            if (userInteractedRef.current) return;
-            if (alpha < 0.25) return;
-            const now = performance.now();
-            if (now - lastTickFitRef.current < 500) return;
-            lastTickFitRef.current = now;
-            g.fitView(0, 0.2);
-          } catch (err) {
-            // eslint-disable-next-line no-console
-            console.warn('[graph:onSimulationTick] tick handler skipped', err);
-          }
-        },
-        onZoomStart: (_e: unknown, userDriven: boolean) => {
-          if (userDriven) userInteractedRef.current = true;
-        },
-        showFPSMonitor: false,
-        hoveredPointCursor: 'pointer',
-        onClick: (index: number | undefined) => {
-          if (index == null) {
-            // Click on empty space — clear everything
-            clearHighlight();
-            return;
-          }
-          const node = nodesRef.current[index];
-          if (node) setSelected(node);
-          setSelectedEdge(null);
-          // Route through the mode-aware highlight picker. Bottleneck mode
-          // shows only hot adjacent edges; normal mode shows the full 1-hop
-          // neighborhood. The ref avoids rebuilding the Graph() instance
-          // every time the mode flips — cosmos.gl resolves it lazily here.
-          highlightByModeRef.current(index);
-        },
-        onPointMouseOver: (index: number) => {
-          const node = nodesRef.current[index];
-          if (node) setHovered(node);
-        },
-        onPointMouseOut: () => setHovered(null),
-      });
-      graphRef.current = graph;
-    }
-
-    // Build indexes
-    const nodes = data.nodes;
-    nodesRef.current = nodes;
-    const indexById = new Map<string, number>();
-    nodes.forEach((n, i) => indexById.set(n.id, i));
-    indexByIdRef.current = indexById;
-
-    const commColors = new Map<number, string>();
-    for (const c of data.communities) commColors.set(c.id, c.color);
-
-    // Positions: reuse any previously-settled positions we already have for
-    // nodes that survived a filter change (Isolated toggle, maxNodes tweak,
-    // granularity switch). Only genuinely new nodes get random-disc init.
-    // Without this, toggling any setting would re-run the big settle pass.
-    const N = nodes.length;
-    // Initial random-disc radius. Short-range repulsion in the manybody
-    // shader spikes as c/sqrt(dist) for close pairs — the visible "jumping"
-    // at sim start came from this: thousands of points in a tight cluster
-    // produce giant first-tick deltas. Seeding across 40% of spaceSize
-    // thins initial density ~2.5×, so alpha=1.0 forces stay bounded and the
-    // opening frames look like flow rather than snap. Gravity still pulls
-    // the cloud back to center within a few seconds.
-    const initRadius = adaptiveSpaceSize * 0.4;
-    const positions = new Float32Array(N * 2);
-    const prevIds = prevNodeIdsRef.current;
-    // cosmos.gl's coordinate space is [0, spaceSize] with origin at the
-    // corner — the position shader hard-clamps to this range. Gravity pulls
-    // toward spaceSize/2, so initialize around the same center; without this
-    // offset, half the random-disc init lands at negative coords and piles
-    // up against the x=0 / y=0 edges as visible clamp lines.
-    const cx = adaptiveSpaceSize / 2;
-    const cy = adaptiveSpaceSize / 2;
-    // Always recenter carry positions so their bbox centroid aligns with
-    // (cx, cy). The previous "only shift if out of range" variant missed
-    // cases where the old layout was nominally in [0, spaceSize] but
-    // clustered in one quadrant (e.g. carried from a smaller spaceSize, or
-    // from an earlier build that centered init on origin but all points
-    // happened to land in the positive half). Unconditional recentering
-    // handles all coordinate-system mismatches — for carry positions that
-    // are already centered, (cx - centroid) is ~0 so it's a no-op.
-    let carryDx = 0;
-    let carryDy = 0;
-    if (carryPositions && carryPositions.length >= 2) {
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (let i = 0; i < carryPositions.length; i += 2) {
-        const x = carryPositions[i];
-        const y = carryPositions[i + 1];
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-      carryDx = cx - (minX + maxX) / 2;
-      carryDy = cy - (minY + maxY) / 2;
-    }
-    for (let i = 0; i < N; i++) {
-      const prevIdx = carryPositions && prevIds ? prevIds.get(nodes[i].id) : undefined;
-      const carriedX = prevIdx != null && carryPositions ? carryPositions[prevIdx * 2] : undefined;
-      const carriedY = prevIdx != null && carryPositions ? carryPositions[prevIdx * 2 + 1] : undefined;
-      if (Number.isFinite(carriedX) && Number.isFinite(carriedY)) {
-        positions[i * 2]     = (carriedX as number) + carryDx;
-        positions[i * 2 + 1] = (carriedY as number) + carryDy;
-      } else {
-        // New node — uniform-area random disc (sqrt for uniform radial density).
-        const r = initRadius * Math.sqrt(Math.random());
-        const a = Math.random() * 2 * Math.PI;
-        positions[i * 2]     = cx + Math.cos(a) * r;
-        positions[i * 2 + 1] = cy + Math.sin(a) * r;
-      }
-    }
-    // Snapshot id → index for the NEXT re-render's carry-over lookup.
-    const newIdMap = new Map<string, number>();
-    for (let i = 0; i < N; i++) newIdMap.set(nodes[i].id, i);
-    prevNodeIdsRef.current = newIdMap;
-
-    // Colors (per-point RGBA, all channels normalized 0-1 — cosmos.gl buffer convention)
-    // In bottleneck mode: articulation points get bright red, other nodes are
-    // painted by the max bottleneckScore of their adjacent edges — so hot
-    // neighborhoods glow while cold parts of the graph fade to dim grey.
-    const useBottleneckColors = settings.bottlenecks || settings.stressTest;
-    const nodeScores = useBottleneckColors
-      ? computeNodeBottleneckScores(nodes, data.edges)
-      : null;
-    const colors = new Float32Array(nodes.length * 4);
-    for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      if (useBottleneckColors && n.isArticulation) {
-        colors[i * 4] = 0.937;     // #ef4444
-        colors[i * 4 + 1] = 0.267;
-        colors[i * 4 + 2] = 0.267;
-      } else if (useBottleneckColors && nodeScores) {
-        const [r, g, b] = bottleneckNodeColor01(nodeScores[i]);
-        colors[i * 4] = r;
-        colors[i * 4 + 1] = g;
-        colors[i * 4 + 2] = b;
-      } else {
-        const [r, g, b] = nodeColor01(n, colorBy, commColors);
-        colors[i * 4] = r;
-        colors[i * 4 + 1] = g;
-        colors[i * 4 + 2] = b;
-      }
-      colors[i * 4 + 3] = 1;
-    }
-
-    // Sizes — articulation points get a +60% bump so they're visually larger than normal nodes.
-    const sizes = new Float32Array(nodes.length);
-    for (let i = 0; i < nodes.length; i++) {
-      const base = nodeSize(nodes[i]);
-      sizes[i] = useBottleneckColors && nodes[i].isArticulation ? base * 1.6 : base;
-    }
-
-    // Top-N important nodes for label overlay defaults
-    const topByImp = [...nodes.keys()].sort(
-      (a, b) => (nodes[b].importance ?? 0) - (nodes[a].importance ?? 0),
-    );
-    // labelIndicesRef stays capped — it's the halo-tracking subset (each
-    // tracked index costs a per-tick GPU→CPU copy in trackedPositionsFbo).
-    // nodesByImpRef holds the full ranking so the label collision pass
-    // can keep walking when the top 60 are all off-screen.
-    labelIndicesRef.current = topByImp.slice(0, 60);
-    nodesByImpRef.current = topByImp;
-
-    // Section reps: the single most-important node per community. Ordered by
-    // community size (biggest section first) so the zoomed-out cap keeps the
-    // labels the user most wants to see.
-    const bestByCommunity = new Map<number, { idx: number; imp: number }>();
-    const sizeByCommunity = new Map<number, number>();
-    for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      const imp = n.importance ?? 0;
-      sizeByCommunity.set(n.community, (sizeByCommunity.get(n.community) ?? 0) + 1);
-      const cur = bestByCommunity.get(n.community);
-      if (!cur || imp > cur.imp) bestByCommunity.set(n.community, { idx: i, imp });
-    }
-    sectionIndicesRef.current = [...bestByCommunity.entries()]
-      .sort((a, b) => (sizeByCommunity.get(b[0]) ?? 0) - (sizeByCommunity.get(a[0]) ?? 0))
-      .map(([, v]) => v.idx);
-    const commLabels = new Map<number, string>();
-    for (const c of data.communities) commLabels.set(c.id, c.label);
-    const sectionLabels = new Map<number, string>();
-    for (const [commId, v] of bestByCommunity) {
-      const lbl = commLabels.get(commId);
-      if (lbl) sectionLabels.set(v.idx, lbl);
-    }
-    sectionLabelByIndexRef.current = sectionLabels;
-
-    // Snapshot so highlightNeighborhood can rewrite colors per hop-distance
-    // and clearHighlight can restore them. Copy because `colors` is reused
-    // by the GPU buffer.
-    origColorsRef.current = new Float32Array(colors);
-
-    // cosmos.gl 3.0 made device/canvas init asynchronous. Data-setters
-    // invoked before `graph.ready` resolves silently no-op, leaving the
-    // canvas empty. Gate every initial data push on the ready promise.
-    // See cosmos.gl v3 notes: `readonly ready: Promise<void>` + `isReady`.
-    const applyPointData = () => {
-      // Push the point data immediately — user sees nodes even before edges
-      // finish processing on big graphs.
-      graph.setPointPositions(positions);
-      graph.setPointColors(colors);
-      graph.setPointSizes(sizes);
-      // Register the subset the halo pass wants. cosmos.gl then runs a
-      // per-tick GPU copy of just these indices into trackedPositionsFbo,
-      // which the halo pass reads via getTrackedPointPositionsMap(). The
-      // subset is re-registered on every renderGraph cycle because
-      // labelIndicesRef is rebuilt from the new nodes array.
-      graph.trackPointPositionsByIndices(labelIndicesRef.current);
-      // Cap the opening alpha — per-tick forces `delta = alpha × force`
-      // would otherwise be at full magnitude and close-pair repulsion
-      // spikes make individual points visibly pop.
-      graph.start(0.4);
-    };
-    if (graph.isReady) applyPointData();
-    else graph.ready.then(applyPointData).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('[graph] init ready failed', err);
-    });
-
-    // Edge processing: dedup + top-K sort. On big graphs this can freeze
-    // the main thread for 100–300ms, so delegate to a Worker. Small graphs
-    // stay synchronous — worker hop isn't worth the latency below ~3k nodes.
-    const EDGE_BUDGET = 20000;
-    const token = ++renderTokenRef.current;
-
-    const finalize = (links: Float32Array) => {
-      // Discard stale worker responses
-      if (token !== renderTokenRef.current) return;
-      const g = graphRef.current;
-      if (!g) return;
-      // Re-gate: a small worker job may still return before cosmos.gl's
-      // async device init has resolved. setLinks before ready is a no-op
-      // (same silent failure as the point-data path above).
-      if (!g.isReady) {
-        g.ready.then(() => finalize(links)).catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error('[graph] finalize ready failed', err);
-        });
-        return;
-      }
-      try {
-        g.setLinks(links);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[graph] setLinks failed', err);
-        setError('setLinks: ' + decorateErr(err).message);
-        return;
-      }
-      // Cache pairs so highlightNeighborhood can rewrite per-link colors for
-      // the 1-hop subgraph. Copy because cosmos.gl may retain the underlying
-      // buffer for GPU upload.
-      linkPairsRef.current = new Float32Array(links);
-      // Compute & push per-link tints (shade of source node's color). Falls
-      // back silently to linkDefaultColor if point colors aren't ready yet.
-      // When bottleneck mode is active, colors come from the bottleneck
-      // palette instead (blue → amber → red by score) so hot-path edges
-      // read immediately even in dense clusters.
-      const srcPointColors = origColorsRef.current;
-      if (srcPointColors) {
-        const useBottleneck = settings.bottlenecks || settings.stressTest;
-        const linkColors = useBottleneck
-          ? computeBottleneckLinkColors(linkPairsRef.current, nodes, buildEdgeScoreMap(data.edges))
-          : computeTintedLinkColors(
-              srcPointColors,
-              linkPairsRef.current,
-              hexToRgb01(themeSpec.background),
-              LINK_TINT_MIX,
-              LINK_TINT_ALPHA,
-            );
-        defaultLinkColorsRef.current = linkColors;
+      const prevGraph = graphRef.current;
+      let carryPositions: number[] | Float32Array | null = null;
+      if (prevGraph) {
         try {
-          g.setLinkColors(new Float32Array(linkColors));
-        } catch (err) {
+          const p = prevGraph.getPointPositions();
+          if (p && p.length > 0) carryPositions = p;
+        } catch {
+          /* ignore — fall through to random */
+        }
+        try {
+          prevGraph.destroy?.();
+        } catch {
+          /* ignore */
+        }
+        graphRef.current = null;
+        container.innerHTML = ''; // remove the old canvas so the new Graph mounts cleanly
+      }
+
+      let graph = graphRef.current;
+      if (!graph) {
+        graph = new Graph(container, {
+          backgroundColor: themeSpec.background,
+          pointDefaultColor: themeSpec.pointDefaultColor,
+          linkDefaultColor: themeSpec.linkColor,
+          hoveredLinkColor: themeSpec.hoveredLink,
+          pointDefaultSize: adaptivePointSize,
+          linkDefaultWidth: adaptiveLinkWidth,
+          linkDefaultArrows: adaptiveLinkArrows,
+          linkArrowsSizeScale: 0.6,
+          // Higher floor = fewer near-camera link fragments shaded every frame.
+          // Wider far end = distant links fade smoothly instead of pop-culling.
+          linkVisibilityDistanceRange: [100, 400],
+          linkVisibilityMinTransparency: 0.05,
+          scalePointsOnZoom: true,
+          spaceSize: adaptiveSpaceSize,
+          renderHoveredPointRing: true,
+          hoveredPointRingColor: themeSpec.hoveredLink,
+          // Greyout — applied automatically when any points are selected.
+          pointGreyoutOpacity: 0.08,
+          linkGreyoutOpacity: 0.05,
+          // Force-directed tuning. Gravity/repulsion balance governs how
+          // tightly clusters pack: too much gravity → one dense ball with
+          // no visible sub-structure; too little → cloud escapes spaceSize.
+          // 2.0 gravity + 1.2 repulsion + 16 link distance gives communities
+          // visible breathing room while keeping isolated (linkless) nodes in
+          // the main mass's halo. Link distance 16 (2× old 8) is the primary
+          // knob for inter-cluster separation — longer springs pull connected
+          // components apart into readable sub-clusters.
+          simulationGravity: 2.0,
+          // Repulsion shader grows as ~c/sqrt(dist) at close range, so any
+          // initial cluster of near-neighbors gets huge first-tick deltas —
+          // the visible "jumping". Holding repulsion at 0.9 (down from 1.2)
+          // keeps sub-community structure readable (gravity still wins at
+          // large distances) while capping the short-range force spike that
+          // makes individual points pop between frames.
+          simulationRepulsion: 0.9,
+          // Friction is a per-tick velocity retention multiplier (higher = less
+          // damping). 0.85 keeps motion visibly dynamic but filters the big
+          // first-tick kicks that made points "teleport" — the rendered frame
+          // delta is ~15% smaller than at 0.92, enough to read as smooth flow
+          // instead of snapping.
+          simulationFriction: 0.85,
+          simulationLinkSpring: 1.0,
+          simulationLinkDistance: 16,
+          // Fixed gentle decay — no user slider. Higher value = alpha decays
+          // slower = longer, gentler settle. 2500 gives ~5s of visible motion
+          // on a laptop before the alpha<0.2 freeze kicks in; earlier 0.5×
+          // slider default mapped to 4000 which was unnecessarily long.
+          simulationDecay: 2500,
+          // Start pre-zoomed-out so random-disc init is centered on screen and
+          // the whole spaceSize is visible. No auto-fit while sim runs — camera
+          // chase was jerky, better to let the cloud expand within the frame
+          // and fit smoothly ONCE at the end.
+          initialZoomLevel: initialZoomFromSpaceSize(adaptiveSpaceSize, container),
+          fitViewOnInit: false,
+          // Three jobs, all throttled against cosmos.gl's RAF-driven tick rate:
+          //   1. Live-track the expanding cloud with instant (0 ms) refits
+          //      every 500 ms so the user doesn't wait for settle to end
+          //      before the view is framed on the actual layout.
+          //   2. Fit-and-mark at alpha < 0.15 (frozenRef flips true) — one
+          //      smooth final fit once the cloud has mostly settled. The
+          //      simulation keeps running; frozenRef just gates further fits.
+          // Continuous motion is handled in a separate wall-clock interval
+          // (see the breathing useEffect below) — not here — because
+          // onSimulationTick stops firing once cosmos.gl considers the sim
+          // ended (alpha < ALPHA_MIN), so a callback-driven re-heat can
+          // never recover from a full decay.
+          // try/catch is load-bearing: this callback is invoked from inside
+          // cosmos.gl's RAF loop, outside our render-time error boundary —
+          // a throw here would otherwise escape to the host and kill the app.
+          onSimulationTick: (alpha: number) => {
+            try {
+              const g = graphRef.current;
+              if (!g) return;
+              // One-shot final fit when the initial settle is "done enough".
+              if (!frozenRef.current && alpha < 0.15) {
+                frozenRef.current = true;
+                if (!userInteractedRef.current) g.fitView(800, 0.2);
+              }
+              if (frozenRef.current) return;
+              // Live-fit — disabled after any user zoom/pan so scroll-to-zoom
+              // isn't clobbered by the next throttled refit.
+              if (userInteractedRef.current) return;
+              if (alpha < 0.25) return;
+              const now = performance.now();
+              if (now - lastTickFitRef.current < 500) return;
+              lastTickFitRef.current = now;
+              g.fitView(0, 0.2);
+            } catch (err) {
+              // eslint-disable-next-line no-console
+              console.warn('[graph:onSimulationTick] tick handler skipped', err);
+            }
+          },
+          onZoomStart: (_e: unknown, userDriven: boolean) => {
+            if (userDriven) userInteractedRef.current = true;
+          },
+          showFPSMonitor: false,
+          hoveredPointCursor: 'pointer',
+          onClick: (index: number | undefined) => {
+            if (index == null) {
+              // Click on empty space — clear everything
+              clearHighlight();
+              return;
+            }
+            const node = nodesRef.current[index];
+            if (node) setSelected(node);
+            setSelectedEdge(null);
+            // Route through the mode-aware highlight picker. Bottleneck mode
+            // shows only hot adjacent edges; normal mode shows the full 1-hop
+            // neighborhood. The ref avoids rebuilding the Graph() instance
+            // every time the mode flips — cosmos.gl resolves it lazily here.
+            highlightByModeRef.current(index);
+          },
+          onPointMouseOver: (index: number) => {
+            const node = nodesRef.current[index];
+            if (node) setHovered(node);
+          },
+          onPointMouseOut: () => setHovered(null),
+        });
+        graphRef.current = graph;
+      }
+
+      // Build indexes
+      const nodes = data.nodes;
+      nodesRef.current = nodes;
+      const indexById = new Map<string, number>();
+      nodes.forEach((n, i) => indexById.set(n.id, i));
+      indexByIdRef.current = indexById;
+
+      const commColors = new Map<number, string>();
+      for (const c of data.communities) commColors.set(c.id, c.color);
+
+      // Positions: reuse any previously-settled positions we already have for
+      // nodes that survived a filter change (Isolated toggle, maxNodes tweak,
+      // granularity switch). Only genuinely new nodes get random-disc init.
+      // Without this, toggling any setting would re-run the big settle pass.
+      const N = nodes.length;
+      // Initial random-disc radius. Short-range repulsion in the manybody
+      // shader spikes as c/sqrt(dist) for close pairs — the visible "jumping"
+      // at sim start came from this: thousands of points in a tight cluster
+      // produce giant first-tick deltas. Seeding across 40% of spaceSize
+      // thins initial density ~2.5×, so alpha=1.0 forces stay bounded and the
+      // opening frames look like flow rather than snap. Gravity still pulls
+      // the cloud back to center within a few seconds.
+      const initRadius = adaptiveSpaceSize * 0.4;
+      const positions = new Float32Array(N * 2);
+      const prevIds = prevNodeIdsRef.current;
+      // cosmos.gl's coordinate space is [0, spaceSize] with origin at the
+      // corner — the position shader hard-clamps to this range. Gravity pulls
+      // toward spaceSize/2, so initialize around the same center; without this
+      // offset, half the random-disc init lands at negative coords and piles
+      // up against the x=0 / y=0 edges as visible clamp lines.
+      const cx = adaptiveSpaceSize / 2;
+      const cy = adaptiveSpaceSize / 2;
+      // Always recenter carry positions so their bbox centroid aligns with
+      // (cx, cy). The previous "only shift if out of range" variant missed
+      // cases where the old layout was nominally in [0, spaceSize] but
+      // clustered in one quadrant (e.g. carried from a smaller spaceSize, or
+      // from an earlier build that centered init on origin but all points
+      // happened to land in the positive half). Unconditional recentering
+      // handles all coordinate-system mismatches — for carry positions that
+      // are already centered, (cx - centroid) is ~0 so it's a no-op.
+      let carryDx = 0;
+      let carryDy = 0;
+      if (carryPositions && carryPositions.length >= 2) {
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
+        for (let i = 0; i < carryPositions.length; i += 2) {
+          const x = carryPositions[i];
+          const y = carryPositions[i + 1];
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+        carryDx = cx - (minX + maxX) / 2;
+        carryDy = cy - (minY + maxY) / 2;
+      }
+      for (let i = 0; i < N; i++) {
+        const prevIdx = carryPositions && prevIds ? prevIds.get(nodes[i].id) : undefined;
+        const carriedX =
+          prevIdx != null && carryPositions ? carryPositions[prevIdx * 2] : undefined;
+        const carriedY =
+          prevIdx != null && carryPositions ? carryPositions[prevIdx * 2 + 1] : undefined;
+        if (Number.isFinite(carriedX) && Number.isFinite(carriedY)) {
+          positions[i * 2] = (carriedX as number) + carryDx;
+          positions[i * 2 + 1] = (carriedY as number) + carryDy;
+        } else {
+          // New node — uniform-area random disc (sqrt for uniform radial density).
+          const r = initRadius * Math.sqrt(Math.random());
+          const a = Math.random() * 2 * Math.PI;
+          positions[i * 2] = cx + Math.cos(a) * r;
+          positions[i * 2 + 1] = cy + Math.sin(a) * r;
+        }
+      }
+      // Snapshot id → index for the NEXT re-render's carry-over lookup.
+      const newIdMap = new Map<string, number>();
+      for (let i = 0; i < N; i++) newIdMap.set(nodes[i].id, i);
+      prevNodeIdsRef.current = newIdMap;
+
+      // Colors (per-point RGBA, all channels normalized 0-1 — cosmos.gl buffer convention)
+      // In bottleneck mode: articulation points get bright red, other nodes are
+      // painted by the max bottleneckScore of their adjacent edges — so hot
+      // neighborhoods glow while cold parts of the graph fade to dim grey.
+      const useBottleneckColors = settings.bottlenecks || settings.stressTest;
+      const nodeScores = useBottleneckColors
+        ? computeNodeBottleneckScores(nodes, data.edges)
+        : null;
+      const colors = new Float32Array(nodes.length * 4);
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (useBottleneckColors && n.isArticulation) {
+          colors[i * 4] = 0.937; // #ef4444
+          colors[i * 4 + 1] = 0.267;
+          colors[i * 4 + 2] = 0.267;
+        } else if (useBottleneckColors && nodeScores) {
+          const [r, g, b] = bottleneckNodeColor01(nodeScores[i]);
+          colors[i * 4] = r;
+          colors[i * 4 + 1] = g;
+          colors[i * 4 + 2] = b;
+        } else {
+          const [r, g, b] = nodeColor01(n, colorBy, commColors);
+          colors[i * 4] = r;
+          colors[i * 4 + 1] = g;
+          colors[i * 4 + 2] = b;
+        }
+        colors[i * 4 + 3] = 1;
+      }
+
+      // Sizes — articulation points get a +60% bump so they're visually larger than normal nodes.
+      const sizes = new Float32Array(nodes.length);
+      for (let i = 0; i < nodes.length; i++) {
+        const base = nodeSize(nodes[i]);
+        sizes[i] = useBottleneckColors && nodes[i].isArticulation ? base * 1.6 : base;
+      }
+
+      // Top-N important nodes for label overlay defaults
+      const topByImp = [...nodes.keys()].sort(
+        (a, b) => (nodes[b].importance ?? 0) - (nodes[a].importance ?? 0),
+      );
+      // labelIndicesRef stays capped — it's the halo-tracking subset (each
+      // tracked index costs a per-tick GPU→CPU copy in trackedPositionsFbo).
+      // nodesByImpRef holds the full ranking so the label collision pass
+      // can keep walking when the top 60 are all off-screen.
+      labelIndicesRef.current = topByImp.slice(0, 60);
+      nodesByImpRef.current = topByImp;
+
+      // Section reps: the single most-important node per community. Ordered by
+      // community size (biggest section first) so the zoomed-out cap keeps the
+      // labels the user most wants to see.
+      const bestByCommunity = new Map<number, { idx: number; imp: number }>();
+      const sizeByCommunity = new Map<number, number>();
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const imp = n.importance ?? 0;
+        sizeByCommunity.set(n.community, (sizeByCommunity.get(n.community) ?? 0) + 1);
+        const cur = bestByCommunity.get(n.community);
+        if (!cur || imp > cur.imp) bestByCommunity.set(n.community, { idx: i, imp });
+      }
+      sectionIndicesRef.current = [...bestByCommunity.entries()]
+        .sort((a, b) => (sizeByCommunity.get(b[0]) ?? 0) - (sizeByCommunity.get(a[0]) ?? 0))
+        .map(([, v]) => v.idx);
+      const commLabels = new Map<number, string>();
+      for (const c of data.communities) commLabels.set(c.id, c.label);
+      const sectionLabels = new Map<number, string>();
+      for (const [commId, v] of bestByCommunity) {
+        const lbl = commLabels.get(commId);
+        if (lbl) sectionLabels.set(v.idx, lbl);
+      }
+      sectionLabelByIndexRef.current = sectionLabels;
+
+      // Snapshot so highlightNeighborhood can rewrite colors per hop-distance
+      // and clearHighlight can restore them. Copy because `colors` is reused
+      // by the GPU buffer.
+      origColorsRef.current = new Float32Array(colors);
+
+      // cosmos.gl 3.0 made device/canvas init asynchronous. Data-setters
+      // invoked before `graph.ready` resolves silently no-op, leaving the
+      // canvas empty. Gate every initial data push on the ready promise.
+      // See cosmos.gl v3 notes: `readonly ready: Promise<void>` + `isReady`.
+      const applyPointData = () => {
+        // Push the point data immediately — user sees nodes even before edges
+        // finish processing on big graphs.
+        graph.setPointPositions(positions);
+        graph.setPointColors(colors);
+        graph.setPointSizes(sizes);
+        // Register the subset the halo pass wants. cosmos.gl then runs a
+        // per-tick GPU copy of just these indices into trackedPositionsFbo,
+        // which the halo pass reads via getTrackedPointPositionsMap(). The
+        // subset is re-registered on every renderGraph cycle because
+        // labelIndicesRef is rebuilt from the new nodes array.
+        graph.trackPointPositionsByIndices(labelIndicesRef.current);
+        // Cap the opening alpha — per-tick forces `delta = alpha × force`
+        // would otherwise be at full magnitude and close-pair repulsion
+        // spikes make individual points visibly pop.
+        graph.start(0.4);
+      };
+      if (graph.isReady) applyPointData();
+      else
+        graph.ready.then(applyPointData).catch((err) => {
           // eslint-disable-next-line no-console
-          console.error('[graph] setLinkColors failed', err);
-          setError('setLinkColors: ' + decorateErr(err).message);
+          console.error('[graph] init ready failed', err);
+        });
+
+      // Edge processing: dedup + top-K sort. On big graphs this can freeze
+      // the main thread for 100–300ms, so delegate to a Worker. Small graphs
+      // stay synchronous — worker hop isn't worth the latency below ~3k nodes.
+      const EDGE_BUDGET = 20000;
+      const token = ++renderTokenRef.current;
+
+      const finalize = (links: Float32Array) => {
+        // Discard stale worker responses
+        if (token !== renderTokenRef.current) return;
+        const g = graphRef.current;
+        if (!g) return;
+        // Re-gate: a small worker job may still return before cosmos.gl's
+        // async device init has resolved. setLinks before ready is a no-op
+        // (same silent failure as the point-data path above).
+        if (!g.isReady) {
+          g.ready
+            .then(() => finalize(links))
+            .catch((err) => {
+              // eslint-disable-next-line no-console
+              console.error('[graph] finalize ready failed', err);
+            });
           return;
         }
-      }
-      // cosmos.gl auto-starts the simulation on new Graph() when
-      // enableSimulation is true (default). No manual start() needed.
-      // A redundant render() call wakes the draw loop after setLinks.
-      try {
-        g.render();
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[graph] render failed', err);
-        setError('render: ' + decorateErr(err).message);
-        return;
-      }
-      // Immediate fit so the user sees the layout framed from the first
-      // frame — especially valuable on re-renders with carry-over positions
-      // where the cloud is already spread. Deferred one frame so cosmos.gl
-      // has the freshly-set positions in the FBO when fitView computes the
-      // bounding box. onSimulationTick (throttled to 500 ms, re-armed below)
-      // takes over from here to track the cloud as it expands during settle.
-      requestAnimationFrame(() => {
-        const gg = graphRef.current;
-        if (gg) gg.fitView(500, 0.2);
-      });
-      // Arm onSimulationTick to fit on the first tick (throttle starts at 0).
-      lastTickFitRef.current = 0;
-      // New render cycle — unfreeze so the fresh settle pass can progress
-      // to its own freeze threshold. Without this reset, the next render
-      // would never run forces (frozenRef stays true from previous cycle).
-      frozenRef.current = false;
-    };
-
-    // Inline edge-build fallback — used directly for small graphs and as a
-    // safety net when the Worker path fails to initialize.
-    const buildEdgesInline = (): Float32Array => {
-      const seenPairs = new Set<number>();
-      const pairA: number[] = [];
-      const pairB: number[] = [];
-      const pairWeight: number[] = [];
-      for (const e of data.edges) {
-        const s = indexById.get(e.source);
-        const t = indexById.get(e.target);
-        if (s == null || t == null) continue;
-        const key = s * 0x100000 + t;
-        if (seenPairs.has(key)) continue;
-        seenPairs.add(key);
-        pairA.push(s);
-        pairB.push(t);
-        pairWeight.push((nodes[s].importance ?? 0) + (nodes[t].importance ?? 0));
-      }
-      let keepIdx: Uint32Array;
-      if (pairA.length > EDGE_BUDGET) {
-        const order = new Uint32Array(pairA.length);
-        for (let i = 0; i < order.length; i++) order[i] = i;
-        const sorted = Array.from(order).sort((a, b) => pairWeight[b] - pairWeight[a]);
-        keepIdx = Uint32Array.from(sorted.slice(0, EDGE_BUDGET));
-      } else {
-        keepIdx = new Uint32Array(pairA.length);
-        for (let i = 0; i < keepIdx.length; i++) keepIdx[i] = i;
-      }
-      const out = new Float32Array(keepIdx.length * 2);
-      for (let i = 0; i < keepIdx.length; i++) {
-        const k = keepIdx[i];
-        out[i * 2] = pairA[k];
-        out[i * 2 + 1] = pairB[k];
-      }
-      return out;
-    };
-
-    if (bigGraph) {
-      // Lazy worker — create once, reuse. Vite bundles via new URL().
-      // Guard with try/catch — in some Electron packaging modes the Worker
-      // URL resolution can fail at runtime; we fall back to inline build
-      // rather than crash the whole render.
-      try {
-        if (!workerRef.current) {
-          workerRef.current = new Worker(
-            new URL('./graph-worker.ts', import.meta.url),
-            { type: 'module' },
-          );
-          workerRef.current.addEventListener('error', (err) => {
-            // eslint-disable-next-line no-console
-            console.warn('[graph-worker] error, falling back to inline', err.message);
-            workerRef.current?.terminate();
-            workerRef.current = null;
-          });
+        try {
+          g.setLinks(links);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[graph] setLinks failed', err);
+          setError('setLinks: ' + decorateErr(err).message);
+          return;
         }
-        const worker = workerRef.current;
-        const onMessage = (ev: MessageEvent<{ type: string; links: Float32Array }>) => {
-          if (ev.data?.type !== 'edges') return;
-          worker.removeEventListener('message', onMessage);
-          finalize(ev.data.links);
-        };
-        worker.addEventListener('message', onMessage);
+        // Cache pairs so highlightNeighborhood can rewrite per-link colors for
+        // the 1-hop subgraph. Copy because cosmos.gl may retain the underlying
+        // buffer for GPU upload.
+        linkPairsRef.current = new Float32Array(links);
+        // Compute & push per-link tints (shade of source node's color). Falls
+        // back silently to linkDefaultColor if point colors aren't ready yet.
+        // When bottleneck mode is active, colors come from the bottleneck
+        // palette instead (blue → amber → red by score) so hot-path edges
+        // read immediately even in dense clusters.
+        const srcPointColors = origColorsRef.current;
+        if (srcPointColors) {
+          const useBottleneck = settings.bottlenecks || settings.stressTest;
+          const linkColors = useBottleneck
+            ? computeBottleneckLinkColors(
+                linkPairsRef.current,
+                nodes,
+                buildEdgeScoreMap(data.edges),
+              )
+            : computeTintedLinkColors(
+                srcPointColors,
+                linkPairsRef.current,
+                hexToRgb01(themeSpec.background),
+                LINK_TINT_MIX,
+                LINK_TINT_ALPHA,
+              );
+          defaultLinkColorsRef.current = linkColors;
+          try {
+            g.setLinkColors(new Float32Array(linkColors));
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[graph] setLinkColors failed', err);
+            setError('setLinkColors: ' + decorateErr(err).message);
+            return;
+          }
+        }
+        // cosmos.gl auto-starts the simulation on new Graph() when
+        // enableSimulation is true (default). No manual start() needed.
+        // A redundant render() call wakes the draw loop after setLinks.
+        try {
+          g.render();
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[graph] render failed', err);
+          setError('render: ' + decorateErr(err).message);
+          return;
+        }
+        // Immediate fit so the user sees the layout framed from the first
+        // frame — especially valuable on re-renders with carry-over positions
+        // where the cloud is already spread. Deferred one frame so cosmos.gl
+        // has the freshly-set positions in the FBO when fitView computes the
+        // bounding box. onSimulationTick (throttled to 500 ms, re-armed below)
+        // takes over from here to track the cloud as it expands during settle.
+        requestAnimationFrame(() => {
+          const gg = graphRef.current;
+          if (gg) gg.fitView(500, 0.2);
+        });
+        // Arm onSimulationTick to fit on the first tick (throttle starts at 0).
+        lastTickFitRef.current = 0;
+        // New render cycle — unfreeze so the fresh settle pass can progress
+        // to its own freeze threshold. Without this reset, the next render
+        // would never run forces (frozenRef stays true from previous cycle).
+        frozenRef.current = false;
+      };
 
-        const importanceArr = new Float32Array(nodes.length);
-        for (let i = 0; i < nodes.length; i++) importanceArr[i] = nodes[i].importance ?? 0;
+      // Inline edge-build fallback — used directly for small graphs and as a
+      // safety net when the Worker path fails to initialize.
+      const buildEdgesInline = (): Float32Array => {
+        const seenPairs = new Set<number>();
+        const pairA: number[] = [];
+        const pairB: number[] = [];
+        const pairWeight: number[] = [];
+        for (const e of data.edges) {
+          const s = indexById.get(e.source);
+          const t = indexById.get(e.target);
+          if (s == null || t == null) continue;
+          const key = s * 0x100000 + t;
+          if (seenPairs.has(key)) continue;
+          seenPairs.add(key);
+          pairA.push(s);
+          pairB.push(t);
+          pairWeight.push((nodes[s].importance ?? 0) + (nodes[t].importance ?? 0));
+        }
+        let keepIdx: Uint32Array;
+        if (pairA.length > EDGE_BUDGET) {
+          const order = new Uint32Array(pairA.length);
+          for (let i = 0; i < order.length; i++) order[i] = i;
+          const sorted = Array.from(order).sort((a, b) => pairWeight[b] - pairWeight[a]);
+          keepIdx = Uint32Array.from(sorted.slice(0, EDGE_BUDGET));
+        } else {
+          keepIdx = new Uint32Array(pairA.length);
+          for (let i = 0; i < keepIdx.length; i++) keepIdx[i] = i;
+        }
+        const out = new Float32Array(keepIdx.length * 2);
+        for (let i = 0; i < keepIdx.length; i++) {
+          const k = keepIdx[i];
+          out[i * 2] = pairA[k];
+          out[i * 2 + 1] = pairB[k];
+        }
+        return out;
+      };
 
-        const edgesFlat = data.edges.map((e) => ({ source: e.source, target: e.target }));
-        const nodeIds = nodes.map((n) => n.id);
+      if (bigGraph) {
+        // Lazy worker — create once, reuse. Vite bundles via new URL().
+        // Guard with try/catch — in some Electron packaging modes the Worker
+        // URL resolution can fail at runtime; we fall back to inline build
+        // rather than crash the whole render.
+        try {
+          if (!workerRef.current) {
+            workerRef.current = new Worker(new URL('./graph-worker.ts', import.meta.url), {
+              type: 'module',
+            });
+            workerRef.current.addEventListener('error', (err) => {
+              // eslint-disable-next-line no-console
+              console.warn('[graph-worker] error, falling back to inline', err.message);
+              workerRef.current?.terminate();
+              workerRef.current = null;
+            });
+          }
+          const worker = workerRef.current;
+          const onMessage = (ev: MessageEvent<{ type: string; links: Float32Array }>) => {
+            if (ev.data?.type !== 'edges') return;
+            worker.removeEventListener('message', onMessage);
+            finalize(ev.data.links);
+          };
+          worker.addEventListener('message', onMessage);
 
-        worker.postMessage(
-          {
-            type: 'build-edges',
-            nodes: nodeIds,
-            edges: edgesFlat,
-            importance: importanceArr,
-            edgeBudget: EDGE_BUDGET,
-          },
-          [importanceArr.buffer],
-        );
-        // NOTE: intentionally NOT calling setLinks(empty) here — some cosmos.gl
-        // code paths misbehave with zero-length link buffers. The previous
-        // links (from the prior render, if any) stay on-screen until the
-        // worker returns fresh ones, which is fine visually.
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[graph-worker] init failed, inline fallback', err);
+          const importanceArr = new Float32Array(nodes.length);
+          for (let i = 0; i < nodes.length; i++) importanceArr[i] = nodes[i].importance ?? 0;
+
+          const edgesFlat = data.edges.map((e) => ({ source: e.source, target: e.target }));
+          const nodeIds = nodes.map((n) => n.id);
+
+          worker.postMessage(
+            {
+              type: 'build-edges',
+              nodes: nodeIds,
+              edges: edgesFlat,
+              importance: importanceArr,
+              edgeBudget: EDGE_BUDGET,
+            },
+            [importanceArr.buffer],
+          );
+          // NOTE: intentionally NOT calling setLinks(empty) here — some cosmos.gl
+          // code paths misbehave with zero-length link buffers. The previous
+          // links (from the prior render, if any) stay on-screen until the
+          // worker returns fresh ones, which is fine visually.
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[graph-worker] init failed, inline fallback', err);
+          finalize(buildEdgesInline());
+        }
+      } else {
+        // Small graph — inline is faster than a worker round-trip.
         finalize(buildEdgesInline());
       }
-    } else {
-      // Small graph — inline is faster than a worker round-trip.
-      finalize(buildEdgesInline());
-    }
-  }, [themeSpec, colorBy, showFPS, settings.bottlenecks, settings.stressTest]);
+    },
+    [themeSpec, colorBy, showFPS, settings.bottlenecks, settings.stressTest],
+  );
 
   // ── Reset edge-worker + position carry-over on granularity switch ──
   // File-graph and symbol-graph node-id namespaces don't overlap, so carrying
@@ -1801,7 +1951,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, [granularity]);
 
   // ── Initial load & refetch when query params change ───────────
-  useEffect(() => { loadGraph(); }, [loadGraph]);
+  useEffect(() => {
+    loadGraph();
+  }, [loadGraph]);
 
   // ── Recolor WITHOUT refetch when colorBy changes ──────────────
   useEffect(() => {
@@ -1885,15 +2037,16 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const data = payloadRef.current;
     const useBottleneckColors = (settings.bottlenecks || settings.stressTest) && data != null;
     if (pointColors && linkPairs && linkPairs.length >= 2) {
-      const linkColors = useBottleneckColors && data
-        ? computeBottleneckLinkColors(linkPairs, data.nodes, buildEdgeScoreMap(data.edges))
-        : computeTintedLinkColors(
-            pointColors,
-            linkPairs,
-            hexToRgb01(themeSpec.background),
-            LINK_TINT_MIX,
-            LINK_TINT_ALPHA,
-          );
+      const linkColors =
+        useBottleneckColors && data
+          ? computeBottleneckLinkColors(linkPairs, data.nodes, buildEdgeScoreMap(data.edges))
+          : computeTintedLinkColors(
+              pointColors,
+              linkPairs,
+              hexToRgb01(themeSpec.background),
+              LINK_TINT_MIX,
+              LINK_TINT_ALPHA,
+            );
       defaultLinkColorsRef.current = linkColors;
       graph.setLinkColors(new Float32Array(linkColors));
     }
@@ -1916,7 +2069,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       const k = e.source + '|' + e.target;
       if (brokenEdgeKeys.has(k)) continue;
       const s = e.bottleneckScore ?? 0;
-      if (s > bestScore) { bestScore = s; best = e; }
+      if (s > bestScore) {
+        bestScore = s;
+        best = e;
+      }
     }
     if (!best || bestScore <= 0) {
       // No hot edges left — stop any auto-play sequence in flight so the
@@ -1946,7 +2102,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       if (lastPendingBreak) setLastPendingBreak(null);
       if (breakHistory.length > 1) setBreakHistory([{ broken: 0, largestFrac: 1 }]);
     }
-  }, [stressTest, brokenEdgeKeys.size, autoSteps, pendingBreak, lastPendingBreak, breakHistory.length]);
+  }, [
+    stressTest,
+    brokenEdgeKeys.size,
+    autoSteps,
+    pendingBreak,
+    lastPendingBreak,
+    breakHistory.length,
+  ]);
 
   // Pacing refs — read at effect start so the flash/gap timers pick up the
   // user's current Auto ×N choice without re-running the effect on every
@@ -1981,7 +2144,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         const s = linkPairs[i * 2] | 0;
         const t = linkPairs[i * 2 + 1] | 0;
         if ((s === si && t === ti) || (s === ti && t === si)) {
-          flash[i * 4]     = 1.0;
+          flash[i * 4] = 1.0;
           flash[i * 4 + 1] = 0.96;
           flash[i * 4 + 2] = 0.72;
           flash[i * 4 + 3] = 1.0;
@@ -1990,15 +2153,15 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       try {
         graph.setLinkColors(flash);
         graph.render();
-      } catch { /* setLinkColors race with re-render — let commit retry */ }
+      } catch {
+        /* setLinkColors race with re-render — let commit retry */
+      }
     }
     // Pacing: single breaks (or small auto runs ≤10) hold the flash long
     // enough for the eye to catch it. Large runs (×100) compress times so
     // the whole sequence doesn't drag into 70+ seconds of tedium.
     const autoTarget = autoStepsRef.current > 0 ? autoStepsCountRef.current : 0;
-    const speed = autoTarget > 0
-      ? Math.max(0.4, Math.min(1.0, 10 / autoTarget))
-      : 1.0;
+    const speed = autoTarget > 0 ? Math.max(0.4, Math.min(1.0, 10 / autoTarget)) : 1.0;
     const flashMs = Math.round(450 * speed);
     const timer = window.setTimeout(() => {
       const key = pendingBreak.source + '|' + pendingBreak.target;
@@ -2093,12 +2256,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       for (let i = 0; i < data.nodes.length; i++) {
         const n = data.nodes[i];
         if (n.isArticulation) {
-          colors[i * 4]     = 0.937;
+          colors[i * 4] = 0.937;
           colors[i * 4 + 1] = 0.267;
           colors[i * 4 + 2] = 0.267;
         } else {
           const [r, g, b] = bottleneckNodeColor01(nodeScores[i]);
-          colors[i * 4]     = r;
+          colors[i * 4] = r;
           colors[i * 4 + 1] = g;
           colors[i * 4 + 2] = b;
         }
@@ -2118,7 +2281,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const parent = new Int32Array(n);
     for (let i = 0; i < n; i++) parent[i] = i;
     const find = (x: number): number => {
-      while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+      while (parent[x] !== x) {
+        parent[x] = parent[parent[x]];
+        x = parent[x];
+      }
       return x;
     };
     for (let i = 0; i < pairs.length; i += 2) {
@@ -2236,7 +2402,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     return () => {
       try {
         graphRef.current?.destroy?.();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       graphRef.current = null;
       if (workerRef.current) {
         workerRef.current.terminate();
@@ -2341,7 +2509,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         const isHot = score > 0 || e.isBridge === true;
         if (!isHot) continue;
         if (e.source === node.id)
-          hotEdges.push({ other: e.target, score, isBridge: e.isBridge === true, direction: 'out' });
+          hotEdges.push({
+            other: e.target,
+            score,
+            isBridge: e.isBridge === true,
+            direction: 'out',
+          });
         else if (e.target === node.id)
           hotEdges.push({ other: e.source, score, isBridge: e.isBridge === true, direction: 'in' });
       }
@@ -2350,9 +2523,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       if (hotEdges.length === 0 && !node.isArticulation) return '';
 
       const maxScore = hotEdges[0]?.score ?? 0;
-      const rank = rankedEdges.findIndex(
-        (e) => e.source === node.id || e.target === node.id,
-      );
+      const rank = rankedEdges.findIndex((e) => e.source === node.id || e.target === node.id);
 
       const lines: string[] = [];
       lines.push(`Analyze an architectural bottleneck at this location.`);
@@ -2371,18 +2542,28 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         lines.push(`Critical dependencies (high bottleneck score):`);
         for (const e of hotEdges.slice(0, 10)) {
           const arrow = e.direction === 'out' ? '→' : '←';
-          const bridge = e.isBridge ? ' [BRIDGE — removing this edge alone disconnects the graph]' : '';
+          const bridge = e.isBridge
+            ? ' [BRIDGE — removing this edge alone disconnects the graph]'
+            : '';
           lines.push(`  ${arrow} ${e.other} (score ${e.score.toFixed(2)}${bridge})`);
         }
       }
       lines.push(``);
       lines.push(`Tasks:`);
       lines.push(`1. Read this file and summarise its current responsibilities in 3–5 bullets.`);
-      lines.push(`2. Investigate why it has such high coupling. Is it a god-module? A leaky abstraction? A registry/bus that collects too much?`);
-      lines.push(`3. Propose 2–3 concrete refactoring options with trade-offs. For each, predict the impact on the bottleneck score.`);
-      lines.push(`4. For each critical dependency above, classify it as: (a) invertible via interface, (b) extractable into a shared module, (c) mediatable via an event/queue, or (d) genuinely essential. Justify each call.`);
+      lines.push(
+        `2. Investigate why it has such high coupling. Is it a god-module? A leaky abstraction? A registry/bus that collects too much?`,
+      );
+      lines.push(
+        `3. Propose 2–3 concrete refactoring options with trade-offs. For each, predict the impact on the bottleneck score.`,
+      );
+      lines.push(
+        `4. For each critical dependency above, classify it as: (a) invertible via interface, (b) extractable into a shared module, (c) mediatable via an event/queue, or (d) genuinely essential. Justify each call.`,
+      );
       lines.push(``);
-      lines.push(`Context: bottleneck score = normalized edge betweenness × (1 + normalized co-change weight), computed over the import graph. High score means many shortest dependency paths cross this node AND it changes together with its neighbours in git history — a double signal for architectural fragility.`);
+      lines.push(
+        `Context: bottleneck score = normalized edge betweenness × (1 + normalized co-change weight), computed over the import graph. High score means many shortest dependency paths cross this node AND it changes together with its neighbours in git history — a double signal for architectural fragility.`,
+      );
       return lines.join('\n');
     },
     [root],
@@ -2424,7 +2605,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         const adj = graph.getAdjacentIndices(idx);
         if (!adj) continue;
         for (const n of adj) {
-          if (!visited.has(n)) { visited.add(n); next.push(n); }
+          if (!visited.has(n)) {
+            visited.add(n);
+            next.push(n);
+          }
         }
       }
       frontier = next;
@@ -2454,20 +2638,23 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // Highlight all nodes in a workspace. Intentionally does NOT auto-zoom —
   // the user wants the view to stay centered where it is unless they explicitly
   // hit Fit or focus a specific node.
-  const doHighlightWorkspace = useCallback((ws: string) => {
-    const indices: number[] = [];
-    for (let i = 0; i < nodesRef.current.length; i++) {
-      if (inferWorkspace(nodesRef.current[i]) === ws) indices.push(i);
-    }
-    if (indices.length === 0) return;
-    const graph = graphRef.current;
-    if (!graph) return;
-    // Wipe any active click-highlight (BFS colors, depth map, widened link
-    // fade) before overlaying the group selection — see doSelectAllMatches.
-    if (highlightedDepthRef.current) clearHighlight();
-    graph.selectPointsByIndices(indices);
-    selectedIndicesRef.current = new Set(indices);
-  }, [clearHighlight]);
+  const doHighlightWorkspace = useCallback(
+    (ws: string) => {
+      const indices: number[] = [];
+      for (let i = 0; i < nodesRef.current.length; i++) {
+        if (inferWorkspace(nodesRef.current[i]) === ws) indices.push(i);
+      }
+      if (indices.length === 0) return;
+      const graph = graphRef.current;
+      if (!graph) return;
+      // Wipe any active click-highlight (BFS colors, depth map, widened link
+      // fade) before overlaying the group selection — see doSelectAllMatches.
+      if (highlightedDepthRef.current) clearHighlight();
+      graph.selectPointsByIndices(indices);
+      selectedIndicesRef.current = new Set(indices);
+    },
+    [clearHighlight],
+  );
 
   // ── Fit + pause Live (user-requested) ─────────────────────────
   const doFit = useCallback(() => {
@@ -2485,17 +2672,29 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       // Ignore when typing in an input/textarea (except Esc)
       const target = e.target as HTMLElement | null;
       const isInput =
-        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
       if (e.key === 'Escape') {
-        if (searchQuery) { setSearchQuery(''); (target as HTMLInputElement | null)?.blur?.(); return; }
+        if (searchQuery) {
+          setSearchQuery('');
+          (target as HTMLInputElement | null)?.blur?.();
+          return;
+        }
         clearHighlight();
         return;
       }
       if (isInput) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); doFit(); }
-      else if (e.key === ' ') { e.preventDefault(); setLive((v) => !v); }
-      else if (e.key === '/') { e.preventDefault(); searchInputRef.current?.focus(); }
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        doFit();
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        setLive((v) => !v);
+      } else if (e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -2597,7 +2796,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           >
             Top {topBottlenecks.length} hotspots
           </div>
-          <div style={{ overflowY: 'auto', flex: 1, minHeight: 0, marginRight: -6, paddingRight: 6 }}>
+          <div
+            style={{ overflowY: 'auto', flex: 1, minHeight: 0, marginRight: -6, paddingRight: 6 }}
+          >
             {topBottlenecks.map((e, i) => {
               const score = e.bottleneckScore ?? 0;
               const [r, g, b] = bottleneckColor01(score);
@@ -2612,10 +2813,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                   title={`${e.source} → ${e.target}\nScore ${score.toFixed(3)}${e.isBridge ? ' (bridge)' : ''}`}
                 >
                   <div className="cosmos-gpu-bn-row-top">
-                    <span
-                      className="cosmos-gpu-bn-dot"
-                      style={{ background: dotRgb }}
-                    />
+                    <span className="cosmos-gpu-bn-dot" style={{ background: dotRgb }} />
                     <span className="cosmos-gpu-bn-name">{srcShort}</span>
                     {e.isBridge && <span className="cosmos-gpu-bn-bridge">BR</span>}
                     <span className="cosmos-gpu-bn-score">{score.toFixed(2)}</span>
@@ -2633,218 +2831,255 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           sidebar (left) and this panel (right) flank the graph without
           overlapping the selected-node popup (which also docks right but
           appears above this via z-index & only on selection). */}
-      {stressTest && (() => {
-        const chart = (() => {
-          const W = 240, H = 60;
-          const points = breakHistory;
-          if (points.length === 0) return null;
-          // X-axis max: during auto-play, scale to the user's chosen count so
-          // the curve physically fills left-to-right as the run progresses.
-          // Outside auto-play, just fit the current point set (min 10).
-          const lastBroken = points[points.length - 1].broken;
-          const maxBroken = autoSteps > 0
-            ? Math.max(autoStepsCount, lastBroken, 1)
-            : Math.max(10, lastBroken);
-          const mapped = points.map((p) => ({
-            x: (p.broken / maxBroken) * W,
-            y: (1 - p.largestFrac) * H,
-            broken: p.broken,
-            largestFrac: p.largestFrac,
-          }));
-          const curve = mapped
-            .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-            .join(' ');
-          // Damage area: fill the region ABOVE the curve (from y=0 down to
-          // the curve). Reads as "red damage grows from the top as breaks
-          // accumulate" — opposite of the original bottom-up fill, which
-          // painted the whole rect red while the graph was still mostly
-          // intact (curve hugs y=0 when largestFrac ~= 1).
-          const area =
-            `M 0 0 ` +
-            mapped.map((p) => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') +
-            ` L ${mapped[mapped.length - 1].x.toFixed(1)} 0 Z`;
-          const last = mapped[mapped.length - 1];
-          return { W, H, curve, area, last, maxBroken };
-        })();
-        const pct = Math.round(componentStats.largestFrac * 100);
-        return (
-          <div
-            ref={stressHudRef}
-            className="absolute right-3 z-30 px-3 py-2.5"
-            style={{
-              ...pillStyle,
-              top: toolbarHeight + 18,
-              width: 272,
-              fontFamily: sysFont,
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div
-                className="text-[10px] uppercase tracking-wider"
-                style={{ opacity: 0.6, letterSpacing: '0.08em' }}
-              >
-                What if — remove critical links
+      {stressTest &&
+        (() => {
+          const chart = (() => {
+            const W = 240,
+              H = 60;
+            const points = breakHistory;
+            if (points.length === 0) return null;
+            // X-axis max: during auto-play, scale to the user's chosen count so
+            // the curve physically fills left-to-right as the run progresses.
+            // Outside auto-play, just fit the current point set (min 10).
+            const lastBroken = points[points.length - 1].broken;
+            const maxBroken =
+              autoSteps > 0 ? Math.max(autoStepsCount, lastBroken, 1) : Math.max(10, lastBroken);
+            const mapped = points.map((p) => ({
+              x: (p.broken / maxBroken) * W,
+              y: (1 - p.largestFrac) * H,
+              broken: p.broken,
+              largestFrac: p.largestFrac,
+            }));
+            const curve = mapped
+              .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+              .join(' ');
+            // Damage area: fill the region ABOVE the curve (from y=0 down to
+            // the curve). Reads as "red damage grows from the top as breaks
+            // accumulate" — opposite of the original bottom-up fill, which
+            // painted the whole rect red while the graph was still mostly
+            // intact (curve hugs y=0 when largestFrac ~= 1).
+            const area =
+              `M 0 0 ` +
+              mapped.map((p) => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') +
+              ` L ${mapped[mapped.length - 1].x.toFixed(1)} 0 Z`;
+            const last = mapped[mapped.length - 1];
+            return { W, H, curve, area, last, maxBroken };
+          })();
+          const pct = Math.round(componentStats.largestFrac * 100);
+          return (
+            <div
+              ref={stressHudRef}
+              className="absolute right-3 z-30 px-3 py-2.5"
+              style={{
+                ...pillStyle,
+                top: toolbarHeight + 18,
+                width: 272,
+                fontFamily: sysFont,
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div
+                  className="text-[10px] uppercase tracking-wider"
+                  style={{ opacity: 0.6, letterSpacing: '0.08em' }}
+                >
+                  What if — remove critical links
+                </div>
+                {autoSteps > 0 && (
+                  <span
+                    className="text-[9px] font-bold"
+                    style={{ color: '#ef4444', opacity: 0.85 }}
+                  >
+                    AUTO ×{autoSteps}
+                  </span>
+                )}
               </div>
-              {autoSteps > 0 && (
+
+              {/* Decay curve — y: % of graph in largest component, x: # edges removed */}
+              {chart && (
+                <div style={{ position: 'relative', marginBottom: 10 }}>
+                  <svg
+                    width={chart.W}
+                    height={chart.H + 12}
+                    style={{ overflow: 'visible', display: 'block' }}
+                  >
+                    {/* Gridline at 50% to eyeball the halfway mark */}
+                    <line
+                      x1={0}
+                      y1={chart.H / 2}
+                      x2={chart.W}
+                      y2={chart.H / 2}
+                      stroke="currentColor"
+                      strokeWidth={0.5}
+                      strokeDasharray="2 3"
+                      opacity={0.15}
+                    />
+                    <path d={chart.area} fill="rgba(239,68,68,0.12)" />
+                    <path
+                      d={chart.curve}
+                      fill="none"
+                      stroke="#ef4444"
+                      strokeWidth={1.5}
+                      strokeLinejoin="round"
+                    />
+                    <circle
+                      cx={chart.last.x}
+                      cy={chart.last.y}
+                      r={3}
+                      fill="#ef4444"
+                      stroke={isDark ? '#141518' : '#f5f5f7'}
+                      strokeWidth={1.5}
+                    />
+                    <text
+                      x={chart.W}
+                      y={chart.H + 10}
+                      textAnchor="end"
+                      fontSize={9}
+                      fill="currentColor"
+                      opacity={0.45}
+                      fontFamily='"SF Mono", ui-monospace, monospace'
+                    >
+                      {chart.maxBroken} breaks
+                    </text>
+                    <text
+                      x={0}
+                      y={chart.H + 10}
+                      textAnchor="start"
+                      fontSize={9}
+                      fill="currentColor"
+                      opacity={0.45}
+                      fontFamily='"SF Mono", ui-monospace, monospace'
+                    >
+                      0
+                    </text>
+                  </svg>
+                </div>
+              )}
+
+              {/* Live metrics — large headline + compact secondary stats */}
+              <div className="flex items-baseline justify-between mb-1">
+                <span className="text-[11px]" style={{ opacity: 0.7 }}>
+                  Graph intact
+                </span>
                 <span
-                  className="text-[9px] font-bold"
-                  style={{ color: '#ef4444', opacity: 0.85 }}
+                  className="font-semibold"
+                  style={{
+                    fontFamily: '"SF Mono", ui-monospace, monospace',
+                    fontSize: 22,
+                    letterSpacing: '-0.02em',
+                    color: pct > 80 ? '#22c55e' : pct > 50 ? '#f59e0b' : '#ef4444',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
                 >
-                  AUTO ×{autoSteps}
-                </span>
-              )}
-            </div>
-
-            {/* Decay curve — y: % of graph in largest component, x: # edges removed */}
-            {chart && (
-              <div style={{ position: 'relative', marginBottom: 10 }}>
-                <svg width={chart.W} height={chart.H + 12} style={{ overflow: 'visible', display: 'block' }}>
-                  {/* Gridline at 50% to eyeball the halfway mark */}
-                  <line
-                    x1={0} y1={chart.H / 2} x2={chart.W} y2={chart.H / 2}
-                    stroke="currentColor" strokeWidth={0.5} strokeDasharray="2 3" opacity={0.15}
-                  />
-                  <path d={chart.area} fill="rgba(239,68,68,0.12)" />
-                  <path d={chart.curve} fill="none" stroke="#ef4444" strokeWidth={1.5} strokeLinejoin="round" />
-                  <circle
-                    cx={chart.last.x} cy={chart.last.y} r={3}
-                    fill="#ef4444" stroke={isDark ? '#141518' : '#f5f5f7'} strokeWidth={1.5}
-                  />
-                  <text
-                    x={chart.W} y={chart.H + 10}
-                    textAnchor="end" fontSize={9} fill="currentColor" opacity={0.45}
-                    fontFamily='"SF Mono", ui-monospace, monospace'
-                  >
-                    {chart.maxBroken} breaks
-                  </text>
-                  <text
-                    x={0} y={chart.H + 10}
-                    textAnchor="start" fontSize={9} fill="currentColor" opacity={0.45}
-                    fontFamily='"SF Mono", ui-monospace, monospace'
-                  >
-                    0
-                  </text>
-                </svg>
-              </div>
-            )}
-
-            {/* Live metrics — large headline + compact secondary stats */}
-            <div className="flex items-baseline justify-between mb-1">
-              <span className="text-[11px]" style={{ opacity: 0.7 }}>Graph intact</span>
-              <span
-                className="font-semibold"
-                style={{
-                  fontFamily: '"SF Mono", ui-monospace, monospace',
-                  fontSize: 22,
-                  letterSpacing: '-0.02em',
-                  color: pct > 80 ? '#22c55e' : pct > 50 ? '#f59e0b' : '#ef4444',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {pct}%
-              </span>
-            </div>
-            <div className="text-[11px] mb-3" style={{ opacity: 0.7 }}>
-              <div className="flex justify-between">
-                <span>Fragmented into</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                  {componentStats.count} {componentStats.count === 1 ? 'piece' : 'pieces'}
+                  {pct}%
                 </span>
               </div>
-              <div className="flex justify-between" style={{ opacity: 0.75 }}>
-                <span>Orphaned files</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{componentStats.isolated}</span>
+              <div className="text-[11px] mb-3" style={{ opacity: 0.7 }}>
+                <div className="flex justify-between">
+                  <span>Fragmented into</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {componentStats.count} {componentStats.count === 1 ? 'piece' : 'pieces'}
+                  </span>
+                </div>
+                <div className="flex justify-between" style={{ opacity: 0.75 }}>
+                  <span>Orphaned files</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {componentStats.isolated}
+                  </span>
+                </div>
+                <div className="flex justify-between" style={{ opacity: 0.75 }}>
+                  <span>Edges removed</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>{brokenEdgeKeys.size}</span>
+                </div>
               </div>
-              <div className="flex justify-between" style={{ opacity: 0.75 }}>
-                <span>Edges removed</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{brokenEdgeKeys.size}</span>
-              </div>
-            </div>
 
-            {/* Controls — Break / Auto / Stop / Reset. Disable everything
+              {/* Controls — Break / Auto / Stop / Reset. Disable everything
                 that would race the flash animation mid-break. */}
-            <div className="flex flex-wrap gap-1.5">
-              {autoSteps > 0 ? (
-                <button
-                  onClick={() => setAutoSteps(0)}
-                  className="cosmos-gpu-pill-btn active"
-                  title="Stop auto-destruction"
-                  style={{ color: '#ef4444' }}
-                >
-                  ⏸ Stop
-                </button>
-              ) : (
-                <>
+              <div className="flex flex-wrap gap-1.5">
+                {autoSteps > 0 ? (
                   <button
-                    onClick={breakNextEdge}
+                    onClick={() => setAutoSteps(0)}
                     className="cosmos-gpu-pill-btn active"
-                    title="Remove the highest-scoring remaining edge"
-                    disabled={pendingBreak != null}
+                    title="Stop auto-destruction"
+                    style={{ color: '#ef4444' }}
                   >
-                    Break next
+                    ⏸ Stop
                   </button>
-                  <button
-                    onClick={() => setAutoSteps(autoStepsCount)}
-                    className="cosmos-gpu-pill-btn"
-                    title={`Auto: remove the top ${autoStepsCount} hottest edges one by one with animation`}
-                    disabled={pendingBreak != null}
-                  >
-                    ▶ Auto
-                  </button>
-                  <select
-                    value={autoStepsCount}
-                    onChange={(e) => setAutoStepsCount(parseInt(e.target.value, 10))}
-                    className={inputBase}
-                    style={{ ...inputStyle, border: 'none', padding: '2px 6px', fontSize: 11 }}
-                    title="How many edges Auto should break in this run"
-                    disabled={pendingBreak != null}
-                  >
-                    {[5, 10, 20, 30, 40, 50, 100].map((n) => (
-                      <option key={n} value={n}>×{n}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-              <button
-                onClick={resetStressTest}
-                className="cosmos-gpu-pill-btn"
-                title="Restore all broken edges and clear history"
-                disabled={brokenEdgeKeys.size === 0 && autoSteps === 0 && breakHistory.length <= 1}
-              >
-                Reset
-              </button>
-            </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={breakNextEdge}
+                      className="cosmos-gpu-pill-btn active"
+                      title="Remove the highest-scoring remaining edge"
+                      disabled={pendingBreak != null}
+                    >
+                      Break next
+                    </button>
+                    <button
+                      onClick={() => setAutoSteps(autoStepsCount)}
+                      className="cosmos-gpu-pill-btn"
+                      title={`Auto: remove the top ${autoStepsCount} hottest edges one by one with animation`}
+                      disabled={pendingBreak != null}
+                    >
+                      ▶ Auto
+                    </button>
+                    <select
+                      value={autoStepsCount}
+                      onChange={(e) => setAutoStepsCount(parseInt(e.target.value, 10))}
+                      className={inputBase}
+                      style={{ ...inputStyle, border: 'none', padding: '2px 6px', fontSize: 11 }}
+                      title="How many edges Auto should break in this run"
+                      disabled={pendingBreak != null}
+                    >
+                      {[5, 10, 20, 30, 40, 50, 100].map((n) => (
+                        <option key={n} value={n}>
+                          ×{n}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+                <button
+                  onClick={resetStressTest}
+                  className="cosmos-gpu-pill-btn"
+                  title="Restore all broken edges and clear history"
+                  disabled={
+                    brokenEdgeKeys.size === 0 && autoSteps === 0 && breakHistory.length <= 1
+                  }
+                >
+                  Reset
+                </button>
+              </div>
 
-            {/* Live caption — during a single Break the current pendingBreak
+              {/* Live caption — during a single Break the current pendingBreak
                 drives it; during Auto we fall back to lastPendingBreak so the
                 caption stays visible through the ~100ms gap between breaks
                 instead of blinking on/off every cycle. Opacity dips slightly
                 during the gap so the user can still tell a flash is active. */}
-            {(() => {
-              const captionEdge = pendingBreak ?? (autoSteps > 0 ? lastPendingBreak : null);
-              if (!captionEdge) return null;
-              const live = pendingBreak != null;
-              return (
-                <div
-                  className="mt-2 text-[10px]"
-                  style={{
-                    opacity: live ? 0.9 : 0.65,
-                    color: '#fca5a5',
-                    fontFamily: '"SF Mono", ui-monospace, monospace',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    transition: 'opacity 150ms',
-                  }}
-                  title={`${captionEdge.source} → ${captionEdge.target}`}
-                >
-                  ⚡ {captionEdge.source.split('/').pop()} → {captionEdge.target.split('/').pop()}
-                </div>
-              );
-            })()}
-          </div>
-        );
-      })()}
+              {(() => {
+                const captionEdge = pendingBreak ?? (autoSteps > 0 ? lastPendingBreak : null);
+                if (!captionEdge) return null;
+                const live = pendingBreak != null;
+                return (
+                  <div
+                    className="mt-2 text-[10px]"
+                    style={{
+                      opacity: live ? 0.9 : 0.65,
+                      color: '#fca5a5',
+                      fontFamily: '"SF Mono", ui-monospace, monospace',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      transition: 'opacity 150ms',
+                    }}
+                    title={`${captionEdge.source} → ${captionEdge.target}`}
+                  >
+                    ⚡ {captionEdge.source.split('/').pop()} → {captionEdge.target.split('/').pop()}
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })()}
 
       {/* Halo overlay — additive radial-gradient glows around top-importance
           nodes. `plus-lighter` is GPU-accelerated in Chromium (unlike
@@ -3081,12 +3316,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           </button>
         </div>
 
-        <div className="w-px h-4 mx-0.5" style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} />
+        <div
+          className="w-px h-4 mx-0.5"
+          style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        />
 
         {/* Color dropdown */}
         <select
           value={colorBy}
-          onChange={(e) => onSettingsChange({ colorBy: e.target.value as GraphGPUSettings['colorBy'] })}
+          onChange={(e) =>
+            onSettingsChange({ colorBy: e.target.value as GraphGPUSettings['colorBy'] })
+          }
           className={inputBase}
           style={{ ...inputStyle, border: 'none' }}
         >
@@ -3118,25 +3358,41 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           FPS
         </button>
 
-        <div className="w-px h-4 mx-0.5" style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} />
+        <div
+          className="w-px h-4 mx-0.5"
+          style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        />
 
         {/* Bottleneck analysis — color edges by betweenness+co-change, highlight bridges & articulation points */}
         <button
-          onClick={() => onSettingsChange({ bottlenecks: !bottlenecks, stressTest: stressTest && !bottlenecks ? false : stressTest })}
+          onClick={() =>
+            onSettingsChange({
+              bottlenecks: !bottlenecks,
+              stressTest: stressTest && !bottlenecks ? false : stressTest,
+            })
+          }
           className={`cosmos-gpu-pill-btn ${bottlenecks ? 'active' : ''}`}
           title="Highlight architectural bottlenecks: edge betweenness × co-change, with bridges & articulation points"
         >
           Bottlenecks
         </button>
         <button
-          onClick={() => onSettingsChange({ stressTest: !stressTest, bottlenecks: !stressTest ? true : bottlenecks })}
+          onClick={() =>
+            onSettingsChange({
+              stressTest: !stressTest,
+              bottlenecks: !stressTest ? true : bottlenecks,
+            })
+          }
           className={`cosmos-gpu-pill-btn ${stressTest ? 'active' : ''}`}
           title="Stress Test: interactively remove top-bottleneck edges and watch the graph fragment"
         >
           Stress Test
         </button>
 
-        <div className="w-px h-4 mx-0.5" style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} />
+        <div
+          className="w-px h-4 mx-0.5"
+          style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        />
 
         {/* Search (typeahead) — also supports "Select all N". Press `/` to focus. */}
         <div className="relative">
@@ -3146,7 +3402,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             placeholder="Search  /"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') doSelectAllMatches(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') doSelectAllMatches();
+            }}
             className={`${inputBase} w-40`}
             style={inputStyle}
           />
@@ -3171,7 +3429,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                   className="px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-white/10 dark:hover:bg-white/10 font-mono text-[11px] break-all"
                 >
                   <div>{shortLabel(n)}</div>
-                  <div style={{ opacity: 0.55 }} className="text-[10px] truncate">{n.id}</div>
+                  <div style={{ opacity: 0.55 }} className="text-[10px] truncate">
+                    {n.id}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -3194,12 +3454,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           >
             <option value="">Highlight group…</option>
             {workspaceList.map((w) => (
-              <option key={w.name} value={w.name}>{w.name} ({w.count})</option>
+              <option key={w.name} value={w.name}>
+                {w.name} ({w.count})
+              </option>
             ))}
           </select>
         )}
 
-        <div className="w-px h-4 mx-0.5" style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} />
+        <div
+          className="w-px h-4 mx-0.5"
+          style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        />
 
         {/* Live / Paused toggle */}
         <button
@@ -3218,11 +3483,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           {live ? 'Live' : 'Paused'}
         </button>
 
-        <button
-          onClick={doFit}
-          className="cosmos-gpu-pill-btn"
-          title="Fit view & pause (F)"
-        >
+        <button onClick={doFit} className="cosmos-gpu-pill-btn" title="Fit view & pause (F)">
           Fit <span className="cosmos-gpu-kbd">F</span>
         </button>
 
@@ -3234,11 +3495,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           ⌫
         </button>
 
-        <button
-          onClick={loadGraph}
-          className="cosmos-gpu-pill-btn"
-          title="Reload graph data"
-        >
+        <button onClick={loadGraph} className="cosmos-gpu-pill-btn" title="Reload graph data">
           ↻
         </button>
       </div>
@@ -3252,14 +3509,18 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       {/* Stats — bottom-right, glass pill matching the FPS badge. */}
       {stats && (
         <div className="cosmos-gpu-stats">
-          {stats.nodes.toLocaleString()} · {stats.edges.toLocaleString()} edges · {stats.communities} groups
+          {stats.nodes.toLocaleString()} · {stats.edges.toLocaleString()} edges ·{' '}
+          {stats.communities} groups
         </div>
       )}
 
       {loading && (
         <div
           className="absolute inset-0 flex items-center justify-center text-sm pointer-events-none z-20"
-          style={{ color: isDark ? '#fff' : '#000', background: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.45)' }}
+          style={{
+            color: isDark ? '#fff' : '#000',
+            background: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.45)',
+          }}
         >
           Building graph…
         </div>
@@ -3268,7 +3529,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       {error && (
         <div
           className="absolute left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 text-[11px]"
-          style={{ ...pillStyle, background: 'rgba(239,68,68,0.9)', color: '#fff', border: 'none', borderRadius: 999, top: toolbarHeight + 18 }}
+          style={{
+            ...pillStyle,
+            background: 'rgba(239,68,68,0.9)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 999,
+            top: toolbarHeight + 18,
+          }}
         >
           {error}
         </div>
@@ -3282,203 +3550,230 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         >
           <div className="font-mono break-all">{hovered.label}</div>
           <div style={{ opacity: 0.6 }} className="text-[10px]">
-            {hovered.type} · {hovered.language ?? '—'} · community {hovered.community} · imp {hovered.importance.toFixed(3)}
+            {hovered.type} · {hovered.language ?? '—'} · community {hovered.community} · imp{' '}
+            {hovered.importance.toFixed(3)}
           </div>
         </div>
       )}
 
       {/* Selected info (right) — anchors below toolbar (measured), shows full
           path with start-side ellipsis, plus Copy + per-IDE Open buttons. */}
-      {selected && (() => {
-        const relPath = extractFilePath(selected);
-        const rootClean = (root ?? '').replace(/\/+$/, '');
-        const absPath = relPath
-          ? (relPath.startsWith('/') ? relPath : rootClean ? `${rootClean}/${relPath}` : relPath)
-          : '';
-        const canOpen = isRealFileId(selected) && !!absPath;
-        // Last-used IDE sorts to the front so the primary button is the one
-        // the user keeps reaching for; others follow for quick switch.
-        const orderedIdes = canOpen
-          ? [...ides.filter((i) => i.id === lastIdeId), ...ides.filter((i) => i.id !== lastIdeId)]
-          : [];
-        // Precompute the AI prompt once per render so the container width,
-        // the inline preview, and the Copy button all read the same value.
-        const bottleneckActive = bottlenecks || stressTest;
-        const prompt = bottleneckActive ? buildBottleneckPrompt(selected, selectedEdge) : '';
-        // Both the popup and the Stress Test HUD dock top-right; stack the
-        // popup below the HUD when both are visible instead of overlapping.
-        // Measured via ResizeObserver so the popup slots right under the HUD
-        // regardless of its current height (chart + metrics + controls vary).
-        const topOffset = stressTest && stressHudHeight > 0
-          ? toolbarHeight + stressHudHeight + 30
-          : toolbarHeight + 18;
-        return (
-          <div
-            className="absolute right-3 z-20 px-3 py-2 text-[11px]"
-            style={{
-              ...pillStyle,
-              borderRadius: 12,
-              top: topOffset,
-              // Wider when an AI prompt is shown below — the monospace block
-              // needs room to breathe or the prompt wraps into an unreadable
-              // column. Normal selection stays compact.
-              width: prompt ? 420 : undefined,
-              maxWidth: prompt ? 'calc(100% - 24px)' : 384,
-              maxHeight: `calc(100% - ${topOffset + 18}px)`,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="font-mono break-all font-semibold">{selected.label}</div>
-                {relPath && (() => {
-                  // Truncate from the LEFT so the filename at the tail stays
-                  // visible. CSS `direction: rtl` + `text-overflow: ellipsis`
-                  // did not clip the start reliably for pure-LTR ASCII paths
-                  // in this Electron build, so we slice in JS.
-                  const full = absPath || relPath;
-                  const maxChars = 52;
-                  const shown = full.length > maxChars
-                    ? '…' + full.slice(-(maxChars - 1))
-                    : full;
-                  return (
-                    <div
-                      className="mt-1 font-mono text-[10px]"
-                      style={{
-                        opacity: 0.75,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                      }}
-                      title={full}
-                    >
-                      {shown}
-                    </div>
-                  );
-                })()}
-                <div style={{ opacity: 0.6 }} className="mt-1 text-[10px]">
-                  {selected.type} · {selected.language ?? '—'} · community {selected.community} · imp {selected.importance.toFixed(3)}
-                </div>
-                {relPath && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <button
-                      className="cosmos-gpu-pill-btn"
-                      title="Copy full path"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(absPath || relPath);
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 1200);
-                        } catch { /* clipboard blocked — ignore */ }
-                      }}
-                    >
-                      {copied ? '✓ Copied' : 'Copy path'}
-                    </button>
-                    {canOpen && orderedIdes.map((ide) => (
+      {selected &&
+        (() => {
+          const relPath = extractFilePath(selected);
+          const rootClean = (root ?? '').replace(/\/+$/, '');
+          const absPath = relPath
+            ? relPath.startsWith('/')
+              ? relPath
+              : rootClean
+                ? `${rootClean}/${relPath}`
+                : relPath
+            : '';
+          const canOpen = isRealFileId(selected) && !!absPath;
+          // Last-used IDE sorts to the front so the primary button is the one
+          // the user keeps reaching for; others follow for quick switch.
+          const orderedIdes = canOpen
+            ? [...ides.filter((i) => i.id === lastIdeId), ...ides.filter((i) => i.id !== lastIdeId)]
+            : [];
+          // Precompute the AI prompt once per render so the container width,
+          // the inline preview, and the Copy button all read the same value.
+          const bottleneckActive = bottlenecks || stressTest;
+          const prompt = bottleneckActive ? buildBottleneckPrompt(selected, selectedEdge) : '';
+          // Both the popup and the Stress Test HUD dock top-right; stack the
+          // popup below the HUD when both are visible instead of overlapping.
+          // Measured via ResizeObserver so the popup slots right under the HUD
+          // regardless of its current height (chart + metrics + controls vary).
+          const topOffset =
+            stressTest && stressHudHeight > 0
+              ? toolbarHeight + stressHudHeight + 30
+              : toolbarHeight + 18;
+          return (
+            <div
+              className="absolute right-3 z-20 px-3 py-2 text-[11px]"
+              style={{
+                ...pillStyle,
+                borderRadius: 12,
+                top: topOffset,
+                // Wider when an AI prompt is shown below — the monospace block
+                // needs room to breathe or the prompt wraps into an unreadable
+                // column. Normal selection stays compact.
+                width: prompt ? 420 : undefined,
+                maxWidth: prompt ? 'calc(100% - 24px)' : 384,
+                maxHeight: `calc(100% - ${topOffset + 18}px)`,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono break-all font-semibold">{selected.label}</div>
+                  {relPath &&
+                    (() => {
+                      // Truncate from the LEFT so the filename at the tail stays
+                      // visible. CSS `direction: rtl` + `text-overflow: ellipsis`
+                      // did not clip the start reliably for pure-LTR ASCII paths
+                      // in this Electron build, so we slice in JS.
+                      const full = absPath || relPath;
+                      const maxChars = 52;
+                      const shown =
+                        full.length > maxChars ? '…' + full.slice(-(maxChars - 1)) : full;
+                      return (
+                        <div
+                          className="mt-1 font-mono text-[10px]"
+                          style={{
+                            opacity: 0.75,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                          }}
+                          title={full}
+                        >
+                          {shown}
+                        </div>
+                      );
+                    })()}
+                  <div style={{ opacity: 0.6 }} className="mt-1 text-[10px]">
+                    {selected.type} · {selected.language ?? '—'} · community {selected.community} ·
+                    imp {selected.importance.toFixed(3)}
+                  </div>
+                  {relPath && (
+                    <div className="mt-2 flex flex-wrap gap-1">
                       <button
-                        key={ide.id}
-                        className={`cosmos-gpu-pill-btn ${ide.id === lastIdeId ? 'active' : ''}`}
-                        title={`Open in ${ide.name}`}
+                        className="cosmos-gpu-pill-btn"
+                        title="Copy full path"
                         onClick={async () => {
-                          const api = window.electronAPI;
-                          if (!api?.openInIde) return;
-                          const res = await api.openInIde(ide.bundlePath, absPath);
-                          if (res?.ok) {
-                            setLastIdeId(ide.id);
-                            try { localStorage.setItem('trace-mcp.lastIde', ide.id); } catch { /* storage blocked */ }
+                          try {
+                            await navigator.clipboard.writeText(absPath || relPath);
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 1200);
+                          } catch {
+                            /* clipboard blocked — ignore */
                           }
                         }}
                       >
-                        {ide.name}
+                        {copied ? '✓ Copied' : 'Copy path'}
                       </button>
-                    ))}
-                  </div>
-                )}
+                      {canOpen &&
+                        orderedIdes.map((ide) => (
+                          <button
+                            key={ide.id}
+                            className={`cosmos-gpu-pill-btn ${ide.id === lastIdeId ? 'active' : ''}`}
+                            title={`Open in ${ide.name}`}
+                            onClick={async () => {
+                              const api = window.electronAPI;
+                              if (!api?.openInIde) return;
+                              const res = await api.openInIde(ide.bundlePath, absPath);
+                              if (res?.ok) {
+                                setLastIdeId(ide.id);
+                                try {
+                                  localStorage.setItem('trace-mcp.lastIde', ide.id);
+                                } catch {
+                                  /* storage blocked */
+                                }
+                              }
+                            }}
+                          >
+                            {ide.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
 
-                {/* Inline AI prompt — shown in bottleneck mode when the node
+                  {/* Inline AI prompt — shown in bottleneck mode when the node
                     carries a bottleneck signal. The user asked for the full
                     prompt to be visible, not just a copy button, so they can
                     sanity-check or tweak the text before pasting. Scrollable
                     so long prompts don't blow out the popup height. */}
-                {prompt && (
-                  <div className="mt-3" style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span
-                        className="text-[10px] uppercase tracking-wider"
-                        style={{ opacity: 0.55, letterSpacing: '0.08em' }}
+                  {prompt && (
+                    <div
+                      className="mt-3"
+                      style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span
+                          className="text-[10px] uppercase tracking-wider"
+                          style={{ opacity: 0.55, letterSpacing: '0.08em' }}
+                        >
+                          {selectedEdge ? 'AI prompt · this edge' : 'AI prompt · this file'}
+                        </span>
+                        <button
+                          className="cosmos-gpu-pill-btn"
+                          title="Copy the prompt below to your clipboard"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(prompt);
+                              setPromptCopied(true);
+                              setTimeout(() => setPromptCopied(false), 1500);
+                            } catch {
+                              /* clipboard blocked — ignore */
+                            }
+                          }}
+                          style={{
+                            padding: '2px 8px',
+                            fontSize: 10,
+                            color: promptCopied ? '#22c55e' : '#fca5a5',
+                            borderColor: promptCopied
+                              ? 'rgba(34,197,94,0.4)'
+                              : 'rgba(252,165,165,0.35)',
+                            borderWidth: '0.5px',
+                            borderStyle: 'solid',
+                          }}
+                        >
+                          {promptCopied ? '✓ Copied' : '✨ Copy'}
+                        </button>
+                      </div>
+                      <div
+                        className="text-[10px] mb-1.5"
+                        style={{ opacity: 0.55, lineHeight: 1.4 }}
                       >
-                        {selectedEdge ? 'AI prompt · this edge' : 'AI prompt · this file'}
-                      </span>
-                      <button
-                        className="cosmos-gpu-pill-btn"
-                        title="Copy the prompt below to your clipboard"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(prompt);
-                            setPromptCopied(true);
-                            setTimeout(() => setPromptCopied(false), 1500);
-                          } catch { /* clipboard blocked — ignore */ }
+                        Copy this and paste into Claude / ChatGPT to investigate the bottleneck and
+                        get refactoring suggestions.
+                      </div>
+                      <pre
+                        onClick={(e) => {
+                          // Single-click selects the whole prompt so ⌘C works
+                          // even if the user doesn't want to hit the button.
+                          const range = document.createRange();
+                          range.selectNodeContents(e.currentTarget);
+                          const sel = window.getSelection();
+                          sel?.removeAllRanges();
+                          sel?.addRange(range);
                         }}
                         style={{
-                          padding: '2px 8px',
-                          fontSize: 10,
-                          color: promptCopied ? '#22c55e' : '#fca5a5',
-                          borderColor: promptCopied ? 'rgba(34,197,94,0.4)' : 'rgba(252,165,165,0.35)',
-                          borderWidth: '0.5px',
-                          borderStyle: 'solid',
+                          maxHeight: 240,
+                          overflowY: 'auto',
+                          padding: '8px 10px',
+                          borderRadius: 6,
+                          background: isDark ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.05)',
+                          border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+                          fontSize: 10.5,
+                          fontFamily: '"SF Mono", ui-monospace, Menlo, Monaco, monospace',
+                          lineHeight: 1.45,
+                          color: isDark ? '#d4d4d8' : '#27272a',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          cursor: 'text',
+                          margin: 0,
                         }}
                       >
-                        {promptCopied ? '✓ Copied' : '✨ Copy'}
-                      </button>
+                        {prompt}
+                      </pre>
                     </div>
-                    <div
-                      className="text-[10px] mb-1.5"
-                      style={{ opacity: 0.55, lineHeight: 1.4 }}
-                    >
-                      Copy this and paste into Claude / ChatGPT to investigate
-                      the bottleneck and get refactoring suggestions.
-                    </div>
-                    <pre
-                      onClick={(e) => {
-                        // Single-click selects the whole prompt so ⌘C works
-                        // even if the user doesn't want to hit the button.
-                        const range = document.createRange();
-                        range.selectNodeContents(e.currentTarget);
-                        const sel = window.getSelection();
-                        sel?.removeAllRanges();
-                        sel?.addRange(range);
-                      }}
-                      style={{
-                        maxHeight: 240,
-                        overflowY: 'auto',
-                        padding: '8px 10px',
-                        borderRadius: 6,
-                        background: isDark ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.05)',
-                        border: `0.5px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-                        fontSize: 10.5,
-                        fontFamily: '"SF Mono", ui-monospace, Menlo, Monaco, monospace',
-                        lineHeight: 1.45,
-                        color: isDark ? '#d4d4d8' : '#27272a',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        cursor: 'text',
-                        margin: 0,
-                      }}
-                    >
-                      {prompt}
-                    </pre>
-                  </div>
-                )}
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setSelected(null);
+                    setSelectedEdge(null);
+                  }}
+                  className="cosmos-gpu-pill-btn"
+                  style={{ padding: '2px 6px', opacity: 0.7 }}
+                >
+                  ×
+                </button>
               </div>
-              <button
-                onClick={() => { setSelected(null); setSelectedEdge(null); }}
-                className="cosmos-gpu-pill-btn"
-                style={{ padding: '2px 6px', opacity: 0.7 }}
-              >×</button>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
     </div>
   );
 });

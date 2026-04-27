@@ -339,7 +339,11 @@ model User {
     });
 
     it('returns empty result for typescript language', () => {
-      const result = plugin.extractNodes('app.ts', Buffer.from('export class Foo {}'), 'typescript');
+      const result = plugin.extractNodes(
+        'app.ts',
+        Buffer.from('export class Foo {}'),
+        'typescript',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       expect(parsed.ormModels ?? []).toHaveLength(0);
@@ -347,7 +351,11 @@ model User {
     });
 
     it('returns empty result for javascript language', () => {
-      const result = plugin.extractNodes('app.js', Buffer.from('module.exports = {}'), 'javascript');
+      const result = plugin.extractNodes(
+        'app.js',
+        Buffer.from('module.exports = {}'),
+        'javascript',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       expect(parsed.ormModels ?? []).toHaveLength(0);

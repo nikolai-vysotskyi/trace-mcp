@@ -109,9 +109,18 @@ export async function hybridSearch(
       });
     } else {
       // Symbol only in vector results — look up from DB
-      const row = db.prepare(
-        'SELECT id, name, fqn, kind, file_id, symbol_id FROM symbols WHERE id = ?',
-      ).get(id) as { id: number; name: string; fqn: string | null; kind: string; file_id: number; symbol_id: string } | undefined;
+      const row = db
+        .prepare('SELECT id, name, fqn, kind, file_id, symbol_id FROM symbols WHERE id = ?')
+        .get(id) as
+        | {
+            id: number;
+            name: string;
+            fqn: string | null;
+            kind: string;
+            file_id: number;
+            symbol_id: string;
+          }
+        | undefined;
 
       if (row) {
         fused.push({

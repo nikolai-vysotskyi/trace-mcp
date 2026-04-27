@@ -33,19 +33,14 @@ interface SymbolOwnership {
 // FILE OWNERSHIP (git shortlog)
 // ════════════════════════════════════════════════════════════════════════
 
-export function getFileOwnership(
-  cwd: string,
-  filePaths: string[],
-): FileOwnership[] {
+export function getFileOwnership(cwd: string, filePaths: string[]): FileOwnership[] {
   if (!isGitRepo(cwd)) return [];
 
   const results: FileOwnership[] = [];
 
   for (const filePath of filePaths) {
     try {
-      const output = execFileSync('git', [
-        'shortlog', '-sn', '--no-merges', '--', filePath,
-      ], {
+      const output = execFileSync('git', ['shortlog', '-sn', '--no-merges', '--', filePath], {
         cwd,
         stdio: 'pipe',
         timeout: 10_000,
@@ -99,15 +94,15 @@ export function getSymbolOwnership(
   if (!file) return null;
 
   try {
-    const output = execFileSync('git', [
-      'blame', '--porcelain',
-      `-L${symbol.line_start},${symbol.line_end}`,
-      '--', file.path,
-    ], {
-      cwd,
-      stdio: 'pipe',
-      timeout: 10_000,
-    }).toString('utf-8');
+    const output = execFileSync(
+      'git',
+      ['blame', '--porcelain', `-L${symbol.line_start},${symbol.line_end}`, '--', file.path],
+      {
+        cwd,
+        stdio: 'pipe',
+        timeout: 10_000,
+      },
+    ).toString('utf-8');
 
     // Parse porcelain blame: count lines per author
     const authorLines = new Map<string, number>();

@@ -151,7 +151,8 @@ function clamp01(v: number, ceiling: number): number {
 // ─── Test coverage helpers (batch) ───────────────────────────────────────────
 
 function getTestedFileIds(store: Store): Set<number> {
-  const rows = store.db.prepare(`
+  const rows = store.db
+    .prepare(`
     SELECT DISTINCT
       CASE
         WHEN n.node_type = 'file' THEN n.ref_id
@@ -161,7 +162,8 @@ function getTestedFileIds(store: Store): Set<number> {
     JOIN edge_types et ON e.edge_type_id = et.id
     JOIN nodes n ON e.target_node_id = n.id
     WHERE et.name = 'test_covers'
-  `).all() as Array<{ fid: number | null }>;
+  `)
+    .all() as Array<{ fid: number | null }>;
   const set = new Set<number>();
   for (const r of rows) if (r.fid != null) set.add(r.fid);
   return set;
@@ -176,7 +178,8 @@ function getTestedSymbolNames(store: Store): Map<number, Set<string>> {
   const result = new Map<number, Set<string>>();
 
   // Find all test files via test_covers edges
-  const testCoverEdges = store.db.prepare(`
+  const testCoverEdges = store.db
+    .prepare(`
     SELECT
       src_n.ref_id AS test_file_id,
       CASE
@@ -189,7 +192,8 @@ function getTestedSymbolNames(store: Store): Map<number, Set<string>> {
     JOIN nodes tgt_n ON e.target_node_id = tgt_n.id
     WHERE et.name = 'test_covers'
     AND src_n.node_type = 'file'
-  `).all() as Array<{ test_file_id: number; source_file_id: number | null }>;
+  `)
+    .all() as Array<{ test_file_id: number; source_file_id: number | null }>;
 
   // Collect all test file IDs and their covered source file IDs
   const testToSources = new Map<number, number[]>();
@@ -223,7 +227,8 @@ function getCoChangesForFile(
   graphFiles: Set<string>,
 ): CoChangeHidden[] {
   try {
-    const rows = store.db.prepare(`
+    const rows = store.db
+      .prepare(`
       SELECT
         CASE WHEN file_a = ? THEN file_b ELSE file_a END AS co_file,
         confidence
@@ -233,7 +238,8 @@ function getCoChangesForFile(
         AND co_change_count >= 3
       ORDER BY confidence DESC
       LIMIT 15
-    `).all(filePath, filePath, filePath) as Array<{ co_file: string; confidence: number }>;
+    `)
+      .all(filePath, filePath, filePath) as Array<{ co_file: string; confidence: number }>;
 
     return rows.map((r) => ({
       file: r.co_file,
@@ -306,10 +312,12 @@ function collectTestFiles(store: Store, nodeId: number, seen: Set<string>): void
 function getFileChurn(cwd: string, filePath: string, days: number): number {
   try {
     const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-    const output = execSync(
-      `git log --since="${since}" --oneline -- "${filePath}" | wc -l`,
-      { cwd, encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] },
-    );
+    const output = execSync(`git log --since="${since}" --oneline -- "${filePath}" | wc -l`, {
+      cwd,
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     return parseInt(output.trim(), 10) || 0;
   } catch {
     return 0;
@@ -322,7 +330,13 @@ function getFileChurn(cwd: string, filePath: string, days: number): number {
 
 export function getChangeImpact(
   store: Store,
-  opts: { filePath?: string; symbolId?: string; fqn?: string; symbolIds?: string[]; decoratorFilter?: string },
+  opts: {
+    filePath?: string;
+    symbolId?: string;
+    fqn?: string;
+    symbolIds?: string[];
+    decoratorFilter?: string;
+  },
   depth = 3,
   maxDependents = 200,
   cwd?: string,
@@ -411,17 +425,30 @@ export function getChangeImpact(
 
   if (startNodeIds.length === 0) {
     const emptySummary: ImpactSummary = {
-      totalFiles: 0, totalSymbols: 0, maxDepth: 0,
-      crossBoundary: false, publicApiAffected: 0,
-      untestedDependents: 0, highComplexityDependents: 0,
+      totalFiles: 0,
+      totalSymbols: 0,
+      maxDepth: 0,
+      crossBoundary: false,
+      publicApiAffected: 0,
+      untestedDependents: 0,
+      highComplexityDependents: 0,
       sentence: 'No dependents found.',
     };
     const emptyRisk: RiskSignals = {
-      score: 0, level: 'low', publicApiBreaking: false,
-      untestedRatio: 0, maxComplexity: 0, mitigations: [],
+      score: 0,
+      level: 'low',
+      publicApiBreaking: false,
+      untestedRatio: 0,
+      maxComplexity: 0,
+      mitigations: [],
     };
     return ok({
-      target: { path: targetPath, symbolId: targetSymbolId, symbolName: targetSymbolName, kind: targetKind },
+      target: {
+        path: targetPath,
+        symbolId: targetSymbolId,
+        symbolName: targetSymbolName,
+        kind: targetKind,
+      },
       summary: emptySummary,
       risk: emptyRisk,
       dependents: [],
@@ -439,21 +466,31 @@ export function getChangeImpact(
   for (const nid of startNodeIds) visited.add(nid);
 
   const testedSymNames = getTestedSymbolNames(store);
-  traverseIncoming(store, startNodeIds, maxDependents, depth, visited, rawDeps, testedFileIds, testedSymNames);
+  traverseIncoming(
+    store,
+    startNodeIds,
+    maxDependents,
+    depth,
+    visited,
+    rawDeps,
+    testedFileIds,
+    testedSymNames,
+  );
 
   const truncated = rawDeps.length >= maxDependents;
 
   // ── Optional decorator filter: keep only dependents whose symbols have the specified decorator ──
   const filteredDeps = opts.decoratorFilter
     ? rawDeps.filter((d) => {
-      if (!d.decorators) return false;
-      const filter = opts.decoratorFilter!.toLowerCase();
-      return d.decorators.some((dec) =>
-        dec.toLowerCase() === filter
-        || dec.toLowerCase().endsWith(`.${filter}`)
-        || dec.toLowerCase().startsWith(`${filter}(`),
-      );
-    })
+        if (!d.decorators) return false;
+        const filter = opts.decoratorFilter!.toLowerCase();
+        return d.decorators.some(
+          (dec) =>
+            dec.toLowerCase() === filter ||
+            dec.toLowerCase().endsWith(`.${filter}`) ||
+            dec.toLowerCase().startsWith(`${filter}(`),
+        );
+      })
     : rawDeps;
 
   // ── Dedup: merge per-file, collect edge types + symbols ──
@@ -468,7 +505,10 @@ export function getChangeImpact(
   }
 
   // ── Compute stats from deduped dependents ──
-  const moduleMap = new Map<string, { files: Set<string>; maxDepth: number; hasUntested: boolean }>();
+  const moduleMap = new Map<
+    string,
+    { files: Set<string>; maxDepth: number; hasUntested: boolean }
+  >();
   const graphFiles = new Set<string>();
   const targetModule = getModule(targetPath);
   let crossBoundary = false;
@@ -542,22 +582,38 @@ export function getChangeImpact(
   const publicApiScore = publicApiAffected > 0 ? 0.3 : 0;
 
   const riskScore = round(
-    0.30 * blastScore +
-    0.20 * complexityScore +
-    0.20 * testGapScore +
-    0.15 * churnScore +
-    0.15 * publicApiScore,
+    0.3 * blastScore +
+      0.2 * complexityScore +
+      0.2 * testGapScore +
+      0.15 * churnScore +
+      0.15 * publicApiScore,
   );
 
   const mitigations: string[] = [];
   if (!targetHasTests) mitigations.push('Add test coverage for the target before modifying');
-  if (blastScore > 0.5) mitigations.push(`High blast radius (${dependents.length} files) — consider incremental rollout`);
-  if (complexityScore > 0.7) mitigations.push('High complexity in dependents — review carefully for regressions');
-  if (untestedRatio > 0.5) mitigations.push(`${untestedDependents}/${totalFiles} dependents lack tests — add integration tests`);
-  if (publicApiAffected > 0) mitigations.push(`${publicApiAffected} public API symbol(s) affected — check for breaking changes`);
-  if (churnCommits > 15) mitigations.push(`High churn (${churnCommits} commits/180d) — review recent history`);
+  if (blastScore > 0.5)
+    mitigations.push(
+      `High blast radius (${dependents.length} files) — consider incremental rollout`,
+    );
+  if (complexityScore > 0.7)
+    mitigations.push('High complexity in dependents — review carefully for regressions');
+  if (untestedRatio > 0.5)
+    mitigations.push(
+      `${untestedDependents}/${totalFiles} dependents lack tests — add integration tests`,
+    );
+  if (publicApiAffected > 0)
+    mitigations.push(
+      `${publicApiAffected} public API symbol(s) affected — check for breaking changes`,
+    );
+  if (churnCommits > 15)
+    mitigations.push(`High churn (${churnCommits} commits/180d) — review recent history`);
   if (coChangeHidden.length > 0) {
-    mitigations.push(`${coChangeHidden.length} hidden coupling(s) via git history: ${coChangeHidden.slice(0, 3).map((c) => c.file).join(', ')}`);
+    mitigations.push(
+      `${coChangeHidden.length} hidden coupling(s) via git history: ${coChangeHidden
+        .slice(0, 3)
+        .map((c) => c.file)
+        .join(', ')}`,
+    );
   }
 
   const risk: RiskSignals = {
@@ -596,7 +652,9 @@ export function getChangeImpact(
 
   if (breakingChanges.length > 0) {
     const totalConsumers = breakingChanges.reduce((s, b) => s + b.consumers, 0);
-    mitigations.push(`${breakingChanges.length} exported symbol(s) with ${totalConsumers} consumer(s) — signature change = breaking`);
+    mitigations.push(
+      `${breakingChanges.length} exported symbol(s) with ${totalConsumers} consumer(s) — signature change = breaking`,
+    );
     parts.push(`${breakingChanges.length} breaking risk(s)`);
     // Recalculate sentence with breaking changes included
     summary.sentence = `Impact: ${parts.join(', ')}.${risk.level !== 'low' ? ` Risk: ${risk.level}.` : ''}`;
@@ -604,7 +662,12 @@ export function getChangeImpact(
 
   // ── Build result, omitting empty optional sections ──
   const result: ChangeImpactResult = {
-    target: { path: targetPath, symbolId: targetSymbolId, symbolName: targetSymbolName, kind: targetKind },
+    target: {
+      path: targetPath,
+      symbolId: targetSymbolId,
+      symbolName: targetSymbolName,
+      kind: targetKind,
+    },
     summary,
     risk,
     affectedTests,
@@ -629,12 +692,15 @@ export function getChangeImpact(
 // ═════════════════════════════════════════════════════════════════════════════
 
 function deduplicateByFile(rawDeps: RawDependent[]): EnrichedDependent[] {
-  const fileMap = new Map<string, {
-    edgeTypes: Set<string>;
-    depth: number;
-    hasTests?: boolean;
-    symbols: DependentSymbol[];
-  }>();
+  const fileMap = new Map<
+    string,
+    {
+      edgeTypes: Set<string>;
+      depth: number;
+      hasTests?: boolean;
+      symbols: DependentSymbol[];
+    }
+  >();
 
   for (const raw of rawDeps) {
     let entry = fileMap.get(raw.path);
@@ -731,7 +797,8 @@ function traverseIncoming(
       else if (ref.nodeType === 'file') fileIds.push(ref.refId);
     }
 
-    const symbolMap = symbolIds.length > 0 ? store.getSymbolsByIds(symbolIds) : new Map<number, SymbolRow>();
+    const symbolMap =
+      symbolIds.length > 0 ? store.getSymbolsByIds(symbolIds) : new Map<number, SymbolRow>();
     const fileMap = fileIds.length > 0 ? store.getFilesByIds(fileIds) : new Map();
 
     const symFileIds = new Set<number>();
@@ -742,9 +809,11 @@ function traverseIncoming(
     const complexityMap = new Map<number, number>();
     if (symbolIds.length > 0) {
       const placeholders = symbolIds.map(() => '?').join(',');
-      const rows = store.db.prepare(
-        `SELECT id, cyclomatic FROM symbols WHERE id IN (${placeholders}) AND cyclomatic IS NOT NULL`,
-      ).all(...symbolIds) as Array<{ id: number; cyclomatic: number }>;
+      const rows = store.db
+        .prepare(
+          `SELECT id, cyclomatic FROM symbols WHERE id IN (${placeholders}) AND cyclomatic IS NOT NULL`,
+        )
+        .all(...symbolIds) as Array<{ id: number; cyclomatic: number }>;
       for (const r of rows) complexityMap.set(r.id, r.cyclomatic);
     }
 
@@ -777,11 +846,14 @@ function traverseIncoming(
             try {
               const meta = JSON.parse(sym.metadata) as Record<string, unknown>;
               isExported = meta.exported === true || meta.exported === 1;
-              const decs = (meta['decorators'] as string[] | undefined)
-                ?? (meta['annotations'] as string[] | undefined)
-                ?? (meta['attributes'] as string[] | undefined);
+              const decs =
+                (meta['decorators'] as string[] | undefined) ??
+                (meta['annotations'] as string[] | undefined) ??
+                (meta['attributes'] as string[] | undefined);
               if (Array.isArray(decs) && decs.length > 0) decorators = decs;
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           }
         }
       } else if (ref.nodeType === 'file') {
@@ -838,7 +910,11 @@ function detectBreakingChanges(
     // Only check exported symbols
     if (!sym.metadata) continue;
     let meta: Record<string, unknown>;
-    try { meta = JSON.parse(sym.metadata) as Record<string, unknown>; } catch { continue; }
+    try {
+      meta = JSON.parse(sym.metadata) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
     if (meta.exported !== true && meta.exported !== 1) continue;
 
     // If scoped to specific symbols, only check those
@@ -901,7 +977,11 @@ function getPennantImpact(store: Store, name: string): PennantImpactResult | nul
     for (const edge of edges) {
       if (!edge.metadata) continue;
       let meta: Record<string, unknown>;
-      try { meta = JSON.parse(edge.metadata) as Record<string, unknown>; } catch { continue; }
+      try {
+        meta = JSON.parse(edge.metadata) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
       if (meta.featureName !== name) continue;
 
       const filePath = String(meta.filePath ?? '');

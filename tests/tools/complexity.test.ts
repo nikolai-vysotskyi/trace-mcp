@@ -137,7 +137,9 @@ describe('computeParamCount', () => {
   });
 
   it('handles nested generics', () => {
-    expect(computeParamCount('function foo(a: Map<string, Map<number, boolean>>, b: string)')).toBe(2);
+    expect(computeParamCount('function foo(a: Map<string, Map<number, boolean>>, b: string)')).toBe(
+      2,
+    );
   });
 
   it('handles destructured params', () => {

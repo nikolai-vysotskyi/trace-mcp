@@ -51,7 +51,9 @@ private:
   int _speed;
 };
 `);
-    expect(r.symbols.some((s: any) => s.name === 'MotorController' && s.kind === 'class')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'MotorController' && s.kind === 'class')).toBe(
+      true,
+    );
     expect(r.symbols.some((s: any) => s.name === 'start' && s.kind === 'method')).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'setSpeed' && s.kind === 'method')).toBe(true);
   });
@@ -88,7 +90,9 @@ int readSensor(int pin) {
   return analogRead(pin);
 }
 `);
-    expect(r.symbols.some((s: any) => s.name === 'handleInterrupt' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'handleInterrupt' && s.kind === 'function')).toBe(
+      true,
+    );
     expect(r.symbols.some((s: any) => s.name === 'readSensor' && s.kind === 'function')).toBe(true);
   });
 
@@ -160,7 +164,11 @@ entity counter is
   );
 end entity counter;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'counter' && s.kind === 'class' && s.metadata?.vhdlKind === 'entity')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'counter' && s.kind === 'class' && s.metadata?.vhdlKind === 'entity',
+      ),
+    ).toBe(true);
   });
 
   it('extracts architecture', () => {
@@ -169,7 +177,12 @@ architecture behavioral of counter is
 begin
 end architecture behavioral;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'behavioral' && s.kind === 'class' && s.metadata?.vhdlKind === 'architecture')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'behavioral' && s.kind === 'class' && s.metadata?.vhdlKind === 'architecture',
+      ),
+    ).toBe(true);
   });
 
   // ── Packages ─────────────────────────────────────────────────
@@ -180,7 +193,12 @@ package math_pkg is
   constant PI : real := 3.14159;
 end package math_pkg;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'math_pkg' && s.kind === 'namespace' && s.metadata?.vhdlKind === 'package')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'math_pkg' && s.kind === 'namespace' && s.metadata?.vhdlKind === 'package',
+      ),
+    ).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'PI' && s.kind === 'constant')).toBe(true);
   });
 
@@ -189,7 +207,14 @@ end package math_pkg;
 package body utils_pkg is
 end package body utils_pkg;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'utils_pkg' && s.kind === 'namespace' && s.metadata?.vhdlKind === 'package_body')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'utils_pkg' &&
+          s.kind === 'namespace' &&
+          s.metadata?.vhdlKind === 'package_body',
+      ),
+    ).toBe(true);
   });
 
   // ── Processes ────────────────────────────────────────────────
@@ -203,7 +228,12 @@ begin
   end if;
 end process;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'clk_proc' && s.kind === 'function' && s.metadata?.vhdlKind === 'process')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'clk_proc' && s.kind === 'function' && s.metadata?.vhdlKind === 'process',
+      ),
+    ).toBe(true);
   });
 
   it('extracts postponed process', () => {
@@ -212,7 +242,9 @@ check_proc : postponed process(clk)
 begin
 end process;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'check_proc' && s.metadata?.vhdlKind === 'process')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'check_proc' && s.metadata?.vhdlKind === 'process'),
+    ).toBe(true);
   });
 
   // ── Functions & Procedures ───────────────────────────────────
@@ -250,7 +282,14 @@ begin
   cnt <= 0;
 end procedure;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'reset_counter' && s.kind === 'function' && s.metadata?.vhdlKind === 'procedure')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'reset_counter' &&
+          s.kind === 'function' &&
+          s.metadata?.vhdlKind === 'procedure',
+      ),
+    ).toBe(true);
   });
 
   // ── Components ───────────────────────────────────────────────
@@ -264,7 +303,9 @@ component full_adder is
   );
 end component;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'full_adder' && s.kind === 'interface')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'full_adder' && s.kind === 'interface')).toBe(
+      true,
+    );
   });
 
   // ── Signals, Constants, Variables ────────────────────────────
@@ -274,7 +315,11 @@ end component;
 signal clk        : std_logic;
 signal data_bus   : std_logic_vector(7 downto 0);
 `);
-    expect(r.symbols.some((s: any) => s.name === 'clk' && s.kind === 'property' && s.metadata?.vhdlKind === 'signal')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'clk' && s.kind === 'property' && s.metadata?.vhdlKind === 'signal',
+      ),
+    ).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'data_bus' && s.kind === 'property')).toBe(true);
   });
 
@@ -311,7 +356,11 @@ type mem_type is array (0 to 255) of std_logic_vector(7 downto 0);
     const r = parseVhdl(`
 subtype byte is std_logic_vector(7 downto 0);
 `);
-    expect(r.symbols.some((s: any) => s.name === 'byte' && s.kind === 'type' && s.metadata?.vhdlKind === 'subtype')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'byte' && s.kind === 'type' && s.metadata?.vhdlKind === 'subtype',
+      ),
+    ).toBe(true);
   });
 
   // ── Aliases & Attributes ─────────────────────────────────────
@@ -320,14 +369,21 @@ subtype byte is std_logic_vector(7 downto 0);
     const r = parseVhdl(`
 alias data_hi is data_bus(7 downto 4);
 `);
-    expect(r.symbols.some((s: any) => s.name === 'data_hi' && s.metadata?.vhdlKind === 'alias')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'data_hi' && s.metadata?.vhdlKind === 'alias'),
+    ).toBe(true);
   });
 
   it('extracts attribute', () => {
     const r = parseVhdl(`
 attribute keep : boolean;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'keep' && s.kind === 'property' && s.metadata?.vhdlKind === 'attribute')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'keep' && s.kind === 'property' && s.metadata?.vhdlKind === 'attribute',
+      ),
+    ).toBe(true);
   });
 
   // ── Generate blocks ──────────────────────────────────────────
@@ -337,7 +393,9 @@ attribute keep : boolean;
 gen_adders : for i in 0 to 7 generate
 end generate;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'gen_adders' && s.metadata?.vhdlKind === 'generate')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'gen_adders' && s.metadata?.vhdlKind === 'generate'),
+    ).toBe(true);
   });
 
   it('extracts if-generate block', () => {
@@ -345,7 +403,9 @@ end generate;
 gen_debug : if DEBUG = true generate
 end generate;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'gen_debug' && s.metadata?.vhdlKind === 'generate')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'gen_debug' && s.metadata?.vhdlKind === 'generate'),
+    ).toBe(true);
   });
 
   // ── Configuration ────────────────────────────────────────────
@@ -357,7 +417,11 @@ configuration default_cfg of top_entity is
   end for;
 end configuration;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'default_cfg' && s.metadata?.vhdlKind === 'configuration')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'default_cfg' && s.metadata?.vhdlKind === 'configuration',
+      ),
+    ).toBe(true);
   });
 
   // ── Imports ──────────────────────────────────────────────────
@@ -396,7 +460,12 @@ context project_ctx is
   use ieee.std_logic_1164.all;
 end context project_ctx;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'project_ctx' && s.kind === 'namespace' && s.metadata?.vhdlKind === 'context')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'project_ctx' && s.kind === 'namespace' && s.metadata?.vhdlKind === 'context',
+      ),
+    ).toBe(true);
   });
 
   it('extracts context reference import (VHDL-2008)', () => {
@@ -415,7 +484,14 @@ context work.project_ctx;
 type shared_counter is protected
 end protected shared_counter;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'shared_counter' && s.kind === 'class' && s.metadata?.vhdlKind === 'protected_type')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'shared_counter' &&
+          s.kind === 'class' &&
+          s.metadata?.vhdlKind === 'protected_type',
+      ),
+    ).toBe(true);
   });
 
   it('extracts protected body', () => {
@@ -423,7 +499,14 @@ end protected shared_counter;
 type shared_counter is protected body
 end protected body shared_counter;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'shared_counter' && s.kind === 'class' && s.metadata?.vhdlKind === 'protected_body')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'shared_counter' &&
+          s.kind === 'class' &&
+          s.metadata?.vhdlKind === 'protected_body',
+      ),
+    ).toBe(true);
   });
 
   // ── File declarations ────────────────────────────────────────
@@ -432,7 +515,9 @@ end protected body shared_counter;
     const r = parseVhdl(`
 file input_file : text open read_mode is "data.txt";
 `);
-    expect(r.symbols.some((s: any) => s.name === 'input_file' && s.metadata?.vhdlKind === 'file')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'input_file' && s.metadata?.vhdlKind === 'file'),
+    ).toBe(true);
   });
 
   // ── Block statements ─────────────────────────────────────────
@@ -443,7 +528,12 @@ data_path : block
 begin
 end block data_path;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'data_path' && s.kind === 'function' && s.metadata?.vhdlKind === 'block')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'data_path' && s.kind === 'function' && s.metadata?.vhdlKind === 'block',
+      ),
+    ).toBe(true);
   });
 
   // ── Case-generate (VHDL-2008) ────────────────────────────────
@@ -455,7 +545,9 @@ gen_mux : case SEL generate
   when 1 =>
 end generate gen_mux;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'gen_mux' && s.metadata?.vhdlKind === 'case_generate')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'gen_mux' && s.metadata?.vhdlKind === 'case_generate'),
+    ).toBe(true);
   });
 
   // ── Incomplete types ─────────────────────────────────────────
@@ -464,7 +556,12 @@ end generate gen_mux;
     const r = parseVhdl(`
 type node;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'node' && s.kind === 'type' && s.metadata?.vhdlKind === 'incomplete_type')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'node' && s.kind === 'type' && s.metadata?.vhdlKind === 'incomplete_type',
+      ),
+    ).toBe(true);
   });
 
   // ── Group & disconnect ───────────────────────────────────────
@@ -473,7 +570,9 @@ type node;
     const r = parseVhdl(`
 group timing_group : signal_group (clk, reset);
 `);
-    expect(r.symbols.some((s: any) => s.name === 'timing_group' && s.metadata?.vhdlKind === 'group')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'timing_group' && s.metadata?.vhdlKind === 'group'),
+    ).toBe(true);
   });
 
   // ── VHDL-AMS ─────────────────────────────────────────────────
@@ -484,9 +583,22 @@ nature electrical is real across real through;
 terminal p, n : electrical;
 quantity v across i through p to n;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'electrical' && s.kind === 'type' && s.metadata?.vhdlKind === 'nature')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'p' && s.kind === 'property' && s.metadata?.vhdlKind === 'terminal')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'v' && s.kind === 'variable' && s.metadata?.vhdlKind === 'quantity')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'electrical' && s.kind === 'type' && s.metadata?.vhdlKind === 'nature',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'p' && s.kind === 'property' && s.metadata?.vhdlKind === 'terminal',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'v' && s.kind === 'variable' && s.metadata?.vhdlKind === 'quantity',
+      ),
+    ).toBe(true);
   });
 
   // ── Concurrent assertion ─────────────────────────────────────
@@ -495,7 +607,9 @@ quantity v across i through p to n;
     const r = parseVhdl(`
 check_clk : assert clk = '1' report "Clock low" severity warning;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'check_clk' && s.metadata?.vhdlKind === 'assertion')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'check_clk' && s.metadata?.vhdlKind === 'assertion'),
+    ).toBe(true);
   });
 
   // ── Complete design example ──────────────────────────────────
@@ -536,15 +650,23 @@ begin
 end architecture rtl;
 `);
     // Entity
-    expect(r.symbols.some((s: any) => s.name === 'alu' && s.metadata?.vhdlKind === 'entity')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'alu' && s.metadata?.vhdlKind === 'entity')).toBe(
+      true,
+    );
     // Architecture
-    expect(r.symbols.some((s: any) => s.name === 'rtl' && s.metadata?.vhdlKind === 'architecture')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'rtl' && s.metadata?.vhdlKind === 'architecture'),
+    ).toBe(true);
     // Signal
-    expect(r.symbols.some((s: any) => s.name === 'temp' && s.metadata?.vhdlKind === 'signal')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'temp' && s.metadata?.vhdlKind === 'signal')).toBe(
+      true,
+    );
     // Constant
     expect(r.symbols.some((s: any) => s.name === 'ZERO' && s.kind === 'constant')).toBe(true);
     // Process
-    expect(r.symbols.some((s: any) => s.name === 'compute' && s.metadata?.vhdlKind === 'process')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'compute' && s.metadata?.vhdlKind === 'process'),
+    ).toBe(true);
     // Imports
     expect(r.edges!.length).toBeGreaterThanOrEqual(3);
   });
@@ -595,13 +717,22 @@ interface axi_if;
 endinterface
 `);
     expect(r.symbols.some((s: any) => s.name === 'axi_if' && s.kind === 'interface')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'master' && s.metadata?.verilogKind === 'modport')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'slave' && s.metadata?.verilogKind === 'modport')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'master' && s.metadata?.verilogKind === 'modport'),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'slave' && s.metadata?.verilogKind === 'modport'),
+    ).toBe(true);
   });
 
   it('extracts program block', () => {
     const r = parseVerilog('program automatic test_prog;\nendprogram');
-    expect(r.symbols.some((s: any) => s.name === 'test_prog' && s.kind === 'module' && s.metadata?.verilogKind === 'program')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'test_prog' && s.kind === 'module' && s.metadata?.verilogKind === 'program',
+      ),
+    ).toBe(true);
   });
 
   // ── Classes ──────────────────────────────────────────────────
@@ -633,7 +764,11 @@ endclass
 
   it('extracts task with automatic qualifier', () => {
     const r = parseVerilog('task automatic drive_data;\nendtask');
-    expect(r.symbols.some((s: any) => s.name === 'drive_data' && s.kind === 'function' && s.metadata?.task === true)).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'drive_data' && s.kind === 'function' && s.metadata?.task === true,
+      ),
+    ).toBe(true);
   });
 
   it('extracts protected/local methods', () => {
@@ -645,7 +780,9 @@ local task helper_task;
 endtask
 `);
     expect(r.symbols.some((s: any) => s.name === 'do_work' && s.kind === 'function')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'helper_task' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'helper_task' && s.kind === 'function')).toBe(
+      true,
+    );
   });
 
   it('extracts extern function', () => {
@@ -661,8 +798,22 @@ parameter DATA_WIDTH = 32;
 localparam ADDR_WIDTH = 16;
 parameter integer DEPTH = 256;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'DATA_WIDTH' && s.kind === 'constant' && s.metadata?.verilogKind === 'parameter')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'ADDR_WIDTH' && s.kind === 'constant' && s.metadata?.verilogKind === 'localparam')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'DATA_WIDTH' &&
+          s.kind === 'constant' &&
+          s.metadata?.verilogKind === 'parameter',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'ADDR_WIDTH' &&
+          s.kind === 'constant' &&
+          s.metadata?.verilogKind === 'localparam',
+      ),
+    ).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'DEPTH' && s.kind === 'constant')).toBe(true);
   });
 
@@ -671,7 +822,11 @@ parameter integer DEPTH = 256;
 \`define MAX_SIZE 1024
 \`define ASSERT(cond) if (!(cond)) $error("fail")
 `);
-    expect(r.symbols.some((s: any) => s.name === 'MAX_SIZE' && s.kind === 'constant' && s.metadata?.macro === true)).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'MAX_SIZE' && s.kind === 'constant' && s.metadata?.macro === true,
+      ),
+    ).toBe(true);
     expect(r.symbols.some((s: any) => s.name === 'ASSERT' && s.kind === 'constant')).toBe(true);
   });
 
@@ -685,7 +840,11 @@ typedef enum logic [1:0] {
   DONE  = 2'b10
 } state_t;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'state_t' && s.kind === 'type' && s.metadata?.verilogKind === 'enum')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'state_t' && s.kind === 'type' && s.metadata?.verilogKind === 'enum',
+      ),
+    ).toBe(true);
   });
 
   it('extracts typedef struct', () => {
@@ -717,21 +876,33 @@ input wire clk,
 output reg [7:0] data_out,
 inout wire data_bus
 `);
-    expect(r.symbols.some((s: any) => s.name === 'clk' && s.kind === 'property' && s.metadata?.verilogKind === 'port')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'data_out' && s.metadata?.verilogKind === 'port')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'data_bus' && s.metadata?.verilogKind === 'port')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'clk' && s.kind === 'property' && s.metadata?.verilogKind === 'port',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'data_out' && s.metadata?.verilogKind === 'port'),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'data_bus' && s.metadata?.verilogKind === 'port'),
+    ).toBe(true);
   });
 
   // ── SystemVerilog Verification ───────────────────────────────
 
   it('extracts covergroup', () => {
     const r = parseVerilog('covergroup cg_addr;\nendgroup');
-    expect(r.symbols.some((s: any) => s.name === 'cg_addr' && s.metadata?.verilogKind === 'covergroup')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'cg_addr' && s.metadata?.verilogKind === 'covergroup'),
+    ).toBe(true);
   });
 
   it('extracts constraint', () => {
     const r = parseVerilog('constraint c_data { data inside {[0:255]}; }');
-    expect(r.symbols.some((s: any) => s.name === 'c_data' && s.metadata?.verilogKind === 'constraint')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'c_data' && s.metadata?.verilogKind === 'constraint'),
+    ).toBe(true);
   });
 
   it('extracts property and sequence', () => {
@@ -744,13 +915,21 @@ sequence s_burst;
   req ##1 data[*4];
 endsequence
 `);
-    expect(r.symbols.some((s: any) => s.name === 'p_handshake' && s.metadata?.verilogKind === 'property')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 's_burst' && s.metadata?.verilogKind === 'sequence')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'p_handshake' && s.metadata?.verilogKind === 'property',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 's_burst' && s.metadata?.verilogKind === 'sequence'),
+    ).toBe(true);
   });
 
   it('extracts clocking block', () => {
     const r = parseVerilog('default clocking cb_main @(posedge clk);\nendclocking');
-    expect(r.symbols.some((s: any) => s.name === 'cb_main' && s.metadata?.verilogKind === 'clocking')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'cb_main' && s.metadata?.verilogKind === 'clocking'),
+    ).toBe(true);
   });
 
   // ── Imports ──────────────────────────────────────────────────
@@ -802,14 +981,21 @@ endpackage
 
   it('extracts labeled begin block', () => {
     const r = parseVerilog('gen_loop : begin\nend');
-    expect(r.symbols.some((s: any) => s.name === 'gen_loop' && s.metadata?.verilogKind === 'block')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'gen_loop' && s.metadata?.verilogKind === 'block'),
+    ).toBe(true);
   });
 
   // ── Checker ──────────────────────────────────────────────────
 
   it('extracts checker block', () => {
     const r = parseVerilog('checker my_checker;\nendchecker');
-    expect(r.symbols.some((s: any) => s.name === 'my_checker' && s.kind === 'class' && s.metadata?.verilogKind === 'checker')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'my_checker' && s.kind === 'class' && s.metadata?.verilogKind === 'checker',
+      ),
+    ).toBe(true);
   });
 
   // ── Wire/Logic/Reg declarations ─────────────────────────────
@@ -819,8 +1005,15 @@ endpackage
 wire [7:0] data_bus;
 wire enable;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'data_bus' && s.kind === 'variable' && s.metadata?.verilogKind === 'wire')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'enable' && s.metadata?.verilogKind === 'wire')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'data_bus' && s.kind === 'variable' && s.metadata?.verilogKind === 'wire',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'enable' && s.metadata?.verilogKind === 'wire'),
+    ).toBe(true);
   });
 
   it('extracts logic declarations', () => {
@@ -828,13 +1021,19 @@ wire enable;
 logic [31:0] addr;
 logic valid;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'addr' && s.metadata?.verilogKind === 'logic')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'valid' && s.metadata?.verilogKind === 'logic')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'addr' && s.metadata?.verilogKind === 'logic'),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'valid' && s.metadata?.verilogKind === 'logic'),
+    ).toBe(true);
   });
 
   it('extracts reg declarations', () => {
     const r = parseVerilog('reg [3:0] state;');
-    expect(r.symbols.some((s: any) => s.name === 'state' && s.metadata?.verilogKind === 'reg')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'state' && s.metadata?.verilogKind === 'reg'),
+    ).toBe(true);
   });
 
   it('extracts integer and real declarations', () => {
@@ -842,37 +1041,55 @@ logic valid;
 integer count;
 real voltage;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'count' && s.metadata?.verilogKind === 'integer')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'voltage' && s.metadata?.verilogKind === 'real')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'count' && s.metadata?.verilogKind === 'integer'),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'voltage' && s.metadata?.verilogKind === 'real'),
+    ).toBe(true);
   });
 
   // ── Always blocks (labeled) ─────────────────────────────────
 
   it('extracts labeled always_ff block', () => {
     const r = parseVerilog('ff_proc : always_ff @(posedge clk)');
-    expect(r.symbols.some((s: any) => s.name === 'ff_proc' && s.metadata?.verilogKind === 'always_ff')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'ff_proc' && s.metadata?.verilogKind === 'always_ff'),
+    ).toBe(true);
   });
 
   it('extracts labeled always_comb block', () => {
     const r = parseVerilog('comb_logic : always_comb');
-    expect(r.symbols.some((s: any) => s.name === 'comb_logic' && s.metadata?.verilogKind === 'always_comb')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'comb_logic' && s.metadata?.verilogKind === 'always_comb',
+      ),
+    ).toBe(true);
   });
 
   it('extracts labeled always_latch block', () => {
     const r = parseVerilog('latch_proc : always_latch');
-    expect(r.symbols.some((s: any) => s.name === 'latch_proc' && s.metadata?.verilogKind === 'always_latch')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'latch_proc' && s.metadata?.verilogKind === 'always_latch',
+      ),
+    ).toBe(true);
   });
 
   it('extracts labeled always @(...) block', () => {
     const r = parseVerilog('sens_proc : always @(posedge clk or negedge rst)');
-    expect(r.symbols.some((s: any) => s.name === 'sens_proc' && s.metadata?.verilogKind === 'always')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'sens_proc' && s.metadata?.verilogKind === 'always'),
+    ).toBe(true);
   });
 
   // ── Assertions ──────────────────────────────────────────────
 
   it('extracts labeled assert property', () => {
     const r = parseVerilog('a_req_ack : assert property (p_handshake);');
-    expect(r.symbols.some((s: any) => s.name === 'a_req_ack' && s.metadata?.verilogKind === 'assertion')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'a_req_ack' && s.metadata?.verilogKind === 'assertion'),
+    ).toBe(true);
   });
 
   it('extracts labeled assume and cover property', () => {
@@ -880,35 +1097,61 @@ real voltage;
 a_valid_input : assume property (@(posedge clk) valid |-> !$isunknown(data));
 c_burst_seen : cover property (@(posedge clk) s_burst);
 `);
-    expect(r.symbols.some((s: any) => s.name === 'a_valid_input' && s.metadata?.verilogKind === 'assumption')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'c_burst_seen' && s.metadata?.verilogKind === 'cover')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'a_valid_input' && s.metadata?.verilogKind === 'assumption',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'c_burst_seen' && s.metadata?.verilogKind === 'cover'),
+    ).toBe(true);
   });
 
   it('extracts labeled cover sequence', () => {
     const r = parseVerilog('c_seq : cover sequence (s_burst);');
-    expect(r.symbols.some((s: any) => s.name === 'c_seq' && s.metadata?.verilogKind === 'cover_sequence')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'c_seq' && s.metadata?.verilogKind === 'cover_sequence',
+      ),
+    ).toBe(true);
   });
 
   // ── UVM macros ──────────────────────────────────────────────
 
   it('extracts `uvm_component_utils', () => {
     const r = parseVerilog('`uvm_component_utils(my_driver)');
-    expect(r.symbols.some((s: any) => s.name === 'my_driver' && s.metadata?.verilogKind === 'uvm_component')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my_driver' && s.metadata?.verilogKind === 'uvm_component',
+      ),
+    ).toBe(true);
   });
 
   it('extracts `uvm_object_utils', () => {
     const r = parseVerilog('`uvm_object_utils(my_transaction)');
-    expect(r.symbols.some((s: any) => s.name === 'my_transaction' && s.metadata?.verilogKind === 'uvm_object')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my_transaction' && s.metadata?.verilogKind === 'uvm_object',
+      ),
+    ).toBe(true);
   });
 
   it('extracts `uvm_component_utils_begin', () => {
     const r = parseVerilog('`uvm_component_utils_begin(my_agent)');
-    expect(r.symbols.some((s: any) => s.name === 'my_agent' && s.metadata?.verilogKind === 'uvm_component')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my_agent' && s.metadata?.verilogKind === 'uvm_component',
+      ),
+    ).toBe(true);
   });
 
   it('extracts `uvm_object_utils_begin', () => {
     const r = parseVerilog('`uvm_object_utils_begin(my_seq_item)');
-    expect(r.symbols.some((s: any) => s.name === 'my_seq_item' && s.metadata?.verilogKind === 'uvm_object')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my_seq_item' && s.metadata?.verilogKind === 'uvm_object',
+      ),
+    ).toBe(true);
   });
 
   it('extracts param variants of UVM macros', () => {
@@ -916,25 +1159,50 @@ c_burst_seen : cover property (@(posedge clk) s_burst);
 \`uvm_component_param_utils(my_param_comp)
 \`uvm_object_param_utils(my_param_obj)
 `);
-    expect(r.symbols.some((s: any) => s.name === 'my_param_comp' && s.metadata?.verilogKind === 'uvm_component')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'my_param_obj' && s.metadata?.verilogKind === 'uvm_object')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my_param_comp' && s.metadata?.verilogKind === 'uvm_component',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my_param_obj' && s.metadata?.verilogKind === 'uvm_object',
+      ),
+    ).toBe(true);
   });
 
   // ── DPI-C ───────────────────────────────────────────────────
 
   it('extracts DPI-C import function', () => {
     const r = parseVerilog('import "DPI-C" function int c_compute(int a, int b);');
-    expect(r.symbols.some((s: any) => s.name === 'c_compute' && s.kind === 'function' && s.metadata?.verilogKind === 'dpi_import')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'c_compute' &&
+          s.kind === 'function' &&
+          s.metadata?.verilogKind === 'dpi_import',
+      ),
+    ).toBe(true);
   });
 
   it('extracts DPI-C import task', () => {
     const r = parseVerilog('import "DPI-C" context task c_wait(int cycles);');
-    expect(r.symbols.some((s: any) => s.name === 'c_wait' && s.kind === 'function' && s.metadata?.verilogKind === 'dpi_import' && s.metadata?.task === true)).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'c_wait' &&
+          s.kind === 'function' &&
+          s.metadata?.verilogKind === 'dpi_import' &&
+          s.metadata?.task === true,
+      ),
+    ).toBe(true);
   });
 
   it('extracts DPI-C pure function', () => {
     const r = parseVerilog('import "DPI-C" pure function int c_abs(int val);');
-    expect(r.symbols.some((s: any) => s.name === 'c_abs' && s.metadata?.verilogKind === 'dpi_import')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'c_abs' && s.metadata?.verilogKind === 'dpi_import'),
+    ).toBe(true);
   });
 
   it('extracts DPI-C export', () => {
@@ -942,34 +1210,60 @@ c_burst_seen : cover property (@(posedge clk) s_burst);
 export "DPI-C" function sv_callback;
 export "DPI-C" task sv_work;
 `);
-    expect(r.symbols.some((s: any) => s.name === 'sv_callback' && s.metadata?.verilogKind === 'dpi_export')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'sv_work' && s.metadata?.verilogKind === 'dpi_export' && s.metadata?.task === true)).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'sv_callback' && s.metadata?.verilogKind === 'dpi_export',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'sv_work' &&
+          s.metadata?.verilogKind === 'dpi_export' &&
+          s.metadata?.task === true,
+      ),
+    ).toBe(true);
   });
 
   it('extracts DPI (without -C) import', () => {
     const r = parseVerilog('import "DPI" function void legacy_fn;');
-    expect(r.symbols.some((s: any) => s.name === 'legacy_fn' && s.metadata?.verilogKind === 'dpi_import')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'legacy_fn' && s.metadata?.verilogKind === 'dpi_import',
+      ),
+    ).toBe(true);
   });
 
   // ── Bind ────────────────────────────────────────────────────
 
   it('extracts bind statement target', () => {
     const r = parseVerilog('bind cpu_core checker_mod chk_inst (.*);');
-    expect(r.symbols.some((s: any) => s.name === 'cpu_core' && s.metadata?.verilogKind === 'bind_target')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'cpu_core' && s.metadata?.verilogKind === 'bind_target',
+      ),
+    ).toBe(true);
   });
 
   // ── Specparam ───────────────────────────────────────────────
 
   it('extracts specparam', () => {
     const r = parseVerilog('specparam tRISE = 2.5;');
-    expect(r.symbols.some((s: any) => s.name === 'tRISE' && s.kind === 'constant' && s.metadata?.verilogKind === 'specparam')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'tRISE' && s.kind === 'constant' && s.metadata?.verilogKind === 'specparam',
+      ),
+    ).toBe(true);
   });
 
   // ── Let construct ───────────────────────────────────────────
 
   it('extracts let declaration', () => {
     const r = parseVerilog('let max(a, b) = (a > b) ? a : b;');
-    expect(r.symbols.some((s: any) => s.name === 'max' && s.metadata?.verilogKind === 'let')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'max' && s.metadata?.verilogKind === 'let')).toBe(
+      true,
+    );
   });
 
   // ── Complete SV design example ───────────────────────────────
@@ -1002,9 +1296,13 @@ module tb_top;
 endmodule
 `);
     // Class
-    expect(r.symbols.some((s: any) => s.name === 'my_transaction' && s.kind === 'class')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'my_transaction' && s.kind === 'class')).toBe(
+      true,
+    );
     // Constraint
-    expect(r.symbols.some((s: any) => s.name === 'c_addr' && s.metadata?.verilogKind === 'constraint')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'c_addr' && s.metadata?.verilogKind === 'constraint'),
+    ).toBe(true);
     // Function
     expect(r.symbols.some((s: any) => s.name === 'display' && s.kind === 'function')).toBe(true);
     // Module
@@ -1068,34 +1366,80 @@ module tb_top;
 endmodule
 `);
     // Checker
-    expect(r.symbols.some((s: any) => s.name === 'protocol_checker' && s.metadata?.verilogKind === 'checker')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'protocol_checker' && s.metadata?.verilogKind === 'checker',
+      ),
+    ).toBe(true);
     // DPI import/export
-    expect(r.symbols.some((s: any) => s.name === 'c_golden_model' && s.metadata?.verilogKind === 'dpi_import')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'sv_get_status' && s.metadata?.verilogKind === 'dpi_export')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'c_golden_model' && s.metadata?.verilogKind === 'dpi_import',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'sv_get_status' && s.metadata?.verilogKind === 'dpi_export',
+      ),
+    ).toBe(true);
     // Class
     expect(r.symbols.some((s: any) => s.name === 'my_driver' && s.kind === 'class')).toBe(true);
     // UVM macro
-    expect(r.symbols.some((s: any) => s.name === 'my_driver' && s.metadata?.verilogKind === 'uvm_component')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my_driver' && s.metadata?.verilogKind === 'uvm_component',
+      ),
+    ).toBe(true);
     // Constraint
-    expect(r.symbols.some((s: any) => s.name === 'c_valid' && s.metadata?.verilogKind === 'constraint')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'c_valid' && s.metadata?.verilogKind === 'constraint'),
+    ).toBe(true);
     // Functions and tasks
-    expect(r.symbols.some((s: any) => s.name === 'build_phase' && s.kind === 'function')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'run_phase' && s.metadata?.task === true)).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'build_phase' && s.kind === 'function')).toBe(
+      true,
+    );
+    expect(r.symbols.some((s: any) => s.name === 'run_phase' && s.metadata?.task === true)).toBe(
+      true,
+    );
     // Property + assertion
-    expect(r.symbols.some((s: any) => s.name === 'p_req_ack' && s.metadata?.verilogKind === 'property')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'a_check' && s.metadata?.verilogKind === 'assertion')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'p_req_ack' && s.metadata?.verilogKind === 'property'),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'a_check' && s.metadata?.verilogKind === 'assertion'),
+    ).toBe(true);
     // Module + params
     expect(r.symbols.some((s: any) => s.name === 'tb_top' && s.kind === 'module')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'CLK_PERIOD' && s.metadata?.verilogKind === 'parameter')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'RESET_CYCLES' && s.metadata?.verilogKind === 'localparam')).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'CLK_PERIOD' && s.metadata?.verilogKind === 'parameter',
+      ),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'RESET_CYCLES' && s.metadata?.verilogKind === 'localparam',
+      ),
+    ).toBe(true);
     // Net declarations
-    expect(r.symbols.some((s: any) => s.name === 'data' && s.metadata?.verilogKind === 'logic')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'test_count' && s.metadata?.verilogKind === 'integer')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'data' && s.metadata?.verilogKind === 'logic'),
+    ).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'test_count' && s.metadata?.verilogKind === 'integer'),
+    ).toBe(true);
     // Always blocks
-    expect(r.symbols.some((s: any) => s.name === 'ff_block' && s.metadata?.verilogKind === 'always_ff')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'comb_block' && s.metadata?.verilogKind === 'always_comb')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'ff_block' && s.metadata?.verilogKind === 'always_ff'),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'comb_block' && s.metadata?.verilogKind === 'always_comb',
+      ),
+    ).toBe(true);
     // Bind
-    expect(r.symbols.some((s: any) => s.name === 'tb_top' && s.metadata?.verilogKind === 'bind_target')).toBe(true);
+    expect(
+      r.symbols.some((s: any) => s.name === 'tb_top' && s.metadata?.verilogKind === 'bind_target'),
+    ).toBe(true);
     // Imports
     expect(r.edges!.length).toBeGreaterThanOrEqual(2);
   });

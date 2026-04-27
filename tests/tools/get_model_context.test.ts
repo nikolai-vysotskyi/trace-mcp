@@ -14,11 +14,7 @@ const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'routes/**/*.php',
-      'database/migrations/**/*.php',
-    ],
+    include: ['app/**/*.php', 'routes/**/*.php', 'database/migrations/**/*.php'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],
@@ -131,7 +127,10 @@ describe('get_model_context — Mongoose ORM path', () => {
       {
         name: 'Post',
         orm: 'mongoose',
-        fields: [{ name: 'title', type: 'String' }, { name: 'body', type: 'String' }],
+        fields: [
+          { name: 'title', type: 'String' },
+          { name: 'body', type: 'String' },
+        ],
       },
       fileId,
     );

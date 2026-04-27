@@ -7,7 +7,11 @@
 
 import type { Store } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
-import { getPageRank, getCouplingMetrics, getDependencyCycles } from '../analysis/graph-analysis.js';
+import {
+  getPageRank,
+  getCouplingMetrics,
+  getDependencyCycles,
+} from '../analysis/graph-analysis.js';
 import { getProjectMap } from './project.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
 
@@ -52,9 +56,10 @@ export function generateDocs(
   const stats: GenerateDocsResult['stats'] = { total_lines: 0 };
 
   const allFiles = store.getAllFiles() as { id: number; path: string; language: string | null }[];
-  const scopeFiles = scope === 'project'
-    ? allFiles
-    : allFiles.filter((f) => scopePath && f.path.startsWith(scopePath));
+  const scopeFiles =
+    scope === 'project'
+      ? allFiles
+      : allFiles.filter((f) => scopePath && f.path.startsWith(scopePath));
 
   // --- Overview ---
   if (sections.includes('overview')) {
@@ -87,7 +92,13 @@ export function generateDocs(
       }
     }
     const totalSymbols = [...symbolCounts.values()].reduce((a, b) => a + b, 0);
-    parts.push(`- **Symbols**: ${totalSymbols} (${[...symbolCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `${v} ${k}s`).join(', ')})`);
+    parts.push(
+      `- **Symbols**: ${totalSymbols} (${[...symbolCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([k, v]) => `${v} ${k}s`)
+        .join(', ')})`,
+    );
 
     if (map) {
       parts.push(`- **Frameworks**: ${JSON.stringify((map as any).frameworks ?? [])}`);
@@ -153,7 +164,11 @@ export function generateDocs(
       const seen = new Set<string>();
       for (const r of topFiles) {
         const file = (r as any).file ?? '';
-        const shortName = file.split('/').pop()?.replace(/\.\w+$/, '') ?? file;
+        const shortName =
+          file
+            .split('/')
+            .pop()
+            ?.replace(/\.\w+$/, '') ?? file;
         if (!seen.has(shortName)) {
           seen.add(shortName);
           parts.push(`  ${shortName}`);
@@ -167,7 +182,8 @@ export function generateDocs(
 
   // --- API Surface ---
   if (sections.includes('api_surface')) {
-    const routes = store.getAllRoutes()
+    const routes = store
+      .getAllRoutes()
       .filter((r: any) => !['STORE', 'SLICE', 'DISPATCH'].includes(r.method));
 
     if (routes.length > 0) {
@@ -189,9 +205,7 @@ export function generateDocs(
   // --- Data Model ---
   if (sections.includes('data_model')) {
     // Find model/entity classes
-    const modelFiles = scopeFiles.filter((f) =>
-      /model|entity|schema|migration/i.test(f.path),
-    );
+    const modelFiles = scopeFiles.filter((f) => /model|entity|schema|migration/i.test(f.path));
 
     const models: { name: string; file: string; fields: string[] }[] = [];
     for (const f of modelFiles) {
@@ -199,7 +213,10 @@ export function generateDocs(
       for (const s of syms) {
         if (['class', 'interface'].includes(s.kind)) {
           const children = syms.filter(
-            (c: any) => c.kind === 'property' && c.line_start > s.line_start && c.line_start < (s.line_end ?? Infinity),
+            (c: any) =>
+              c.kind === 'property' &&
+              c.line_start > s.line_start &&
+              c.line_start < (s.line_end ?? Infinity),
           );
           models.push({
             name: s.name,
@@ -227,8 +244,8 @@ export function generateDocs(
 
   // --- Components ---
   if (sections.includes('components')) {
-    const componentFiles = scopeFiles.filter((f) =>
-      /\.(vue|tsx|jsx)$/.test(f.path) || f.path.includes('component'),
+    const componentFiles = scopeFiles.filter(
+      (f) => /\.(vue|tsx|jsx)$/.test(f.path) || f.path.includes('component'),
     );
 
     if (componentFiles.length > 0) {
@@ -294,13 +311,19 @@ export function generateDocs(
 }
 
 function safe<T>(fn: () => T, fallback: T): T {
-  try { return fn(); } catch { return fallback; }
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
 }
 
 /** Minimal markdown → HTML conversion (headings, tables, lists, code blocks) */
 function markdownToBasicHtml(md: string): string {
   const lines = md.split('\n');
-  const html: string[] = ['<!DOCTYPE html><html><head><meta charset="utf-8"><title>Documentation</title></head><body>'];
+  const html: string[] = [
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Documentation</title></head><body>',
+  ];
   let inCode = false;
   let inTable = false;
 
@@ -325,7 +348,10 @@ function markdownToBasicHtml(md: string): string {
         inTable = true;
       }
       if (line.includes('---')) continue; // separator row
-      const cells = line.split('|').filter(Boolean).map((c) => c.trim());
+      const cells = line
+        .split('|')
+        .filter(Boolean)
+        .map((c) => c.trim());
       html.push(`<tr>${cells.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`);
       continue;
     }

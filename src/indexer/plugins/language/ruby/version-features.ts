@@ -5,20 +5,20 @@
 
 const RUBY_MIN_VERSION: Record<string, string> = {
   // Ruby 2.0 — keyword arguments, lazy enumerator
-  'keyword_parameter': '2.0',
+  keyword_parameter: '2.0',
 
   // Ruby 2.3 — frozen string literal, safe navigation (&.)
-  'safe_navigation': '2.3',
+  safe_navigation: '2.3',
 
   // Ruby 2.6 — endless range
-  'endless_range': '2.6',
+  endless_range: '2.6',
 
   // Ruby 2.7 — pattern matching (experimental), numbered block params
-  'case_match': '2.7',
-  'in_clause': '2.7',
+  case_match: '2.7',
+  in_clause: '2.7',
 
   // Ruby 3.0 — pattern matching (stable), ractor, one-line method
-  'find_pattern': '3.0',
+  find_pattern: '3.0',
 };
 
 /** Source-level patterns for Ruby features. */

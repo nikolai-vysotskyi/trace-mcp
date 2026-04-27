@@ -24,14 +24,7 @@ import type {
 } from '../../../../../plugin-api/types.js';
 import { findEnclosingSymbol, lineOfIndex } from '../../_shared/regex-edges.js';
 
-const JWT_PACKAGES = [
-  'jose',
-  'jsonwebtoken',
-  'jws',
-  'jwk-to-pem',
-  'node-jose',
-  '@panva/jose',
-];
+const JWT_PACKAGES = ['jose', 'jsonwebtoken', 'jws', 'jwk-to-pem', 'node-jose', '@panva/jose'];
 
 const SIGN_CLASS_RE =
   /new\s+(?:SignJWT|EncryptJWT|GeneralSign|FlattenedSign|CompactSign|GeneralEncrypt|FlattenedEncrypt|CompactEncrypt)\s*\(/;
@@ -40,8 +33,7 @@ const JOSE_VERIFY_RE =
 const JOSE_KEY_RE =
   /\b(?:importJWK|importSPKI|importPKCS8|importX509|createLocalJWKSet|createRemoteJWKSet|exportJWK|exportSPKI|exportPKCS8|generateKeyPair|generateSecret|calculateJwkThumbprint|embeddedJWK)\s*\(/;
 
-const JSONWEBTOKEN_QUALIFIED_RE =
-  /\b(?:jwt|jsonwebtoken|JWT)\s*\.\s*(sign|verify|decode)\s*\(/g;
+const JSONWEBTOKEN_QUALIFIED_RE = /\b(?:jwt|jsonwebtoken|JWT)\s*\.\s*(sign|verify|decode)\s*\(/g;
 
 const JWT_IMPORT_RE =
   /(?:import|require)\s*(?:\(|{)?\s*.*['"](?:jose|jsonwebtoken|jws|jwk-to-pem|node-jose|@panva\/jose)['"]/;
@@ -49,12 +41,9 @@ const JWT_IMPORT_RE =
 const JSONWEBTOKEN_NAMED_IMPORT_RE =
   /(?:import\s*\{([^}]+)\}\s*from\s*['"]jsonwebtoken['"]|(?:const|let|var)\s*\{([^}]+)\}\s*=\s*require\s*\(\s*['"]jsonwebtoken['"]\s*\))/g;
 
-const JWKS_URL_RE =
-  /createRemoteJWKSet\s*\(\s*new\s+URL\s*\(\s*['"`]([^'"`]+)['"`]/g;
-const ISSUER_RE =
-  /\bissuer\s*:\s*['"`]([^'"`]+)['"`]/g;
-const AUDIENCE_RE =
-  /\baudience\s*:\s*['"`]([^'"`]+)['"`]/g;
+const JWKS_URL_RE = /createRemoteJWKSet\s*\(\s*new\s+URL\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const ISSUER_RE = /\bissuer\s*:\s*['"`]([^'"`]+)['"`]/g;
+const AUDIENCE_RE = /\baudience\s*:\s*['"`]([^'"`]+)['"`]/g;
 
 function parseJsonwebtokenNamedImports(source: string): Set<string> {
   const names = new Set<string>();

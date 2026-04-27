@@ -24,7 +24,8 @@ const comments: CommentStyle = {
 
 const scope: ScopeConfig = {
   style: 'keyword-end',
-  openKeywords: /\b(?:classdef|properties|methods|events|enumeration|function|if|for|while|switch|try|parfor|spmd)\b/gi,
+  openKeywords:
+    /\b(?:classdef|properties|methods|events|enumeration|function|if|for|while|switch|try|parfor|spmd)\b/gi,
   endKeywords: /\bend\b/gi,
 };
 

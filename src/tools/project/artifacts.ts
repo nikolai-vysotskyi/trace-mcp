@@ -41,12 +41,20 @@ function getDbArtifacts(store: Store): Artifact[] {
   const artifacts: Artifact[] = [];
 
   // ORM models
-  const models = store.db.prepare(`
+  const models = store.db
+    .prepare(`
     SELECT m.name, m.orm, m.collection_or_table, f.path, s.line_start
     FROM orm_models m
     LEFT JOIN files f ON m.file_id = f.id
     LEFT JOIN symbols s ON s.file_id = f.id AND s.name = m.name AND s.kind = 'class'
-  `).all() as { name: string; orm: string; collection_or_table: string | null; path: string; line_start: number | null }[];
+  `)
+    .all() as {
+    name: string;
+    orm: string;
+    collection_or_table: string | null;
+    path: string;
+    line_start: number | null;
+  }[];
 
   for (const m of models) {
     artifacts.push({
@@ -60,11 +68,13 @@ function getDbArtifacts(store: Store): Artifact[] {
   }
 
   // Migrations
-  const migrations = store.db.prepare(`
+  const migrations = store.db
+    .prepare(`
     SELECT m.table_name, m.operation, f.path
     FROM migrations m
     LEFT JOIN files f ON m.file_id = f.id
-  `).all() as { table_name: string | null; operation: string | null; path: string | null }[];
+  `)
+    .all() as { table_name: string | null; operation: string | null; path: string | null }[];
 
   for (const m of migrations) {
     artifacts.push({
@@ -83,12 +93,20 @@ function getApiArtifacts(store: Store): Artifact[] {
   const artifacts: Artifact[] = [];
 
   // Routes
-  const routes = store.db.prepare(`
+  const routes = store.db
+    .prepare(`
     SELECT r.uri, r.method, r.handler, r.middleware, f.path
     FROM routes r
     LEFT JOIN files f ON r.file_id = f.id
     WHERE r.method NOT IN ('STORE', 'SLICE', 'DISPATCH', 'TASK', 'SIGNAL', 'EVENT', 'LISTENER', 'SUBSCRIBE')
-  `).all() as { uri: string; method: string; handler: string | null; middleware: string | null; path: string }[];
+  `)
+    .all() as {
+    uri: string;
+    method: string;
+    handler: string | null;
+    middleware: string | null;
+    path: string;
+  }[];
 
   for (const r of routes) {
     artifacts.push({
@@ -106,11 +124,13 @@ function getApiArtifacts(store: Store): Artifact[] {
   }
 
   // OpenAPI endpoints from symbols
-  const openApiSymbols = store.db.prepare(`
+  const openApiSymbols = store.db
+    .prepare(`
     SELECT s.name, s.metadata, f.path, s.line_start
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE s.metadata LIKE '%"yamlKind":"endpoint"%'
-  `).all() as { name: string; metadata: string | null; path: string; line_start: number | null }[];
+  `)
+    .all() as { name: string; metadata: string | null; path: string; line_start: number | null }[];
 
   for (const s of openApiSymbols) {
     const meta = s.metadata ? JSON.parse(s.metadata) : {};
@@ -125,11 +145,13 @@ function getApiArtifacts(store: Store): Artifact[] {
   }
 
   // OpenAPI schemas
-  const schemaSymbols = store.db.prepare(`
+  const schemaSymbols = store.db
+    .prepare(`
     SELECT s.name, f.path, s.line_start
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE s.metadata LIKE '%"yamlKind":"schema"%'
-  `).all() as { name: string; path: string; line_start: number | null }[];
+  `)
+    .all() as { name: string; path: string; line_start: number | null }[];
 
   for (const s of schemaSymbols) {
     artifacts.push({
@@ -148,16 +170,31 @@ function getInfraArtifacts(store: Store): Artifact[] {
   const artifacts: Artifact[] = [];
 
   const infraKinds = new Set([
-    'service', 'image', 'port', 'volume', 'volumeDef', 'network', 'networkDef',
-    'k8sKind', 'k8sName', 'container', 'containerImage', 'volumeMount',
-    'configMapRef', 'secretRef', 'serviceSelector', 'chartName',
+    'service',
+    'image',
+    'port',
+    'volume',
+    'volumeDef',
+    'network',
+    'networkDef',
+    'k8sKind',
+    'k8sName',
+    'container',
+    'containerImage',
+    'volumeMount',
+    'configMapRef',
+    'secretRef',
+    'serviceSelector',
+    'chartName',
   ]);
 
-  const symbols = store.db.prepare(`
+  const symbols = store.db
+    .prepare(`
     SELECT s.name, s.metadata, f.path, s.line_start
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE s.metadata LIKE '%"yamlKind"%'
-  `).all() as { name: string; metadata: string | null; path: string; line_start: number | null }[];
+  `)
+    .all() as { name: string; metadata: string | null; path: string; line_start: number | null }[];
 
   for (const s of symbols) {
     const meta = s.metadata ? JSON.parse(s.metadata) : {};
@@ -181,11 +218,19 @@ function getCiArtifacts(store: Store): Artifact[] {
 
   const ciKinds = new Set(['job', 'step', 'stage']);
 
-  const symbols = store.db.prepare(`
+  const symbols = store.db
+    .prepare(`
     SELECT s.name, s.kind, s.metadata, f.path, s.line_start
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE s.metadata LIKE '%"yamlKind"%'
-  `).all() as { name: string; kind: string; metadata: string | null; path: string; line_start: number | null }[];
+  `)
+    .all() as {
+    name: string;
+    kind: string;
+    metadata: string | null;
+    path: string;
+    line_start: number | null;
+  }[];
 
   for (const s of symbols) {
     const meta = s.metadata ? JSON.parse(s.metadata) : {};
@@ -224,11 +269,13 @@ function getConfigArtifacts(store: Store): Artifact[] {
   }
 
   // Docker-compose env vars
-  const envSymbols = store.db.prepare(`
+  const envSymbols = store.db
+    .prepare(`
     SELECT s.name, s.metadata, f.path, s.line_start
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE s.metadata LIKE '%"yamlKind":"envVar"%'
-  `).all() as { name: string; metadata: string | null; path: string; line_start: number | null }[];
+  `)
+    .all() as { name: string; metadata: string | null; path: string; line_start: number | null }[];
 
   for (const s of envSymbols) {
     const meta = s.metadata ? JSON.parse(s.metadata) : {};
@@ -274,10 +321,11 @@ export function getArtifacts(
   // Text filter
   if (opts.query) {
     const q = opts.query.toLowerCase();
-    artifacts = artifacts.filter((a) =>
-      a.name.toLowerCase().includes(q) ||
-      a.kind.toLowerCase().includes(q) ||
-      (a.file && a.file.toLowerCase().includes(q)),
+    artifacts = artifacts.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        a.kind.toLowerCase().includes(q) ||
+        (a.file && a.file.toLowerCase().includes(q)),
     );
   }
 

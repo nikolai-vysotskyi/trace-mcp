@@ -35,25 +35,33 @@ function hasPythonDep(rootPath: string, depName: string): boolean {
     try {
       const content = fs.readFileSync(path.join(rootPath, reqFile), 'utf-8');
       if (new RegExp(`^${escapeRegExp(depName)}\\b`, 'm').test(content)) return true;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
 
   try {
     const content = fs.readFileSync(path.join(rootPath, 'pyproject.toml'), 'utf-8');
     if (content.includes(depName)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   for (const f of ['setup.py', 'setup.cfg']) {
     try {
       const content = fs.readFileSync(path.join(rootPath, f), 'utf-8');
       if (content.includes(depName)) return true;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
 
   try {
     const content = fs.readFileSync(path.join(rootPath, 'Pipfile'), 'utf-8');
     if (content.includes(depName)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return false;
 }
@@ -100,7 +108,10 @@ interface CeleryTaskInfo {
  * - @app.task(name='...') / @celery.task(bind=True, name='...')
  * - @shared_task / @shared_task(name='...')
  */
-function isCeleryTaskDecorator(decoratorNode: TSNode): { isTask: boolean; taskName: string | null } {
+function isCeleryTaskDecorator(decoratorNode: TSNode): {
+  isTask: boolean;
+  taskName: string | null;
+} {
   // decorator node's child is the actual expression
   const expr = decoratorNode.namedChildren[0];
   if (!expr) return { isTask: false, taskName: null };
@@ -160,14 +171,14 @@ function extractCeleryTasks(root: TSNode): CeleryTaskInfo[] {
     if (child.type !== 'decorated_definition') continue;
 
     // Find the function inside the decorated_definition
-    const funcDef = child.namedChildren.find(c => c.type === 'function_definition');
+    const funcDef = child.namedChildren.find((c) => c.type === 'function_definition');
     if (!funcDef) continue;
 
     const funcName = funcDef.childForFieldName('name')?.text;
     if (!funcName) continue;
 
     // Check each decorator
-    const decorators = child.namedChildren.filter(c => c.type === 'decorator');
+    const decorators = child.namedChildren.filter((c) => c.type === 'decorator');
     for (const dec of decorators) {
       const { isTask, taskName } = isCeleryTaskDecorator(dec);
       if (isTask) {
@@ -212,9 +223,7 @@ function extractBeatSchedule(root: TSNode): BeatScheduleEntry[] {
 
     // Match app.conf.beat_schedule or CELERY_BEAT_SCHEDULE or beat_schedule
     const target = left.text;
-    const isBeatSchedule =
-      target.endsWith('beat_schedule') ||
-      target === 'CELERY_BEAT_SCHEDULE';
+    const isBeatSchedule = target.endsWith('beat_schedule') || target === 'CELERY_BEAT_SCHEDULE';
     if (!isBeatSchedule) return;
 
     const right = node.childForFieldName('right');
@@ -319,9 +328,21 @@ export class CeleryPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'celery_task_registered', category: 'celery', description: '@app.task / @shared_task → function' } as EdgeTypeDeclaration,
-        { name: 'celery_beat_schedule', category: 'celery', description: 'Beat schedule entry → task' } as EdgeTypeDeclaration,
-        { name: 'celery_dispatches', category: 'celery', description: '.delay() / .apply_async() → task' } as EdgeTypeDeclaration,
+        {
+          name: 'celery_task_registered',
+          category: 'celery',
+          description: '@app.task / @shared_task → function',
+        } as EdgeTypeDeclaration,
+        {
+          name: 'celery_beat_schedule',
+          category: 'celery',
+          description: 'Beat schedule entry → task',
+        } as EdgeTypeDeclaration,
+        {
+          name: 'celery_dispatches',
+          category: 'celery',
+          description: '.delay() / .apply_async() → task',
+        } as EdgeTypeDeclaration,
       ],
     };
   }

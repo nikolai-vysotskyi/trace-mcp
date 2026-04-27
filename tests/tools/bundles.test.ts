@@ -17,27 +17,29 @@ import Database from 'better-sqlite3';
 let tmpHome: string;
 
 vi.mock('../../src/global.js', () => ({
-  get TRACE_MCP_HOME() { return tmpHome; },
+  get TRACE_MCP_HOME() {
+    return tmpHome;
+  },
 }));
 
 // Dynamic imports after mock is in place
 let ensureBundlesDir: typeof import('../../src/bundles.js').ensureBundlesDir;
-let exportBundle:     typeof import('../../src/bundles.js').exportBundle;
-let listBundles:      typeof import('../../src/bundles.js').listBundles;
-let removeBundle:     typeof import('../../src/bundles.js').removeBundle;
-let loadAllBundles:   typeof import('../../src/bundles.js').loadAllBundles;
-let searchBundles:    typeof import('../../src/bundles.js').searchBundles;
+let exportBundle: typeof import('../../src/bundles.js').exportBundle;
+let listBundles: typeof import('../../src/bundles.js').listBundles;
+let removeBundle: typeof import('../../src/bundles.js').removeBundle;
+let loadAllBundles: typeof import('../../src/bundles.js').loadAllBundles;
+let searchBundles: typeof import('../../src/bundles.js').searchBundles;
 
 beforeEach(async () => {
   tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'bundles-test-'));
   vi.resetModules();
   const m = await import('../../src/bundles.js');
   ensureBundlesDir = m.ensureBundlesDir;
-  exportBundle     = m.exportBundle;
-  listBundles      = m.listBundles;
-  removeBundle     = m.removeBundle;
-  loadAllBundles   = m.loadAllBundles;
-  searchBundles    = m.searchBundles;
+  exportBundle = m.exportBundle;
+  listBundles = m.listBundles;
+  removeBundle = m.removeBundle;
+  loadAllBundles = m.loadAllBundles;
+  searchBundles = m.searchBundles;
 });
 
 afterEach(() => {
@@ -81,7 +83,10 @@ function makeSourceDb(symbols: Array<{ name: string; kind: string; fqn?: string 
     );
   `);
 
-  db.prepare('INSERT INTO files (id, path, language) VALUES (1, ?, ?)').run('src/index.ts', 'typescript');
+  db.prepare('INSERT INTO files (id, path, language) VALUES (1, ?, ?)').run(
+    'src/index.ts',
+    'typescript',
+  );
 
   const insertSym = db.prepare(`
     INSERT INTO symbols (id, file_id, symbol_id, name, kind, fqn, byte_start, byte_end, is_exported)
@@ -106,7 +111,10 @@ describe('ensureBundlesDir', () => {
   });
 
   it('is idempotent — calling twice does not throw', () => {
-    expect(() => { ensureBundlesDir(); ensureBundlesDir(); }).not.toThrow();
+    expect(() => {
+      ensureBundlesDir();
+      ensureBundlesDir();
+    }).not.toThrow();
   });
 });
 
@@ -143,7 +151,10 @@ describe('exportBundle', () => {
 
   it('overwrites an existing bundle of the same package@version', () => {
     const src1 = makeSourceDb([{ name: 'a', kind: 'function' }]);
-    const src2 = makeSourceDb([{ name: 'a', kind: 'function' }, { name: 'b', kind: 'function' }]);
+    const src2 = makeSourceDb([
+      { name: 'a', kind: 'function' },
+      { name: 'b', kind: 'function' },
+    ]);
 
     exportBundle(src1, 'pkg', '1.0.0');
     exportBundle(src2, 'pkg', '1.0.0');
@@ -156,17 +167,20 @@ describe('exportBundle', () => {
   it('bundle DB contains the correct symbols', () => {
     const src = makeSourceDb([
       { name: 'handler', kind: 'function', fqn: 'routes.handler' },
-      { name: 'Config',  kind: 'class' },
+      { name: 'Config', kind: 'class' },
     ]);
     const entry = exportBundle(src, 'pkg', '1.0.0');
     const bundlePath = path.join(tmpHome, 'bundles', entry.file);
 
     const db = new Database(bundlePath, { readonly: true });
-    const rows = db.prepare('SELECT name, kind FROM symbols ORDER BY name').all() as Array<{ name: string; kind: string }>;
+    const rows = db.prepare('SELECT name, kind FROM symbols ORDER BY name').all() as Array<{
+      name: string;
+      kind: string;
+    }>;
     db.close();
 
-    expect(rows.map(r => r.name)).toEqual(['Config', 'handler']);
-    expect(rows.find(r => r.name === 'handler')?.kind).toBe('function');
+    expect(rows.map((r) => r.name)).toEqual(['Config', 'handler']);
+    expect(rows.find((r) => r.name === 'handler')?.kind).toBe('function');
   });
 });
 
@@ -184,7 +198,7 @@ describe('listBundles', () => {
 
     const listed = listBundles();
     expect(listed).toHaveLength(2);
-    expect(listed.map(b => b.package).sort()).toEqual(['lib-a', 'lib-b']);
+    expect(listed.map((b) => b.package).sort()).toEqual(['lib-a', 'lib-b']);
   });
 });
 
@@ -256,7 +270,7 @@ describe('searchBundles', () => {
   it('finds symbols by name substring', () => {
     const src = makeSourceDb([
       { name: 'getUserById', kind: 'function' },
-      { name: 'createUser',  kind: 'function' },
+      { name: 'createUser', kind: 'function' },
       { name: 'ProductService', kind: 'class' },
     ]);
     exportBundle(src, 'api', '1.0.0');
@@ -264,7 +278,7 @@ describe('searchBundles', () => {
 
     const results = searchBundles(bundles, 'User');
     expect(results.length).toBe(2);
-    expect(results.every(r => r.name.includes('User') || r.fqn?.includes('User'))).toBe(true);
+    expect(results.every((r) => r.name.includes('User') || r.fqn?.includes('User'))).toBe(true);
     expect(results[0].bundle_package).toBe('api');
 
     for (const b of bundles) b.db.close();
@@ -273,7 +287,7 @@ describe('searchBundles', () => {
   it('filters by kind', () => {
     const src = makeSourceDb([
       { name: 'UserService', kind: 'class' },
-      { name: 'getUser',     kind: 'function' },
+      { name: 'getUser', kind: 'function' },
     ]);
     exportBundle(src, 'svc', '1.0.0');
     const bundles = loadAllBundles();
@@ -317,7 +331,7 @@ describe('searchBundles', () => {
 
     const results = searchBundles(bundles, 'alpha');
     expect(results.length).toBe(2);
-    const packages = results.map(r => r.bundle_package).sort();
+    const packages = results.map((r) => r.bundle_package).sort();
     expect(packages).toEqual(['bundle-a', 'bundle-b']);
 
     for (const b of bundles) b.db.close();

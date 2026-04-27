@@ -1,14 +1,4 @@
 {
-  "include": [
-    "src/**/*.{ts,tsx}",
-    "lib/**/*.{ts,tsx}",
-    "tests/**/*.{ts,tsx}"
-  ],
-  "exclude": [
-    "node_modules/**",
-    "dist/**",
-    ".git/**",
-    "**/.env",
-    "**/.env.*"
-  ]
+  "include": ["src/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+  "exclude": ["node_modules/**", "dist/**", ".git/**", "**/.env", "**/.env.*"]
 }

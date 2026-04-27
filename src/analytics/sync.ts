@@ -16,7 +16,11 @@ interface SyncResult {
 export function syncAnalytics(store: AnalyticsStore, opts: { full?: boolean } = {}): SyncResult {
   const start = Date.now();
   const sessions = listAllSessions();
-  let parsed = 0, skipped = 0, stored = 0, toolCallsCount = 0, errors = 0;
+  let parsed = 0,
+    skipped = 0,
+    stored = 0,
+    toolCallsCount = 0,
+    errors = 0;
 
   for (const { filePath, projectPath, mtime } of sessions) {
     if (!opts.full && !store.needsSync(filePath, mtime)) {
@@ -51,11 +55,21 @@ export function syncAnalytics(store: AnalyticsStore, opts: { full?: boolean } = 
 }
 
 /** Sync only sessions for a specific project path */
-export function syncProjectAnalytics(store: AnalyticsStore, projectPath: string, opts: { full?: boolean } = {}): SyncResult {
+export function syncProjectAnalytics(
+  store: AnalyticsStore,
+  projectPath: string,
+  opts: { full?: boolean } = {},
+): SyncResult {
   const start = Date.now();
   const allSessions = listAllSessions();
-  const sessions = allSessions.filter(s => s.projectPath === projectPath || s.projectPath.endsWith(projectPath));
-  let parsed = 0, skipped = 0, stored = 0, toolCallsCount = 0, errors = 0;
+  const sessions = allSessions.filter(
+    (s) => s.projectPath === projectPath || s.projectPath.endsWith(projectPath),
+  );
+  let parsed = 0,
+    skipped = 0,
+    stored = 0,
+    toolCallsCount = 0,
+    errors = 0;
 
   for (const { filePath, projectPath: pp, mtime } of sessions) {
     if (!opts.full && !store.needsSync(filePath, mtime)) {

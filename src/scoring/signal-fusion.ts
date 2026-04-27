@@ -49,7 +49,7 @@ export interface FusionDebugInfo {
 }
 
 export interface FusionCandidate {
-  id: string;  // symbolIdStr
+  id: string; // symbolIdStr
   /** Any extra data to carry through (symbol row, file, etc.) */
   data?: unknown;
 }
@@ -79,9 +79,9 @@ export interface FusionChannels {
 // ── Default weights ──────────────────────────────────────────────────
 
 const DEFAULT_WEIGHTS: FusionWeights = {
-  lexical: 0.40,
+  lexical: 0.4,
   structural: 0.25,
-  similarity: 0.20,
+  similarity: 0.2,
   identity: 0.15,
 };
 
@@ -93,7 +93,11 @@ const DEFAULT_K = 60;
  * Score a symbol name against the query for the identity channel.
  * Returns 0-1 score based on match quality.
  */
-export function computeIdentityScore(query: string, symbolName: string, symbolFqn?: string | null): number {
+export function computeIdentityScore(
+  query: string,
+  symbolName: string,
+  symbolFqn?: string | null,
+): number {
   const q = query.toLowerCase();
   const name = symbolName.toLowerCase();
   const fqnLower = symbolFqn?.toLowerCase() ?? '';
@@ -149,17 +153,15 @@ function splitSegments(name: string): string[] {
  *
  * Items not present in a channel receive no contribution from that channel.
  */
-export function signalFusion(
-  channels: FusionChannels,
-  options?: FusionOptions,
-): FusionResult[] {
+export function signalFusion(channels: FusionChannels, options?: FusionOptions): FusionResult[] {
   const k = options?.k ?? DEFAULT_K;
   const debug = options?.debug ?? false;
 
   // Normalize weights — only include channels that have data
   const rawWeights = { ...DEFAULT_WEIGHTS, ...options?.weights };
-  const activeChannels = (Object.keys(channels) as Array<keyof FusionChannels>)
-    .filter((ch) => channels[ch] && channels[ch]!.items.length > 0);
+  const activeChannels = (Object.keys(channels) as Array<keyof FusionChannels>).filter(
+    (ch) => channels[ch] && channels[ch]!.items.length > 0,
+  );
 
   if (activeChannels.length === 0) return [];
 
@@ -177,7 +179,10 @@ export function signalFusion(
   }
 
   // Build rank maps for each channel: id → { rank, rawScore }
-  const rankMaps = new Map<keyof FusionChannels, Map<string, { rank: number; rawScore?: number }>>();
+  const rankMaps = new Map<
+    keyof FusionChannels,
+    Map<string, { rank: number; rawScore?: number }>
+  >();
   for (const ch of activeChannels) {
     const map = new Map<string, { rank: number; rawScore?: number }>();
     const items = channels[ch]!.items;

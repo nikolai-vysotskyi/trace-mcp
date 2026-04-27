@@ -72,7 +72,8 @@ describe('MCP Tools E2E — Laravel', () => {
 
   it('get_symbol: returns class details by symbolId', () => {
     // Use symbolId since FQN format varies by parser
-    const searchResult = store.getAllFiles()
+    const searchResult = store
+      .getAllFiles()
       .flatMap((f) => store.getSymbolsByFile(f.id))
       .find((s) => s.name === 'User' && s.kind === 'class');
     expect(searchResult).toBeDefined();
@@ -176,11 +177,7 @@ describe('MCP Tools E2E — Vue', () => {
   });
 
   it('get_change_impact: finds dependents of UserCard.vue', () => {
-    const result = getChangeImpact(
-      store,
-      { filePath: 'src/components/UserCard.vue' },
-      3,
-    );
+    const result = getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }, 3);
     if (result.isOk()) {
       const impact = result._unsafeUnwrap();
       expect(impact.totalAffected).toBeGreaterThan(0);

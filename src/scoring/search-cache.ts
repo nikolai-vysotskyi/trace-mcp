@@ -53,7 +53,13 @@ export function getSearchCacheStats(): {
   misses: number;
   evictions: number;
 } {
-  return { size: _cache.size, max: MAX_ENTRIES, hits: _hits, misses: _misses, evictions: _evictions };
+  return {
+    size: _cache.size,
+    max: MAX_ENTRIES,
+    hits: _hits,
+    misses: _misses,
+    evictions: _evictions,
+  };
 }
 
 /** Reset all counters and clear the cache. Test-only helper. */

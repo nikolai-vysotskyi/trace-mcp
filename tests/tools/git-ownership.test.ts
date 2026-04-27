@@ -25,11 +25,7 @@ describe('getFileOwnership', () => {
       const argList = args as string[];
       if (argList[0] === 'rev-parse') return Buffer.from('true');
       if (argList[0] === 'shortlog') {
-        return Buffer.from([
-          '    15\tAlice',
-          '     8\tBob',
-          '     2\tCharlie',
-        ].join('\n'));
+        return Buffer.from(['    15\tAlice', '     8\tBob', '     2\tCharlie'].join('\n'));
       }
       return Buffer.from('');
     });
@@ -60,32 +56,34 @@ describe('getSymbolOwnership', () => {
       const argList = args as string[];
       if (argList[0] === 'rev-parse') return Buffer.from('true');
       if (argList[0] === 'blame') {
-        return Buffer.from([
-          'abc123 1 1 3',
-          'author Alice',
-          'author-mail <alice@example.com>',
-          'author-time 1700000000',
-          'author-tz +0000',
-          'summary initial commit',
-          'filename src/a.ts',
-          '\tfunction foo() {',
-          'abc123 2 2',
-          'author Alice',
-          'author-mail <alice@example.com>',
-          'author-time 1700000000',
-          'author-tz +0000',
-          'summary initial commit',
-          'filename src/a.ts',
-          '\t  return 42;',
-          'def456 3 3',
-          'author Bob',
-          'author-mail <bob@example.com>',
-          'author-time 1700100000',
-          'author-tz +0000',
-          'summary fix return',
-          'filename src/a.ts',
-          '\t}',
-        ].join('\n'));
+        return Buffer.from(
+          [
+            'abc123 1 1 3',
+            'author Alice',
+            'author-mail <alice@example.com>',
+            'author-time 1700000000',
+            'author-tz +0000',
+            'summary initial commit',
+            'filename src/a.ts',
+            '\tfunction foo() {',
+            'abc123 2 2',
+            'author Alice',
+            'author-mail <alice@example.com>',
+            'author-time 1700000000',
+            'author-tz +0000',
+            'summary initial commit',
+            'filename src/a.ts',
+            '\t  return 42;',
+            'def456 3 3',
+            'author Bob',
+            'author-mail <bob@example.com>',
+            'author-time 1700100000',
+            'author-tz +0000',
+            'summary fix return',
+            'filename src/a.ts',
+            '\t}',
+          ].join('\n'),
+        );
       }
       return Buffer.from('');
     });

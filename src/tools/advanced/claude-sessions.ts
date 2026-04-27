@@ -67,7 +67,10 @@ export interface DiscoverClaudeSessionsResult {
  */
 export function decodeClaudeProjectName(name: string): string | null {
   if (!name.startsWith('-')) return null;
-  const tokens = name.slice(1).split('-').filter((t) => t.length > 0);
+  const tokens = name
+    .slice(1)
+    .split('-')
+    .filter((t) => t.length > 0);
   if (tokens.length === 0) return '/';
 
   let current = '/';
@@ -108,7 +111,9 @@ export function decodeClaudeProjectName(name: string): string | null {
 function countSessionFiles(dir: string): number {
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
-    return entries.filter((e) => e.isFile() && (e.name.endsWith('.jsonl') || e.name.endsWith('.json'))).length;
+    return entries.filter(
+      (e) => e.isFile() && (e.name.endsWith('.jsonl') || e.name.endsWith('.json')),
+    ).length;
   } catch {
     return 0;
   }
@@ -122,16 +127,18 @@ function dirMtime(dir: string): number | null {
   }
 }
 
-export function discoverClaudeSessions(opts: {
-  /** Override the scan root (defaults to ~/.claude/projects) */
-  scanRoot?: string;
-  /** If set, exclude paths under this prefix (typically the current project) */
-  excludePrefix?: string;
-  /** Drop entries whose decoded path no longer exists on disk */
-  onlyExisting?: boolean;
-  /** Maximum number of sessions to return (0 = unlimited) */
-  limit?: number;
-} = {}): TraceMcpResult<DiscoverClaudeSessionsResult> {
+export function discoverClaudeSessions(
+  opts: {
+    /** Override the scan root (defaults to ~/.claude/projects) */
+    scanRoot?: string;
+    /** If set, exclude paths under this prefix (typically the current project) */
+    excludePrefix?: string;
+    /** Drop entries whose decoded path no longer exists on disk */
+    onlyExisting?: boolean;
+    /** Maximum number of sessions to return (0 = unlimited) */
+    limit?: number;
+  } = {},
+): TraceMcpResult<DiscoverClaudeSessionsResult> {
   const scanRoot = opts.scanRoot ?? path.join(os.homedir(), '.claude', 'projects');
   if (!fs.existsSync(scanRoot)) {
     return err(validationError(`Claude projects root not found: ${scanRoot}`));

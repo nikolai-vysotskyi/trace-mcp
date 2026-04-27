@@ -16,7 +16,17 @@ describe('compareBranches', () => {
     // Create a temporary git repo with two branches
     repoDir = createTmpDir('branch-compare-');
     const run = (cmd: string) =>
-      execSync(cmd, { cwd: repoDir, encoding: 'utf-8', env: { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@test.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@test.com' } });
+      execSync(cmd, {
+        cwd: repoDir,
+        encoding: 'utf-8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 'Test',
+          GIT_AUTHOR_EMAIL: 'test@test.com',
+          GIT_COMMITTER_NAME: 'Test',
+          GIT_COMMITTER_EMAIL: 'test@test.com',
+        },
+      });
 
     // Init repo with main branch
     run('git init -b main');
@@ -86,11 +96,9 @@ describe('compareBranches', () => {
     // Add a new file
     fs.writeFileSync(
       path.join(repoDir, 'src/mfa.ts'),
-      [
-        'export function enableMfa(userId: string) {',
-        '  return generateSecret(userId);',
-        '}',
-      ].join('\n'),
+      ['export function enableMfa(userId: string) {', '  return generateSecret(userId);', '}'].join(
+        '\n',
+      ),
     );
 
     run('git add -A');

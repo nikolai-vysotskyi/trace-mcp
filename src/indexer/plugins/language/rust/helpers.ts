@@ -5,7 +5,12 @@ import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/type
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
-export function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parentName?: string): string {
+export function makeSymbolId(
+  filePath: string,
+  name: string,
+  kind: SymbolKind,
+  parentName?: string,
+): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;
   return `${filePath}::${name}#${kind}`;
 }

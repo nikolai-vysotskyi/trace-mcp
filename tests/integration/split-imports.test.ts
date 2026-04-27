@@ -53,9 +53,10 @@ describe('split import specifier consolidation', () => {
 
     expect(consumerToErrors).toBeDefined();
 
-    const metadata = typeof consumerToErrors!.metadata === 'string'
-      ? JSON.parse(consumerToErrors!.metadata)
-      : consumerToErrors!.metadata;
+    const metadata =
+      typeof consumerToErrors!.metadata === 'string'
+        ? JSON.parse(consumerToErrors!.metadata)
+        : consumerToErrors!.metadata;
 
     // All three specifiers from the three separate import statements must be present
     expect(metadata.specifiers).toBeDefined();

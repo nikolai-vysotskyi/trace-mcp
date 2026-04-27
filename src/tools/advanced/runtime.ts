@@ -109,12 +109,14 @@ export function getRuntimeProfile(
   if (!nodeId) return err(notFound('Node not found in graph'));
 
   // Query aggregates
-  const aggregates = store.db.prepare(`
+  const aggregates = store.db
+    .prepare(`
     SELECT bucket, call_count, error_count, total_duration_us, min_duration_us, max_duration_us, percentiles
     FROM runtime_aggregates
     WHERE node_id = ? AND bucket >= ?
     ORDER BY bucket
-  `).all(nodeId, since.slice(0, 13)) as Array<{
+  `)
+    .all(nodeId, since.slice(0, 13)) as Array<{
     bucket: string;
     call_count: number;
     error_count: number;
@@ -129,8 +131,11 @@ export function getRuntimeProfile(
   const totalDuration = aggregates.reduce((s, a) => s + a.total_duration_us, 0);
 
   // Merge percentiles from all buckets (weighted)
-  let p50 = 0, p95 = 0, p99 = 0;
-  let minUs = Infinity, maxUs = 0;
+  let p50 = 0,
+    p95 = 0,
+    p99 = 0;
+  let minUs = Infinity,
+    maxUs = 0;
 
   for (const agg of aggregates) {
     if (agg.min_duration_us != null && agg.min_duration_us < minUs) minUs = agg.min_duration_us;
@@ -147,7 +152,11 @@ export function getRuntimeProfile(
   }
 
   return ok({
-    target: { type: targetType, id: opts.symbolId ?? opts.fqn ?? opts.routeUri ?? '', name: targetName },
+    target: {
+      type: targetType,
+      id: opts.symbolId ?? opts.fqn ?? opts.routeUri ?? '',
+      name: targetName,
+    },
     period: { since, until },
     total_calls: totalCalls,
     error_rate: totalCalls > 0 ? Math.round((totalErrors / totalCalls) * 1000) / 1000 : 0,
@@ -224,7 +233,11 @@ export function getRuntimeCallGraph(
 
     const children: RuntimeCallGraphNode[] = [];
     if (currentDepth < maxDepth) {
-      const childRows = childQuery.all(nId, nId, since) as Array<{ child_node_id: number; call_count: number; avg_duration: number }>;
+      const childRows = childQuery.all(nId, nId, since) as Array<{
+        child_node_id: number;
+        call_count: number;
+        avg_duration: number;
+      }>;
 
       for (const row of childRows) {
         if (visited.has(row.child_node_id)) continue;
@@ -278,12 +291,14 @@ export function getEndpointAnalytics(
   if (!routeNodeId) return err(notFound('Route not in graph'));
 
   // Get aggregates for this route (per-bucket for percentile merging)
-  const aggRows = store.db.prepare(`
+  const aggRows = store.db
+    .prepare(`
     SELECT call_count, error_count, total_duration_us, min_duration_us, max_duration_us, percentiles
     FROM runtime_aggregates
     WHERE node_id = ? AND bucket >= ?
     ORDER BY bucket
-  `).all(routeNodeId, since.slice(0, 13)) as Array<{
+  `)
+    .all(routeNodeId, since.slice(0, 13)) as Array<{
     call_count: number;
     error_count: number;
     total_duration_us: number;
@@ -297,7 +312,9 @@ export function getEndpointAnalytics(
   const totalDur = aggRows.reduce((s, a) => s + a.total_duration_us, 0);
 
   // Merge percentiles (weighted average across buckets)
-  let p50 = 0, p95 = 0, p99 = 0;
+  let p50 = 0,
+    p95 = 0,
+    p99 = 0;
   for (const agg of aggRows) {
     if (agg.percentiles && total > 0) {
       try {
@@ -308,18 +325,22 @@ export function getEndpointAnalytics(
           if (pc.p === 95) p95 += pc.v * weight;
           if (pc.p === 99) p99 += pc.v * weight;
         }
-      } catch { /* corrupted percentiles, skip */ }
+      } catch {
+        /* corrupted percentiles, skip */
+      }
     }
   }
 
   // Get caller services
-  const callers = store.db.prepare(`
+  const callers = store.db
+    .prepare(`
     SELECT service_name, COUNT(*) as cnt
     FROM runtime_spans
     WHERE mapped_node_id = ? AND started_at >= ? AND kind = 'server'
     GROUP BY service_name
     ORDER BY cnt DESC
-  `).all(routeNodeId, since) as Array<{ service_name: string; cnt: number }>;
+  `)
+    .all(routeNodeId, since) as Array<{ service_name: string; cnt: number }>;
 
   return ok({
     route: { method: route.method, uri: route.uri, handler: route.handler ?? undefined },
@@ -374,7 +395,8 @@ export function getRuntimeDependencies(
   if (!nodeId) return err(notFound('Node not found'));
 
   // Find external services called from spans mapped to this node
-  const services = store.db.prepare(`
+  const services = store.db
+    .prepare(`
     SELECT
       child.service_name as name,
       COUNT(*) as call_count,
@@ -386,7 +408,8 @@ export function getRuntimeDependencies(
       AND child.kind IN ('client', 'producer')
     GROUP BY child.service_name
     ORDER BY call_count DESC
-  `).all(nodeId) as Array<{
+  `)
+    .all(nodeId) as Array<{
     name: string;
     call_count: number;
     avg_latency: number;
@@ -395,7 +418,10 @@ export function getRuntimeDependencies(
 
   // Also check runtime_services for kind info
   const serviceKinds = new Map<string, string>();
-  const allServices = store.db.prepare('SELECT name, kind FROM runtime_services').all() as Array<{ name: string; kind: string }>;
+  const allServices = store.db.prepare('SELECT name, kind FROM runtime_services').all() as Array<{
+    name: string;
+    kind: string;
+  }>;
   for (const s of allServices) serviceKinds.set(s.name, s.kind);
 
   return ok({

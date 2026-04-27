@@ -46,7 +46,9 @@ export function getModuleGraph(
     let source: string;
     try {
       source = fs.readFileSync(path.resolve(rootPath, file.path), 'utf-8');
-    } catch { continue; }
+    } catch {
+      continue;
+    }
 
     const info = extractModuleInfo(source);
     if (!info) continue;
@@ -69,9 +71,14 @@ export function getModuleGraph(
   const rootModule = moduleMap.get(moduleName);
   if (!rootModule) {
     const available = [...moduleMap.keys()];
-    return err(notFound(moduleName, available.length > 0
-      ? [`Available modules: ${available.join(', ')}`]
-      : ['No NestJS modules found']));
+    return err(
+      notFound(
+        moduleName,
+        available.length > 0
+          ? [`Available modules: ${available.join(', ')}`]
+          : ['No NestJS modules found'],
+      ),
+    );
   }
 
   // BFS to collect reachable modules

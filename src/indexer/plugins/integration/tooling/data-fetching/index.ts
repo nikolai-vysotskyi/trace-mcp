@@ -33,18 +33,15 @@ const USE_MUTATION_RE =
  * Match useSWR('/api/...', fetcher)
  * Match useSWR(() => `/api/...`, fetcher)
  */
-const USE_SWR_STRING_RE =
-  /\buseSWR\s*\(\s*['"`](\/[^'"`$]*?)['"`]/g;
+const USE_SWR_STRING_RE = /\buseSWR\s*\(\s*['"`](\/[^'"`$]*?)['"`]/g;
 
-const USE_SWR_FUNCTION_RE =
-  /\buseSWR\s*\(\s*\(\s*\)\s*=>\s*[`'"](\/[^'"`$]*?)['"`]/g;
+const USE_SWR_FUNCTION_RE = /\buseSWR\s*\(\s*\(\s*\)\s*=>\s*[`'"](\/[^'"`$]*?)['"`]/g;
 
 /**
  * Template literal fetch patterns with interpolation.
  * e.g., fetch(`/api/users/${id}`) → '/api/users/:param'
  */
-const FETCH_TEMPLATE_RE =
-  /fetch\s*\(\s*`(\/[^`]*?)\$\{[^}]+\}([^`]*?)`/g;
+const FETCH_TEMPLATE_RE = /fetch\s*\(\s*`(\/[^`]*?)\$\{[^}]+\}([^`]*?)`/g;
 
 interface DataFetchingHook {
   hook: string;
@@ -154,7 +151,11 @@ export class DataFetchingPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'fetches_endpoint', category: 'data-fetching', description: 'useQuery/useSWR call referencing an API endpoint' },
+        {
+          name: 'fetches_endpoint',
+          category: 'data-fetching',
+          description: 'useQuery/useSWR call referencing an API endpoint',
+        },
       ],
     };
   }

@@ -7,18 +7,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
-import type { ProjectContext, FileParseResult, RawEdge, FrameworkPlugin } from '../plugin-api/types.js';
+import type {
+  ProjectContext,
+  FileParseResult,
+  RawEdge,
+  FrameworkPlugin,
+} from '../plugin-api/types.js';
 import { executeLanguagePlugin, executeFrameworkExtractNodes } from '../plugin-api/executor.js';
 import { buildProjectContext } from './project-context.js';
 import { hashContent } from '../utils/hasher.js';
-import { validatePath, validateFileSize, isSensitiveFile, isBinaryBuffer } from '../utils/security.js';
+import {
+  validatePath,
+  validateFileSize,
+  isSensitiveFile,
+  isBinaryBuffer,
+} from '../utils/security.js';
 import { logger } from '../logger.js';
 import { computeComplexity } from '../tools/analysis/complexity.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
 import type { FileExtraction } from './pipeline-state.js';
 import type { FileRow } from '../db/types.js';
-
 
 interface ExtractorContext {
   /**
@@ -90,14 +99,18 @@ export class FileExtractor {
     //   1. caller-supplied via opts.existing (worker path)
     //   2. context preload Map (CLI path; one IN-query upfront)
     //   3. store.getFile fallback (single-row SELECT)
-    const existing = opts.existing
-      ?? this.ctx.existingFiles?.get(relPath)
-      ?? this.ctx.store?.getFile(relPath);
+    const existing =
+      opts.existing ?? this.ctx.existingFiles?.get(relPath) ?? this.ctx.store?.getFile(relPath);
 
     // mtime fast-path: if mtime hasn't changed, the file content is identical —
     // skip the expensive read + hash computation entirely.
-    if (!force && fileMtimeMs != null && existing
-        && existing.mtime_ms != null && existing.mtime_ms === Math.floor(fileMtimeMs)) {
+    if (
+      !force &&
+      fileMtimeMs != null &&
+      existing &&
+      existing.mtime_ms != null &&
+      existing.mtime_ms === Math.floor(fileMtimeMs)
+    ) {
       return 'skipped';
     }
 
@@ -159,12 +172,17 @@ export class FileExtractor {
     if (parsed.edges?.length) {
       for (const edge of parsed.edges) {
         // Capture both JS/TS imports and Python imports for file-level resolution
-        const isImportEdge = (edge.edgeType === 'imports' || edge.edgeType === 'py_imports' || edge.edgeType === 'php_imports')
-          && !edge.sourceNodeType && !edge.sourceSymbolId;
+        const isImportEdge =
+          (edge.edgeType === 'imports' ||
+            edge.edgeType === 'py_imports' ||
+            edge.edgeType === 'php_imports') &&
+          !edge.sourceNodeType &&
+          !edge.sourceSymbolId;
         if (isImportEdge) {
           importEdges.push({
-            from: (edge.metadata as Record<string, unknown>)?.['from'] as string ?? '',
-            specifiers: ((edge.metadata as Record<string, unknown>)?.['specifiers'] as string[]) ?? [],
+            from: ((edge.metadata as Record<string, unknown>)?.['from'] as string) ?? '',
+            specifiers:
+              ((edge.metadata as Record<string, unknown>)?.['specifiers'] as string[]) ?? [],
             relPath,
           });
         } else {
@@ -213,7 +231,9 @@ export class FileExtractor {
             ...(sym.metadata ?? {}),
             cyclomatic: 1,
             max_nesting: 0,
-            param_count: sym.signature ? computeComplexity('', sym.signature, language).param_count : 0,
+            param_count: sym.signature
+              ? computeComplexity('', sym.signature, language).param_count
+              : 0,
           };
           continue;
         }
@@ -303,8 +323,13 @@ export class FileExtractor {
   private detectLanguage(filePath: string): string {
     const ext = path.extname(filePath).slice(1);
     const map: Record<string, string> = {
-      php: 'php', ts: 'typescript', tsx: 'typescript',
-      js: 'javascript', jsx: 'javascript', mjs: 'javascript', mts: 'typescript',
+      php: 'php',
+      ts: 'typescript',
+      tsx: 'typescript',
+      js: 'javascript',
+      jsx: 'javascript',
+      mjs: 'javascript',
+      mts: 'typescript',
       vue: 'vue',
     };
     return map[ext] ?? ext;

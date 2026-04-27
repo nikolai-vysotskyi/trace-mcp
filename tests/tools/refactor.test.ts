@@ -3,7 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
-import { applyRename, removeDeadCode, extractFunction, applyCodemod } from '../../src/tools/refactoring/refactor.js';
+import {
+  applyRename,
+  removeDeadCode,
+  extractFunction,
+  applyCodemod,
+} from '../../src/tools/refactoring/refactor.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -156,8 +161,8 @@ describe('applyRename', () => {
 
     const content = readFile(tmpDir, 'src/a.ts');
     expect(content).toContain('fetch');
-    expect(content).toContain('getAll');  // NOT renamed
-    expect(content).toContain('doGet');   // NOT renamed
+    expect(content).toContain('getAll'); // NOT renamed
+    expect(content).toContain('doGet'); // NOT renamed
     expect(content).not.toMatch(/\bget\b/);
   });
 
@@ -498,9 +503,15 @@ describe('applyCodemod', () => {
       'tests/b.test.ts': "it('also works', () => {\n  doOther();\n});\n",
     });
 
-    const result = applyCodemod(tmpDir, "it\\('([^']+)',\\s*\\(\\)", "it('$1', async ()", 'tests/**/*.test.ts', {
-      dryRun: true,
-    });
+    const result = applyCodemod(
+      tmpDir,
+      "it\\('([^']+)',\\s*\\(\\)",
+      "it('$1', async ()",
+      'tests/**/*.test.ts',
+      {
+        dryRun: true,
+      },
+    );
 
     expect(result.success).toBe(true);
     expect(result.dry_run).toBe(true);
@@ -519,9 +530,15 @@ describe('applyCodemod', () => {
       'tests/b.test.ts': "it('also works', () => {\n  doOther();\n});\n",
     });
 
-    const result = applyCodemod(tmpDir, "it\\('([^']+)',\\s*\\(\\)", "it('$1', async ()", 'tests/**/*.test.ts', {
-      dryRun: false,
-    });
+    const result = applyCodemod(
+      tmpDir,
+      "it\\('([^']+)',\\s*\\(\\)",
+      "it('$1', async ()",
+      'tests/**/*.test.ts',
+      {
+        dryRun: false,
+      },
+    );
 
     expect(result.success).toBe(true);
     expect(result.dry_run).toBe(false);
@@ -555,7 +572,7 @@ describe('applyCodemod', () => {
   it('filter_content narrows scope', () => {
     tmpDir = createTmpFixture({
       'src/a.ts': "import { foo } from './foo';\nconst x = foo();\n",
-      'src/b.ts': "const y = 42;\n",
+      'src/b.ts': 'const y = 42;\n',
     });
 
     const result = applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
@@ -629,13 +646,19 @@ describe('applyCodemod', () => {
 
   it('supports multiline mode', () => {
     tmpDir = createTmpFixture({
-      'src/a.ts': "if (cond) {\n  doA();\n  doB();\n}\n",
+      'src/a.ts': 'if (cond) {\n  doA();\n  doB();\n}\n',
     });
 
-    const result = applyCodemod(tmpDir, 'if \\(cond\\) \\{\\n  doA\\(\\);', 'if (cond) {\n  doX();', 'src/**', {
-      dryRun: false,
-      multiline: true,
-    });
+    const result = applyCodemod(
+      tmpDir,
+      'if \\(cond\\) \\{\\n  doA\\(\\);',
+      'if (cond) {\n  doX();',
+      'src/**',
+      {
+        dryRun: false,
+        multiline: true,
+      },
+    );
 
     expect(result.success).toBe(true);
     const content = readFile(tmpDir, 'src/a.ts');
@@ -648,9 +671,15 @@ describe('applyCodemod', () => {
       'src/a.ts': "it('test1', () => {});\nit('test2', () => {});\nit('test3', () => {});\n",
     });
 
-    const result = applyCodemod(tmpDir, "it\\('([^']+)',\\s*\\(\\)", "it('$1', async ()", 'src/**', {
-      dryRun: false,
-    });
+    const result = applyCodemod(
+      tmpDir,
+      "it\\('([^']+)',\\s*\\(\\)",
+      "it('$1', async ()",
+      'src/**',
+      {
+        dryRun: false,
+      },
+    );
 
     expect(result.success).toBe(true);
     expect(result.total_replacements).toBe(3);

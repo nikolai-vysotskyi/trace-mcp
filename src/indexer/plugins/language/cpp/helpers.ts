@@ -5,7 +5,12 @@ import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/type
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
-export function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parentName?: string): string {
+export function makeSymbolId(
+  filePath: string,
+  name: string,
+  kind: SymbolKind,
+  parentName?: string,
+): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;
   return `${filePath}::${name}#${kind}`;
 }
@@ -32,7 +37,9 @@ export function getNodeName(node: TSNode): string | undefined {
  * Handles qualified identifiers (ClassName::method), pointer declarators (*func),
  * and reference declarators (&func).
  */
-export function extractDeclaratorName(node: TSNode): { name: string; qualifier?: string } | undefined {
+export function extractDeclaratorName(
+  node: TSNode,
+): { name: string; qualifier?: string } | undefined {
   const declarator = node.childForFieldName('declarator');
   if (!declarator) return undefined;
   return extractNameFromDeclarator(declarator);
@@ -238,7 +245,8 @@ export function isVirtual(node: TSNode): boolean {
   // Also check unnamed children
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
-    if (child && (child.type === 'virtual_function_specifier' || child.type === 'virtual')) return true;
+    if (child && (child.type === 'virtual_function_specifier' || child.type === 'virtual'))
+      return true;
   }
   return false;
 }

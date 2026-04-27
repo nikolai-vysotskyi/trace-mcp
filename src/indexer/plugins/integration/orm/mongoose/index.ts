@@ -60,12 +60,28 @@ export class MongoosePlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'mongoose_references', category: 'mongoose', description: 'ObjectId ref to another model' },
+        {
+          name: 'mongoose_references',
+          category: 'mongoose',
+          description: 'ObjectId ref to another model',
+        },
         { name: 'mongoose_has_virtual', category: 'mongoose', description: 'Schema virtual field' },
-        { name: 'mongoose_has_middleware', category: 'mongoose', description: 'Schema pre/post hook' },
-        { name: 'mongoose_has_method', category: 'mongoose', description: 'Schema instance method' },
+        {
+          name: 'mongoose_has_middleware',
+          category: 'mongoose',
+          description: 'Schema pre/post hook',
+        },
+        {
+          name: 'mongoose_has_method',
+          category: 'mongoose',
+          description: 'Schema instance method',
+        },
         { name: 'mongoose_has_static', category: 'mongoose', description: 'Schema static method' },
-        { name: 'mongoose_discriminates', category: 'mongoose', description: 'Model discriminator' },
+        {
+          name: 'mongoose_discriminates',
+          category: 'mongoose',
+          description: 'Model discriminator',
+        },
         { name: 'mongoose_has_index', category: 'mongoose', description: 'Schema index' },
         { name: 'mongoose_uses_plugin', category: 'mongoose', description: 'Schema plugin' },
       ],
@@ -123,9 +139,11 @@ export function extractMongooseSchema(
   filePath: string,
 ): MongooseExtractionResult | null {
   // Try plain mongoose first, then decorators
-  return extractPlainMongooseSchema(source, filePath)
-    ?? extractNestMongooseSchema(source, filePath)
-    ?? extractTypegooseSchema(source, filePath);
+  return (
+    extractPlainMongooseSchema(source, filePath) ??
+    extractNestMongooseSchema(source, filePath) ??
+    extractTypegooseSchema(source, filePath)
+  );
 }
 
 /**
@@ -136,7 +154,8 @@ function extractPlainMongooseSchema(
   filePath: string,
 ): MongooseExtractionResult | null {
   // Match: new mongoose.Schema({...}) or new Schema({...})
-  const schemaRegex = /(?:const|let|var)\s+(\w+)\s*=\s*new\s+(?:mongoose\.)?Schema\s*\(\s*\{([\s\S]*?)\}\s*(?:,\s*\{([\s\S]*?)\})?\s*\)/;
+  const schemaRegex =
+    /(?:const|let|var)\s+(\w+)\s*=\s*new\s+(?:mongoose\.)?Schema\s*\(\s*\{([\s\S]*?)\}\s*(?:,\s*\{([\s\S]*?)\})?\s*\)/;
   const schemaMatch = source.match(schemaRegex);
   if (!schemaMatch) return null;
 
@@ -234,10 +253,7 @@ function extractNestMongooseSchema(
  * Extract Typegoose decorated schema.
  * @modelOptions({...}) class User { @prop({...}) public name!: string; }
  */
-function extractTypegooseSchema(
-  source: string,
-  filePath: string,
-): MongooseExtractionResult | null {
+function extractTypegooseSchema(source: string, filePath: string): MongooseExtractionResult | null {
   const classRegex = /@modelOptions\s*\(\s*\{([\s\S]*?)\}\s*\)\s*export\s+class\s+(\w+)/;
   const classMatch = source.match(classRegex);
   if (!classMatch) return null;
@@ -285,12 +301,26 @@ function parseSchemaFields(body: string): Record<string, unknown>[] {
   // name: { type: String, ... }
   // name: String
   // name: [{ type: ObjectId, ref: 'Post' }]  (array)
-  const fieldRegex = /(\w+)\s*:\s*(?:\[\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*\]|\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}|(\w[\w.]*(?:\.\w+)*)(?:\s*,)?)/g;
+  const fieldRegex =
+    /(\w+)\s*:\s*(?:\[\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*\]|\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}|(\w[\w.]*(?:\.\w+)*)(?:\s*,)?)/g;
   let match: RegExpExecArray | null;
   while ((match = fieldRegex.exec(body)) !== null) {
     const fieldName = match[1];
     // Skip common non-field names
-    if (['type', 'ref', 'required', 'default', 'enum', 'unique', 'index', 'select', 'validate'].includes(fieldName)) continue;
+    if (
+      [
+        'type',
+        'ref',
+        'required',
+        'default',
+        'enum',
+        'unique',
+        'index',
+        'select',
+        'validate',
+      ].includes(fieldName)
+    )
+      continue;
 
     if (match[2]) {
       // Array of objects form: [{ type: ObjectId, ref: 'Post' }]
@@ -384,9 +414,15 @@ function extractVirtuals(source: string, schemaVar: string): string[] {
   return virtuals;
 }
 
-function extractMiddleware(source: string, schemaVar: string): Array<{ hook: string; event: string }> {
+function extractMiddleware(
+  source: string,
+  schemaVar: string,
+): Array<{ hook: string; event: string }> {
   const middleware: Array<{ hook: string; event: string }> = [];
-  const regex = new RegExp(`${escapeRegExp(schemaVar)}\\.(pre|post)\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
+  const regex = new RegExp(
+    `${escapeRegExp(schemaVar)}\\.(pre|post)\\s*\\(\\s*['"]([^'"]+)['"]`,
+    'g',
+  );
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     middleware.push({ hook: m[1], event: m[2] });
@@ -436,7 +472,10 @@ function extractIndexes(source: string, schemaVar: string): string[] {
 
 function extractDiscriminators(source: string, modelName: string): string[] {
   const discriminators: string[] = [];
-  const regex = new RegExp(`${escapeRegExp(modelName)}\\.discriminator\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
+  const regex = new RegExp(
+    `${escapeRegExp(modelName)}\\.discriminator\\s*\\(\\s*['"]([^'"]+)['"]`,
+    'g',
+  );
   let m: RegExpExecArray | null;
   while ((m = regex.exec(source)) !== null) {
     discriminators.push(m[1]);

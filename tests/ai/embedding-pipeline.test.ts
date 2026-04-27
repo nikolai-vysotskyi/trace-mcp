@@ -90,10 +90,18 @@ describe('EmbeddingPipeline', () => {
 
   it('handles embedding service failure gracefully', async () => {
     const failingService: EmbeddingService = {
-      async embed() { throw new Error('network error'); },
-      async embedBatch() { throw new Error('network error'); },
-      dimensions() { return 3; },
-      modelName() { return 'mock-failing'; },
+      async embed() {
+        throw new Error('network error');
+      },
+      async embedBatch() {
+        throw new Error('network error');
+      },
+      dimensions() {
+        return 3;
+      },
+      modelName() {
+        return 'mock-failing';
+      },
     };
 
     const pipeline = new EmbeddingPipeline(store, failingService, vectorStore);
