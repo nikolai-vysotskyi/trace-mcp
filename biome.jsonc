@@ -53,8 +53,8 @@
         "noExplicitAny": "warn",
         "noShadowRestrictedNames": "error",
         "noDuplicateElseIf": "warn",
-        "noUselessEscapeInString": "warn",
-        "noTemplateCurlyInString": "warn"
+        "noUselessEscapeInString": "error",
+        "noTemplateCurlyInString": "error"
       },
       "complexity": {
         "useOptionalChain": "error",
@@ -104,6 +104,16 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["tests/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    },
     {
       "includes": ["packages/app/src/renderer/**"],
       "linter": {
