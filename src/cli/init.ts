@@ -519,11 +519,15 @@ export const initCommand = new Command('init')
         const header = opts.dryRun ? 'trace-mcp init (dry run)' : 'trace-mcp init';
         console.log(header);
         for (const step of steps) {
-          // Inline-strip CR/LF on each interpolated value to block log
-          // injection. CodeQL recognises a literal regex sanitizer at the
-          // source (helper aliases aren't tracked through call edges).
-          const target = shortPath(step.target).replace(/[\r\n]/g, ' ');
-          const detail = String(step.detail ?? step.action).replace(/[\r\n]/g, ' ');
+          // Strip all control characters (CR/LF + escape sequences) from
+          // interpolated values. Both `step.target` (config path) and
+          // `step.detail` are produced by our own init code, but CodeQL
+          // tracks them as user-influenced; the regex sanitizer leaves the
+          // output human-readable while neutralising log-injection.
+          const sanitize = (s: string): string => s.replace(/[\x00-\x1f\x7f]/g, ' ');
+          const target = sanitize(shortPath(step.target));
+          const detail = sanitize(String(step.detail ?? step.action));
+          // codeql[js/log-injection]: target/detail are sanitized above.
           console.log(`  ${target}  ${detail}`);
         }
         if (!opts.dryRun) {
