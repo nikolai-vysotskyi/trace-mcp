@@ -51,7 +51,7 @@
     "@parcel/watcher": "^2.5.6",
     "@vue/compiler-sfc": "^3.5.32",
     "better-sqlite3": "^12.9.0",
-    "commander": "^13.1.0",
+    "commander": "^14.0.3",
     "cosmiconfig": "^9.0.0",
     "fast-glob": "^3.3.3",
     "fastest-levenshtein": "^1.0.16",
