@@ -18,7 +18,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawOrmModel,
-  RawOrmAssociation,
   EdgeTypeDeclaration,
   RawMigration,
 } from '../../../../../plugin-api/types.js';

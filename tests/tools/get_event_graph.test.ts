@@ -3,7 +3,7 @@
  * Uses in-memory store with manually inserted symbols + edges.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { getEventGraph } from '../../src/tools/framework/events.js';
 import { createTestStore } from '../test-utils.js';
 

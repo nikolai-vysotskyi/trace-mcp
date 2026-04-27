@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { createTestStore } from '../test-utils.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';

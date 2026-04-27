@@ -64,7 +64,6 @@ export class LocalBackend implements Backend {
   private topoStore: TopologyStore | null = null;
   private decisionStore: DecisionStore | null = null;
   private clientTransport: InMemoryTransport | null = null;
-  private serverTransport: InMemoryTransport | null = null;
   private indexingPromise: Promise<void> | null = null;
   private started = false;
   private stopping = false;

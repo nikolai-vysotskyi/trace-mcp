@@ -66,7 +66,7 @@ export class HclLanguagePlugin implements LanguagePlugin {
 
     // Whether we are inside a terraform > required_providers sub-block
     let insideRequiredProviders = false;
-    let requiredProvidersDepth = 0;
+    let _requiredProvidersDepth = 0;
 
     function addSymbol(
       name: string,
@@ -374,7 +374,7 @@ export class HclLanguagePlugin implements LanguagePlugin {
         if (block.kind === 'terraform') {
           if (trimmed.match(/^required_providers\s*\{/)) {
             insideRequiredProviders = true;
-            requiredProvidersDepth = braceDepth + 1;
+            _requiredProvidersDepth = braceDepth + 1;
           }
           if (insideRequiredProviders && depthInsideBlock === 1) {
             // Inside required_providers at one level deep — extract provider name = { ... }

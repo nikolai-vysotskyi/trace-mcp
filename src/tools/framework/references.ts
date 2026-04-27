@@ -1,4 +1,4 @@
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
+import type { Store, } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { ok, err } from 'neverthrow';
 import { resolveSymbolInput } from '../shared/resolve.js';
@@ -42,7 +42,7 @@ export function findReferences(
   opts: { symbolId?: string; fqn?: string; filePath?: string },
 ): TraceMcpResult<FindReferencesResult> {
   let nodeId: number | undefined;
-  let targetMeta: FindReferencesResult['target'] = {};
+  const targetMeta: FindReferencesResult['target'] = {};
 
   if (opts.symbolId || opts.fqn) {
     const resolved = resolveSymbolInput(store, opts);

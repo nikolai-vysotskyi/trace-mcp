@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { getDeadCodeV2, getDeadCodeReachability } from '../../src/tools/refactoring/dead-code.js';
 

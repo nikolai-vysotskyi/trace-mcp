@@ -175,7 +175,7 @@ export function getChurnRate(
   }
 
   const stats = getGitFileStats(cwd, sinceDays);
-  let entries: ChurnEntry[] = [];
+  const entries: ChurnEntry[] = [];
 
   for (const [file, data] of stats) {
     if (filePattern && !file.includes(filePattern)) continue;

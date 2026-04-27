@@ -14,7 +14,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../../errors.js';
@@ -25,7 +24,7 @@ import type { TraceMcpResult } from '../../../../../errors.js';
  * Match ConfigProvider theme prop: <ConfigProvider theme={{ token: { ... }, components: { ... } }}>
  * Simplified: look for theme={{ token or theme={{ components
  */
-const CONFIG_PROVIDER_THEME_RE = /ConfigProvider[\s\S]*?theme\s*=\s*\{\s*\{([^]*?)\}\s*\}/g;
+const _CONFIG_PROVIDER_THEME_RE = /ConfigProvider[\s\S]*?theme\s*=\s*\{\s*\{([^]*?)\}\s*\}/g;
 
 /**
  * Match: const theme = { token: { ... }, components: { ... } }

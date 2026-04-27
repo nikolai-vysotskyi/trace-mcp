@@ -85,7 +85,7 @@ describe('applyBudgetDefaults', () => {
 
   it('caps get_type_hierarchy max_depth from 10 → 3 at critical', () => {
     const params: Record<string, unknown> = { max_depth: 10 };
-    const applied = applyBudgetDefaults('get_type_hierarchy', params, 'critical');
+    const _applied = applyBudgetDefaults('get_type_hierarchy', params, 'critical');
     expect(params.max_depth).toBe(3);
   });
 

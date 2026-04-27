@@ -141,7 +141,7 @@ const DARK_MODE_RE = /\bdarkMode\s*:\s*['"]?([\w-]+|false)['"]?/;
 const CONTENT_RE = /(?:content|purge)\s*:\s*\[([\s\S]*?)\]/;
 const SAFELIST_RE = /\bsafelist\s*:\s*\[([\s\S]*?)\]/;
 const PRESETS_RE = /\bpresets\s*:\s*\[([\s\S]*?)\]/;
-const SCREENS_RE = /\bscreens\s*:\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)}/;
+const _SCREENS_RE = /\bscreens\s*:\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)}/;
 const VARIANTS_CONFIG_RE = /\bvariants\s*:\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)}/;
 const CORE_PLUGINS_RE = /\bcorePlugins\s*:\s*\{([^}]*)\}/;
 const MODULES_RE = /\bmodules\s*:\s*\{([^}]*)\}/;
@@ -163,7 +163,7 @@ const HTML_CLASS_ATTR_RE = /\bclass\s*=\s*["']([^"']+)["']/g;
 // JSX className (static string)
 const JSX_CLASSNAME_STATIC_RE = /\bclassName\s*=\s*["']([^"']+)["']/g;
 // JSX className={`template`} — extract static segments
-const JSX_CLASSNAME_TMPL_RE = /\bclassName\s*=\s*\{`([^`]+)`\}/g;
+const _JSX_CLASSNAME_TMPL_RE = /\bclassName\s*=\s*\{`([^`]+)`\}/g;
 // JSX className={"string"}
 const JSX_CLASSNAME_BRACE_STR_RE = /\bclassName\s*=\s*\{["']([^"']+)["']\}/g;
 // Vue :class="['a', 'b']" or :class="'a'"
@@ -233,7 +233,6 @@ export class TailwindPlugin implements FrameworkPlugin {
 
   private detectedVersion: 1 | 2 | 3 | 4 | null = null;
   private configFilePath: string | null = null;
-  private postCssConfigPath: string | null = null;
 
   // ── detect ─────────────────────────────────────────────────
 

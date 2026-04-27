@@ -11,7 +11,6 @@
  * - TypeDefs string literals inside .ts files (gql`...` template literals)
  */
 import fs from 'node:fs';
-import path from 'node:path';
 import { ok } from 'neverthrow';
 import type {
   FrameworkPlugin,

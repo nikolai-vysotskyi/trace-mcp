@@ -250,7 +250,7 @@ function buildCallNode(
   const fileMap = allFileIds.length > 0 ? store.getFilesByIds(allFileIds) : new Map();
 
   // Phase 3: Build tree from pre-fetched data
-  const builtNodes = new Map<number, CallGraphNode>();
+  const _builtNodes = new Map<number, CallGraphNode>();
 
   function buildFromInfo(nodeId: number, depth: number, buildVisited: Set<number>): CallGraphNode {
     const info = nodeInfoMap.get(nodeId);

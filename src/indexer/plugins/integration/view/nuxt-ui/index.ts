@@ -24,8 +24,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
-  RawComponent,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../../errors.js';
@@ -355,9 +353,6 @@ export class NuxtUiPlugin implements FrameworkPlugin {
     category: 'view',
     dependencies: ['nuxt'],
   };
-
-  private isV3 = false;
-  private hasPro = false;
 
   detect(ctx: ProjectContext): boolean {
     const deps = {

@@ -28,9 +28,7 @@ import {
   extractCustomNodeDefinitions,
 } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
 import type {
-  ExpressionInfo,
   WorkflowComplexity,
-  CustomNodeDefinition,
 } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

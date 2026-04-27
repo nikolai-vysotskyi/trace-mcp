@@ -425,7 +425,7 @@ function parseColumnDef(name: string, body: string): Record<string, unknown> {
 // Association extraction
 // ============================================================
 
-const ASSOCIATION_MAP: Record<string, string> = {
+const _ASSOCIATION_MAP: Record<string, string> = {
   hasMany: 'sequelize_has_many',
   belongsTo: 'sequelize_belongs_to',
   belongsToMany: 'sequelize_belongs_to_many',

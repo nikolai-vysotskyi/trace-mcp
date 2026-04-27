@@ -1,16 +1,4 @@
-/**
- * TypeORMPlugin — Framework plugin for TypeORM.
- *
- * Extracts:
- * - @Entity() decorated classes → RawOrmModel
- * - @Column() / @PrimaryGeneratedColumn() fields
- * - @OneToMany / @ManyToOne / @OneToOne / @ManyToMany relations → RawOrmAssociation
- * - @Index / @Unique block attributes
- *
- * Supports TypeORM 0.2.x and 0.3.x.
- */
-import fs from 'node:fs';
-import path from 'node:path';
+
 import { ok } from 'neverthrow';
 import type {
   FrameworkPlugin,
@@ -125,7 +113,7 @@ export function extractTypeORMEntity(source: string, filePath: string): TypeORME
   }
 
   // Extract relation decorators
-  const RELATION_MAP: Record<string, string> = {
+  const _RELATION_MAP: Record<string, string> = {
     OneToMany: 'typeorm_one_to_many',
     ManyToOne: 'typeorm_many_to_one',
     OneToOne: 'typeorm_one_to_one',

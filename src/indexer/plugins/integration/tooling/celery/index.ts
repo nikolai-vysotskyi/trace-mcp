@@ -17,7 +17,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
   EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
@@ -75,12 +74,12 @@ function stripQuotes(s: string): string {
 }
 
 /** Walk all nodes of a given type. */
-function walkNodes(node: TSNode, type: string, visitor: (n: TSNode) => void): void {
+function _walkNodes(node: TSNode, type: string, visitor: (n: TSNode) => void): void {
   if (node.type === type) {
     visitor(node);
   }
   for (const child of node.namedChildren) {
-    walkNodes(child, type, visitor);
+    _walkNodes(child, type, visitor);
   }
 }
 

@@ -3,7 +3,6 @@ import { z } from 'zod';
 import type { ServerContext } from '../../server/types.js';
 import { formatToolError } from '../../errors.js';
 import { logger } from '../../logger.js';
-import type { TopologyStore } from '../../topology/topology-db.js';
 import {
   getServiceMap,
   getCrossServiceImpact,

@@ -243,7 +243,7 @@ export function detectCommunities(
   }
 
   const assignments = leidenDetect(graph, resolution);
-  const numCommunities = Math.max(...assignments) + 1;
+  const _numCommunities = Math.max(...assignments) + 1;
 
   // Group files by community
   const communityFiles = new Map<number, string[]>();

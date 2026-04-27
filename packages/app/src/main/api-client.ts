@@ -1,4 +1,4 @@
-import http from 'http';
+import http from 'node:http';
 
 const DEFAULT_BASE = 'http://127.0.0.1:3741';
 

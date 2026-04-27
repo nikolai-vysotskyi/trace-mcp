@@ -22,7 +22,7 @@ import { getArtifacts, type ArtifactCategory } from '../project/artifacts.js';
 import { planBatchChange } from '../project/batch-changes.js';
 import { checkRenameSafe } from '../refactoring/rename-check.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
-import { GIT_CHURN_METHODOLOGY, COMPLEXITY_METHODOLOGY } from '../shared/confidence.js';
+import { GIT_CHURN_METHODOLOGY, } from '../shared/confidence.js';
 
 export function registerGitTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, registry, guardPath, j, jh } = ctx;

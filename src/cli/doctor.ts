@@ -10,7 +10,6 @@ import { Command } from 'commander';
 import * as p from '@clack/prompts';
 import {
   detectConflicts,
-  type Conflict,
   type ConflictSeverity,
 } from '../init/conflict-detector.js';
 import { fixConflict, fixAllConflicts, type FixResult } from '../init/conflict-resolver.js';
@@ -24,7 +23,7 @@ import {
 } from '../init/launcher.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
 
-const SEVERITY_ICON: Record<ConflictSeverity, string> = {
+const _SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',
   warning: '!',
   info: '-',

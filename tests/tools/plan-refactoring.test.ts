@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 import { planRefactoring } from '../../src/tools/refactoring/plan-refactoring.js';
 
@@ -122,7 +122,7 @@ describe('planRefactoring', () => {
     tmpDir = createTmpFixture({
       'src/a.ts': 'function main() {\n  const x = 1;\n  const y = 2;\n  return x + y;\n}\n',
     });
-    const fileId = insertFile(store, 'src/a.ts');
+    const _fileId = insertFile(store, 'src/a.ts');
 
     const result = planRefactoring(store, tmpDir, {
       type: 'extract',

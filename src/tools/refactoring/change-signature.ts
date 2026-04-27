@@ -168,7 +168,7 @@ export function changeSignature(
 
   // 6. Build new parameter list text
   const newParamText = newParams.map((p) => p.raw).join(', ');
-  const oldParamText = parenResult.content;
+  const _oldParamText = parenResult.content;
 
   // Build the new definition region
   const newDefRegion =

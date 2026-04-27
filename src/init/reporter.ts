@@ -2,7 +2,7 @@
  * Format init/upgrade results for human-readable and JSON output.
  */
 
-import type { DetectionResult, InitStepResult, InitReport } from './types.js';
+import type { InitReport } from './types.js';
 
 export function formatReport(report: InitReport, json: boolean): string {
   if (json) return JSON.stringify(report, null, 2);

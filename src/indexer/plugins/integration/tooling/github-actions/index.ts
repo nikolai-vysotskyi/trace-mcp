@@ -9,7 +9,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -28,10 +27,10 @@ const JOB_RE = /^\s{2}(\w[\w-]*):\s*$/gm;
 const USES_RE = /uses:\s*['"]?([^'"\n]+)['"]?/g;
 
 // run: npm test
-const RUN_RE = /run:\s*[|>]?\s*\n?\s*(.+)/g;
+const _RUN_RE = /run:\s*[|>]?\s*\n?\s*(.+)/g;
 
 // needs: [job1, job2] or needs: job1
-const NEEDS_RE = /needs:\s*(?:\[([^\]]+)\]|(\w[\w-]*))/g;
+const _NEEDS_RE = /needs:\s*(?:\[([^\]]+)\]|(\w[\w-]*))/g;
 
 // --- Helpers -------------------------------------------------------------------
 

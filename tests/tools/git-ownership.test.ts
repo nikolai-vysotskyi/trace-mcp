@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { Store } from '../../src/db/store.js';
 import { getFileOwnership, getSymbolOwnership } from '../../src/tools/git/git-ownership.js';
 import { createTestStore } from '../test-utils.js';
 

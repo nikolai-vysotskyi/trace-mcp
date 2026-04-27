@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { z } from 'zod';
 import { TraceMcpConfigSchema } from '../../src/config.js';
 import { resolvePreset, TOOL_PRESETS } from '../../src/tools/project/presets.js';
 

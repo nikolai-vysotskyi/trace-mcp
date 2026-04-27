@@ -3,7 +3,7 @@
  * Uses in-memory store with manually inserted symbols and edges.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { getCallGraph } from '../../src/tools/framework/call-graph.js';
 
@@ -17,7 +17,7 @@ function addSymbol(
     metadata?: Record<string, unknown>;
   },
 ): { fileId: number; symbolDbId: number; nodeId: number } {
-  let file = store.getFile(opts.filePath);
+  const file = store.getFile(opts.filePath);
   let fileId: number;
   if (!file) {
     fileId = store.insertFile(opts.filePath, 'typescript', null, null);
@@ -55,7 +55,7 @@ describe('getCallGraph', () => {
   });
 
   it('returns root only when symbol has no edges', () => {
-    const sym = addSymbol(store, {
+    const _sym = addSymbol(store, {
       filePath: 'src/app.ts',
       name: 'lonelyFn',
       kind: 'function',

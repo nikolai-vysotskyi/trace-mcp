@@ -329,7 +329,7 @@ function walkAndInvoke(
 }
 
 function scanFileContent(filePath: string, content: string, results: ScannedClientCall[]): void {
-  const lines = content.split('\n');
+  const _lines = content.split('\n');
 
   for (const pattern of CALL_PATTERNS) {
     // Reset regex state

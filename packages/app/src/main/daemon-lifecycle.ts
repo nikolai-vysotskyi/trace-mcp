@@ -7,7 +7,7 @@
  * this file duplicated the launchd/spawn logic and drifted over time.
  */
 
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync, execSync } from 'node:child_process';
 
 const isWin = process.platform === 'win32';
 

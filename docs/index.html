@@ -2887,7 +2887,7 @@
   })();
 
   // Copy install
-  function copyInstall(el) {
+  function _copyInstall(el) {
     navigator.clipboard.writeText('npm install -g trace-mcp');
     const c = el.querySelector('.copy');
     const original = c.textContent;
@@ -3005,7 +3005,7 @@
       const onChange = (e) => {
         try {
           if (localStorage.getItem('trace-mcp-theme')) return;
-        } catch (err) {}
+        } catch (_err) {}
         applyTheme(e.matches ? 'light' : 'dark', false);
       };
       if (mq.addEventListener) mq.addEventListener('change', onChange);

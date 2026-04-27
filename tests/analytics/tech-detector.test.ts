@@ -37,7 +37,7 @@ describe('tech-detector', () => {
     });
 
     it('has correct structure for all entries', () => {
-      for (const [name, meta] of Object.entries(KNOWN_PACKAGES)) {
+      for (const [_name, meta] of Object.entries(KNOWN_PACKAGES)) {
         expect(meta).toHaveProperty('category');
         expect(meta).toHaveProperty('priority');
         expect(meta).toHaveProperty('plugin');

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Store, SymbolRow, FileRow } from '../../db/store.js';
-import { searchFts, type FtsResult, type FtsFilters } from '../../db/fts.js';
-import { fuzzySearch, type FuzzyMatch } from '../../db/fuzzy.js';
+import { searchFts, type FtsFilters } from '../../db/fts.js';
+import { fuzzySearch, } from '../../db/fuzzy.js';
 import { readByteRange } from '../../utils/source-reader.js';
 import {
   hybridScore,

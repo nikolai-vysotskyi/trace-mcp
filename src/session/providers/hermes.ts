@@ -114,7 +114,7 @@ function toMs(v: number | string | null | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function toIso(v: number | string | null | undefined): string {
+function _toIso(v: number | string | null | undefined): string {
   const ms = toMs(v, 0);
   return ms > 0 ? new Date(ms).toISOString() : '';
 }

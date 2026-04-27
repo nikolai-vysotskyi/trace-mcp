@@ -14,7 +14,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { execSync, spawn } from 'node:child_process';
 import {
   TRACE_MCP_HOME,
@@ -135,7 +134,7 @@ function installPlist(port: number): void {
   fs.writeFileSync(LAUNCHD_PLIST_PATH, generatePlist(binaryPath, port), 'utf-8');
 }
 
-function isPlistLoaded(): boolean {
+function _isPlistLoaded(): boolean {
   try {
     const out = execSync(`launchctl list ${PLIST_LABEL} 2>&1`, { encoding: 'utf-8' });
     return !out.includes('Could not find service');

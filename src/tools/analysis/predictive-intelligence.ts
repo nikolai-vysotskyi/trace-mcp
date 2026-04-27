@@ -579,7 +579,7 @@ export function detectDrift(
   // Build co-change matrix
   const coChangeCount = new Map<string, number>(); // "fileA|fileB" -> count
   const fileCommitCount = new Map<string, number>();
-  const fileModuleMap = new Map<string, Set<string>>(); // file -> set of modules touched per commit
+  const _fileModuleMap = new Map<string, Set<string>>(); // file -> set of modules touched per commit
 
   // Track shotgun commits per file
   const fileShotgunCount = new Map<string, number>();

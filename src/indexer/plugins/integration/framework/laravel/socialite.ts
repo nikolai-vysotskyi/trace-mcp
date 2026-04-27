@@ -31,7 +31,7 @@ interface CustomSocialiteProvider {
 // ─── Detection ───────────────────────────────────────────────
 
 const NAMESPACE_RE = /namespace\s+([\w\\]+)\s*;/;
-const CLASS_NAME_RE = /class\s+(\w+)/;
+const _CLASS_NAME_RE = /class\s+(\w+)/;
 
 // Socialite::driver('github')->redirect() or Socialite::driver('github')->user()
 const SOCIALITE_DRIVER_RE = /Socialite::driver\(\s*['"](\w+)['"]\s*\)\s*->\s*(\w+)/g;

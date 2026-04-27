@@ -1,4 +1,4 @@
-import { AnalyticsStore } from './analytics-store.js';
+import type { AnalyticsStore } from './analytics-store.js';
 import { parseSessionFile, listAllSessions } from './log-parser.js';
 import { logger } from '../logger.js';
 

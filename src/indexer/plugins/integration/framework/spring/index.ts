@@ -7,8 +7,6 @@ import type {
   PluginManifest,
   ProjectContext,
   FileParseResult,
-  RawEdge,
-  RawRoute,
 } from '../../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../../errors.js';
 

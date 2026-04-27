@@ -1,9 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
-import fs from 'node:fs';
 import { TRACE_MCP_HOME, ensureGlobalDirs } from '../global.js';
-import { logger } from '../logger.js';
-import type { ParsedSession, ToolCallEvent, ToolResultEvent, TokenUsage } from './log-parser.js';
+import type { ParsedSession, } from './log-parser.js';
 
 const ANALYTICS_DB_PATH = path.join(TRACE_MCP_HOME, 'analytics.db');
 

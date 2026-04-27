@@ -7,7 +7,7 @@
  */
 import { execSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
+import { ok, type TraceMcpResult } from '../../errors.js';
 import { logger } from '../../logger.js';
 
 interface CoChangeEntry {

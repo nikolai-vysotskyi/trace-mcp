@@ -12,7 +12,6 @@ import fg from 'fast-glob';
 import type { Store } from '../../db/store.js';
 import { checkRenameSafe } from './rename-check.js';
 import {
-  type FileEdit,
   type RefactorResult,
   readLines,
   writeLines,

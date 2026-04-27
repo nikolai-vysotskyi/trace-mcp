@@ -11,7 +11,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -28,13 +27,13 @@ const COMMAND_RE = /\.command\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)
 const OPTION_RE = /\.option\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
 
 // .argument('<name>', 'description')
-const ARGUMENT_RE = /\.argument\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
+const _ARGUMENT_RE = /\.argument\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
 
 // .name('cli-name')
-const NAME_RE = /\.name\(\s*['"]([^'"]+)['"]/g;
+const _NAME_RE = /\.name\(\s*['"]([^'"]+)['"]/g;
 
 // .description('text')
-const DESCRIPTION_RE = /\.description\(\s*['"]([^'"]+)['"]/g;
+const _DESCRIPTION_RE = /\.description\(\s*['"]([^'"]+)['"]/g;
 
 // new Command('name') or program = new Command()
 const NEW_COMMAND_RE = /new\s+Command\(\s*(?:['"]([^'"]+)['"])?\s*\)/g;

@@ -124,14 +124,14 @@ export function analyzeRealSavings(
   // Compute alternatives — only count savings from indexed files
   let filesInIndex = 0;
   let filesNotIndexed = 0;
-  let totalReadTokens = 0;
+  let _totalReadTokens = 0;
   let replaceableTokens = 0;
   let achievableTokens = 0;
   const byFile: FileAlternative[] = [];
   const toolReplacements = new Map<string, ToolReplacement>();
 
   for (const [file, group] of fileGroups) {
-    totalReadTokens += group.tokens;
+    _totalReadTokens += group.tokens;
     const alt = computeAlternativeTokens(store, file);
 
     const toolKey = READ_TOOLS.has(group.tool) ? group.tool : 'Bash (cat/head/tail)';

@@ -11,7 +11,7 @@
  * - Package vs module distinction (__init__.py)
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join, dirname, relative, normalize } from 'node:path';
+import { join, dirname, } from 'node:path';
 
 interface PyModuleResolveResult {
   path: string;

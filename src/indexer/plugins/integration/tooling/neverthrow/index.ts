@@ -24,7 +24,7 @@ const RESULT_TYPE_RE = /(?:Result|ResultAsync|Ok|Err)\s*<[^>]+>/g;
 const CHAIN_RE = /\.\s*(?:andThen|map|mapErr|orElse|match|unwrapOr|isOk|isErr)\s*\(/g;
 
 // ok(...), err(...), okAsync(...), errAsync(...)
-const CONSTRUCTOR_RE = /\b(?:ok|err|okAsync|errAsync)\s*\(/g;
+const _CONSTRUCTOR_RE = /\b(?:ok|err|okAsync|errAsync)\s*\(/g;
 
 // fromPromise(...), fromThrowable(...)
 const WRAPPER_RE = /\b(?:fromPromise|fromThrowable|safeTry)\s*\(/g;

@@ -24,7 +24,7 @@ const LOGGER_CREATE_RE =
 const LOG_CALL_RE = /(?:logger|log)\s*\.\s*(trace|debug|info|warn|error|fatal)\s*\(/g;
 
 // level: 'info', level: 'debug'
-const LOG_LEVEL_RE = /level\s*:\s*['"](\w+)['"]/g;
+const _LOG_LEVEL_RE = /level\s*:\s*['"](\w+)['"]/g;
 
 // Pino child logger: logger.child({...})
 const CHILD_LOGGER_RE = /\.child\s*\(\s*\{/g;

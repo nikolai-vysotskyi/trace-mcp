@@ -9,9 +9,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as p from '@clack/prompts';
 import { findProjectRoot } from '../project-root.js';
-import { getProject, unregisterProject, listProjects, findParentProject } from '../registry.js';
+import { getProject, unregisterProject, findParentProject } from '../registry.js';
 import { removeProjectConfig } from '../config.js';
-import { getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
+import { TOPOLOGY_DB_PATH } from '../global.js';
 import { TopologyStore } from '../topology/topology-db.js';
 
 export const removeCommand = new Command('remove')

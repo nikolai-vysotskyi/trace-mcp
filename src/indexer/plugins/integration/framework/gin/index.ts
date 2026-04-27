@@ -13,7 +13,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -173,7 +172,7 @@ export class GinPlugin implements FrameworkPlugin {
     const middlewares = extractGinMiddleware(source);
     if (middlewares.length > 0) {
       result.frameworkRole = result.frameworkRole ?? 'gin_middleware';
-      for (const mw of middlewares) {
+      for (const _mw of middlewares) {
         result.routes!.push({
           method: 'USE',
           uri: '/',

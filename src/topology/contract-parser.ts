@@ -210,8 +210,8 @@ function parseOpenApi(content: string, specPath: string): ParsedContract | null 
   version = versionMatch?.[1] ?? '';
 
   // Extract paths using indentation patterns
-  const pathRegex = /^\s{2}(\/\S+):\s*$/gm;
-  const methodRegex = /^\s{4}(get|post|put|patch|delete|head|options):\s*$/gm;
+  const _pathRegex = /^\s{2}(\/\S+):\s*$/gm;
+  const _methodRegex = /^\s{4}(get|post|put|patch|delete|head|options):\s*$/gm;
 
   let currentPath = '';
   for (const line of content.split('\n')) {

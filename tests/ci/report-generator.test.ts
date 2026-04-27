@@ -573,7 +573,7 @@ describe('CI Report Markdown Formatter', () => {
     registry.registerFrameworkPlugin(new VueFrameworkPlugin());
 
     const config = makeConfig();
-    const pipeline = new IndexingPipeline(realStore, registry, config, FIXTURE_DIR);
+    const _pipeline = new IndexingPipeline(realStore, registry, config, FIXTURE_DIR);
     // synchronous-ish for test: we can rely on beforeAll having worked
     // Actually, let's generate from the shared store
     const files = realStore.getAllFiles().map((f) => f.path);

@@ -6,7 +6,6 @@ import type { PipelineState } from './pipeline-state.js';
 import type { FileExtraction } from './pipeline-state.js';
 import type { RawEdge } from '../plugin-api/types.js';
 import { indexTrigramsBatch, deleteTrigramsByFile } from '../db/fuzzy.js';
-import { logger } from '../logger.js';
 
 /**
  * Callback for storing raw edges — injected from the pipeline so that

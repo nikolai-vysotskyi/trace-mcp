@@ -121,7 +121,6 @@ export interface WorkspaceResolver {
 
 export class EsModuleResolver {
   private resolvers: Map<string, ResolverFactory> = new Map();
-  private rootPath: string;
   private rootResolver: ResolverFactory;
   /** Workspace paths sorted longest-first for prefix matching. */
   private sortedWorkspacePaths: string[] = [];

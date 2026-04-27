@@ -7,10 +7,10 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 import { ok, err, type TraceMcpResult } from '../../errors.js';
 import { validationError } from '../../errors.js';
-import { Store, type FileRow, type SymbolRow, type EdgeRow } from '../../db/store.js';
+import { Store, type FileRow, } from '../../db/store.js';
 import { initializeDatabase } from '../../db/schema.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
 import { logger } from '../../logger.js';
@@ -141,7 +141,7 @@ export function buildGraphData(
 ): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } {
   const scope = opts.scope;
   const depth = opts.depth ?? 2;
-  const colorBy = opts.colorBy ?? 'community';
+  const _colorBy = opts.colorBy ?? 'community';
   const granularity = opts.granularity ?? 'file';
   const hideIsolated = opts.hideIsolated === true; // default false
 
@@ -349,7 +349,7 @@ function buildFileGraph(
   // 1. Collect ALL symbol node IDs for the seed files — this is where
   //    edges actually live (symbol→symbol), not file→file.
   const fileIdSet = new Set(seedFiles.map((f) => f.id));
-  const fileByIdMap = new Map(seedFiles.map((f) => [f.id, f]));
+  const _fileByIdMap = new Map(seedFiles.map((f) => [f.id, f]));
 
   // Get symbol→nodeId mapping for seed files
   const allSymbols = store.getSymbolsByFileIds([...fileIdSet]);
@@ -487,7 +487,7 @@ function buildFileGraph(
   }
 
   const dedupedEdges = [...edgeMap.values()];
-  let vizNodes = [...vizNodeMap.values()];
+  const vizNodes = [...vizNodeMap.values()];
 
   // 7. Communities, importance, optional isolation filter
   return finalize(vizNodes, dedupedEdges, hideIsolated);

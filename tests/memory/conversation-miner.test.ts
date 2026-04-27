@@ -34,7 +34,7 @@ describe('Conversation Miner — extraction patterns', () => {
   /**
    * Helper: write a synthetic JSONL session file with conversation turns.
    */
-  function writeSession(
+  function _writeSession(
     sessionDir: string,
     sessionId: string,
     turns: Array<{ role: 'user' | 'assistant'; text: string }>,

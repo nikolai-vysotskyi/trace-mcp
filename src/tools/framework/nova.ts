@@ -171,7 +171,7 @@ function findNovaSymbol(store: Store, name: string) {
   return store.findSymbolByRole(name, 'nova_resource');
 }
 
-function resolveTargetName(
+function _resolveTargetName(
   store: Store,
   targetNodeId: number,
   meta: Record<string, unknown>,

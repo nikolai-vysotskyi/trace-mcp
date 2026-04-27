@@ -13,7 +13,6 @@ import type {
   OrmModelRow,
   OrmAssociationRow,
   FileRow,
-  MigrationRow,
 } from '../../db/store.js';
 import {
   classifyNumericConfidence,
@@ -953,7 +952,7 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
 // ---------------------------------------------------------------------------
 
 /** Patterns that suggest potential memory leaks via unbounded growth. */
-const MEMORY_LEAK_PATTERNS: {
+const _MEMORY_LEAK_PATTERNS: {
   regex: RegExp;
   label: string;
   severity: Severity;
@@ -1137,9 +1136,9 @@ const LONG_METHOD_LOC_THRESHOLD = 60;
 const LONG_PARAM_LIST_THRESHOLD = 6;
 const DEEP_NESTING_THRESHOLD = 5;
 
-const CLASS_KINDS = new Set(['class', 'interface', 'struct', 'enum', 'trait', 'module']);
-const METHOD_KINDS = new Set(['method', 'function', 'constructor', 'arrow_function']);
-const TRIVIAL_NAME_RE = /^(?:get|set|is|has)[A-Z]/;
+const _CLASS_KINDS = new Set(['class', 'interface', 'struct', 'enum', 'trait', 'module']);
+const _METHOD_KINDS = new Set(['method', 'function', 'constructor', 'arrow_function']);
+const _TRIVIAL_NAME_RE = /^(?:get|set|is|has)[A-Z]/;
 
 function countParamsFromSignature(signature: string | null): number {
   if (!signature) return 0;
@@ -1147,7 +1146,7 @@ function countParamsFromSignature(signature: string | null): number {
   const closeParen = signature.lastIndexOf(')');
   if (openParen === -1 || closeParen <= openParen) return 0;
 
-  let inner = signature.slice(openParen + 1, closeParen).trim();
+  const inner = signature.slice(openParen + 1, closeParen).trim();
   if (!inner) return 0;
 
   // Strip nested parens and generics so commas inside them don't split params

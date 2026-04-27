@@ -4,7 +4,6 @@ import type {
   RawComponent,
   RawMigration,
   RawOrmModel,
-  RawOrmAssociation,
   RawRnScreen,
 } from '../../plugin-api/types.js';
 import type {

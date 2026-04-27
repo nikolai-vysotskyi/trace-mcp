@@ -44,7 +44,7 @@ const TEMPLATE_HINT_RE = /\b(?:template|html|text)\s*:\s*['"`]/g;
 const MAIL_IMPORT_RE =
   /(?:import|require)\s*(?:\(|{)?\s*.*['"](?:nodemailer|@sendgrid\/mail|mailgun\.js|mailgun-js|resend|postmark|@aws-sdk\/client-ses|mailersend)['"]/;
 
-const PROVIDER_IMPORT_PATTERNS: Array<{ name: string; re: RegExp }> = [
+const _PROVIDER_IMPORT_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: 'sendgrid', re: /['"]@sendgrid\/mail['"]/ },
   { name: 'resend', re: /['"]resend['"]/ },
   { name: 'postmark', re: /['"]postmark['"]/ },

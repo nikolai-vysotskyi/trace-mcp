@@ -969,8 +969,8 @@ function parseCustomNodeSource(filePath: string, source: string): CustomNodeDefi
     const propsBlock = extractBalancedBracket(source, source.indexOf('[', propsStart));
     if (propsBlock) {
       // Match top-level { name: '...' } entries (depth=1 curly braces)
-      const topLevelNameRe = /\{\s*name\s*[:=]\s*['"]([^'"]+)['"]/g;
-      let m: RegExpExecArray | null;
+      const _topLevelNameRe = /\{\s*name\s*[:=]\s*['"]([^'"]+)['"]/g;
+      let _m: RegExpExecArray | null;
       // Walk through and only match at bracket depth 0 (relative to propsBlock content)
       let depth = 0;
       let idx = 0;

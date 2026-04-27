@@ -17,7 +17,6 @@ import type {
   PluginManifest,
   ProjectContext,
   FileParseResult,
-  RawSymbol,
   RawEdge,
   ResolveContext,
   EdgeTypeDeclaration,
@@ -67,7 +66,7 @@ function hasPythonDep(ctx: ProjectContext, pkg: string): boolean {
 }
 
 /** Known pytest marker names. */
-const KNOWN_MARKERS = new Set([
+const _KNOWN_MARKERS = new Set([
   'skip',
   'skipif',
   'xfail',

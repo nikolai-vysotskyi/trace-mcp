@@ -1,13 +1,11 @@
-import path from 'path';
+import path from 'node:path';
 import {
   Tray,
   nativeImage,
   Menu,
   BrowserWindow,
   app,
-  shell,
   ipcMain,
-  dialog,
   nativeTheme,
 } from 'electron';
 import { DaemonClient } from './api-client';
@@ -52,7 +50,7 @@ let consecutiveFailures = 0;
 const RESTART_ATTEMPT_TICKS = new Set<number>([1, 3, 6, 12, 24]);
 /** After the last explicit tick, retry every N ticks. */
 const RESTART_RETRY_EVERY = 24;
-let lastRestartAttempt = 0;
+let _lastRestartAttempt = 0;
 /**
  * Timestamp of the last daemon restart triggered by a version mismatch.
  * Used to back off so a stuck daemon (one that comes back up still reporting
@@ -463,7 +461,7 @@ async function checkHealth(): Promise<void> {
     }
     daemonReachable = true;
     consecutiveFailures = 0;
-    lastRestartAttempt = 0;
+    _lastRestartAttempt = 0;
     setTrayIcon(true);
 
     // Version mismatch — npm swapped the binary on disk but the running daemon
@@ -504,7 +502,7 @@ async function checkHealth(): Promise<void> {
       }
       daemonReachable = true;
       consecutiveFailures = 0;
-      lastRestartAttempt = 0;
+      _lastRestartAttempt = 0;
       setTrayIcon(true);
       tray.setContextMenu(buildContextMenu());
       return;
@@ -519,7 +517,7 @@ async function checkHealth(): Promise<void> {
       // Later failures → force restart (kills any zombie then starts fresh).
       const useRestart = consecutiveFailures > 1;
       const action = useRestart ? 'restart' : 'ensure';
-      lastRestartAttempt = consecutiveFailures;
+      _lastRestartAttempt = consecutiveFailures;
       console.log(
         `[trace-mcp] daemon unreachable (fail #${consecutiveFailures}), attempting ${action}`,
       );

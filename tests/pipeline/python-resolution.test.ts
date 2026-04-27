@@ -374,7 +374,7 @@ describe('Python resolution pipeline', () => {
 
   it('resolves dict dispatch to all handler functions', () => {
     // Debug
-    const daSym = db
+    const _daSym = db
       .prepare(`SELECT name, kind, metadata FROM symbols WHERE name = 'dispatch_action'`)
       .all() as { name: string; kind: string; metadata: string | null }[];
     // dispatch_action uses handlers = {"create": handle_create, ...}; handlers[action]()

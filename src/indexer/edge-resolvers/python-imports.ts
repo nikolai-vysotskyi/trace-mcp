@@ -1,13 +1,4 @@
-/**
- * Python import resolver — resolves py_imports edges to file-level dependencies.
- *
- * Handles:
- * - Absolute imports: `from myapp.models import User` → `myapp/models.py`
- * - Relative imports: `from . import utils` → sibling `utils.py`
- * - Package imports: `import myapp.models` → `myapp/models.py` or `myapp/models/__init__.py`
- * - __init__.py awareness: `from myapp import models` → `myapp/__init__.py` re-export
- */
-import * as path from 'node:path';
+
 import type { PipelineState } from '../pipeline-state.js';
 import { logger } from '../../logger.js';
 

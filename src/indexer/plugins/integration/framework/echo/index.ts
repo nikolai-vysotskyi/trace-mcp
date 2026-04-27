@@ -13,7 +13,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -174,7 +173,7 @@ export class EchoPlugin implements FrameworkPlugin {
     const middlewares = extractEchoMiddleware(source);
     if (middlewares.length > 0) {
       result.frameworkRole = result.frameworkRole ?? 'echo_middleware';
-      for (const mw of middlewares) {
+      for (const _mw of middlewares) {
         result.routes!.push({
           method: 'USE',
           uri: '/',

@@ -23,7 +23,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawSymbol,
   ResolveContext,
   EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';

@@ -3,7 +3,6 @@
  * Subcommands: sync, report, optimize, benchmark, coverage
  */
 
-import path from 'node:path';
 import { Command } from 'commander';
 import { AnalyticsStore } from '../analytics/analytics-store.js';
 import { syncAnalytics } from '../analytics/sync.js';

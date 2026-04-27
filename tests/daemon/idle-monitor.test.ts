@@ -10,7 +10,7 @@ describe('DaemonIdleMonitor', () => {
   });
 
   it('calls onIdle after idleTimeoutMs of zero busy', () => {
-    let busy = false;
+    const busy = false;
     const onIdle = vi.fn();
     const m = new DaemonIdleMonitor({ idleTimeoutMs: 1_000, isBusy: () => busy, onIdle });
     m.onActivity();
@@ -20,7 +20,7 @@ describe('DaemonIdleMonitor', () => {
   });
 
   it('does NOT call onIdle when isBusy is true', () => {
-    let busy = true;
+    const busy = true;
     const onIdle = vi.fn();
     const m = new DaemonIdleMonitor({ idleTimeoutMs: 500, isBusy: () => busy, onIdle });
     m.onActivity();
@@ -71,7 +71,7 @@ describe('DaemonIdleMonitor', () => {
   });
 
   it('stop() cancels any pending timer and disables further callbacks', () => {
-    let busy = false;
+    const busy = false;
     const onIdle = vi.fn();
     const m = new DaemonIdleMonitor({ idleTimeoutMs: 500, isBusy: () => busy, onIdle });
     m.onActivity();
@@ -86,7 +86,7 @@ describe('DaemonIdleMonitor', () => {
   });
 
   it('disabled when idleTimeoutMs <= 0', () => {
-    let busy = false;
+    const busy = false;
     const onIdle = vi.fn();
     const m = new DaemonIdleMonitor({ idleTimeoutMs: 0, isBusy: () => busy, onIdle });
     expect(m.enabled).toBe(false);

@@ -80,7 +80,7 @@ export function detectEventDispatches(source: string): string[] {
 /**
  * Build listens_to edges from event-listener mappings.
  */
-function buildEventEdges(mappings: EventListenerMapping[]): RawEdge[] {
+function _buildEventEdges(mappings: EventListenerMapping[]): RawEdge[] {
   const edges: RawEdge[] = [];
 
   for (const mapping of mappings) {
@@ -101,7 +101,7 @@ function buildEventEdges(mappings: EventListenerMapping[]): RawEdge[] {
 /**
  * Build dispatches edges from detected event dispatches.
  */
-function buildDispatchEdges(sourceFqn: string, dispatches: string[]): RawEdge[] {
+function _buildDispatchEdges(sourceFqn: string, dispatches: string[]): RawEdge[] {
   return dispatches.map((eventClass) => ({
     edgeType: 'dispatches',
     metadata: {

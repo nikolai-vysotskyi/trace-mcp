@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 import { applyMove } from '../../src/tools/refactoring/move.js';
 
@@ -195,7 +195,7 @@ describe('applyMove — symbol mode', () => {
     const consumerFileId = insertFile(store, 'src/consumer.ts');
     insertFile(store, 'src/target.ts');
 
-    const symId = insertSymbol(store, utilsFileId, 'helper', {
+    const _symId = insertSymbol(store, utilsFileId, 'helper', {
       lineStart: 1,
       lineEnd: 1,
       metadata: { exported: true },
@@ -356,7 +356,7 @@ describe('applyMove — file mode', () => {
         "import { config } from '../config';\nexport function help() { return config; }\n",
       'src/config.ts': 'export const config = {};\n',
     });
-    const helperFileId = insertFile(store, 'src/utils/helper.ts');
+    const _helperFileId = insertFile(store, 'src/utils/helper.ts');
 
     const result = applyMove(store, tmpDir, {
       mode: 'file',

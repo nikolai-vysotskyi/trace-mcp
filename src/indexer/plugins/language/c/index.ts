@@ -17,7 +17,6 @@ import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
-  makeFqn,
   extractSignature,
   getNodeName,
   extractQualifiers,

@@ -10,8 +10,8 @@
  */
 
 import sharp from 'sharp';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const assetsDir = path.join(__dirname, '..', 'assets');
@@ -164,7 +164,7 @@ function appIconSVG(size) {
 // ── Generate all files ──────────────────────────────────────────────
 
 async function generate() {
-  const { mkdir } = await import('fs/promises');
+  const { mkdir } = await import('node:fs/promises');
   await mkdir(assetsDir, { recursive: true });
   await mkdir(buildDir, { recursive: true });
 
@@ -273,7 +273,7 @@ async function generate() {
   header.writeUInt16LE(1, 2); // type = ICO
   header.writeUInt16LE(numImages, 4); // count
 
-  const { writeFile } = await import('fs/promises');
+  const { writeFile } = await import('node:fs/promises');
   const icoBuffer = Buffer.concat([header, ...dirEntries, ...pngBuffers.map((p) => p.buf)]);
   const icoPath = path.join(buildDir, 'icon.ico');
   await writeFile(icoPath, icoBuffer);

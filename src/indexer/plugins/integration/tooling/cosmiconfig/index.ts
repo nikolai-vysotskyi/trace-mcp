@@ -20,7 +20,7 @@ const CONFIG_PACKAGES = ['cosmiconfig', 'lilconfig', 'rc', 'dotenv', 'envalid', 
 const EXPLORER_RE = /(?:cosmiconfig|lilconfig|cosmiconfigSync|lilconfigSync)\(\s*['"]([^'"]+)['"]/g;
 
 // explorer.search(), explorer.load('path')
-const SEARCH_RE = /(?:explorer|result)\s*\.\s*(?:search|load)\s*\(/g;
+const _SEARCH_RE = /(?:explorer|result)\s*\.\s*(?:search|load)\s*\(/g;
 
 // dotenv.config(), config()
 const DOTENV_RE = /(?:dotenv\.config|config)\s*\(\s*(?:\{[^}]*\})?\s*\)/g;

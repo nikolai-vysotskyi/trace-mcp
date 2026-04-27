@@ -5,7 +5,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { resolve, extname } from 'node:path';
+import { resolve, } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { logger } from '../logger.js';
 import type { Store } from '../db/store.js';

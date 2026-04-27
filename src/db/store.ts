@@ -1,12 +1,10 @@
 import type Database from 'better-sqlite3';
 import type {
   RawSymbol,
-  RawEdge,
   RawRoute,
   RawComponent,
   RawMigration,
   RawOrmModel,
-  RawOrmAssociation,
   RawRnScreen,
 } from '../plugin-api/types.js';
 import type { TraceMcpResult } from '../errors.js';

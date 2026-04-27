@@ -138,7 +138,7 @@ function processRouteGroups(
 ): void {
   // Match Route:: chains ending with ->group(function ... { ... })
   // We use a regex that captures the chain before group() and then find the matching body
-  const groupStartRegex =
+  const _groupStartRegex =
     /Route::((?:namespace|controller|prefix|middleware|name)\s*\([^)]*\)\s*->\s*)*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
 
   // Simpler approach: find specific group patterns

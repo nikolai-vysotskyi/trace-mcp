@@ -8,7 +8,6 @@ import type {
   PluginManifest,
   FileParseResult,
   RawSymbol,
-  RawEdge,
   SymbolKind,
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';

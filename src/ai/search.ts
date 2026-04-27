@@ -148,7 +148,7 @@ export async function hybridSearch(
         text: [c.kind, c.fqn ?? c.name, c.name].join(' '),
       }));
       const reranked = await reranker.rerank(query, docs, limit);
-      const rerankedIds = new Map(reranked.map((r) => [r.id, r.score]));
+      const _rerankedIds = new Map(reranked.map((r) => [r.id, r.score]));
       const result: HybridSearchResult[] = [];
       for (const r of reranked) {
         const original = candidates.find((c) => c.symbolId === r.id);

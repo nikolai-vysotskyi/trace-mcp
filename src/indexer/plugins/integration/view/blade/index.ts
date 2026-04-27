@@ -483,7 +483,7 @@ export class BladePlugin implements FrameworkPlugin {
     }
 
     const source = content.toString('utf-8');
-    const sections = extractBladeSections(source);
+    const _sections = extractBladeSections(source);
     const yields = extractBladeYields(source);
 
     const result: FileParseResult = {

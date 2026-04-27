@@ -8,14 +8,14 @@
 
 import type { Store } from '../../db/store.js';
 import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError, notFound } from '../../errors.js';
+import { notFound } from '../../errors.js';
 import {
   DomainStore,
   type DomainTreeNode,
   type CrossDomainDep,
 } from '../../intent/domain-store.js';
-import { DomainBuilder, type IntentConfig } from '../../intent/domain-builder.js';
-import { searchFts, type FtsResult } from '../../db/fts.js';
+import { DomainBuilder, } from '../../intent/domain-builder.js';
+import { searchFts, } from '../../db/fts.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

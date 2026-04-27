@@ -8,7 +8,7 @@ import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typ
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import { hybridSearch } from '../../src/ai/search.js';
 import { BlobVectorStore } from '../../src/ai/vector-store.js';
-import type { VectorStore, EmbeddingService } from '../../src/ai/interfaces.js';
+import type { EmbeddingService } from '../../src/ai/interfaces.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 import type Database from 'better-sqlite3';
 

@@ -41,7 +41,7 @@ function isEnvFile(filePath: string): boolean {
  * - gitignored files → return notice instead of source
  * - all other files → return content as-is
  */
-function readFileSafe(filePath: string, gitignored?: boolean): string {
+function _readFileSafe(filePath: string, gitignored?: boolean): string {
   // .env redaction takes priority over gitignore — keys/types are always safe to expose
   if (isEnvFile(filePath)) {
     const content = fs.readFileSync(filePath, 'utf-8');

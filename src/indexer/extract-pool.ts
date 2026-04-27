@@ -208,13 +208,4 @@ export class ExtractPool {
     this.queue = [];
     await Promise.all(workers.map((w) => w.terminate().catch(() => 0)));
   }
-
-  /** Reset state after auto-terminate so a subsequent extract() can re-spawn. */
-  private reset(): void {
-    this.terminated = false;
-    this.workers = [];
-    this.busy = [];
-    this.pending.clear();
-    this.queue = [];
-  }
 }

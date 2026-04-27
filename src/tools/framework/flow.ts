@@ -61,7 +61,7 @@ export function getRequestFlow(
 
     let controllerSymbol = store.getSymbolByFqn(controllerFqn);
     const methodFqn = actionName ? `${controllerFqn}::${actionName}` : undefined;
-    let methodSymbol = methodFqn ? store.getSymbolByFqn(methodFqn) : undefined;
+    const methodSymbol = methodFqn ? store.getSymbolByFqn(methodFqn) : undefined;
 
     // Fallback: Python frameworks store just the function name (e.g. "get_user"),
     // not the full FQN. Try name-based lookup from the route's file.

@@ -5,10 +5,8 @@ import type {
   FrameworkPlugin,
   ProjectContext,
   FileParseResult,
-  ResolveContext,
-  RawEdge,
 } from '../../src/plugin-api/types.js';
-import { ok, type TraceMcpResult } from '../../src/errors.js';
+import { ok, } from '../../src/errors.js';
 
 function makeLanguagePlugin(name: string, priority: number, extensions: string[]): LanguagePlugin {
   return {

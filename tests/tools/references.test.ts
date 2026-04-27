@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { findReferences } from '../../src/tools/framework/references.js';
 
@@ -12,7 +12,7 @@ function addSymbol(
     fqn?: string;
   },
 ): { fileId: number; symbolDbId: number; nodeId: number } {
-  let file = store.getFile(opts.filePath);
+  const file = store.getFile(opts.filePath);
   const fileId = file ? file.id : store.insertFile(opts.filePath, 'typescript', null, null);
   const symbolDbId = store.insertSymbol(fileId, {
     symbolId: `${opts.filePath}::${opts.name}#${opts.kind}`,

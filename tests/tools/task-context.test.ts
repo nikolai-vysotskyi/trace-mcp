@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, } from 'vitest';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
@@ -13,7 +13,6 @@ import {
   getTaskContext,
   classifyIntent,
   type TaskIntent,
-  type TaskContextResult,
 } from '../../src/tools/navigation/task-context.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
@@ -201,7 +200,7 @@ describe('getTaskContext', () => {
     const result = await getTaskContext(store, FIXTURE_DIR, {
       task: 'user controller',
     });
-    for (const [sectionName, items] of Object.entries(result.sections)) {
+    for (const [_sectionName, items] of Object.entries(result.sections)) {
       for (const item of items) {
         expect(['full', 'no_source', 'signature_only']).toContain(item.detail);
         expect(item.tokens).toBeGreaterThan(0);

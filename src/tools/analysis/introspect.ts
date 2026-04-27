@@ -8,7 +8,7 @@
  *   get_plugin_registry  — list registered plugins, their manifests,
  *                          and all known edge types.
  */
-import type { Store, SymbolWithFilePath, SymbolRow } from '../../db/store.js';
+import type { Store, SymbolWithFilePath, } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import { getCouplingMetrics, getDependencyCycles } from './graph-analysis.js';
 
@@ -258,7 +258,7 @@ function walkAncestors(
   const extNames = Array.isArray(ext) ? (ext as string[]) : typeof ext === 'string' ? [ext] : [];
   const implNames = Array.isArray(meta['implements']) ? (meta['implements'] as string[]) : [];
 
-  const file = store.getFileById(sym.file_id);
+  const _file = store.getFileById(sym.file_id);
 
   for (const parentName of extNames) {
     const node: HierarchyNode = {
@@ -321,7 +321,7 @@ function walkDescendants(
   for (const row of implementors) {
     const meta = safeParseMeta(row.metadata);
     const impl = meta['implements'];
-    const ext = meta['extends'];
+    const _ext = meta['extends'];
 
     let relation: 'extends' | 'implements' = 'extends';
     if (Array.isArray(impl) && (impl as string[]).includes(name)) {

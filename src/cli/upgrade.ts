@@ -7,7 +7,7 @@
 import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
-import { detectProject, detectGuardHook } from '../init/detector.js';
+import { detectGuardHook } from '../init/detector.js';
 import { updateClaudeMd } from '../init/claude-md.js';
 import { installGuardHook, installWorktreeHook, isHookOutdated } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';

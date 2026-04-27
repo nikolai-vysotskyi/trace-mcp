@@ -1,15 +1,4 @@
-/**
- * DrizzlePlugin — Framework plugin for Drizzle ORM.
- *
- * Extracts:
- * - pgTable / mysqlTable / sqliteTable calls → RawOrmModel with fields
- * - relations() blocks → RawOrmAssociation
- * - Column types (integer, text, varchar, boolean, timestamp, json, etc.)
- *
- * Supports drizzle-orm 0.27+.
- */
-import fs from 'node:fs';
-import path from 'node:path';
+
 import { ok } from 'neverthrow';
 import type {
   FrameworkPlugin,

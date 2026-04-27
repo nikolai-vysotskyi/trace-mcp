@@ -12,8 +12,6 @@ import type { Store } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import { searchFts } from '../../db/fts.js';
 import { getPageRank } from '../analysis/graph-analysis.js';
-import { getProjectMap } from '../project/project.js';
-import { buildProjectContext } from '../../indexer/project-context.js';
 import fs from 'node:fs';
 import path from 'node:path';
 

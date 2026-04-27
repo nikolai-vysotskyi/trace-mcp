@@ -17,8 +17,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
-  RawComponent,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../../errors.js';
@@ -26,7 +24,7 @@ import type { TraceMcpResult } from '../../../../../errors.js';
 // ── Extraction helpers ────────────────────────────────────────────────────
 
 /** Known Headless UI compound component roots. */
-const HEADLESS_UI_ROOTS = new Set([
+const _HEADLESS_UI_ROOTS = new Set([
   'Combobox',
   'Dialog',
   'Disclosure',
@@ -50,7 +48,7 @@ const HEADLESS_UI_ROOTS = new Set([
 ]);
 
 /** Known Radix UI primitive roots. */
-const RADIX_ROOTS = new Set([
+const _RADIX_ROOTS = new Set([
   'Accordion',
   'AlertDialog',
   'AspectRatio',

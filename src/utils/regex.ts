@@ -24,7 +24,7 @@ export function globalRe(pattern: RegExp): RegExp {
 /**
  * Same as globalRe but with dotAll flag ('gs').
  */
-function globalReS(pattern: RegExp): RegExp {
+function _globalReS(pattern: RegExp): RegExp {
   let cached = globalResCaches.get(pattern);
   if (!cached) {
     cached = new RegExp(pattern.source, 'gs');

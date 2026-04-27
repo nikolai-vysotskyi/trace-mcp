@@ -312,7 +312,7 @@ export function installPrecompactHook(opts: {
   return installHook(PRECOMPACT_HOOK, opts);
 }
 
-function uninstallPrecompactHook(opts: { global?: boolean }): InitStepResult {
+function _uninstallPrecompactHook(opts: { global?: boolean }): InitStepResult {
   return uninstallHook(PRECOMPACT_HOOK, opts);
 }
 
@@ -324,7 +324,7 @@ export function installWorktreeHook(opts: {
   return [installHook(WORKTREE_HOOK, opts), installHook(WORKTREE_REMOVE_HOOK, opts)];
 }
 
-function uninstallWorktreeHook(opts: { global?: boolean }): InitStepResult[] {
+function _uninstallWorktreeHook(opts: { global?: boolean }): InitStepResult[] {
   return [uninstallHook(WORKTREE_HOOK, opts), uninstallHook(WORKTREE_REMOVE_HOOK, opts)];
 }
 

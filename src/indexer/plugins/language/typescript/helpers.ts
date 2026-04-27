@@ -105,7 +105,7 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
           } else if (inner.type === 'named_imports') {
             for (const spec of inner.namedChildren) {
               if (spec.type === 'import_specifier') {
-                const alias = spec.childForFieldName('alias');
+                const _alias = spec.childForFieldName('alias');
                 const name = spec.childForFieldName('name');
                 // Always store the original exported name, not the local alias.
                 // `import { Foo as Bar }` → specifier = "Foo" (matches the export).

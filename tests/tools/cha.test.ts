@@ -5,9 +5,9 @@
  * follow method calls through the class hierarchy via CHA expansion.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
-import { expandMethodViaCha, getChaNodeIds } from '../../src/tools/shared/cha.js';
+import { expandMethodViaCha, } from '../../src/tools/shared/cha.js';
 import { findReferences } from '../../src/tools/framework/references.js';
 import { getCallGraph } from '../../src/tools/framework/call-graph.js';
 
@@ -22,7 +22,7 @@ function addSymbol(
     metadata?: Record<string, unknown>;
   },
 ): { fileId: number; symbolDbId: number; nodeId: number; symbolId: string } {
-  let file = store.getFile(opts.filePath);
+  const file = store.getFile(opts.filePath);
   let fileId: number;
   if (!file) {
     fileId = store.insertFile(opts.filePath, 'typescript', null, null);

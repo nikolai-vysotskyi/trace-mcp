@@ -232,7 +232,7 @@ export class CppLanguagePlugin implements LanguagePlugin {
     symbols: RawSymbol[],
   ): void {
     let currentAccess: string | undefined;
-    const className = fqnParts[fqnParts.length - 1];
+    const _className = fqnParts[fqnParts.length - 1];
 
     for (const child of body.namedChildren) {
       if (child.type === 'access_specifier') {

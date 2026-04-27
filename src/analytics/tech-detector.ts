@@ -6,7 +6,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { KNOWN_PACKAGES, type PackageMeta } from './known-packages.js';
-import { logger } from '../logger.js';
 import { discoverChildProjectsRecursive } from '../project-root.js';
 
 interface DependencyInfo {
@@ -189,7 +188,7 @@ const MANIFEST_PARSERS: {
 // --- Unknown package heuristics ---
 
 /** All ecosystems have language-level indexing — trace-mcp always parses source code by language */
-const LANGUAGE_FALLBACK_LANGUAGES: Record<Ecosystem, string> = {
+const _LANGUAGE_FALLBACK_LANGUAGES: Record<Ecosystem, string> = {
   npm: 'TypeScript/JavaScript',
   composer: 'PHP',
   pip: 'Python',

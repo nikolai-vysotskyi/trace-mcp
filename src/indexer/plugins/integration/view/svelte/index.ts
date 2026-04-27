@@ -11,7 +11,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   RawComponent,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -28,13 +27,13 @@ const SLOT_RE = /<slot(?:\s+name\s*=\s*['"]([^'"]+)['"])?\s*\/?>/g;
 const DISPATCH_RE = /dispatch\s*\(\s*['"]([^'"]+)['"]/g;
 
 // createEventDispatcher usage
-const CREATE_DISPATCHER_RE = /createEventDispatcher\s*(?:<[^>]*>)?\s*\(\s*\)/;
+const _CREATE_DISPATCHER_RE = /createEventDispatcher\s*(?:<[^>]*>)?\s*\(\s*\)/;
 
 // Store subscriptions: $storeName
 const STORE_SUB_RE = /\$(\w+)/g;
 
 // Store creation: writable(...), readable(...), derived(...)
-const STORE_CREATE_RE = /(?:writable|readable|derived)\s*\(/g;
+const _STORE_CREATE_RE = /(?:writable|readable|derived)\s*\(/g;
 
 // Svelte component imports: import Foo from './Foo.svelte'
 const SVELTE_IMPORT_RE = /import\s+(\w+)\s+from\s+['"]([^'"]*\.svelte)['"]/g;

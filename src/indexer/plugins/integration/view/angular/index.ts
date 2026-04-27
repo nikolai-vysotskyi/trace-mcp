@@ -14,7 +14,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawComponent,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -48,7 +47,7 @@ const INJECT_RE = /inject\s*\(\s*(\w+)\s*\)/g;
 const CTOR_INJECT_RE = /constructor\s*\(([^)]*)\)/g;
 
 // NgModule declarations, imports, providers arrays
-const NGMODULE_DECLARATIONS_RE = /@NgModule\s*\(\s*\{[^}]*declarations\s*:\s*\[([^\]]*)\]/gs;
+const _NGMODULE_DECLARATIONS_RE = /@NgModule\s*\(\s*\{[^}]*declarations\s*:\s*\[([^\]]*)\]/gs;
 const NGMODULE_IMPORTS_RE = /@NgModule\s*\(\s*\{[^}]*imports\s*:\s*\[([^\]]*)\]/gs;
 const NGMODULE_PROVIDERS_RE = /@NgModule\s*\(\s*\{[^}]*providers\s*:\s*\[([^\]]*)\]/gs;
 

@@ -98,7 +98,7 @@ function reconstructTable(store: Store, tableName: string): TableSchema | null {
   const migrations = store.getMigrationsByTable(tableName);
   if (migrations.length === 0) return null;
 
-  const columns: TableColumn[] = [];
+  const _columns: TableColumn[] = [];
   const operations: { operation: string; timestamp?: string }[] = [];
   const columnMap = new Map<string, TableColumn>();
 

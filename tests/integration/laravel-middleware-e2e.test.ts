@@ -2,16 +2,7 @@
  * Integration: Laravel middleware resolution through full pipeline.
  * Tests both L6-10 (Kernel.php) and L11+ (bootstrap/app.php) styles.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
-import fs from 'node:fs';
-import os from 'node:os';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TraceMcpConfigSchema } from '../../src/config.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { describe, it, expect, } from 'vitest';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import {
   parseKernelMiddleware,

@@ -13,7 +13,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
-import { logger } from '../../logger.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -997,7 +996,7 @@ export function taintAnalysis(
   const isTest = (p: string) => /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.\w+$/.test(p);
   const sourceFiles = files.filter((f) => !isTest(f.path) && f.language);
 
-  let allFlows: TaintFlow[] = [];
+  const allFlows: TaintFlow[] = [];
   let analyzed = 0;
 
   // Phase 1: Intra-file taint analysis

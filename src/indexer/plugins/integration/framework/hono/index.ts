@@ -14,7 +14,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -38,7 +37,7 @@ const MIDDLEWARE_GLOBAL_RE =
   /(?:app|router|hono)\s*\.\s*use\s*\(\s*([A-Za-z][\w.]*(?:\s*\(\s*[^)]*\))?)\s*[,)]/g;
 
 // app.basePath('/v1')
-const BASEPATH_RE = /(?:app|router|hono)\s*\.\s*basePath\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const _BASEPATH_RE = /(?:app|router|hono)\s*\.\s*basePath\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 interface HonoRoute {
   method: string;

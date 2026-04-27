@@ -237,7 +237,7 @@ function traverseBFS(
     // Resolve new nodes to symbols, enforce node cap
     if (nextFrontier.length > 0) {
       const refs = ctx.store.getNodeRefsBatch(nextFrontier);
-      for (const [nid, ref] of refs) {
+      for (const [_nid, ref] of refs) {
         if (ref.nodeType === 'symbol') {
           if (ctx.symbolIds.size >= ctx.maxNodes) break;
           ctx.symbolIds.add(ref.refId);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock the daemon client so we can control health responses without a real HTTP server.
 vi.mock('../../src/daemon/client.js', () => {

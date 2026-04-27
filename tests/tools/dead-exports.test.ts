@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { getDeadExports } from '../../src/tools/analysis/introspect.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -10,7 +10,7 @@ function addExportedSymbol(
   kind: string,
   extraMetadata?: Record<string, unknown>,
 ): number {
-  let file = store.getFile(filePath);
+  const file = store.getFile(filePath);
   const fileId = file ? file.id : store.insertFile(filePath, 'typescript', null, null);
   return store.insertSymbol(fileId, {
     symbolId: `${filePath}::${name}#${kind}`,
@@ -25,9 +25,9 @@ function addExportedSymbol(
 }
 
 function addImportEdge(store: Store, fromFile: string, toFile: string, specifiers: string[]): void {
-  let srcFile = store.getFile(fromFile);
+  const srcFile = store.getFile(fromFile);
   const srcFileId = srcFile ? srcFile.id : store.insertFile(fromFile, 'typescript', null, null);
-  let tgtFile = store.getFile(toFile);
+  const tgtFile = store.getFile(toFile);
   const tgtFileId = tgtFile ? tgtFile.id : store.insertFile(toFile, 'typescript', null, null);
 
   const srcNodeId = store.getNodeId('file', srcFileId) ?? store.createNode('file', srcFileId);

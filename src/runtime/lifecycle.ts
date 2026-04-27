@@ -33,8 +33,7 @@ export class RuntimeIntelligence {
   private mapper: SpanMapper;
   private aggregator: RuntimeAggregator;
 
-  constructor(
-    private store: Store,
+  constructor(store: Store,
     private config: RuntimeConfig,
   ) {
     this.ingester = new SpanIngester(store.db, config.retention.prune_interval);

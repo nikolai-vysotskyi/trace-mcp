@@ -6,8 +6,8 @@ import { ProjectOverview } from './tabs/ProjectOverview';
 import { AskTab } from './tabs/AskTab';
 import {
   GraphExplorerGPU,
-  GraphExplorerGPUHandle,
-  GraphGPUSettings,
+  type GraphExplorerGPUHandle,
+  type GraphGPUSettings,
   DEFAULT_GRAPH_GPU_SETTINGS,
 } from './tabs/GraphExplorerGPU';
 import { WindowTabBar } from './components/WindowTabBar';
@@ -684,7 +684,7 @@ export function App() {
   );
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [_isFullscreen, setIsFullscreen] = useState(false);
   const dragging = useRef(false);
   const graphRef = useRef<GraphExplorerGPUHandle | null>(null);
   const [graphGpuSettings, setGraphGpuSettings] = useState<GraphGPUSettings>(

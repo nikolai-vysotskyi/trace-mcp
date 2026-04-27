@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { getEdgeBottlenecks } from '../../src/tools/analysis/bottlenecks.js';
 import { createTestStore } from '../test-utils.js';
 

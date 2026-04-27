@@ -4,7 +4,6 @@
  * Resolves PHP FQN ↔ file paths based on composer.json autoload mappings.
  */
 import { readFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
 
 export class Psr4Resolver {
   /** namespace prefix (with trailing backslash) → directory (with trailing slash) */

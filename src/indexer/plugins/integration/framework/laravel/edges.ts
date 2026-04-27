@@ -174,7 +174,7 @@ export function resolveComposerLaravelProviders(
 
     // Disambiguate between forks: prefer a symbol whose file sits inside the
     // same composer package directory. Fall back to any FQN match.
-    let targetSymbol = findSymbolByFqnScoped(ctx, normalizedFqn, packagePrefix);
+    const targetSymbol = findSymbolByFqnScoped(ctx, normalizedFqn, packagePrefix);
     if (!targetSymbol) continue;
 
     edges.push({

@@ -126,7 +126,7 @@ function hexToRgb01(hex: string): [number, number, number] {
   );
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
-function hexToRgb255(hex: string): [number, number, number] {
+function _hexToRgb255(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
   const n = parseInt(
     h.length === 3

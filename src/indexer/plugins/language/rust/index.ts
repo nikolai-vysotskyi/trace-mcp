@@ -14,7 +14,6 @@ import { getParser } from '../../../../parser/tree-sitter.js';
 import {
   type TSNode,
   makeSymbolId,
-  makeFqn,
   extractSignature,
   getNodeName,
   isPublic,
@@ -233,7 +232,7 @@ export class RustLanguagePlugin implements LanguagePlugin {
     const traitNode = node.childForFieldName('trait');
     if (traitNode) {
       // Create an edge for trait implementation
-      const meta: Record<string, unknown> = {
+      const _meta: Record<string, unknown> = {
         rustKind: 'impl',
         trait: traitNode.text,
       };

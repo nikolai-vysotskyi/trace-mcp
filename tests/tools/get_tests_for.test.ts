@@ -3,7 +3,7 @@
  * Uses in-memory store to verify heuristic path matching and edge-based resolution.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { getTestsFor } from '../../src/tools/framework/tests.js';
 import { createTestStore } from '../test-utils.js';
 

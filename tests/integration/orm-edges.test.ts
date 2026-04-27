@@ -3,7 +3,7 @@
  * Verifies that Prisma, TypeORM, Drizzle, Mongoose, and Sequelize
  * associations are correctly mapped to ORM-specific edge types.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, } from 'vitest';
 import { createTestStore, createTmpDir, writeFixtureFile, removeTmpDir } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';

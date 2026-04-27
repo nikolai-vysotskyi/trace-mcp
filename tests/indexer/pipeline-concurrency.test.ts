@@ -6,7 +6,7 @@
  * file. Without the lock, indexAll() would later overwrite that file with stale
  * content because it collected the file list before the change was applied.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, } from 'vitest';
 import path from 'node:path';
 import { createTestStore } from '../test-utils.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';

@@ -5,7 +5,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { REGISTRY_PATH, ensureGlobalDirs, getDbPath, projectName } from './global.js';
 
 export interface RegistryEntry {
@@ -136,7 +135,7 @@ export function listProjects(): RegistryEntry[] {
 }
 
 /** Remove entries whose root directory no longer exists. Returns removed paths. */
-function pruneStaleProjects(): string[] {
+function _pruneStaleProjects(): string[] {
   const reg = loadRegistry();
   const removed: string[] = [];
 

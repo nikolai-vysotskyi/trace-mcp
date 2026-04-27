@@ -132,7 +132,7 @@ export function ProjectOverview({
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [coverage, setCoverage] = useState<CoverageReport | null>(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
-  const [services, setServices] = useState<SubprojectInfo[]>([]);
+  const [_services, setServices] = useState<SubprojectInfo[]>([]);
   const [svcList, setSvcList] = useState<ServiceInfo[]>([]);
   const [addingService, setAddingService] = useState(false);
   const [editingGroup, setEditingGroup] = useState<number | null>(null);

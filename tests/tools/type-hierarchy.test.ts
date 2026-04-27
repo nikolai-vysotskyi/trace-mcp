@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { getTypeHierarchy } from '../../src/tools/analysis/introspect.js';
 
@@ -12,7 +12,7 @@ function addSymbol(
     metadata?: Record<string, unknown>;
   },
 ) {
-  let file = store.getFile(opts.filePath);
+  const file = store.getFile(opts.filePath);
   const fileId = file ? file.id : store.insertFile(opts.filePath, 'typescript', null, null);
   store.insertSymbol(fileId, {
     symbolId: `${opts.filePath}::${opts.name}#${opts.kind}`,

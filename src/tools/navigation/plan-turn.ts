@@ -16,7 +16,7 @@
  *   budget: turn budget level + actionable advice
  *   next_actions[]: recommended follow-up tool calls
  */
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
+import type { Store, } from '../../db/store.js';
 import type { SessionJournal } from '../../session/journal.js';
 import type { SavingsTracker } from '../../savings.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';

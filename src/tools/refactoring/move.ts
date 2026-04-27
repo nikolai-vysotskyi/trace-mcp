@@ -12,7 +12,6 @@ import { readLines, writeLines, getImportingFiles } from './shared.js';
 import {
   rewriteImportForMovedTarget,
   computeRelativeSpecifier,
-  rewriteImportSpecifiers,
 } from './import-rewriter.js';
 
 export interface MoveSymbolParams {

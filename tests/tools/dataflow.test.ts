@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { getDataflow } from '../../src/tools/analysis/dataflow.js';
 

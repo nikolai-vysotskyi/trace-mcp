@@ -8,18 +8,14 @@
  */
 
 import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound, validationError } from '../../errors.js';
-import {
+import { notFound, } from '../../errors.js';
+import type {
   TopologyStore,
-  type ServiceRow,
-  type EndpointRow,
-  type CrossServiceEdgeRow,
 } from '../../topology/topology-db.js';
 import { detectServices } from '../../topology/service-detector.js';
 import { parseContracts } from '../../topology/contract-parser.js';
 import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
 import { getDbPath } from '../../global.js';
-import path from 'node:path';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

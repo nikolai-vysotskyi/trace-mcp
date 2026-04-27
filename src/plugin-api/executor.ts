@@ -5,8 +5,7 @@ import type {
   RawEdge,
   ResolveContext,
 } from './types.js';
-import { ok, err, type TraceMcpResult } from '../errors.js';
-import { pluginError, parseError } from '../errors.js';
+import { ok, type TraceMcpResult } from '../errors.js';
 import { logger } from '../logger.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;

@@ -11,9 +11,6 @@ import { AdaLanguagePlugin } from '../../src/indexer/plugins/language/ada/index.
 import { PowerShellLanguagePlugin } from '../../src/indexer/plugins/language/powershell/index.js';
 import { ApexLanguagePlugin } from '../../src/indexer/plugins/language/apex/index.js';
 import { PlsqlLanguagePlugin } from '../../src/indexer/plugins/language/plsql/index.js';
-import { MatlabLanguagePlugin } from '../../src/indexer/plugins/language/matlab/index.js';
-import { CobolLanguagePlugin } from '../../src/indexer/plugins/language/cobol/index.js';
-import { CommonLispLanguagePlugin } from '../../src/indexer/plugins/language/common-lisp/index.js';
 import { stripCommentsAndStrings } from '../../src/indexer/plugins/language/regex-base-v2.js';
 
 function parse(

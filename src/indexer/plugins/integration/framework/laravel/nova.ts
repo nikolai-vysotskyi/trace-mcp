@@ -77,9 +77,9 @@ const CLASS_NAME_RE = /class\s+(\w+)/;
 const USE_STMT_RE = /use\s+([\w\\]+?)(?:\s+as\s+(\w+))?;/g;
 
 const EXTENDS_RESOURCE_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Resource\b/;
-const EXTENDS_ACTION_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Action\b/;
-const EXTENDS_FILTER_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Filter\b/;
-const EXTENDS_LENS_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Lens\b/;
+const _EXTENDS_ACTION_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Action\b/;
+const _EXTENDS_FILTER_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Filter\b/;
+const _EXTENDS_LENS_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Lens\b/;
 const EXTENDS_METRIC_RE = new RegExp(
   `class\\s+\\w+\\s+extends\\s+(?:[\\w\\\\]*\\\\)?(?:${[...METRIC_BASES].join('|')})\\b`,
 );

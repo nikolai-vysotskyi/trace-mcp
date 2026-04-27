@@ -13,13 +13,12 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
-import { TopologyStore, type SubprojectRow, type ClientCallRow } from '../topology/topology-db.js';
+import type { TopologyStore, ClientCallRow } from '../topology/topology-db.js';
 import { parseContracts, extractRoutesFromDb } from '../topology/contract-parser.js';
 import { detectServices } from '../topology/service-detector.js';
 import { scanClientCalls, scanEndpointLiterals } from './scanner.js';
-import { diffEndpoints, type EndpointSchemaDiff } from './schema-diff.js';
+import type { EndpointSchemaDiff } from './schema-diff.js';
 import { getDbPath } from '../global.js';
-import { Store } from '../db/store.js';
 import { logger } from '../logger.js';
 import { subprojectSearch as _subprojectSearch } from './subproject-search.js';
 import type { SubprojectSearchResult } from './subproject-search.js';
@@ -712,7 +711,7 @@ export class SubprojectManager {
         // Find source service: exact match first, then longest prefix match (handles
         // the case where a parent folder is registered as a repo but services live
         // in subdirectories, e.g. repo_root="the/" but service.repo_root="the/fair-front/").
-        const repoRoot = repo.repo_root.endsWith('/') ? repo.repo_root : `${repo.repo_root}/`;
+        const _repoRoot = repo.repo_root.endsWith('/') ? repo.repo_root : `${repo.repo_root}/`;
         const callPath = call.file_path.startsWith('/') ? call.file_path : `/${call.file_path}`;
         const candidates = services.filter((s) => {
           if (s.repo_root === repo.repo_root) return true;

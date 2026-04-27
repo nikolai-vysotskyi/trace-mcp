@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { getArtifacts } from '../../src/tools/project/artifacts.js';
 
@@ -55,7 +55,7 @@ describe('Context Artifacts', () => {
   });
 
   test('collects route artifacts', () => {
-    const fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
+    const _fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
     store.insertRoute({
       uri: '/api/users',
       method: 'GET',
@@ -122,7 +122,7 @@ describe('Context Artifacts', () => {
   });
 
   test('text query filters artifacts', () => {
-    const fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
+    const _fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
     store.insertRoute({
       uri: '/api/users',
       method: 'GET',
@@ -142,7 +142,7 @@ describe('Context Artifacts', () => {
   });
 
   test('respects limit', () => {
-    const fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
+    const _fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
     for (let i = 0; i < 10; i++) {
       store.insertRoute({
         uri: `/api/r${i}`,
@@ -157,7 +157,7 @@ describe('Context Artifacts', () => {
   });
 
   test('category=all collects from all categories', () => {
-    const f1 = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
+    const _f1 = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
     store.insertRoute({
       uri: '/api/users',
       method: 'GET',
@@ -184,7 +184,7 @@ describe('Context Artifacts', () => {
   });
 
   test('does not include event/store routes as API artifacts', () => {
-    const fileId = store.insertFile('src/events.ts', 'typescript', 'h1', 100);
+    const _fileId = store.insertFile('src/events.ts', 'typescript', 'h1', 100);
     store.insertRoute({
       uri: 'user.created',
       method: 'EVENT',

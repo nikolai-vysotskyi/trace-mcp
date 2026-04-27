@@ -57,7 +57,7 @@ const JAVA_SOURCE_PATTERNS: [RegExp, string, string][] = [
 ];
 
 /** Detect minimum Java version from AST node types. */
-function detectMinJavaVersion(nodeTypes: string[]): string | undefined {
+function _detectMinJavaVersion(nodeTypes: string[]): string | undefined {
   let max = 0;
   let result: string | undefined;
   for (const nt of nodeTypes) {

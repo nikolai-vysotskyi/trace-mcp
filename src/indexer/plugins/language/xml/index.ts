@@ -507,9 +507,9 @@ export class XmlLanguagePlugin implements LanguagePlugin {
     ]);
 
     // Track parent tags for RSS/Atom/Sitemap text content extraction
-    let pendingTextTag: { local: string; offset: number } | null = null;
+    const _pendingTextTag: { local: string; offset: number } | null = null;
     let insideRssItem = false;
-    let insideAtomEntry = false;
+    let _insideAtomEntry = false;
 
     for (const { tag, local, attrs, offset } of scanTags(source)) {
       const ll = local.toLowerCase();
@@ -537,7 +537,7 @@ export class XmlLanguagePlugin implements LanguagePlugin {
         if (rule.attr === '__text_title') {
           // We need to find <title> child — mark for next iteration
           if (ll === 'item') insideRssItem = true;
-          if (ll === 'entry') insideAtomEntry = true;
+          if (ll === 'entry') _insideAtomEntry = true;
           continue;
         }
 

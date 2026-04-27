@@ -120,7 +120,7 @@ export function buildFileGraph(store: Store): FileGraph {
   return { forward, reverse, pathMap, allFileIds };
 }
 
-function getFileIdForSymbol(store: Store, symbolRefId: number): number | undefined {
+function _getFileIdForSymbol(store: Store, symbolRefId: number): number | undefined {
   const sym = store.db.prepare('SELECT file_id FROM symbols WHERE id = ?').get(symbolRefId) as
     | { file_id: number }
     | undefined;

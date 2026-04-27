@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 import {
   visualizeGraph,
@@ -25,7 +25,7 @@ describe('visualizeGraph', () => {
     const f4 = store.insertFile('lib/utils.ts', 'typescript', 'h4', 100);
 
     // Insert symbols
-    const s1 = store.insertSymbol(f1, {
+    const _s1 = store.insertSymbol(f1, {
       symbolId: 'src/auth.ts::login#function',
       name: 'login',
       kind: 'function',
@@ -35,7 +35,7 @@ describe('visualizeGraph', () => {
       lineStart: 1,
       lineEnd: 5,
     });
-    const s2 = store.insertSymbol(f2, {
+    const _s2 = store.insertSymbol(f2, {
       symbolId: 'src/user.ts::User#class',
       name: 'User',
       kind: 'class',
@@ -45,7 +45,7 @@ describe('visualizeGraph', () => {
       lineStart: 1,
       lineEnd: 20,
     });
-    const s3 = store.insertSymbol(f3, {
+    const _s3 = store.insertSymbol(f3, {
       symbolId: 'src/db.ts::query#function',
       name: 'query',
       kind: 'function',

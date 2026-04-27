@@ -11,7 +11,7 @@
  * No CLI concerns, no git — pure data in, report out.
  */
 import type { Store } from '../db/store.js';
-import { getChangeImpact, type ChangeImpactResult } from '../tools/analysis/impact.js';
+import { getChangeImpact, } from '../tools/analysis/impact.js';
 import { getDeadExports } from '../tools/analysis/introspect.js';
 import { getUntestedExports } from '../tools/analysis/introspect.js';
 import { getCouplingMetrics, type CouplingResult } from '../tools/analysis/graph-analysis.js';
@@ -567,7 +567,7 @@ function computeDeploymentImpact(
     // Map changed files to services by repo_root
     const serviceCounts = new Map<string, { name: string; type: string; count: number }>();
 
-    for (const filePath of changedFiles) {
+    for (const _filePath of changedFiles) {
       for (const svc of services) {
         // Check if file belongs to this service's repo
         if (

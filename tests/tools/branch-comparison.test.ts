@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 import { compareBranches } from '../../src/tools/quality/changed-symbols.js';
 

@@ -3,7 +3,7 @@
  * BFS path finding, subgraph extraction, and Mermaid generation.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import type { Store } from '../../src/db/store.js';
 import { graphQuery } from '../../src/tools/analysis/graph-query.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -16,7 +16,7 @@ function addSymbol(
     fqn?: string;
   },
 ): { fileId: number; symbolDbId: number; nodeId: number } {
-  let file = store.getFile(opts.filePath);
+  const file = store.getFile(opts.filePath);
   let fileId: number;
   if (!file) {
     fileId = store.insertFile(opts.filePath, 'typescript', null, null);

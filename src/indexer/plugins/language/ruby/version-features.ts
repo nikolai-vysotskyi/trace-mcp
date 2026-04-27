@@ -72,7 +72,7 @@ function semverGt(a: string, b: string): boolean {
 }
 
 /** Detect minimum Ruby version from AST node types. */
-function detectMinRubyVersion(nodeTypes: string[]): string | undefined {
+function _detectMinRubyVersion(nodeTypes: string[]): string | undefined {
   let max = '0';
   for (const nt of nodeTypes) {
     const ver = RUBY_MIN_VERSION[nt];

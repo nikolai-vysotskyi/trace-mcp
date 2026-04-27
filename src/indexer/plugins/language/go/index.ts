@@ -202,7 +202,7 @@ export class GoLanguagePlugin implements LanguagePlugin {
           symbols.push(...fieldSymbols);
         } else if (typeNode.type === 'interface_type') {
           const symbolId = makeSymbolId(filePath, name, 'interface');
-          const body = typeNode.namedChildren.find(
+          const _body = typeNode.namedChildren.find(
             (c) => c.type === 'method_spec' || c.type === 'method_elem',
           )
             ? typeNode

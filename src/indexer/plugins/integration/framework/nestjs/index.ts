@@ -23,8 +23,8 @@ const METHOD_DECORATOR_RE = (method: string) =>
 const MODULE_RE = /@Module\(\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}\s*\)/s;
 const INJECTABLE_RE = /@Injectable\(\)/;
 const USE_GUARDS_RE = /@UseGuards\(\s*([^)]+)\s*\)/g;
-const USE_PIPES_RE = /@UsePipes\(\s*([^)]+)\s*\)/g;
-const USE_INTERCEPTORS_RE = /@UseInterceptors\(\s*([^)]+)\s*\)/g;
+const _USE_PIPES_RE = /@UsePipes\(\s*([^)]+)\s*\)/g;
+const _USE_INTERCEPTORS_RE = /@UseInterceptors\(\s*([^)]+)\s*\)/g;
 const CONSTRUCTOR_RE = /constructor\s*\(([^)]*)\)/s;
 const GATEWAY_RE = /@WebSocketGateway\s*\(/;
 const SUBSCRIBE_RE = /@SubscribeMessage\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;

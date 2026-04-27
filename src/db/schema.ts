@@ -1452,7 +1452,7 @@ export function getTableNames(db: Database.Database): string[] {
   return rows.map((r) => r.name);
 }
 
-function getVirtualTableNames(db: Database.Database): string[] {
+function _getVirtualTableNames(db: Database.Database): string[] {
   const rows = db
     .prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE '%VIRTUAL%' ORDER BY name",

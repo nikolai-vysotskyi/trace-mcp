@@ -60,7 +60,7 @@ function buildSubprojectData(topoStore: TopologyStore): {
   // Build nodes
   const nodes: SubVizNode[] = services.map((svc) => {
     const endpoints = allEndpoints.filter((e) => e.service_id === svc.id);
-    const endpointIds = new Set(endpoints.map((e) => e.id));
+    const _endpointIds = new Set(endpoints.map((e) => e.id));
 
     // Count client calls targeting this service's endpoints
     let clientCallCount = 0;

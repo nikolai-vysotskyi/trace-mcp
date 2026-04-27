@@ -19,7 +19,6 @@ import type {
   ProjectContext,
   FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
   EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';

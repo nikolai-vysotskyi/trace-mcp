@@ -55,7 +55,7 @@ function semverGt(a: string, b: string): boolean {
 }
 
 /** Detect minimum Go version from AST node types. */
-function detectMinGoVersion(nodeTypes: string[]): string | undefined {
+function _detectMinGoVersion(nodeTypes: string[]): string | undefined {
   let max = '0';
   for (const nt of nodeTypes) {
     const ver = GO_MIN_VERSION[nt];

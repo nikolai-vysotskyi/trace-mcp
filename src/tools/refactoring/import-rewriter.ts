@@ -50,7 +50,7 @@ export function computeNewImportSpecifier(
     // try '@/utils/bar'
     const aliasPrefix = oldSpecifier.split('/').slice(0, 1).join('/');
     if (aliasPrefix.startsWith('@') || aliasPrefix.startsWith('~')) {
-      const oldSuffix = oldSpecifier.slice(aliasPrefix.length);
+      const _oldSuffix = oldSpecifier.slice(aliasPrefix.length);
       // Compute what the suffix would be for the new path
       const resolved = resolver.resolve(aliasPrefix, importingFilePath);
       if (resolved) {

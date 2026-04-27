@@ -11,7 +11,6 @@ import type {
   PluginManifest,
   FileParseResult,
   RawSymbol,
-  SymbolKind,
 } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';

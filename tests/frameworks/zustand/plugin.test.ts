@@ -2,7 +2,6 @@
  * Tests for Zustand / Redux Toolkit state management plugin.
  */
 import { describe, it, expect } from 'vitest';
-import { ok } from 'neverthrow';
 import {
   ZustandReduxPlugin,
   extractZustandStores,

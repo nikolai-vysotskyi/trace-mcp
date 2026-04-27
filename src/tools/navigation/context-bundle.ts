@@ -77,7 +77,7 @@ function readSource(sym: SymbolRow, file: FileRow, rootPath: string): string | u
   }
 }
 
-function toContextItem(
+function _toContextItem(
   sym: SymbolRow,
   file: FileRow,
   rootPath: string,
