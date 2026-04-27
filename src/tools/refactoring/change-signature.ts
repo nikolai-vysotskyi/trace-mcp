@@ -500,7 +500,7 @@ function updateCallSites(
         const oldLine = lines[i];
         const before = oldLine.slice(0, callStartCol + 1);
         const after = oldLine.slice(endCol); // endCol points past ')'
-        const newLine = before + newArgText + ')' + after;
+        const newLine = `${before + newArgText})${after}`;
 
         result.edits.push({
           file: file.path,
@@ -513,7 +513,7 @@ function updateCallSites(
       } else {
         // Multi-line: replace from start to end
         const firstLine = lines[i];
-        const newFirstLine = firstLine.slice(0, callStartCol + 1) + newArgText + ')';
+        const newFirstLine = `${firstLine.slice(0, callStartCol + 1) + newArgText})`;
         result.edits.push({
           file: file.path,
           original_line: i + 1,

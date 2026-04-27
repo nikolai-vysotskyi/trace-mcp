@@ -370,7 +370,7 @@ export function extractFunction(
   const bodyLines = extractedLines.map((l) => {
     // Re-indent: remove site indent, add one level
     const stripped = l.startsWith(siteIndent) ? l.slice(siteIndent.length) : l.trimStart();
-    return '  ' + stripped;
+    return `  ${stripped}`;
   });
 
   let functionDef: string;
@@ -601,8 +601,8 @@ export function applyCodemod(
         allMatches.push({
           file: relPath,
           line: lineNum,
-          original: original.length > 200 ? original.slice(0, 200) + '…' : original,
-          replaced: replaced.length > 200 ? replaced.slice(0, 200) + '…' : replaced,
+          original: original.length > 200 ? `${original.slice(0, 200)}…` : original,
+          replaced: replaced.length > 200 ? `${replaced.slice(0, 200)}…` : replaced,
           context_before: lines.slice(
             Math.max(0, lineNum - 1 - CODEMOD_CONTEXT_LINES),
             lineNum - 1,

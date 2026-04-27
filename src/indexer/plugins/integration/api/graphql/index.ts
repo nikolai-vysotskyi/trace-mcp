@@ -188,7 +188,7 @@ function extractSchemaSymbols(source: string, filePath: string): RawSymbol[] {
     ) {
       const bodyMatch = blockContent.match(/\{([\s\S]*)\}/);
       if (bodyMatch) {
-        const fieldRegex = /^\s*(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w!\[\]]+)/gm;
+        const fieldRegex = /^\s*(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w![\]]+)/gm;
         let fieldMatch: RegExpExecArray | null;
         while ((fieldMatch = fieldRegex.exec(bodyMatch[1])) !== null) {
           const fieldName = fieldMatch[1];

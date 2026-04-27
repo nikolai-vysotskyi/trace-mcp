@@ -27,7 +27,7 @@ function extractSignature(node: TSNode): string {
   const firstLine = node.text.split('\n')[0].trim();
   const braceIdx = firstLine.indexOf('{');
   if (braceIdx > 0) return firstLine.substring(0, braceIdx).trim();
-  return firstLine.length > 120 ? firstLine.slice(0, 120) + '…' : firstLine;
+  return firstLine.length > 120 ? `${firstLine.slice(0, 120)}…` : firstLine;
 }
 
 function isPub(node: TSNode): boolean {

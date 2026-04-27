@@ -68,7 +68,7 @@ function loadManifest(): BundleManifest {
 
 function saveManifest(manifest: BundleManifest): void {
   ensureBundlesDir();
-  fs.writeFileSync(getManifestPath(), JSON.stringify(manifest, null, 2) + '\n');
+  fs.writeFileSync(getManifestPath(), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 // ---------------------------------------------------------------------------

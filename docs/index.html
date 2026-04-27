@@ -117,10 +117,10 @@
 
   <script>
     // Set theme and theme-color before first paint to avoid flash.
-    (function () {
+    (() => {
       try {
         var stored = localStorage.getItem('trace-mcp-theme');
-        var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        var prefersLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
         var theme = stored === 'light' || stored === 'dark' ? stored : (prefersLight ? 'light' : 'dark');
         document.documentElement.setAttribute('data-theme', theme);
         var meta = document.querySelector('meta[name="theme-color"]');
@@ -2873,7 +2873,7 @@
     fetch('https://registry.npmjs.org/trace-mcp/latest')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        if (data && data.version) {
+        if (data?.version) {
           setVersion(data.version);
           try { localStorage.setItem(cacheKey, JSON.stringify({ v: data.version, ts: Date.now() })); } catch (e) {}
         }
@@ -2899,9 +2899,9 @@
   // Format integers with thin separators: 1234 -> "1,234"; 12000 -> "12k"; 1500000 -> "1.5M"
   function formatCount(n) {
     if (typeof n !== 'number' || !isFinite(n)) return null;
-    if (n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace(/\.0$/, '') + 'M';
-    if (n >= 10000)   return Math.round(n / 1000) + 'k';
-    if (n >= 1000)    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    if (n >= 1000000) return `${(n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace(/\.0$/, '')}M`;
+    if (n >= 10000)   return `${Math.round(n / 1000)}k`;
+    if (n >= 1000)    return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
     return String(n);
   }
 
@@ -2963,7 +2963,7 @@
   })();
 
   // Theme toggle
-  (function () {
+  (() => {
     const root = document.documentElement;
     const toggle = document.querySelector('[data-theme-toggle]');
     const meta = document.querySelector('meta[name="theme-color"]');

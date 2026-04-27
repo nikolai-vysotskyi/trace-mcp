@@ -62,7 +62,7 @@ class AnthropicInferenceService implements InferenceService {
 
         if (!resp.ok) {
           const body = await resp.text().catch(() => '');
-          const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+          const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
           throw new Error(`Anthropic API error: ${resp.status} ${resp.statusText} — ${safeBody}`);
         }
 
@@ -102,7 +102,7 @@ class AnthropicInferenceService implements InferenceService {
 
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
-      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+      const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
       throw new Error(`Anthropic stream error: ${resp.status} ${resp.statusText} — ${safeBody}`);
     }
 

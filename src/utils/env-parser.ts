@@ -62,7 +62,7 @@ const FORMAT_DETECTORS: Array<{ format: EnvValueFormat; test: (v: string) => boo
   // host:port (after IP check to not conflict)
   { format: 'host:port', test: (v) => /^[\w.-]+:\d{1,5}$/.test(v) },
   // Cron expression (5 or 6 fields)
-  { format: 'cron', test: (v) => /^(\S+\s+){4,5}\S+$/.test(v) && /[*\/,\-]/.test(v) },
+  { format: 'cron', test: (v) => /^(\S+\s+){4,5}\S+$/.test(v) && /[*/,-]/.test(v) },
   // JSON object or array
   {
     format: 'json',

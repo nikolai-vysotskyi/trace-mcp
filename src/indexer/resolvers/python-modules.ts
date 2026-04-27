@@ -189,7 +189,7 @@ export class PyModuleResolver {
 
     // [tool.setuptools.packages.find] → where = ["src"]
     const setupToolsWhereMatch = content.match(
-      /\[tool\.setuptools\.packages\.find\][^\[]*?where\s*=\s*\[([^\]]*)\]/s,
+      /\[tool\.setuptools\.packages\.find\][^[]*?where\s*=\s*\[([^\]]*)\]/s,
     );
     if (setupToolsWhereMatch) {
       const dirs = this.parseTomlStringArray(setupToolsWhereMatch[1]);
@@ -198,7 +198,7 @@ export class PyModuleResolver {
 
     // [tool.poetry.packages] → [{include = "myapp", from = "src"}]
     // This is an array of inline tables — extract `from` values
-    const poetryPkgSection = content.match(/\[tool\.poetry\][^\[]*?packages\s*=\s*\[([^\]]*)\]/s);
+    const poetryPkgSection = content.match(/\[tool\.poetry\][^[]*?packages\s*=\s*\[([^\]]*)\]/s);
     if (poetryPkgSection) {
       const fromMatches = poetryPkgSection[1].matchAll(/from\s*=\s*"([^"]*)"/g);
       for (const m of fromMatches) {

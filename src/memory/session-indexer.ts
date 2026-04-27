@@ -72,7 +72,7 @@ function truncateChunk(text: string): string {
   if (lastPeriod > MAX_CHUNK_CHARS * 0.5) {
     return truncated.slice(0, lastPeriod + 1);
   }
-  return truncated + '...';
+  return `${truncated}...`;
 }
 
 // ════════════════════════════════════════════════════════════════════════

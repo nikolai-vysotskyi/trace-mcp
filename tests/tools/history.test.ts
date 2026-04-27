@@ -16,7 +16,7 @@ vi.mock('node:child_process', () => ({
 const mockExecFileSync = vi.mocked(execFileSync);
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
-  return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
+  return store.insertFile(filePath, lang, `hash_${filePath}`, 100);
 }
 
 function insertSymbol(

@@ -5,7 +5,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { createExploredTracker } from '../../src/server/explored-tracker.js';
 
-const TEST_ROOT = path.join(os.tmpdir(), 'trace-mcp-test-explored-' + process.pid);
+const TEST_ROOT = path.join(os.tmpdir(), `trace-mcp-test-explored-${process.pid}`);
 
 function getMarkerDir(): string {
   const hash = crypto.createHash('sha256').update(TEST_ROOT).digest('hex').slice(0, 12);

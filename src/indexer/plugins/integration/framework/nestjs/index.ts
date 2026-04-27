@@ -89,7 +89,7 @@ export function extractControllerRoutes(
     while ((match = re.exec(source)) !== null) {
       const methodPath = match[1] ?? '';
       const segments = [basePath, methodPath].filter(Boolean);
-      const uri = '/' + segments.join('/').replace(/\/+/g, '/').replace(/^\//, '');
+      const uri = `/${segments.join('/').replace(/\/+/g, '/').replace(/^\//, '')}`;
       routes.push({
         method: method.toUpperCase(),
         uri: uri || '/',

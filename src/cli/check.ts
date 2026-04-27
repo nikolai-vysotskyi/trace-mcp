@@ -126,7 +126,7 @@ export const checkCommand = new Command('check')
 
     // Output
     if (opts.format === 'json') {
-      process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     } else {
       process.stdout.write(formatGateReport(report));
     }

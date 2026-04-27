@@ -120,7 +120,7 @@ export function configureMcpClients(
         detail: hasClaudeCode
           ? 'Enable Settings → Agents → MCP servers → "File-based MCP servers" to inherit trace-mcp from Claude Code, or paste: ' +
             snippet
-          : 'Open Settings → Agents → MCP servers → + Add → paste: ' + snippet,
+          : `Open Settings → Agents → MCP servers → + Add → paste: ${snippet}`,
       });
       continue;
     }
@@ -418,7 +418,7 @@ function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 
   }
   (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
 
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
   return isNew ? 'created' : 'updated';
 }
 
@@ -528,7 +528,7 @@ function writeAmpJsoncEntry(configPath: string, entry: McpServerEntry): 'created
     formattingOptions: AMP_FORMATTING,
   });
   const updated = applyEdits(content, edits);
-  fs.writeFileSync(configPath, updated.endsWith('\n') ? updated : updated + '\n');
+  fs.writeFileSync(configPath, updated.endsWith('\n') ? updated : `${updated}\n`);
   return isNew ? 'created' : 'updated';
 }
 
@@ -576,7 +576,7 @@ function writeFactoryJsonEntry(
     config.mcpServers = {};
   }
   (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
   return isNew ? 'created' : 'updated';
 }
 
@@ -604,13 +604,13 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
       section.push(`${k} = "${v}"`);
     }
   }
-  const block = section.join('\n') + '\n';
+  const block = `${section.join('\n')}\n`;
 
   let isNew = true;
   if (fs.existsSync(configPath)) {
     const existing = fs.readFileSync(configPath, 'utf-8');
     isNew = false;
-    fs.writeFileSync(configPath, existing.trimEnd() + '\n' + block);
+    fs.writeFileSync(configPath, `${existing.trimEnd()}\n${block}`);
   } else {
     fs.writeFileSync(configPath, block.trimStart());
   }

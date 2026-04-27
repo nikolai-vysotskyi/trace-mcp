@@ -141,7 +141,7 @@ const CONTEXT_BOOSTERS = [
 function truncateTitle(s: string): string {
   const clean = s.replace(/\s+/g, ' ').trim();
   if (clean.length <= 80) return clean;
-  return clean.slice(0, 77) + '...';
+  return `${clean.slice(0, 77)}...`;
 }
 
 // ════════════════════════════════════════════════════════════════════════

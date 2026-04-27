@@ -108,19 +108,19 @@ export function renderStructuredContext(result: StructuredContextResult): string
   const sections: string[] = [];
 
   if (result.primary.length > 0) {
-    sections.push('=== Primary Symbol ===\n' + result.primary.map((i) => i.content).join('\n\n'));
+    sections.push(`=== Primary Symbol ===\n${result.primary.map((i) => i.content).join('\n\n')}`);
   }
   if (result.dependencies.length > 0) {
     sections.push(
-      '=== Dependencies ===\n' + result.dependencies.map((i) => i.content).join('\n\n'),
+      `=== Dependencies ===\n${result.dependencies.map((i) => i.content).join('\n\n')}`,
     );
   }
   if (result.callers.length > 0) {
-    sections.push('=== Callers ===\n' + result.callers.map((i) => i.content).join('\n\n'));
+    sections.push(`=== Callers ===\n${result.callers.map((i) => i.content).join('\n\n')}`);
   }
   if (result.typeContext.length > 0) {
     sections.push(
-      '=== Type Hierarchy ===\n' + result.typeContext.map((i) => i.content).join('\n\n'),
+      `=== Type Hierarchy ===\n${result.typeContext.map((i) => i.content).join('\n\n')}`,
     );
   }
 

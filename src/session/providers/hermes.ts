@@ -187,7 +187,6 @@ function normalizeRole(role: string | null): RawMessage['role'] {
     case 'tool_result':
     case 'function':
       return 'tool';
-    case 'system':
     default:
       return role === 'system' ? 'system' : 'assistant';
   }

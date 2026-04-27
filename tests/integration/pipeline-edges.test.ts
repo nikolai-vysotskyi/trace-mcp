@@ -238,7 +238,7 @@ describe('PHP import edge resolution (laravel-10)', () => {
     const importEdges = store.getEdgesByType('imports');
     const withMeta = importEdges.filter((e) => {
       const meta = JSON.parse(e.metadata ?? '{}');
-      return meta.from && meta.from.includes('\\');
+      return meta.from?.includes('\\');
     });
     expect(withMeta.length).toBeGreaterThan(0);
 

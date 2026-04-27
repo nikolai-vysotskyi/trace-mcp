@@ -47,7 +47,7 @@ export function extractSignature(text: string, maxLen = 120): string {
   const firstLine = text.split('\n')[0].trim();
   const braceIdx = firstLine.lastIndexOf('{');
   const sig = braceIdx > 0 ? firstLine.substring(0, braceIdx).trim() : firstLine;
-  return sig.length > maxLen ? sig.slice(0, maxLen) + '…' : sig;
+  return sig.length > maxLen ? `${sig.slice(0, maxLen)}…` : sig;
 }
 
 export interface SymbolPattern {
@@ -170,7 +170,7 @@ function extractFullSignature(
     const lineEnd = nextNl === -1 ? source.length : nextNl;
     const line = source.substring(pos + 1, lineEnd).trim();
     if (!line) break;
-    text += ' ' + line;
+    text += ` ${line}`;
     extra++;
     if (countChar(text, '(', ')') === 0 && countChar(text, '[', ']') === 0) break;
     pos = nextNl;
@@ -178,7 +178,7 @@ function extractFullSignature(
   const braceIdx = text.lastIndexOf('{');
   const sig = braceIdx > 0 ? text.substring(0, braceIdx).trim() : text;
   const cleaned = sig.replace(/\s+/g, ' ');
-  return cleaned.length > maxLen ? cleaned.slice(0, maxLen) + '...' : cleaned;
+  return cleaned.length > maxLen ? `${cleaned.slice(0, maxLen)}...` : cleaned;
 }
 
 /**
@@ -205,7 +205,7 @@ export function createRegexLanguagePlugin(config: RegexLanguageConfig): Language
       if (config.scopeTracking) {
         for (const sp of config.symbolPatterns) {
           if (!sp.isScope) continue;
-          const flags = sp.pattern.flags.includes('g') ? sp.pattern.flags : sp.pattern.flags + 'g';
+          const flags = sp.pattern.flags.includes('g') ? sp.pattern.flags : `${sp.pattern.flags}g`;
           const re = new RegExp(sp.pattern.source, flags);
           let m: RegExpExecArray | null;
           while ((m = re.exec(source)) !== null) {
@@ -241,7 +241,7 @@ export function createRegexLanguagePlugin(config: RegexLanguageConfig): Language
       }
 
       for (const sp of config.symbolPatterns) {
-        const flags = sp.pattern.flags.includes('g') ? sp.pattern.flags : sp.pattern.flags + 'g';
+        const flags = sp.pattern.flags.includes('g') ? sp.pattern.flags : `${sp.pattern.flags}g`;
         const re = new RegExp(sp.pattern.source, flags);
         let m: RegExpExecArray | null;
         while ((m = re.exec(source)) !== null) {
@@ -294,7 +294,7 @@ export function createRegexLanguagePlugin(config: RegexLanguageConfig): Language
 
       if (config.importPatterns) {
         for (const ip of config.importPatterns) {
-          const flags = ip.pattern.flags.includes('g') ? ip.pattern.flags : ip.pattern.flags + 'g';
+          const flags = ip.pattern.flags.includes('g') ? ip.pattern.flags : `${ip.pattern.flags}g`;
           const re = new RegExp(ip.pattern.source, flags);
           let m: RegExpExecArray | null;
           while ((m = re.exec(source)) !== null) {

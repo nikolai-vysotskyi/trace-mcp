@@ -325,7 +325,7 @@ export function getArtifacts(
       (a) =>
         a.name.toLowerCase().includes(q) ||
         a.kind.toLowerCase().includes(q) ||
-        (a.file && a.file.toLowerCase().includes(q)),
+        a.file?.toLowerCase().includes(q),
     );
   }
 

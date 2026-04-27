@@ -313,7 +313,7 @@ export class FileExtractor {
   /** Returns the workspace path (relative to root) that contains `relPath`, or null. */
   private resolveWorkspacePath(relPath: string): string | null {
     for (const ws of this.ctx.workspaces) {
-      if (relPath.startsWith(ws.path + '/') || relPath === ws.path) {
+      if (relPath.startsWith(`${ws.path}/`) || relPath === ws.path) {
         return ws.path;
       }
     }

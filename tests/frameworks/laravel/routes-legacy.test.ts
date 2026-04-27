@@ -73,7 +73,7 @@ describe('Laravel 6 route extraction (string syntax)', () => {
     });
 
     it('applies middleware group from Route::middleware', () => {
-      const grouped = apiRoutes.filter((r) => r.middleware && r.middleware.includes('auth:api'));
+      const grouped = apiRoutes.filter((r) => r.middleware?.includes('auth:api'));
       expect(grouped.length).toBeGreaterThan(0);
     });
   });

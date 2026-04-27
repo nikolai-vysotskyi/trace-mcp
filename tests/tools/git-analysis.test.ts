@@ -11,7 +11,7 @@ vi.mock('node:child_process', () => ({
 const mockExecFileSync = vi.mocked(execFileSync);
 
 function insertFileWithComplexity(store: Store, path: string, cyclomatic: number): number {
-  const fileId = store.insertFile(path, 'typescript', 'hash_' + path, 100);
+  const fileId = store.insertFile(path, 'typescript', `hash_${path}`, 100);
   store.insertSymbol(fileId, {
     symbolId: `sym:${path}::main`,
     name: 'main',

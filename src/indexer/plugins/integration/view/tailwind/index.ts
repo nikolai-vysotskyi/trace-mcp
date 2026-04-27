@@ -215,7 +215,7 @@ function isTailwindClass(token: string): boolean {
   if (/\[\S+\]$/.test(core)) {
     const prefix = core.replace(/\[.+\]$/, '');
     // prefix must be a valid TW utility prefix (non-empty, ends with -)
-    if (prefix && prefix.endsWith('-')) return true;
+    if (prefix?.endsWith('-')) return true;
   }
   return TW_UTIL_RE.test(core);
 }

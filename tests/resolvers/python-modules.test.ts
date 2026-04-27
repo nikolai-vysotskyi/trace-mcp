@@ -15,10 +15,7 @@ describe('PyModuleResolver', () => {
   let root: string;
 
   beforeEach(() => {
-    root = join(
-      tmpdir(),
-      'pymod-test-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
-    );
+    root = join(tmpdir(), `pymod-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     mkdirSync(root, { recursive: true });
   });
 

@@ -94,7 +94,7 @@ export const exportSecurityContextCommand = new Command('export-security-context
       const json = JSON.stringify(result.value, null, 2);
 
       if (opts.output === '-') {
-        process.stdout.write(json + '\n');
+        process.stdout.write(`${json}\n`);
       } else {
         const outputPath = path.resolve(opts.output);
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });

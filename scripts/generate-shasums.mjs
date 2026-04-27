@@ -53,10 +53,10 @@ for (const name of entries) {
   const digest = hash.digest('hex');
 
   // Per-asset bare-digest file — primary format consumed by the updater.
-  fs.writeFileSync(`${full}.sha256`, digest + '\n', 'utf-8');
+  fs.writeFileSync(`${full}.sha256`, `${digest}\n`, 'utf-8');
   combined.push(`${digest}  ${name}`);
   console.log(`${digest}  ${name}`);
 }
 
 // Combined manifest — convenient for humans and unmatrixed jobs.
-fs.writeFileSync(path.join(dir, 'SHASUMS256.txt'), combined.join('\n') + '\n', 'utf-8');
+fs.writeFileSync(path.join(dir, 'SHASUMS256.txt'), `${combined.join('\n')}\n`, 'utf-8');

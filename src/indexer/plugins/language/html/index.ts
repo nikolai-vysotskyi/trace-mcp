@@ -153,7 +153,7 @@ export class HtmlLanguagePlugin implements LanguagePlugin {
       // Inline script block — check for raw_text content in the element
       if (!src) {
         const rawText = element.namedChildren.find((c) => c.type === 'raw_text');
-        if (rawText && rawText.text.trim()) {
+        if (rawText?.text.trim()) {
           const scriptType = getAttr(tag, 'type') ?? 'text/javascript';
           symbols.push({
             symbolId: `${filePath}::inline-script@${element.startIndex}#variable`,

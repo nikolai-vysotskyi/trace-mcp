@@ -468,7 +468,7 @@ function extractChainedName(chain: string): string | null {
 
 /** Extract ->middleware('...') or ->middleware(['...', '...']) from method chain. */
 function extractChainedMiddleware(chain: string): string[] {
-  const match = chain.match(/->middleware\s*\(\s*(['"\[].*?)\s*\)/);
+  const match = chain.match(/->middleware\s*\(\s*(['"[].*?)\s*\)/);
   if (!match) return [];
 
   const arg = match[1];
@@ -493,7 +493,7 @@ function applyMiddlewareGroups(source: string, routes: RawRoute[]): void {
   // Match: Route::middleware('auth:sanctum')->group(function () { ... });
   // Also: Route::middleware(['auth', 'verified'])->group(function () { ... });
   const groupRegex =
-    /Route::middleware\s*\(\s*([\['""][^)]*?)\s*\)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
+    /Route::middleware\s*\(\s*([['""][^)]*?)\s*\)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
 
   let match: RegExpExecArray | null;
   while ((match = groupRegex.exec(source)) !== null) {

@@ -281,7 +281,7 @@ function computeBottleneckLinkColors(
   for (let i = 0; i < numLinks; i++) {
     const si = linkPairs[i * 2] | 0;
     const ti = linkPairs[i * 2 + 1] | 0;
-    const info = edgeScoreByPair.get(nodes[si].id + '|' + nodes[ti].id);
+    const info = edgeScoreByPair.get(`${nodes[si].id}|${nodes[ti].id}`);
     const score = info?.score ?? 0;
     const isBridge = info?.isBridge === true;
     if (score < 0.05 && !isBridge) {
@@ -305,7 +305,7 @@ function buildEdgeScoreMap(edges: VizEdge[]): Map<string, { score: number; isBri
   const map = new Map<string, { score: number; isBridge: boolean }>();
   for (const e of edges) {
     if (e.bottleneckScore == null && e.isBridge !== true) continue;
-    map.set(e.source + '|' + e.target, {
+    map.set(`${e.source}|${e.target}`, {
       score: e.bottleneckScore ?? 0,
       isBridge: e.isBridge === true,
     });
@@ -832,11 +832,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       const isHot = score > 0 || e.isBridge === true;
       if (!isHot) continue;
       if (e.source === seed.id) {
-        hotEdgeKeys.add(e.source + '|' + e.target);
+        hotEdgeKeys.add(`${e.source}|${e.target}`);
         const ti = indexById.get(e.target);
         if (ti != null) otherEnds.add(ti);
       } else if (e.target === seed.id) {
-        hotEdgeKeys.add(e.source + '|' + e.target);
+        hotEdgeKeys.add(`${e.source}|${e.target}`);
         const si = indexById.get(e.source);
         if (si != null) otherEnds.add(si);
       }
@@ -872,7 +872,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       const srcId = data.nodes[s]?.id;
       const tgtId = data.nodes[t]?.id;
       if (srcId == null || tgtId == null) continue;
-      if (hotEdgeKeys.has(srcId + '|' + tgtId)) {
+      if (hotEdgeKeys.has(`${srcId}|${tgtId}`)) {
         linkColors[i * 4] = 1.0;
         linkColors[i * 4 + 1] = 0.38;
         linkColors[i * 4 + 2] = 0.38;
@@ -1772,7 +1772,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('[graph] setLinks failed', err);
-          setError('setLinks: ' + decorateErr(err).message);
+          setError(`setLinks: ${decorateErr(err).message}`);
           return;
         }
         // Cache pairs so highlightNeighborhood can rewrite per-link colors for
@@ -1806,7 +1806,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error('[graph] setLinkColors failed', err);
-            setError('setLinkColors: ' + decorateErr(err).message);
+            setError(`setLinkColors: ${decorateErr(err).message}`);
             return;
           }
         }
@@ -1818,7 +1818,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('[graph] render failed', err);
-          setError('render: ' + decorateErr(err).message);
+          setError(`render: ${decorateErr(err).message}`);
           return;
         }
         // Immediate fit so the user sees the layout framed from the first
@@ -2066,7 +2066,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     let best: VizEdge | null = null;
     let bestScore = -1;
     for (const e of data.edges) {
-      const k = e.source + '|' + e.target;
+      const k = `${e.source}|${e.target}`;
       if (brokenEdgeKeys.has(k)) continue;
       const s = e.bottleneckScore ?? 0;
       if (s > bestScore) {
@@ -2164,7 +2164,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const speed = autoTarget > 0 ? Math.max(0.4, Math.min(1.0, 10 / autoTarget)) : 1.0;
     const flashMs = Math.round(450 * speed);
     const timer = window.setTimeout(() => {
-      const key = pendingBreak.source + '|' + pendingBreak.target;
+      const key = `${pendingBreak.source}|${pendingBreak.target}`;
       setBrokenEdgeKeys((prev) => {
         if (prev.has(key)) return prev;
         const next = new Set(prev);
@@ -2230,7 +2230,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const pairs: number[] = [];
     const survivingEdges: VizEdge[] = [];
     for (const e of data.edges) {
-      if (brokenEdgeKeys.has(e.source + '|' + e.target)) continue;
+      if (brokenEdgeKeys.has(`${e.source}|${e.target}`)) continue;
       const s = indexById.get(e.source);
       const t = indexById.get(e.target);
       if (s == null || t == null) continue;
@@ -3616,7 +3616,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                       const full = absPath || relPath;
                       const maxChars = 52;
                       const shown =
-                        full.length > maxChars ? '…' + full.slice(-(maxChars - 1)) : full;
+                        full.length > maxChars ? `…${full.slice(-(maxChars - 1))}` : full;
                       return (
                         <div
                           className="mt-1 font-mono text-[10px]"

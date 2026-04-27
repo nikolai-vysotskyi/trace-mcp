@@ -72,7 +72,7 @@ describe('Laravel route extraction', () => {
 
     it('applies middleware from group', () => {
       // All routes inside middleware group should have auth:sanctum
-      const grouped = routes.filter((r) => r.middleware && r.middleware.includes('auth:sanctum'));
+      const grouped = routes.filter((r) => r.middleware?.includes('auth:sanctum'));
       expect(grouped.length).toBeGreaterThan(0);
     });
   });

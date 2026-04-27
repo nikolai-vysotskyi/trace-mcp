@@ -131,7 +131,7 @@ export function fuzzySearch(
     }
   }
 
-  const whereExtra = filterConditions.length > 0 ? 'AND ' + filterConditions.join(' AND ') : '';
+  const whereExtra = filterConditions.length > 0 ? `AND ${filterConditions.join(' AND ')}` : '';
 
   // Fetch candidates with shared trigram count — limits to top 200 by shared count
   const candidateSql = `

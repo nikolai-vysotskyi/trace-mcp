@@ -61,7 +61,7 @@ export class EdgeResolver {
 
       // Create a scoped resolve context: paths are workspace-relative,
       // rootPath points to the workspace root.
-      const wsPrefix = ws.path + '/';
+      const wsPrefix = `${ws.path}/`;
       const scopedCtx: ResolveContext = {
         rootPath: wsRoot,
         getAllFiles: () =>
@@ -357,7 +357,7 @@ export class EdgeResolver {
 
   resolveWorkspace(relPath: string): string | null {
     for (const ws of this.state.workspaces) {
-      if (relPath.startsWith(ws.path + '/') || relPath === ws.path) {
+      if (relPath.startsWith(`${ws.path}/`) || relPath === ws.path) {
         return ws.name;
       }
     }

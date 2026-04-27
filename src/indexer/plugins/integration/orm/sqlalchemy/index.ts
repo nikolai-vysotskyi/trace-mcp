@@ -433,8 +433,6 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
           line: stmt.startPosition.row + 1,
         });
       } else if (callFunc === 'relationship') {
-        // Skip relationships — handled separately
-        continue;
       }
     }
 

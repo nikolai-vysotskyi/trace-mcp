@@ -283,6 +283,6 @@ function cleanTopology(repoRoot: string): { subprojects: number; services: numbe
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   return p;
 }

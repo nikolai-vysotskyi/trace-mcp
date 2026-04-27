@@ -94,7 +94,7 @@ function extractSqlStatements(source: string): SqlStatement[] {
     results.push({
       kind: isPragma ? 'pragma' : isDdl ? 'ddl' : 'dml',
       tables,
-      raw: sql.length > 200 ? sql.slice(0, 200) + '…' : sql,
+      raw: sql.length > 200 ? `${sql.slice(0, 200)}…` : sql,
     });
   }
 

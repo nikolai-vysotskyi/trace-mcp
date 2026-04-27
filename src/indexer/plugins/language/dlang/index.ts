@@ -38,7 +38,7 @@ const _plugin = createMultiPassPlugin({
         {
           kind: 'method',
           pattern:
-            /^\s*(?:(?:public|private|package|protected|export|static|final|override|abstract|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*(?:\s*[*\[\]!]+)?)\s+(\w+)\s*\(/gm,
+            /^\s*(?:(?:public|private|package|protected|export|static|final|override|abstract|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*(?:\s*[*[\]!]+)?)\s+(\w+)\s*\(/gm,
         },
         // Property: @property RetType name()
         { kind: 'property', pattern: /^\s*@property\s+(?:\w+\s+)?(\w+)\s*\(/gm },
@@ -62,7 +62,7 @@ const _plugin = createMultiPassPlugin({
         {
           kind: 'method',
           pattern:
-            /^\s*(?:(?:public|private|package|protected|export|static|final|override|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*(?:\s*[*\[\]!]+)?)\s+(\w+)\s*\(/gm,
+            /^\s*(?:(?:public|private|package|protected|export|static|final|override|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*(?:\s*[*[\]!]+)?)\s+(\w+)\s*\(/gm,
         },
         { kind: 'property', pattern: /^\s*@property\s+(?:\w+\s+)?(\w+)\s*\(/gm },
         { kind: 'method', pattern: /^\s*(this)\s*\(/gm, meta: { constructor: true } },
@@ -100,7 +100,7 @@ const _plugin = createMultiPassPlugin({
       pattern: /^\s*(?:(?:public|private|package|protected|export)\s+)?union\s+(\w+)/gm,
       meta: { union: true },
       memberPatterns: [
-        { kind: 'property', pattern: /^\s*(?:\w+(?:\.\w+)*(?:\s*[*\[\]!]+)?)\s+(\w+)\s*;/gm },
+        { kind: 'property', pattern: /^\s*(?:\w+(?:\.\w+)*(?:\s*[*[\]!]+)?)\s+(\w+)\s*;/gm },
       ],
     },
     // ── Templates ──────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ const _plugin = createMultiPassPlugin({
     {
       kind: 'function',
       pattern:
-        /^\s*(?:(?:public|private|package|protected|export)\s+)?(?:(?:static|final|override|abstract|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|wchar|dchar|string|wstring|dstring|size_t|\w+(?:\.\w+)*(?:\s*[*\[\]!]+)?)\s+(\w+)\s*\(/gm,
+        /^\s*(?:(?:public|private|package|protected|export)\s+)?(?:(?:static|final|override|abstract|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|wchar|dchar|string|wstring|dstring|size_t|\w+(?:\.\w+)*(?:\s*[*[\]!]+)?)\s+(\w+)\s*\(/gm,
     },
 
     // ── Aliases (top-level) ────────────────────────────────────────────

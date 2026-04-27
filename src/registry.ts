@@ -40,8 +40,8 @@ function loadRegistry(): Registry {
 /** Atomic write: tmp file + rename to avoid partial reads. */
 function saveRegistry(reg: Registry): void {
   ensureGlobalDirs();
-  const tmp = REGISTRY_PATH + '.tmp.' + process.pid;
-  fs.writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
+  const tmp = `${REGISTRY_PATH}.tmp.${process.pid}`;
+  fs.writeFileSync(tmp, `${JSON.stringify(reg, null, 2)}\n`);
   fs.renameSync(tmp, REGISTRY_PATH);
 }
 

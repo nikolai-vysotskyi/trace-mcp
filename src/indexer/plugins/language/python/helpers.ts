@@ -243,8 +243,6 @@ function collectCalleeNames(node: TSNode, out: string[]): void {
         if (args) collectCalleeNames(args, out);
       }
     } else if (child.type === 'function_definition' || child.type === 'class_definition') {
-      // Don't descend into nested definitions
-      continue;
     } else {
       collectCalleeNames(child, out);
     }
@@ -835,8 +833,6 @@ export function extractClassBases(node: TSNode): string[] {
       const fn = child.childForFieldName('function');
       if (fn) bases.push(fn.text);
     } else if (child.type === 'keyword_argument') {
-      // Skip keyword arguments like metaclass=...
-      continue;
     }
   }
 

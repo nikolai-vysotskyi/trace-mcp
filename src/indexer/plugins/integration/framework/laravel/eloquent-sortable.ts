@@ -22,7 +22,7 @@ export interface EloquentSortableModelInfo {
 const NAMESPACE_RE = /namespace\s+([\w\\]+)\s*;/;
 const CLASS_NAME_RE = /class\s+(\w+)/;
 const SORTABLE_TRAIT_RE = /use\s+(?:[\w\\]*\\)?SortableTrait\b/;
-const SORTABLE_INTERFACE_RE = /implements\s+[^\{]*?\bSortable\b/;
+const SORTABLE_INTERFACE_RE = /implements\s+[^{]*?\bSortable\b/;
 const ORDER_COLUMN_RE = /['"]order_column_name['"]\s*=>\s*['"]([^'"]+)['"]/;
 const SORT_WHEN_CREATING_RE = /['"]sort_when_creating['"]\s*=>\s*(true|false)/;
 

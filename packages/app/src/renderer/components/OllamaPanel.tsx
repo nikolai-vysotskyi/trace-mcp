@@ -208,9 +208,9 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
                   <RowInfo
                     title={m.name}
                     subtitle={[
-                      fmtBytes(m.size_vram) + ' VRAM',
-                      m.size > m.size_vram ? fmtBytes(m.size - m.size_vram) + ' RAM' : null,
-                      fmtExpires(m.expires_at) ? 'unload in ' + fmtExpires(m.expires_at) : null,
+                      `${fmtBytes(m.size_vram)} VRAM`,
+                      m.size > m.size_vram ? `${fmtBytes(m.size - m.size_vram)} RAM` : null,
+                      fmtExpires(m.expires_at) ? `unload in ${fmtExpires(m.expires_at)}` : null,
                     ]
                       .filter(Boolean)
                       .join(' · ')}

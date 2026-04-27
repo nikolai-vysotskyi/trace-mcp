@@ -23,7 +23,7 @@ export async function* parseOpenAIStream(body: ReadableStream<Uint8Array>): Asyn
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        if (!trimmed?.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
         if (payload === '[DONE]') return;
 
@@ -65,7 +65,7 @@ export async function* parseAnthropicStream(
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        if (!trimmed?.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
 
         try {
@@ -109,7 +109,7 @@ export async function* parseGeminiStream(body: ReadableStream<Uint8Array>): Asyn
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        if (!trimmed?.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
         if (payload === '[DONE]') return;
 

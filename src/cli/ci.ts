@@ -234,7 +234,7 @@ function getChangedFiles(cwd: string, base: string, head: string): string[] {
 
 function writeOutput(outputPath: string, content: string): void {
   if (outputPath === '-' || !outputPath) {
-    process.stdout.write(content + '\n');
+    process.stdout.write(`${content}\n`);
   } else {
     const resolved = path.resolve(outputPath);
     fs.mkdirSync(path.dirname(resolved), { recursive: true });

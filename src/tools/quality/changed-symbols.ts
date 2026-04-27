@@ -371,7 +371,6 @@ export function compareBranches(
         key = br >= 10 ? 'high' : br >= 3 ? 'medium' : 'low';
         break;
       }
-      case 'category':
       default:
         key = sym.changeKind;
         break;

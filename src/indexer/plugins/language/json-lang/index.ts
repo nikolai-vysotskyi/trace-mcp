@@ -751,7 +751,6 @@ export class JsonLanguagePlugin implements LanguagePlugin {
         case 'openapi':
           extractOpenApiJson(rootObject, add, edges);
           break;
-        case 'generic':
         default:
           extractGenericJson(rootObject, add);
           break;

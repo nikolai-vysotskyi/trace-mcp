@@ -288,7 +288,7 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
           }),
         null,
       );
-      if (debt && debt.isOk()) {
+      if (debt?.isOk()) {
         sections.push('## Tech Debt\n');
         sections.push('```json');
         sections.push(JSON.stringify(debt.value, null, 2).slice(0, 3000));
@@ -307,7 +307,7 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       // Bug prediction
       const bugs = safe(() => predictBugs(store, projectRoot, { limit: 10 }), null);
-      if (bugs && bugs.isOk()) {
+      if (bugs?.isOk()) {
         sections.push('## Bug Prediction (top 10)\n');
         sections.push('```json');
         sections.push(JSON.stringify(bugs.value, null, 2).slice(0, 2000));

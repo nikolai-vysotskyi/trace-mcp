@@ -72,7 +72,7 @@ function extractMethodSelector(node: TSNode): string | null {
 
   if (hasParams) {
     // Each identifier corresponds to a selector keyword followed by ':'
-    return selectorParts.map((p) => p + ':').join('');
+    return selectorParts.map((p) => `${p}:`).join('');
   }
   // Unary selector (no parameters)
   return selectorParts[0];

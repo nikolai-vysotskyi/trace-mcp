@@ -88,7 +88,7 @@ export function getSymbolOwnership(
   if (!isGitRepo(cwd)) return null;
 
   const symbol = store.getSymbolBySymbolId(symbolId);
-  if (!symbol || !symbol.line_start || !symbol.line_end) return null;
+  if (!symbol?.line_start || !symbol.line_end) return null;
 
   const file = store.getFileById(symbol.file_id);
   if (!file) return null;

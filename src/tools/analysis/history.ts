@@ -160,7 +160,6 @@ export function countImports(content: string): number {
     // PHP: use Namespace\...
     if (/^use\s+[A-Z\\]/.test(t)) {
       count++;
-      continue;
     }
   }
   return count;

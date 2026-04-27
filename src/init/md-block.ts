@@ -74,7 +74,7 @@ export function upsertTraceMcpBlock(
   }
 
   if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, TRACE_MCP_ROUTING_BLOCK + '\n');
+    fs.writeFileSync(filePath, `${TRACE_MCP_ROUTING_BLOCK}\n`);
     return { target: filePath, action: 'created' };
   }
 
@@ -101,7 +101,7 @@ export function upsertTraceMcpBlock(
 
   content = cleanupWhitespace(content);
   const separator = content.endsWith('\n') ? '\n' : '\n\n';
-  fs.writeFileSync(filePath, content + separator + TRACE_MCP_ROUTING_BLOCK + '\n');
+  fs.writeFileSync(filePath, `${content + separator + TRACE_MCP_ROUTING_BLOCK}\n`);
   const cleaned = originalContent !== content;
   return {
     target: filePath,
@@ -251,7 +251,7 @@ function lookAheadSection(lines: string[], start: number, level: number): string
 }
 
 function cleanupWhitespace(content: string): string {
-  return content.replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  return `${content.replace(/\n{3,}/g, '\n\n').trim()}\n`;
 }
 
 function escapeRegex(s: string): string {

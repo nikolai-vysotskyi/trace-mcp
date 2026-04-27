@@ -16,8 +16,8 @@ const _plugin = createRegexLanguagePlugin({
   docComments: { linePrefix: [';;'] },
   symbolPatterns: [
     // ─── Namespaces ────────────────────────────────────────────────────
-    { kind: 'namespace', pattern: /\(\s*ns\s+([\w.\-]+)/gm },
-    { kind: 'namespace', pattern: /\(\s*in-ns\s+'([\w.\-]+)/gm },
+    { kind: 'namespace', pattern: /\(\s*ns\s+([\w.-]+)/gm },
+    { kind: 'namespace', pattern: /\(\s*in-ns\s+'([\w.-]+)/gm },
 
     // ─── Functions ─────────────────────────────────────────────────────
     { kind: 'function', pattern: /\(\s*defn\s+([\w*+!\-'?<>=/.]+)/gm, meta: { public: true } },
@@ -103,13 +103,13 @@ const _plugin = createRegexLanguagePlugin({
     },
   ],
   importPatterns: [
-    { pattern: /\(:require\s+\[?([\w.\-]+)/gm },
-    { pattern: /\[\s*([\w.\-]+)\s+:as\b/gm },
-    { pattern: /\[\s*([\w.\-]+)\s+:refer\b/gm },
-    { pattern: /\(:import\s+\[?([\w.\-]+)/gm },
-    { pattern: /\(\s*require\s+'([\w.\-]+)/gm },
-    { pattern: /\(\s*use\s+'([\w.\-]+)/gm },
-    { pattern: /\(:require-macros\s+\[?([\w.\-]+)/gm },
+    { pattern: /\(:require\s+\[?([\w.-]+)/gm },
+    { pattern: /\[\s*([\w.-]+)\s+:as\b/gm },
+    { pattern: /\[\s*([\w.-]+)\s+:refer\b/gm },
+    { pattern: /\(:import\s+\[?([\w.-]+)/gm },
+    { pattern: /\(\s*require\s+'([\w.-]+)/gm },
+    { pattern: /\(\s*use\s+'([\w.-]+)/gm },
+    { pattern: /\(:require-macros\s+\[?([\w.-]+)/gm },
   ],
   fqnSep: '/',
 });

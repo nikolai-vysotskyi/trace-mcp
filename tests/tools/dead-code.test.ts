@@ -4,7 +4,7 @@ import { createTestStore } from '../test-utils.js';
 import { getDeadCodeV2, getDeadCodeReachability } from '../../src/tools/refactoring/dead-code.js';
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
-  return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
+  return store.insertFile(filePath, lang, `hash_${filePath}`, 100);
 }
 
 function insertExportedSymbol(

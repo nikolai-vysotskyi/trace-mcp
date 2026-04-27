@@ -6,7 +6,7 @@ import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { detectAstClones } from '../../src/tools/analysis/ast-clones.js';
 
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-ast-clones-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-ast-clones-test-${process.pid}`);
 
 function writeAndIndex(
   store: Store,
@@ -18,7 +18,7 @@ function writeAndIndex(
   const absPath = path.join(TEST_DIR, relPath);
   mkdirSync(path.dirname(absPath), { recursive: true });
   writeFileSync(absPath, content);
-  const fileId = store.insertFile(relPath, language, 'hash-' + relPath, content.length);
+  const fileId = store.insertFile(relPath, language, `hash-${relPath}`, content.length);
 
   // Compute byte offsets for each symbol based on line ranges
   const lines = content.split('\n');

@@ -63,7 +63,7 @@ class VoyageEmbeddingService implements EmbeddingService {
 
         if (!resp.ok) {
           const payload = await resp.text().catch(() => '');
-          const safePayload = payload.length > 200 ? payload.slice(0, 200) + '…' : payload;
+          const safePayload = payload.length > 200 ? `${payload.slice(0, 200)}…` : payload;
           throw new Error(
             `Voyage embeddings failed: ${resp.status} ${resp.statusText} — ${safePayload}`,
           );

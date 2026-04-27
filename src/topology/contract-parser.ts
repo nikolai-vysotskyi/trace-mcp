@@ -254,7 +254,7 @@ function parseGraphqlSdl(content: string, specPath: string): ParsedContract | nu
   while ((match = typeBlockRegex.exec(content)) !== null) {
     const typeName = match[1];
     const body = match[2];
-    const fieldRegex = /^\s*(\w+)\s*[\(:]/gm;
+    const fieldRegex = /^\s*(\w+)\s*[(:]/gm;
     let fieldMatch;
 
     while ((fieldMatch = fieldRegex.exec(body)) !== null) {

@@ -227,7 +227,7 @@ export function buildProjectContext(rootPath: string): ProjectContext {
       .filter((l) => l && !l.startsWith('-'));
     requirementsTxt = lines.map((l) =>
       l
-        .split(/[>=<!\[;]/)[0]
+        .split(/[>=<![;]/)[0]
         .trim()
         .toLowerCase(),
     );

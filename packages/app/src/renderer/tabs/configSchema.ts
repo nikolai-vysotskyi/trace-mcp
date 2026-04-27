@@ -111,7 +111,7 @@ export function validateSection(
       value = data[field.key];
     }
     const err = validateField(field, value);
-    if (err) errors[`${field.nested ? field.nested + '.' : ''}${field.key}`] = err;
+    if (err) errors[`${field.nested ? `${field.nested}.` : ''}${field.key}`] = err;
   }
   return errors;
 }

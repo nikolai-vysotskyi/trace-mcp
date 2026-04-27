@@ -524,7 +524,7 @@ function detectUnboundedQuery(store: Store, data: PreFetchedData): AntipatternFi
     const file = data.fileMap.get(model.file_id);
     if (!file || !matchesFilePattern(file.path, data.filePattern)) continue;
 
-    const tableName = model.collection_or_table ?? model.name.toLowerCase() + 's';
+    const tableName = model.collection_or_table ?? `${model.name.toLowerCase()}s`;
 
     // Check model options for pagination/limit config
     const opts = jsonParse(model.options);
@@ -832,7 +832,7 @@ function detectCircularDeps(data: PreFetchedData): AntipatternFinding[] {
     const file = data.fileMap.get(first.file_id);
     if (!file || !matchesFilePattern(file.path, data.filePattern)) continue;
 
-    const cycle = modelNames.map((m) => m.name).join(' → ') + ' → ' + modelNames[0].name;
+    const cycle = `${modelNames.map((m) => m.name).join(' → ')} → ${modelNames[0].name}`;
     counter++;
     findings.push({
       id: `CYC-${String(counter).padStart(3, '0')}`,
@@ -887,7 +887,7 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
     if (!file || !matchesFilePattern(file.path, data.filePattern)) continue;
 
     const assocs = data.assocByModel.get(model.id) ?? [];
-    const tableName = model.collection_or_table ?? model.name.toLowerCase() + 's';
+    const tableName = model.collection_or_table ?? `${model.name.toLowerCase()}s`;
     const tableIndexes = indexedColumns.get(tableName) ?? new Set();
 
     for (const assoc of assocs) {
@@ -904,7 +904,7 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
         if (!BELONGS_TO_KINDS.has(assoc.kind)) continue;
         const targetName = assoc.target_model_name;
         if (!targetName) continue;
-        fk = toSnakeCase(targetName) + '_id';
+        fk = `${toSnakeCase(targetName)}_id`;
         isInferred = true;
       }
 
@@ -914,7 +914,7 @@ function detectMissingIndex(store: Store, data: PreFetchedData): AntipatternFind
       // Also check target table for the FK
       const targetModel = assoc.target_model_id ? data.modelMap.get(assoc.target_model_id) : null;
       const targetTable = targetModel
-        ? (targetModel.collection_or_table ?? targetModel.name.toLowerCase() + 's')
+        ? (targetModel.collection_or_table ?? `${targetModel.name.toLowerCase()}s`)
         : null;
       if (targetTable) {
         const targetIndexes = indexedColumns.get(targetTable) ?? new Set();

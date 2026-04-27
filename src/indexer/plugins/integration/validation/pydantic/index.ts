@@ -346,12 +346,6 @@ function extractFieldAnnotations(body: TSNode): PydanticFieldRef[] {
     //
     // For bare annotation `name: Type`, tree-sitter uses 'type' node:
     if (child.type === 'type') {
-      // The 'type' node in tree-sitter-python stores the annotation
-      // Its children: identifier (name) and the type annotation
-      // Actually tree-sitter-python has 'expression_statement' > 'type' where
-      // the 'type' node contains the var name and annotation.
-      // Let's handle it more carefully.
-      continue;
     }
   }
 

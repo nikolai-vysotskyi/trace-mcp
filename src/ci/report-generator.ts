@@ -572,7 +572,7 @@ function computeDeploymentImpact(
         // Check if file belongs to this service's repo
         if (
           svc.repo_root &&
-          (rootPath === svc.repo_root || rootPath.startsWith(svc.repo_root + '/'))
+          (rootPath === svc.repo_root || rootPath.startsWith(`${svc.repo_root}/`))
         ) {
           const key = svc.name;
           const existing = serviceCounts.get(key) ?? {

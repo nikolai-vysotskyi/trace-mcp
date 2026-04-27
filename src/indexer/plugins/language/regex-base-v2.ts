@@ -227,11 +227,11 @@ function findBlockEnd(
 
   if (style === 'braces') {
     return findBraceBlockEnd(stripped, openOffset);
-  } else if (style === 'keyword-end') {
-    return findKeywordBlockEnd(stripped, openOffset, scopeConfig!);
-  } else {
-    return findIndentBlockEnd(stripped, openOffset);
   }
+  if (style === 'keyword-end') {
+    return findKeywordBlockEnd(stripped, openOffset, scopeConfig!);
+  }
+  return findIndentBlockEnd(stripped, openOffset);
 }
 
 function findBraceBlockEnd(source: string, start: number): number {
@@ -256,8 +256,8 @@ function findKeywordBlockEnd(source: string, start: number, config: ScopeConfig)
   let depth = 0;
   // Scan from start
   const text = source.slice(start);
-  const openRe = new RegExp(openKeywords.source, openKeywords.flags.replace('g', '') + 'g');
-  const endRe = new RegExp(endKeywords.source, endKeywords.flags.replace('g', '') + 'g');
+  const openRe = new RegExp(openKeywords.source, `${openKeywords.flags.replace('g', '')}g`);
+  const endRe = new RegExp(endKeywords.source, `${endKeywords.flags.replace('g', '')}g`);
 
   // Collect all open/close keyword positions
   const events: Array<{ offset: number; type: 'open' | 'close' }> = [];
@@ -351,7 +351,7 @@ function extractSignature(text: string, maxLen = 120): string {
   const firstLine = text.split('\n')[0].trim();
   const braceIdx = firstLine.lastIndexOf('{');
   const sig = braceIdx > 0 ? firstLine.substring(0, braceIdx).trim() : firstLine;
-  return sig.length > maxLen ? sig.slice(0, maxLen) + '…' : sig;
+  return sig.length > maxLen ? `${sig.slice(0, maxLen)}…` : sig;
 }
 
 function makeSymbolId(
@@ -394,7 +394,7 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
       // ── Pass 1: Containers ───────────────────────────────────────────
       if (config.containerPatterns) {
         for (const cp of config.containerPatterns) {
-          const flags = cp.pattern.flags.includes('g') ? cp.pattern.flags : cp.pattern.flags + 'g';
+          const flags = cp.pattern.flags.includes('g') ? cp.pattern.flags : `${cp.pattern.flags}g`;
           const re = new RegExp(cp.pattern.source, flags);
           let m: RegExpExecArray | null;
 
@@ -440,7 +440,7 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
             for (const mp of cp.memberPatterns ?? []) {
               const mFlags = mp.pattern.flags.includes('g')
                 ? mp.pattern.flags
-                : mp.pattern.flags + 'g';
+                : `${mp.pattern.flags}g`;
               const mRe = new RegExp(mp.pattern.source, mFlags);
               let mm: RegExpExecArray | null;
 
@@ -485,7 +485,7 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
       // ── Pass 3: Top-level symbols ──────────────────────────────────
       if (config.symbolPatterns) {
         for (const sp of config.symbolPatterns) {
-          const flags = sp.pattern.flags.includes('g') ? sp.pattern.flags : sp.pattern.flags + 'g';
+          const flags = sp.pattern.flags.includes('g') ? sp.pattern.flags : `${sp.pattern.flags}g`;
           const re = new RegExp(sp.pattern.source, flags);
           let m: RegExpExecArray | null;
 
@@ -535,7 +535,7 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
       if (config.importPatterns) {
         const seenEdges = new Set<string>();
         for (const ip of config.importPatterns) {
-          const flags = ip.pattern.flags.includes('g') ? ip.pattern.flags : ip.pattern.flags + 'g';
+          const flags = ip.pattern.flags.includes('g') ? ip.pattern.flags : `${ip.pattern.flags}g`;
           const re = new RegExp(ip.pattern.source, flags);
           let m: RegExpExecArray | null;
 

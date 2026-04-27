@@ -49,7 +49,7 @@ export function filePathToRoute(filePath: string, srcDir: string = '.'): string 
     return seg;
   });
 
-  return '/' + routeSegments.join('/');
+  return `/${routeSegments.join('/')}`;
 }
 
 /**
@@ -75,7 +75,7 @@ export function serverApiToRoute(filePath: string): { method: string; uri: strin
   // Handle index files
   route = route.replace(/\/index$/, '');
 
-  return { method, uri: '/' + route };
+  return { method, uri: `/${route}` };
 }
 
 /**
@@ -99,7 +99,7 @@ export function serverRoutesToRoute(filePath: string): { method: string; uri: st
   route = route.replace(/\/index$/, '');
   if (route === 'index') route = '';
 
-  return { method, uri: '/' + route };
+  return { method, uri: `/${route}` };
 }
 
 /** Detect useFetch / useAsyncData calls and extract the API URL. */
@@ -724,8 +724,7 @@ export class NuxtPlugin implements FrameworkPlugin {
           if (!target) {
             for (const [rutUri, rutTarget] of routeByUri) {
               if (!rutUri.includes('[')) continue;
-              const pattern =
-                '^' + rutUri.replace(/\[[^\]]+\]/g, '[^/]+').replace(/\//g, '\\/') + '$';
+              const pattern = `^${rutUri.replace(/\[[^\]]+\]/g, '[^/]+').replace(/\//g, '\\/')}$`;
               if (new RegExp(pattern).test(cleanUri)) {
                 target = rutTarget;
                 break;

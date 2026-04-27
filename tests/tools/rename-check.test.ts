@@ -4,7 +4,7 @@ import { createTestStore } from '../test-utils.js';
 import { checkRenameSafe } from '../../src/tools/refactoring/rename-check.js';
 
 function insertFile(store: Store, filePath: string): number {
-  return store.insertFile(filePath, 'typescript', 'hash_' + filePath, 100);
+  return store.insertFile(filePath, 'typescript', `hash_${filePath}`, 100);
 }
 
 function insertSymbol(store: Store, fileId: number, name: string, kind = 'function'): number {

@@ -299,7 +299,7 @@ function decodeDirName(dirName: string): string {
   for (let i = 1; i < parts.length; i++) {
     const seg = parts[i];
     // Try: base + "/" + (tail ? tail + "-" + seg : seg) — is this a directory?
-    const candidate = base + '/' + (tail ? tail + '-' + seg : seg);
+    const candidate = `${base}/${tail ? `${tail}-${seg}` : seg}`;
     try {
       if (fs.statSync(candidate).isDirectory()) {
         // It's a real directory → commit as new base
@@ -313,7 +313,7 @@ function decodeDirName(dirName: string): string {
 
     // Also try: base + "/" + seg (ignoring tail) — maybe tail should have been a dir?
     if (tail) {
-      const slashCandidate = base + '/' + tail;
+      const slashCandidate = `${base}/${tail}`;
       try {
         if (fs.statSync(slashCandidate).isDirectory()) {
           // tail was actually a directory name, commit it
@@ -327,10 +327,10 @@ function decodeDirName(dirName: string): string {
     }
 
     // Accumulate into tail (literal dash in name)
-    tail = tail ? tail + '-' + seg : seg;
+    tail = tail ? `${tail}-${seg}` : seg;
   }
 
-  return tail ? base + '/' + tail : base;
+  return tail ? `${base}/${tail}` : base;
 }
 
 function listProjectDirs(): { dirName: string; projectPath: string }[] {

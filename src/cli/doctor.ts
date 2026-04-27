@@ -222,7 +222,7 @@ function printFixResults(results: FixResult[], dryRun?: boolean) {
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   const cwd = process.cwd();
   if (p.startsWith(cwd)) return p.slice(cwd.length + 1) || '.';
   return p;

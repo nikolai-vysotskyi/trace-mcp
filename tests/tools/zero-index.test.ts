@@ -9,7 +9,7 @@ import {
   fallbackOutline,
 } from '../../src/tools/navigation/zero-index.js';
 
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-zeroindex-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-zeroindex-test-${process.pid}`);
 
 function writeFile(relPath: string, content: string): void {
   const absPath = path.join(TEST_DIR, relPath);

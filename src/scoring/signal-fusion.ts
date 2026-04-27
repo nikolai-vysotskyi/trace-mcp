@@ -119,7 +119,7 @@ export function computeIdentityScore(
 
   // FQN segment match
   if (symbolFqn) {
-    const fqnSegments = symbolFqn.toLowerCase().split(/[::#./\-]+/);
+    const fqnSegments = symbolFqn.toLowerCase().split(/[::#./-]+/);
     if (fqnSegments.some((seg) => seg === q)) return 0.6;
   }
 

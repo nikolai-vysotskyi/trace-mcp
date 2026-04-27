@@ -57,7 +57,7 @@ export function computeNewImportSpecifier(
         const aliasRoot = path.dirname(resolved);
         const newRelToAlias = path.relative(aliasRoot, newTargetAbsPath);
         if (!newRelToAlias.startsWith('..')) {
-          const newSpecifier = aliasPrefix + '/' + stripExtension(newRelToAlias);
+          const newSpecifier = `${aliasPrefix}/${stripExtension(newRelToAlias)}`;
           // Verify it resolves correctly
           const check = resolver.resolve(newSpecifier, importingFilePath);
           if (check && normalizePath(check) === normalizePath(newTargetAbsPath)) {
@@ -90,7 +90,7 @@ export function computeRelativeSpecifier(fromFile: string, toFile: string): stri
 
   // Ensure leading './' for same-directory or child imports
   if (!rel.startsWith('.') && !rel.startsWith('/')) {
-    rel = './' + rel;
+    rel = `./${rel}`;
   }
 
   // Normalize separators to forward slashes

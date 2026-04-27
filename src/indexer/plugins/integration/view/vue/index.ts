@@ -568,7 +568,7 @@ export function nuxtAutoImportAliases(
   let matchedLen = 0;
   for (const cfg of configs) {
     const cfgPath = cfg.path.replace(/^~\//, '').replace(/^\.\//, '');
-    if (normalizedPath.startsWith(cfgPath + '/') || normalizedPath.startsWith(cfgPath)) {
+    if (normalizedPath.startsWith(`${cfgPath}/`) || normalizedPath.startsWith(cfgPath)) {
       if (cfgPath.length > matchedLen) {
         matched = cfg;
         matchedLen = cfgPath.length;

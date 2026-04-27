@@ -76,7 +76,7 @@ function firstArg(node: TSNode): TSNode | null {
   if (!args) return null;
   for (let i = 0; i < args.namedChildCount; i++) {
     const child = args.namedChild(i);
-    if (child && child.isNamed) return child;
+    if (child?.isNamed) return child;
   }
   return null;
 }

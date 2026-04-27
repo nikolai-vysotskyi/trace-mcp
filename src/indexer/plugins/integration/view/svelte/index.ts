@@ -273,7 +273,7 @@ export class SveltePlugin implements FrameworkPlugin {
     const composables: string[] = [];
     const storeSeen = new Set<string>();
     const storeRe = new RegExp(STORE_SUB_RE.source, 'g');
-    const combined = scriptContent + '\n' + template;
+    const combined = `${scriptContent}\n${template}`;
     while ((match = storeRe.exec(combined)) !== null) {
       const storeName = match[1];
       // Filter out common non-store $ prefixed items and built-ins

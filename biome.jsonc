@@ -41,13 +41,22 @@
         "useConst": "error",
         "useImportType": "error",
         "useNodejsImportProtocol": "error",
-        "useExportType": "error"
+        "useExportType": "error",
+        "useTemplate": "error",
+        "noUselessElse": "error"
       },
       "suspicious": {
         "noDebugger": "error",
         "noDoubleEquals": "error",
         "noEmptyBlockStatements": "off",
         "noConsole": "off"
+      },
+      "complexity": {
+        "useOptionalChain": "error",
+        "useArrowFunction": "error",
+        "noUselessSwitchCase": "error",
+        "noUselessContinue": "error",
+        "noUselessEscapeInRegex": "error"
       }
     }
   },

@@ -122,7 +122,7 @@ export function AskTab({ root }: { root: string }) {
         buf = lines.pop()!;
         for (const ln of lines) {
           const t = ln.trim();
-          if (!t || !t.startsWith('data: ')) continue;
+          if (!t?.startsWith('data: ')) continue;
           try {
             const ev = JSON.parse(t.slice(6));
             if (ev.type === 'phase' && ev.phase === 'streaming') setPhase('streaming');
@@ -177,7 +177,7 @@ export function AskTab({ root }: { root: string }) {
     const el = taRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   }, []);
 
   const openSettings = useCallback(() => {

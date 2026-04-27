@@ -253,7 +253,7 @@ function checkSymbol(
       if (matches.length > 0) {
         const best = matches[0];
         const fileRow = store.getFileById(best.fileId);
-        issue.fix = `Did you mean \`${best.name}\`?` + (fileRow ? ` (${fileRow.path})` : '');
+        issue.fix = `Did you mean \`${best.name}\`?${fileRow ? ` (${fileRow.path})` : ''}`;
       }
     } catch {
       // Fuzzy search may fail if trigram table empty — ignore

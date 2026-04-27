@@ -15,7 +15,7 @@ const _plugin = createRegexLanguagePlugin({
     // [section_name] or [section.subsection]
     { kind: 'class', pattern: /^\s*\[([^\]]+)\]/gm },
     // key = value or key: value
-    { kind: 'variable', pattern: /^\s*([a-zA-Z_][\w.\-]*)\s*[=:]/gm },
+    { kind: 'variable', pattern: /^\s*([a-zA-Z_][\w.-]*)\s*[=:]/gm },
   ],
 });
 

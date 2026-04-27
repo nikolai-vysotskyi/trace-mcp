@@ -116,7 +116,7 @@ memoryCommand
 
       console.log(`Found ${results.length} results for "${query}":\n`);
       for (const r of results) {
-        const preview = r.content.length > 150 ? r.content.slice(0, 147) + '...' : r.content;
+        const preview = r.content.length > 150 ? `${r.content.slice(0, 147)}...` : r.content;
         console.log(`  [${r.session_id}] ${r.role} (${r.timestamp})`);
         console.log(`    ${preview}`);
         if (r.referenced_files) {

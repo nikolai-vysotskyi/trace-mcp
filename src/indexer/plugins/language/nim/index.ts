@@ -26,70 +26,70 @@ const _plugin = createRegexLanguagePlugin({
     // proc name*[T](params): RetType {.pragmas.} =
     {
       kind: 'function',
-      pattern: /^\s*proc\s+(`[^`]+`|\w+)\*\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*proc\s+(`[^`]+`|\w+)\*\s*(?:\[|[({:]|=)/gm,
       meta: { public: true },
     },
-    { kind: 'function', pattern: /^\s*proc\s+(`[^`]+`|\w+)\s*(?:\[|[\({:]|=)/gm },
+    { kind: 'function', pattern: /^\s*proc\s+(`[^`]+`|\w+)\s*(?:\[|[({:]|=)/gm },
     // func (pure, no side effects)
     {
       kind: 'function',
-      pattern: /^\s*func\s+(`[^`]+`|\w+)\*\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*func\s+(`[^`]+`|\w+)\*\s*(?:\[|[({:]|=)/gm,
       meta: { public: true, pure: true },
     },
     {
       kind: 'function',
-      pattern: /^\s*func\s+(`[^`]+`|\w+)\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*func\s+(`[^`]+`|\w+)\s*(?:\[|[({:]|=)/gm,
       meta: { pure: true },
     },
     // method (dynamic dispatch)
     {
       kind: 'method',
-      pattern: /^\s*method\s+(`[^`]+`|\w+)\*\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*method\s+(`[^`]+`|\w+)\*\s*(?:\[|[({:]|=)/gm,
       meta: { public: true },
     },
-    { kind: 'method', pattern: /^\s*method\s+(`[^`]+`|\w+)\s*(?:\[|[\({:]|=)/gm },
+    { kind: 'method', pattern: /^\s*method\s+(`[^`]+`|\w+)\s*(?:\[|[({:]|=)/gm },
     // template (compile-time code generation)
     {
       kind: 'function',
-      pattern: /^\s*template\s+(`[^`]+`|\w+)\*\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*template\s+(`[^`]+`|\w+)\*\s*(?:\[|[({:]|=)/gm,
       meta: { public: true, template: true },
     },
     {
       kind: 'function',
-      pattern: /^\s*template\s+(`[^`]+`|\w+)\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*template\s+(`[^`]+`|\w+)\s*(?:\[|[({:]|=)/gm,
       meta: { template: true },
     },
     // macro (AST-level metaprogramming)
     {
       kind: 'function',
-      pattern: /^\s*macro\s+(`[^`]+`|\w+)\*\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*macro\s+(`[^`]+`|\w+)\*\s*(?:\[|[({:]|=)/gm,
       meta: { public: true, macro: true },
     },
     {
       kind: 'function',
-      pattern: /^\s*macro\s+(`[^`]+`|\w+)\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*macro\s+(`[^`]+`|\w+)\s*(?:\[|[({:]|=)/gm,
       meta: { macro: true },
     },
     // iterator (yield-based)
     {
       kind: 'function',
-      pattern: /^\s*iterator\s+(`[^`]+`|\w+)\*\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*iterator\s+(`[^`]+`|\w+)\*\s*(?:\[|[({:]|=)/gm,
       meta: { public: true, iterator: true },
     },
     {
       kind: 'function',
-      pattern: /^\s*iterator\s+(`[^`]+`|\w+)\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*iterator\s+(`[^`]+`|\w+)\s*(?:\[|[({:]|=)/gm,
       meta: { iterator: true },
     },
     // converter (implicit type conversion)
     {
       kind: 'function',
-      pattern: /^\s*converter\s+(`[^`]+`|\w+)\*\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*converter\s+(`[^`]+`|\w+)\*\s*(?:\[|[({:]|=)/gm,
       meta: { public: true, converter: true },
     },
     {
       kind: 'function',
-      pattern: /^\s*converter\s+(`[^`]+`|\w+)\s*(?:\[|[\({:]|=)/gm,
+      pattern: /^\s*converter\s+(`[^`]+`|\w+)\s*(?:\[|[({:]|=)/gm,
       meta: { converter: true },
     },
 

@@ -311,7 +311,7 @@ async function handleMultiRoot(
   const allProjects = listProjects();
   const cleaned: string[] = [];
   for (const proj of allProjects) {
-    if (proj.root.startsWith(parentDir + path.sep) || proj.root.startsWith(parentDir + '/')) {
+    if (proj.root.startsWith(parentDir + path.sep) || proj.root.startsWith(`${parentDir}/`)) {
       // Delete child's DB file
       if (fs.existsSync(proj.dbPath)) {
         fs.unlinkSync(proj.dbPath);
@@ -405,6 +405,6 @@ async function handleMultiRoot(
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   return p;
 }

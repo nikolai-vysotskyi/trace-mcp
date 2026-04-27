@@ -321,7 +321,7 @@ export class CLanguagePlugin implements LanguagePlugin {
       name,
       kind: 'constant',
       fqn: name,
-      signature: `#define ${name}${valueNode ? ' ' + valueNode.text.trim() : ''}`,
+      signature: `#define ${name}${valueNode ? ` ${valueNode.text.trim()}` : ''}`,
       byteStart: node.startIndex,
       byteEnd: node.endIndex,
       lineStart: node.startPosition.row + 1,

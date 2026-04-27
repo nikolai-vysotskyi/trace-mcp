@@ -1769,7 +1769,7 @@ export class N8nPlugin implements FrameworkPlugin {
         symbolId: `${filePath}::${node.name}#constant`,
         name: node.name,
         kind: 'constant',
-        signature: `[n8n:${node.type}${node.typeVersion ? '@' + node.typeVersion : ''}] ${node.name}`,
+        signature: `[n8n:${node.type}${node.typeVersion ? `@${node.typeVersion}` : ''}] ${node.name}`,
         byteStart: Math.max(byteStart, 0),
         byteEnd: Math.max(byteEnd, 0),
         metadata: meta,

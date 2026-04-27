@@ -4,7 +4,7 @@ import { getEdgeBottlenecks } from '../../src/tools/analysis/bottlenecks.js';
 import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, path: string): number {
-  return store.insertFile(path, 'typescript', 'hash_' + path, 100);
+  return store.insertFile(path, 'typescript', `hash_${path}`, 100);
 }
 
 function insertEdge(store: Store, srcNode: number, tgtNode: number): void {

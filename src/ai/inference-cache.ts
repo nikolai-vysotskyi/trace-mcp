@@ -10,9 +10,7 @@ export class InferenceCache {
   constructor(private db: Database.Database) {}
 
   private cacheKey(model: string, prompt: string): string {
-    return createHash('sha256')
-      .update(model + '\0' + prompt)
-      .digest('hex');
+    return createHash('sha256').update(`${model}\0${prompt}`).digest('hex');
   }
 
   get(model: string, prompt: string): string | null {

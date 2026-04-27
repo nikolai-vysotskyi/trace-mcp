@@ -100,7 +100,7 @@ export class SpringPlugin implements FrameworkPlugin {
       let m: RegExpExecArray | null;
       while ((m = re.exec(source)) !== null) {
         const path = m[1] ?? '';
-        const uri = normalizePath(classPrefix + '/' + path);
+        const uri = normalizePath(`${classPrefix}/${path}`);
         result.routes!.push({ method, uri, line: source.substring(0, m.index).split('\n').length });
       }
     }
@@ -110,7 +110,7 @@ export class SpringPlugin implements FrameworkPlugin {
       /@RequestMapping\s*\([^)]*(?:value\s*=\s*)?["']([^"']+)["'][^)]*method\s*=\s*RequestMethod\.(\w+)/g;
     let rm: RegExpExecArray | null;
     while ((rm = rmRe.exec(source)) !== null) {
-      const uri = normalizePath(classPrefix + '/' + rm[1]);
+      const uri = normalizePath(`${classPrefix}/${rm[1]}`);
       result.routes!.push({
         method: rm[2],
         uri,
@@ -183,5 +183,5 @@ export class SpringPlugin implements FrameworkPlugin {
 }
 
 function normalizePath(path: string): string {
-  return '/' + path.replace(/\/+/g, '/').replace(/^\/|\/$/g, '');
+  return `/${path.replace(/\/+/g, '/').replace(/^\/|\/$/g, '')}`;
 }

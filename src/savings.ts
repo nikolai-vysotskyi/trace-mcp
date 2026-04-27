@@ -214,7 +214,7 @@ export function loadPersistentSavings(): PersistentSavings | null {
 
 /** Atomic write of persistent savings. */
 function savePersistentSavings(data: PersistentSavings): void {
-  const tmpPath = SAVINGS_PATH + '.tmp';
-  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n');
+  const tmpPath = `${SAVINGS_PATH}.tmp`;
+  fs.writeFileSync(tmpPath, `${JSON.stringify(data, null, 2)}\n`);
   fs.renameSync(tmpPath, SAVINGS_PATH);
 }

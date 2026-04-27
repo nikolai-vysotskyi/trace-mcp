@@ -237,6 +237,6 @@ function matchGlob(filePath: string, pattern: string): boolean {
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // escape regex special chars
     .replace(/\\\*\\\*/g, '.*') // ** → .*
     .replace(/\\\*/g, '[^/]*'); // * → [^/]*
-  const regex = new RegExp('^' + escaped + '$');
+  const regex = new RegExp(`^${escaped}$`);
   return regex.test(filePath);
 }

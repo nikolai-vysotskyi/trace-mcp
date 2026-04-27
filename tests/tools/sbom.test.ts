@@ -4,7 +4,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { generateSbom } from '../../src/tools/project/sbom.js';
 
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-sbom-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-sbom-test-${process.pid}`);
 
 function writeJson(relPath: string, data: unknown): void {
   const absPath = path.join(TEST_DIR, relPath);

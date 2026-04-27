@@ -22,7 +22,7 @@ export interface MediaLibraryModelInfo {
 const NAMESPACE_RE = /namespace\s+([\w\\]+)\s*;/;
 const CLASS_NAME_RE = /class\s+(\w+)/;
 const INTERACTS_WITH_MEDIA_RE = /use\s+(?:[\w\\]*\\)?InteractsWithMedia\b/;
-const HAS_MEDIA_INTERFACE_RE = /implements\s+[^\{]*?\bHasMedia\b/;
+const HAS_MEDIA_INTERFACE_RE = /implements\s+[^{]*?\bHasMedia\b/;
 const ADD_MEDIA_COLLECTION_RE = /addMediaCollection\s*\(\s*['"]([^'"]+)['"]/g;
 
 // ─── Model extraction ────────────────────────────────────────

@@ -8,7 +8,7 @@ import {
 } from '../../src/tools/analysis/layer-violations.js';
 
 function insertFile(store: Store, filePath: string): number {
-  return store.insertFile(filePath, 'typescript', 'hash_' + filePath, 100);
+  return store.insertFile(filePath, 'typescript', `hash_${filePath}`, 100);
 }
 
 function insertEdge(store: Store, srcNodeId: number, tgtNodeId: number, edgeType: string): void {

@@ -168,7 +168,7 @@ function extractChannels(source: string, _useMap: Map<string, string>): Broadcas
   const concatRe = /new\s+(Private|Presence)?Channel\(\s*['"]([^'"]+)['"]\s*\./g;
   while ((match = concatRe.exec(body)) !== null) {
     const qualifier = match[1];
-    const baseName = match[2] + '{id}'; // simplified pattern
+    const baseName = `${match[2]}{id}`; // simplified pattern
     const type: BroadcastChannel['type'] =
       qualifier === 'Private' ? 'private' : qualifier === 'Presence' ? 'presence' : 'public';
     // Only add if not already captured

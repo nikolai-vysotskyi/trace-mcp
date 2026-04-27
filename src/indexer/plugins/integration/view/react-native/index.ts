@@ -48,7 +48,7 @@ function expoFileToRoute(
   // index → empty
   routePart = routePart.replace(/\/index$|^index$/, '');
 
-  const route = '/' + routePart.replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
+  const route = `/${routePart.replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '')}`;
   return { route: route || '/', isLayout, is404 };
 }
 

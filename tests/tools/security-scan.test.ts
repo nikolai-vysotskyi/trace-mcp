@@ -7,13 +7,13 @@ import { createTestStore } from '../test-utils.js';
 import { scanSecurity } from '../../src/tools/quality/security-scan.js';
 
 // Temp dir for test files
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-security-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-security-test-${process.pid}`);
 
 function writeFile(store: Store, relPath: string, content: string, language: string): void {
   const absPath = path.join(TEST_DIR, relPath);
   mkdirSync(path.dirname(absPath), { recursive: true });
   writeFileSync(absPath, content);
-  store.insertFile(relPath, language, 'hash-' + relPath, content.length);
+  store.insertFile(relPath, language, `hash-${relPath}`, content.length);
 }
 
 describe('Security Scanning', () => {

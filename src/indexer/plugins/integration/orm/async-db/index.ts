@@ -61,7 +61,7 @@ function hasPythonDep(ctx: ProjectContext, packages: string[]): string | null {
     if (
       ctx.requirementsTxt?.some((line) => {
         const pkgName = line
-          .split(/[=<>!\[]/)[0]
+          .split(/[=<>![]/)[0]
           .trim()
           .toLowerCase();
         return pkgName === lowerPkg;

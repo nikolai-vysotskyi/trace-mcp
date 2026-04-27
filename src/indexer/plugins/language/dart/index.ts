@@ -58,7 +58,7 @@ function extractClassModifiers(node: TSNode): string[] {
   if (mods.length === 0) {
     const text = node.text.trimStart();
     for (const m of ['abstract', 'sealed', 'base', 'final', 'mixin'] as const) {
-      if (text.startsWith(m + ' ')) mods.push(m);
+      if (text.startsWith(`${m} `)) mods.push(m);
     }
   }
   return mods;

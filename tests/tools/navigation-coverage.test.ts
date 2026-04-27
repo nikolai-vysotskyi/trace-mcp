@@ -29,7 +29,7 @@ import fs from 'node:fs';
 type Meta = Record<string, unknown>;
 
 function seedFile(store: Store, filePath: string, language = 'typescript'): number {
-  return store.insertFile(filePath, language, 'hash:' + filePath, 100);
+  return store.insertFile(filePath, language, `hash:${filePath}`, 100);
 }
 
 function seedSymbol(

@@ -102,7 +102,7 @@ export function extractDataFetchingHooks(source: string): DataFetchingHook[] {
   // Template literal fetch with interpolation (any useQuery/useSWR context)
   const templateRe = globalRe(FETCH_TEMPLATE_RE);
   while ((match = templateRe.exec(source)) !== null) {
-    const endpoint = normalizeEndpoint(match[1] + '${x}' + match[2]);
+    const endpoint = normalizeEndpoint(`${match[1]}\${x}${match[2]}`);
     // Determine context: is this inside useQuery, useMutation, or useSWR?
     const before = source.slice(Math.max(0, match.index - 200), match.index);
     let hook = 'fetch';

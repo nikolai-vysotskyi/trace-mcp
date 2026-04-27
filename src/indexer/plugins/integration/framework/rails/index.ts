@@ -107,7 +107,7 @@ export class RailsPlugin implements FrameworkPlugin {
         continue;
       }
 
-      const prefix = prefixStack.length > 0 ? '/' + prefixStack.join('/') : '';
+      const prefix = prefixStack.length > 0 ? `/${prefixStack.join('/')}` : '';
 
       // resources :users
       const resourcesMatch = line.match(/resources?\s+:(\w+)/);

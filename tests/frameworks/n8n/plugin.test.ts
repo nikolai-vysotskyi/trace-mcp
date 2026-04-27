@@ -1560,7 +1560,7 @@ function createMockResolveContext() {
       const content = fileContents[file.path];
       if (!content) return [];
       const wf = parseN8nWorkflow(Buffer.from(content));
-      if (!wf || !wf.nodes.length) return [];
+      if (!wf?.nodes.length) return [];
       return [{ symbolId: `${file.path}::${wf.nodes[0].name}#constant` }];
     },
   } as any;

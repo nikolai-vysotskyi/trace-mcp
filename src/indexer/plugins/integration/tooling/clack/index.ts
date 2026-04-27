@@ -31,7 +31,7 @@ const CLACK_PROMPT_RE =
   /(?:text|select|confirm|multiselect|selectKey|group|password|isCancel)\s*\(\s*\{/g;
 
 // inquirer.prompt([...]), prompt({...})
-const INQUIRER_PROMPT_RE = /(?:inquirer\.prompt|prompt)\s*\(\s*[\[{]/g;
+const INQUIRER_PROMPT_RE = /(?:inquirer\.prompt|prompt)\s*\(\s*[[{]/g;
 
 // Import detection
 const PROMPT_IMPORT_RE =

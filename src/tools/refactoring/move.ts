@@ -414,7 +414,7 @@ function rewriteOwnImports(
 
     // Match import specifiers in this line
     const specifierMatch = extractSpecifierFromLine(line);
-    if (!specifierMatch || !specifierMatch.startsWith('.')) continue;
+    if (!specifierMatch?.startsWith('.')) continue;
 
     // Resolve the old specifier to an absolute path
     const resolvedAbs = resolveRelativeSpecifier(currentDir, specifierMatch);
@@ -552,7 +552,7 @@ function rewriteSymbolImport(
           original_text: line.trimStart(),
           new_text: `${oldImportRewritten.trimStart()}\n${newImportLine}`,
         });
-        lines[i] = oldImportRewritten + '\n' + newImportLine;
+        lines[i] = `${oldImportRewritten}\n${newImportLine}`;
       } else {
         // This import only had the moved symbol — rewrite the whole specifier
         const newLine = line.replace(specifier, newSpecifier);

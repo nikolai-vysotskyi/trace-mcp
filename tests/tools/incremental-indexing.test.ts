@@ -4,7 +4,7 @@ import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, path: string, lang = 'typescript'): number {
-  return store.insertFile(path, lang, 'hash_' + path, 100);
+  return store.insertFile(path, lang, `hash_${path}`, 100);
 }
 
 function insertSymbol(store: Store, fileId: number, name: string, kind = 'function'): number {

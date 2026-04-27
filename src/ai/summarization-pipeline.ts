@@ -137,7 +137,7 @@ export class SummarizationPipeline {
       const slice = content.slice(byteStart, byteEnd);
       const lines = slice.split('\n');
       if (lines.length > MAX_SOURCE_LINES) {
-        return lines.slice(0, MAX_SOURCE_LINES).join('\n') + '\n// ... truncated';
+        return `${lines.slice(0, MAX_SOURCE_LINES).join('\n')}\n// ... truncated`;
       }
       return slice;
     } catch {

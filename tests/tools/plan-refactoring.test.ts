@@ -10,7 +10,7 @@ import { planRefactoring } from '../../src/tools/refactoring/plan-refactoring.js
 // ════════════════════════════════════════════════════════════════════════
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
-  return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
+  return store.insertFile(filePath, lang, `hash_${filePath}`, 100);
 }
 
 function insertSymbol(

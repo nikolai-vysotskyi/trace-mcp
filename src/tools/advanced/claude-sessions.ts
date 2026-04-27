@@ -82,7 +82,7 @@ export function decodeClaudeProjectName(name: string): string | null {
     } catch {
       // Cannot read further — fall back to greedy decode of the remainder
       return current === '/'
-        ? '/' + tokens.slice(i).join('/')
+        ? `/${tokens.slice(i).join('/')}`
         : path.join(current, tokens.slice(i).join('/'));
     }
     const entrySet = new Set(entries);
@@ -93,14 +93,14 @@ export function decodeClaudeProjectName(name: string): string | null {
       const candidate = tokens.slice(i, j).join('-');
       if (entrySet.has(candidate)) {
         matched = j;
-        current = current === '/' ? '/' + candidate : path.join(current, candidate);
+        current = current === '/' ? `/${candidate}` : path.join(current, candidate);
         break;
       }
     }
     if (matched === -1) {
       // No match — give up walking; return greedy decode of the remainder
       return current === '/'
-        ? '/' + tokens.slice(i).join('/')
+        ? `/${tokens.slice(i).join('/')}`
         : path.join(current, tokens.slice(i).join('/'));
     }
     i = matched;

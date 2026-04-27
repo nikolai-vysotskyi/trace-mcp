@@ -123,7 +123,7 @@ const _plugin = createMultiPassPlugin({
     { pattern: new RegExp(`\\(\\s*require\\s+[:#]?"?(${SYM_RE})`, 'gim') },
     { pattern: /\(\s*load\s+"([^"]+)"/gim },
     { pattern: new RegExp(`\\(\\s*ql:quickload\\s+[:"](${SYM_RE})`, 'gim') },
-    { pattern: /:depends-on\s+[("#]+([\w.\-]+)/gim },
+    { pattern: /:depends-on\s+[("#]+([\w.-]+)/gim },
   ],
 });
 

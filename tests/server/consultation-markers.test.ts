@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { markToolConsultation } from '../../src/server/consultation-markers.js';
 import { projectHash } from '../../src/global.js';
 
-const TEST_ROOT = path.join(os.tmpdir(), 'trace-mcp-test-consultation-' + process.pid);
+const TEST_ROOT = path.join(os.tmpdir(), `trace-mcp-test-consultation-${process.pid}`);
 
 function getMarkerDir(): string {
   return path.join(os.tmpdir(), `trace-mcp-consulted-${projectHash(path.resolve(TEST_ROOT))}`);

@@ -66,7 +66,7 @@ export function getSymbol(
     if (opts.maxLines != null) {
       const lines = source.split('\n');
       if (lines.length > opts.maxLines) {
-        source = lines.slice(0, opts.maxLines).join('\n') + '\n// ... truncated';
+        source = `${lines.slice(0, opts.maxLines).join('\n')}\n// ... truncated`;
         truncated = true;
       }
     }

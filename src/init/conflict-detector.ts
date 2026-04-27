@@ -898,10 +898,10 @@ function scanGlobalArtifacts(): Conflict[] {
 // ---------------------------------------------------------------------------
 
 function shortPath(p: string): string {
-  if (p.startsWith(HOME)) return '~' + p.slice(HOME.length);
+  if (p.startsWith(HOME)) return `~${p.slice(HOME.length)}`;
   return p;
 }
 
 function truncate(s: string, maxLen: number): string {
-  return s.length > maxLen ? s.slice(0, maxLen - 1) + '…' : s;
+  return s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s;
 }

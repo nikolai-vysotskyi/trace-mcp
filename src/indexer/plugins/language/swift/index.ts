@@ -355,7 +355,6 @@ export class SwiftLanguagePlugin implements LanguagePlugin {
         kind = 'class';
         meta.swiftKind = 'extension';
         break;
-      case 'class':
       default:
         kind = 'class';
         break;

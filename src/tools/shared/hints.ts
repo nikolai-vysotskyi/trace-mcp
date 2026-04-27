@@ -189,7 +189,7 @@ const hintGenerators: Record<string, HintGenerator> = {
     if (name) {
       hints.push({
         tool: 'get_schema',
-        args: { table_name: name.toLowerCase() + 's' },
+        args: { table_name: `${name.toLowerCase()}s` },
         why: "See the full DB schema for this model's table",
       });
       hints.push({

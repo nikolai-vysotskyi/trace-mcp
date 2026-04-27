@@ -1748,7 +1748,7 @@ function RequestRow({ entry, isLast }: { entry: AIEntry; isLast: boolean }) {
             letterSpacing: '0.03em',
             padding: '1px 5px',
             borderRadius: 4,
-            background: meta.color + '1a',
+            background: `${meta.color}1a`,
             color: meta.color,
             flexShrink: 0,
             fontFamily: 'SF Mono, Menlo, monospace',
@@ -1956,7 +1956,7 @@ function AIActivity() {
             style={{
               background: !filter ? 'var(--accent)' : 'var(--fill-control)',
               color: !filter ? '#fff' : 'var(--text-secondary)',
-              border: '0.5px solid ' + (!filter ? 'var(--accent)' : 'var(--border)'),
+              border: `0.5px solid ${!filter ? 'var(--accent)' : 'var(--border)'}`,
               cursor: 'pointer',
             }}
           >
@@ -1972,9 +1972,9 @@ function AIActivity() {
                 onClick={() => setFilter(active ? null : type)}
                 className="text-[10px] font-medium px-2.5 py-1 rounded-full transition-all flex items-center gap-1"
                 style={{
-                  background: active ? meta.color + '22' : 'var(--fill-control)',
+                  background: active ? `${meta.color}22` : 'var(--fill-control)',
                   color: active ? meta.color : 'var(--text-secondary)',
-                  border: '0.5px solid ' + (active ? meta.color + '44' : 'var(--border)'),
+                  border: `0.5px solid ${active ? `${meta.color}44` : 'var(--border)'}`,
                   cursor: 'pointer',
                   backdropFilter: 'blur(8px)',
                   WebkitBackdropFilter: 'blur(8px)',

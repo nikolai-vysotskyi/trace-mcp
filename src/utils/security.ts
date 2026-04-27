@@ -100,7 +100,7 @@ function matchGlob(name: string, pattern: string): boolean {
   // id_rsa.* → matches id_rsa.pub, etc.
   if (pattern.endsWith('.*') && !pattern.startsWith('*')) {
     const prefix = pattern.slice(0, -2);
-    if (name === prefix || (name.startsWith(prefix + '.') && name.length > prefix.length + 1)) {
+    if (name === prefix || (name.startsWith(`${prefix}.`) && name.length > prefix.length + 1)) {
       return true;
     }
   }

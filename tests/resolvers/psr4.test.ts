@@ -77,7 +77,7 @@ describe('PSR-4 resolver', () => {
   // ---------- fromComposerJson ----------
 
   it('creates resolver from composer.json', () => {
-    const dir = join(tmpdir(), 'psr4-test-' + Date.now());
+    const dir = join(tmpdir(), `psr4-test-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
 
     const composerJson = {
@@ -101,7 +101,7 @@ describe('PSR-4 resolver', () => {
   });
 
   it('returns undefined for composer.json without psr-4', () => {
-    const dir = join(tmpdir(), 'psr4-test-nopsr4-' + Date.now());
+    const dir = join(tmpdir(), `psr4-test-nopsr4-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'composer.json'), JSON.stringify({ require: {} }));
 

@@ -6,13 +6,13 @@ import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { taintAnalysis } from '../../src/tools/quality/taint-analysis.js';
 
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-taint-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-taint-test-${process.pid}`);
 
 function writeFile(store: Store, relPath: string, content: string, language: string): void {
   const absPath = path.join(TEST_DIR, relPath);
   mkdirSync(path.dirname(absPath), { recursive: true });
   writeFileSync(absPath, content);
-  store.insertFile(relPath, language, 'hash-' + relPath, content.length);
+  store.insertFile(relPath, language, `hash-${relPath}`, content.length);
 }
 
 describe('Taint Analysis', () => {

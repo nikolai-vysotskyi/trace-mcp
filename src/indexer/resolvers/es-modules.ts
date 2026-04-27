@@ -54,10 +54,7 @@ function findTsconfig(startDir: string, stopDir: string): string | undefined {
           }
         }
         return candidate;
-      } catch {
-        // JSON parse error — skip this tsconfig
-        continue;
-      }
+      } catch {}
     }
     const parent = path.dirname(dir);
     if (parent === dir) break; // filesystem root
@@ -163,7 +160,7 @@ export class EsModuleResolver {
   /** Get the resolver for the workspace containing `absFilePath`. */
   private getResolver(absFilePath: string): ResolverFactory {
     for (const wsPath of this.sortedWorkspacePaths) {
-      if (absFilePath.startsWith(wsPath + '/') || absFilePath === wsPath) {
+      if (absFilePath.startsWith(`${wsPath}/`) || absFilePath === wsPath) {
         const resolver = this.resolvers.get(wsPath);
         if (resolver) return resolver;
       }

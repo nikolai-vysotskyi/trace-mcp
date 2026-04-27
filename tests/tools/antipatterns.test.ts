@@ -6,13 +6,13 @@ import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { detectAntipatterns } from '../../src/tools/quality/antipatterns.js';
 
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-antipatterns-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-antipatterns-test-${process.pid}`);
 
 function insertFile(store: Store, relPath: string, language = 'typescript'): number {
   const absPath = path.join(TEST_DIR, relPath);
   mkdirSync(path.dirname(absPath), { recursive: true });
   writeFileSync(absPath, '// placeholder');
-  return store.insertFile(relPath, language, 'hash-' + relPath, 100);
+  return store.insertFile(relPath, language, `hash-${relPath}`, 100);
 }
 
 function insertModel(

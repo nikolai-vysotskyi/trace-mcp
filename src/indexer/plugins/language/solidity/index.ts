@@ -23,7 +23,7 @@ function makeSymbolId(filePath: string, name: string, kind: string, parent?: str
 
 function extractSignature(node: TSNode, maxLen = 120): string {
   const firstLine = node.text.split('\n')[0].trim();
-  return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine;
+  return firstLine.length > maxLen ? `${firstLine.slice(0, maxLen)}…` : firstLine;
 }
 
 function getNameText(node: TSNode, ...childTypes: string[]): string | null {

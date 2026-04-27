@@ -543,7 +543,7 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
     let projectSection: Record<string, unknown> = {};
     if (searchFrom) {
       const projects = globalRaw.projects as Record<string, unknown> | undefined;
-      if (projects && projects[searchFrom]) {
+      if (projects?.[searchFrom]) {
         projectSection = projects[searchFrom] as Record<string, unknown>;
       }
     }

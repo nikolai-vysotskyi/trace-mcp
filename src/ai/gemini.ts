@@ -59,7 +59,7 @@ class GeminiEmbeddingService implements EmbeddingService {
 
         if (!resp.ok) {
           const body = await resp.text().catch(() => '');
-          const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+          const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
           throw new Error(
             `Gemini embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`,
           );
@@ -111,7 +111,7 @@ class GeminiInferenceService implements InferenceService {
 
         if (!resp.ok) {
           const body = await resp.text().catch(() => '');
-          const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+          const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
           throw new Error(
             `Gemini generate failed: ${resp.status} ${resp.statusText} — ${safeBody}`,
           );
@@ -154,7 +154,7 @@ class GeminiInferenceService implements InferenceService {
 
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
-      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+      const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
       throw new Error(`Gemini stream failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
     }
 

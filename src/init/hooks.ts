@@ -163,7 +163,7 @@ function readSettings(filePath: string): Record<string, unknown> {
 
 function writeSettings(filePath: string, settings: Record<string, unknown>): void {
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(settings, null, 2) + '\n');
+  fs.writeFileSync(filePath, `${JSON.stringify(settings, null, 2)}\n`);
 }
 
 function addHookEntry(settings: Record<string, unknown>, desc: HookDescriptor, dest: string): void {

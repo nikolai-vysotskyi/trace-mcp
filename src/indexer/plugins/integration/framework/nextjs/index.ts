@@ -161,7 +161,7 @@ export function appRouterPathToRoute(filePath: string): string {
       return seg;
     });
 
-  return '/' + routeSegments.join('/');
+  return `/${routeSegments.join('/')}`;
 }
 
 /**
@@ -194,7 +194,7 @@ export function pagesRouterPathToRoute(filePath: string): string {
     return seg;
   });
 
-  return '/' + routeSegments.join('/');
+  return `/${routeSegments.join('/')}`;
 }
 
 /** Determine the file type from an App Router path. */
@@ -243,7 +243,7 @@ function extractInterceptingInfo(
       });
       return {
         pattern: '(..)(..)',
-        interceptedRoute: '/' + routeSegments.join('/'),
+        interceptedRoute: `/${routeSegments.join('/')}`,
       };
     }
 
@@ -266,7 +266,7 @@ function extractInterceptingInfo(
 
       return {
         pattern,
-        interceptedRoute: '/' + routeSegments.join('/'),
+        interceptedRoute: `/${routeSegments.join('/')}`,
       };
     }
   }
@@ -771,7 +771,7 @@ export class NextJSPlugin implements FrameworkPlugin {
 
       // Find pages nested under this layout
       for (const page of pages) {
-        if (page.path.startsWith(layoutDir + '/') || layoutDir === 'app') {
+        if (page.path.startsWith(`${layoutDir}/`) || layoutDir === 'app') {
           const pageSymbols = ctx.getSymbolsByFile(page.id);
           const pageSym = pageSymbols.find((s) => s.kind === 'function' || s.kind === 'class');
           if (!pageSym) continue;
@@ -792,7 +792,7 @@ export class NextJSPlugin implements FrameworkPlugin {
         for (const file of files) {
           if (
             path.dirname(file.path) === layoutDir ||
-            (file.path.startsWith(layoutDir + '/') && layoutDir === 'app')
+            (file.path.startsWith(`${layoutDir}/`) && layoutDir === 'app')
           ) {
             const fileSymbols = ctx.getSymbolsByFile(file.id);
             const fileSym = fileSymbols.find((s) => s.kind === 'function' || s.kind === 'class');
@@ -828,7 +828,7 @@ export class NextJSPlugin implements FrameworkPlugin {
       const parentDir = segments.slice(0, slotIdx).join('/');
       const parentLayout = allFiles.find(
         (f) =>
-          f.path.startsWith(parentDir + '/') &&
+          f.path.startsWith(`${parentDir}/`) &&
           !f.path.includes('@') &&
           /layout\.(tsx|ts|jsx|js)$/.test(path.basename(f.path)),
       );
@@ -907,7 +907,7 @@ export class NextJSPlugin implements FrameworkPlugin {
 
       // Find pages nested under this template
       for (const page of pages) {
-        if (page.path.startsWith(templateDir + '/') || templateDir === 'app') {
+        if (page.path.startsWith(`${templateDir}/`) || templateDir === 'app') {
           const pageSymbols = ctx.getSymbolsByFile(page.id);
           const pageSym = pageSymbols.find((s) => s.kind === 'function' || s.kind === 'class');
           if (!pageSym) continue;

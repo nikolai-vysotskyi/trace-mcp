@@ -139,7 +139,7 @@ function buildOrmModelContext(
     fields.length > 0
       ? [
           {
-            tableName: ormModel.collection_or_table ?? ormModel.name.toLowerCase() + 's',
+            tableName: ormModel.collection_or_table ?? `${ormModel.name.toLowerCase()}s`,
             columns: fields,
             operation: 'schema',
           },
@@ -383,7 +383,7 @@ function modelNameToTable(name: string): string {
   // Simple snake_case + plural
   const snake = short.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
   // Simple pluralization
-  if (snake.endsWith('y') && !/[aeiou]y$/.test(snake)) return snake.slice(0, -1) + 'ies';
-  if (/(?:s|sh|ch|x|z)$/.test(snake)) return snake + 'es';
-  return snake + 's';
+  if (snake.endsWith('y') && !/[aeiou]y$/.test(snake)) return `${snake.slice(0, -1)}ies`;
+  if (/(?:s|sh|ch|x|z)$/.test(snake)) return `${snake}es`;
+  return `${snake}s`;
 }

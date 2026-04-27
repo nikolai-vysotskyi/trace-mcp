@@ -177,7 +177,7 @@ export function commentOutJsonKey(raw: string, key: string): string | null {
 
   // Comment out lines [startLine..endLine]
   for (let i = startLine; i <= endLine; i++) {
-    lines[i] = '// ' + lines[i];
+    lines[i] = `// ${lines[i]}`;
   }
 
   return lines.join('\n');
@@ -260,7 +260,7 @@ function fixHookInSettings(conflict: Conflict, opts: { dryRun?: boolean }): FixR
       };
     }
 
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+    fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
     return {
       conflictId: conflict.id,
       action: 'removed',
@@ -387,7 +387,7 @@ function fixClaudeMdBlock(conflict: Conflict, opts: { dryRun?: boolean }): FixRe
     }
 
     // Clean up excessive blank lines left behind
-    updated = updated.replace(/\n{3,}/g, '\n\n').trim() + '\n';
+    updated = `${updated.replace(/\n{3,}/g, '\n\n').trim()}\n`;
 
     if (updated === content) {
       return {
@@ -599,6 +599,6 @@ function fixGlobalArtifact(conflict: Conflict, opts: { dryRun?: boolean }): FixR
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   return p;
 }

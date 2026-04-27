@@ -701,7 +701,7 @@ export class LaravelPlugin implements FrameworkPlugin {
       const baseName = m.split(':')[0];
       const resolved = this.resolveMiddlewareAlias(baseName);
       return resolved !== baseName
-        ? `${resolved}${m.includes(':') ? ':' + m.split(':').slice(1).join(':') : ''}`
+        ? `${resolved}${m.includes(':') ? `:${m.split(':').slice(1).join(':')}` : ''}`
         : m;
     });
   }

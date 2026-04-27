@@ -155,7 +155,7 @@ const CALL_PATTERNS: CallPattern[] = [
   // Require PascalCase name + opening brace to avoid matching PHP $query->method()
   {
     name: 'graphql-operation',
-    regex: /(?:query|mutation|subscription)\s+([A-Z]\w+)\s*[\({]/g,
+    regex: /(?:query|mutation|subscription)\s+([A-Z]\w+)\s*[({]/g,
     extractMethod: (m) => 'GraphQL',
     extractUrl: (m) => m[1],
     confidence: 0.5,

@@ -65,7 +65,7 @@ export function isIndexStale(store: Store, maxAgeMinutes = 60): { stale: boolean
     }
 
     if (row.latest) {
-      const latestDate = new Date(row.latest + 'Z');
+      const latestDate = new Date(`${row.latest}Z`);
       const ageMinutes = (Date.now() - latestDate.getTime()) / 60_000;
       if (ageMinutes > maxAgeMinutes) {
         return {
@@ -131,9 +131,7 @@ function searchWithRipgrep(
           text: data.lines.text.trimEnd(),
         });
         if (matches.length >= limit) break;
-      } catch {
-        continue;
-      }
+      } catch {}
     }
 
     return matches;
@@ -200,9 +198,7 @@ function manualSearch(
               if (matches.length >= limit) return;
             }
           }
-        } catch {
-          continue;
-        }
+        } catch {}
       }
     }
   }

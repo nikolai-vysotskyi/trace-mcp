@@ -60,7 +60,7 @@ describe('security', () => {
       const result = validatePath('app/..%2f..%2f..%2fetc/passwd', root);
       // %2f is not decoded by path.resolve, so this stays in root — that's fine
       if (result.isOk()) {
-        expect(result._unsafeUnwrap().startsWith(root + '/')).toBe(true);
+        expect(result._unsafeUnwrap().startsWith(`${root}/`)).toBe(true);
       }
     });
 

@@ -521,7 +521,7 @@ function resolveCallSite(
 
     case 'parent': {
       // Look in the parent class of the containing class
-      if (!parentClass || !parentClass.metadata) return null;
+      if (!parentClass?.metadata) return null;
       try {
         const parentMeta = JSON.parse(parentClass.metadata) as Record<string, unknown>;
         const ext = parentMeta.extends as string[] | undefined;
@@ -732,7 +732,7 @@ function resolveCallSite(
           fileUseMap,
           fileNamespaceMap,
         );
-        if (!prop || !prop.metadata) return null;
+        if (!prop?.metadata) return null;
         try {
           const propMeta = JSON.parse(prop.metadata) as Record<string, unknown>;
           const typeRef = propMeta.type as string | undefined;

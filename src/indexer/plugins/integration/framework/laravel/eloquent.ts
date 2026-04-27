@@ -167,7 +167,7 @@ function resolveClassRef(
 ): string {
   // Fully qualified: \App\Models\Post::class
   const fqnMatch = ref.match(/^\\?([\w\\]+)::class$/);
-  if (fqnMatch && fqnMatch[1].includes('\\')) return fqnMatch[1];
+  if (fqnMatch?.[1].includes('\\')) return fqnMatch[1];
 
   // Short name: Post::class
   const shortMatch = ref.match(/^(\w+)::class$/);

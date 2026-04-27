@@ -236,7 +236,7 @@ const RULES: SecurityRule[] = [
     patterns: [
       // Generic: API key patterns
       {
-        regex: /(?:api[_-]?key|apikey|api[_-]?secret)\s*[:=]\s*['"][a-zA-Z0-9_\-]{20,}['"]/gi,
+        regex: /(?:api[_-]?key|apikey|api[_-]?secret)\s*[:=]\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
         languages: ALL_LANGUAGES,
       },
       // AWS access key
@@ -501,7 +501,7 @@ export function scanSecurity(
               file: file.path,
               line: lineIdx + 1,
               column: match.index + 1,
-              snippet: snippet.length > 200 ? snippet.slice(0, 200) + '...' : snippet,
+              snippet: snippet.length > 200 ? `${snippet.slice(0, 200)}...` : snippet,
               fix: rule.fix,
             });
           }

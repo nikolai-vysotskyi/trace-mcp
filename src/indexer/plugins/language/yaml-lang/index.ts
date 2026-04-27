@@ -219,7 +219,7 @@ function detectDialect(filePath: string, doc: Document): YamlDialect {
     for (const resPair of resourcesMap.items) {
       if (isPair(resPair) && isMap(resPair.value)) {
         const typeVal = getMapScalar(resPair.value as YAMLMap, 'Type');
-        if (typeVal && typeVal.includes('AWS::')) return 'cloudformation';
+        if (typeVal?.includes('AWS::')) return 'cloudformation';
       }
     }
   }
@@ -1025,7 +1025,6 @@ export class YamlLanguagePlugin implements LanguagePlugin {
         case 'cloudformation':
           if (isMap(contents)) extractCloudFormation(filePath, contents, edges, add);
           break;
-        case 'generic':
         default:
           if (isMap(contents)) extractGenericYaml(filePath, contents, add);
           break;

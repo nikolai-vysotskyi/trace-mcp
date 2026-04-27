@@ -6,13 +6,13 @@ import type { Store } from '../../src/db/store.js';
 import { createTestStore } from '../test-utils.js';
 import { scanCodeSmells } from '../../src/tools/quality/code-smells.js';
 
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-code-smells-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-code-smells-test-${process.pid}`);
 
 function writeFile(store: Store, relPath: string, content: string, language: string): number {
   const absPath = path.join(TEST_DIR, relPath);
   mkdirSync(path.dirname(absPath), { recursive: true });
   writeFileSync(absPath, content);
-  return store.insertFile(relPath, language, 'hash-' + relPath, content.length);
+  return store.insertFile(relPath, language, `hash-${relPath}`, content.length);
 }
 
 function insertSymbol(

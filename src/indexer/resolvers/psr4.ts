@@ -16,8 +16,8 @@ export class Psr4Resolver {
     // Normalise: ensure prefix ends with \ and dir ends with /
     this.mappings = new Map();
     for (const [prefix, dir] of mappings) {
-      const normPrefix = prefix.endsWith('\\') ? prefix : prefix + '\\';
-      const normDir = dir.endsWith('/') ? dir : dir + '/';
+      const normPrefix = prefix.endsWith('\\') ? prefix : `${prefix}\\`;
+      const normDir = dir.endsWith('/') ? dir : `${dir}/`;
       this.mappings.set(normPrefix, normDir);
     }
   }
@@ -90,7 +90,7 @@ export class Psr4Resolver {
 
     const remainder = fqn.substring(bestPrefix.length);
     const relativePath = remainder.replace(/\\/g, '/');
-    return bestDir + relativePath + '.php';
+    return `${bestDir + relativePath}.php`;
   }
 
   /**
@@ -102,7 +102,7 @@ export class Psr4Resolver {
     // Normalise the file path to use forward slashes and be relative
     let normalised = filePath.replace(/\\/g, '/');
     // Strip rootPath prefix if present
-    const rootNorm = this.rootPath.replace(/\\/g, '/').replace(/\/$/, '') + '/';
+    const rootNorm = `${this.rootPath.replace(/\\/g, '/').replace(/\/$/, '')}/`;
     if (normalised.startsWith(rootNorm)) {
       normalised = normalised.substring(rootNorm.length);
     }
@@ -121,7 +121,7 @@ export class Psr4Resolver {
       }
       // Handle case where dir has no trailing slash yet
       const dirNoSlash = dir.replace(/\/$/, '');
-      if (withoutExt.startsWith(dirNoSlash + '/') && dir.length > bestDir.length) {
+      if (withoutExt.startsWith(`${dirNoSlash}/`) && dir.length > bestDir.length) {
         bestPrefix = prefix;
         bestDir = dir;
       }

@@ -55,7 +55,7 @@ function extractMuiThemes(source: string): MuiTheme[] {
 
     // Extract top-level keys: palette, typography, spacing, etc.
     const sections: string[] = [];
-    const keyRe = /(\w+)\s*:\s*[{\['"]/g;
+    const keyRe = /(\w+)\s*:\s*[{['"]/g;
     let keyMatch: RegExpExecArray | null;
     while ((keyMatch = keyRe.exec(body)) !== null) {
       const key = keyMatch[1];

@@ -624,46 +624,45 @@ export function ProjectOverview({
                 No {smellsCategory.replace('_', ' ')} findings
               </div>
             )}
-            {smells &&
-              smells.findings.slice(0, 25).map((f, i) => {
-                const isLast = i === Math.min(smells.findings.length, 25) - 1;
-                return (
-                  <button
-                    key={`${f.file}:${f.line}:${i}`}
-                    onClick={() => {
-                      const api = (window as any).electronAPI;
-                      if (api?.openInEditor) api.openInEditor(`${root}/${f.file}:${f.line}`);
-                    }}
-                    className="flex items-start justify-between gap-2 px-3 py-2 w-full text-left hover:brightness-110"
-                    style={{
-                      borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div className="flex items-start gap-1.5 min-w-0 flex-1">
-                      {priorityBadge(f.priority)}
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className="text-[12px] truncate"
-                          style={{
-                            color: 'var(--text-primary)',
-                            fontFamily: 'SF Mono, Menlo, monospace',
-                          }}
-                        >
-                          {f.snippet}
-                        </div>
-                        <div
-                          className="text-[10px] mt-0.5 truncate"
-                          style={{ color: 'var(--text-tertiary)' }}
-                        >
-                          {f.file}:{f.line}
-                          {f.tag ? ` · ${f.tag}` : ''}
-                        </div>
+            {smells?.findings.slice(0, 25).map((f, i) => {
+              const isLast = i === Math.min(smells.findings.length, 25) - 1;
+              return (
+                <button
+                  key={`${f.file}:${f.line}:${i}`}
+                  onClick={() => {
+                    const api = (window as any).electronAPI;
+                    if (api?.openInEditor) api.openInEditor(`${root}/${f.file}:${f.line}`);
+                  }}
+                  className="flex items-start justify-between gap-2 px-3 py-2 w-full text-left hover:brightness-110"
+                  style={{
+                    borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                    {priorityBadge(f.priority)}
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="text-[12px] truncate"
+                        style={{
+                          color: 'var(--text-primary)',
+                          fontFamily: 'SF Mono, Menlo, monospace',
+                        }}
+                      >
+                        {f.snippet}
+                      </div>
+                      <div
+                        className="text-[10px] mt-0.5 truncate"
+                        style={{ color: 'var(--text-tertiary)' }}
+                      >
+                        {f.file}:{f.line}
+                        {f.tag ? ` · ${f.tag}` : ''}
                       </div>
                     </div>
-                  </button>
-                );
-              })}
+                  </div>
+                </button>
+              );
+            })}
             {smells && smells.findings.length > 25 && (
               <div
                 className="px-3 py-1.5 text-[10px] text-center"
