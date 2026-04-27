@@ -366,9 +366,9 @@ function parseSchemaFields(body: string): Record<string, unknown>[] {
       if (defaultMatch) field.default = defaultMatch[1];
 
       fields.push(field);
-    } else if (match[3]) {
+    } else if (match[4]) {
       // Shorthand form: name: String
-      fields.push({ name: fieldName, type: match[3] });
+      fields.push({ name: fieldName, type: match[4] });
     }
   }
 

@@ -52,7 +52,7 @@
         "noConsole": "off",
         "noExplicitAny": "warn",
         "noShadowRestrictedNames": "error",
-        "noDuplicateElseIf": "warn",
+        "noDuplicateElseIf": "error",
         "noUselessEscapeInString": "error",
         "noTemplateCurlyInString": "error"
       },
