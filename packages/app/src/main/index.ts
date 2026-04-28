@@ -448,7 +448,12 @@ function fetchLatestRelease(): Promise<{
           data += chunk;
         });
         res.on('end', () =>
-          resolve({ status: res.statusCode, body: data, etag: res.headers.etag, resetAt }),
+          resolve({
+            status: res.statusCode ?? 0,
+            body: data,
+            etag: res.headers.etag as string | undefined,
+            resetAt,
+          }),
         );
       },
     );
