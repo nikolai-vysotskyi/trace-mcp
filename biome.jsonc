@@ -129,6 +129,9 @@
           "suspicious": {
             "noTemplateCurlyInString": "off",
             "noExplicitAny": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
           }
         }
       }
