@@ -53,7 +53,8 @@
         "useShorthandAssign": "error",
         "useCollapsedElseIf": "warn",
         "useDefaultParameterLast": "error",
-        "useSingleVarDeclarator": "error"
+        "useSingleVarDeclarator": "error",
+        "noNonNullAssertion": "warn"
       },
       "suspicious": {
         "noDebugger": "error",
