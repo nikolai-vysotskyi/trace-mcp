@@ -8,9 +8,21 @@ import type { ProgressState } from '../progress.js';
 import type { EmbeddingService, VectorStore } from './interfaces.js';
 
 const DEFAULT_BATCH_SIZE = 50;
+/** Trip the circuit breaker after this many consecutive batch failures. */
+const FAILURE_THRESHOLD = 2;
+/** How long to skip embedding work after the breaker trips. */
+const COOLDOWN_MS = 10 * 60 * 1000;
 
 export class EmbeddingPipeline {
   private consistent = false;
+  /** Set while indexUnembedded is running; rapid re-triggers (file watcher) are no-ops. */
+  private inFlight = false;
+  /** Consecutive batch failures since last success — drives the circuit breaker. */
+  private consecutiveFailures = 0;
+  /** Wall-clock until which indexUnembedded short-circuits to 0. */
+  private disabledUntilMs = 0;
+  /** Whether we've already logged the breaker trip (to avoid log spam). */
+  private breakerNotified = false;
 
   constructor(
     private store: Store,
@@ -62,46 +74,60 @@ export class EmbeddingPipeline {
   /**
    * Find symbols that don't have embeddings yet and embed them in a loop.
    * Reports progress and returns the total number of newly embedded symbols.
+   *
+   * Self-guarded: skips work when a previous run is still in flight (rapid
+   * file-watcher re-triggers) or when the circuit breaker is open (embedding
+   * service has been failing for several consecutive batches).
    */
   async indexUnembedded(batchSize = DEFAULT_BATCH_SIZE): Promise<number> {
-    this.ensureConsistent();
-    const totalToEmbed = this.store.countUnembeddedSymbols();
-    if (totalToEmbed === 0) return 0;
+    if (this.inFlight) return 0;
+    if (this.disabledUntilMs > Date.now()) return 0;
 
-    this.progress?.update('embedding', {
-      phase: 'running',
-      processed: 0,
-      total: totalToEmbed,
-      startedAt: Date.now(),
-      completedAt: 0,
-    });
-
-    let totalIndexed = 0;
-
+    this.inFlight = true;
     try {
-      let batch: number;
-      do {
-        batch = await this.embedBatch(batchSize);
-        totalIndexed += batch;
-        if (batch > 0) {
-          this.progress?.update('embedding', { processed: totalIndexed });
-        }
-      } while (batch > 0);
+      this.ensureConsistent();
+      const totalToEmbed = this.store.countUnembeddedSymbols();
+      if (totalToEmbed === 0) return 0;
 
       this.progress?.update('embedding', {
-        phase: 'completed',
-        processed: totalIndexed,
-        completedAt: Date.now(),
+        phase: 'running',
+        processed: 0,
+        total: totalToEmbed,
+        startedAt: Date.now(),
+        completedAt: 0,
       });
-    } catch (e) {
-      this.progress?.update('embedding', {
-        phase: 'error',
-        error: e instanceof Error ? e.message : String(e),
-      });
-      throw e;
+
+      let totalIndexed = 0;
+
+      try {
+        let batch: number;
+        do {
+          batch = await this.embedBatch(batchSize);
+          totalIndexed += batch;
+          if (batch > 0) {
+            this.progress?.update('embedding', { processed: totalIndexed });
+          }
+          // Stop the loop if the breaker tripped during this batch.
+          if (this.disabledUntilMs > Date.now()) break;
+        } while (batch > 0);
+
+        this.progress?.update('embedding', {
+          phase: 'completed',
+          processed: totalIndexed,
+          completedAt: Date.now(),
+        });
+      } catch (e) {
+        this.progress?.update('embedding', {
+          phase: 'error',
+          error: e instanceof Error ? e.message : String(e),
+        });
+        throw e;
+      }
+
+      return totalIndexed;
+    } finally {
+      this.inFlight = false;
     }
-
-    return totalIndexed;
   }
 
   /**
@@ -139,8 +165,32 @@ export class EmbeddingPipeline {
           indexed++;
         }
       }
+      // Reset breaker on any successful batch.
+      if (this.consecutiveFailures > 0 || this.breakerNotified) {
+        if (this.breakerNotified) {
+          logger.info('Embedding service recovered — resuming background embedding');
+        }
+        this.consecutiveFailures = 0;
+        this.breakerNotified = false;
+      }
     } catch (e) {
       logger.error({ error: e }, 'Embedding batch failed');
+      this.consecutiveFailures++;
+      if (this.consecutiveFailures >= FAILURE_THRESHOLD && !this.breakerNotified) {
+        this.disabledUntilMs = Date.now() + COOLDOWN_MS;
+        this.breakerNotified = true;
+        logger.warn(
+          {
+            consecutiveFailures: this.consecutiveFailures,
+            cooldownMinutes: COOLDOWN_MS / 60_000,
+          },
+          'Embedding service unreachable — pausing background embedding',
+        );
+      } else if (this.breakerNotified) {
+        // Already tripped; just extend the cooldown so a still-broken service
+        // doesn't get probed the moment the previous window ends.
+        this.disabledUntilMs = Date.now() + COOLDOWN_MS;
+      }
     }
 
     logger.debug({ indexed, total: unembedded.length }, 'Indexed unembedded symbols');

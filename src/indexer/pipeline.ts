@@ -314,6 +314,8 @@ export class IndexingPipeline {
     edgeResolver.resolvePythonHeritageEdges();
     edgeResolver.resolvePythonCallEdges();
     edgeResolver.resolveTestCoversEdges();
+    edgeResolver.resolveMarkdownWikilinkEdges();
+    edgeResolver.resolveMarkdownTagEdges();
     // Must run last — projects cross-file symbol edges to file-level `imports`
     // edges so the file dependency graph is as rich as the symbol graph.
     edgeResolver.resolveFileProjectionEdges();

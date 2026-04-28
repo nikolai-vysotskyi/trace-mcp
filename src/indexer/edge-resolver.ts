@@ -13,6 +13,8 @@ import {
 } from './edge-resolvers/file-projection.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
 import { resolveEsmImportEdges as _resolveImports } from './edge-resolvers/imports.js';
+import { resolveMarkdownTagEdges as _resolveMarkdownTags } from './edge-resolvers/markdown-tags.js';
+import { resolveMarkdownWikilinkEdges as _resolveMarkdownLinks } from './edge-resolvers/markdown-wikilinks.js';
 import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
 import { resolveOrmAssociationEdges as _resolveOrm } from './edge-resolvers/orm.js';
 import { resolvePhpCallEdges as _resolvePhpCalls } from './edge-resolvers/php-calls.js';
@@ -147,6 +149,16 @@ export class EdgeResolver {
   /** Pass 2j: file-level projection of cross-file symbol edges. */
   resolveFileProjectionEdges(): void {
     _resolveFileProjection(this.state);
+  }
+
+  /** Pass 2m: Markdown wikilink + md-link edges between notes. */
+  resolveMarkdownWikilinkEdges(): void {
+    _resolveMarkdownLinks(this.state, (edges) => this.storeRawEdges(edges));
+  }
+
+  /** Pass 2n: Markdown tag aggregation — note → canonical `tag:<name>` symbol. */
+  resolveMarkdownTagEdges(): void {
+    _resolveMarkdownTags(this.state, (edges) => this.storeRawEdges(edges));
   }
 
   /** Pass 2k (final sweep): remove forbidden cross-workspace edges. */

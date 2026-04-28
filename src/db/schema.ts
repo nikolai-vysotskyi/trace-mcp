@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 23;
 
 const DDL = `
 -- ============================================================
@@ -385,6 +385,16 @@ const SEED_EDGE_TYPES = [
     description: 'Symbol is a member of a container (method/property of class, case of enum)',
   },
   { name: 'references', category: 'core', description: 'Symbol reference (read/write)' },
+  {
+    name: 'embeds',
+    category: 'markdown',
+    description: 'Markdown embed (![[X]]) — note transcludes another note',
+  },
+  {
+    name: 'tagged',
+    category: 'markdown',
+    description: 'Note is tagged with a #tag (frontmatter or inline)',
+  },
   { name: 'unresolved', category: 'core', description: 'Phantom edge for unresolved targets' },
   { name: 'test_covers', category: 'core', description: 'Test file covers a symbol or file' },
   { name: 'esm_imports', category: 'core', description: 'ESM import (file→file)' },
@@ -1301,6 +1311,21 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       )
+    `);
+  },
+  22: (db) => {
+    // Markdown knowledge-graph: register the `embeds` edge type for ![[X]] transclusions.
+    db.exec(`
+      INSERT OR IGNORE INTO edge_types (name, category, directed, description)
+      VALUES ('embeds', 'markdown', 1, 'Markdown embed (![[X]]) — note transcludes another note');
+    `);
+  },
+  23: (db) => {
+    // Markdown knowledge-graph: `tagged` edge from note → canonical tag symbol.
+    // Enables `find_usages` on `tag:foo` to return every note carrying that tag.
+    db.exec(`
+      INSERT OR IGNORE INTO edge_types (name, category, directed, description)
+      VALUES ('tagged', 'markdown', 1, 'Note is tagged with a #tag (frontmatter or inline)');
     `);
   },
 };

@@ -211,10 +211,19 @@ export class MessageRouter {
    * Does NOT clear the message queue — anything still buffered stays until a
    * new backend is attached (via setInitialBackend + flushPending) or until
    * the router is garbage collected. This matches the idle/wake flow.
+   *
+   * Drains pending requests before stopping the backend so that in-flight
+   * tools/list / initialize round-trips complete instead of being cancelled
+   * with AbortError when the HTTP transport closes (mirrors swap()).
    */
-  async shutdown(): Promise<void> {
+  async shutdown(opts?: { drainTimeoutMs?: number }): Promise<void> {
+    const drainMs = opts?.drainTimeoutMs ?? this.drainTimeoutMs;
     const old = this.activeBackend;
     if (old) {
+      // Wait for in-flight requests to settle while the backend is still wired.
+      if (this.pendingRequestIds.size > 0) {
+        await this.waitForDrain(drainMs);
+      }
       old.onmessage = undefined;
       try {
         await old.stop();

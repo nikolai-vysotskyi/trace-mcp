@@ -281,6 +281,28 @@ const TopologyConfigSchema = z
   })
   .optional();
 
+const VaultConfigSchema = z
+  .object({
+    /**
+     * Treat the project (or specific roots) as a markdown knowledge vault
+     * (Obsidian / Logseq / plain MD). Enables wikilink resolution and the
+     * `note` / `section` / `tag` symbol kinds in indexing output.
+     */
+    enabled: z.boolean().default(true),
+    /**
+     * Subdirectories that contain the vault. Defaults to the project root.
+     * Use this when notes live alongside code (e.g. ['docs/vault']).
+     */
+    roots: z.array(z.string()).default([]),
+    /**
+     * Glob patterns the vault scanner picks up beyond the regular `include`
+     * list. Useful when you keep the rest of the include narrow but still
+     * want every `.md` under `roots` indexed.
+     */
+    extra_globs: z.array(z.string()).default(['**/*.md', '**/*.mdx', '**/*.markdown']),
+  })
+  .prefault({});
+
 export const TraceMcpConfigSchema = z.object({
   root: z.string().default('.'),
   db: z
@@ -310,6 +332,8 @@ export const TraceMcpConfigSchema = z.object({
     'components/**/*.{vue,ts,tsx,js,jsx}',
     'composables/**/*.{ts,tsx,js,jsx}',
     'server/**/*.{ts,tsx,js,jsx}',
+    // Markdown knowledge graph — Obsidian/Logseq/plain MD vaults
+    '**/*.{md,mdx,markdown}',
   ]),
   exclude: z
     .array(z.string())
@@ -337,6 +361,7 @@ export const TraceMcpConfigSchema = z.object({
   runtime: RuntimeConfigSchema,
   lsp: LspConfigSchema,
   topology: TopologyConfigSchema,
+  vault: VaultConfigSchema,
   quality_gates: QualityGatesConfigSchema,
   tools: ToolsConfigSchema,
   watch: z
