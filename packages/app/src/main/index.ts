@@ -1,8 +1,8 @@
-import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
 import { exec, spawn } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import fs from 'node:fs';
+import { app, dialog, ipcMain, nativeImage, shell } from 'electron';
 import { createTray, showMenuWindow } from './tray';
 
 // SharedArrayBuffer needed for cosmos.gl workers. GPU compositing + Skia
@@ -133,13 +133,13 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
 
 import { restartDaemon } from './daemon-lifecycle';
 import {
-  getStatus as ollamaStatus,
+  deleteModel as ollamaDelete,
   listInstalled as ollamaListInstalled,
   listRunning as ollamaListRunning,
-  unloadModel as ollamaUnload,
-  deleteModel as ollamaDelete,
   startDaemon as ollamaStart,
+  getStatus as ollamaStatus,
   stopDaemon as ollamaStop,
+  unloadModel as ollamaUnload,
 } from './ollama-control';
 
 // IPC: restart daemon (kill old, create plist if needed, start new via launchd)

@@ -111,11 +111,12 @@
   },
   "overrides": [
     {
-      "includes": ["tests/**"],
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/test-utils.ts"],
       "linter": {
         "rules": {
           "suspicious": {
-            "noTemplateCurlyInString": "off"
+            "noTemplateCurlyInString": "off",
+            "noExplicitAny": "off"
           }
         }
       }

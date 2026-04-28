@@ -1,63 +1,65 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
-import path from 'node:path';
-import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Command } from 'commander';
+
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+
+import http from 'node:http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { initializeDatabase } from './db/schema.js';
-import { Store } from './db/store.js';
-import { PluginRegistry } from './plugin-api/registry.js';
-import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
-import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
-import { createServer } from './server/server.js';
-import { logger, attachFileLogging } from './logger.js';
-import { IndexingPipeline } from './indexer/pipeline.js';
 import { aiTracker } from './ai/index.js';
 import { detectCoverageRecursive } from './analytics/tech-detector.js';
-import http from 'node:http';
-import { initCommand } from './cli/init.js';
-import { upgradeCommand } from './cli/upgrade.js';
 import { addCommand } from './cli/add.js';
-import { doctorCommand } from './cli/doctor.js';
-import { ciReportCommand } from './cli/ci.js';
-import { checkCommand } from './cli/check.js';
-import { bundlesCommand } from './cli/bundles.js';
-import { subprojectCommand } from './cli/subproject.js';
-import { memoryCommand } from './cli/memory.js';
 import { analyticsCommand } from './cli/analytics.js';
+import { askCommand } from './cli/ask.js';
+import { bundlesCommand } from './cli/bundles.js';
+import { checkCommand } from './cli/check.js';
+import { ciReportCommand } from './cli/ci.js';
+import { daemonCommand } from './cli/daemon.js';
+import { doctorCommand } from './cli/doctor.js';
+import { exportSecurityContextCommand } from './cli/export-security-context.js';
+import { initCommand } from './cli/init.js';
+import { installAppCommand } from './cli/install-app.js';
+import { memoryCommand } from './cli/memory.js';
 import { removeCommand } from './cli/remove.js';
 import { statusCommand } from './cli/status.js';
+import { subprojectCommand } from './cli/subproject.js';
+import { upgradeCommand } from './cli/upgrade.js';
 import { visualizeCommand } from './cli/visualize.js';
-import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
-import { scanCodeSmells } from './tools/quality/code-smells.js';
-import { daemonCommand } from './cli/daemon.js';
-import { installAppCommand } from './cli/install-app.js';
-import { askCommand } from './cli/ask.js';
-import { exportSecurityContextCommand } from './cli/export-security-context.js';
-import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
-import {
-  getDbPath,
-  ensureGlobalDirs,
-  TOPOLOGY_DB_PATH,
-  GLOBAL_CONFIG_PATH,
-  DAEMON_LOG_PATH,
-} from './global.js';
-import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
-import { setupProject, isDangerousProjectRoot } from './project-setup.js';
-import { findProjectRoot, detectGitWorktree } from './project-root.js';
-import { TopologyStore } from './topology/topology-db.js';
-import { SubprojectManager } from './subproject/manager.js';
+import type { TraceMcpConfig } from './config.js';
+import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
+import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import { StdioSession } from './daemon/router/session.js';
-import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
-import { DEFAULT_DAEMON_PORT } from './global.js';
-import type { TraceMcpConfig } from './config.js';
+import { initializeDatabase } from './db/schema.js';
+import { Store } from './db/store.js';
+import {
+  DAEMON_LOG_PATH,
+  DEFAULT_DAEMON_PORT,
+  ensureGlobalDirs,
+  GLOBAL_CONFIG_PATH,
+  getDbPath,
+  TOPOLOGY_DB_PATH,
+} from './global.js';
+import { IndexingPipeline } from './indexer/pipeline.js';
+import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
+import { attachFileLogging, logger } from './logger.js';
+import { PluginRegistry } from './plugin-api/registry.js';
+import { detectGitWorktree, findProjectRoot } from './project-root.js';
+import { isDangerousProjectRoot, setupProject } from './project-setup.js';
+import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
+import { createServer } from './server/server.js';
+import { SubprojectManager } from './subproject/manager.js';
+import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
+import { scanCodeSmells } from './tools/quality/code-smells.js';
+import { TopologyStore } from './topology/topology-db.js';
+import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
 
 /**
  * Resolve DB path for a project:
@@ -633,11 +635,11 @@ program
             const pendingClientId = (transport as any).__pendingClientId;
             if (pendingHandle) {
               sessionHandles.set(sid, pendingHandle);
-              delete (transport as any).__pendingHandle;
+              (transport as any).__pendingHandle = undefined;
             }
             if (pendingClientId) {
               sessionClients.set(sid, pendingClientId);
-              delete (transport as any).__pendingClientId;
+              (transport as any).__pendingClientId = undefined;
             }
           }
         } catch (e: any) {

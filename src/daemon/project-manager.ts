@@ -1,31 +1,30 @@
-import { initializeDatabase } from '../db/schema.js';
-import { Store } from '../db/store.js';
-import { PluginRegistry } from '../plugin-api/registry.js';
-import { loadConfig } from '../config.js';
-import type { TraceMcpConfig } from '../config.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
-import { FileWatcher } from '../indexer/watcher.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type Database from 'better-sqlite3';
 import {
-  createAIProvider,
   BlobVectorStore,
+  CachedInferenceService,
+  createAIProvider,
   EmbeddingPipeline,
   InferenceCache,
-  CachedInferenceService,
 } from '../ai/index.js';
 import { SummarizationPipeline } from '../ai/summarization-pipeline.js';
-import { ProgressState, writeServerPid, clearServerPid } from '../progress.js';
-import { createServer } from '../server/server.js';
+import type { TraceMcpConfig } from '../config.js';
+import { loadConfig } from '../config.js';
+import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
+import { ensureGlobalDirs, getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
+import { FileWatcher } from '../indexer/watcher.js';
 import { logger } from '../logger.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { listProjects, unregisterProject } from '../registry.js';
-import { setupProject, isDangerousProjectRoot } from '../project-setup.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { clearServerPid, ProgressState, writeServerPid } from '../progress.js';
 import { detectGitWorktree } from '../project-root.js';
-import { TopologyStore } from '../topology/topology-db.js';
-import { SubprojectManager } from '../subproject/manager.js';
-import { TOPOLOGY_DB_PATH } from '../global.js';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { isDangerousProjectRoot, setupProject } from '../project-setup.js';
+import { listProjects, unregisterProject } from '../registry.js';
 import type { ServerHandle } from '../server/server.js';
-import type Database from 'better-sqlite3';
+import { createServer } from '../server/server.js';
+import { SubprojectManager } from '../subproject/manager.js';
+import { TopologyStore } from '../topology/topology-db.js';
 
 export interface ManagedProject {
   root: string;

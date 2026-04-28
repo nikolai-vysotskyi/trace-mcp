@@ -4,56 +4,57 @@
  * Does NOT add projects — use `trace-mcp add` for that.
  */
 
-import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as p from '@clack/prompts';
-import { configureMcpClients } from '../init/mcp-client.js';
-import { updateClaudeMd } from '../init/claude-md.js';
+import { Command } from 'commander';
 import { updateAgentsMd } from '../init/agents-md.js';
+import { updateClaudeMd } from '../init/claude-md.js';
 import { installHermesHooks } from '../init/hermes-hooks.js';
 import {
-  installGuardHook,
-  installReindexHook,
-  installPrecompactHook,
-  installWorktreeHook,
   cleanupLegacyHooks,
+  installGuardHook,
+  installPrecompactHook,
+  installReindexHook,
+  installWorktreeHook,
 } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
+import { configureMcpClients } from '../init/mcp-client.js';
 
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
-import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
-import { installTweakccPrompts, detectTweakccPrompts } from '../init/tweakcc.js';
-import { ensureGlobalDirs, getDbPath, GLOBAL_CONFIG_PATH } from '../global.js';
+
+import { parse as parseJsonc } from 'jsonc-parser';
+import { loadConfig, removeProjectConfig, saveProjectConfig } from '../config.js';
 import {
   migrateGlobalConfig,
   modifyGlobalConfigJsonc,
   readGlobalConfigText,
 } from '../config-jsonc.js';
-import { parse as parseJsonc } from 'jsonc-parser';
-import type { DetectedMcpClient, InitStepResult } from '../init/types.js';
-import { detectMcpClients, detectGuardHook, detectProject } from '../init/detector.js';
+import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
+import { ensureGlobalDirs, GLOBAL_CONFIG_PATH, getDbPath } from '../global.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
+import { generateConfig } from '../init/config-generator.js';
 import { detectConflicts } from '../init/conflict-detector.js';
 import { fixAllConflicts } from '../init/conflict-resolver.js';
-import { findProjectRoot, discoverChildProjects, hasRootMarkers } from '../project-root.js';
-import { generateConfig } from '../init/config-generator.js';
+import { detectGuardHook, detectMcpClients, detectProject } from '../init/detector.js';
+import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
+import { detectTweakccPrompts, installTweakccPrompts } from '../init/tweakcc.js';
+import type { DetectedMcpClient, InitStepResult } from '../init/types.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
+import { setupProject } from '../project-setup.js';
 import {
-  registerProject,
   getProject,
   listProjects,
-  updateLastIndexed,
+  registerProject,
   unregisterProject,
+  updateLastIndexed,
 } from '../registry.js';
-import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
-import { initializeDatabase } from '../db/schema.js';
-import { setupProject } from '../project-setup.js';
-import { Store } from '../db/store.js';
-import { PluginRegistry } from '../plugin-api/registry.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
-import { installGuiApp, isAppInstalled, isAppOutdated } from './install-app.js';
 import { ensureDaemonRunning } from './daemon.js';
+import { installGuiApp, isAppInstalled, isAppOutdated } from './install-app.js';
 
 export const initCommand = new Command('init')
   .description('One-time global setup: configure MCP clients, install hooks, set up CLAUDE.md')
@@ -99,7 +100,7 @@ export const initCommand = new Command('init')
 
       // Detect existing MCP clients and hook state
       const mcpClients = detectMcpClients();
-      const { hasGuardHook, guardHookVersion } = detectGuardHook();
+      detectGuardHook();
 
       // --- Interactive questions ---
       let selectedClients: DetectedMcpClient['name'][] = [];
