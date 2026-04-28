@@ -454,8 +454,10 @@ program
       // Store handle and client mapping (will be registered after session ID is assigned)
       // The session ID is set by handleRequest during initialize, so we store by transport ref
       // and move to sessionHandles map after the initialize response.
-      (transport as any).__pendingHandle = handle;
-      (transport as any).__pendingClientId = clientId;
+      (
+        transport as unknown as { __pendingHandle?: import('./server/server.js').ServerHandle }
+      ).__pendingHandle = handle;
+      (transport as unknown as { __pendingClientId?: string }).__pendingClientId = clientId;
 
       return transport;
     }
@@ -631,19 +633,29 @@ program
             idleMonitor.onActivity();
 
             // Move pending handle/clientId to session-keyed maps
-            const pendingHandle = (transport as any).__pendingHandle;
-            const pendingClientId = (transport as any).__pendingClientId;
+            const pendingHandle = (
+              transport as unknown as {
+                __pendingHandle?: import('./server/server.js').ServerHandle;
+              }
+            ).__pendingHandle;
+            const pendingClientId = (transport as unknown as { __pendingClientId?: string })
+              .__pendingClientId;
             if (pendingHandle) {
               sessionHandles.set(sid, pendingHandle);
-              (transport as any).__pendingHandle = undefined;
+              (
+                transport as unknown as {
+                  __pendingHandle?: import('./server/server.js').ServerHandle;
+                }
+              ).__pendingHandle = undefined;
             }
             if (pendingClientId) {
               sessionClients.set(sid, pendingClientId);
-              (transport as any).__pendingClientId = undefined;
+              (transport as unknown as { __pendingClientId?: string }).__pendingClientId =
+                undefined;
             }
           }
-        } catch (e: any) {
-          if (e?.message === 'BODY_TOO_LARGE') {
+        } catch (e) {
+          if ((e as Error & { stack?: string })?.message === 'BODY_TOO_LARGE') {
             if (!res.headersSent) {
               res.writeHead(413, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ error: 'Request body too large' }));
@@ -704,7 +716,7 @@ program
         try {
           const db = managed.store.db;
           let sql: string;
-          let params: any[];
+          let params: unknown[];
 
           if (isolated) {
             sql = `SELECT s.id, s.fqn, s.kind, f.path as file_path, s.line_start, s.line_end
@@ -744,9 +756,11 @@ program
           const symbols = db.prepare(sql).all(...params);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ symbols, count: symbols.length }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Query failed' }),
+          );
         }
         return;
       }
@@ -777,9 +791,9 @@ program
           // Find the node for this symbol
           const node = db
             .prepare(`SELECT id FROM nodes WHERE node_type = 'symbol' AND ref_id = ?`)
-            .get(symbolId) as any;
-          let outgoing: any[] = [];
-          let incoming: any[] = [];
+            .get(symbolId) as Record<string, unknown> | undefined;
+          let outgoing: unknown[] = [];
+          let incoming: unknown[] = [];
           if (node) {
             outgoing = db
               .prepare(`
@@ -808,9 +822,11 @@ program
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ symbol, nodeId: node?.id ?? null, outgoing, incoming }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Query failed' }),
+          );
         }
         return;
       }
@@ -875,9 +891,13 @@ program
           } finally {
             topoStore?.close();
           }
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Graph build failed' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Graph build failed',
+            }),
+          );
         }
         return;
       }
@@ -966,9 +986,9 @@ program
           } finally {
             topoStore?.close();
           }
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end(e?.message ?? 'Graph build failed');
+          res.end((e as Error & { stack?: string })?.message ?? 'Graph build failed');
         }
         return;
       }
@@ -990,8 +1010,9 @@ program
         try {
           const db = managed.store.db;
           const totalSymbols =
-            (db.prepare('SELECT COUNT(*) as c FROM symbols').get() as any)?.c ?? 0;
-          const totalEdges = (db.prepare('SELECT COUNT(*) as c FROM edges').get() as any)?.c ?? 0;
+            (db.prepare('SELECT COUNT(*) as c FROM symbols').get() as { c: number })?.c ?? 0;
+          const totalEdges =
+            (db.prepare('SELECT COUNT(*) as c FROM edges').get() as { c: number })?.c ?? 0;
           const isolatedCount =
             (
               db
@@ -1003,7 +1024,7 @@ program
               WHERE n.node_type = 'symbol' AND n.ref_id = s.id
             )
           `)
-                .get() as any
+                .get() as { c: number } | undefined
             )?.c ?? 0;
 
           const kindBreakdown = db
@@ -1029,9 +1050,11 @@ program
               edgeBreakdown,
             }),
           );
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Query failed' }),
+          );
         }
         return;
       }
@@ -1052,15 +1075,24 @@ program
         }
         try {
           const db = managed.store.db;
-          const files = (db.prepare('SELECT COUNT(*) as c FROM files').get() as any)?.c ?? 0;
-          const symbols = (db.prepare('SELECT COUNT(*) as c FROM symbols').get() as any)?.c ?? 0;
-          const edges = (db.prepare('SELECT COUNT(*) as c FROM edges').get() as any)?.c ?? 0;
-          const lastRow = db.prepare('SELECT MAX(indexed_at) as t FROM files').get() as any;
+          const files =
+            (db.prepare('SELECT COUNT(*) as c FROM files').get() as { c: number })?.c ?? 0;
+          const symbols =
+            (db.prepare('SELECT COUNT(*) as c FROM symbols').get() as { c: number })?.c ?? 0;
+          const edges =
+            (db.prepare('SELECT COUNT(*) as c FROM edges').get() as { c: number })?.c ?? 0;
+          const lastRow = db.prepare('SELECT MAX(indexed_at) as t FROM files').get() as
+            | { t: string | null }
+            | undefined;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ files, symbols, edges, lastIndexed: lastRow?.t ?? null }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Failed to get stats' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to get stats',
+            }),
+          );
         }
         return;
       }
@@ -1089,9 +1121,10 @@ program
         const priorityThreshold = url.searchParams.get('priority_threshold') ?? undefined;
         const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '500', 10), 2000);
         try {
+          type SmellOpts = NonNullable<Parameters<typeof scanCodeSmells>[2]>;
           const result = scanCodeSmells(managed.store, projectRoot, {
-            category: categories as any,
-            priority_threshold: priorityThreshold as any,
+            category: categories as SmellOpts['category'],
+            priority_threshold: priorityThreshold as SmellOpts['priority_threshold'],
             limit,
           });
           if (result.isErr()) {
@@ -1101,9 +1134,13 @@ program
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(result.value));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Failed to scan code smells' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to scan code smells',
+            }),
+          );
         }
         return;
       }
@@ -1166,9 +1203,13 @@ program
               unknown,
             }),
           );
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Failed to detect coverage' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to detect coverage',
+            }),
+          );
         }
         return;
       }
@@ -1293,9 +1334,11 @@ program
           }[];
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ files, sort: sortBy }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Query failed' }),
+          );
         }
         return;
       }
@@ -1337,9 +1380,13 @@ program
           } finally {
             topoStore.close();
           }
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Subproject query failed' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Subproject query failed',
+            }),
+          );
         }
         return;
       }
@@ -1366,9 +1413,13 @@ program
             try {
               ensureGlobalDirs();
               topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-            } catch (e: any) {
+            } catch (e) {
               res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: e?.message ?? 'Failed to open topology DB' }));
+              res.end(
+                JSON.stringify({
+                  error: (e as Error & { stack?: string })?.message ?? 'Failed to open topology DB',
+                }),
+              );
               return;
             }
 
@@ -1379,7 +1430,7 @@ program
             } finally {
               topoStore.close();
             }
-          } catch (_e: any) {
+          } catch (_e) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Invalid JSON body' }));
           }
@@ -1406,9 +1457,13 @@ program
             try {
               ensureGlobalDirs();
               topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-            } catch (e: any) {
+            } catch (e) {
               res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: e?.message ?? 'Failed to open topology DB' }));
+              res.end(
+                JSON.stringify({
+                  error: (e as Error & { stack?: string })?.message ?? 'Failed to open topology DB',
+                }),
+              );
               return;
             }
 
@@ -1417,13 +1472,17 @@ program
               const result = manager.add(repoPath, project);
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify(result));
-            } catch (e: any) {
+            } catch (e) {
               res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: e?.message ?? 'Failed to add subproject' }));
+              res.end(
+                JSON.stringify({
+                  error: (e as Error & { stack?: string })?.message ?? 'Failed to add subproject',
+                }),
+              );
             } finally {
               topoStore?.close();
             }
-          } catch (_e: any) {
+          } catch (_e) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Invalid JSON body' }));
           }
@@ -1467,9 +1526,13 @@ program
           } finally {
             topoStore.close();
           }
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Subproject delete failed' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Subproject delete failed',
+            }),
+          );
         }
         return;
       }
@@ -1560,9 +1623,13 @@ program
           broadcastEvent({ type: 'project_status', project: absRoot, status: 'indexing' });
           res.writeHead(201, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'added', project: absRoot }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Failed to add project' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to add project',
+            }),
+          );
         }
         return;
       }
@@ -1630,9 +1697,11 @@ program
           idleMonitor.onActivity();
           res.writeHead(201, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'registered' }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Bad request' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Bad request' }),
+          );
         }
         return;
       }
@@ -1647,7 +1716,7 @@ program
             if (name) existing.name = name;
             existing.lastSeen = new Date().toISOString();
             broadcastEvent({
-              type: 'client_update' as any,
+              type: 'client_update',
               clientId: id,
               name,
               project: existing.project,
@@ -1655,9 +1724,11 @@ program
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'updated' }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Bad request' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Bad request' }),
+          );
         }
         return;
       }
@@ -1720,9 +1791,13 @@ program
           fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(merged, null, 2));
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'updated', settings: merged }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Invalid JSON body' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Invalid JSON body',
+            }),
+          );
         }
         return;
       }
@@ -1765,9 +1840,13 @@ program
           const provider = resolveProvider({}, config);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ provider: provider.name }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'No provider available' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'No provider available',
+            }),
+          );
         }
         return;
       }
@@ -1852,7 +1931,11 @@ program
           const chatMessages = [
             systemMsg,
             // Strip context from older user messages
-            ...messages.slice(0, -1).map((m) => stripContextFromMessage(m as any)),
+            ...messages
+              .slice(0, -1)
+              .map((m) =>
+                stripContextFromMessage(m as Parameters<typeof stripContextFromMessage>[0]),
+              ),
             // Latest user message with fresh context
             {
               role: 'user' as const,
@@ -1871,8 +1954,11 @@ program
           }
 
           sendEvent({ type: 'done' });
-        } catch (e: any) {
-          sendEvent({ type: 'error', message: e?.message ?? 'Unknown error' });
+        } catch (e) {
+          sendEvent({
+            type: 'error',
+            message: (e as Error & { stack?: string })?.message ?? 'Unknown error',
+          });
         }
 
         res.end();
