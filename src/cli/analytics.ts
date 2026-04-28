@@ -398,7 +398,9 @@ analyticsCommand
       syncAnalytics(analyticsStore);
       const toolCalls = analyticsStore.getToolCallsForOptimization({
         projectPath: projectRoot,
-        period: opts.period as Parameters<typeof analyticsStore.getToolCallsForOptimization>[0]['period'],
+        period: opts.period as Parameters<
+          typeof analyticsStore.getToolCallsForOptimization
+        >[0]['period'],
       });
       const result = analyzeRealSavings(store, toolCalls, opts.period);
 
