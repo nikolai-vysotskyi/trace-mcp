@@ -4,11 +4,11 @@
  * macOS/Linux CI will skip this entire suite.
  */
 
-import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const isWin = process.platform === 'win32';
 const descIf = isWin ? describe : describe.skip;
@@ -16,15 +16,27 @@ const descIf = isWin ? describe : describe.skip;
 const HOOKS_DIR = path.resolve(__dirname, '..', '..', 'hooks');
 const FIXTURES = isWin ? fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-win-')) : '';
 
-function setupFakeHome(): { home: string; traceHome: string; nodeExe: string; cli: string; shimDir: string } {
+function setupFakeHome(): {
+  home: string;
+  traceHome: string;
+  nodeExe: string;
+  cli: string;
+  shimDir: string;
+} {
   const home = fs.mkdtempSync(path.join(FIXTURES, 'home-'));
   const traceHome = path.join(home, '.trace-mcp');
   const shimDir = path.join(traceHome, 'bin');
   fs.mkdirSync(shimDir, { recursive: true });
 
   // Copy the ps1 into shim dir — the .cmd looks for it as a sibling
-  fs.copyFileSync(path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1'), path.join(shimDir, 'trace-mcp-launcher.ps1'));
-  fs.copyFileSync(path.join(HOOKS_DIR, 'trace-mcp-launcher.cmd'), path.join(shimDir, 'trace-mcp.cmd'));
+  fs.copyFileSync(
+    path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1'),
+    path.join(shimDir, 'trace-mcp-launcher.ps1'),
+  );
+  fs.copyFileSync(
+    path.join(HOOKS_DIR, 'trace-mcp-launcher.cmd'),
+    path.join(shimDir, 'trace-mcp.cmd'),
+  );
 
   // Fake node.exe: a .cmd that echoes its args so we can assert.
   const nodeExe = path.join(home, 'fake-node.cmd');
@@ -36,15 +48,20 @@ function setupFakeHome(): { home: string; traceHome: string; nodeExe: string; cl
 }
 
 function writeConfig(traceHome: string, nodeExe: string, cli: string) {
-  fs.writeFileSync(path.join(traceHome, 'launcher.env'), [
-    `TRACE_MCP_NODE="${nodeExe.replace(/\\/g, '\\\\')}"`,
-    `TRACE_MCP_CLI="${cli.replace(/\\/g, '\\\\')}"`,
-    'TRACE_MCP_VERSION="0.0.0"',
-    '',
-  ].join('\r\n'));
+  fs.writeFileSync(
+    path.join(traceHome, 'launcher.env'),
+    [
+      `TRACE_MCP_NODE="${nodeExe.replace(/\\/g, '\\\\')}"`,
+      `TRACE_MCP_CLI="${cli.replace(/\\/g, '\\\\')}"`,
+      'TRACE_MCP_VERSION="0.0.0"',
+      '',
+    ].join('\r\n'),
+  );
 }
 
-beforeAll(() => { /* nothing needed */ });
+beforeAll(() => {
+  /* nothing needed */
+});
 afterAll(() => {
   if (isWin && FIXTURES) fs.rmSync(FIXTURES, { recursive: true, force: true });
 });
@@ -96,11 +113,14 @@ descIf('Windows launcher shim integration', () => {
   it('injection attempt in config is not evaluated', () => {
     const { home, traceHome, shimDir } = setupFakeHome();
     const sentinel = path.join(home, 'PWNED');
-    fs.writeFileSync(path.join(traceHome, 'launcher.env'), [
-      `TRACE_MCP_NODE="C:\\nope.exe\"; New-Item -Path '${sentinel}' -ItemType File; \""`,
-      `TRACE_MCP_CLI="$( New-Item -Path '${sentinel}-sub' )"`,
-      '',
-    ].join('\r\n'));
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [
+        `TRACE_MCP_NODE="C:\\nope.exe"; New-Item -Path '${sentinel}' -ItemType File; ""`,
+        `TRACE_MCP_CLI="$( New-Item -Path '${sentinel}-sub' )"`,
+        '',
+      ].join('\r\n'),
+    );
 
     const cmdPath = path.join(shimDir, 'trace-mcp.cmd');
     spawnSync(cmdPath, ['serve'], {

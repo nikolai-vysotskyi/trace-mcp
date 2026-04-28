@@ -2,33 +2,32 @@
  * Unit tests for Python language plugin helper functions.
  * Tests individual extraction utilities in isolation.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
-import { getParser } from '../../src/parser/tree-sitter.js';
+import { describe, expect, it } from 'vitest';
 import {
+  detectPropertyGrouping,
+  detectTypingPatterns,
   detectVisibility,
-  extractDocstring,
   extractAllList,
   extractCallSites,
-  extractReexportEdges,
-  extractTypeAnnotationEdges,
-  extractDecoratorEdges,
-  extractInheritanceEdges,
-  extractTypeCheckingImports,
-  extractConditionalImports,
-  detectTypingPatterns,
-  extractSlots,
-  extractMetaclass,
-  extractNestedDefinitions,
-  detectPropertyGrouping,
   extractClassBases,
+  extractConditionalImports,
+  extractDecoratorEdges,
+  extractDocstring,
   extractImportEdges,
+  extractInheritanceEdges,
+  extractMetaclass,
   extractNameMainCallees,
+  extractReexportEdges,
+  extractSlots,
+  extractTypeAnnotationEdges,
+  extractTypeCheckingImports,
   filePathToModule,
+  hasSpecialDecorator,
+  isAllCaps,
   makeFqn,
   makeSymbolId,
-  isAllCaps,
-  hasSpecialDecorator,
 } from '../../src/indexer/plugins/language/python/helpers.js';
+import { getParser } from '../../src/parser/tree-sitter.js';
 
 async function parse(code: string) {
   const parser = await getParser('python');
@@ -330,13 +329,13 @@ describe('extractImportEdges', () => {
   it('extracts wildcard import', async () => {
     const root = await parse(`from mymodule import *`);
     const edges = extractImportEdges(root);
-    expect((edges[0].metadata?.specifiers as string[])).toContain('*');
+    expect(edges[0].metadata?.specifiers as string[]).toContain('*');
   });
 
   it('extracts aliased import (stores original name)', async () => {
     const root = await parse(`from foo import Bar as Baz`);
     const edges = extractImportEdges(root);
-    expect((edges[0].metadata?.specifiers as string[])).toContain('Bar');
+    expect(edges[0].metadata?.specifiers as string[]).toContain('Bar');
   });
 });
 
@@ -586,7 +585,9 @@ describe('utility functions', () => {
   });
 
   it('makeSymbolId with parent', () => {
-    expect(makeSymbolId('file.py', 'method', 'method', 'Class')).toBe('file.py::Class::method#method');
+    expect(makeSymbolId('file.py', 'method', 'method', 'Class')).toBe(
+      'file.py::Class::method#method',
+    );
   });
 
   it('makeSymbolId without parent', () => {

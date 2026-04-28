@@ -11,7 +11,7 @@
  *  - automatically when the indexed-symbol count changes between calls (cheap
  *    sanity check that catches background indexing finishing mid-session).
  */
-import type { SymbolRow, FileRow } from '../db/store.js';
+import type { FileRow, SymbolRow } from '../db/store.js';
 
 export interface CachedSearchItem {
   symbol: SymbolRow;
@@ -53,7 +53,13 @@ export function getSearchCacheStats(): {
   misses: number;
   evictions: number;
 } {
-  return { size: _cache.size, max: MAX_ENTRIES, hits: _hits, misses: _misses, evictions: _evictions };
+  return {
+    size: _cache.size,
+    max: MAX_ENTRIES,
+    hits: _hits,
+    misses: _misses,
+    evictions: _evictions,
+  };
 }
 
 /** Reset all counters and clear the cache. Test-only helper. */

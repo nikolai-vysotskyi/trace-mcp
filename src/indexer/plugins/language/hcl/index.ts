@@ -8,21 +8,38 @@
  * globally. Now only extracts keys inside locals blocks using brace depth tracking.
  */
 import { ok } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parent?: string): string {
   if (parent) return `${filePath}::${parent}::${name}#${kind}`;
   return `${filePath}::${name}#${kind}`;
 }
 
-type BlockKind = 'resource' | 'data' | 'module' | 'variable' | 'output' | 'locals' | 'provider' | 'terraform' | 'moved' | 'other';
+type BlockKind =
+  | 'resource'
+  | 'data'
+  | 'module'
+  | 'variable'
+  | 'output'
+  | 'locals'
+  | 'provider'
+  | 'terraform'
+  | 'moved'
+  | 'other';
 
 interface BlockState {
   kind: BlockKind;
   name: string;
   startLine: number;
-  braceDepth: number;      // brace depth at which this block was opened
+  braceDepth: number; // brace depth at which this block was opened
   resourceType?: string;
   meta: Record<string, unknown>;
 }
@@ -49,9 +66,15 @@ export class HclLanguagePlugin implements LanguagePlugin {
 
     // Whether we are inside a terraform > required_providers sub-block
     let insideRequiredProviders = false;
-    let requiredProvidersDepth = 0;
+    let _requiredProvidersDepth = 0;
 
-    function addSymbol(name: string, kind: SymbolKind, lineNum: number, offset: number, meta?: Record<string, unknown>): void {
+    function addSymbol(
+      name: string,
+      kind: SymbolKind,
+      lineNum: number,
+      offset: number,
+      meta?: Record<string, unknown>,
+    ): void {
       const sid = makeSymbolId(filePath, name, kind);
       if (seen.has(sid)) return;
       seen.add(sid);
@@ -100,8 +123,12 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'resource', name: resourceMatch[2], startLine: lineNum,
-              braceDepth, resourceType: resourceMatch[1], meta: { hclKind: 'resource' },
+              kind: 'resource',
+              name: resourceMatch[2],
+              startLine: lineNum,
+              braceDepth,
+              resourceType: resourceMatch[1],
+              meta: { hclKind: 'resource' },
             });
           }
           byteOffset += line.length + 1;
@@ -118,8 +145,12 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'data', name: dataMatch[2], startLine: lineNum,
-              braceDepth, resourceType: dataMatch[1], meta: { hclKind: 'data' },
+              kind: 'data',
+              name: dataMatch[2],
+              startLine: lineNum,
+              braceDepth,
+              resourceType: dataMatch[1],
+              meta: { hclKind: 'data' },
             });
           }
           byteOffset += line.length + 1;
@@ -133,8 +164,11 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'module', name: moduleMatch[1], startLine: lineNum,
-              braceDepth, meta: { hclKind: 'module' },
+              kind: 'module',
+              name: moduleMatch[1],
+              startLine: lineNum,
+              braceDepth,
+              meta: { hclKind: 'module' },
             });
           }
           byteOffset += line.length + 1;
@@ -148,8 +182,11 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'variable', name: variableMatch[1], startLine: lineNum,
-              braceDepth, meta: { hclKind: 'variable' },
+              kind: 'variable',
+              name: variableMatch[1],
+              startLine: lineNum,
+              braceDepth,
+              meta: { hclKind: 'variable' },
             });
           }
           byteOffset += line.length + 1;
@@ -163,8 +200,11 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'output', name: outputMatch[1], startLine: lineNum,
-              braceDepth, meta: { hclKind: 'output' },
+              kind: 'output',
+              name: outputMatch[1],
+              startLine: lineNum,
+              braceDepth,
+              meta: { hclKind: 'output' },
             });
           }
           byteOffset += line.length + 1;
@@ -177,8 +217,11 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'locals', name: 'locals', startLine: lineNum,
-              braceDepth, meta: { hclKind: 'locals' },
+              kind: 'locals',
+              name: 'locals',
+              startLine: lineNum,
+              braceDepth,
+              meta: { hclKind: 'locals' },
             });
           }
           byteOffset += line.length + 1;
@@ -192,8 +235,11 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'provider', name: providerMatch[1], startLine: lineNum,
-              braceDepth, meta: { hclKind: 'provider' },
+              kind: 'provider',
+              name: providerMatch[1],
+              startLine: lineNum,
+              braceDepth,
+              meta: { hclKind: 'provider' },
             });
           }
           byteOffset += line.length + 1;
@@ -206,8 +252,11 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'terraform', name: 'terraform', startLine: lineNum,
-              braceDepth, meta: { hclKind: 'terraform' },
+              kind: 'terraform',
+              name: 'terraform',
+              startLine: lineNum,
+              braceDepth,
+              meta: { hclKind: 'terraform' },
             });
           }
           byteOffset += line.length + 1;
@@ -220,8 +269,11 @@ export class HclLanguagePlugin implements LanguagePlugin {
           if (trimmed.includes('{')) {
             braceDepth++;
             blockStack.push({
-              kind: 'moved', name: 'moved', startLine: lineNum,
-              braceDepth, meta: { hclKind: 'moved' },
+              kind: 'moved',
+              name: 'moved',
+              startLine: lineNum,
+              braceDepth,
+              meta: { hclKind: 'moved' },
             });
           }
           byteOffset += line.length + 1;
@@ -239,13 +291,16 @@ export class HclLanguagePlugin implements LanguagePlugin {
       for (let c = 0; c < line.length; c++) {
         const ch = line[c];
         if (inString) {
-          if (ch === '\\') { c++; continue; }
+          if (ch === '\\') {
+            c++;
+            continue;
+          }
           if (ch === stringChar) inString = false;
-        } else {
-          if (ch === '"') { inString = true; stringChar = '"'; }
-          else if (ch === '{') lineDepthChange++;
-          else if (ch === '}') lineDepthChange--;
-        }
+        } else if (ch === '"') {
+          inString = true;
+          stringChar = '"';
+        } else if (ch === '{') lineDepthChange++;
+        else if (ch === '}') lineDepthChange--;
       }
 
       // Before updating brace depth, extract content from inside blocks
@@ -273,21 +328,27 @@ export class HclLanguagePlugin implements LanguagePlugin {
           const typeMatch = trimmed.match(/^type\s*=\s*(.*)/);
           if (typeMatch) {
             // Update existing symbol metadata
-            const sym = symbols.find(s => s.name === block.name && s.metadata?.hclKind === 'variable');
+            const sym = symbols.find(
+              (s) => s.name === block.name && s.metadata?.hclKind === 'variable',
+            );
             if (sym) {
               sym.metadata = { ...sym.metadata, type: typeMatch[1].trim() };
             }
           }
           const defaultMatch = trimmed.match(/^default\s*=\s*(.*)/);
           if (defaultMatch) {
-            const sym = symbols.find(s => s.name === block.name && s.metadata?.hclKind === 'variable');
+            const sym = symbols.find(
+              (s) => s.name === block.name && s.metadata?.hclKind === 'variable',
+            );
             if (sym) {
               sym.metadata = { ...sym.metadata, default: defaultMatch[1].trim() };
             }
           }
           const descMatch = trimmed.match(/^description\s*=\s*"([^"]*)"/);
           if (descMatch) {
-            const sym = symbols.find(s => s.name === block.name && s.metadata?.hclKind === 'variable');
+            const sym = symbols.find(
+              (s) => s.name === block.name && s.metadata?.hclKind === 'variable',
+            );
             if (sym) {
               sym.metadata = { ...sym.metadata, description: descMatch[1] };
             }
@@ -298,7 +359,9 @@ export class HclLanguagePlugin implements LanguagePlugin {
         if (block.kind === 'output' && depthInsideBlock === 0) {
           const valueMatch = trimmed.match(/^value\s*=\s*(.*)/);
           if (valueMatch) {
-            const sym = symbols.find(s => s.name === block.name && s.metadata?.hclKind === 'output');
+            const sym = symbols.find(
+              (s) => s.name === block.name && s.metadata?.hclKind === 'output',
+            );
             if (sym) {
               sym.metadata = { ...sym.metadata, value: valueMatch[1].trim() };
             }
@@ -309,13 +372,15 @@ export class HclLanguagePlugin implements LanguagePlugin {
         if (block.kind === 'terraform') {
           if (trimmed.match(/^required_providers\s*\{/)) {
             insideRequiredProviders = true;
-            requiredProvidersDepth = braceDepth + 1;
+            _requiredProvidersDepth = braceDepth + 1;
           }
           if (insideRequiredProviders && depthInsideBlock === 1) {
             // Inside required_providers at one level deep — extract provider name = { ... }
             const provReqMatch = trimmed.match(/^(\w+)\s*=\s*\{/);
             if (provReqMatch) {
-              addSymbol(provReqMatch[1], 'constant', lineNum, lineOffset, { hclKind: 'required_provider' });
+              addSymbol(provReqMatch[1], 'constant', lineNum, lineOffset, {
+                hclKind: 'required_provider',
+              });
             }
           }
         }
@@ -326,11 +391,16 @@ export class HclLanguagePlugin implements LanguagePlugin {
           const toMatch = trimmed.match(/^to\s*=\s*(.*)/);
           if (fromMatch) {
             const name = `moved:${fromMatch[1].trim()}`;
-            addSymbol(name, 'constant', lineNum, lineOffset, { hclKind: 'moved', from: fromMatch[1].trim() });
+            addSymbol(name, 'constant', lineNum, lineOffset, {
+              hclKind: 'moved',
+              from: fromMatch[1].trim(),
+            });
           }
           if (toMatch) {
             // Update the moved symbol with to info
-            const movedSym = symbols.find(s => s.metadata?.hclKind === 'moved' && s.lineStart === lineNum - 1);
+            const movedSym = symbols.find(
+              (s) => s.metadata?.hclKind === 'moved' && s.lineStart === lineNum - 1,
+            );
             if (movedSym) {
               movedSym.metadata = { ...movedSym.metadata, to: toMatch[1].trim() };
             }

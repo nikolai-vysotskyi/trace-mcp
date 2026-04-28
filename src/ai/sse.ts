@@ -23,7 +23,7 @@ export async function* parseOpenAIStream(body: ReadableStream<Uint8Array>): Asyn
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        if (!trimmed?.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
         if (payload === '[DONE]') return;
 
@@ -47,7 +47,9 @@ export async function* parseOpenAIStream(body: ReadableStream<Uint8Array>): Asyn
  * Parse an SSE stream from the Anthropic Messages API.
  * Yields content delta text strings as they arrive.
  */
-export async function* parseAnthropicStream(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
+export async function* parseAnthropicStream(
+  body: ReadableStream<Uint8Array>,
+): AsyncIterable<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -63,7 +65,7 @@ export async function* parseAnthropicStream(body: ReadableStream<Uint8Array>): A
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        if (!trimmed?.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
 
         try {
@@ -107,7 +109,7 @@ export async function* parseGeminiStream(body: ReadableStream<Uint8Array>): Asyn
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        if (!trimmed?.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
         if (payload === '[DONE]') return;
 
@@ -131,7 +133,9 @@ export async function* parseGeminiStream(body: ReadableStream<Uint8Array>): Asyn
  * Parse an NDJSON stream from Ollama's chat API.
  * Yields content strings as they arrive.
  */
-export async function* parseOllamaChatStream(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
+export async function* parseOllamaChatStream(
+  body: ReadableStream<Uint8Array>,
+): AsyncIterable<string> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';

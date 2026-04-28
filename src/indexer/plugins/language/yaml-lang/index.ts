@@ -19,9 +19,26 @@
  *   - Generic YAML (top-level keys as constants)
  */
 import { ok } from 'neverthrow';
-import { parseDocument, isMap, isSeq, isPair, isScalar, type Document, type YAMLMap, type YAMLSeq, type Pair } from 'yaml';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import {
+  type Document,
+  isMap,
+  isPair,
+  isScalar,
+  isSeq,
+  type Pair,
+  parseDocument,
+  type YAMLMap,
+  type YAMLSeq,
+} from 'yaml';
 import type { TraceMcpResult } from '../../../../errors.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -29,7 +46,13 @@ function symId(filePath: string, name: string, kind: string): string {
   return `${filePath}::${name}#${kind}`;
 }
 
-type AddFn = (name: string, kind: SymbolKind, offset: number, endOffset: number, meta?: Record<string, unknown>) => void;
+type AddFn = (
+  name: string,
+  kind: SymbolKind,
+  offset: number,
+  endOffset: number,
+  meta?: Record<string, unknown>,
+) => void;
 
 // ── YAML AST helpers ─────────────────────────────────────────────────────
 
@@ -151,13 +174,18 @@ function detectDialect(filePath: string, doc: Document): YamlDialect {
   const baseName = fn.split('/').pop() ?? '';
 
   // Filename-based detection (highest priority)
-  if (baseName === 'docker-compose.yml' || baseName === 'docker-compose.yaml' ||
-      baseName === 'compose.yml' || baseName === 'compose.yaml') {
+  if (
+    baseName === 'docker-compose.yml' ||
+    baseName === 'docker-compose.yaml' ||
+    baseName === 'compose.yml' ||
+    baseName === 'compose.yaml'
+  ) {
     return 'docker-compose';
   }
   if (fn.includes('.github/workflows/')) return 'github-actions';
   if (baseName === '.gitlab-ci.yml' || baseName === '.gitlab-ci.yaml') return 'gitlab-ci';
-  if (fn.includes('.circleci/') && (baseName === 'config.yml' || baseName === 'config.yaml')) return 'circleci';
+  if (fn.includes('.circleci/') && (baseName === 'config.yml' || baseName === 'config.yaml'))
+    return 'circleci';
   if (baseName === 'chart.yaml' || baseName === 'chart.yml') return 'helm-chart';
 
   const contents = doc.contents;
@@ -175,7 +203,7 @@ function detectDialect(filePath: string, doc: Document): YamlDialect {
 
   if (!isMap(contents)) return 'generic';
 
-  const topKeyNames = new Set([...getKeyNames(contents)].map(k => k.toLowerCase()));
+  const topKeyNames = new Set([...getKeyNames(contents)].map((k) => k.toLowerCase()));
 
   // Content-based detection
   if (topKeyNames.has('services') && !topKeyNames.has('apiversion')) return 'docker-compose';
@@ -191,7 +219,7 @@ function detectDialect(filePath: string, doc: Document): YamlDialect {
     for (const resPair of resourcesMap.items) {
       if (isPair(resPair) && isMap(resPair.value)) {
         const typeVal = getMapScalar(resPair.value as YAMLMap, 'Type');
-        if (typeVal && typeVal.includes('AWS::')) return 'cloudformation';
+        if (typeVal?.includes('AWS::')) return 'cloudformation';
       }
     }
   }
@@ -202,7 +230,10 @@ function detectDialect(filePath: string, doc: Document): YamlDialect {
 // ── Dialect extractors ─────────────────────────────────────────────────────
 
 function extractDockerCompose(
-  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+  filePath: string,
+  rootMap: YAMLMap,
+  edges: RawEdge[],
+  add: AddFn,
 ): void {
   // Services
   const servicesMap = getMapMap(rootMap, 'services');
@@ -221,7 +252,11 @@ function extractDockerCompose(
       const imagePair = getMapPair(svcMap, 'image');
       if (imagePair) {
         const imageVal = pairVal(imagePair);
-        if (imageVal) add(`${svcName}:image`, 'constant', pairStart(imagePair), pairEnd(imagePair), { yamlKind: 'image', value: imageVal });
+        if (imageVal)
+          add(`${svcName}:image`, 'constant', pairStart(imagePair), pairEnd(imagePair), {
+            yamlKind: 'image',
+            value: imageVal,
+          });
       }
 
       // ports:
@@ -229,7 +264,14 @@ function extractDockerCompose(
       if (portsSeq) {
         for (const item of portsSeq.items) {
           const portVal = scalarVal(item as YNode);
-          if (portVal) add(`${svcName}:${portVal}`, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'port', value: portVal });
+          if (portVal)
+            add(
+              `${svcName}:${portVal}`,
+              'constant',
+              nodeStart(item as YNode),
+              nodeEnd(item as YNode),
+              { yamlKind: 'port', value: portVal },
+            );
         }
       }
 
@@ -272,7 +314,13 @@ function extractDockerCompose(
           const vol = scalarVal(item as YNode);
           if (vol) {
             const hostPath = vol.split(':')[0];
-            add(`${svcName}:vol:${hostPath}`, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'volume', value: vol, service: svcName });
+            add(
+              `${svcName}:vol:${hostPath}`,
+              'constant',
+              nodeStart(item as YNode),
+              nodeEnd(item as YNode),
+              { yamlKind: 'volume', value: vol, service: svcName },
+            );
           }
         }
       }
@@ -282,7 +330,14 @@ function extractDockerCompose(
       if (netsSeq) {
         for (const item of netsSeq.items) {
           const net = scalarVal(item as YNode);
-          if (net) add(`${svcName}:net:${net}`, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'network', value: net, service: svcName });
+          if (net)
+            add(
+              `${svcName}:net:${net}`,
+              'constant',
+              nodeStart(item as YNode),
+              nodeEnd(item as YNode),
+              { yamlKind: 'network', value: net, service: svcName },
+            );
         }
       }
       // networks can also be a mapping
@@ -291,7 +346,12 @@ function extractDockerCompose(
         for (const netPair of netsMap.items) {
           if (!isPair(netPair)) continue;
           const net = pairKey(netPair);
-          if (net) add(`${svcName}:net:${net}`, 'constant', pairStart(netPair), pairEnd(netPair), { yamlKind: 'network', value: net, service: svcName });
+          if (net)
+            add(`${svcName}:net:${net}`, 'constant', pairStart(netPair), pairEnd(netPair), {
+              yamlKind: 'network',
+              value: net,
+              service: svcName,
+            });
         }
       }
 
@@ -303,7 +363,12 @@ function extractDockerCompose(
           for (const ePair of (envPair.value as YAMLMap).items) {
             if (!isPair(ePair)) continue;
             const envKey = pairKey(ePair);
-            if (envKey) add(`${svcName}:env:${envKey}`, 'variable', pairStart(ePair), pairEnd(ePair), { yamlKind: 'envVar', key: envKey, service: svcName });
+            if (envKey)
+              add(`${svcName}:env:${envKey}`, 'variable', pairStart(ePair), pairEnd(ePair), {
+                yamlKind: 'envVar',
+                key: envKey,
+                service: svcName,
+              });
           }
         }
         // Sequence form: - KEY=value
@@ -314,7 +379,13 @@ function extractDockerCompose(
               const eqIdx = envEntry.indexOf('=');
               if (eqIdx > 0) {
                 const envKey = envEntry.slice(0, eqIdx);
-                add(`${svcName}:env:${envKey}`, 'variable', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'envVar', key: envKey, service: svcName });
+                add(
+                  `${svcName}:env:${envKey}`,
+                  'variable',
+                  nodeStart(item as YNode),
+                  nodeEnd(item as YNode),
+                  { yamlKind: 'envVar', key: envKey, service: svcName },
+                );
               }
             }
           }
@@ -345,7 +416,10 @@ function extractDockerCompose(
 }
 
 function extractGitHubActions(
-  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+  filePath: string,
+  rootMap: YAMLMap,
+  edges: RawEdge[],
+  add: AddFn,
 ): void {
   const jobsMap = getMapMap(rootMap, 'jobs');
   if (!jobsMap) return;
@@ -372,7 +446,11 @@ function extractGitHubActions(
       const namePair = getMapPair(stepMap, 'name');
       if (namePair) {
         const stepName = pairVal(namePair);
-        if (stepName) add(stepName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'step', job: jobName });
+        if (stepName)
+          add(stepName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), {
+            yamlKind: 'step',
+            job: jobName,
+          });
       }
 
       // uses:
@@ -380,19 +458,28 @@ function extractGitHubActions(
       if (usesPair) {
         const usesVal = pairVal(usesPair);
         if (usesVal) {
-          edges.push({ edgeType: 'imports', metadata: { module: usesVal, dialect: 'github-actions' } });
+          edges.push({
+            edgeType: 'imports',
+            metadata: { module: usesVal, dialect: 'github-actions' },
+          });
         }
       }
     }
   }
 }
 
-function extractGitLabCI(
-  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
-): void {
+function extractGitLabCI(filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn): void {
   const reservedKeys = new Set([
-    'stages', 'variables', 'default', 'include', 'image', 'services',
-    'before_script', 'after_script', 'cache', 'workflow',
+    'stages',
+    'variables',
+    'default',
+    'include',
+    'image',
+    'services',
+    'before_script',
+    'after_script',
+    'cache',
+    'workflow',
   ]);
 
   // Extract stages
@@ -400,7 +487,10 @@ function extractGitLabCI(
   if (stagesSeq) {
     for (const item of stagesSeq.items) {
       const stageName = scalarVal(item as YNode);
-      if (stageName) add(stageName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'stage' });
+      if (stageName)
+        add(stageName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), {
+          yamlKind: 'stage',
+        });
     }
   }
 
@@ -414,9 +504,7 @@ function extractGitLabCI(
   }
 }
 
-function extractKubernetes(
-  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
-): void {
+function extractKubernetes(filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn): void {
   // kind:
   let kind = '';
   const kindPair = getMapPair(rootMap, 'kind');
@@ -432,7 +520,11 @@ function extractKubernetes(
     const namePair = getMapPair(metaMap, 'name');
     if (namePair) {
       metadataName = pairVal(namePair) ?? '';
-      if (metadataName) add(metadataName, 'constant', pairStart(namePair), pairEnd(namePair), { yamlKind: 'k8sName', kind });
+      if (metadataName)
+        add(metadataName, 'constant', pairStart(namePair), pairEnd(namePair), {
+          yamlKind: 'k8sName',
+          kind,
+        });
     }
   }
 
@@ -442,8 +534,12 @@ function extractKubernetes(
 
 /** Recursively walk Kubernetes AST nodes for nested structures */
 function walkK8sNode(
-  filePath: string, node: YNode, kind: string, metadataName: string,
-  edges: RawEdge[], add: AddFn,
+  filePath: string,
+  node: YNode,
+  kind: string,
+  metadataName: string,
+  edges: RawEdge[],
+  add: AddFn,
 ): void {
   if (isMap(node)) {
     const map = node as YAMLMap;
@@ -457,12 +553,16 @@ function walkK8sNode(
         const cName = getMapScalar(containerMap, 'name');
         if (cName) {
           const cNamePair = getMapPair(containerMap, 'name')!;
-          add(cName, 'constant', pairStart(cNamePair), pairEnd(cNamePair), { yamlKind: 'container' });
+          add(cName, 'constant', pairStart(cNamePair), pairEnd(cNamePair), {
+            yamlKind: 'container',
+          });
         }
         const cImage = getMapScalar(containerMap, 'image');
         if (cImage) {
           const cImagePair = getMapPair(containerMap, 'image')!;
-          add(cImage, 'constant', pairStart(cImagePair), pairEnd(cImagePair), { yamlKind: 'containerImage' });
+          add(cImage, 'constant', pairStart(cImagePair), pairEnd(cImagePair), {
+            yamlKind: 'containerImage',
+          });
         }
       }
     }
@@ -476,7 +576,11 @@ function walkK8sNode(
         const mp = getMapScalar(vmMap, 'mountPath');
         if (mp) {
           const mpPair = getMapPair(vmMap, 'mountPath')!;
-          add(`mount:${mp}`, 'variable', pairStart(mpPair), pairEnd(mpPair), { yamlKind: 'volumeMount', kind, resource: metadataName });
+          add(`mount:${mp}`, 'variable', pairStart(mpPair), pairEnd(mpPair), {
+            yamlKind: 'volumeMount',
+            kind,
+            resource: metadataName,
+          });
         }
       }
     }
@@ -488,7 +592,10 @@ function walkK8sNode(
         const ref = getMapScalar(refMap, 'name');
         if (ref) {
           const refPair = getMapPair(map, refKey)!;
-          add(`configMap:${ref}`, 'constant', pairStart(refPair), pairEnd(refPair), { yamlKind: 'configMapRef', resource: metadataName });
+          add(`configMap:${ref}`, 'constant', pairStart(refPair), pairEnd(refPair), {
+            yamlKind: 'configMapRef',
+            resource: metadataName,
+          });
           edges.push({
             sourceSymbolId: symId(filePath, metadataName || kind, 'constant'),
             targetSymbolId: symId(filePath, `configMap:${ref}`, 'constant'),
@@ -506,7 +613,10 @@ function walkK8sNode(
         const ref = getMapScalar(refMap, 'name');
         if (ref) {
           const refPair = getMapPair(map, refKey)!;
-          add(`secret:${ref}`, 'constant', pairStart(refPair), pairEnd(refPair), { yamlKind: 'secretRef', resource: metadataName });
+          add(`secret:${ref}`, 'constant', pairStart(refPair), pairEnd(refPair), {
+            yamlKind: 'secretRef',
+            resource: metadataName,
+          });
           edges.push({
             sourceSymbolId: symId(filePath, metadataName || kind, 'constant'),
             targetSymbolId: symId(filePath, `secret:${ref}`, 'constant'),
@@ -525,7 +635,11 @@ function walkK8sNode(
         if (appPair) {
           const selectorApp = pairVal(appPair);
           if (selectorApp && metadataName) {
-            add(`selector:${selectorApp}`, 'constant', pairStart(appPair), pairEnd(appPair), { yamlKind: 'serviceSelector', service: metadataName, app: selectorApp });
+            add(`selector:${selectorApp}`, 'constant', pairStart(appPair), pairEnd(appPair), {
+              yamlKind: 'serviceSelector',
+              service: metadataName,
+              app: selectorApp,
+            });
           }
         }
       }
@@ -544,9 +658,7 @@ function walkK8sNode(
   }
 }
 
-function extractAnsible(
-  filePath: string, doc: Document, edges: RawEdge[], add: AddFn,
-): void {
+function extractAnsible(filePath: string, doc: Document, edges: RawEdge[], add: AddFn): void {
   const contents = doc.contents;
   if (!isSeq(contents)) return;
 
@@ -558,7 +670,10 @@ function extractAnsible(
     const namePair = getMapPair(playMap, 'name');
     if (namePair) {
       const name = pairVal(namePair);
-      if (name) add(name, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'play' });
+      if (name)
+        add(name, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), {
+          yamlKind: 'play',
+        });
     }
 
     // Tasks
@@ -570,7 +685,10 @@ function extractAnsible(
         const taskNamePair = getMapPair(taskMap, 'name');
         if (taskNamePair) {
           const taskName = pairVal(taskNamePair);
-          if (taskName) add(taskName, 'function', nodeStart(taskItem as YNode), nodeEnd(taskItem as YNode), { yamlKind: 'task' });
+          if (taskName)
+            add(taskName, 'function', nodeStart(taskItem as YNode), nodeEnd(taskItem as YNode), {
+              yamlKind: 'task',
+            });
         }
       }
     }
@@ -582,23 +700,28 @@ function extractAnsible(
         // Simple string role
         const roleText = scalarVal(roleItem as YNode);
         if (roleText && !roleText.includes(':')) {
-          edges.push({ edgeType: 'imports', metadata: { module: roleText, dialect: 'ansible-playbook' } });
+          edges.push({
+            edgeType: 'imports',
+            metadata: { module: roleText, dialect: 'ansible-playbook' },
+          });
           continue;
         }
 
         // Mapping form: - role: name
         if (isMap(roleItem)) {
           const roleName = getMapScalar(roleItem as YAMLMap, 'role');
-          if (roleName) edges.push({ edgeType: 'imports', metadata: { module: roleName, dialect: 'ansible-playbook' } });
+          if (roleName)
+            edges.push({
+              edgeType: 'imports',
+              metadata: { module: roleName, dialect: 'ansible-playbook' },
+            });
         }
       }
     }
   }
 }
 
-function extractOpenAPI(
-  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
-): void {
+function extractOpenAPI(filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn): void {
   // Paths
   const pathsMap = getMapMap(rootMap, 'paths');
   if (pathsMap) {
@@ -716,9 +839,7 @@ function collectRefs(node: YAMLMap | YAMLSeq | YNode, edges: RawEdge[], from?: s
   }
 }
 
-function extractCircleCI(
-  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
-): void {
+function extractCircleCI(filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn): void {
   // Jobs
   const jobsMap = getMapMap(rootMap, 'jobs');
   if (jobsMap) {
@@ -737,27 +858,32 @@ function extractCircleCI(
       const orbAlias = pairKey(pair);
       const orbRef = pairVal(pair);
       if (orbRef) {
-        edges.push({ edgeType: 'imports', metadata: { module: orbRef, alias: orbAlias, dialect: 'circleci' } });
+        edges.push({
+          edgeType: 'imports',
+          metadata: { module: orbRef, alias: orbAlias, dialect: 'circleci' },
+        });
       }
     }
   }
 }
 
-function extractHelmChart(
-  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
-): void {
+function extractHelmChart(filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn): void {
   // name:
   const namePair = getMapPair(rootMap, 'name');
   if (namePair) {
     const val = pairVal(namePair);
-    if (val) add(val, 'constant', pairStart(namePair), pairEnd(namePair), { yamlKind: 'chartName' });
+    if (val)
+      add(val, 'constant', pairStart(namePair), pairEnd(namePair), { yamlKind: 'chartName' });
   }
 
   // version:
   const versionPair = getMapPair(rootMap, 'version');
   if (versionPair) {
     const val = pairVal(versionPair);
-    if (val) add(val, 'constant', pairStart(versionPair), pairEnd(versionPair), { yamlKind: 'chartVersion' });
+    if (val)
+      add(val, 'constant', pairStart(versionPair), pairEnd(versionPair), {
+        yamlKind: 'chartVersion',
+      });
   }
 
   // dependencies:
@@ -768,7 +894,9 @@ function extractHelmChart(
       const depMap = item as YAMLMap;
       const depName = getMapScalar(depMap, 'name');
       if (depName) {
-        add(depName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), { yamlKind: 'helmDep' });
+        add(depName, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), {
+          yamlKind: 'helmDep',
+        });
         edges.push({ edgeType: 'imports', metadata: { module: depName, dialect: 'helm-chart' } });
       }
     }
@@ -776,7 +904,10 @@ function extractHelmChart(
 }
 
 function extractCloudFormation(
-  filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn,
+  filePath: string,
+  rootMap: YAMLMap,
+  edges: RawEdge[],
+  add: AddFn,
 ): void {
   const resourcesMap = getMapMap(rootMap, 'Resources');
   if (!resourcesMap) return;
@@ -793,14 +924,17 @@ function extractCloudFormation(
     const typePair = getMapPair(resMap, 'Type');
     if (typePair) {
       const resType = pairVal(typePair);
-      if (resType) add(`${resName}:${resType}`, 'type', pairStart(typePair), pairEnd(typePair), { yamlKind: 'cfnResourceType', resource: resName, type: resType });
+      if (resType)
+        add(`${resName}:${resType}`, 'type', pairStart(typePair), pairEnd(typePair), {
+          yamlKind: 'cfnResourceType',
+          resource: resName,
+          type: resType,
+        });
     }
   }
 }
 
-function extractGenericYaml(
-  filePath: string, rootMap: YAMLMap, add: AddFn,
-): void {
+function extractGenericYaml(filePath: string, rootMap: YAMLMap, add: AddFn): void {
   for (const pair of rootMap.items) {
     if (!isPair(pair)) continue;
     const key = pairKey(pair);
@@ -836,13 +970,22 @@ export class YamlLanguagePlugin implements LanguagePlugin {
         warnings.push('Source contains syntax errors; extraction may be incomplete');
       }
 
-      const add: AddFn = (name: string, kind: SymbolKind, offset: number, endOffset: number, meta?: Record<string, unknown>) => {
+      const add: AddFn = (
+        name: string,
+        kind: SymbolKind,
+        offset: number,
+        endOffset: number,
+        meta?: Record<string, unknown>,
+      ) => {
         if (!name) return;
         const id = symId(filePath, name, kind);
         if (seen.has(id)) return;
         seen.add(id);
         symbols.push({
-          symbolId: id, name, kind, fqn: name,
+          symbolId: id,
+          name,
+          kind,
+          fqn: name,
           byteStart: offset,
           byteEnd: endOffset,
           lineStart: lineAt(source, offset),
@@ -882,7 +1025,6 @@ export class YamlLanguagePlugin implements LanguagePlugin {
         case 'cloudformation':
           if (isMap(contents)) extractCloudFormation(filePath, contents, edges, add);
           break;
-        case 'generic':
         default:
           if (isMap(contents)) extractGenericYaml(filePath, contents, add);
           break;

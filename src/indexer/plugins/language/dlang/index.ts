@@ -7,12 +7,16 @@
  * Comment stripping: //, /* *​/, /+ +/
  * Scope: braces
  */
-import { createMultiPassPlugin, type CommentStyle } from '../regex-base-v2.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin } from '../regex-base-v2.js';
 
 const comments: CommentStyle = {
   line: ['//'],
-  block: [['/*', '*/'], ['/+', '+/']],
+  block: [
+    ['/*', '*/'],
+    ['/+', '+/'],
+  ],
   strings: ['"', "'", '`'],
 };
 
@@ -28,10 +32,15 @@ const _plugin = createMultiPassPlugin({
     // ── Classes ────────────────────────────────────────────────────────
     {
       kind: 'class',
-      pattern: /^\s*(?:(?:public|private|package|protected|export)\s+)?(?:(?:static|final|abstract|synchronized)\s+)*class\s+(\w+)/gm,
+      pattern:
+        /^\s*(?:(?:public|private|package|protected|export)\s+)?(?:(?:static|final|abstract|synchronized)\s+)*class\s+(\w+)/gm,
       memberPatterns: [
         // Method: ReturnType name(params)
-        { kind: 'method', pattern: /^\s*(?:(?:public|private|package|protected|export|static|final|override|abstract|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*(?:\s*[*\[\]!]+)?)\s+(\w+)\s*\(/gm },
+        {
+          kind: 'method',
+          pattern:
+            /^\s*(?:(?:public|private|package|protected|export|static|final|override|abstract|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*(?:\s*[*[\]!]+)?)\s+(\w+)\s*\(/gm,
+        },
         // Property: @property RetType name()
         { kind: 'property', pattern: /^\s*@property\s+(?:\w+\s+)?(\w+)\s*\(/gm },
         // Constructor: this(params)
@@ -47,10 +56,15 @@ const _plugin = createMultiPassPlugin({
     // ── Structs ────────────────────────────────────────────────────────
     {
       kind: 'class',
-      pattern: /^\s*(?:(?:public|private|package|protected|export)\s+)?(?:static\s+)?struct\s+(\w+)/gm,
+      pattern:
+        /^\s*(?:(?:public|private|package|protected|export)\s+)?(?:static\s+)?struct\s+(\w+)/gm,
       meta: { struct: true },
       memberPatterns: [
-        { kind: 'method', pattern: /^\s*(?:(?:public|private|package|protected|export|static|final|override|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*(?:\s*[*\[\]!]+)?)\s+(\w+)\s*\(/gm },
+        {
+          kind: 'method',
+          pattern:
+            /^\s*(?:(?:public|private|package|protected|export|static|final|override|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*(?:\s*[*[\]!]+)?)\s+(\w+)\s*\(/gm,
+        },
         { kind: 'property', pattern: /^\s*@property\s+(?:\w+\s+)?(\w+)\s*\(/gm },
         { kind: 'method', pattern: /^\s*(this)\s*\(/gm, meta: { constructor: true } },
         { kind: 'method', pattern: /^\s*(~this)\s*\(/gm, meta: { destructor: true } },
@@ -63,14 +77,19 @@ const _plugin = createMultiPassPlugin({
       kind: 'interface',
       pattern: /^\s*(?:(?:public|private|package|protected|export)\s+)?interface\s+(\w+)/gm,
       memberPatterns: [
-        { kind: 'method', pattern: /^\s*(?:(?:static|final|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*)\s+(\w+)\s*\(/gm },
+        {
+          kind: 'method',
+          pattern:
+            /^\s*(?:(?:static|final|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|size_t|\w+(?:\.\w+)*)\s+(\w+)\s*\(/gm,
+        },
         { kind: 'property', pattern: /^\s*@property\s+(?:\w+\s+)?(\w+)\s*\(/gm },
       ],
     },
     // ── Enums (named) ──────────────────────────────────────────────────
     {
       kind: 'enum',
-      pattern: /^\s*(?:(?:public|private|package|protected|export)\s+)?enum\s+(\w+)\s*(?::\s*\w+)?\s*\{/gm,
+      pattern:
+        /^\s*(?:(?:public|private|package|protected|export)\s+)?enum\s+(\w+)\s*(?::\s*\w+)?\s*\{/gm,
       memberPatterns: [
         // Enum members: name [= value]
         { kind: 'constant', pattern: /^\s*(\w+)\s*(?:=|,\s*$)/gm },
@@ -82,7 +101,7 @@ const _plugin = createMultiPassPlugin({
       pattern: /^\s*(?:(?:public|private|package|protected|export)\s+)?union\s+(\w+)/gm,
       meta: { union: true },
       memberPatterns: [
-        { kind: 'property', pattern: /^\s*(?:\w+(?:\.\w+)*(?:\s*[*\[\]!]+)?)\s+(\w+)\s*;/gm },
+        { kind: 'property', pattern: /^\s*(?:\w+(?:\.\w+)*(?:\s*[*[\]!]+)?)\s+(\w+)\s*;/gm },
       ],
     },
     // ── Templates ──────────────────────────────────────────────────────
@@ -91,7 +110,11 @@ const _plugin = createMultiPassPlugin({
       pattern: /^\s*(?:(?:public|private|package|protected|export)\s+)?template\s+(\w+)\s*\(/gm,
       meta: { template: true },
       memberPatterns: [
-        { kind: 'function', pattern: /^\s*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|\w+)\s+(\w+)\s*\(/gm },
+        {
+          kind: 'function',
+          pattern:
+            /^\s*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|string|\w+)\s+(\w+)\s*\(/gm,
+        },
         { kind: 'class', pattern: /^\s*(?:class|struct)\s+(\w+)/gm },
         { kind: 'type', pattern: /^\s*alias\s+(\w+)\s*=/gm },
       ],
@@ -101,9 +124,7 @@ const _plugin = createMultiPassPlugin({
       kind: 'type',
       pattern: /^\s*mixin\s+template\s+(\w+)\s*\(/gm,
       meta: { mixin: true, template: true },
-      memberPatterns: [
-        { kind: 'function', pattern: /^\s*(?:auto|void|bool|\w+)\s+(\w+)\s*\(/gm },
-      ],
+      memberPatterns: [{ kind: 'function', pattern: /^\s*(?:auto|void|bool|\w+)\s+(\w+)\s*\(/gm }],
     },
   ],
 
@@ -112,7 +133,11 @@ const _plugin = createMultiPassPlugin({
     { kind: 'namespace', pattern: /^\s*module\s+([\w.]+)\s*;/gm },
 
     // ── Top-level functions ────────────────────────────────────────────
-    { kind: 'function', pattern: /^\s*(?:(?:public|private|package|protected|export)\s+)?(?:(?:static|final|override|abstract|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|wchar|dchar|string|wstring|dstring|size_t|\w+(?:\.\w+)*(?:\s*[*\[\]!]+)?)\s+(\w+)\s*\(/gm },
+    {
+      kind: 'function',
+      pattern:
+        /^\s*(?:(?:public|private|package|protected|export)\s+)?(?:(?:static|final|override|abstract|pure|nothrow|@\w+)\s+)*(?:auto|void|bool|int|uint|long|ulong|float|double|real|char|wchar|dchar|string|wstring|dstring|size_t|\w+(?:\.\w+)*(?:\s*[*[\]!]+)?)\s+(\w+)\s*\(/gm,
+    },
 
     // ── Aliases (top-level) ────────────────────────────────────────────
     { kind: 'type', pattern: /^\s*alias\s+(\w+)\s*=/gm, meta: { alias: true } },
@@ -127,15 +152,31 @@ const _plugin = createMultiPassPlugin({
     // ── Constructors / destructors (top-level: module ctor/dtor) ───────
     { kind: 'function', pattern: /^\s*static\s+(this)\s*\(/gm, meta: { moduleConstructor: true } },
     { kind: 'function', pattern: /^\s*static\s+(~this)\s*\(/gm, meta: { moduleDestructor: true } },
-    { kind: 'function', pattern: /^\s*shared\s+static\s+(this)\s*\(/gm, meta: { sharedConstructor: true } },
-    { kind: 'function', pattern: /^\s*shared\s+static\s+(~this)\s*\(/gm, meta: { sharedDestructor: true } },
+    {
+      kind: 'function',
+      pattern: /^\s*shared\s+static\s+(this)\s*\(/gm,
+      meta: { sharedConstructor: true },
+    },
+    {
+      kind: 'function',
+      pattern: /^\s*shared\s+static\s+(~this)\s*\(/gm,
+      meta: { sharedDestructor: true },
+    },
 
     // ── Unittest ───────────────────────────────────────────────────────
     { kind: 'function', pattern: /^\s*(unittest)\s*\{/gm, meta: { test: true } },
 
     // ── Version / debug conditionals ───────────────────────────────────
-    { kind: 'variable', pattern: /^\s*version\s*\(\s*(\w+)\s*\)/gm, meta: { conditional: true, conditionKind: 'version' } },
-    { kind: 'variable', pattern: /^\s*debug\s*\(\s*(\w+)\s*\)/gm, meta: { conditional: true, conditionKind: 'debug' } },
+    {
+      kind: 'variable',
+      pattern: /^\s*version\s*\(\s*(\w+)\s*\)/gm,
+      meta: { conditional: true, conditionKind: 'version' },
+    },
+    {
+      kind: 'variable',
+      pattern: /^\s*debug\s*\(\s*(\w+)\s*\)/gm,
+      meta: { conditional: true, conditionKind: 'debug' },
+    },
   ],
 
   importPatterns: [

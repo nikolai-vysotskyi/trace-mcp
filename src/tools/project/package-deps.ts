@@ -57,7 +57,11 @@ function readManifest(repoPath: string): {
   deps: Map<string, { version: string; type: string }>;
   publishes: string[];
 } {
-  const result = { name: undefined as string | undefined, deps: new Map<string, { version: string; type: string }>(), publishes: [] as string[] };
+  const result = {
+    name: undefined as string | undefined,
+    deps: new Map<string, { version: string; type: string }>(),
+    publishes: [] as string[],
+  };
 
   // package.json (npm)
   const pkgJsonPath = path.join(repoPath, 'package.json');
@@ -72,7 +76,9 @@ function readManifest(repoPath: string): {
       for (const [dep, ver] of Object.entries(pkg.devDependencies ?? {})) {
         result.deps.set(dep, { version: ver as string, type: 'devDependencies' });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // composer.json (PHP)
@@ -91,7 +97,9 @@ function readManifest(repoPath: string): {
       for (const [dep, ver] of Object.entries(composer['require-dev'] ?? {})) {
         result.deps.set(dep, { version: ver as string, type: 'require-dev' });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // pyproject.toml (Python) — simple key extraction
@@ -112,7 +120,9 @@ function readManifest(repoPath: string): {
           result.deps.set(m[1], { version: '*', type: 'dependencies' });
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return result;

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DecisionStore } from '../../src/memory/decision-store.js';
 
 /**
@@ -34,7 +34,11 @@ describe('Conversation Miner — extraction patterns', () => {
   /**
    * Helper: write a synthetic JSONL session file with conversation turns.
    */
-  function writeSession(sessionDir: string, sessionId: string, turns: Array<{ role: 'user' | 'assistant'; text: string }>): string {
+  function _writeSession(
+    sessionDir: string,
+    sessionId: string,
+    turns: Array<{ role: 'user' | 'assistant'; text: string }>,
+  ): string {
     fs.mkdirSync(sessionDir, { recursive: true });
     const filePath = path.join(sessionDir, `${sessionId}.jsonl`);
 
@@ -75,7 +79,7 @@ describe('Conversation Miner — extraction patterns', () => {
           project_root: '/test/project',
           tags: ['auth'],
           source: 'mined' as const,
-          confidence: 0.80,
+          confidence: 0.8,
           session_id: 'test-session-1',
         },
       ];
@@ -89,14 +93,15 @@ describe('Conversation Miner — extraction patterns', () => {
 
       const results = store.queryDecisions({ project_root: '/test/project' });
       expect(results.length).toBe(2);
-      expect(results.some(d => d.type === 'tech_choice')).toBe(true);
-      expect(results.some(d => d.type === 'bug_root_cause')).toBe(true);
+      expect(results.some((d) => d.type === 'tech_choice')).toBe(true);
+      expect(results.some((d) => d.type === 'bug_root_cause')).toBe(true);
     });
 
     it('full-text search finds mined decisions', () => {
       store.addDecision({
         title: 'Switched from REST to GraphQL',
-        content: 'We decided to switch to GraphQL because the frontend team needed more flexible queries and we were over-fetching data with REST endpoints.',
+        content:
+          'We decided to switch to GraphQL because the frontend team needed more flexible queries and we were over-fetching data with REST endpoints.',
         type: 'architecture_decision',
         project_root: '/test/project',
         tags: ['api', 'graphql'],
@@ -106,7 +111,8 @@ describe('Conversation Miner — extraction patterns', () => {
 
       store.addDecision({
         title: 'Use Redis for session cache',
-        content: 'Going with Redis for session storage because of its TTL support and pub/sub capabilities.',
+        content:
+          'Going with Redis for session storage because of its TTL support and pub/sub capabilities.',
         type: 'tech_choice',
         project_root: '/test/project',
         tags: ['cache', 'session'],
@@ -114,11 +120,17 @@ describe('Conversation Miner — extraction patterns', () => {
         confidence: 0.85,
       });
 
-      const graphqlResults = store.queryDecisions({ project_root: '/test/project', search: 'GraphQL REST' });
+      const graphqlResults = store.queryDecisions({
+        project_root: '/test/project',
+        search: 'GraphQL REST',
+      });
       expect(graphqlResults.length).toBeGreaterThanOrEqual(1);
       expect(graphqlResults[0].title).toContain('GraphQL');
 
-      const redisResults = store.queryDecisions({ project_root: '/test/project', search: 'Redis session' });
+      const redisResults = store.queryDecisions({
+        project_root: '/test/project',
+        search: 'Redis session',
+      });
       expect(redisResults.length).toBeGreaterThanOrEqual(1);
       expect(redisResults[0].title).toContain('Redis');
     });
@@ -172,17 +184,26 @@ describe('Conversation Miner — extraction patterns', () => {
       expect(active[0].title).toContain('PostgreSQL');
 
       // As of January 2025: MySQL should be active
-      const jan = store.queryDecisions({ project_root: '/test/project', as_of: '2025-03-01T00:00:00Z' });
+      const jan = store.queryDecisions({
+        project_root: '/test/project',
+        as_of: '2025-03-01T00:00:00Z',
+      });
       expect(jan.length).toBe(1);
       expect(jan[0].title).toContain('MySQL');
 
       // As of July 2025: only PostgreSQL (MySQL invalidated)
-      const jul = store.queryDecisions({ project_root: '/test/project', as_of: '2025-07-01T00:00:00Z' });
+      const jul = store.queryDecisions({
+        project_root: '/test/project',
+        as_of: '2025-07-01T00:00:00Z',
+      });
       expect(jul.length).toBe(1);
       expect(jul[0].title).toContain('PostgreSQL');
 
       // Include all: both
-      const all = store.queryDecisions({ project_root: '/test/project', include_invalidated: true });
+      const all = store.queryDecisions({
+        project_root: '/test/project',
+        include_invalidated: true,
+      });
       expect(all.length).toBe(2);
     });
   });

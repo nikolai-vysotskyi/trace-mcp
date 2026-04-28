@@ -1,24 +1,20 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { createTestStore } from '../test-utils.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
-import { getSchema } from '../../src/tools/framework/schema.js';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
+import type { Store } from '../../src/db/store.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { getSchema } from '../../src/tools/framework/schema.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
 
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'routes/**/*.php',
-      'database/migrations/**/*.php',
-    ],
+    include: ['app/**/*.php', 'routes/**/*.php', 'database/migrations/**/*.php'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],
@@ -117,7 +113,10 @@ describe('get_schema — ORM (Mongoose/Sequelize) schemas', () => {
   it('filters by model name', () => {
     const fileId = store.insertFile('models/multi.ts', 'typescript', 'h2', 100);
     store.insertOrmModel({ name: 'Post', orm: 'mongoose', collectionOrTable: 'posts' }, fileId);
-    store.insertOrmModel({ name: 'Comment', orm: 'mongoose', collectionOrTable: 'comments' }, fileId);
+    store.insertOrmModel(
+      { name: 'Comment', orm: 'mongoose', collectionOrTable: 'comments' },
+      fileId,
+    );
 
     const result = getSchema(store, 'Post');
     expect(result.isOk()).toBe(true);

@@ -1,10 +1,10 @@
-import { describe, test, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
+import { beforeEach, describe, expect, test } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { planBatchChange } from '../../src/tools/project/batch-changes.js';
+import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
-  return store.insertFile(filePath, lang, 'hash-' + filePath, 100);
+  return store.insertFile(filePath, lang, `hash-${filePath}`, 100);
 }
 
 function insertSymbol(

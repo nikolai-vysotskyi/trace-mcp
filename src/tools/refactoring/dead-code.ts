@@ -13,7 +13,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
-import { classifyConfidence, type ConfidenceLevel, type Methodology } from '../shared/confidence.js';
+import {
+  type ConfidenceLevel,
+  classifyConfidence,
+  type Methodology,
+} from '../shared/confidence.js';
 
 // ════════════════════════════════��═══════════════════════════════════════
 // TYPES
@@ -51,8 +55,19 @@ interface DeadCodeResult {
  * symbols (controllers, handlers, routes, views) that are actually live.
  */
 const DECORATOR_DRIVEN_FRAMEWORKS = new Set([
-  'nestjs', 'laravel', 'django', 'rails', 'spring', 'fastapi', 'flask',
-  'nextjs', 'nuxt', 'drf', 'blade', 'inertia', 'n8n',
+  'nestjs',
+  'laravel',
+  'django',
+  'rails',
+  'spring',
+  'fastapi',
+  'flask',
+  'nextjs',
+  'nuxt',
+  'drf',
+  'blade',
+  'inertia',
+  'n8n',
 ]);
 
 /**
@@ -72,24 +87,23 @@ const DECORATOR_DRIVEN_FRAMEWORKS = new Set([
  *   Go, Ruby, PHP, Rust, C, C++, Vue, Blade, and the 60+ regex-based plugins.
  */
 export const SPECIFIER_TRACKED_LANGUAGES = new Set([
-  'typescript', 'javascript', 'tsx', 'jsx',
+  'typescript',
+  'javascript',
+  'tsx',
+  'jsx',
   'python',
-  'java', 'kotlin', 'scala',
+  'java',
+  'kotlin',
+  'scala',
   'swift',
   'csharp',
 ]);
-
 
 // ═══════════════════════════════���════════════════════════════════════════
 // BARREL FILE DETECTION
 // ═══════════════════════════════════════════��════════════════════════════
 
-const BARREL_PATTERNS = [
-  /^index\.[jt]sx?$/,
-  /^mod\.rs$/,
-  /^__init__\.py$/,
-  /^main\.[jt]sx?$/,
-];
+const BARREL_PATTERNS = [/^index\.[jt]sx?$/, /^mod\.rs$/, /^__init__\.py$/, /^main\.[jt]sx?$/];
 
 function isBarrelFile(filePath: string): boolean {
   const base = path.basename(filePath);
@@ -111,11 +125,12 @@ function buildImportedNamesSet(store: Store): Set<string> {
     const edges = store.getEdgesByType(edgeType);
     for (const edge of edges) {
       if (!edge.metadata) continue;
-      const meta = typeof edge.metadata === 'string'
-        ? JSON.parse(edge.metadata) as Record<string, unknown>
-        : edge.metadata as Record<string, unknown>;
+      const meta =
+        typeof edge.metadata === 'string'
+          ? (JSON.parse(edge.metadata) as Record<string, unknown>)
+          : (edge.metadata as Record<string, unknown>);
 
-      const specifiers = meta['specifiers'];
+      const specifiers = meta.specifiers;
       if (Array.isArray(specifiers)) {
         for (const s of specifiers) {
           if (typeof s === 'string') {
@@ -182,11 +197,12 @@ function buildBarrelExportedNames(store: Store): Set<string> {
       if (!barrelNodeIds.has(edge.source_node_id)) continue;
       if (!edge.metadata) continue;
 
-      const meta = typeof edge.metadata === 'string'
-        ? JSON.parse(edge.metadata) as Record<string, unknown>
-        : edge.metadata as Record<string, unknown>;
+      const meta =
+        typeof edge.metadata === 'string'
+          ? (JSON.parse(edge.metadata) as Record<string, unknown>)
+          : (edge.metadata as Record<string, unknown>);
 
-      const specifiers = meta['specifiers'];
+      const specifiers = meta.specifiers;
       if (Array.isArray(specifiers)) {
         for (const s of specifiers) {
           if (typeof s === 'string') {
@@ -220,7 +236,8 @@ export function getDeadCodeV2(
   // files (entry points run by test runners, never imported by production code).
   const TEST_FIXTURE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/fixtures?\//;
   const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.[jt]sx?$/;
-  const exported = store.getExportedSymbols(filePattern)
+  const exported = store
+    .getExportedSymbols(filePattern)
     .filter((s) => s.kind !== 'method') // methods inherit export from class
     .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
     .filter((s) => !TEST_FILE_RE.test(s.file_path));
@@ -280,38 +297,52 @@ export function getDeadCodeV2(
   if (flaggedFrameworks.length > 0) {
     warnings.push(
       `Detected framework(s) [${flaggedFrameworks.join(', ')}] use decorators, ` +
-      `file-system routing, or convention-based entry points that this detector ` +
-      `does not trace. Symbols reachable only via routes/handlers/controllers may ` +
-      `be reported as dead. Verify low/medium-confidence results before removal.`,
+        `file-system routing, or convention-based entry points that this detector ` +
+        `does not trace. Symbols reachable only via routes/handlers/controllers may ` +
+        `be reported as dead. Verify low/medium-confidence results before removal.`,
     );
   }
   if (importedNames.size === 0 && exported.length > 0) {
     warnings.push(
       `Zero import specifiers indexed across the project. The import_graph signal ` +
-      `cannot distinguish live from dead — all results rely on call_graph and ` +
-      `barrel_exports only. Treat results as low confidence regardless of score.`,
+        `cannot distinguish live from dead — all results rely on call_graph and ` +
+        `barrel_exports only. Treat results as low confidence regardless of score.`,
     );
   }
 
   // Import-gap warning: languages whose import edges don't carry specifiers make
   // import_graph always fire "not imported", inflating confidence for their files.
   const indexedLanguages = new Set(
-    store.getAllFiles()
-      .filter((f) => filePattern ? f.path.includes(filePattern) : true)
+    store
+      .getAllFiles()
+      .filter((f) => (filePattern ? f.path.includes(filePattern) : true))
       .map((f) => f.language?.toLowerCase() ?? '')
       .filter(Boolean),
   );
   const gapLanguages = [...indexedLanguages].filter(
-    (lang) => !SPECIFIER_TRACKED_LANGUAGES.has(lang) &&
+    (lang) =>
+      !SPECIFIER_TRACKED_LANGUAGES.has(lang) &&
       // Exclude data formats that never have named imports
-      !['json', 'yaml', 'toml', 'xml', 'html', 'css', 'markdown', 'sql', 'ini', 'dockerfile', 'makefile'].includes(lang),
+      ![
+        'json',
+        'yaml',
+        'toml',
+        'xml',
+        'html',
+        'css',
+        'markdown',
+        'sql',
+        'ini',
+        'dockerfile',
+        'makefile',
+      ].includes(lang),
   );
   if (gapLanguages.length > 0) {
     warnings.push(
       `Language(s) [${gapLanguages.sort().join(', ')}] do not emit import specifiers. ` +
-      `The import_graph signal will always fire "not imported" for symbols in these files, ` +
-      `raising confidence scores regardless of actual usage. ` +
-      `Reachability mode (mode="reachability") is more reliable for these languages.`,
+        `The import_graph signal will always fire "not imported" for symbols in these files, ` +
+        `raising confidence scores regardless of actual usage. ` +
+        `Reachability mode (mode="reachability") is more reliable for these languages.`,
     );
   }
 
@@ -396,10 +427,10 @@ const ENTRY_FRAMEWORK_ROLES = new Set([
   'route_handler',
   'request_handler',
   'middleware',
-  'page',           // next.js / nuxt page components
+  'page', // next.js / nuxt page components
   'layout',
   'api_route',
-  'job',            // celery / queue jobs
+  'job', // celery / queue jobs
   'task',
   'event_handler',
   'listener',
@@ -429,7 +460,10 @@ const ENTRY_FILE_PATTERNS: Array<{ re: RegExp; source: string }> = [
  * Read package.json `main` and `bin` entries (if present) and resolve to
  * absolute file paths under projectRoot.
  */
-function readPackageEntries(projectRoot: string): { paths: Set<string>; sources: Record<string, string> } {
+function readPackageEntries(projectRoot: string): {
+  paths: Set<string>;
+  sources: Record<string, string>;
+} {
   const paths = new Set<string>();
   const sources: Record<string, string> = {};
   if (!projectRoot) return { paths, sources };
@@ -476,7 +510,7 @@ function collectEntryPoints(
   };
 
   const allFiles = store.getAllFiles();
-  const filesByPath = new Map<string, typeof allFiles[number]>();
+  const filesByPath = new Map<string, (typeof allFiles)[number]>();
   for (const f of allFiles) filesByPath.set(f.path.replace(/\\/g, '/'), f);
 
   // 1. Filename heuristics: tests, main, bin
@@ -493,7 +527,9 @@ function collectEntryPoints(
   }
 
   // 2. package.json main/bin
-  const pkg = projectRoot ? readPackageEntries(projectRoot) : { paths: new Set<string>(), sources: {} };
+  const pkg = projectRoot
+    ? readPackageEntries(projectRoot)
+    : { paths: new Set<string>(), sources: {} };
   for (const rel of pkg.paths) {
     const f = filesByPath.get(rel) ?? filesByPath.get(rel.replace(/^\.?\//, ''));
     if (f) {
@@ -540,14 +576,16 @@ function collectEntryPoints(
   for (const sym of store.getExportedSymbols()) {
     if (!sym.metadata) continue;
     try {
-      const meta = typeof sym.metadata === 'string'
-        ? JSON.parse(sym.metadata) as Record<string, unknown>
-        : sym.metadata as Record<string, unknown>;
-      const role = typeof meta.frameworkRole === 'string'
-        ? meta.frameworkRole
-        : typeof meta.role === 'string'
-          ? meta.role
-          : undefined;
+      const meta =
+        typeof sym.metadata === 'string'
+          ? (JSON.parse(sym.metadata) as Record<string, unknown>)
+          : (sym.metadata as Record<string, unknown>);
+      const role =
+        typeof meta.frameworkRole === 'string'
+          ? meta.frameworkRole
+          : typeof meta.role === 'string'
+            ? meta.role
+            : undefined;
       if (role && ENTRY_FRAMEWORK_ROLES.has(role.toLowerCase())) {
         frameworkEntrySymIds.push(sym.id);
         bump(`framework:${role}`);
@@ -586,7 +624,8 @@ export function getDeadCodeReachability(
   const TEST_FIXTURE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/fixtures?\//;
   const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.[jt]sx?$/;
 
-  const exported = store.getExportedSymbols(filePattern)
+  const exported = store
+    .getExportedSymbols(filePattern)
     .filter((s) => s.kind !== 'method')
     .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
     .filter((s) => !TEST_FILE_RE.test(s.file_path));
@@ -599,7 +638,10 @@ export function getDeadCodeReachability(
   const enqueueFileSymbols = (fileId: number, target: Set<number>, worklist: number[]) => {
     const symRows = store.getSymbolsByFile(fileId);
     if (symRows.length === 0) return;
-    const symNodeMap = store.getNodeIdsBatch('symbol', symRows.map((s) => s.id));
+    const symNodeMap = store.getNodeIdsBatch(
+      'symbol',
+      symRows.map((s) => s.id),
+    );
     for (const n of symNodeMap.values()) {
       if (!target.has(n)) {
         target.add(n);
@@ -652,7 +694,10 @@ export function getDeadCodeReachability(
   }
 
   // Map exported symbols to node IDs and bucket dead vs reached
-  const symNodeMap = store.getNodeIdsBatch('symbol', exported.map((s) => s.id));
+  const symNodeMap = store.getNodeIdsBatch(
+    'symbol',
+    exported.map((s) => s.id),
+  );
 
   const dead: ReachabilityDeadCodeItem[] = [];
   let reachedExportedCount = 0;
@@ -679,8 +724,8 @@ export function getDeadCodeReachability(
   if (totalEntryNodes === 0) {
     warnings.push(
       'No entry points were detected. Reachability analysis is meaningless ' +
-      'without entry points — every exported symbol will be reported as dead. ' +
-      'Pass `entryPoints` explicitly or ensure tests/main/bin/routes exist.',
+        'without entry points — every exported symbol will be reported as dead. ' +
+        'Pass `entryPoints` explicitly or ensure tests/main/bin/routes exist.',
     );
   }
   const flaggedFrameworks = detectedFrameworks.filter((f) =>
@@ -689,29 +734,45 @@ export function getDeadCodeReachability(
   if (flaggedFrameworks.length > 0) {
     warnings.push(
       `Detected framework(s) [${flaggedFrameworks.join(', ')}] use decorator/` +
-      `convention-based entry points. Reachability mode auto-promotes routes ` +
-      `and symbols with framework metadata.frameworkRole, but anything ` +
-      `discovered purely by string lookup or runtime DI may still appear dead.`,
+        `convention-based entry points. Reachability mode auto-promotes routes ` +
+        `and symbols with framework metadata.frameworkRole, but anything ` +
+        `discovered purely by string lookup or runtime DI may still appear dead.`,
     );
   }
 
   // Import-gap: reachability relies on call/imports edges; if a language doesn't
   // emit call edges at all (only symbol extraction, no edges), its files will have
   // no outgoing edges and their symbols won't be reached — false positives.
-  const reachabilityGapLanguages = [...new Set(
-    store.getAllFiles()
-      .filter((f) => filePattern ? f.path.includes(filePattern) : true)
-      .map((f) => f.language?.toLowerCase() ?? '')
-      .filter(Boolean),
-  )].filter(
-    (lang) => !SPECIFIER_TRACKED_LANGUAGES.has(lang) &&
-      !['json', 'yaml', 'toml', 'xml', 'html', 'css', 'markdown', 'sql', 'ini', 'dockerfile', 'makefile'].includes(lang),
+  const reachabilityGapLanguages = [
+    ...new Set(
+      store
+        .getAllFiles()
+        .filter((f) => (filePattern ? f.path.includes(filePattern) : true))
+        .map((f) => f.language?.toLowerCase() ?? '')
+        .filter(Boolean),
+    ),
+  ].filter(
+    (lang) =>
+      !SPECIFIER_TRACKED_LANGUAGES.has(lang) &&
+      ![
+        'json',
+        'yaml',
+        'toml',
+        'xml',
+        'html',
+        'css',
+        'markdown',
+        'sql',
+        'ini',
+        'dockerfile',
+        'makefile',
+      ].includes(lang),
   );
   if (reachabilityGapLanguages.length > 0) {
     warnings.push(
       `Language(s) [${reachabilityGapLanguages.sort().join(', ')}] have limited call/import ` +
-      `edge extraction. Symbols in these files may appear unreachable simply because ` +
-      `the indexer did not trace their edges. Review dead symbols in these languages manually.`,
+        `edge extraction. Symbols in these files may appear unreachable simply because ` +
+        `the indexer did not trace their edges. Review dead symbols in these languages manually.`,
     );
   }
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * generate-shasums.mjs — emit per-asset `<file>.sha256` files next to release
  * artifacts, plus a combined SHASUMS256.txt for ergonomic verification.
@@ -21,9 +22,9 @@
  * If no extensions are given, hashes every `.zip` and `.exe` in <dir>.
  */
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 
 const dir = process.argv[2];
 if (!dir) {
@@ -53,10 +54,10 @@ for (const name of entries) {
   const digest = hash.digest('hex');
 
   // Per-asset bare-digest file — primary format consumed by the updater.
-  fs.writeFileSync(`${full}.sha256`, digest + '\n', 'utf-8');
+  fs.writeFileSync(`${full}.sha256`, `${digest}\n`, 'utf-8');
   combined.push(`${digest}  ${name}`);
   console.log(`${digest}  ${name}`);
 }
 
 // Combined manifest — convenient for humans and unmatrixed jobs.
-fs.writeFileSync(path.join(dir, 'SHASUMS256.txt'), combined.join('\n') + '\n', 'utf-8');
+fs.writeFileSync(path.join(dir, 'SHASUMS256.txt'), `${combined.join('\n')}\n`, 'utf-8');

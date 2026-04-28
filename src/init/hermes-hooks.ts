@@ -15,8 +15,8 @@
  * get rejected.
  */
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import YAML from 'yaml';
 import type { InitStepResult } from './types.js';
 
@@ -74,7 +74,7 @@ case "$first" in
     # Block find walks that look for source files by extension (the classic
     # "discover the codebase" antipattern). Passing through find calls with
     # explicit paths or non-code extensions.
-    if printf '%s' "$cmd" | grep -qE -- "-name[[:space:]]+[\\\"']?\\\*\\.(ts|tsx|js|jsx|py|go|rs|java|kt|rb|php|vue|svelte|c|cpp|h|hpp|cs|scala|swift)"; then
+    if printf '%s' "$cmd" | grep -qE -- "-name[[:space:]]+[\\"']?\\*\\.(ts|tsx|js|jsx|py|go|rs|java|kt|rb|php|vue|svelte|c|cpp|h|hpp|cs|scala|swift)"; then
       block "Use trace-mcp 'search' or 'get_project_map' instead of 'find -name \\"*.<lang>\\"'. trace-mcp already knows every indexed file and can filter by language and symbol kind."
     fi
     ;;
@@ -114,8 +114,13 @@ function writeGuardScript(opts: HermesHooksOptions): InitStepResult {
 
   if (opts.dryRun) {
     if (!existing) return { target: dest, action: 'skipped', detail: 'Would install guard script' };
-    if (alreadyUpToDate) return { target: dest, action: 'skipped', detail: 'Would keep existing guard script' };
-    return { target: dest, action: 'skipped', detail: `Would upgrade guard script to v${HERMES_GUARD_VERSION}` };
+    if (alreadyUpToDate)
+      return { target: dest, action: 'skipped', detail: 'Would keep existing guard script' };
+    return {
+      target: dest,
+      action: 'skipped',
+      detail: `Would upgrade guard script to v${HERMES_GUARD_VERSION}`,
+    };
   }
 
   if (alreadyUpToDate) {
@@ -129,7 +134,9 @@ function writeGuardScript(opts: HermesHooksOptions): InitStepResult {
   return {
     target: dest,
     action: existing ? 'updated' : 'created',
-    detail: existing ? `Upgraded to v${HERMES_GUARD_VERSION}` : `Installed v${HERMES_GUARD_VERSION}`,
+    detail: existing
+      ? `Upgraded to v${HERMES_GUARD_VERSION}`
+      : `Installed v${HERMES_GUARD_VERSION}`,
   };
 }
 
@@ -192,15 +199,19 @@ function wireIntoConfigYaml(opts: HermesHooksOptions): InitStepResult {
     return {
       target: cfgPath,
       action: 'skipped',
-      detail: existingMatch === 'stale' ? 'Would refresh stale trace-mcp hook entry' : 'Would add pre_tool_call hook',
+      detail:
+        existingMatch === 'stale'
+          ? 'Would refresh stale trace-mcp hook entry'
+          : 'Would add pre_tool_call hook',
     };
   }
 
   upsertHookEntry(doc, desired);
   fs.writeFileSync(cfgPath, doc.toString({ lineWidth: 0 }));
-  const base = existingMatch === 'stale'
-    ? 'Refreshed trace-mcp pre_tool_call hook'
-    : 'Added trace-mcp pre_tool_call hook';
+  const base =
+    existingMatch === 'stale'
+      ? 'Refreshed trace-mcp pre_tool_call hook'
+      : 'Added trace-mcp pre_tool_call hook';
   // Hermes requires per-(event, command) first-use consent. If the caller
   // didn't ask us to auto-allowlist, the hook is dormant until the user
   // approves at the TTY — say so explicitly to avoid silent surprises.
@@ -234,16 +245,18 @@ function allowlistGuardCommand(opts: HermesHooksOptions): InitStepResult {
   const target = allowlistPath();
 
   const existing = readAllowlist(target);
-  const already = existing.approvals.some(
-    (e) => e && e.event === event && e.command === cmd,
-  );
+  const already = existing.approvals.some((e) => e && e.event === event && e.command === cmd);
 
   if (already) {
     return { target, action: 'already_configured', detail: 'Hermes shell-hook allowlist' };
   }
 
   if (opts.dryRun) {
-    return { target, action: 'skipped', detail: 'Would pre-approve trace-mcp hook in Hermes allowlist' };
+    return {
+      target,
+      action: 'skipped',
+      detail: 'Would pre-approve trace-mcp hook in Hermes allowlist',
+    };
   }
 
   // Match Hermes's _record_approval shape exactly, so `hermes hooks list`
@@ -258,12 +271,19 @@ function allowlistGuardCommand(opts: HermesHooksOptions): InitStepResult {
   };
   const next: AllowlistFile = { ...existing, approvals: [...existing.approvals, entry] };
   writeAllowlistAtomic(target, next);
-  return { target, action: existing.approvals.length === 0 ? 'created' : 'updated', detail: 'Pre-approved trace-mcp hook (standard/max install)' };
+  return {
+    target,
+    action: existing.approvals.length === 0 ? 'created' : 'updated',
+    detail: 'Pre-approved trace-mcp hook (standard/max install)',
+  };
 }
 
 function safeMtimeIso(p: string): string | null {
   try {
-    return fs.statSync(p).mtime.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    return fs
+      .statSync(p)
+      .mtime.toISOString()
+      .replace(/\.\d{3}Z$/, 'Z');
   } catch {
     return null;
   }
@@ -295,7 +315,11 @@ function writeAllowlistAtomic(p: string, data: AllowlistFile): void {
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
     fs.renameSync(tmp, p);
   } catch (e) {
-    try { fs.unlinkSync(tmp); } catch { /* best-effort */ }
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      /* best-effort */
+    }
     throw e;
   }
 }

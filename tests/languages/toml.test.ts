@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { TomlLanguagePlugin } from '../../src/indexer/plugins/language/toml/index.js';
 
 const plugin = new TomlLanguagePlugin();
@@ -21,13 +21,15 @@ describe('TomlLanguagePlugin', () => {
 
   describe('generic', () => {
     it('extracts [table] as namespace and key=value as constant', async () => {
-      const r = await parse('[database]\nhost = "localhost"\nport = 5432\n\n[logging]\nlevel = "debug"');
+      const r = await parse(
+        '[database]\nhost = "localhost"\nport = 5432\n\n[logging]\nlevel = "debug"',
+      );
       expect(r.metadata?.dialect).toBe('generic');
-      expect(r.symbols.some(s => s.name === 'database' && s.kind === 'namespace')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'host' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'port' && s.kind === 'constant')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'logging' && s.kind === 'namespace')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'level' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'database' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'host' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'port' && s.kind === 'constant')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'logging' && s.kind === 'namespace')).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'level' && s.kind === 'constant')).toBe(true);
     });
 
     it('handles empty file', async () => {
@@ -63,17 +65,27 @@ name = "my-binary"`,
 
       expect(r.metadata?.dialect).toBe('cargo');
       // package name and version
-      expect(r.symbols.some(s => s.name === 'name' && s.metadata?.tomlKind === 'package-field')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'version' && s.metadata?.tomlKind === 'package-field')).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'name' && s.metadata?.tomlKind === 'package-field'),
+      ).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'version' && s.metadata?.tomlKind === 'package-field'),
+      ).toBe(true);
       // dependencies as import edges
-      expect(r.edges!.some(e => (e.metadata as any).module === 'serde')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).module === 'tokio')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).module === 'criterion')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'serde')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'tokio')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'criterion')).toBe(true);
       // features
-      expect(r.symbols.some(s => s.name === 'default' && s.metadata?.tomlKind === 'feature')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'full' && s.metadata?.tomlKind === 'feature')).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'default' && s.metadata?.tomlKind === 'feature'),
+      ).toBe(true);
+      expect(r.symbols.some((s) => s.name === 'full' && s.metadata?.tomlKind === 'feature')).toBe(
+        true,
+      );
       // [[bin]]
-      expect(r.symbols.some(s => s.name === 'my-binary' && s.metadata?.tomlKind === 'binary')).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'my-binary' && s.metadata?.tomlKind === 'binary'),
+      ).toBe(true);
     });
   });
 
@@ -97,13 +109,17 @@ requires = ["setuptools>=61.0"]`,
 
       expect(r.metadata?.dialect).toBe('pyproject');
       // project name and version
-      expect(r.symbols.some(s => s.name === 'name' && s.metadata?.tomlKind === 'project-field')).toBe(true);
-      expect(r.symbols.some(s => s.name === 'version' && s.metadata?.tomlKind === 'project-field')).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'name' && s.metadata?.tomlKind === 'project-field'),
+      ).toBe(true);
+      expect(
+        r.symbols.some((s) => s.name === 'version' && s.metadata?.tomlKind === 'project-field'),
+      ).toBe(true);
       // poetry deps as imports
-      expect(r.edges!.some(e => (e.metadata as any).module === 'requests')).toBe(true);
-      expect(r.edges!.some(e => (e.metadata as any).module === 'flask')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'requests')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'flask')).toBe(true);
       // build-system requires
-      expect(r.edges!.some(e => (e.metadata as any).module === 'setuptools')).toBe(true);
+      expect(r.edges!.some((e) => (e.metadata as any).module === 'setuptools')).toBe(true);
     });
   });
 });

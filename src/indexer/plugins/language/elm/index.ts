@@ -3,11 +3,17 @@
  *
  * Extracts: functions, type aliases, custom types, ports, modules, and import edges.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 
 function makeSymbolId(filePath: string, name: string, kind: string): string {
   return `${filePath}::${name}#${kind}`;
@@ -45,7 +51,10 @@ export class ElmLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.elm'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('elm');
       const sourceCode = content.toString('utf-8');
@@ -147,7 +156,12 @@ export class ElmLanguagePlugin implements LanguagePlugin {
   /**
    * type alias Name = ...
    */
-  private extractTypeAlias(node: TSNode, filePath: string, moduleName: string | undefined, symbols: RawSymbol[]): void {
+  private extractTypeAlias(
+    node: TSNode,
+    filePath: string,
+    moduleName: string | undefined,
+    symbols: RawSymbol[],
+  ): void {
     const nameNode = findChild(node, 'upper_case_identifier');
     if (!nameNode) return;
     const name = nameNode.text;
@@ -171,7 +185,12 @@ export class ElmLanguagePlugin implements LanguagePlugin {
   /**
    * type Name = Constructor1 | Constructor2
    */
-  private extractCustomType(node: TSNode, filePath: string, moduleName: string | undefined, symbols: RawSymbol[]): void {
+  private extractCustomType(
+    node: TSNode,
+    filePath: string,
+    moduleName: string | undefined,
+    symbols: RawSymbol[],
+  ): void {
     const nameNode = findChild(node, 'upper_case_identifier');
     if (!nameNode) return;
     const name = nameNode.text;
@@ -207,7 +226,13 @@ export class ElmLanguagePlugin implements LanguagePlugin {
   /**
    * port name : Type
    */
-  private extractPort(node: TSNode, filePath: string, moduleName: string | undefined, symbols: RawSymbol[], seenNames: Set<string>): void {
+  private extractPort(
+    node: TSNode,
+    filePath: string,
+    moduleName: string | undefined,
+    symbols: RawSymbol[],
+    seenNames: Set<string>,
+  ): void {
     const nameNode = findChild(node, 'lower_case_identifier');
     if (!nameNode) return;
     const name = nameNode.text;
@@ -232,7 +257,13 @@ export class ElmLanguagePlugin implements LanguagePlugin {
   /**
    * name : Type -> Type (function type signature)
    */
-  private extractTypeAnnotation(node: TSNode, filePath: string, moduleName: string | undefined, symbols: RawSymbol[], seenNames: Set<string>): void {
+  private extractTypeAnnotation(
+    node: TSNode,
+    filePath: string,
+    moduleName: string | undefined,
+    symbols: RawSymbol[],
+    seenNames: Set<string>,
+  ): void {
     const nameNode = findChild(node, 'lower_case_identifier');
     if (!nameNode) return;
     const name = nameNode.text;
@@ -259,7 +290,13 @@ export class ElmLanguagePlugin implements LanguagePlugin {
   /**
    * name args = expr (function/value definition)
    */
-  private extractValueDeclaration(node: TSNode, filePath: string, moduleName: string | undefined, symbols: RawSymbol[], seenNames: Set<string>): void {
+  private extractValueDeclaration(
+    node: TSNode,
+    filePath: string,
+    moduleName: string | undefined,
+    symbols: RawSymbol[],
+    seenNames: Set<string>,
+  ): void {
     // The function name is inside function_declaration_left → lower_case_identifier
     const declLeft = findChild(node, 'function_declaration_left');
     if (!declLeft) return;

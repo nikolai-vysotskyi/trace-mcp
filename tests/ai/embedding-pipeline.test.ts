@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import { BlobVectorStore } from '../../src/ai/vector-store.js';
-import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
-import type { Store } from '../../src/db/store.js';
-import type { EmbeddingService } from '../../src/ai/interfaces.js';
 import type Database from 'better-sqlite3';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
+import type { EmbeddingService } from '../../src/ai/interfaces.js';
+import { BlobVectorStore } from '../../src/ai/vector-store.js';
+import type { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 
 function createMockEmbedding(dims = 3, model = 'mock-model'): EmbeddingService {
   return {
@@ -90,10 +90,18 @@ describe('EmbeddingPipeline', () => {
 
   it('handles embedding service failure gracefully', async () => {
     const failingService: EmbeddingService = {
-      async embed() { throw new Error('network error'); },
-      async embedBatch() { throw new Error('network error'); },
-      dimensions() { return 3; },
-      modelName() { return 'mock-failing'; },
+      async embed() {
+        throw new Error('network error');
+      },
+      async embedBatch() {
+        throw new Error('network error');
+      },
+      dimensions() {
+        return 3;
+      },
+      modelName() {
+        return 'mock-failing';
+      },
     };
 
     const pipeline = new EmbeddingPipeline(store, failingService, vectorStore);

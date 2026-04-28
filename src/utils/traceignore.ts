@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logger.js';
-import { parseIgnorePattern, type IgnoreRule } from './ignore-patterns.js';
+import { type IgnoreRule, parseIgnorePattern } from './ignore-patterns.js';
 
 export interface TraceignoreConfig {
   /** Extra glob patterns from config (gitignore syntax) */

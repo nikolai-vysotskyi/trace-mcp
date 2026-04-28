@@ -13,18 +13,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   LanguagePlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawOrmModel,
   RawOrmAssociation,
+  RawOrmModel,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 // ── LanguagePlugin half ────────────────────────────────────────────────────
 
@@ -84,7 +84,11 @@ export class PrismaPlugin implements FrameworkPlugin {
     return {
       edgeTypes: [
         { name: 'prisma_relation', category: 'prisma', description: 'Prisma model relation' },
-        { name: 'prisma_implicit_m2m', category: 'prisma', description: 'Prisma implicit many-to-many' },
+        {
+          name: 'prisma_implicit_m2m',
+          category: 'prisma',
+          description: 'Prisma implicit many-to-many',
+        },
       ],
     };
   }
@@ -221,9 +225,7 @@ export function parsePrismaSchema(source: string): ParseResult {
             options: {
               ...(relNameMatch ? { name: relNameMatch[1] } : {}),
               fields: fieldsMatch[1].split(',').map((s) => s.trim()),
-              references: referencesMatch
-                ? referencesMatch[1].split(',').map((s) => s.trim())
-                : [],
+              references: referencesMatch ? referencesMatch[1].split(',').map((s) => s.trim()) : [],
             },
           });
         }

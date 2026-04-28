@@ -4,28 +4,26 @@
  * Extracts: contracts, interfaces, libraries, structs, enums, events,
  * modifiers, errors, functions, state variables, constants, and import edges.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-  SymbolKind,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 function makeSymbolId(filePath: string, name: string, kind: string, parent?: string): string {
-  return parent
-    ? `${filePath}::${parent}.${name}#${kind}`
-    : `${filePath}::${name}#${kind}`;
+  return parent ? `${filePath}::${parent}.${name}#${kind}` : `${filePath}::${name}#${kind}`;
 }
 
 function extractSignature(node: TSNode, maxLen = 120): string {
   const firstLine = node.text.split('\n')[0].trim();
-  return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine;
+  return firstLine.length > maxLen ? `${firstLine.slice(0, maxLen)}…` : firstLine;
 }
 
 function getNameText(node: TSNode, ...childTypes: string[]): string | null {
@@ -117,7 +115,13 @@ export class SolidityLanguagePlugin implements LanguagePlugin {
 
   private visitTopLevel(
     node: TSNode,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, parent?: string, meta?: Record<string, unknown>) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      parent?: string,
+      meta?: Record<string, unknown>,
+    ) => void,
     edges: RawEdge[],
   ): void {
     switch (node.type) {
@@ -230,7 +234,13 @@ export class SolidityLanguagePlugin implements LanguagePlugin {
   private visitContractBody(
     contractNode: TSNode,
     contractName: string,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, parent?: string, meta?: Record<string, unknown>) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      parent?: string,
+      meta?: Record<string, unknown>,
+    ) => void,
   ): void {
     for (const child of contractNode.namedChildren) {
       switch (child.type) {
@@ -242,11 +252,22 @@ export class SolidityLanguagePlugin implements LanguagePlugin {
             if (vis) meta.visibility = vis;
             // check for view/pure/payable
             for (const c of child.namedChildren) {
-              if (c.type === 'state_mutability' || c.text === 'view' || c.text === 'pure' || c.text === 'payable') {
+              if (
+                c.type === 'state_mutability' ||
+                c.text === 'view' ||
+                c.text === 'pure' ||
+                c.text === 'payable'
+              ) {
                 meta.mutability = c.text;
               }
             }
-            addSymbol(name, 'method', child, contractName, Object.keys(meta).length > 0 ? meta : undefined);
+            addSymbol(
+              name,
+              'method',
+              child,
+              contractName,
+              Object.keys(meta).length > 0 ? meta : undefined,
+            );
           }
           break;
         }
@@ -279,12 +300,19 @@ export class SolidityLanguagePlugin implements LanguagePlugin {
           const name = getNameText(child, 'identifier');
           if (name) {
             const vis = getVisibility(child);
-            const isConstant = child.text.includes(' constant ') || child.text.includes(' immutable ');
+            const isConstant =
+              child.text.includes(' constant ') || child.text.includes(' immutable ');
             const kind: SymbolKind = isConstant ? 'constant' : 'property';
             const meta: Record<string, unknown> = {};
             if (vis) meta.visibility = vis;
             if (isConstant) meta.constant = true;
-            addSymbol(name, kind, child, contractName, Object.keys(meta).length > 0 ? meta : undefined);
+            addSymbol(
+              name,
+              kind,
+              child,
+              contractName,
+              Object.keys(meta).length > 0 ? meta : undefined,
+            );
           }
           break;
         }

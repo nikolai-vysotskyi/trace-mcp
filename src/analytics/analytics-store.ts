@@ -1,9 +1,7 @@
-import Database from 'better-sqlite3';
 import path from 'node:path';
-import fs from 'node:fs';
-import { TRACE_MCP_HOME, ensureGlobalDirs } from '../global.js';
-import { logger } from '../logger.js';
-import type { ParsedSession, ToolCallEvent, ToolResultEvent, TokenUsage } from './log-parser.js';
+import Database from 'better-sqlite3';
+import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
+import type { ParsedSession } from './log-parser.js';
 
 const ANALYTICS_DB_PATH = path.join(TRACE_MCP_HOME, 'analytics.db');
 
@@ -76,7 +74,9 @@ export class AnalyticsStore {
 
   /** Check if a session file needs re-parsing (by mtime) */
   needsSync(filePath: string, mtime: number): boolean {
-    const row = this.db.prepare('SELECT mtime_ms FROM sync_state WHERE file_path = ?').get(filePath) as { mtime_ms: number } | undefined;
+    const row = this.db
+      .prepare('SELECT mtime_ms FROM sync_state WHERE file_path = ?')
+      .get(filePath) as { mtime_ms: number } | undefined;
     if (!row) return true;
     return mtime > row.mtime_ms;
   }
@@ -88,10 +88,24 @@ export class AnalyticsStore {
       const s = parsed.summary;
 
       // Upsert session
-      this.db.prepare(`
+      this.db
+        .prepare(`
         INSERT OR REPLACE INTO sessions (id, project_path, started_at, ended_at, model, input_tokens, output_tokens, cache_read_tokens, cache_create_tokens, tool_call_count, parsed_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(s.sessionId, s.projectPath, s.startedAt, s.endedAt, s.model, s.usage.inputTokens, s.usage.outputTokens, s.usage.cacheReadTokens, s.usage.cacheCreateTokens, s.toolCallCount, now);
+      `)
+        .run(
+          s.sessionId,
+          s.projectPath,
+          s.startedAt,
+          s.endedAt,
+          s.model,
+          s.usage.inputTokens,
+          s.usage.outputTokens,
+          s.usage.cacheReadTokens,
+          s.usage.cacheCreateTokens,
+          s.toolCallCount,
+          now,
+        );
 
       // Delete old tool calls for this session
       this.db.prepare('DELETE FROM tool_calls WHERE session_id = ?').run(s.sessionId);
@@ -107,13 +121,26 @@ export class AnalyticsStore {
         const outputChars = result?.outputSizeChars ?? 0;
         const outputTokensEst = Math.ceil(outputChars / 3.5); // rough estimate
         // Store first 500 chars of Bash commands for optimization rule detection
-        const snippet = (tc.toolShortName === 'Bash' || tc.toolShortName === 'bash')
-          ? (typeof tc.inputParams['command'] === 'string' ? (tc.inputParams['command'] as string).slice(0, 500) : null)
-          : null;
+        const snippet =
+          tc.toolShortName === 'Bash' || tc.toolShortName === 'bash'
+            ? typeof tc.inputParams.command === 'string'
+              ? (tc.inputParams.command as string).slice(0, 500)
+              : null
+            : null;
         insertTC.run(
-          tc.toolId, tc.sessionId, tc.timestamp, tc.toolName, tc.toolServer,
-          tc.toolShortName, tc.inputSizeChars, outputChars, outputTokensEst,
-          result?.isError ? 1 : 0, tc.targetFile ?? null, tc.model, snippet,
+          tc.toolId,
+          tc.sessionId,
+          tc.timestamp,
+          tc.toolName,
+          tc.toolServer,
+          tc.toolShortName,
+          tc.inputSizeChars,
+          outputChars,
+          outputTokensEst,
+          result?.isError ? 1 : 0,
+          tc.targetFile ?? null,
+          tc.model,
+          snippet,
         );
       }
     });
@@ -122,10 +149,12 @@ export class AnalyticsStore {
 
   /** Mark a file as synced */
   markSynced(filePath: string, mtime: number): void {
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT OR REPLACE INTO sync_state (file_path, mtime_ms, parsed_at)
       VALUES (?, ?, ?)
-    `).run(filePath, mtime, new Date().toISOString());
+    `)
+      .run(filePath, mtime, new Date().toISOString());
   }
 
   // --- Query methods ---
@@ -137,7 +166,14 @@ export class AnalyticsStore {
     sessionId?: string;
   }): {
     sessions_count: number;
-    totals: { input_tokens: number; output_tokens: number; cache_read_tokens: number; cache_create_tokens: number; tool_calls: number; estimated_cost_usd: number };
+    totals: {
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_tokens: number;
+      cache_create_tokens: number;
+      tool_calls: number;
+      estimated_cost_usd: number;
+    };
     by_tool_server: Record<string, { calls: number; output_tokens_est: number; pct: number }>;
     top_tools: { name: string; calls: number; output_tokens_est: number }[];
     top_files: { path: string; reads: number; tokens_est: number }[];
@@ -163,7 +199,8 @@ export class AnalyticsStore {
     const where = `WHERE 1=1 ${dateFilter} ${projectFilter}`;
 
     // Sessions summary
-    const summary = this.db.prepare(`
+    const summary = this.db
+      .prepare(`
       SELECT COUNT(*) as cnt,
         COALESCE(SUM(input_tokens),0) as input_tokens,
         COALESCE(SUM(output_tokens),0) as output_tokens,
@@ -171,46 +208,70 @@ export class AnalyticsStore {
         COALESCE(SUM(cache_create_tokens),0) as cache_create_tokens,
         COALESCE(SUM(tool_call_count),0) as tool_calls
       FROM sessions s ${where}
-    `).get() as any;
+    `)
+      .get() as {
+      cnt: number;
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_tokens: number;
+      cache_create_tokens: number;
+      tool_calls: number;
+    };
 
-    const inputCost = (summary.input_tokens * 3 + summary.cache_read_tokens * 0.3 + summary.cache_create_tokens * 3.75) / 1_000_000;
-    const outputCost = summary.output_tokens * 15 / 1_000_000;
+    const inputCost =
+      (summary.input_tokens * 3 +
+        summary.cache_read_tokens * 0.3 +
+        summary.cache_create_tokens * 3.75) /
+      1_000_000;
+    const outputCost = (summary.output_tokens * 15) / 1_000_000;
     const estimatedCost = Math.round((inputCost + outputCost) * 100) / 100;
 
     // By tool server
-    const serverRows = this.db.prepare(`
+    const serverRows = this.db
+      .prepare(`
       SELECT tc.tool_server, COUNT(*) as calls, COALESCE(SUM(tc.output_tokens_estimate),0) as output_tokens_est
       FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id ${where}
       GROUP BY tc.tool_server ORDER BY calls DESC
-    `).all() as any[];
+    `)
+      .all() as { tool_server: string; calls: number; output_tokens_est: number }[];
 
-    const totalCalls = serverRows.reduce((s: number, r: any) => s + r.calls, 0);
+    const totalCalls = serverRows.reduce((s: number, r) => s + r.calls, 0);
     const byServer: Record<string, { calls: number; output_tokens_est: number; pct: number }> = {};
     for (const r of serverRows) {
-      byServer[r.tool_server] = { calls: r.calls, output_tokens_est: r.output_tokens_est, pct: totalCalls > 0 ? Math.round(r.calls / totalCalls * 100) : 0 };
+      byServer[r.tool_server] = {
+        calls: r.calls,
+        output_tokens_est: r.output_tokens_est,
+        pct: totalCalls > 0 ? Math.round((r.calls / totalCalls) * 100) : 0,
+      };
     }
 
     // Top tools
-    const topTools = this.db.prepare(`
+    const topTools = this.db
+      .prepare(`
       SELECT tc.tool_name as name, COUNT(*) as calls, COALESCE(SUM(tc.output_tokens_estimate),0) as output_tokens_est
       FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id ${where}
       GROUP BY tc.tool_name ORDER BY output_tokens_est DESC LIMIT 15
-    `).all() as any[];
+    `)
+      .all() as { name: string; calls: number; output_tokens_est: number }[];
 
     // Top files
-    const topFiles = this.db.prepare(`
+    const topFiles = this.db
+      .prepare(`
       SELECT tc.target_file as path, COUNT(*) as reads, COALESCE(SUM(tc.output_tokens_estimate),0) as tokens_est
       FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id ${where}
       AND tc.target_file IS NOT NULL
       GROUP BY tc.target_file ORDER BY tokens_est DESC LIMIT 15
-    `).all() as any[];
+    `)
+      .all() as { path: string; reads: number; tokens_est: number }[];
 
     // Models used
-    const modelRows = this.db.prepare(`
+    const modelRows = this.db
+      .prepare(`
       SELECT model, COUNT(DISTINCT id) as sessions, COALESCE(SUM(input_tokens + output_tokens),0) as tokens
       FROM sessions s ${where} AND model IS NOT NULL AND model != ''
       GROUP BY model
-    `).all() as any[];
+    `)
+      .all() as { model: string; sessions: number; tokens: number }[];
 
     const modelsUsed: Record<string, { sessions: number; tokens: number }> = {};
     for (const r of modelRows) {
@@ -246,27 +307,33 @@ export class AnalyticsStore {
     } else if (opts.period && opts.period !== 'all') {
       const now = new Date();
       let since: Date;
-      if (opts.period === 'today') since = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (opts.period === 'today')
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       else if (opts.period === 'week') since = new Date(now.getTime() - 7 * 86400000);
       else since = new Date(now.getTime() - 30 * 86400000);
       dateFilter = `AND s.started_at >= '${since.toISOString()}'`;
     }
     const projectFilter = opts.projectPath ? `AND s.project_path = '${opts.projectPath}'` : '';
 
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT tc.tool_name, tc.tool_server, tc.tool_short_name, tc.target_file,
         tc.output_size_chars, tc.output_tokens_estimate, tc.session_id, tc.is_error,
         tc.input_snippet
       FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id
       WHERE 1=1 ${dateFilter} ${projectFilter}
       ORDER BY tc.timestamp
-    `).all() as ToolCallRow[];
+    `)
+      .all() as ToolCallRow[];
   }
 
   /** Get usage trends (daily aggregation) */
-  getUsageTrends(days: number = 30): { date: string; sessions: number; tokens: number; cost_usd: number; tool_calls: number }[] {
+  getUsageTrends(
+    days: number = 30,
+  ): { date: string; sessions: number; tokens: number; cost_usd: number; tool_calls: number }[] {
     const since = new Date(Date.now() - days * 86400000).toISOString();
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT DATE(started_at) as date,
         COUNT(*) as sessions,
         SUM(input_tokens + output_tokens) as tokens,
@@ -274,15 +341,25 @@ export class AnalyticsStore {
         SUM(tool_call_count) as tool_calls
       FROM sessions WHERE started_at >= ?
       GROUP BY DATE(started_at) ORDER BY date
-    `).all(since) as any[];
+    `)
+      .all(since) as {
+      date: string;
+      sessions: number;
+      tokens: number;
+      cost_usd: number;
+      tool_calls: number;
+    }[];
   }
 
   /** Get synced session count */
   getSyncStats(): { sessions: number; tool_calls: number; files_synced: number } {
-    const sessions = (this.db.prepare('SELECT COUNT(*) as cnt FROM sessions').get() as any).cnt;
-    const toolCalls = (this.db.prepare('SELECT COUNT(*) as cnt FROM tool_calls').get() as any).cnt;
-    const filesSynced = (this.db.prepare('SELECT COUNT(*) as cnt FROM sync_state').get() as any).cnt;
-    return { sessions, tool_calls: toolCalls, files_synced: filesSynced };
+    const cnt = (stmt: string) =>
+      (this.db.prepare(stmt).get() as { cnt: number } | undefined)?.cnt ?? 0;
+    return {
+      sessions: cnt('SELECT COUNT(*) as cnt FROM sessions'),
+      tool_calls: cnt('SELECT COUNT(*) as cnt FROM tool_calls'),
+      files_synced: cnt('SELECT COUNT(*) as cnt FROM sync_state'),
+    };
   }
 
   close(): void {

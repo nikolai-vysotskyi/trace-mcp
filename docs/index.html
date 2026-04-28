@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- ── Primary Meta ── -->
-  <title>trace-mcp — the optimization layer for LLM applications</title>
-  <meta name="description" content="Make AI systems faster, more efficient, and reliable at scale. ~40–50% lower token usage on average in production; up to 94–99% in structured tasks like code navigation. Framework-aware dependency graph exposed through MCP. 81 languages, 58 integrations. Open source, local-first.">
-  <meta name="keywords" content="mcp, model context protocol, code intelligence, ai agents, code graph, ai coding agent, llm developer tools, code search, framework-aware indexing, claude code, cursor, windsurf, dependency graph, ast, tree-sitter, lsp">
+  <title>trace-mcp — recomputation → reuse for AI systems</title>
+  <meta name="description" content="AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 97% less redundant processing. Open source, local-first, MCP-native.">
+  <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="googlebot" content="index, follow">
@@ -47,8 +47,8 @@
   <meta property="og:site_name" content="trace-mcp">
   <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://trace-mcp.com/">
-  <meta property="og:title" content="trace-mcp — the optimization layer for LLM applications">
-  <meta property="og:description" content="Make AI systems faster, more efficient, and reliable at scale. ~40–50% lower token usage on average in production; up to 94–99% in structured tasks like code navigation.">
+  <meta property="og:title" content="trace-mcp — recomputation → reuse for AI systems">
+  <meta property="og:description" content="AI agents recompute the same work every turn. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 97% less redundant processing.">
   <meta property="og:image" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:secure_url" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:type" content="image/png">
@@ -58,8 +58,8 @@
 
   <!-- ── Twitter / X Card ── -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="trace-mcp — the optimization layer for LLM applications">
-  <meta name="twitter:description" content="Faster, more efficient, more reliable AI at scale. ~40–50% lower tokens on average in production; up to 94–99% in structured tasks. Open source, local-first.">
+  <meta name="twitter:title" content="trace-mcp — recomputation → reuse for AI systems">
+  <meta name="twitter:description" content="AI agents recompute the same work every turn. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity. Open source, local-first.">
   <meta name="twitter:image" content="https://trace-mcp.com/og-image.png">
   <meta name="twitter:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
 
@@ -69,8 +69,8 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
-    "alternateName": "trace-mcp — Optimization Layer for LLM Applications",
-    "description": "Systemic optimization layer for LLM applications. Makes AI systems faster, more efficient, and reliable at scale — ~40–50% lower token usage on average in production, up to 94–99% in structured tasks like code navigation. Framework-aware dependency graph via MCP, 81 languages, 58 integrations.",
+    "alternateName": "trace-mcp — Recomputation → Reuse for AI Systems",
+    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 97% less redundant processing. Framework-aware dependency graph via MCP, 81 languages, 58 integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
     "applicationCategory": "DeveloperApplication",
@@ -99,9 +99,10 @@
       "url": "https://github.com/nikolai-vysotskyi"
     },
     "featureList": [
-      "Optimization layer for LLM applications — lower cost, latency, and hallucinations",
-      "~40–50% lower token usage on average in real production",
-      "Up to 94–99% reduction in structured tasks (code navigation, impact analysis)",
+      "Recomputation → reuse layer for AI systems — agents stop re-reading and re-traversing",
+      "40–50% fewer tokens on average across real agent workflows",
+      "Up to 2× effective capacity at the same context budget",
+      "Up to 97% less redundant processing in structured tasks (code navigation, dependency traversal)",
       "Framework-aware dependency graph (58 integrations, 81 languages)",
       "138 MCP tools for navigation, impact analysis, refactoring",
       "Local-first: SQLite + bundled ONNX embeddings, zero API keys",
@@ -117,10 +118,10 @@
 
   <script>
     // Set theme and theme-color before first paint to avoid flash.
-    (function () {
+    (() => {
       try {
         var stored = localStorage.getItem('trace-mcp-theme');
-        var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        var prefersLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
         var theme = stored === 'light' || stored === 'dark' ? stored : (prefersLight ? 'light' : 'dark');
         document.documentElement.setAttribute('data-theme', theme);
         var meta = document.querySelector('meta[name="theme-color"]');
@@ -432,6 +433,45 @@
       max-width: 220px;
       text-align: right;
       line-height: 1.4;
+    }
+    .hero-metrics {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 18px;
+      text-align: right;
+    }
+    .hero-metric { display: flex; flex-direction: column; gap: 4px; }
+    .hero-metric-value {
+      font-family: var(--font-display);
+      font-size: clamp(38px, 5.4vw, 64px);
+      font-weight: 700;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      color: var(--text-display);
+    }
+    .hero-metric-value .unit {
+      font-family: var(--font-mono);
+      font-size: 0.45em;
+      color: var(--text-secondary);
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+    .hero-metric-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .hero-metrics-foot {
+      max-width: 260px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      color: var(--text-disabled);
+      line-height: 1.5;
+      margin-top: 4px;
     }
     .hero-desc {
       margin-top: 48px;
@@ -1877,7 +1917,7 @@
     <div class="container">
 
       <div class="hero-meta">
-        <span class="label">/ Optimization Layer · LLM Applications</span>
+        <span class="label">/ Recomputation &rarr; Reuse · AI Execution Layer</span>
         <span class="divider"></span>
         <span class="label label-disabled">v<span data-version>&hellip;</span> / mit license</span>
       </div>
@@ -1885,31 +1925,42 @@
       <div class="hero-grid">
         <div>
           <h1 class="hero-headline">
-            Make AI systems faster, more efficient, and <span class="em">reliable at scale.</span>
+            AI agents recompute the same work. We make them <span class="em">reuse instead.</span>
           </h1>
         </div>
         <div class="hero-side">
-          <span class="label">/ Token Reduction · Structured Tasks</span>
-          <div class="hero-massive">
-            94<span class="pct">%</span>
+          <span class="label">/ Measured On Real Workflows</span>
+          <div class="hero-metrics">
+            <div class="hero-metric">
+              <span class="hero-metric-value">40&ndash;50<span class="unit">%</span></span>
+              <span class="hero-metric-label">Fewer tokens, on average</span>
+            </div>
+            <div class="hero-metric">
+              <span class="hero-metric-value">up to 2<span class="unit">&times;</span></span>
+              <span class="hero-metric-label">Effective capacity</span>
+            </div>
+            <div class="hero-metric">
+              <span class="hero-metric-value">up to 97<span class="unit">%</span></span>
+              <span class="hero-metric-label">Less redundant processing</span>
+            </div>
+            <span class="hero-metrics-foot">Based on early benchmarks across agent workflows with repeated context and dependency traversal.</span>
           </div>
-          <span class="label hero-side-label">~40&ndash;50% on average<br>in real production</span>
         </div>
       </div>
 
       <p class="hero-desc">
-        The systemic optimization layer for LLM applications. Less wasted context means <span class="accent-text">lower cost, lower latency, and fewer hallucinations</span> &mdash; in production, not just in benchmarks. We start with code intelligence: a framework-aware dependency graph exposed through MCP, so agents reason over your stack instead of brute-reading it.
+        AI systems don't scale because they recompute instead of reuse &mdash; re-reading the same files, re-traversing the same dependencies, re-inflating context every turn. trace-mcp builds a framework-aware graph of your codebase once, then serves it through MCP so agents <span class="accent-text">reason from a precomputed structure instead of brute-reading the repo</span>. Less wasted work means lower cost, lower latency, and fewer hallucinations in production.
       </p>
 
       <div class="hero-cta">
         <a href="#install" class="btn btn-primary">
-          Get started in minutes <span class="arrow">&rarr;</span>
+          See your waste in 5 minutes <span class="arrow">&rarr;</span>
         </a>
         <a href="#pilot" class="btn btn-secondary">
           Run a pilot
         </a>
         <span class="hero-install" onclick="copyInstall(this)">
-          <code>npm i -g trace-mcp</code>
+          <code>npx trace-mcp benchmark .</code>
           <span class="copy">copy</span>
         </span>
       </div>
@@ -2004,9 +2055,9 @@
           <div class="stat-trend">read-only or audited</div>
         </div>
         <div class="stat">
-          <div class="stat-label">Tokens Saved</div>
-          <div class="stat-value">94<span class="unit">%</span></div>
-          <div class="stat-trend">vs naive read/grep</div>
+          <div class="stat-label">Avg Token Reduction</div>
+          <div class="stat-value">40&ndash;50<span class="unit">%</span></div>
+          <div class="stat-trend">on real agent workflows</div>
         </div>
       </div>
     </div>
@@ -2018,31 +2069,31 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">001 / Problem</span></div>
         <div>
-          <h2 class="section-title">AI agents don't understand <span class="em">real codebases.</span></h2>
-          <p class="section-lede">Large repositories are unstructured, framework logic is implicit, and agents rely on shallow search inside a shrinking context window. The cost shows up as broken changes, silent failures, and hours of manual reconstruction.</p>
+          <h2 class="section-title">AI agents recompute work <span class="em">they've already done.</span></h2>
+          <p class="section-lede">Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. Token bills grow. Latency grows. Reasoning quality drops. The model isn't the bottleneck &mdash; the recomputation leak is.</p>
         </div>
       </div>
 
       <div class="pain-list reveal">
         <div class="pain-item">
           <span class="pain-num">01</span>
-          <span class="pain-text">Large repositories are unstructured and hard to navigate.</span>
+          <span class="pain-text">The same files get read 5&ndash;15 times in a single task as the agent traverses dependencies blind.</span>
         </div>
         <div class="pain-item">
           <span class="pain-num">02</span>
-          <span class="pain-text">Framework logic is implicit and inconsistent across languages.</span>
+          <span class="pain-text">Context window is treated like a database &mdash; bloated with structure that's already been computed.</span>
         </div>
         <div class="pain-item">
           <span class="pain-num">03</span>
-          <span class="pain-text">Agents rely on shallow search and shrinking context windows.</span>
+          <span class="pain-text">Framework edges are invisible: routes &harr; controllers &harr; models &harr; views are rediscovered each turn.</span>
         </div>
         <div class="pain-item">
           <span class="pain-num">04</span>
-          <span class="pain-text">Changes break systems because dependencies aren't understood.</span>
+          <span class="pain-text">Cost, latency, and hallucinations all grow with project size instead of with task complexity.</span>
         </div>
       </div>
 
-      <p class="pain-punchline">Agents guess <span class="muted">instead of</span> reasoning.</p>
+      <p class="pain-punchline">Agents recompute <span class="muted">instead of</span> reusing.</p>
     </div>
   </section>
 
@@ -2052,29 +2103,29 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">002 / Solution</span></div>
         <div>
-          <h2 class="section-title">Give agents structured <span class="em">understanding of your code.</span></h2>
-          <p class="section-lede">trace-mcp reads your code as a system, not as text. One continuously-updated graph, exposed through MCP &mdash; every agent, every editor, every session.</p>
+          <h2 class="section-title">Trace. Diagnose. Optimize. <span class="em">Control.</span></h2>
+          <p class="section-lede">Four layers that move AI systems from recomputation to reuse. We start at the noisiest place agents work today &mdash; the codebase &mdash; and turn what they keep re-reading into a structure they query once.</p>
         </div>
       </div>
 
       <div class="sol-block reveal">
-        <p class="sol-lede">From files to functions to call graphs, <span class="em">everything is connected.</span></p>
+        <p class="sol-lede">Show the leak. Explain it. Close it. <span class="em">Keep it closed.</span></p>
         <div class="sol-list">
           <div class="sol-item">
-            <span class="sol-mark">+</span>
-            <span class="sol-text"><strong>Build a dependency graph</strong> across your entire codebase.</span>
+            <span class="sol-mark">01</span>
+            <span class="sol-text"><strong>Trace</strong> &mdash; surface what your agent actually reads, re-reads, and re-traverses. Repeated reads, fan-out, context growth, recomputation hotspots &mdash; visible per task.</span>
           </div>
           <div class="sol-item">
-            <span class="sol-mark">+</span>
-            <span class="sol-text"><strong>Capture real relationships</strong> between routes, controllers, models, migrations, components.</span>
+            <span class="sol-mark">02</span>
+            <span class="sol-text"><strong>Diagnose</strong> &mdash; explain <em>why</em> work is being recomputed: blind dependency traversal, missing framework edges, context bloat after step N, recursion past depth K.</span>
           </div>
           <div class="sol-item">
-            <span class="sol-mark">+</span>
-            <span class="sol-text"><strong>Understand frameworks and conventions</strong> across 58 integrations.</span>
+            <span class="sol-mark">03</span>
+            <span class="sol-text"><strong>Optimize</strong> &mdash; replace recomputation with a precomputed, framework-aware graph served via MCP. One <code>get_change_impact</code> call instead of 80 Greps and 190 reads.</span>
           </div>
           <div class="sol-item">
-            <span class="sol-mark">+</span>
-            <span class="sol-text"><strong>Enable safe, context-aware changes</strong> with reversible, graph-aware refactors.</span>
+            <span class="sol-mark">04</span>
+            <span class="sol-text"><strong>Control</strong> &mdash; keep reuse the default: incremental reindex, repeated-read detection, agent-behavior rules, optimization policies that survive every session.</span>
           </div>
         </div>
       </div>
@@ -2094,11 +2145,11 @@
 
       <div class="definition reveal">
         <div class="def-text">
-          <h3>This is how agents move from <span class="em">guessing to reasoning.</span></h3>
-          <p><strong>Global dependency graph</strong> &mdash; every symbol, every edge, across 81 languages in one directed graph.</p>
-          <p><strong>Framework-aware parsing</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. 58 integrations, not just syntax.</p>
-          <p><strong>Real execution relationships</strong> &mdash; optional LSP enrichment with <code>tsserver</code>, <code>pyright</code>, <code>gopls</code> for compiler-grade call resolution.</p>
-          <p><strong>Continuously updated</strong> &mdash; 300ms file-watcher debounce, content-hashed incremental reindex.</p>
+          <h3>This is how agents stop <span class="em">recomputing and start reusing.</span></h3>
+          <p><strong>Computed once</strong> &mdash; every symbol, every edge, across 81 languages in one directed graph. The agent queries it instead of rediscovering it each turn.</p>
+          <p><strong>Framework-aware</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. 58 integrations capture edges the agent would otherwise reconstruct from raw files.</p>
+          <p><strong>Compiler-grade where it matters</strong> &mdash; optional LSP enrichment with <code>tsserver</code>, <code>pyright</code>, <code>gopls</code> for call resolution that survives across calls.</p>
+          <p><strong>Reused, not rebuilt</strong> &mdash; 300ms file-watcher debounce and content-hashed incremental reindex keep the graph fresh without redoing finished work.</p>
         </div>
         <div class="def-diagram">
           <div class="head">/ Cross-Language Edge Trace</div>
@@ -2181,7 +2232,7 @@
       </div>
 
       <p style="margin-top: 48px; font-family: var(--font-body); font-size: 19px; color: var(--text-display); max-width: 640px;">
-        Agents can now operate with <span style="font-weight: 700;">full context.</span>
+        Recomputation becomes <span style="font-weight: 700;">reuse.</span>
       </p>
     </div>
   </section>
@@ -2192,8 +2243,8 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">005 / Core Capabilities</span></div>
         <div>
-          <h2 class="section-title">Tools agents reach for <span class="em">first, every session.</span></h2>
-          <p class="section-lede">Five tools from a surface of 138 &mdash; the ones most called. Structure-aware, cross-file, framework-conscious. Built for programmatic consumption, not human eyes.</p>
+          <h2 class="section-title">The five calls that <span class="em">replace 90% of recomputation.</span></h2>
+          <p class="section-lede">Five tools from a surface of 138 &mdash; the ones agents reach for first. Each one collapses what would otherwise be a chain of Reads, Greps, and Globs into a single graph query. Token cost drops; the answer gets sharper.</p>
         </div>
       </div>
 
@@ -2235,35 +2286,35 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">006 / Positioning</span></div>
         <div>
-          <h2 class="section-title">Traditional tools were built <span class="em">for humans.</span></h2>
-          <p class="section-lede">Sourcegraph, Glean, Cursor's indexer &mdash; powerful, but optimized for developers reading code. Agents consume information differently.</p>
+          <h2 class="section-title">Traditional tools make agents <span class="em">recompute harder.</span></h2>
+          <p class="section-lede">Sourcegraph, Glean, Cursor's indexer &mdash; powerful, but optimized for humans reading code one screen at a time. Pointed at an agent loop, they return more text to re-process, not less work to do.</p>
         </div>
       </div>
 
       <div class="compare-grid reveal">
         <div class="compare-col human">
           <span class="compare-sub">/ Human-first tools</span>
-          <h4>Code search for developers</h4>
+          <h4>Search results for the agent to re-read</h4>
           <ul>
-            <li>Search optimized for developers, not agents</li>
-            <li>Context limited to files or snippets</li>
-            <li>No unified dependency graph</li>
-            <li>No native interface for agent workflows</li>
+            <li>Returns files and snippets &mdash; the agent still has to traverse them</li>
+            <li>Same query, same output, every turn &mdash; no reuse across calls</li>
+            <li>No unified graph; framework edges are rediscovered from text</li>
+            <li>Bolted onto agent workflows, not designed for them</li>
           </ul>
         </div>
         <div class="compare-col agent">
           <span class="compare-sub">/ Agent-native trace-mcp</span>
-          <h4>Code intelligence for agents</h4>
+          <h4>A precomputed graph the agent reuses</h4>
           <ul>
-            <li>138 tools designed for programmatic consumption</li>
-            <li>Context sized per query, not per file</li>
-            <li>Single graph across every symbol and edge</li>
+            <li>138 tools that return answers, not files to read</li>
+            <li>One incremental index, queried per task &mdash; not rebuilt per turn</li>
+            <li>Single graph across every symbol, edge, and framework</li>
             <li>Native MCP protocol, zero adapter code</li>
           </ul>
         </div>
       </div>
 
-      <p class="compare-coda">Agents need a <span class="em">different layer.</span></p>
+      <p class="compare-coda">Agents need <span class="em">reuse, not more search.</span></p>
     </div>
   </section>
 
@@ -2273,20 +2324,20 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">007 / Differentiation</span></div>
         <div>
-          <h2 class="section-title">Built for agents, <span class="em">not humans.</span></h2>
+          <h2 class="section-title">Reuse is the unlock, <span class="em">not more search.</span></h2>
         </div>
       </div>
 
       <div class="diff-block reveal">
         <ul class="diff-list">
-          <li><span class="num">/ 01</span><span><strong>Graph-based understanding</strong> of codebases &mdash; not text indexing with fuzzy ranking.</span></li>
-          <li><span class="num">/ 02</span><span><strong>Framework-aware indexing</strong> across 58 integrations &mdash; not syntax parsing alone.</span></li>
-          <li><span class="num">/ 03</span><span><strong>Native tools for agent navigation</strong> and reasoning &mdash; not a search box retrofitted to agents.</span></li>
-          <li><span class="num">/ 04</span><span><strong>Safe code modification</strong> with dependency awareness &mdash; dry-run, reversible, audited.</span></li>
+          <li><span class="num">/ 01</span><span><strong>Computed once, queried many times</strong> &mdash; a graph, not a text index that gets re-ranked every turn.</span></li>
+          <li><span class="num">/ 02</span><span><strong>Framework-aware edges</strong> across 58 integrations &mdash; routes, ORMs, views, DI captured up front, not rediscovered from raw files.</span></li>
+          <li><span class="num">/ 03</span><span><strong>Tools that return answers</strong>, not snippets to read &mdash; <code>get_change_impact</code>, <code>get_call_graph</code>, <code>find_usages</code> over a precomputed structure.</span></li>
+          <li><span class="num">/ 04</span><span><strong>Reuse survives the session</strong> &mdash; incremental reindex, decision memory, agent-behavior rules keep cost from rebounding.</span></li>
         </ul>
         <p class="diff-quote">
           This is <span class="neg">not code search.</span><br>
-          This is <span class="pos">code intelligence</span> for autonomous systems.
+          This is <span class="pos">recomputation &rarr; reuse</span> for AI systems.
         </p>
       </div>
     </div>
@@ -2406,9 +2457,9 @@
 
       <div class="benchmark-summary">
         <div class="bs-text">
-          Average across 11 structured task categories on the trace-mcp TS/Vue codebase. Production reduction on mixed workloads is lower &mdash; typically 30&ndash;60% depending on stack &mdash; but the per-task patterns hold for any well-supported codebase. Less noise also means fewer hallucinations and stronger first-response accuracy.
+          Peak structured-task reduction across 11 categories on the trace-mcp TS/Vue codebase &mdash; the recomputation that gets eliminated when the agent reuses a precomputed graph instead of re-reading files. Real production sessions mix structured calls with reads and edits, so net reduction lands at <strong>~40&ndash;50%</strong> on mixed workloads. Less noise also means fewer hallucinations and stronger first-response accuracy.
         </div>
-        <div class="bs-num">94<span class="pct">%</span></div>
+        <div class="bs-num">up to 97<span class="pct">%</span></div>
       </div>
     </div>
   </section>
@@ -2549,8 +2600,8 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">013 / Install</span></div>
         <div>
-          <h2 class="section-title">Three commands. <span class="em">No configuration.</span></h2>
-          <p class="section-lede">No API keys. No paid services. Embeddings ship with the binary &mdash; runs fully offline after first install.</p>
+          <h2 class="section-title">See your waste first. <span class="em">Then wire it in.</span></h2>
+          <p class="section-lede">Run one command and watch the recomputation surface. No config, no API keys, no signup &mdash; embeddings ship with the binary, everything stays local.</p>
         </div>
       </div>
 
@@ -2559,25 +2610,25 @@
           <div class="qs-step reveal">
             <div class="qs-step-num">01</div>
             <div class="qs-step-body">
-              <h4>/ Install Globally</h4>
-              <div class="qs-cmd">npm install -g trace-mcp</div>
-              <p>Single binary. No native deps. Runs on Node 20+.</p>
+              <h4>/ See Your Waste</h4>
+              <div class="qs-cmd">npx trace-mcp benchmark .</div>
+              <p>Indexes the project, runs 11 structured task benchmarks, prints per-task token cost &mdash; without trace-mcp vs. with. Time-to-value: ~5 minutes on a real repo.</p>
             </div>
           </div>
           <div class="qs-step reveal">
             <div class="qs-step-num">02</div>
             <div class="qs-step-body">
-              <h4>/ Initialize Once</h4>
-              <div class="qs-cmd">trace-mcp init</div>
-              <p>Configures your MCP client (Claude Code, Cursor, Windsurf), installs the guard hook, updates CLAUDE.md.</p>
+              <h4>/ Wire In Your Agent</h4>
+              <div class="qs-cmd">npx trace-mcp init</div>
+              <p>Configures your MCP client (Claude Code, Cursor, Windsurf), installs the guard hook, updates CLAUDE.md. One command per machine.</p>
             </div>
           </div>
           <div class="qs-step reveal">
             <div class="qs-step-num">03</div>
             <div class="qs-step-body">
-              <h4>/ Add A Project</h4>
+              <h4>/ Index The Project</h4>
               <div class="qs-cmd">trace-mcp add</div>
-              <p>Detects frameworks, indexes the codebase, registers the project. Run in each repo you want indexed.</p>
+              <p>Detects frameworks, indexes the codebase, registers the project. The graph stays incrementally fresh from here on.</p>
             </div>
           </div>
         </div>
@@ -2587,23 +2638,23 @@
             <span>~/projects/my-app</span>
             <span class="right"><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> ready</span>
           </div>
-          <div class="terminal-body"><span class="cmt"># 1. install + initialize</span>
-<span class="pmt">$</span> npm install -g trace-mcp
-<span class="pmt">$</span> trace-mcp init
-<span class="ok">[OK]</span> claude code configured
+          <div class="terminal-body"><span class="cmt"># 1. see your waste &mdash; ~5 minutes, no setup</span>
+<span class="pmt">$</span> npx trace-mcp benchmark .
+<span class="ok">[OK]</span> indexed 1,247 files / 8,392 symbols
+<span class="ok">[BENCH]</span> impact analysis    49,141 &rarr;  1,856 tokens (96.2% less)
+<span class="ok">[BENCH]</span> call graph        178,345 &rarr;  9,285 tokens (94.8% less)
+<span class="ok">[BENCH]</span> type hierarchy     94,762 &rarr;    855 tokens (99.1% less)
+<span class="ok">[OK]</span> total recomputation: <span class="kw">up to ~97% per call</span>
+
+<span class="cmt"># 2. wire trace-mcp into your agent</span>
+<span class="pmt">$</span> npx trace-mcp init
+<span class="ok">[OK]</span> claude code / cursor / windsurf configured
 <span class="ok">[OK]</span> guard hook installed
 <span class="ok">[OK]</span> claude.md updated
 
-<span class="cmt"># 2. add your project</span>
-<span class="pmt">$</span> <span class="kw">cd</span> ~/my-app
-<span class="pmt">$</span> trace-mcp add
-<span class="ok">[OK]</span> detected: laravel, vue, inertia
-<span class="ok">[OK]</span> indexed 1,247 files in 8.2s
-<span class="ok">[OK]</span> 8,392 symbols / 14,902 edges
-
-<span class="cmt"># 3. use in your AI agent</span>
-<span class="pmt">&gt;</span> <span class="kw">get_task_context</span>(<span class="str">"fix login bug"</span>)
-<span class="ok">[READY]</span> 23 symbols, 4 tests, 1 decision</div>
+<span class="cmt"># 3. agent now reuses the graph instead of re-reading</span>
+<span class="pmt">&gt;</span> <span class="kw">get_change_impact</span>(<span class="str">"app/Models/User.php"</span>)
+<span class="ok">[READY]</span> 1 call &rarr; 23 affected symbols, 4 tests, 1 decision</div>
         </div>
       </div>
     </div>
@@ -2671,11 +2722,11 @@
     <div class="container">
       <div class="category-tag"><span class="label">/ The Category</span></div>
       <h2 class="category-headline">
-        The optimization layer<br>
-        <span class="em">for LLM applications.</span>
+        Recomputation &rarr; Reuse.<br>
+        <span class="em">The execution layer for AI systems.</span>
       </h2>
       <p class="category-sub">
-        AI is bottlenecked not by models, but by infrastructure. Inference cost, context overhead, and retry loops grow faster than model quality. trace-mcp is the systemic layer that keeps LLM systems cheap, fast, and reliable as they scale &mdash; starting with code intelligence, where the noise is loudest.
+        AI systems don't scale because they recompute instead of reuse. Every turn costs tokens, latency, and reasoning quality on work the agent has already done. trace-mcp turns recomputation into a precomputed, queryable structure &mdash; starting with code, where the noise is loudest, and extending to anywhere agents pay twice for the same answer.
       </p>
     </div>
   </section>
@@ -2809,7 +2860,7 @@
     const start = performance.now();
     function tick(now) {
       const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
+      const eased = 1 - (1 - t) ** 3;
       el.textContent = Math.round(target * eased);
       if (t < 1) requestAnimationFrame(tick);
     }
@@ -2873,7 +2924,7 @@
     fetch('https://registry.npmjs.org/trace-mcp/latest')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
-        if (data && data.version) {
+        if (data?.version) {
           setVersion(data.version);
           try { localStorage.setItem(cacheKey, JSON.stringify({ v: data.version, ts: Date.now() })); } catch (e) {}
         }
@@ -2887,7 +2938,7 @@
   })();
 
   // Copy install
-  function copyInstall(el) {
+  function _copyInstall(el) {
     navigator.clipboard.writeText('npm install -g trace-mcp');
     const c = el.querySelector('.copy');
     const original = c.textContent;
@@ -2898,10 +2949,10 @@
 
   // Format integers with thin separators: 1234 -> "1,234"; 12000 -> "12k"; 1500000 -> "1.5M"
   function formatCount(n) {
-    if (typeof n !== 'number' || !isFinite(n)) return null;
-    if (n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace(/\.0$/, '') + 'M';
-    if (n >= 10000)   return Math.round(n / 1000) + 'k';
-    if (n >= 1000)    return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+    if (n >= 1000000) return `${(n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace(/\.0$/, '')}M`;
+    if (n >= 10000)   return `${Math.round(n / 1000)}k`;
+    if (n >= 1000)    return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
     return String(n);
   }
 
@@ -2963,7 +3014,7 @@
   })();
 
   // Theme toggle
-  (function () {
+  (() => {
     const root = document.documentElement;
     const toggle = document.querySelector('[data-theme-toggle]');
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -3005,7 +3056,7 @@
       const onChange = (e) => {
         try {
           if (localStorage.getItem('trace-mcp-theme')) return;
-        } catch (err) {}
+        } catch (_err) {}
         applyTheme(e.matches ? 'light' : 'dark', false);
       };
       if (mq.addEventListener) mq.addEventListener('change', onChange);

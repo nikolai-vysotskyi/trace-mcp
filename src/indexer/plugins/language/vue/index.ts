@@ -7,33 +7,33 @@
  *   - Extracts custom component tags from <template>
  */
 import { parse as parseSFC } from '@vue/compiler-sfc';
-import { ok, err } from 'neverthrow';
-import type {
-  LanguagePlugin,
-  PluginManifest,
-  FileParseResult,
-  RawSymbol,
-  RawEdge,
-  RawComponent,
-} from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawComponent,
+  RawEdge,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  extractImportEdges,
-  extractCallSites,
   collectLocalTypes,
-  extractTypeReferences,
+  extractCallSites,
+  extractImportEdges,
   extractModuleCallSites,
+  extractTypeReferences,
+  makeSymbolId,
+  type TSNode,
 } from '../typescript/helpers.js';
 import {
   componentNameFromPath,
-  extractProps,
+  extractComposables,
   extractEmits,
   extractExposed,
-  extractComposables,
+  extractProps,
   extractTemplateComponents,
 } from './helpers.js';
 
@@ -46,7 +46,10 @@ export class VueLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.vue'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const sourceCode = content.toString('utf-8');
       const { descriptor, errors } = parseSFC(sourceCode, {
@@ -264,7 +267,11 @@ export class VueLanguagePlugin implements LanguagePlugin {
    * script body. Captures module-level call sites so calls inside `<script setup>`
    * or non-named Options-API bodies can be attributed to something in the call graph.
    */
-  private async buildModuleSymbol(scriptContent: string, filePath: string, suffix: string = ''): Promise<RawSymbol | null> {
+  private async buildModuleSymbol(
+    scriptContent: string,
+    filePath: string,
+    suffix: string = '',
+  ): Promise<RawSymbol | null> {
     try {
       const parser = await getParser('typescript');
       const tree = parser.parse(scriptContent);
@@ -275,7 +282,11 @@ export class VueLanguagePlugin implements LanguagePlugin {
       const callSites = extractModuleCallSites(root, { skipLexicalFunctionBodies: false });
       const typeRefs = extractTypeReferences(root);
       if (callSites.length === 0 && typeRefs.length === 0) return null;
-      const baseName = filePath.split('/').pop()?.replace(/\.vue$/, '') ?? '__module__';
+      const baseName =
+        filePath
+          .split('/')
+          .pop()
+          ?.replace(/\.vue$/, '') ?? '__module__';
       const tag = suffix ? `__module__${suffix}` : '__module__';
       return {
         symbolId: makeSymbolId(filePath, tag, 'namespace'),

@@ -14,7 +14,9 @@ export const PROMPTS = {
   summarize_symbol: {
     version: 1,
     build: (v) => {
-      const parts = [`Summarize this ${v.kind} in one concise sentence. Focus on WHAT it does, not HOW.`];
+      const parts = [
+        `Summarize this ${v.kind} in one concise sentence. Focus on WHAT it does, not HOW.`,
+      ];
       parts.push(`Name: ${v.name}`);
       if (v.fqn) parts.push(`FQN: ${v.fqn}`);
       if (v.signature) parts.push(`Signature: ${v.signature}`);
@@ -71,7 +73,9 @@ export const PROMPTS = {
       ];
       if (v.diff) parts.push(`Diff:\n${v.diff}`);
       if (v.blastRadius) parts.push(`Affected dependents:\n${v.blastRadius}`);
-      parts.push('Respond in JSON: { "issues": [{ "severity": "high|medium|low", "description": "...", "suggestion": "..." }], "summary": "..." }');
+      parts.push(
+        'Respond in JSON: { "issues": [{ "severity": "high|medium|low", "description": "...", "suggestion": "..." }], "summary": "..." }',
+      );
       return parts.join('\n');
     },
     maxTokens: 800,
@@ -86,7 +90,9 @@ export const PROMPTS = {
       ];
       if (v.scope) parts.push(`Scope: ${v.scope}`);
       if (v.context) parts.push(`Key symbols and structure:\n${v.context}`);
-      parts.push('Respond in JSON: { "overview": "...", "layers": ["..."], "key_patterns": ["..."], "data_flow": ["..."] }');
+      parts.push(
+        'Respond in JSON: { "overview": "...", "layers": ["..."], "key_patterns": ["..."], "data_flow": ["..."] }',
+      );
       return parts.join('\n');
     },
     maxTokens: 1000,

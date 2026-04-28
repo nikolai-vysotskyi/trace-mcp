@@ -12,19 +12,19 @@
  *
  * Uses tree-sitter-typescript for AST-based extraction of JSX/TSX.
  */
-import { ok, err } from 'neverthrow';
-import type {
-  FrameworkPlugin,
-  PluginManifest,
-  ProjectContext,
-  FileParseResult,
-  RawEdge,
-  RawComponent,
-  ResolveContext,
-} from '../../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
 import { parseError } from '../../../../../errors.js';
 import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  FrameworkPlugin,
+  PluginManifest,
+  ProjectContext,
+  RawComponent,
+  RawEdge,
+  ResolveContext,
+} from '../../../../../plugin-api/types.js';
 
 // ============================================================
 // Built-in hooks — we skip these when detecting custom hook usage
@@ -76,7 +76,7 @@ function firstArg(node: TSNode): TSNode | null {
   if (!args) return null;
   for (let i = 0; i < args.namedChildCount; i++) {
     const child = args.namedChild(i);
-    if (child && child.isNamed) return child;
+    if (child?.isNamed) return child;
   }
   return null;
 }
@@ -129,13 +129,41 @@ export class ReactPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'react_renders', category: 'react', description: 'Parent component renders child via JSX' },
-        { name: 'react_context_provides', category: 'react', description: 'Context.Provider usage' },
-        { name: 'react_context_consumes', category: 'react', description: 'useContext() or use() call' },
-        { name: 'react_lazy_loads', category: 'react', description: 'React.lazy(() => import("./X"))' },
-        { name: 'react_custom_hook_uses', category: 'react', description: 'Component calls a custom hook' },
-        { name: 'react_use_client', category: 'react', description: "'use client' directive (React 19)" },
-        { name: 'react_use_server', category: 'react', description: "'use server' directive (React 19)" },
+        {
+          name: 'react_renders',
+          category: 'react',
+          description: 'Parent component renders child via JSX',
+        },
+        {
+          name: 'react_context_provides',
+          category: 'react',
+          description: 'Context.Provider usage',
+        },
+        {
+          name: 'react_context_consumes',
+          category: 'react',
+          description: 'useContext() or use() call',
+        },
+        {
+          name: 'react_lazy_loads',
+          category: 'react',
+          description: 'React.lazy(() => import("./X"))',
+        },
+        {
+          name: 'react_custom_hook_uses',
+          category: 'react',
+          description: 'Component calls a custom hook',
+        },
+        {
+          name: 'react_use_client',
+          category: 'react',
+          description: "'use client' directive (React 19)",
+        },
+        {
+          name: 'react_use_server',
+          category: 'react',
+          description: "'use server' directive (React 19)",
+        },
       ],
     };
   }

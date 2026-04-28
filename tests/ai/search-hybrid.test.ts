@@ -2,17 +2,18 @@
  * Integration test: hybrid AI search (FTS + vector).
  * Verifies search() returns search_mode='hybrid_ai' when vector store is populated.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
+import type { EmbeddingService } from '../../src/ai/interfaces.js';
+import { BlobVectorStore } from '../../src/ai/vector-store.js';
+import type { TraceMcpConfig } from '../../src/config.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { BlobVectorStore } from '../../src/ai/vector-store.js';
-import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { search } from '../../src/tools/navigation/navigation.js';
-import type { EmbeddingService } from '../../src/ai/interfaces.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');
 
@@ -47,7 +48,9 @@ function makeMockEmbedding(): EmbeddingService {
     dimensions() {
       return 8;
     },
-    modelName() { return 'mock-model'; },
+    modelName() {
+      return 'mock-model';
+    },
   };
 }
 
@@ -130,7 +133,11 @@ describe('Hybrid AI search', () => {
 
   it('semantic="off" forces FTS even when AI is configured', async () => {
     const result = await search(
-      store, 'add', {}, 10, 0,
+      store,
+      'add',
+      {},
+      10,
+      0,
       { vectorStore, embeddingService },
       undefined,
       { semantic: 'off' },
@@ -140,7 +147,11 @@ describe('Hybrid AI search', () => {
 
   it('semantic="only" returns hybrid_ai mode and works on nonsense queries', async () => {
     const result = await search(
-      store, 'zzzznonexistent999', {}, 10, 0,
+      store,
+      'zzzznonexistent999',
+      {},
+      10,
+      0,
       { vectorStore, embeddingService },
       undefined,
       { semantic: 'only' },
@@ -152,7 +163,11 @@ describe('Hybrid AI search', () => {
   it('semantic_weight=0 reproduces FTS-only ordering through the hybrid path', async () => {
     const ftsOnly = await search(store, 'User', {}, 10, 0);
     const weightedZero = await search(
-      store, 'User', {}, 10, 0,
+      store,
+      'User',
+      {},
+      10,
+      0,
       { vectorStore, embeddingService },
       undefined,
       { semantic: 'on', semanticWeight: 0 },
@@ -165,12 +180,9 @@ describe('Hybrid AI search', () => {
   });
 
   it('semantic="auto" with no AI configured falls back to FTS', async () => {
-    const result = await search(
-      store, 'User', {}, 10, 0,
-      undefined,
-      undefined,
-      { semantic: 'auto' },
-    );
+    const result = await search(store, 'User', {}, 10, 0, undefined, undefined, {
+      semantic: 'auto',
+    });
     expect(result.search_mode).toBe('fts');
   });
 });

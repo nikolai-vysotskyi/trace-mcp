@@ -46,7 +46,7 @@ const CSS_SPEC_FEATURES: [RegExp, string, string][] = [
 
   // --- 2023 ---
   [/color-mix\s*\(/, '2023', 'color-mix()'],
-  [/&\s*[.#:\[>+~]/, '2023', 'CSS nesting (& combinator)'],
+  [/&\s*[.#:[>+~]/, '2023', 'CSS nesting (& combinator)'],
   [/subgrid/, '2023', 'subgrid'],
   [/:nth-child\([^)]*\bof\b/, '2023', ':nth-child(An+B of S)'],
   [/text-wrap\s*:\s*balance/, '2023', 'text-wrap: balance'],
@@ -63,7 +63,11 @@ const CSS_SPEC_FEATURES: [RegExp, string, string][] = [
   [/interpolate-size\s*:/, '2024', 'interpolate-size'],
   [/field-sizing\s*:/, '2024', 'field-sizing'],
   [/text-wrap\s*:\s*pretty/, '2024', 'text-wrap: pretty'],
-  [/align-content\s*:\s*(?:center|start|end|space-between)/, '2024', 'align-content on block containers'],
+  [
+    /align-content\s*:\s*(?:center|start|end|space-between)/,
+    '2024',
+    'align-content on block containers',
+  ],
 
   // --- 2025 ---
   [/if\s*\(/, '2025', 'if() inline conditional'],
@@ -95,7 +99,7 @@ const SASS_VERSION_FEATURES: [RegExp, string, string][] = [
   [/\$[\w-]+\s*\/\s*\$[\w-]+/, '1.57', 'slash-as-division deprecation warning context'],
 
   // --- Sass 1.63 (Jul 2023) — CSS nesting support ---
-  [/&\s*[.#:\[>+~]/, '1.63', 'CSS nesting in SCSS'],
+  [/&\s*[.#:[>+~]/, '1.63', 'CSS nesting in SCSS'],
 
   // --- Sass 1.65 (Aug 2023) — color.channel() API ---
   [/color\.channel\s*\(/, '1.65', 'color.channel()'],

@@ -1,27 +1,33 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { getDeadExports } from '../../src/tools/analysis/introspect.js';
 import { createTestStore } from '../test-utils.js';
 
 function addExportedSymbol(
-  store: Store, filePath: string, name: string, kind: string,
+  store: Store,
+  filePath: string,
+  name: string,
+  kind: string,
   extraMetadata?: Record<string, unknown>,
 ): number {
-  let file = store.getFile(filePath);
+  const file = store.getFile(filePath);
   const fileId = file ? file.id : store.insertFile(filePath, 'typescript', null, null);
   return store.insertSymbol(fileId, {
     symbolId: `${filePath}::${name}#${kind}`,
     name,
     kind: kind as any,
-    byteStart: 0, byteEnd: 100, lineStart: 1, lineEnd: 10,
+    byteStart: 0,
+    byteEnd: 100,
+    lineStart: 1,
+    lineEnd: 10,
     metadata: { exported: 1, ...extraMetadata },
   });
 }
 
 function addImportEdge(store: Store, fromFile: string, toFile: string, specifiers: string[]): void {
-  let srcFile = store.getFile(fromFile);
+  const srcFile = store.getFile(fromFile);
   const srcFileId = srcFile ? srcFile.id : store.insertFile(fromFile, 'typescript', null, null);
-  let tgtFile = store.getFile(toFile);
+  const tgtFile = store.getFile(toFile);
   const tgtFileId = tgtFile ? tgtFile.id : store.insertFile(toFile, 'typescript', null, null);
 
   const srcNodeId = store.getNodeId('file', srcFileId) ?? store.createNode('file', srcFileId);

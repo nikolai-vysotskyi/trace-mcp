@@ -6,12 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -20,8 +19,7 @@ import type {
 const PROCEDURE_RE =
   /(\w+)\s*:\s*\w*[Pp]rocedure[\s\S]{0,500}?\.(query|mutation|subscription)\s*\(/g;
 
-const ROUTER_RE =
-  /(?:t\.router|router)\s*\(\s*\{/g;
+const ROUTER_RE = /(?:t\.router|router)\s*\(\s*\{/g;
 
 interface TrpcProcedure {
   name: string;

@@ -9,13 +9,28 @@
  */
 
 type CFGNodeKind =
-  | 'entry' | 'exit'
-  | 'if' | 'else' | 'else_if'
-  | 'for' | 'while' | 'do_while' | 'for_of' | 'for_in'
-  | 'switch' | 'case' | 'default'
-  | 'try' | 'catch' | 'finally'
-  | 'return' | 'throw' | 'break' | 'continue'
-  | 'await' | 'yield'
+  | 'entry'
+  | 'exit'
+  | 'if'
+  | 'else'
+  | 'else_if'
+  | 'for'
+  | 'while'
+  | 'do_while'
+  | 'for_of'
+  | 'for_in'
+  | 'switch'
+  | 'case'
+  | 'default'
+  | 'try'
+  | 'catch'
+  | 'finally'
+  | 'return'
+  | 'throw'
+  | 'break'
+  | 'continue'
+  | 'await'
+  | 'yield'
   | 'statement';
 
 interface CFGNode {
@@ -46,8 +61,16 @@ const PATTERNS: { kind: CFGNodeKind; regex: RegExp; condGroup?: number }[] = [
   { kind: 'else_if', regex: /^\s*}\s*else\s+if\s*\((.+?)\)\s*\{?/, condGroup: 1 },
   { kind: 'else', regex: /^\s*}\s*else\s*\{?/ },
   { kind: 'if', regex: /^\s*(?:}\s*)?if\s*\((.+?)\)\s*\{?/, condGroup: 1 },
-  { kind: 'for_of', regex: /^\s*for\s*\(\s*(?:const|let|var)\s+\w+\s+of\s+(.+?)\)\s*\{?/, condGroup: 1 },
-  { kind: 'for_in', regex: /^\s*for\s*\(\s*(?:const|let|var)\s+\w+\s+in\s+(.+?)\)\s*\{?/, condGroup: 1 },
+  {
+    kind: 'for_of',
+    regex: /^\s*for\s*\(\s*(?:const|let|var)\s+\w+\s+of\s+(.+?)\)\s*\{?/,
+    condGroup: 1,
+  },
+  {
+    kind: 'for_in',
+    regex: /^\s*for\s*\(\s*(?:const|let|var)\s+\w+\s+in\s+(.+?)\)\s*\{?/,
+    condGroup: 1,
+  },
   { kind: 'for', regex: /^\s*for\s*\((.+?)\)\s*\{?/, condGroup: 1 },
   { kind: 'while', regex: /^\s*while\s*\((.+?)\)\s*\{?/, condGroup: 1 },
   { kind: 'do_while', regex: /^\s*do\s*\{?/ },
@@ -72,7 +95,11 @@ const PATTERNS: { kind: CFGNodeKind; regex: RegExp; condGroup?: number }[] = [
   // Python: if condition:
   { kind: 'if', regex: /^\s*if\s+(.+?)\s*:/, condGroup: 1 },
   // Python: for x in iterable:
-  { kind: 'for_in', regex: /^\s*(?:async\s+)?for\s+\w+(?:\s*,\s*\w+)*\s+in\s+(.+?)\s*:/, condGroup: 1 },
+  {
+    kind: 'for_in',
+    regex: /^\s*(?:async\s+)?for\s+\w+(?:\s*,\s*\w+)*\s+in\s+(.+?)\s*:/,
+    condGroup: 1,
+  },
   // Python: while condition:
   { kind: 'while', regex: /^\s*while\s+(.+?)\s*:/, condGroup: 1 },
   // Python: match subject:  (3.10+)
@@ -101,7 +128,12 @@ export function extractCFG(source: string, startLine = 1): CFGResult {
   const edges: CFGEdge[] = [];
   let nextId = 0;
 
-  const mkNode = (kind: CFGNodeKind, line: number, snippet: string, condition?: string): CFGNode => {
+  const mkNode = (
+    kind: CFGNodeKind,
+    line: number,
+    snippet: string,
+    condition?: string,
+  ): CFGNode => {
     const node: CFGNode = { id: nextId++, kind, line, code_snippet: snippet.trim().slice(0, 80) };
     if (condition) node.condition = condition.trim().slice(0, 120);
     nodes.push(node);
@@ -126,7 +158,14 @@ export function extractCFG(source: string, startLine = 1): CFGResult {
     const lineNum = startLine + i;
     const trimmed = line.trim();
 
-    if (!trimmed || trimmed === '{' || trimmed === '}' || trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) {
+    if (
+      !trimmed ||
+      trimmed === '{' ||
+      trimmed === '}' ||
+      trimmed.startsWith('//') ||
+      trimmed.startsWith('/*') ||
+      trimmed.startsWith('*')
+    ) {
       // Track nesting on closing braces
       if (trimmed === '}' && nestingStack.length > 0) {
         nestingStack.pop();
@@ -284,9 +323,7 @@ export function cfgToMermaid(cfg: CFGResult): string {
   const lines: string[] = ['flowchart TD'];
 
   for (const node of cfg.nodes) {
-    const label = node.condition
-      ? `${node.condition}`
-      : node.code_snippet;
+    const label = node.condition ? `${node.condition}` : node.code_snippet;
     const escaped = label.replace(/"/g, "'").replace(/[[\]{}]/g, '');
 
     switch (node.kind) {
@@ -325,9 +362,10 @@ export function cfgToMermaid(cfg: CFGResult): string {
 export function cfgToAscii(cfg: CFGResult): string {
   const lines: string[] = [];
   for (const node of cfg.nodes) {
-    const prefix = node.kind === 'entry' || node.kind === 'exit'
-      ? `[${node.kind.toUpperCase()}]`
-      : `  ${node.kind}`;
+    const prefix =
+      node.kind === 'entry' || node.kind === 'exit'
+        ? `[${node.kind.toUpperCase()}]`
+        : `  ${node.kind}`;
     const cond = node.condition ? ` (${node.condition})` : '';
     lines.push(`${prefix} L${node.line}: ${node.code_snippet}${cond}`);
 

@@ -1,17 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { getEdgeBottlenecks } from '../../src/tools/analysis/bottlenecks.js';
 import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, path: string): number {
-  return store.insertFile(path, 'typescript', 'hash_' + path, 100);
+  return store.insertFile(path, 'typescript', `hash_${path}`, 100);
 }
 
 function insertEdge(store: Store, srcNode: number, tgtNode: number): void {
   store.insertEdge(srcNode, tgtNode, 'esm_imports');
 }
 
-function buildButterfly(store: Store): { left: string[]; right: string[]; bridgeEdge: [string, string] } {
+function buildButterfly(store: Store): {
+  left: string[];
+  right: string[];
+  bridgeEdge: [string, string];
+} {
   // Two triangles connected by a single edge:
   //   a1 — a2 — a3 — a1    (left clique, directed cycle)
   //   b1 — b2 — b3 — b1    (right clique, directed cycle)

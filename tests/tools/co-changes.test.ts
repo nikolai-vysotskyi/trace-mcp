@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import type Database from 'better-sqlite3';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { getCoChanges, persistCoChanges } from '../../src/tools/quality/co-changes.js';
-import type Database from 'better-sqlite3';
 
 describe('Co-Change Analysis', () => {
   let db: Database.Database;
@@ -47,7 +47,9 @@ describe('Co-Change Analysis', () => {
       expect(data.coChanges.length).toBeGreaterThan(0);
       // Should be sorted by confidence DESC
       for (let i = 1; i < data.coChanges.length; i++) {
-        expect(data.coChanges[i - 1].confidence).toBeGreaterThanOrEqual(data.coChanges[i].confidence);
+        expect(data.coChanges[i - 1].confidence).toBeGreaterThanOrEqual(
+          data.coChanges[i].confidence,
+        );
       }
     });
 

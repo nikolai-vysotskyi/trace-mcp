@@ -14,9 +14,11 @@ import type { Store, SymbolRow } from '../../db/store.js';
 
 // Heritage edge types across languages
 const HERITAGE_EDGE_TYPES = [
-  'ts_extends', 'ts_implements',  // TypeScript
-  'extends', 'implements',        // PHP
-  'py_inherits',                  // Python (fallback)
+  'ts_extends',
+  'ts_implements', // TypeScript
+  'extends',
+  'implements', // PHP
+  'py_inherits', // Python (fallback)
 ];
 
 interface ChaMethodMatch {
@@ -53,9 +55,7 @@ export function expandMethodViaCha(
   const methodName = symbol.name;
 
   // Find the parent class of this method
-  const parentClass = symbol.parent_id != null
-    ? store.getSymbolById(symbol.parent_id)
-    : null;
+  const parentClass = symbol.parent_id != null ? store.getSymbolById(symbol.parent_id) : null;
 
   if (!parentClass || (parentClass.kind !== 'class' && parentClass.kind !== 'interface')) {
     const nodeId = store.getNodeId('symbol', symbol.id);
@@ -145,27 +145,33 @@ function collectAncestors(
       const meta = JSON.parse(classSymbol.metadata) as Record<string, unknown>;
       const parentNames: string[] = [];
 
-      const ext = meta['extends'];
-      if (Array.isArray(ext)) parentNames.push(...ext.filter((n): n is string => typeof n === 'string'));
+      const ext = meta.extends;
+      if (Array.isArray(ext))
+        parentNames.push(...ext.filter((n): n is string => typeof n === 'string'));
       else if (typeof ext === 'string') parentNames.push(ext);
 
-      const impl = meta['implements'];
-      if (Array.isArray(impl)) parentNames.push(...impl.filter((n): n is string => typeof n === 'string'));
+      const impl = meta.implements;
+      if (Array.isArray(impl))
+        parentNames.push(...impl.filter((n): n is string => typeof n === 'string'));
 
       // Python bases
-      const bases = meta['bases'];
-      if (Array.isArray(bases)) parentNames.push(...bases.filter((n): n is string => typeof n === 'string'));
+      const bases = meta.bases;
+      if (Array.isArray(bases))
+        parentNames.push(...bases.filter((n): n is string => typeof n === 'string'));
 
       for (const name of parentNames) {
         const shortName = name.includes('.') ? name.split('.').pop()! : name;
-        const parentSym = store.getSymbolByName(shortName, 'class')
-          ?? store.getSymbolByName(shortName, 'interface');
+        const parentSym =
+          store.getSymbolByName(shortName, 'class') ??
+          store.getSymbolByName(shortName, 'interface');
         if (parentSym && !result.has(parentSym.id)) {
           result.add(parentSym.id);
           collectAncestors(store, parentSym, result, visited, depth - 1);
         }
       }
-    } catch { /* skip malformed metadata */ }
+    } catch {
+      /* skip malformed metadata */
+    }
   }
 }
 
@@ -196,7 +202,8 @@ function collectDescendants(
  */
 function findMethodOnClass(store: Store, classId: number, methodName: string): SymbolRow | null {
   const children = store.getSymbolChildren(classId);
-  return children.find((s) =>
-    s.name === methodName && (s.kind === 'method' || s.kind === 'function'),
-  ) ?? null;
+  return (
+    children.find((s) => s.name === methodName && (s.kind === 'method' || s.kind === 'function')) ??
+    null
+  );
 }

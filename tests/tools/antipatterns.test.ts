@@ -1,18 +1,18 @@
-import { describe, test, expect, beforeEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import path from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
+import path from 'node:path';
+import { beforeEach, describe, expect, test } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { detectAntipatterns } from '../../src/tools/quality/antipatterns.js';
+import { createTestStore } from '../test-utils.js';
 
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-antipatterns-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-antipatterns-test-${process.pid}`);
 
 function insertFile(store: Store, relPath: string, language = 'typescript'): number {
   const absPath = path.join(TEST_DIR, relPath);
   mkdirSync(path.dirname(absPath), { recursive: true });
   writeFileSync(absPath, '// placeholder');
-  return store.insertFile(relPath, language, 'hash-' + relPath, 100);
+  return store.insertFile(relPath, language, `hash-${relPath}`, 100);
 }
 
 function insertModel(
@@ -44,7 +44,15 @@ function insertAssoc(
   fileId?: number,
   line?: number,
 ): number {
-  return store.insertOrmAssociation(sourceModelId, targetModelId, targetModelName, kind, options, fileId, line);
+  return store.insertOrmAssociation(
+    sourceModelId,
+    targetModelId,
+    targetModelName,
+    kind,
+    options,
+    fileId,
+    line,
+  );
 }
 
 describe('Antipattern Detection', () => {
@@ -381,7 +389,7 @@ describe('Antipattern Detection', () => {
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
       expect(data.findings.length).toBeGreaterThanOrEqual(1);
-      expect(data.findings.some(f => f.title.includes('setInterval'))).toBe(true);
+      expect(data.findings.some((f) => f.title.includes('setInterval'))).toBe(true);
     });
 
     test('detects subscribe without unsubscribe', () => {
@@ -457,7 +465,9 @@ describe('Antipattern Detection', () => {
         byteStart: 0,
         byteEnd: 100,
         signature: 'function cleanup()',
-        metadata: { callSites: [{ calleeName: 'removeEventListener', line: 2, receiver: 'window' }] },
+        metadata: {
+          callSites: [{ calleeName: 'removeEventListener', line: 2, receiver: 'window' }],
+        },
       });
 
       // B imports A
@@ -643,7 +653,12 @@ describe('Antipattern Detection', () => {
 
       // Migration has no index on user_id
       store.insertMigration(
-        { tableName: 'posts', operation: 'create', columns: [{ name: 'user_id', type: 'integer' }], indices: [] },
+        {
+          tableName: 'posts',
+          operation: 'create',
+          columns: [{ name: 'user_id', type: 'integer' }],
+          indices: [],
+        },
         fMig,
       );
 
@@ -736,15 +751,19 @@ describe('Antipattern Detection', () => {
         lineEnd: 120,
       });
       for (let i = 0; i < 30; i++) {
-        store.insertSymbol(fId, {
-          symbolId: `Huge#m${i}`,
-          name: `method${i}`,
-          kind: 'method' as any,
-          byteStart: 100 + i * 100,
-          byteEnd: 100 + i * 100 + 50,
-          lineStart: 2 + i * 2,
-          lineEnd: 2 + i * 2 + 1,
-        }, classDbId);
+        store.insertSymbol(
+          fId,
+          {
+            symbolId: `Huge#m${i}`,
+            name: `method${i}`,
+            kind: 'method' as any,
+            byteStart: 100 + i * 100,
+            byteEnd: 100 + i * 100 + 50,
+            lineStart: 2 + i * 2,
+            lineEnd: 2 + i * 2 + 1,
+          },
+          classDbId,
+        );
       }
 
       const result = detectAntipatterns(store, TEST_DIR, { category: ['god_class'] });
@@ -862,7 +881,8 @@ describe('Antipattern Detection', () => {
         byteEnd: 200,
         lineStart: 1,
         lineEnd: 10,
-        signature: 'function tooManyParams(a: string, b: number, c: boolean, d: Date, e: object, f: string, g: number)',
+        signature:
+          'function tooManyParams(a: string, b: number, c: boolean, d: Date, e: object, f: string, g: number)',
       });
 
       const result = detectAntipatterns(store, TEST_DIR, { category: ['long_parameter_list'] });
@@ -1061,7 +1081,8 @@ describe('Antipattern Detection', () => {
       });
       expect(result.isOk()).toBe(true);
       const data = result._unsafeUnwrap();
-      const total = data.summary.critical + data.summary.high + data.summary.medium + data.summary.low;
+      const total =
+        data.summary.critical + data.summary.high + data.summary.medium + data.summary.low;
       expect(total).toBe(data.findings.length);
     });
 

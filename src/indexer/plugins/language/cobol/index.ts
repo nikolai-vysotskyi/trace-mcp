@@ -9,8 +9,9 @@
  *
  * COBOL is case-insensitive; patterns use the 'i' flag.
  */
-import { createMultiPassPlugin, type CommentStyle, type ScopeConfig } from '../regex-base-v2.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin, type ScopeConfig } from '../regex-base-v2.js';
 
 const comments: CommentStyle = {
   // COBOL comments: * in column 7 (handled by line pattern), *> inline
@@ -69,9 +70,7 @@ const _plugin = createMultiPassPlugin({
       kind: 'class',
       pattern: /^\s*FD\s+([\w-]+)/gim,
       meta: { fileDesc: true },
-      memberPatterns: [
-        { kind: 'property', pattern: /^\s*(?:0[1-9]|[1-4]\d)\s+([\w-]+)/gim },
-      ],
+      memberPatterns: [{ kind: 'property', pattern: /^\s*(?:0[1-9]|[1-4]\d)\s+([\w-]+)/gim }],
     },
   ],
 

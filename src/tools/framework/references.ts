@@ -1,8 +1,8 @@
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
+import { err, ok } from 'neverthrow';
+import type { Store } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
-import { ok, err } from 'neverthrow';
-import { resolveSymbolInput } from '../shared/resolve.js';
 import { expandMethodViaCha } from '../shared/cha.js';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface ReferenceItem {
   /** Edge type describing the relationship (e.g. 'imports', 'calls', 'renders_component') */
@@ -42,7 +42,7 @@ export function findReferences(
   opts: { symbolId?: string; fqn?: string; filePath?: string },
 ): TraceMcpResult<FindReferencesResult> {
   let nodeId: number | undefined;
-  let targetMeta: FindReferencesResult['target'] = {};
+  const targetMeta: FindReferencesResult['target'] = {};
 
   if (opts.symbolId || opts.fqn) {
     const resolved = resolveSymbolInput(store, opts);
@@ -88,7 +88,10 @@ export function findReferences(
   }
 
   // Collect incoming edges for all target nodes (self + CHA equivalents)
-  const allIncomingEdges: Array<{ edge: ReturnType<Store['getIncomingEdges']>[0]; via_cha?: string }> = [];
+  const allIncomingEdges: Array<{
+    edge: ReturnType<Store['getIncomingEdges']>[0];
+    via_cha?: string;
+  }> = [];
   const seenEdgeKeys = new Set<string>();
 
   for (const targetNid of allTargetNodeIds) {
@@ -101,12 +104,14 @@ export function findReferences(
       seenEdgeKeys.add(key);
       allIncomingEdges.push({
         edge,
-        via_cha: isChaTarget ? chaExpansion?.find((c) => {
-          const ref = store.getNodeRef(targetNid);
-          return ref && ref.nodeType === 'symbol'
-            ? store.getSymbolById(ref.refId)?.symbol_id === c.symbol_id
-            : false;
-        })?.name : undefined,
+        via_cha: isChaTarget
+          ? chaExpansion?.find((c) => {
+              const ref = store.getNodeRef(targetNid);
+              return ref && ref.nodeType === 'symbol'
+                ? store.getSymbolById(ref.refId)?.symbol_id === c.symbol_id
+                : false;
+            })?.name
+          : undefined,
       });
     }
   }

@@ -50,15 +50,22 @@ interface RealSavingsReport {
 }
 
 const MODEL_PRICING: Record<string, number> = {
-  'claude-opus-4-6': 5.00 / 1_000_000,
-  'claude-sonnet-4-6': 3.00 / 1_000_000,
-  'claude-haiku-4-5': 1.00 / 1_000_000,
+  'claude-opus-4-6': 5.0 / 1_000_000,
+  'claude-sonnet-4-6': 3.0 / 1_000_000,
+  'claude-haiku-4-5': 1.0 / 1_000_000,
 };
 
-const READ_TOOLS = new Set(['Read', 'mcp__phpstorm__read_file', 'mcp__phpstorm__get_file_text_by_path']);
+const READ_TOOLS = new Set([
+  'Read',
+  'mcp__phpstorm__read_file',
+  'mcp__phpstorm__get_file_text_by_path',
+]);
 
 /** Compute alternative token cost for a file using trace-mcp */
-function computeAlternativeTokens(store: Store, filePath: string): { tokens: number; tool: string } | null {
+function computeAlternativeTokens(
+  store: Store,
+  filePath: string,
+): { tokens: number; tool: string } | null {
   // Normalize path — strip absolute prefix to match index
   const normalized = filePath.replace(/^\/[^/]+\/[^/]+\/[^/]+\/[^/]+\//, '');
   const file = store.getFile(normalized) ?? store.getFile(filePath);
@@ -73,14 +80,15 @@ function computeAlternativeTokens(store: Store, filePath: string): { tokens: num
 
   if (symbols.length === 0) {
     // No symbols — outline would still be cheaper than full file
-    return { tokens: Math.ceil(fileBytes * 0.15 / 3.5), tool: 'get_outline' };
+    return { tokens: Math.ceil((fileBytes * 0.15) / 3.5), tool: 'get_outline' };
   }
 
   // Average symbol size
-  const avgSymbolBytes = symbols.reduce((s, sym) => s + (sym.byte_end - sym.byte_start), 0) / symbols.length;
+  const avgSymbolBytes =
+    symbols.reduce((s, sym) => s + (sym.byte_end - sym.byte_start), 0) / symbols.length;
 
   // Best strategy: outline first (~signatures), then get_symbol for 1-2 needed symbols
-  const outlineTokens = Math.ceil(signatureBytes / 3.5) || Math.ceil(fileBytes * 0.1 / 3.5);
+  const outlineTokens = Math.ceil(signatureBytes / 3.5) || Math.ceil((fileBytes * 0.1) / 3.5);
   const oneSymbolTokens = Math.ceil(avgSymbolBytes / 3.5);
   const alternativeTokens = outlineTokens + oneSymbolTokens;
 
@@ -93,9 +101,13 @@ export function analyzeRealSavings(
   period: string,
 ): RealSavingsReport {
   // Collect file read calls
-  const fileReads = toolCalls.filter(tc => READ_TOOLS.has(tc.tool_name) && tc.target_file);
-  const bashCats = toolCalls.filter(tc =>
-    tc.tool_short_name === 'Bash' && tc.input_snippet && /\b(cat|head|tail)\b/.test(tc.input_snippet) && tc.target_file,
+  const fileReads = toolCalls.filter((tc) => READ_TOOLS.has(tc.tool_name) && tc.target_file);
+  const bashCats = toolCalls.filter(
+    (tc) =>
+      tc.tool_short_name === 'Bash' &&
+      tc.input_snippet &&
+      /\b(cat|head|tail)\b/.test(tc.input_snippet) &&
+      tc.target_file,
   );
   const allReads = [...fileReads, ...bashCats];
 
@@ -112,18 +124,25 @@ export function analyzeRealSavings(
   // Compute alternatives — only count savings from indexed files
   let filesInIndex = 0;
   let filesNotIndexed = 0;
-  let totalReadTokens = 0;
+  let _totalReadTokens = 0;
   let replaceableTokens = 0;
   let achievableTokens = 0;
   const byFile: FileAlternative[] = [];
   const toolReplacements = new Map<string, ToolReplacement>();
 
   for (const [file, group] of fileGroups) {
-    totalReadTokens += group.tokens;
+    _totalReadTokens += group.tokens;
     const alt = computeAlternativeTokens(store, file);
 
     const toolKey = READ_TOOLS.has(group.tool) ? group.tool : 'Bash (cat/head/tail)';
-    const tr = toolReplacements.get(toolKey) ?? { originalTool: toolKey, calls: 0, tokens: 0, replaceableCalls: 0, replaceableTokens: 0, savingsTokens: 0 };
+    const tr = toolReplacements.get(toolKey) ?? {
+      originalTool: toolKey,
+      calls: 0,
+      tokens: 0,
+      replaceableCalls: 0,
+      replaceableTokens: 0,
+      savingsTokens: 0,
+    };
     tr.calls += group.reads;
     tr.tokens += group.tokens;
 
@@ -149,7 +168,9 @@ export function analyzeRealSavings(
     toolReplacements.set(toolKey, tr);
   }
 
-  byFile.sort((a, b) => (b.totalReadTokens - b.alternativeTokens) - (a.totalReadTokens - a.alternativeTokens));
+  byFile.sort(
+    (a, b) => b.totalReadTokens - b.alternativeTokens - (a.totalReadTokens - a.alternativeTokens),
+  );
 
   const savingsTokens = replaceableTokens - achievableTokens;
   const costSavings: Record<string, string> = {};
@@ -169,37 +190,45 @@ export function analyzeRealSavings(
     sessionMap.set(tc.session_id, s);
   }
 
-  const withTrace = [...sessionMap.values()].filter(s => s.hasTrace);
-  const withoutTrace = [...sessionMap.values()].filter(s => !s.hasTrace);
+  const withTrace = [...sessionMap.values()].filter((s) => s.hasTrace);
+  const withoutTrace = [...sessionMap.values()].filter((s) => !s.hasTrace);
 
   let abComparison: RealSavingsReport['abComparison'];
   if (withTrace.length >= 2 && withoutTrace.length >= 2) {
     const avgWith = {
       count: withTrace.length,
-      avgTokensPerSession: Math.round(withTrace.reduce((s, v) => s + v.tokens, 0) / withTrace.length),
+      avgTokensPerSession: Math.round(
+        withTrace.reduce((s, v) => s + v.tokens, 0) / withTrace.length,
+      ),
       avgToolCalls: Math.round(withTrace.reduce((s, v) => s + v.toolCalls, 0) / withTrace.length),
     };
     const avgWithout = {
       count: withoutTrace.length,
-      avgTokensPerSession: Math.round(withoutTrace.reduce((s, v) => s + v.tokens, 0) / withoutTrace.length),
-      avgToolCalls: Math.round(withoutTrace.reduce((s, v) => s + v.toolCalls, 0) / withoutTrace.length),
+      avgTokensPerSession: Math.round(
+        withoutTrace.reduce((s, v) => s + v.tokens, 0) / withoutTrace.length,
+      ),
+      avgToolCalls: Math.round(
+        withoutTrace.reduce((s, v) => s + v.toolCalls, 0) / withoutTrace.length,
+      ),
     };
     abComparison = {
       sessionsWithTraceMcp: avgWith,
       sessionsWithoutTraceMcp: avgWithout,
       difference: {
-        tokensSavedPct: avgWithout.avgTokensPerSession > 0
-          ? Math.round((1 - avgWith.avgTokensPerSession / avgWithout.avgTokensPerSession) * 100)
-          : 0,
-        fewerToolCallsPct: avgWithout.avgToolCalls > 0
-          ? Math.round((1 - avgWith.avgToolCalls / avgWithout.avgToolCalls) * 100)
-          : 0,
+        tokensSavedPct:
+          avgWithout.avgTokensPerSession > 0
+            ? Math.round((1 - avgWith.avgTokensPerSession / avgWithout.avgTokensPerSession) * 100)
+            : 0,
+        fewerToolCallsPct:
+          avgWithout.avgToolCalls > 0
+            ? Math.round((1 - avgWith.avgToolCalls / avgWithout.avgToolCalls) * 100)
+            : 0,
       },
     };
   }
 
   // Count unique sessions
-  const sessionIds = new Set(allReads.map(tc => tc.session_id));
+  const sessionIds = new Set(allReads.map((tc) => tc.session_id));
 
   return {
     period,
@@ -211,7 +240,8 @@ export function analyzeRealSavings(
       totalReadTokens: replaceableTokens,
       achievableWithTraceMcp: achievableTokens,
       potentialSavingsTokens: savingsTokens,
-      potentialSavingsPct: replaceableTokens > 0 ? Math.round(savingsTokens / replaceableTokens * 100) : 0,
+      potentialSavingsPct:
+        replaceableTokens > 0 ? Math.round((savingsTokens / replaceableTokens) * 100) : 0,
       potentialCostSavings: costSavings,
     },
     byFile: byFile.slice(0, 20),

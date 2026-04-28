@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
   extractMigrations,
   extractTimestamp,
@@ -54,9 +54,7 @@ describe('Laravel migration parsing', () => {
 
     it('extracts nullable columns', () => {
       const columns = migrations[0].columns!;
-      const emailVerified = columns.find(
-        (c) => (c as any).name === 'email_verified_at',
-      );
+      const emailVerified = columns.find((c) => (c as any).name === 'email_verified_at');
       expect(emailVerified).toBeDefined();
       expect((emailVerified as any).nullable).toBe(true);
     });
@@ -100,7 +98,10 @@ return new class extends Migration {
         });
     }
 };`;
-      const { migrations } = extractMigrations(source, 'database/migrations/2024_02_01_000000_add_phone_to_users.php');
+      const { migrations } = extractMigrations(
+        source,
+        'database/migrations/2024_02_01_000000_add_phone_to_users.php',
+      );
       expect(migrations).toHaveLength(1);
       expect(migrations[0].operation).toBe('alter');
       expect(migrations[0].tableName).toBe('users');
@@ -120,7 +121,10 @@ return new class extends Migration {
         Schema::dropIfExists('temp_data');
     }
 };`;
-      const { migrations } = extractMigrations(source, 'database/migrations/2024_03_01_000000_drop_temp_data.php');
+      const { migrations } = extractMigrations(
+        source,
+        'database/migrations/2024_03_01_000000_drop_temp_data.php',
+      );
       expect(migrations).toHaveLength(1);
       expect(migrations[0].operation).toBe('drop');
       expect(migrations[0].tableName).toBe('temp_data');
@@ -129,8 +133,9 @@ return new class extends Migration {
 
   describe('extractTimestamp()', () => {
     it('extracts timestamp from standard migration filename', () => {
-      expect(extractTimestamp('database/migrations/2024_01_15_143022_create_users_table.php'))
-        .toBe('2024_01_15_143022');
+      expect(extractTimestamp('database/migrations/2024_01_15_143022_create_users_table.php')).toBe(
+        '2024_01_15_143022',
+      );
     });
 
     it('returns undefined for non-migration filename', () => {

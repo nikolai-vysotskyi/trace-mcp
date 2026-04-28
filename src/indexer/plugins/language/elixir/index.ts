@@ -6,11 +6,18 @@
  * macros (defmacro/defmacrop), guards (defguard/defguardp), type specs (@type/@typep/@opaque),
  * callbacks (@callback), and import edges (import, alias, use, require).
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 function makeSymbolId(filePath: string, name: string, kind: string): string {
   return `${filePath}::${name}#${kind}`;
@@ -132,7 +139,9 @@ function extractImportTarget(node: TSNode): string | null {
  * `@type foo :: bar` → the operand is a call to `type` with args.
  * `@callback foo(...)` → operand is a call to `callback`.
  */
-function extractAttributeInfo(node: TSNode): { attrName: string; symbolName: string | null } | null {
+function extractAttributeInfo(
+  node: TSNode,
+): { attrName: string; symbolName: string | null } | null {
   // The operator should be '@'
   const op = node.childForFieldName('operator');
   if (!op || op.text !== '@') return null;
@@ -207,24 +216,24 @@ function extractAttributeSymbolName(callNode: TSNode): string | null {
 
 /** Known def-family call targets and their symbol mappings. */
 const DEF_TARGETS: Record<string, { kind: SymbolKind; meta?: Record<string, unknown> }> = {
-  defmodule:  { kind: 'class',     meta: { module: true } },
-  defprotocol:{ kind: 'interface' },
-  defimpl:    { kind: 'class',     meta: { impl: true } },
-  defdelegate:{ kind: 'function',  meta: { delegate: true } },
-  defstruct:  { kind: 'type',      meta: { struct: true } },
-  def:        { kind: 'function' },
-  defp:       { kind: 'function',  meta: { private: true } },
-  defmacro:   { kind: 'function',  meta: { macro: true } },
-  defmacrop:  { kind: 'function',  meta: { macro: true, private: true } },
-  defguard:   { kind: 'function',  meta: { guard: true } },
-  defguardp:  { kind: 'function',  meta: { guard: true, private: true } },
+  defmodule: { kind: 'class', meta: { module: true } },
+  defprotocol: { kind: 'interface' },
+  defimpl: { kind: 'class', meta: { impl: true } },
+  defdelegate: { kind: 'function', meta: { delegate: true } },
+  defstruct: { kind: 'type', meta: { struct: true } },
+  def: { kind: 'function' },
+  defp: { kind: 'function', meta: { private: true } },
+  defmacro: { kind: 'function', meta: { macro: true } },
+  defmacrop: { kind: 'function', meta: { macro: true, private: true } },
+  defguard: { kind: 'function', meta: { guard: true } },
+  defguardp: { kind: 'function', meta: { guard: true, private: true } },
 };
 
 /** Attribute names that produce type symbols. */
 const TYPE_ATTRS: Record<string, Record<string, unknown> | undefined> = {
-  type:    undefined,
-  typep:   { private: true },
-  opaque:  { opaque: true },
+  type: undefined,
+  typep: { private: true },
+  opaque: { opaque: true },
 };
 
 const IMPORT_TARGETS = new Set(['import', 'alias', 'use', 'require']);
@@ -239,7 +248,10 @@ export class ElixirLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.ex', '.exs'];
   supportedVersions = ['1.12', '1.13', '1.14', '1.15', '1.16', '1.17'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('elixir');
       const sourceCode = content.toString('utf-8');
@@ -343,9 +355,7 @@ export class ElixirLanguagePlugin implements LanguagePlugin {
 
       if (!seen.has(symbolId)) {
         seen.add(symbolId);
-        const parentId = moduleCtx
-          ? makeSymbolId(filePath, moduleCtx, 'class')
-          : undefined;
+        const parentId = moduleCtx ? makeSymbolId(filePath, moduleCtx, 'class') : undefined;
         symbols.push({
           symbolId,
           name,
@@ -373,9 +383,7 @@ export class ElixirLanguagePlugin implements LanguagePlugin {
 
       if (!seen.has(symbolId)) {
         seen.add(symbolId);
-        const parentId = moduleCtx
-          ? makeSymbolId(filePath, moduleCtx, 'class')
-          : undefined;
+        const parentId = moduleCtx ? makeSymbolId(filePath, moduleCtx, 'class') : undefined;
         symbols.push({
           symbolId,
           name: 'defstruct',
@@ -402,9 +410,7 @@ export class ElixirLanguagePlugin implements LanguagePlugin {
 
     if (!seen.has(symbolId)) {
       seen.add(symbolId);
-      const parentId = moduleCtx
-        ? makeSymbolId(filePath, moduleCtx, 'class')
-        : undefined;
+      const parentId = moduleCtx ? makeSymbolId(filePath, moduleCtx, 'class') : undefined;
       symbols.push({
         symbolId,
         name: funcName,
@@ -444,9 +450,7 @@ export class ElixirLanguagePlugin implements LanguagePlugin {
       const symbolId = makeSymbolId(filePath, fqn, 'type');
       if (!seen.has(symbolId)) {
         seen.add(symbolId);
-        const parentId = moduleCtx
-          ? makeSymbolId(filePath, moduleCtx, 'class')
-          : undefined;
+        const parentId = moduleCtx ? makeSymbolId(filePath, moduleCtx, 'class') : undefined;
         symbols.push({
           symbolId,
           name: symbolName,
@@ -470,9 +474,7 @@ export class ElixirLanguagePlugin implements LanguagePlugin {
       const symbolId = makeSymbolId(filePath, fqn, 'function');
       if (!seen.has(symbolId)) {
         seen.add(symbolId);
-        const parentId = moduleCtx
-          ? makeSymbolId(filePath, moduleCtx, 'class')
-          : undefined;
+        const parentId = moduleCtx ? makeSymbolId(filePath, moduleCtx, 'class') : undefined;
         symbols.push({
           symbolId,
           name: symbolName,

@@ -3,9 +3,10 @@ import type { PipelineState } from '../pipeline-state.js';
 
 export function resolveOrmAssociationEdges(state: PipelineState): void {
   const { store } = state;
-  const changedFileIds = state.isIncremental && state.changedFileIds.size > 0
-    ? Array.from(state.changedFileIds)
-    : undefined;
+  const changedFileIds =
+    state.isIncremental && state.changedFileIds.size > 0
+      ? Array.from(state.changedFileIds)
+      : undefined;
   const associations = store.getAllOrmAssociations(changedFileIds);
   if (associations.length === 0) return;
 
@@ -16,12 +17,16 @@ export function resolveOrmAssociationEdges(state: PipelineState): void {
   const ormKindToEdgeType: Record<string, Record<string, string>> = {
     mongoose: { ref: 'mongoose_references', discriminator: 'mongoose_discriminates' },
     sequelize: {
-      hasMany: 'sequelize_has_many', belongsTo: 'sequelize_belongs_to',
-      belongsToMany: 'sequelize_belongs_to_many', hasOne: 'sequelize_has_one',
+      hasMany: 'sequelize_has_many',
+      belongsTo: 'sequelize_belongs_to',
+      belongsToMany: 'sequelize_belongs_to_many',
+      hasOne: 'sequelize_has_one',
     },
     typeorm: {
-      OneToMany: 'typeorm_one_to_many', ManyToOne: 'typeorm_many_to_one',
-      OneToOne: 'typeorm_one_to_one', ManyToMany: 'typeorm_many_to_many',
+      OneToMany: 'typeorm_one_to_many',
+      ManyToOne: 'typeorm_many_to_one',
+      OneToOne: 'typeorm_one_to_one',
+      ManyToMany: 'typeorm_many_to_many',
     },
     prisma: { hasMany: 'prisma_relation', belongsTo: 'prisma_relation' },
     drizzle: { hasMany: 'drizzle_relation', belongsTo: 'drizzle_relation' },

@@ -52,10 +52,7 @@ interface GroupContext {
  * Extract routes from a PHP route file source.
  * Handles all Laravel route definition patterns from L6 to L13.
  */
-export function extractRoutes(
-  source: string,
-  filePath: string,
-): RouteExtractionResult {
+export function extractRoutes(source: string, filePath: string): RouteExtractionResult {
   const routes: RawRoute[] = [];
   const warnings: string[] = [];
 
@@ -63,13 +60,13 @@ export function extractRoutes(
   const useMap = buildUseMap(source);
 
   // Process groups recursively, then top-level routes
-  processRouteGroups(source, useMap, routes, { });
+  processRouteGroups(source, useMap, routes, {});
 
   // Extract top-level simple routes (not inside any group we've already processed)
-  extractSimpleRoutes(source, useMap, routes, { });
+  extractSimpleRoutes(source, useMap, routes, {});
 
   // Extract top-level resource routes
-  extractResourceRoutes(source, useMap, routes, { });
+  extractResourceRoutes(source, useMap, routes, {});
 
   // Apply middleware from Route::middleware(...)->group(...) blocks
   applyMiddlewareGroups(source, routes);
@@ -141,7 +138,8 @@ function processRouteGroups(
 ): void {
   // Match Route:: chains ending with ->group(function ... { ... })
   // We use a regex that captures the chain before group() and then find the matching body
-  const groupStartRegex = /Route::((?:namespace|controller|prefix|middleware|name)\s*\([^)]*\)\s*->\s*)*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
+  const _groupStartRegex =
+    /Route::((?:namespace|controller|prefix|middleware|name)\s*\([^)]*\)\s*->\s*)*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
 
   // Simpler approach: find specific group patterns
   // 1. Route::namespace('X')->...->group(function () { ... })
@@ -160,7 +158,8 @@ function extractNamespaceGroups(
   routes: RawRoute[],
   parentCtx: GroupContext,
 ): void {
-  const regex = /Route::namespace\s*\(\s*['"]([^'"]+)['"]\s*\)((?:\s*->\s*(?:prefix|middleware|name)\s*\([^)]*\))*)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
+  const regex =
+    /Route::namespace\s*\(\s*['"]([^'"]+)['"]\s*\)((?:\s*->\s*(?:prefix|middleware|name)\s*\([^)]*\))*)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(source)) !== null) {
@@ -178,9 +177,7 @@ function extractNamespaceGroups(
     // Extract prefix from chain
     const prefixMatch = chainStr.match(/prefix\s*\(\s*['"]([^'"]+)['"]\s*\)/);
     if (prefixMatch) {
-      ctx.prefix = parentCtx.prefix
-        ? `${parentCtx.prefix}/${prefixMatch[1]}`
-        : prefixMatch[1];
+      ctx.prefix = parentCtx.prefix ? `${parentCtx.prefix}/${prefixMatch[1]}` : prefixMatch[1];
     }
 
     // Extract middleware from chain
@@ -205,7 +202,8 @@ function extractControllerGroups(
   routes: RawRoute[],
   parentCtx: GroupContext,
 ): void {
-  const regex = /Route::controller\s*\(\s*([\w\\]+::class)\s*\)((?:\s*->\s*(?:prefix|middleware|name)\s*\([^)]*\))*)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
+  const regex =
+    /Route::controller\s*\(\s*([\w\\]+::class)\s*\)((?:\s*->\s*(?:prefix|middleware|name)\s*\([^)]*\))*)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(source)) !== null) {
@@ -223,9 +221,7 @@ function extractControllerGroups(
     // Extract prefix/middleware from chain
     const prefixMatch = chainStr.match(/prefix\s*\(\s*['"]([^'"]+)['"]\s*\)/);
     if (prefixMatch) {
-      ctx.prefix = parentCtx.prefix
-        ? `${parentCtx.prefix}/${prefixMatch[1]}`
-        : prefixMatch[1];
+      ctx.prefix = parentCtx.prefix ? `${parentCtx.prefix}/${prefixMatch[1]}` : prefixMatch[1];
     }
     const mwMatch = chainStr.match(/middleware\s*\(\s*['"]([^'"]+)['"]\s*\)/);
     if (mwMatch) {
@@ -406,7 +402,8 @@ function extractResourceRoutes(
   ctx: GroupContext,
 ): void {
   // Class-based: Route::resource('posts', PostController::class)
-  const classRegex = /Route::(resource|apiResource)\s*\(\s*['"]([^'"]+)['"]\s*,\s*([\w\\]+::class)\s*\)([^;]*);/g;
+  const classRegex =
+    /Route::(resource|apiResource)\s*\(\s*['"]([^'"]+)['"]\s*,\s*([\w\\]+::class)\s*\)([^;]*);/g;
 
   let match: RegExpExecArray | null;
   while ((match = classRegex.exec(source)) !== null) {
@@ -432,7 +429,8 @@ function extractResourceRoutes(
   }
 
   // String-based: Route::resource('posts', 'PostController') — Laravel 6-8
-  const stringRegex = /Route::(resource|apiResource)\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)([^;]*);/g;
+  const stringRegex =
+    /Route::(resource|apiResource)\s*\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)([^;]*);/g;
 
   while ((match = stringRegex.exec(source)) !== null) {
     const type = match[1];
@@ -470,7 +468,7 @@ function extractChainedName(chain: string): string | null {
 
 /** Extract ->middleware('...') or ->middleware(['...', '...']) from method chain. */
 function extractChainedMiddleware(chain: string): string[] {
-  const match = chain.match(/->middleware\s*\(\s*(['"\[].*?)\s*\)/);
+  const match = chain.match(/->middleware\s*\(\s*(['"[].*?)\s*\)/);
   if (!match) return [];
 
   const arg = match[1];
@@ -494,7 +492,8 @@ function extractChainedMiddleware(chain: string): string[] {
 function applyMiddlewareGroups(source: string, routes: RawRoute[]): void {
   // Match: Route::middleware('auth:sanctum')->group(function () { ... });
   // Also: Route::middleware(['auth', 'verified'])->group(function () { ... });
-  const groupRegex = /Route::middleware\s*\(\s*([\['""][^)]*?)\s*\)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
+  const groupRegex =
+    /Route::middleware\s*\(\s*([['""][^)]*?)\s*\)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
 
   let match: RegExpExecArray | null;
   while ((match = groupRegex.exec(source)) !== null) {

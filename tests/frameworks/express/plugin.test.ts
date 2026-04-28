@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ExpressPlugin,
-  extractExpressRoutes,
   extractExpressMiddleware,
+  extractExpressRoutes,
 } from '../../../src/indexer/plugins/integration/framework/express/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -64,10 +64,7 @@ describe('ExpressPlugin', () => {
 
   describe('extractExpressRoutes()', () => {
     it('extracts app.get routes', () => {
-      const source = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/app.ts'),
-        'utf-8',
-      );
+      const source = fs.readFileSync(path.join(FIXTURE_DIR, 'src/app.ts'), 'utf-8');
       const routes = extractExpressRoutes(source);
       expect(routes.length).toBeGreaterThanOrEqual(1);
       const healthRoute = routes.find((r) => r.path === '/health');
@@ -76,10 +73,7 @@ describe('ExpressPlugin', () => {
     });
 
     it('extracts router.get and router.post routes', () => {
-      const source = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/routes/users.ts'),
-        'utf-8',
-      );
+      const source = fs.readFileSync(path.join(FIXTURE_DIR, 'src/routes/users.ts'), 'utf-8');
       const routes = extractExpressRoutes(source);
       expect(routes.length).toBeGreaterThanOrEqual(3);
 
@@ -95,10 +89,7 @@ describe('ExpressPlugin', () => {
 
   describe('extractExpressMiddleware()', () => {
     it('extracts path-based middleware (router mounts)', () => {
-      const source = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/app.ts'),
-        'utf-8',
-      );
+      const source = fs.readFileSync(path.join(FIXTURE_DIR, 'src/app.ts'), 'utf-8');
       const middlewares = extractExpressMiddleware(source);
       const pathMiddlewares = middlewares.filter((m) => !m.isGlobal);
       expect(pathMiddlewares.length).toBeGreaterThanOrEqual(1);
@@ -118,9 +109,7 @@ describe('ExpressPlugin', () => {
 
   describe('extractNodes()', () => {
     it('detects express_router role and routes', () => {
-      const content = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/routes/users.ts'),
-      );
+      const content = fs.readFileSync(path.join(FIXTURE_DIR, 'src/routes/users.ts'));
       const result = plugin.extractNodes('routes/users.ts', content, 'typescript');
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();

@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
+  computeComplexity,
   computeCyclomatic,
   computeMaxNesting,
   computeParamCount,
-  computeComplexity,
 } from '../../src/tools/analysis/complexity.js';
 
 describe('computeCyclomatic', () => {
@@ -137,7 +137,9 @@ describe('computeParamCount', () => {
   });
 
   it('handles nested generics', () => {
-    expect(computeParamCount('function foo(a: Map<string, Map<number, boolean>>, b: string)')).toBe(2);
+    expect(computeParamCount('function foo(a: Map<string, Map<number, boolean>>, b: string)')).toBe(
+      2,
+    );
   });
 
   it('handles destructured params', () => {

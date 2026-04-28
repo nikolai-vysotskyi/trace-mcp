@@ -44,7 +44,7 @@ export function validationError(message: string, details?: unknown): TraceMcpErr
 export function formatToolError(error: TraceMcpError): object {
   const base: Record<string, unknown> = {
     code: error.code,
-    message: 'message' in error ? error.message : ('detail' in error ? error.detail : error.code),
+    message: 'message' in error ? error.message : 'detail' in error ? error.detail : error.code,
   };
 
   if (error.code === 'NOT_FOUND' && error.candidates?.length) {
@@ -55,4 +55,4 @@ export function formatToolError(error: TraceMcpError): object {
   return { error: base };
 }
 
-export { ok, err, Result };
+export { err, ok, Result };

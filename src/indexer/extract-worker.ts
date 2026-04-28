@@ -8,10 +8,10 @@
  */
 import { parentPort } from 'node:worker_threads';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { FileExtractor } from './file-extractor.js';
-import { buildProjectContext } from './project-context.js';
 import type { ExtractRequest, ExtractResponse } from './extract-pool.js';
+import { FileExtractor } from './file-extractor.js';
 import type { WorkspaceInfo } from './monorepo.js';
+import { buildProjectContext } from './project-context.js';
 
 if (!parentPort) {
   throw new Error('extract-worker.ts must be loaded as a worker_thread');
@@ -56,7 +56,9 @@ function getExtractor(rootPath: string, workspaces: WorkspaceInfo[]): FileExtrac
   return e;
 }
 
-interface InternalRequest extends ExtractRequest { id: number }
+interface InternalRequest extends ExtractRequest {
+  id: number;
+}
 
 parentPort.on('message', async (req: InternalRequest) => {
   let result: ExtractResponse;

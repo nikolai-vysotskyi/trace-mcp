@@ -25,24 +25,35 @@ export interface SearchEvidence {
 
 const TOOL_SUGGESTIONS: Record<string, string> = {
   // ─── search-style tools (verdict: not_found_in_project) ─────
-  search: 'No symbols matched this query. Do not retry with similar terms. Try fuzzy=true or use search_text for raw content matching.',
-  search_text: 'No text matches found in the indexed files. Check spelling or try a broader pattern.',
-  get_feature_context: 'No code matched this feature description. Try more specific technical terms or symbol names.',
-  query_by_intent: 'No symbols matched this intent query. Rephrase with concrete terms (function names, class names, patterns).',
+  search:
+    'No symbols matched this query. Do not retry with similar terms. Try fuzzy=true or use search_text for raw content matching.',
+  search_text:
+    'No text matches found in the indexed files. Check spelling or try a broader pattern.',
+  get_feature_context:
+    'No code matched this feature description. Try more specific technical terms or symbol names.',
+  query_by_intent:
+    'No symbols matched this intent query. Rephrase with concrete terms (function names, class names, patterns).',
 
   // ─── audit tools — empty result is GOOD news ─────────────────
-  get_dead_code: 'No dead code detected — all symbols have incoming references or are entry points.',
+  get_dead_code:
+    'No dead code detected — all symbols have incoming references or are entry points.',
   get_dead_exports: 'No dead exports found — every exported symbol is imported somewhere.',
-  get_untested_exports: 'No untested public exports — every exported symbol has matching test coverage.',
+  get_untested_exports:
+    'No untested public exports — every exported symbol has matching test coverage.',
   get_untested_symbols: 'No untested symbols found — every function and class has test coverage.',
   get_circular_imports: 'No circular import chains found in the analyzed scope.',
 
   // ─── relation tools (verdict: symbol_indexed_but_isolated) ──
-  find_usages: 'This symbol has no incoming references in the dependency graph. It may be dead code or only used dynamically. Do not grep for it as a fallback — the absence is authoritative.',
-  get_tests_for: 'No tests found for this symbol/file. Consider creating tests or check if tests use a different naming convention.',
-  get_call_graph: 'This symbol is a leaf in the call graph: no callers and no callees were resolved. Either it is dead code, only invoked dynamically, or its call edges were not extracted (check the language plugin).',
-  get_type_hierarchy: 'This name has no parents (extends/implements) and no descendants in the indexed codebase. Either it is a standalone class/interface, or the name does not match any indexed type.',
-  get_implementations: 'No classes implement or extend this name. It may be unused, an external type, or the indexer did not capture the heritage relation.',
+  find_usages:
+    'This symbol has no incoming references in the dependency graph. It may be dead code or only used dynamically. Do not grep for it as a fallback — the absence is authoritative.',
+  get_tests_for:
+    'No tests found for this symbol/file. Consider creating tests or check if tests use a different naming convention.',
+  get_call_graph:
+    'This symbol is a leaf in the call graph: no callers and no callees were resolved. Either it is dead code, only invoked dynamically, or its call edges were not extracted (check the language plugin).',
+  get_type_hierarchy:
+    'This name has no parents (extends/implements) and no descendants in the indexed codebase. Either it is a standalone class/interface, or the name does not match any indexed type.',
+  get_implementations:
+    'No classes implement or extend this name. It may be unused, an external type, or the indexer did not capture the heritage relation.',
 };
 
 const DEFAULT_SUGGESTION_NOT_FOUND =
@@ -87,19 +98,21 @@ export function buildNegativeEvidence(
   queryExpanded?: boolean,
   toolName?: string,
 ): SearchEvidence {
-  const opts = typeof filesOrOpts === 'object'
-    ? filesOrOpts
-    : {
-        indexedFiles: filesOrOpts,
-        indexedSymbols: indexedSymbols!,
-        queryExpanded: queryExpanded ?? false,
-        toolName: toolName!,
-      };
+  const opts =
+    typeof filesOrOpts === 'object'
+      ? filesOrOpts
+      : {
+          indexedFiles: filesOrOpts,
+          indexedSymbols: indexedSymbols!,
+          queryExpanded: queryExpanded ?? false,
+          toolName: toolName!,
+        };
 
   const verdict: EvidenceVerdict = opts.verdict ?? 'not_found_in_project';
-  const defaultSuggestion = verdict === 'symbol_indexed_but_isolated'
-    ? DEFAULT_SUGGESTION_ISOLATED
-    : DEFAULT_SUGGESTION_NOT_FOUND;
+  const defaultSuggestion =
+    verdict === 'symbol_indexed_but_isolated'
+      ? DEFAULT_SUGGESTION_ISOLATED
+      : DEFAULT_SUGGESTION_NOT_FOUND;
 
   const ev: SearchEvidence = {
     scope: 'full_index',

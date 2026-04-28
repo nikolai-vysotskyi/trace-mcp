@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
 import Database from 'better-sqlite3';
-import type { InferenceService } from '../../src/ai/interfaces.js';
-import { InferenceCache } from '../../src/ai/inference-cache.js';
+import { describe, expect, it, vi } from 'vitest';
 import { CachedInferenceService } from '../../src/ai/cached-inference.js';
+import { InferenceCache } from '../../src/ai/inference-cache.js';
+import type { InferenceService } from '../../src/ai/interfaces.js';
 
 function createDb(): Database.Database {
   const db = new Database(':memory:');

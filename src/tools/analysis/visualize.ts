@@ -7,34 +7,33 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
-import { Store, type FileRow, type SymbolRow, type EdgeRow } from '../../db/store.js';
-import { initializeDatabase } from '../../db/schema.js';
-import type { TopologyStore } from '../../topology/topology-db.js';
-import { logger } from '../../logger.js';
-import { computeBottlenecksForVizGraph } from './bottlenecks.js';
+import type Database from 'better-sqlite3';
 // @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
+import { initializeDatabase } from '../../db/schema.js';
+import { type FileRow, Store } from '../../db/store.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
+import { logger } from '../../logger.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
+import { computeBottlenecksForVizGraph } from './bottlenecks.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface VisualizeGraphOptions {
-  scope: string;            // file path, directory, or "project"
-  depth?: number;           // max hops from scope (default: 2)
+  scope: string; // file path, directory, or "project"
+  depth?: number; // max hops from scope (default: 2)
   layout?: 'force' | 'hierarchical' | 'radial';
   colorBy?: 'community' | 'language' | 'framework_role';
-  includeEdges?: string[];  // filter edge types
-  output?: string;          // output path
-  hideIsolated?: boolean;   // hide nodes with no edges (default: true)
+  includeEdges?: string[]; // filter edge types
+  output?: string; // output path
+  hideIsolated?: boolean; // hide nodes with no edges (default: true)
   granularity?: 'file' | 'symbol'; // node granularity (default: file)
-  symbolKinds?: string[];   // filter symbol kinds when granularity=symbol
-  maxFiles?: number;        // max seed files for file-level graph
-  maxNodes?: number;        // max viz nodes for symbol-level graph (default: 100000)
+  symbolKinds?: string[]; // filter symbol kinds when granularity=symbol
+  maxFiles?: number; // max seed files for file-level graph
+  maxNodes?: number; // max viz nodes for symbol-level graph (default: 100000)
   topoStore?: TopologyStore; // topology store — when set, merges connected subproject repos
-  projectRoot?: string;      // current project root — used to scope subprojects to connected repos only
-  highlightDepth?: number;   // BFS depth for click-highlight (default: 1)
+  projectRoot?: string; // current project root — used to scope subprojects to connected repos only
+  highlightDepth?: number; // BFS depth for click-highlight (default: 1)
   includeBottlenecks?: boolean; // annotate edges/nodes with bottleneck scores, bridges, and articulation points (file granularity only)
 }
 
@@ -47,7 +46,7 @@ interface VizNode {
   community: number;
   symbolCount?: number;
   importance: number;
-  repo?: string;  // set when merging subproject repos
+  repo?: string; // set when merging subproject repos
   isArticulation?: boolean; // single point of failure — removal disconnects the graph
 }
 
@@ -57,7 +56,7 @@ interface VizEdge {
   type: string;
   weight: number;
   bottleneckScore?: number; // normalized [0..1]; only set when includeBottlenecks=true
-  isBridge?: boolean;       // true if removing this edge would disconnect the (undirected) graph
+  isBridge?: boolean; // true if removing this edge would disconnect the (undirected) graph
 }
 
 interface VizCommunity {
@@ -89,12 +88,11 @@ interface MermaidDiagramResult {
 
 // ── Community Detection (simple label propagation) ─────────────────────
 
-function detectCommunities(
-  nodeIds: string[],
-  edges: VizEdge[],
-): Map<string, number> {
+function detectCommunities(nodeIds: string[], edges: VizEdge[]): Map<string, number> {
   const labels = new Map<string, number>();
-  nodeIds.forEach((id, i) => labels.set(id, i));
+  nodeIds.forEach((id, i) => {
+    labels.set(id, i);
+  });
 
   // Build adjacency list
   const adj = new Map<string, string[]>();
@@ -118,7 +116,10 @@ function detectCommunities(
       let maxLabel = labels.get(id)!;
       let maxCount = 0;
       for (const [l, c] of freq) {
-        if (c > maxCount) { maxCount = c; maxLabel = l; }
+        if (c > maxCount) {
+          maxCount = c;
+          maxLabel = l;
+        }
       }
       labels.set(id, maxLabel);
     }
@@ -127,7 +128,9 @@ function detectCommunities(
   // Normalize community IDs to 0..N
   const uniqueLabels = [...new Set(labels.values())];
   const remap = new Map<number, number>();
-  uniqueLabels.forEach((l, i) => remap.set(l, i));
+  uniqueLabels.forEach((l, i) => {
+    remap.set(l, i);
+  });
   for (const [id, l] of labels) labels.set(id, remap.get(l)!);
 
   return labels;
@@ -141,7 +144,7 @@ export function buildGraphData(
 ): { nodes: VizNode[]; edges: VizEdge[]; communities: VizCommunity[] } {
   const scope = opts.scope;
   const depth = opts.depth ?? 2;
-  const colorBy = opts.colorBy ?? 'community';
+  const _colorBy = opts.colorBy ?? 'community';
   const granularity = opts.granularity ?? 'file';
   const hideIsolated = opts.hideIsolated === true; // default false
 
@@ -169,8 +172,18 @@ export function buildGraphData(
 
 /** Directories that should never appear in graph visualizations (safety net for stale indexes). */
 const GRAPH_EXCLUDE_DIRS = new Set([
-  'node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__',
-  '.venv', '.next', '.nuxt', 'coverage', '.turbo', '.cache',
+  'node_modules',
+  'vendor',
+  '.git',
+  'dist',
+  'build',
+  '__pycache__',
+  '.venv',
+  '.next',
+  '.nuxt',
+  'coverage',
+  '.turbo',
+  '.cache',
 ]);
 
 function isExcludedPath(filePath: string): boolean {
@@ -235,11 +248,16 @@ function buildSubprojectGraph(
 
   // Build graph for main project
   const mainResult = buildSingleProjectGraph(
-    mainStore, opts, 'project', opts.depth ?? 2,
-    opts.granularity ?? 'file', opts.hideIsolated === true,
+    mainStore,
+    opts,
+    'project',
+    opts.depth ?? 2,
+    opts.granularity ?? 'file',
+    opts.hideIsolated === true,
   );
 
-  const mainPrefix = allRepos.find((r) => r.repo_root === projectRoot)?.name ?? path.basename(projectRoot);
+  const mainPrefix =
+    allRepos.find((r) => r.repo_root === projectRoot)?.name ?? path.basename(projectRoot);
 
   for (const n of mainResult.nodes) {
     n.repo = mainPrefix;
@@ -263,8 +281,12 @@ function buildSubprojectGraph(
       };
 
       const fedResult = buildSingleProjectGraph(
-        fedStore, fedOpts, 'project', opts.depth ?? 2,
-        opts.granularity ?? 'file', opts.hideIsolated === true,
+        fedStore,
+        fedOpts,
+        'project',
+        opts.depth ?? 2,
+        opts.granularity ?? 'file',
+        opts.hideIsolated === true,
       );
 
       for (const n of fedResult.nodes) {
@@ -306,7 +328,9 @@ function buildSubprojectGraph(
         });
       }
     }
-  } catch { /* cross-service edges are best-effort */ }
+  } catch {
+    /* cross-service edges are best-effort */
+  }
 
   if (allNodes.length === 0) return null;
 
@@ -328,7 +352,7 @@ function buildFileGraph(
   // 1. Collect ALL symbol node IDs for the seed files — this is where
   //    edges actually live (symbol→symbol), not file→file.
   const fileIdSet = new Set(seedFiles.map((f) => f.id));
-  const fileByIdMap = new Map(seedFiles.map((f) => [f.id, f]));
+  const _fileByIdMap = new Map(seedFiles.map((f) => [f.id, f]));
 
   // Get symbol→nodeId mapping for seed files
   const allSymbols = store.getSymbolsByFileIds([...fileIdSet]);
@@ -354,9 +378,7 @@ function buildFileGraph(
 
   // 2. Query edges for all seed nodes (symbols + files)
   const allSeedNodeIds = [...new Set([...symbolNodeIds, ...fileNodeIds])];
-  const rawEdges = allSeedNodeIds.length > 0
-    ? store.getEdgesForNodesBatch(allSeedNodeIds)
-    : [];
+  const rawEdges = allSeedNodeIds.length > 0 ? store.getEdgesForNodesBatch(allSeedNodeIds) : [];
 
   const filteredEdges = edgeFilter
     ? rawEdges.filter((e) => edgeFilter.has(e.edge_type_name))
@@ -370,16 +392,13 @@ function buildFileGraph(
 
   for (let d = 0; d < depth && frontier.size > 0; d++) {
     const nextFrontier = new Set<number>();
-    const batchEdges = d === 0
-      ? filteredEdges
-      : store.getEdgesForNodesBatch([...frontier]);
+    const batchEdges = d === 0 ? filteredEdges : store.getEdgesForNodesBatch([...frontier]);
 
     if (d > 0) allCollectedEdges.push(...batchEdges);
 
     for (const edge of batchEdges) {
-      const otherNode = edge.pivot_node_id === edge.source_node_id
-        ? edge.target_node_id
-        : edge.source_node_id;
+      const otherNode =
+        edge.pivot_node_id === edge.source_node_id ? edge.target_node_id : edge.source_node_id;
 
       if (!visitedNodes.has(otherNode) && visitedNodes.size < 5000) {
         visitedNodes.add(otherNode);
@@ -407,9 +426,8 @@ function buildFileGraph(
   }
 
   // Resolve symbols to their file_id
-  const expandedSymbolRows = expandedSymbolIds.size > 0
-    ? store.getSymbolsByIds([...expandedSymbolIds])
-    : new Map();
+  const expandedSymbolRows =
+    expandedSymbolIds.size > 0 ? store.getSymbolsByIds([...expandedSymbolIds]) : new Map();
 
   for (const [nodeId, ref] of nodeRefs) {
     if (ref.nodeType === 'symbol') {
@@ -472,7 +490,7 @@ function buildFileGraph(
   }
 
   const dedupedEdges = [...edgeMap.values()];
-  let vizNodes = [...vizNodeMap.values()];
+  const vizNodes = [...vizNodeMap.values()];
 
   // 7. Communities, importance, optional isolation filter
   return finalize(vizNodes, dedupedEdges, hideIsolated);
@@ -514,9 +532,7 @@ function buildSymbolGraph(
   const visitedFileNodes = new Set(seedFileNodeIds);
   let frontier = new Set(seedFileNodeIds);
 
-  const rawEdges = seedFileNodeIds.length > 0
-    ? store.getEdgesForNodesBatch(seedFileNodeIds)
-    : [];
+  const rawEdges = seedFileNodeIds.length > 0 ? store.getEdgesForNodesBatch(seedFileNodeIds) : [];
   const filteredEdges = edgeFilter
     ? rawEdges.filter((e) => edgeFilter.has(e.edge_type_name))
     : rawEdges;
@@ -526,16 +542,13 @@ function buildSymbolGraph(
 
   for (let d = 0; d < depth && frontier.size > 0; d++) {
     const nextFrontier = new Set<number>();
-    const batchEdges = d === 0
-      ? filteredEdges
-      : store.getEdgesForNodesBatch([...frontier]);
+    const batchEdges = d === 0 ? filteredEdges : store.getEdgesForNodesBatch([...frontier]);
 
     if (d > 0) collectedEdges.push(...batchEdges);
 
     for (const edge of batchEdges) {
-      const otherNode = edge.pivot_node_id === edge.source_node_id
-        ? edge.target_node_id
-        : edge.source_node_id;
+      const otherNode =
+        edge.pivot_node_id === edge.source_node_id ? edge.target_node_id : edge.source_node_id;
 
       if (!visitedFileNodes.has(otherNode) && visitedFileNodes.size < 5000) {
         visitedFileNodes.add(otherNode);
@@ -553,7 +566,8 @@ function buildSymbolGraph(
   for (const [, ref] of fileNodeRefs) {
     if (ref.nodeType === 'file') candidateFileRefIds.push(ref.refId);
   }
-  const candidateFilesMap = candidateFileRefIds.length > 0 ? store.getFilesByIds(candidateFileRefIds) : new Map();
+  const candidateFilesMap =
+    candidateFileRefIds.length > 0 ? store.getFilesByIds(candidateFileRefIds) : new Map();
   for (const [nodeId, ref] of fileNodeRefs) {
     if (ref.nodeType === 'file') {
       const file = candidateFilesMap.get(ref.refId);
@@ -574,9 +588,8 @@ function buildSymbolGraph(
 
   // -- Load symbols: prioritize files with edges --
   const connectedFileIdArr = [...connectedFileIds];
-  const allSymbols = connectedFileIdArr.length > 0
-    ? store.getSymbolsByFileIds(connectedFileIdArr)
-    : [];
+  const allSymbols =
+    connectedFileIdArr.length > 0 ? store.getSymbolsByFileIds(connectedFileIdArr) : [];
 
   // Apply kind filter
   const filteredSymbols = opts.symbolKinds
@@ -589,9 +602,10 @@ function buildSymbolGraph(
     const withEdges = filteredSymbols.filter((s) => edgeConnectedFileIds.has(s.file_id));
     const withoutEdges = filteredSymbols.filter((s) => !edgeConnectedFileIds.has(s.file_id));
     const remaining = MAX_VIZ_NODES - withEdges.length;
-    cappedSymbols = remaining > 0
-      ? [...withEdges, ...withoutEdges.slice(0, remaining)]
-      : withEdges.slice(0, MAX_VIZ_NODES);
+    cappedSymbols =
+      remaining > 0
+        ? [...withEdges, ...withoutEdges.slice(0, remaining)]
+        : withEdges.slice(0, MAX_VIZ_NODES);
   } else {
     cappedSymbols = filteredSymbols;
   }
@@ -606,9 +620,7 @@ function buildSymbolGraph(
   const cappedSymNodeMap = store.getNodeIdsBatch('symbol', cappedSymRefIds);
   const cappedSymNodeIds = [...cappedSymNodeMap.values()];
 
-  const symEdges = cappedSymNodeIds.length > 0
-    ? store.getEdgesForNodesBatch(cappedSymNodeIds)
-    : [];
+  const symEdges = cappedSymNodeIds.length > 0 ? store.getEdgesForNodesBatch(cappedSymNodeIds) : [];
   const filteredSymEdges = edgeFilter
     ? symEdges.filter((e) => edgeFilter.has(e.edge_type_name))
     : symEdges;
@@ -684,7 +696,10 @@ function buildSymbolGraph(
   const fileSymbolByName = new Map<number, Map<string, string>>();
   for (const sym of symbolsById.values()) {
     let nameMap = fileSymbolByName.get(sym.file_id);
-    if (!nameMap) { nameMap = new Map(); fileSymbolByName.set(sym.file_id, nameMap); }
+    if (!nameMap) {
+      nameMap = new Map();
+      fileSymbolByName.set(sym.file_id, nameMap);
+    }
     nameMap.set(sym.name, sym.symbol_id);
   }
 
@@ -695,8 +710,11 @@ function buildSymbolGraph(
     if (source === target) return;
     const key = `${source}→${target}`;
     const existing = edgeMap.get(key);
-    if (existing) { existing.weight++; }
-    else { edgeMap.set(key, { source, target, type, weight: 1 }); }
+    if (existing) {
+      existing.weight++;
+    } else {
+      edgeMap.set(key, { source, target, type, weight: 1 });
+    }
   };
 
   // Deduplicate collected edges
@@ -743,7 +761,9 @@ function buildSymbolGraph(
             }
           }
         }
-      } catch { /* ignore malformed metadata */ }
+      } catch {
+        /* ignore malformed metadata */
+      }
     }
 
     // Fallback: create one proxy edge between first symbols of each file
@@ -797,7 +817,18 @@ function finalize(
     else byCommunity.set(n.community, [n]);
   }
   const communitySet = new Set(vizNodes.map((n) => n.community));
-  const COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac'];
+  const COLORS = [
+    '#4e79a7',
+    '#f28e2b',
+    '#e15759',
+    '#76b7b2',
+    '#59a14f',
+    '#edc948',
+    '#b07aa1',
+    '#ff9da7',
+    '#9c755f',
+    '#bab0ac',
+  ];
   const communities: VizCommunity[] = [...communitySet].map((id) => ({
     id,
     label: deriveCommunityLabel(byCommunity.get(id) ?? [], id),
@@ -836,7 +867,10 @@ function deriveCommunityLabel(nodes: VizNode[], communityId: number): string {
     if (count < threshold) continue;
     // Prefer longer (deeper) prefix; tie-break by higher count.
     const score = prefix.split('/').length * 1000 + count;
-    if (score > bestScore) { bestScore = score; best = prefix; }
+    if (score > bestScore) {
+      bestScore = score;
+      best = prefix;
+    }
   }
   return best || `group-${communityId}`;
 }
@@ -1986,7 +2020,11 @@ function fetchVizCoChangeWeights(
   const pathSet = new Set<string>();
   for (const n of nodes) pathSet.add(n.id);
 
-  interface Row { file_a: string; file_b: string; confidence: number }
+  interface Row {
+    file_a: string;
+    file_b: string;
+    confidence: number;
+  }
   const rows = store.db
     .prepare('SELECT file_a, file_b, confidence FROM co_changes WHERE confidence > 0')
     .all() as Row[];
@@ -2016,11 +2054,17 @@ export function visualizeGraph(
   const { nodes, edges, communities } = buildGraphData(store, opts);
 
   if (nodes.length === 0) {
-    return err(validationError('No nodes found for the given scope. Try a broader scope or ensure the project is indexed.'));
+    return err(
+      validationError(
+        'No nodes found for the given scope. Try a broader scope or ensure the project is indexed.',
+      ),
+    );
   }
 
   const layout = opts.layout ?? 'force';
-  const html = generateHtml(nodes, edges, communities, layout, { highlightDepth: opts.highlightDepth });
+  const html = generateHtml(nodes, edges, communities, layout, {
+    highlightDepth: opts.highlightDepth,
+  });
   const outputPath = opts.output ?? path.join(process.env.TMPDIR ?? '/tmp', 'trace-mcp-graph.html');
 
   fs.writeFileSync(outputPath, html, 'utf-8');
@@ -2063,7 +2107,12 @@ export function getDependencyDiagram(
       lines.push(`  ${src} -> ${tgt} [label="${e.type}"];`);
     }
     lines.push('}');
-    return ok({ diagram: lines.join('\n'), format: 'dot', nodes: topNodes.length, edges: filteredEdges.length });
+    return ok({
+      diagram: lines.join('\n'),
+      format: 'dot',
+      nodes: topNodes.length,
+      edges: filteredEdges.length,
+    });
   }
 
   // Mermaid

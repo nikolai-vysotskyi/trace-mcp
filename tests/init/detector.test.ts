@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 describe('detectProject', () => {
   it('detects languages and frameworks from a real project root', async () => {
@@ -7,9 +7,9 @@ describe('detectProject', () => {
 
     expect(result.projectRoot).toBe(process.cwd());
     // Language names may be capitalized
-    expect(result.languages.some(l => l.toLowerCase() === 'typescript')).toBe(true);
+    expect(result.languages.some((l) => l.toLowerCase() === 'typescript')).toBe(true);
     expect(result.packageManagers.length).toBeGreaterThan(0);
-    expect(result.packageManagers.some(pm => pm.type === 'npm')).toBe(true);
+    expect(result.packageManagers.some((pm) => pm.type === 'npm')).toBe(true);
   });
 
   it('detects frameworks from package.json', async () => {

@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { describe, expect, it } from 'vitest';
 import {
-  extractUseStatements,
+  extractCallSites,
   extractClassHeritage,
   extractInterfaceExtends,
-  extractCallSites,
+  extractUseStatements,
 } from '../../src/indexer/plugins/language/php/helpers.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { getParser } from '../../src/parser/tree-sitter.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
@@ -80,7 +80,9 @@ interface Authenticatable
     expect(iface.fqn).toBe('App\\Contracts\\Authenticatable');
 
     const method = findSymbol(result.symbols, 'getAuthId', 'method');
-    expect(method.parentSymbolId).toBe('app/Contracts/Authenticatable.php::Authenticatable#interface');
+    expect(method.parentSymbolId).toBe(
+      'app/Contracts/Authenticatable.php::Authenticatable#interface',
+    );
   });
 
   it('extracts trait with methods', async () => {
@@ -278,12 +280,16 @@ class User extends Model {}`;
     expect(result.edges).toBeDefined();
     expect(result.edges!.length).toBe(2);
 
-    const modelEdge = result.edges!.find((e) => (e.metadata as any).from === 'Illuminate\\Database\\Eloquent\\Model');
+    const modelEdge = result.edges!.find(
+      (e) => (e.metadata as any).from === 'Illuminate\\Database\\Eloquent\\Model',
+    );
     expect(modelEdge).toBeDefined();
     expect(modelEdge!.edgeType).toBe('php_imports');
     expect((modelEdge!.metadata as any).specifiers).toEqual(['Model']);
 
-    const searchableEdge = result.edges!.find((e) => (e.metadata as any).from === 'App\\Contracts\\Searchable');
+    const searchableEdge = result.edges!.find(
+      (e) => (e.metadata as any).from === 'App\\Contracts\\Searchable',
+    );
     expect(searchableEdge).toBeDefined();
     expect((searchableEdge!.metadata as any).specifiers).toEqual(['Searchable']);
   });
@@ -406,7 +412,10 @@ describe('extractClassHeritage', () => {
     const root = parser.parse(code).rootNode;
     function find(n: any): any {
       if (n.type === 'class_declaration') return n;
-      for (const c of n.namedChildren) { const r = find(c); if (r) return r; }
+      for (const c of n.namedChildren) {
+        const r = find(c);
+        if (r) return r;
+      }
       return null;
     }
     return find(root);
@@ -415,21 +424,27 @@ describe('extractClassHeritage', () => {
   it('extracts extends', async () => {
     const node = await parseClass('<?php class User extends Model {}');
     expect(extractClassHeritage(node)).toEqual({
-      extends: ['Model'], implements: [], usesTraits: [],
+      extends: ['Model'],
+      implements: [],
+      usesTraits: [],
     });
   });
 
   it('extracts implements (multiple)', async () => {
     const node = await parseClass('<?php class User implements Auth, Serializable {}');
     expect(extractClassHeritage(node)).toEqual({
-      extends: [], implements: ['Auth', 'Serializable'], usesTraits: [],
+      extends: [],
+      implements: ['Auth', 'Serializable'],
+      usesTraits: [],
     });
   });
 
   it('extracts trait usage', async () => {
     const node = await parseClass('<?php class User { use HasRoles, CanLogin; }');
     expect(extractClassHeritage(node)).toEqual({
-      extends: [], implements: [], usesTraits: ['HasRoles', 'CanLogin'],
+      extends: [],
+      implements: [],
+      usesTraits: ['HasRoles', 'CanLogin'],
     });
   });
 
@@ -461,7 +476,10 @@ describe('extractCallSites', () => {
     const root = parser.parse(code).rootNode;
     function find(n: any): any {
       if (n.type === 'compound_statement') return n;
-      for (const c of n.namedChildren) { const r = find(c); if (r) return r; }
+      for (const c of n.namedChildren) {
+        const r = find(c);
+        if (r) return r;
+      }
       return null;
     }
     return find(root);
@@ -482,7 +500,9 @@ describe('extractCallSites', () => {
   });
 
   it('extracts Class::method() static calls', async () => {
-    const body = await parseBody(`<?php function f() { User::query()->get(); App\\Util::helper(); }`);
+    const body = await parseBody(
+      `<?php function f() { User::query()->get(); App\\Util::helper(); }`,
+    );
     const calls = extractCallSites(body);
     const statics = calls.filter((c) => c.type === 'static');
     expect(statics).toHaveLength(2);
@@ -544,7 +564,9 @@ function f() {
   });
 
   it('extracts Class::CONST class constant access', async () => {
-    const body = await parseBody(`<?php function f() { echo User::STATUS_ACTIVE; echo App\\Config::DEFAULT; }`);
+    const body = await parseBody(
+      `<?php function f() { echo User::STATUS_ACTIVE; echo App\\Config::DEFAULT; }`,
+    );
     const refs = extractCallSites(body);
     const consts = refs.filter((r) => r.type === 'class_const');
     expect(consts).toHaveLength(2);
@@ -573,7 +595,9 @@ function f() {
   });
 
   it('extracts Class::$static static property access', async () => {
-    const body = await parseBody(`<?php function f() { echo self::$static_prop; echo User::$tableName; }`);
+    const body = await parseBody(
+      `<?php function f() { echo self::$static_prop; echo User::$tableName; }`,
+    );
     const refs = extractCallSites(body);
     const rel = refs.filter((r) => r.type === 'relative_static_prop');
     const st = refs.filter((r) => r.type === 'static_prop');

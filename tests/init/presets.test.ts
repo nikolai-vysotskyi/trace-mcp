@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { FRAMEWORK_PRESETS, LANGUAGE_PRESETS, BASE_EXCLUDE } from '../../src/init/presets.js';
+import { describe, expect, it } from 'vitest';
+import { BASE_EXCLUDE, FRAMEWORK_PRESETS, LANGUAGE_PRESETS } from '../../src/init/presets.js';
 
 describe('init presets', () => {
   it('BASE_EXCLUDE contains standard ignore patterns', () => {

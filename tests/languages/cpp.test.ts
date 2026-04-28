@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { CppLanguagePlugin } from '../../src/indexer/plugins/language/cpp/index.js';
 
 const plugin = new CppLanguagePlugin();
@@ -13,8 +13,14 @@ async function extract(code: string, filePath = 'src/main.cpp') {
 
 describe('CppLanguagePlugin', () => {
   beforeAll(async () => {
-    const probe = await plugin.extractSymbols('probe.cpp', Buffer.from('int probe() { return 0; }\n'));
-    expect(probe.isOk(), `C++ parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+    const probe = await plugin.extractSymbols(
+      'probe.cpp',
+      Buffer.from('int probe() { return 0; }\n'),
+    );
+    expect(
+      probe.isOk(),
+      `C++ parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`,
+    ).toBe(true);
   });
 
   it('has correct manifest', () => {

@@ -4,11 +4,18 @@
  * Extracts: function definitions, readonly/exported constants, exported variables.
  * Import edges: `source file.sh` and `. file.sh` commands.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 function makeSymbolId(filePath: string, name: string, kind: string): string {
   return `${filePath}::${name}#${kind}`;
@@ -22,7 +29,10 @@ export class BashLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = { name: 'bash-language', version: '2.0.0', priority: 5 };
   supportedExtensions = ['.sh', '.bash', '.zsh'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('bash');
       const sourceCode = content.toString('utf-8');
@@ -70,7 +80,12 @@ export class BashLanguagePlugin implements LanguagePlugin {
   }
 
   /** Extract `function name { ... }` and `name() { ... }` */
-  private extractFunction(node: TSNode, filePath: string, symbols: RawSymbol[], seen: Set<string>): void {
+  private extractFunction(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
     const nameNode = node.childForFieldName('name');
     if (!nameNode) return;
 
@@ -97,7 +112,12 @@ export class BashLanguagePlugin implements LanguagePlugin {
    * - `declare -r NAME=...` → constant (UPPERCASE names only)
    * - `export NAME=...` → variable with exported metadata
    */
-  private extractDeclaration(node: TSNode, filePath: string, symbols: RawSymbol[], seen: Set<string>): void {
+  private extractDeclaration(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
     // Determine the declaration type from the first child (word)
     const firstChild = node.namedChildren[0];
     if (!firstChild) return;
@@ -161,7 +181,12 @@ export class BashLanguagePlugin implements LanguagePlugin {
    * Extract top-level UPPERCASE variable assignments as constants.
    * Only UPPER_CASE names to avoid noise from general shell variables.
    */
-  private extractTopLevelVariable(node: TSNode, filePath: string, symbols: RawSymbol[], seen: Set<string>): void {
+  private extractTopLevelVariable(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
     const varNameNode = node.childForFieldName('name');
     if (!varNameNode) return;
 
@@ -195,7 +220,7 @@ export class BashLanguagePlugin implements LanguagePlugin {
     if (cmdName !== 'source' && cmdName !== '.') return;
 
     // The argument is the next named child after the command name
-    const args = node.namedChildren.filter(c => c.id !== nameNode.id);
+    const args = node.namedChildren.filter((c) => c.id !== nameNode.id);
     if (args.length === 0) return;
 
     const target = args[0].text;

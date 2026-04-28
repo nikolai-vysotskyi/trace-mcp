@@ -39,16 +39,56 @@ export interface RefactorResult {
 // ════════════════════════════════════════════════════════════════════════
 
 export const BINARY_EXTENSIONS = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.webp',
-  '.woff', '.woff2', '.ttf', '.eot', '.otf',
-  '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar',
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx',
-  '.mp3', '.mp4', '.avi', '.mov', '.wav',
-  '.exe', '.dll', '.so', '.dylib', '.o', '.a',
-  '.wasm', '.pyc', '.class',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.ico',
+  '.svg',
+  '.webp',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.eot',
+  '.otf',
+  '.zip',
+  '.tar',
+  '.gz',
+  '.bz2',
+  '.7z',
+  '.rar',
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.mp3',
+  '.mp4',
+  '.avi',
+  '.mov',
+  '.wav',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dylib',
+  '.o',
+  '.a',
+  '.wasm',
+  '.pyc',
+  '.class',
 ]);
 
-export const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', 'vendor', '__pycache__', '.next', '.nuxt'];
+export const SKIP_DIRS = [
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'vendor',
+  '__pycache__',
+  '.next',
+  '.nuxt',
+];
 
 // ════════════════════════════════════════════════════════════════════════
 // FILE I/O
@@ -109,7 +149,10 @@ export function getImportingFiles(
       seen.add(importFileId);
       const file = store.getFileById(importFileId);
       if (file) {
-        importingFiles.push({ filePath: path.resolve(projectRoot, file.path), fileId: importFileId });
+        importingFiles.push({
+          filePath: path.resolve(projectRoot, file.path),
+          fileId: importFileId,
+        });
       }
     }
   }
@@ -123,7 +166,12 @@ export function getImportingFiles(
 
 export function detectLanguage(ext: string): 'typescript' | 'python' | 'go' | 'generic' {
   switch (ext) {
-    case '.ts': case '.tsx': case '.js': case '.jsx': case '.mjs': case '.cjs':
+    case '.ts':
+    case '.tsx':
+    case '.js':
+    case '.jsx':
+    case '.mjs':
+    case '.cjs':
       return 'typescript';
     case '.py':
       return 'python';
@@ -148,21 +196,119 @@ export interface IdentifierAnalysis {
 /** Keywords to exclude from identifier analysis */
 export const KEYWORDS = new Set([
   // JS/TS
-  'const', 'let', 'var', 'function', 'class', 'return', 'if', 'else', 'for', 'while',
-  'do', 'switch', 'case', 'break', 'continue', 'new', 'this', 'super', 'import', 'export',
-  'from', 'default', 'async', 'await', 'try', 'catch', 'finally', 'throw', 'typeof',
-  'instanceof', 'void', 'delete', 'in', 'of', 'true', 'false', 'null', 'undefined',
-  'yield', 'static', 'extends', 'implements', 'interface', 'type', 'enum', 'abstract',
+  'const',
+  'let',
+  'var',
+  'function',
+  'class',
+  'return',
+  'if',
+  'else',
+  'for',
+  'while',
+  'do',
+  'switch',
+  'case',
+  'break',
+  'continue',
+  'new',
+  'this',
+  'super',
+  'import',
+  'export',
+  'from',
+  'default',
+  'async',
+  'await',
+  'try',
+  'catch',
+  'finally',
+  'throw',
+  'typeof',
+  'instanceof',
+  'void',
+  'delete',
+  'in',
+  'of',
+  'true',
+  'false',
+  'null',
+  'undefined',
+  'yield',
+  'static',
+  'extends',
+  'implements',
+  'interface',
+  'type',
+  'enum',
+  'abstract',
   // Python
-  'def', 'class', 'return', 'if', 'elif', 'else', 'for', 'while', 'with', 'as',
-  'import', 'from', 'try', 'except', 'finally', 'raise', 'pass', 'lambda', 'and',
-  'or', 'not', 'is', 'in', 'True', 'False', 'None', 'global', 'nonlocal', 'assert',
+  'def',
+  'class',
+  'return',
+  'if',
+  'elif',
+  'else',
+  'for',
+  'while',
+  'with',
+  'as',
+  'import',
+  'from',
+  'try',
+  'except',
+  'finally',
+  'raise',
+  'pass',
+  'lambda',
+  'and',
+  'or',
+  'not',
+  'is',
+  'in',
+  'True',
+  'False',
+  'None',
+  'global',
+  'nonlocal',
+  'assert',
   // Go
-  'func', 'return', 'if', 'else', 'for', 'range', 'switch', 'case', 'default',
-  'break', 'continue', 'go', 'defer', 'select', 'chan', 'map', 'struct', 'interface',
-  'package', 'import', 'type', 'var', 'const', 'nil', 'true', 'false',
+  'func',
+  'return',
+  'if',
+  'else',
+  'for',
+  'range',
+  'switch',
+  'case',
+  'default',
+  'break',
+  'continue',
+  'go',
+  'defer',
+  'select',
+  'chan',
+  'map',
+  'struct',
+  'interface',
+  'package',
+  'import',
+  'type',
+  'var',
+  'const',
+  'nil',
+  'true',
+  'false',
   // Common
-  'console', 'log', 'print', 'fmt', 'string', 'number', 'boolean', 'int', 'float',
+  'console',
+  'log',
+  'print',
+  'fmt',
+  'string',
+  'number',
+  'boolean',
+  'int',
+  'float',
 ]);
 
 /**
@@ -176,11 +322,11 @@ export function extractIdentifiers(text: string): IdentifierAnalysis {
 
   // Detect definitions: const/let/var X, function X, def X, X :=, X =
   const defPatterns = [
-    /(?:const|let|var)\s+(?:\{[^}]*\}|([a-zA-Z_$][\w$]*))/g,     // JS/TS destructuring or simple
-    /function\s+([a-zA-Z_$][\w$]*)/g,                              // function declarations
-    /def\s+([a-zA-Z_]\w*)/g,                                       // Python defs
-    /([a-zA-Z_]\w*)\s*:=/g,                                        // Go short var decl
-    /for\s+(?:const|let|var)?\s*(?:\(?\s*)?([a-zA-Z_$][\w$]*)/g,   // for loop vars
+    /(?:const|let|var)\s+(?:\{[^}]*\}|([a-zA-Z_$][\w$]*))/g, // JS/TS destructuring or simple
+    /function\s+([a-zA-Z_$][\w$]*)/g, // function declarations
+    /def\s+([a-zA-Z_]\w*)/g, // Python defs
+    /([a-zA-Z_]\w*)\s*:=/g, // Go short var decl
+    /for\s+(?:const|let|var)?\s*(?:\(?\s*)?([a-zA-Z_$][\w$]*)/g, // for loop vars
   ];
 
   for (const pattern of defPatterns) {

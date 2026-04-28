@@ -2,22 +2,13 @@
  * Integration: Laravel middleware resolution through full pipeline.
  * Tests both L6-10 (Kernel.php) and L11+ (bootstrap/app.php) styles.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
-import fs from 'node:fs';
-import os from 'node:os';
-import { initializeDatabase } from '../../src/db/schema.js';
-import { Store } from '../../src/db/store.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TraceMcpConfigSchema } from '../../src/config.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { describe, expect, it } from 'vitest';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import {
-  parseKernelMiddleware,
   parseBootstrapMiddleware,
-  parseRouteServiceProviderNamespace,
   parseBootstrapRouting,
+  parseKernelMiddleware,
+  parseRouteServiceProviderNamespace,
 } from '../../src/indexer/plugins/integration/framework/laravel/middleware.js';
 
 describe('Laravel middleware parsing', () => {
@@ -59,13 +50,13 @@ class Kernel extends HttpKernel
     expect(config.global).toHaveLength(2);
     expect(config.global[0]).toContain('TrustProxies');
 
-    expect(config.groups['web']).toHaveLength(3);
-    expect(config.groups['api']).toHaveLength(2);
-    expect(config.groups['api']).toContain('throttle:api');
+    expect(config.groups.web).toHaveLength(3);
+    expect(config.groups.api).toHaveLength(2);
+    expect(config.groups.api).toContain('throttle:api');
 
-    expect(config.aliases['auth']).toContain('Authenticate');
-    expect(config.aliases['verified']).toContain('EnsureEmailIsVerified');
-    expect(config.aliases['can']).toContain('Authorize');
+    expect(config.aliases.auth).toContain('Authenticate');
+    expect(config.aliases.verified).toContain('EnsureEmailIsVerified');
+    expect(config.aliases.can).toContain('Authorize');
   });
 
   it('parses bootstrap/app.php middleware (Laravel 11 style)', () => {
@@ -95,13 +86,13 @@ return Application::configure(basePath: dirname(__DIR__))
 
     const mwConfig = parseBootstrapMiddleware(source);
     expect(mwConfig.source).toBe('bootstrap');
-    expect(mwConfig.aliases['auth']).toContain('Authenticate');
-    expect(mwConfig.aliases['verified']).toContain('EnsureEmailIsVerified');
-    expect(mwConfig.groups['web']).toContain('App\\Http\\Middleware\\HandleInertiaRequests');
+    expect(mwConfig.aliases.auth).toContain('Authenticate');
+    expect(mwConfig.aliases.verified).toContain('EnsureEmailIsVerified');
+    expect(mwConfig.groups.web).toContain('App\\Http\\Middleware\\HandleInertiaRequests');
 
     const routing = parseBootstrapRouting(source);
-    expect(routing['web']).toBe('routes/web.php');
-    expect(routing['api']).toBe('routes/api.php');
+    expect(routing.web).toBe('routes/web.php');
+    expect(routing.api).toBe('routes/api.php');
   });
 
   it('parses RouteServiceProvider namespace (Laravel 6-8)', () => {
@@ -157,7 +148,7 @@ class Kernel extends HttpKernel {
 
     const config = plugin.getMiddlewareConfig();
     expect(config).not.toBeNull();
-    expect(config!.aliases['auth']).toContain('Authenticate');
+    expect(config!.aliases.auth).toContain('Authenticate');
     expect(plugin.resolveMiddlewareAlias('auth')).toContain('Authenticate');
   });
 

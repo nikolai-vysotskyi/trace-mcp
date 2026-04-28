@@ -1,7 +1,12 @@
-import type { LanguagePlugin, FrameworkPlugin, FileParseResult, RawEdge, ResolveContext } from './types.js';
-import { ok, err, type TraceMcpResult } from '../errors.js';
-import { pluginError, parseError } from '../errors.js';
+import { ok, type TraceMcpResult } from '../errors.js';
 import { logger } from '../logger.js';
+import type {
+  FileParseResult,
+  FrameworkPlugin,
+  LanguagePlugin,
+  RawEdge,
+  ResolveContext,
+} from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** Maximum symbols a single file extraction can return. */
@@ -19,12 +24,17 @@ export async function executeLanguagePlugin(
 ): Promise<TraceMcpResult<FileParseResult>> {
   // Guard: reject oversized input before handing to plugin
   if (content.length > MAX_PLUGIN_INPUT_BYTES) {
-    logger.warn({ plugin: plugin.manifest.name, file: filePath, bytes: content.length }, 'File exceeds plugin input size limit, skipping');
+    logger.warn(
+      { plugin: plugin.manifest.name, file: filePath, bytes: content.length },
+      'File exceeds plugin input size limit, skipping',
+    );
     return ok({
       language: undefined,
       status: 'error',
       symbols: [],
-      warnings: [`File too large for plugin (${content.length} bytes > ${MAX_PLUGIN_INPUT_BYTES} limit)`],
+      warnings: [
+        `File too large for plugin (${content.length} bytes > ${MAX_PLUGIN_INPUT_BYTES} limit)`,
+      ],
     });
   }
 
@@ -38,17 +48,28 @@ export async function executeLanguagePlugin(
     // Guard: cap output size to prevent runaway plugins
     if (result.isOk() && result.value.symbols.length > MAX_SYMBOLS_PER_FILE) {
       logger.warn(
-        { plugin: plugin.manifest.name, file: filePath, count: result.value.symbols.length, limit: MAX_SYMBOLS_PER_FILE },
+        {
+          plugin: plugin.manifest.name,
+          file: filePath,
+          count: result.value.symbols.length,
+          limit: MAX_SYMBOLS_PER_FILE,
+        },
         'Plugin returned too many symbols, truncating',
       );
       result.value.symbols = result.value.symbols.slice(0, MAX_SYMBOLS_PER_FILE);
-      result.value.warnings = [...(result.value.warnings ?? []), `Output truncated: ${MAX_SYMBOLS_PER_FILE} symbol limit reached`];
+      result.value.warnings = [
+        ...(result.value.warnings ?? []),
+        `Output truncated: ${MAX_SYMBOLS_PER_FILE} symbol limit reached`,
+      ];
     }
 
     return result;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    logger.error({ plugin: plugin.manifest.name, file: filePath, error: msg }, 'Language plugin error');
+    logger.error(
+      { plugin: plugin.manifest.name, file: filePath, error: msg },
+      'Language plugin error',
+    );
     return ok({
       language: undefined,
       status: 'error',
@@ -78,7 +99,10 @@ export function executeFrameworkExtractNodes(
     return result.map((r) => r as FileParseResult | null);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    logger.error({ plugin: plugin.manifest.name, file: filePath, error: msg }, 'Framework extractNodes error');
+    logger.error(
+      { plugin: plugin.manifest.name, file: filePath, error: msg },
+      'Framework extractNodes error',
+    );
     return ok(null);
   }
 }
@@ -100,7 +124,11 @@ export async function executeFrameworkResolveEdges(
     // Guard: cap edge output to prevent runaway framework plugins
     if (result.isOk() && result.value.length > MAX_EDGES_PER_RESOLUTION) {
       logger.warn(
-        { plugin: plugin.manifest.name, count: result.value.length, limit: MAX_EDGES_PER_RESOLUTION },
+        {
+          plugin: plugin.manifest.name,
+          count: result.value.length,
+          limit: MAX_EDGES_PER_RESOLUTION,
+        },
         'Framework plugin returned too many edges, truncating',
       );
       return ok(result.value.slice(0, MAX_EDGES_PER_RESOLUTION));
@@ -114,11 +142,7 @@ export async function executeFrameworkResolveEdges(
   }
 }
 
-async function withTimeout<T>(
-  fn: () => T,
-  timeoutMs: number,
-  operationName: string,
-): Promise<T> {
+async function withTimeout<T>(fn: () => T, timeoutMs: number, operationName: string): Promise<T> {
   // For synchronous functions, just call directly
   const result = fn();
 

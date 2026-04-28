@@ -2,7 +2,7 @@
  * Helper utilities for the C# language plugin.
  * Extracts AST-walking logic to keep the main plugin concise.
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
@@ -55,12 +55,31 @@ export function extractModifiers(node: TSNode): string[] {
       keywords.push(child.text);
     }
     // Some modifiers appear as plain keywords before the declaration type
-    if (!child.isNamed && [
-      'public', 'private', 'protected', 'internal',
-      'static', 'abstract', 'sealed', 'virtual', 'override',
-      'readonly', 'const', 'new', 'partial', 'async', 'extern',
-      'unsafe', 'volatile', 'ref', 'required', 'file',
-    ].includes(child.text)) {
+    if (
+      !child.isNamed &&
+      [
+        'public',
+        'private',
+        'protected',
+        'internal',
+        'static',
+        'abstract',
+        'sealed',
+        'virtual',
+        'override',
+        'readonly',
+        'const',
+        'new',
+        'partial',
+        'async',
+        'extern',
+        'unsafe',
+        'volatile',
+        'ref',
+        'required',
+        'file',
+      ].includes(child.text)
+    ) {
       keywords.push(child.text);
     }
   }
@@ -74,7 +93,10 @@ export function extractAttributes(node: TSNode): string[] {
     if (child.type === 'attribute_list') {
       for (const attr of child.namedChildren) {
         if (attr.type === 'attribute') {
-          const nameNode = attr.childForFieldName('name') ?? findChildByType(attr, 'identifier') ?? findChildByType(attr, 'qualified_name');
+          const nameNode =
+            attr.childForFieldName('name') ??
+            findChildByType(attr, 'identifier') ??
+            findChildByType(attr, 'qualified_name');
           if (nameNode) attrs.push(nameNode.text);
         }
       }
@@ -91,7 +113,11 @@ export function extractBaseTypes(node: TSNode): string[] {
 
   for (const child of baseList.namedChildren) {
     // Each child is typically a simple_base_type, generic_name, qualified_name, or identifier
-    if (child.type === 'identifier' || child.type === 'generic_name' || child.type === 'qualified_name') {
+    if (
+      child.type === 'identifier' ||
+      child.type === 'generic_name' ||
+      child.type === 'qualified_name'
+    ) {
       bases.push(child.text);
     } else {
       // Nested type references — use the text
@@ -126,7 +152,11 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
 
       // The namespace/type name
       for (const child of node.namedChildren) {
-        if (child.type === 'qualified_name' || child.type === 'identifier' || child.type === 'name') {
+        if (
+          child.type === 'qualified_name' ||
+          child.type === 'identifier' ||
+          child.type === 'name'
+        ) {
           namespaceName = child.text;
         }
       }
@@ -182,7 +212,9 @@ export function extractClassMethods(
       if (modifiers.includes('override')) meta.override = true;
       if (modifiers.includes('async')) meta.async = true;
 
-      const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+      const visibility = modifiers.find((m) =>
+        ['public', 'private', 'protected', 'internal'].includes(m),
+      );
       if (visibility) meta.visibility = visibility;
 
       symbols.push({
@@ -205,7 +237,9 @@ export function extractClassMethods(
 
       meta.isConstructor = true;
       if (attrs.length > 0) meta.attributes = attrs;
-      const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+      const visibility = modifiers.find((m) =>
+        ['public', 'private', 'protected', 'internal'].includes(m),
+      );
       if (visibility) meta.visibility = visibility;
 
       symbols.push({
@@ -251,7 +285,9 @@ export function extractClassProperties(
       if (modifiers.includes('override')) meta.override = true;
       if (modifiers.includes('required')) meta.required = true;
 
-      const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+      const visibility = modifiers.find((m) =>
+        ['public', 'private', 'protected', 'internal'].includes(m),
+      );
       if (visibility) meta.visibility = visibility;
 
       symbols.push({
@@ -304,7 +340,9 @@ export function extractClassFields(
           if (modifiers.includes('readonly')) meta.readonly = true;
           if (isConst) meta.const = true;
 
-          const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+          const visibility = modifiers.find((m) =>
+            ['public', 'private', 'protected', 'internal'].includes(m),
+          );
           if (visibility) meta.visibility = visibility;
 
           symbols.push({
@@ -348,7 +386,9 @@ export function extractClassEvents(
       if (modifiers.includes('virtual')) meta.virtual = true;
       if (modifiers.includes('override')) meta.override = true;
 
-      const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+      const visibility = modifiers.find((m) =>
+        ['public', 'private', 'protected', 'internal'].includes(m),
+      );
       if (visibility) meta.visibility = visibility;
 
       // event_field_declaration may have a variable_declaration with declarators

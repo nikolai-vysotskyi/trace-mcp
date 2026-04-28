@@ -6,10 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -17,20 +17,16 @@ import type {
 const CONFIG_PACKAGES = ['cosmiconfig', 'lilconfig', 'rc', 'dotenv', 'envalid', 'env-var'];
 
 // cosmiconfig('name'), lilconfig('name')
-const EXPLORER_RE =
-  /(?:cosmiconfig|lilconfig|cosmiconfigSync|lilconfigSync)\(\s*['"]([^'"]+)['"]/g;
+const EXPLORER_RE = /(?:cosmiconfig|lilconfig|cosmiconfigSync|lilconfigSync)\(\s*['"]([^'"]+)['"]/g;
 
 // explorer.search(), explorer.load('path')
-const SEARCH_RE =
-  /(?:explorer|result)\s*\.\s*(?:search|load)\s*\(/g;
+const _SEARCH_RE = /(?:explorer|result)\s*\.\s*(?:search|load)\s*\(/g;
 
 // dotenv.config(), config()
-const DOTENV_RE =
-  /(?:dotenv\.config|config)\s*\(\s*(?:\{[^}]*\})?\s*\)/g;
+const DOTENV_RE = /(?:dotenv\.config|config)\s*\(\s*(?:\{[^}]*\})?\s*\)/g;
 
 // Import detection
-const CONFIG_IMPORT_RE =
-  /(?:import|require)\s*(?:\(|{)?\s*.*(?:cosmiconfig|lilconfig|dotenv)\b/;
+const CONFIG_IMPORT_RE = /(?:import|require)\s*(?:\(|{)?\s*.*(?:cosmiconfig|lilconfig|dotenv)\b/;
 
 export class CosmiconfigPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {

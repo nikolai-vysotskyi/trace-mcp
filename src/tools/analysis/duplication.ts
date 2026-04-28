@@ -8,7 +8,6 @@
 import type Database from 'better-sqlite3';
 import type { Store } from '../../db/store.js';
 import type { SymbolRow } from '../../db/types.js';
-import { fuzzySearch, type FuzzyMatch } from '../../db/fuzzy.js';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -37,35 +36,77 @@ export interface DuplicationResult {
 
 // ─── Constants ──────────────────────────────────────────────
 
-const CHECKABLE_KINDS = new Set([
-  'function', 'class', 'method', 'interface', 'type_alias', 'enum',
+const _CHECKABLE_KINDS = new Set([
+  'function',
+  'class',
+  'method',
+  'interface',
+  'type_alias',
+  'enum',
 ]);
 
-const TRIVIAL_NAMES = new Set([
-  'constructor', 'toString', 'toJSON', 'valueOf', 'render', 'setup',
-  'main', 'index', 'default', 'init', 'create', 'get', 'set', 'delete',
-  'update', 'handle', 'process', 'run', 'start', 'stop', 'reset',
-  'configure', 'register', 'execute', 'validate', 'transform',
-  'apply', 'call', 'bind', 'map', 'filter', 'reduce', 'forEach',
-  'connect', 'disconnect', 'open', 'close', 'build', 'destroy',
-  'mount', 'unmount', 'dispose', 'serialize', 'deserialize',
+const _TRIVIAL_NAMES = new Set([
+  'constructor',
+  'toString',
+  'toJSON',
+  'valueOf',
+  'render',
+  'setup',
+  'main',
+  'index',
+  'default',
+  'init',
+  'create',
+  'get',
+  'set',
+  'delete',
+  'update',
+  'handle',
+  'process',
+  'run',
+  'start',
+  'stop',
+  'reset',
+  'configure',
+  'register',
+  'execute',
+  'validate',
+  'transform',
+  'apply',
+  'call',
+  'bind',
+  'map',
+  'filter',
+  'reduce',
+  'forEach',
+  'connect',
+  'disconnect',
+  'open',
+  'close',
+  'build',
+  'destroy',
+  'mount',
+  'unmount',
+  'dispose',
+  'serialize',
+  'deserialize',
 ]);
 
-const TEST_PATH_RE = /(?:^|[/\\])(?:tests?|__tests__|spec)[/\\]|\.(?:test|spec)\.[jt]sx?$/i;
+const _TEST_PATH_RE = /(?:^|[/\\])(?:tests?|__tests__|spec)[/\\]|\.(?:test|spec)\.[jt]sx?$/i;
 
-const MIN_NAME_LENGTH = 4;
-const MAX_SYMBOLS_PER_FILE = 30;
+const _MIN_NAME_LENGTH = 4;
+const _MAX_SYMBOLS_PER_FILE = 30;
 
 // Signal weights
-const W_NAME = 0.45;
-const W_KIND = 0.15;
-const W_SIGNATURE = 0.25;
-const W_TOKEN = 0.15;
+const _W_NAME = 0.45;
+const _W_KIND = 0.15;
+const _W_SIGNATURE = 0.25;
+const _W_TOKEN = 0.15;
 
 // ─── Helpers ────────────────────────────────────────────────
 
 /** Split camelCase / PascalCase / snake_case name into lowercase tokens */
-function tokenizeName(name: string): Set<string> {
+function _tokenizeName(name: string): Set<string> {
   const parts = name
     .replace(/([a-z])([A-Z])/g, '$1_$2')
     .toLowerCase()
@@ -75,7 +116,7 @@ function tokenizeName(name: string): Set<string> {
 }
 
 /** Jaccard similarity between two token sets */
-function jaccard(a: Set<string>, b: Set<string>): number {
+function _jaccard(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 && b.size === 0) return 0;
   let intersection = 0;
   for (const t of a) {
@@ -86,7 +127,7 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 }
 
 /** Compute signature similarity from param counts. Returns 0–1. */
-function signatureSimilarity(srcParamCount: number | null, candParamCount: number | null): number {
+function _signatureSimilarity(srcParamCount: number | null, candParamCount: number | null): number {
   if (srcParamCount == null && candParamCount == null) return 0.5; // neutral
   if (srcParamCount == null || candParamCount == null) return 0.3; // partial info
   const max = Math.max(srcParamCount, candParamCount, 1);
@@ -94,7 +135,7 @@ function signatureSimilarity(srcParamCount: number | null, candParamCount: numbe
 }
 
 /** Extract heritage names (extends/implements) from metadata JSON */
-function getHeritageNames(metadata: string | null): Set<string> {
+function _getHeritageNames(metadata: string | null): Set<string> {
   if (!metadata) return new Set();
   try {
     const parsed = JSON.parse(metadata) as Record<string, unknown>;
@@ -137,7 +178,7 @@ export function checkFileForDuplicates(
 ): DuplicationResult {
   const file = store.getFile(filePath);
   if (!file) {
-    return { warnings: [], symbols_checked: 0, threshold: options?.threshold ?? 0.70 };
+    return { warnings: [], symbols_checked: 0, threshold: options?.threshold ?? 0.7 };
   }
 
   const symbols = store.getSymbolsByFile(file.id) as SymbolRowExtended[];
@@ -154,20 +195,23 @@ export function checkSymbolForDuplicates(
   query: { symbol_id?: string; name?: string; kind?: string },
   options?: { threshold?: number; maxResults?: number },
 ): DuplicationResult {
-  const threshold = options?.threshold ?? 0.60;
+  const threshold = options?.threshold ?? 0.6;
 
   if (query.symbol_id) {
     // Look up actual symbol
-    const row = db.prepare<[string], SymbolRowExtended>(
-      'SELECT * FROM symbols WHERE symbol_id = ?',
-    ).get(query.symbol_id);
+    const row = db
+      .prepare<[string], SymbolRowExtended>('SELECT * FROM symbols WHERE symbol_id = ?')
+      .get(query.symbol_id);
 
     if (!row) {
       return { warnings: [], symbols_checked: 0, threshold };
     }
 
     const file = store.getFileById(row.file_id);
-    return findDuplicateSymbols(store, db, [row], row.file_id, file?.path ?? '', { threshold, maxResults: options?.maxResults ?? 15 });
+    return findDuplicateSymbols(store, db, [row], row.file_id, file?.path ?? '', {
+      threshold,
+      maxResults: options?.maxResults ?? 15,
+    });
   }
 
   if (query.name) {
@@ -190,7 +234,10 @@ export function checkSymbolForDuplicates(
       param_count: null,
     };
 
-    return findDuplicateSymbols(store, db, [virtual], -1, '', { threshold, maxResults: options?.maxResults ?? 15 });
+    return findDuplicateSymbols(store, db, [virtual], -1, '', {
+      threshold,
+      maxResults: options?.maxResults ?? 15,
+    });
   }
 
   return { warnings: [], symbols_checked: 0, threshold };
@@ -198,8 +245,11 @@ export function checkSymbolForDuplicates(
 
 // ─── Internals ──────────────────────────────────────────────
 
-function getCandidateSymbol(db: Database.Database, symbolId: number): SymbolRowExtended | undefined {
-  return db.prepare<[number], SymbolRowExtended>(
-    'SELECT * FROM symbols WHERE id = ?',
-  ).get(symbolId);
+function _getCandidateSymbol(
+  db: Database.Database,
+  symbolId: number,
+): SymbolRowExtended | undefined {
+  return db
+    .prepare<[number], SymbolRowExtended>('SELECT * FROM symbols WHERE id = ?')
+    .get(symbolId);
 }

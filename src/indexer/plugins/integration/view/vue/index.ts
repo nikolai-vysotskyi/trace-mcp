@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -15,27 +15,28 @@ import { resolveComponentTag, toKebabCase, toPascalCase } from './resolver.js';
 export function isNuxtEntryPoint(filePath: string): boolean {
   return (
     // Nuxt 3/4: (app/)? pages/, layouts/, error.vue, app.vue.
-    /(?:^|\/)app\/pages\//.test(filePath)
-    || /(?:^|\/)app\/layouts\//.test(filePath)
-    || /(?:^|\/)app\/error\.vue$/.test(filePath)
-    || /(?:^|\/)app\/app\.vue$/.test(filePath)
-    || /(?:^|\/)pages\//.test(filePath)
-    || /(?:^|\/)layouts\//.test(filePath)
-    || /(?:^|\/)error\.vue$/.test(filePath)
-    || /(?:^|\/)app\.vue$/.test(filePath)
+    /(?:^|\/)app\/pages\//.test(filePath) ||
+    /(?:^|\/)app\/layouts\//.test(filePath) ||
+    /(?:^|\/)app\/error\.vue$/.test(filePath) ||
+    /(?:^|\/)app\/app\.vue$/.test(filePath) ||
+    /(?:^|\/)pages\//.test(filePath) ||
+    /(?:^|\/)layouts\//.test(filePath) ||
+    /(?:^|\/)error\.vue$/.test(filePath) ||
+    /(?:^|\/)app\.vue$/.test(filePath) ||
     // Laravel Nova components: compiled by Laravel Mix, registered via
     // PHP ServiceProvider::boot() using Nova::script/style/component by
     // file path. Not referenced by name in JS/Vue code.
-    || /(?:^|\/)nova-components\/[^/]+\/resources\/js\//.test(filePath)
+    /(?:^|\/)nova-components\/[^/]+\/resources\/js\//.test(filePath) ||
     // Laravel Blade-side Vue components (resources/js/components, etc.)
     // are typically registered globally in app.js bootstrap.
-    || /(?:^|\/)resources\/(?:js|assets\/js)\/components\//.test(filePath)
+    /(?:^|\/)resources\/(?:js|assets\/js)\/components\//.test(filePath)
   );
 }
 
 export function classifyNuxtEntry(filePath: string): string {
   if (/(?:^|\/)app\/pages\//.test(filePath) || /(?:^|\/)pages\//.test(filePath)) return 'page';
-  if (/(?:^|\/)app\/layouts\//.test(filePath) || /(?:^|\/)layouts\//.test(filePath)) return 'layout';
+  if (/(?:^|\/)app\/layouts\//.test(filePath) || /(?:^|\/)layouts\//.test(filePath))
+    return 'layout';
   if (/error\.vue$/.test(filePath)) return 'error';
   if (/app\.vue$/.test(filePath)) return 'app_root';
   if (/nova-components\//.test(filePath)) return 'nova_component';
@@ -45,12 +46,49 @@ export function classifyNuxtEntry(filePath: string): string {
 
 /** Common single-word component names that produce too many false positives. */
 const GENERIC_COMPONENT_NAMES = new Set([
-  'Button', 'Link', 'Input', 'Form', 'Card', 'Modal', 'Page', 'App',
-  'Header', 'Footer', 'Layout', 'Section', 'Container', 'Wrapper', 'Item',
-  'List', 'Menu', 'Tab', 'Tabs', 'Icon', 'Image', 'Avatar', 'Badge',
-  'Alert', 'Toast', 'Spinner', 'Loader', 'Table', 'Row', 'Cell', 'Panel',
-  'Error', 'Success', 'Warning', 'Info', 'Dialog', 'Tooltip', 'Popover',
-  'Index', 'Main', 'Default', 'Root', 'Home',
+  'Button',
+  'Link',
+  'Input',
+  'Form',
+  'Card',
+  'Modal',
+  'Page',
+  'App',
+  'Header',
+  'Footer',
+  'Layout',
+  'Section',
+  'Container',
+  'Wrapper',
+  'Item',
+  'List',
+  'Menu',
+  'Tab',
+  'Tabs',
+  'Icon',
+  'Image',
+  'Avatar',
+  'Badge',
+  'Alert',
+  'Toast',
+  'Spinner',
+  'Loader',
+  'Table',
+  'Row',
+  'Cell',
+  'Panel',
+  'Error',
+  'Success',
+  'Warning',
+  'Info',
+  'Dialog',
+  'Tooltip',
+  'Popover',
+  'Index',
+  'Main',
+  'Default',
+  'Root',
+  'Home',
 ]);
 
 /**
@@ -69,7 +107,8 @@ function isDistinctiveComponentName(name: string): boolean {
 
 /** Detect @vue/server-renderer usage (SSR entry points). */
 const VUE_SSR_IMPORT_RE = /(?:from|require\()\s*['"]@vue\/server-renderer['"]/;
-const VUE_SSR_CALL_RE = /\b(?:renderToString|renderToWebStream|renderToNodeStream|renderToSimpleStream|pipeToWebWritable|pipeToNodeWritable)\s*\(/;
+const VUE_SSR_CALL_RE =
+  /\b(?:renderToString|renderToWebStream|renderToNodeStream|renderToSimpleStream|pipeToWebWritable|pipeToNodeWritable)\s*\(/;
 
 export class VueFrameworkPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -107,13 +146,22 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
   detect(ctx: ProjectContext): boolean {
     const hasVueFramework = (deps: Record<string, string> | undefined): boolean => {
       if (!deps) return false;
-      return 'vue' in deps
-        || 'nuxt' in deps || 'nuxt3' in deps || '@nuxt/core' in deps
-        || '@vue/compiler-sfc' in deps || '@vue/server-renderer' in deps
-        || 'vite-plugin-vue' in deps
-        || 'quasar' in deps || '@quasar/app' in deps
-        || 'vitepress' in deps || 'vuepress' in deps || '@vuepress/core' in deps
-        || 'laravel-nova' in deps || 'laravel-mix' in deps;
+      return (
+        'vue' in deps ||
+        'nuxt' in deps ||
+        'nuxt3' in deps ||
+        '@nuxt/core' in deps ||
+        '@vue/compiler-sfc' in deps ||
+        '@vue/server-renderer' in deps ||
+        'vite-plugin-vue' in deps ||
+        'quasar' in deps ||
+        '@quasar/app' in deps ||
+        'vitepress' in deps ||
+        'vuepress' in deps ||
+        '@vuepress/core' in deps ||
+        'laravel-nova' in deps ||
+        'laravel-mix' in deps
+      );
     };
 
     if (ctx.packageJson) {
@@ -134,7 +182,9 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
         ...(pkg.devDependencies as Record<string, string> | undefined),
       };
       if (hasVueFramework(deps)) return true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Fallback 2: presence of nova-components/ dir (Laravel Nova package)
     // or any .vue files in the project — common for Laravel+Nova projects
@@ -142,7 +192,9 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     try {
       const novaDir = path.join(ctx.rootPath, 'nova-components');
       if (fs.existsSync(novaDir) && fs.statSync(novaDir).isDirectory()) return true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     return false;
   }
@@ -150,12 +202,33 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'renders_component', category: 'vue', description: 'Parent component renders child in template' },
-        { name: 'uses_composable', category: 'vue', description: 'Component calls a composable function' },
+        {
+          name: 'renders_component',
+          category: 'vue',
+          description: 'Parent component renders child in template',
+        },
+        {
+          name: 'uses_composable',
+          category: 'vue',
+          description: 'Component calls a composable function',
+        },
         { name: 'provides_slot', category: 'vue', description: 'Component provides a named slot' },
-        { name: 'references_component', category: 'vue', description: 'Dynamic reference to component (e.g., from config/TS)' },
-        { name: 'nuxt_entry_point', category: 'vue', description: 'Nuxt 3/4 file-based auto-loaded entry point (pages, layouts, error.vue, app.vue, middleware, plugins)' },
-        { name: 'vue_ssr_entry', category: 'vue', description: '@vue/server-renderer SSR entry point' },
+        {
+          name: 'references_component',
+          category: 'vue',
+          description: 'Dynamic reference to component (e.g., from config/TS)',
+        },
+        {
+          name: 'nuxt_entry_point',
+          category: 'vue',
+          description:
+            'Nuxt 3/4 file-based auto-loaded entry point (pages, layouts, error.vue, app.vue, middleware, plugins)',
+        },
+        {
+          name: 'vue_ssr_entry',
+          category: 'vue',
+          description: '@vue/server-renderer SSR entry point',
+        },
       ],
     };
   }
@@ -239,15 +312,19 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
       // Resolve renders_component edges
       for (const tag of templateComponents) {
         // Try direct name lookup first (tag IS the component name, PascalCase or kebab)
-        let targetSymbolId = componentNameToSymbolId.get(tag)
-          ?? componentNameToSymbolId.get(toPascalCase(tag))
-          ?? componentNameToSymbolId.get(toKebabCase(tag));
+        let targetSymbolId =
+          componentNameToSymbolId.get(tag) ??
+          componentNameToSymbolId.get(toPascalCase(tag)) ??
+          componentNameToSymbolId.get(toKebabCase(tag));
 
         if (!targetSymbolId) {
           // Fall back to file-path-based resolution (imports + componentFiles map)
           const targetPath = resolveComponentTag(tag, importMap, componentNameToFilePath);
           if (!targetPath) continue;
-          const targetName = targetPath.split('/').pop()?.replace(/\.vue$/, '');
+          const targetName = targetPath
+            .split('/')
+            .pop()
+            ?.replace(/\.vue$/, '');
           if (!targetName) continue;
           targetSymbolId = componentNameToSymbolId.get(targetName);
           if (!targetSymbolId) continue;
@@ -393,7 +470,10 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
 
     for (const f of allFiles) {
       if (!f.path.endsWith('.vue') || f.path === currentFile.path) continue;
-      const compName = f.path.split('/').pop()?.replace(/\.vue$/, '');
+      const compName = f.path
+        .split('/')
+        .pop()
+        ?.replace(/\.vue$/, '');
       if (!compName) continue;
 
       // Base name + case variants
@@ -470,7 +550,8 @@ export function parseNuxtComponentsConfig(source: string): NuxtComponentPathConf
  *   components/forms/CheckboxInput.vue    → [CheckboxInput, FormCheckboxInput]
  */
 export function nuxtAutoImportAliases(
-  filePath: string, configs: NuxtComponentPathConfig[] = [],
+  filePath: string,
+  configs: NuxtComponentPathConfig[] = [],
 ): string[] {
   const parts = filePath.split('/');
   const idx = parts.lastIndexOf('components');
@@ -487,7 +568,7 @@ export function nuxtAutoImportAliases(
   let matchedLen = 0;
   for (const cfg of configs) {
     const cfgPath = cfg.path.replace(/^~\//, '').replace(/^\.\//, '');
-    if (normalizedPath.startsWith(cfgPath + '/') || normalizedPath.startsWith(cfgPath)) {
+    if (normalizedPath.startsWith(`${cfgPath}/`) || normalizedPath.startsWith(cfgPath)) {
       if (cfgPath.length > matchedLen) {
         matched = cfg;
         matchedLen = cfgPath.length;

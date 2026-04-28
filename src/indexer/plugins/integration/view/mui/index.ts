@@ -8,17 +8,15 @@
  * Supports MUI v5+ (@mui/material) and legacy v4 (@material-ui/core).
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
-  RawComponent,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 // ── Theme extraction ──────────────────────────────────────────────────────
 
@@ -26,8 +24,7 @@ import type { TraceMcpResult } from '../../../../../errors.js';
  * Match: createTheme({ palette: { ... }, typography: { ... } })
  * or: const theme = createTheme(...)
  */
-const CREATE_THEME_RE =
-  /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*createTheme\s*\(/g;
+const CREATE_THEME_RE = /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*createTheme\s*\(/g;
 
 /**
  * Match: styled(Component)(...) or styled('div')(...)
@@ -37,7 +34,7 @@ const STYLED_RE =
 
 interface MuiTheme {
   name: string;
-  sections: string[];    // e.g. ['palette', 'typography', 'spacing']
+  sections: string[]; // e.g. ['palette', 'typography', 'spacing']
 }
 
 interface MuiStyledComponent {
@@ -58,7 +55,7 @@ function extractMuiThemes(source: string): MuiTheme[] {
 
     // Extract top-level keys: palette, typography, spacing, etc.
     const sections: string[] = [];
-    const keyRe = /(\w+)\s*:\s*[{\['"]/g;
+    const keyRe = /(\w+)\s*:\s*[{['"]/g;
     let keyMatch: RegExpExecArray | null;
     while ((keyMatch = keyRe.exec(body)) !== null) {
       const key = keyMatch[1];
@@ -104,11 +101,18 @@ function extractMuiImports(source: string): { name: string; package: string }[] 
   // Match: import { Button, TextField } from '@mui/material'
   // Or: import { DataGrid } from '@mui/x-data-grid'
   // Or: import Button from '@mui/material/Button'
-  const namedRe =
-    /import\s*\{([^}]+)\}\s*from\s*["'](@mui\/[^"']+|@material-ui\/[^"']+)["']/g;
+  const namedRe = /import\s*\{([^}]+)\}\s*from\s*["'](@mui\/[^"']+|@material-ui\/[^"']+)["']/g;
   let m: RegExpExecArray | null;
   while ((m = namedRe.exec(source)) !== null) {
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     for (const name of names) {
       imports.push({ name, package: m[2] });
     }
@@ -153,8 +157,16 @@ export class MuiPlugin implements FrameworkPlugin {
     return {
       edgeTypes: [
         { name: 'mui_theme', category: 'ui-library', description: 'MUI createTheme() definition' },
-        { name: 'mui_styled', category: 'ui-library', description: 'MUI styled() component wrapper' },
-        { name: 'uses_mui_component', category: 'ui-library', description: 'Imports MUI component' },
+        {
+          name: 'mui_styled',
+          category: 'ui-library',
+          description: 'MUI styled() component wrapper',
+        },
+        {
+          name: 'uses_mui_component',
+          category: 'ui-library',
+          description: 'Imports MUI component',
+        },
       ],
     };
   }

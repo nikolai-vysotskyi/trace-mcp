@@ -1,10 +1,12 @@
 /** Pass 2e: Create test_covers edges from test files to their source files. */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 // JS/TS: *.test.ts, *.spec.ts, __tests__/
 // Python: test_*.py, *_test.py, conftest.py, tests/test_*.py
-const TEST_PATH_RE = /\.(test|spec)\.[jt]sx?$|__tests__\/|(?:^|[/\\])test_[^/\\]+\.py$|(?:^|[/\\])[^/\\]+_test\.py$|conftest\.py$/;
+const TEST_PATH_RE =
+  /\.(test|spec)\.[jt]sx?$|__tests__\/|(?:^|[/\\])test_[^/\\]+\.py$|(?:^|[/\\])[^/\\]+_test\.py$|conftest\.py$/;
 
 export function resolveTestCoversEdges(state: PipelineState): void {
   const { store } = state;
@@ -20,10 +22,13 @@ export function resolveTestCoversEdges(state: PipelineState): void {
   const testFileIds = testFiles.map((f) => f.id);
   const fileNodeMap = state.isIncremental
     ? store.getNodeIdsBatch('file', testFileIds)
-    : store.getNodeIdsBatch('file', allFiles.map((f) => f.id));
+    : store.getNodeIdsBatch(
+        'file',
+        allFiles.map((f) => f.id),
+      );
 
   const testNodeIds: number[] = [];
-  const testNodeToFile = new Map<number, typeof testFiles[0]>();
+  const testNodeToFile = new Map<number, (typeof testFiles)[0]>();
   for (const tf of testFiles) {
     const nodeId = fileNodeMap.get(tf.id);
     if (nodeId != null) {
@@ -52,7 +57,9 @@ export function resolveTestCoversEdges(state: PipelineState): void {
   const symbolFileIds = [...new Set([...targetSymbolMap.values()].map((s) => s.file_id))];
   const symbolFileMap = store.getFilesByIds(symbolFileIds);
 
-  const testCoversType = store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('test_covers') as { id: number } | undefined;
+  const testCoversType = store.db
+    .prepare('SELECT id FROM edge_types WHERE name = ?')
+    .get('test_covers') as { id: number } | undefined;
   if (!testCoversType) return;
 
   let created = 0;

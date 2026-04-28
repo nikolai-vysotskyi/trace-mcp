@@ -4,10 +4,11 @@
  * so embedding() returns a FallbackEmbeddingService (use a separate
  * embedding provider or pair with ONNX for embeddings).
  */
-import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
-import { parseAnthropicStream } from './sse.js';
+
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import { parseAnthropicStream } from './sse.js';
 
 interface AnthropicConfig {
   apiKey: string;
@@ -18,10 +19,18 @@ interface AnthropicConfig {
 const BASE_URL = 'https://api.anthropic.com';
 
 class NoEmbeddingService implements EmbeddingService {
-  async embed(_text: string): Promise<number[]> { return []; }
-  async embedBatch(_texts: string[]): Promise<number[][]> { return []; }
-  dimensions(): number { return 0; }
-  modelName(): string { return ''; }
+  async embed(_text: string): Promise<number[]> {
+    return [];
+  }
+  async embedBatch(_texts: string[]): Promise<number[][]> {
+    return [];
+  }
+  dimensions(): number {
+    return 0;
+  }
+  modelName(): string {
+    return '';
+  }
 }
 
 class AnthropicInferenceService implements InferenceService {
@@ -34,42 +43,45 @@ class AnthropicInferenceService implements InferenceService {
     prompt: string,
     options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
-    return withRetry(async () => {
-      const resp = await fetch(`${BASE_URL}/v1/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: options?.maxTokens ?? 4096,
-          messages: [{ role: 'user', content: prompt }],
-          ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-        }),
-        signal: AbortSignal.timeout(60_000),
-      });
+    return withRetry(
+      async () => {
+        const resp = await fetch(`${BASE_URL}/v1/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: this.model,
+            max_tokens: options?.maxTokens ?? 4096,
+            messages: [{ role: 'user', content: prompt }],
+            ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+          }),
+          signal: AbortSignal.timeout(60_000),
+        });
 
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '');
-        const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
-        throw new Error(`Anthropic API error: ${resp.status} ${resp.statusText} — ${safeBody}`);
-      }
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => '');
+          const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
+          throw new Error(`Anthropic API error: ${resp.status} ${resp.statusText} — ${safeBody}`);
+        }
 
-      const data = (await resp.json()) as {
-        content: { type: string; text?: string }[];
-      };
-      return data.content?.find(c => c.type === 'text')?.text ?? '';
-    }, { label: 'Anthropic generate' });
+        const data = (await resp.json()) as {
+          content: { type: string; text?: string }[];
+        };
+        return data.content?.find((c) => c.type === 'text')?.text ?? '';
+      },
+      { label: 'Anthropic generate' },
+    );
   }
 
   async *generateStream(
     messages: ChatMessage[],
     options?: { maxTokens?: number; temperature?: number },
   ): AsyncIterable<string> {
-    const systemMsg = messages.find(m => m.role === 'system');
-    const nonSystemMsgs = messages.filter(m => m.role !== 'system');
+    const systemMsg = messages.find((m) => m.role === 'system');
+    const nonSystemMsgs = messages.filter((m) => m.role !== 'system');
 
     const resp = await fetch(`${BASE_URL}/v1/messages`, {
       method: 'POST',
@@ -84,14 +96,14 @@ class AnthropicInferenceService implements InferenceService {
         stream: true,
         ...(systemMsg ? { system: systemMsg.content } : {}),
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-        messages: nonSystemMsgs.map(m => ({ role: m.role, content: m.content })),
+        messages: nonSystemMsgs.map((m) => ({ role: m.role, content: m.content })),
       }),
       signal: AbortSignal.timeout(120_000),
     });
 
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
-      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+      const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
       throw new Error(`Anthropic stream error: ${resp.status} ${resp.statusText} — ${safeBody}`);
     }
 
@@ -132,7 +144,9 @@ export class AnthropicProvider implements AIProvider {
   }
 
   embedding(): EmbeddingService {
-    logger.warn('Anthropic does not provide embeddings — use a separate embedding provider (ONNX, Ollama, or OpenAI)');
+    logger.warn(
+      'Anthropic does not provide embeddings — use a separate embedding provider (ONNX, Ollama, or OpenAI)',
+    );
     return new NoEmbeddingService();
   }
 

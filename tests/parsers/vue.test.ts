@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
 
@@ -195,10 +195,7 @@ describe('Vue plugin — broken SFC', () => {
 
   it('handles empty content', async () => {
     const plugin = new VueLanguagePlugin();
-    const result = await plugin.extractSymbols(
-      'empty.vue',
-      Buffer.from('', 'utf-8'),
-    );
+    const result = await plugin.extractSymbols('empty.vue', Buffer.from('', 'utf-8'));
     expect(result.isOk()).toBe(true);
     const parsed = result._unsafeUnwrap();
     expect(parsed.language).toBe('vue');
@@ -244,9 +241,7 @@ defineEmits(['click', 'submit'])
   it('extracts props from array syntax', async () => {
     const result = await parse(code);
     const comp = result.components![0];
-    expect(Object.keys(comp.props!)).toEqual(
-      expect.arrayContaining(['name', 'age', 'active']),
-    );
+    expect(Object.keys(comp.props!)).toEqual(expect.arrayContaining(['name', 'age', 'active']));
   });
 
   it('extracts emits from array syntax', async () => {

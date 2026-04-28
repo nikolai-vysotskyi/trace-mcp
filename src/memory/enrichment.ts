@@ -8,7 +8,7 @@
  * plan_turn, get_session_resume, etc.
  */
 
-import type { DecisionStore, DecisionRow } from './decision-store.js';
+import type { DecisionRow, DecisionStore } from './decision-store.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -55,14 +55,20 @@ export function decisionsForImpact(
   // 1. Decisions linked to the target symbol
   if (target.symbolId) {
     for (const d of decisionStore.getDecisionsForSymbol(target.symbolId)) {
-      if (!seen.has(d.id)) { seen.add(d.id); results.push(compact(d)); }
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        results.push(compact(d));
+      }
     }
   }
 
   // 2. Decisions linked to the target file
   if (target.filePath) {
     for (const d of decisionStore.getDecisionsForFile(target.filePath)) {
-      if (!seen.has(d.id)) { seen.add(d.id); results.push(compact(d)); }
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        results.push(compact(d));
+      }
     }
   }
 
@@ -70,7 +76,10 @@ export function decisionsForImpact(
   if (affectedFiles) {
     for (const file of affectedFiles.slice(0, 5)) {
       for (const d of decisionStore.getDecisionsForFile(file)) {
-        if (!seen.has(d.id)) { seen.add(d.id); results.push(compact(d)); }
+        if (!seen.has(d.id)) {
+          seen.add(d.id);
+          results.push(compact(d));
+        }
         if (results.length >= limit) break;
       }
       if (results.length >= limit) break;
@@ -104,7 +113,10 @@ export function decisionsForTask(
         limit: limit,
       });
       for (const d of ftsResults) {
-        if (!seen.has(d.id)) { seen.add(d.id); results.push(compact(d)); }
+        if (!seen.has(d.id)) {
+          seen.add(d.id);
+          results.push(compact(d));
+        }
       }
     } catch {
       // FTS match syntax errors are non-fatal
@@ -115,7 +127,10 @@ export function decisionsForTask(
   if (targetFiles) {
     for (const file of targetFiles.slice(0, 3)) {
       for (const d of decisionStore.getDecisionsForFile(file)) {
-        if (!seen.has(d.id)) { seen.add(d.id); results.push(compact(d)); }
+        if (!seen.has(d.id)) {
+          seen.add(d.id);
+          results.push(compact(d));
+        }
         if (results.length >= limit) break;
       }
       if (results.length >= limit) break;
@@ -146,22 +161,100 @@ export function decisionsForResume(
  */
 function extractKeywords(text: string): string | null {
   const stopWords = new Set([
-    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'can', 'shall', 'to', 'of', 'in', 'for',
-    'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during',
-    'before', 'after', 'above', 'below', 'between', 'and', 'but', 'or',
-    'not', 'no', 'so', 'if', 'when', 'than', 'that', 'this', 'these',
-    'those', 'it', 'its', 'i', 'we', 'you', 'he', 'she', 'they', 'them',
-    'what', 'which', 'who', 'how', 'why', 'where', 'all', 'each', 'every',
-    'add', 'fix', 'update', 'change', 'modify', 'implement', 'create',
-    'make', 'get', 'set', 'use', 'new', 'file', 'code',
+    'a',
+    'an',
+    'the',
+    'is',
+    'are',
+    'was',
+    'were',
+    'be',
+    'been',
+    'being',
+    'have',
+    'has',
+    'had',
+    'do',
+    'does',
+    'did',
+    'will',
+    'would',
+    'could',
+    'should',
+    'may',
+    'might',
+    'can',
+    'shall',
+    'to',
+    'of',
+    'in',
+    'for',
+    'on',
+    'with',
+    'at',
+    'by',
+    'from',
+    'as',
+    'into',
+    'through',
+    'during',
+    'before',
+    'after',
+    'above',
+    'below',
+    'between',
+    'and',
+    'but',
+    'or',
+    'not',
+    'no',
+    'so',
+    'if',
+    'when',
+    'than',
+    'that',
+    'this',
+    'these',
+    'those',
+    'it',
+    'its',
+    'i',
+    'we',
+    'you',
+    'he',
+    'she',
+    'they',
+    'them',
+    'what',
+    'which',
+    'who',
+    'how',
+    'why',
+    'where',
+    'all',
+    'each',
+    'every',
+    'add',
+    'fix',
+    'update',
+    'change',
+    'modify',
+    'implement',
+    'create',
+    'make',
+    'get',
+    'set',
+    'use',
+    'new',
+    'file',
+    'code',
   ]);
 
-  const words = text.toLowerCase()
+  const words = text
+    .toLowerCase()
     .replace(/[^\w\s-]/g, ' ')
     .split(/\s+/)
-    .filter(w => w.length > 2 && !stopWords.has(w));
+    .filter((w) => w.length > 2 && !stopWords.has(w));
 
   if (words.length === 0) return null;
 

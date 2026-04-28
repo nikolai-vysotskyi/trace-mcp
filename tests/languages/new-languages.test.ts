@@ -2,25 +2,30 @@
  * Tests for new language plugins (Pascal, Ada, Solidity, PowerShell, Apex, PL/SQL)
  * and upgraded plugins (MATLAB, COBOL, Common Lisp, Zig, OCaml).
  */
-import { describe, it, expect } from 'vitest';
-import { PascalLanguagePlugin } from '../../src/indexer/plugins/language/pascal/index.js';
+import { describe, expect, it } from 'vitest';
 import { AdaLanguagePlugin } from '../../src/indexer/plugins/language/ada/index.js';
-import { SolidityLanguagePlugin } from '../../src/indexer/plugins/language/solidity/index.js';
-import { PowerShellLanguagePlugin } from '../../src/indexer/plugins/language/powershell/index.js';
 import { ApexLanguagePlugin } from '../../src/indexer/plugins/language/apex/index.js';
-import { PlsqlLanguagePlugin } from '../../src/indexer/plugins/language/plsql/index.js';
-import { MatlabLanguagePlugin } from '../../src/indexer/plugins/language/matlab/index.js';
 import { CobolLanguagePlugin } from '../../src/indexer/plugins/language/cobol/index.js';
 import { CommonLispLanguagePlugin } from '../../src/indexer/plugins/language/common-lisp/index.js';
-import { ZigLanguagePlugin } from '../../src/indexer/plugins/language/zig/index.js';
+import { MatlabLanguagePlugin } from '../../src/indexer/plugins/language/matlab/index.js';
 import { OcamlLanguagePlugin } from '../../src/indexer/plugins/language/ocaml/index.js';
+import { PascalLanguagePlugin } from '../../src/indexer/plugins/language/pascal/index.js';
+import { PlsqlLanguagePlugin } from '../../src/indexer/plugins/language/plsql/index.js';
+import { PowerShellLanguagePlugin } from '../../src/indexer/plugins/language/powershell/index.js';
+import { SolidityLanguagePlugin } from '../../src/indexer/plugins/language/solidity/index.js';
+import { ZigLanguagePlugin } from '../../src/indexer/plugins/language/zig/index.js';
 
 // Helper to parse and unwrap (handles both sync and async extractSymbols)
-async function parse(plugin: { extractSymbols: (f: string, c: Buffer) => any }, source: string, filePath: string): Promise<any> {
+async function parse(
+  plugin: { extractSymbols: (f: string, c: Buffer) => any },
+  source: string,
+  filePath: string,
+): Promise<any> {
   const resultOrPromise = plugin.extractSymbols(filePath, Buffer.from(source));
-  const result = resultOrPromise && typeof resultOrPromise.then === 'function'
-    ? await resultOrPromise
-    : resultOrPromise;
+  const result =
+    resultOrPromise && typeof resultOrPromise.then === 'function'
+      ? await resultOrPromise
+      : resultOrPromise;
   expect(result.isOk()).toBe(true);
   return result._unsafeUnwrap();
 }
@@ -44,7 +49,9 @@ describe('Pascal', () => {
 
   it('extracts interface type', async () => {
     const r = await p('IMyInterface = interface\nend;');
-    expect(r.symbols.some((s: any) => s.name === 'IMyInterface' && s.kind === 'interface')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'IMyInterface' && s.kind === 'interface')).toBe(
+      true,
+    );
   });
 
   it('extracts procedure and function', async () => {
@@ -73,7 +80,9 @@ describe('Ada', () => {
 
   it('extracts package', async () => {
     const r = await p('package My_Package is\nend My_Package;');
-    expect(r.symbols.some((s: any) => s.name === 'My_Package' && s.kind === 'namespace')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'My_Package' && s.kind === 'namespace')).toBe(
+      true,
+    );
   });
 
   it('extracts procedure and function', async () => {
@@ -111,17 +120,23 @@ describe('Solidity', () => {
   });
 
   it('extracts interface', async () => {
-    const r = await p('interface IERC20 {\n  function totalSupply() external view returns (uint256);\n}');
+    const r = await p(
+      'interface IERC20 {\n  function totalSupply() external view returns (uint256);\n}',
+    );
     expect(r.symbols.some((s: any) => s.name === 'IERC20' && s.kind === 'interface')).toBe(true);
   });
 
   it('extracts function inside contract', async () => {
-    const r = await p('contract Token {\n  function transfer(address to, uint256 amount) public returns (bool) {\n    return true;\n  }\n}');
+    const r = await p(
+      'contract Token {\n  function transfer(address to, uint256 amount) public returns (bool) {\n    return true;\n  }\n}',
+    );
     expect(r.symbols.some((s: any) => s.name === 'transfer' && s.kind === 'method')).toBe(true);
   });
 
   it('extracts event', async () => {
-    const r = await p('contract Token {\n  event Transfer(address indexed from, address indexed to, uint256 value);\n}');
+    const r = await p(
+      'contract Token {\n  event Transfer(address indexed from, address indexed to, uint256 value);\n}',
+    );
     expect(r.symbols.some((s: any) => s.name === 'Transfer' && s.metadata?.event)).toBe(true);
   });
 
@@ -141,7 +156,9 @@ describe('Solidity', () => {
   });
 
   it('extracts struct inside contract', async () => {
-    const r = await p('contract Token {\n  struct Order {\n    uint256 amount;\n    address buyer;\n  }\n}');
+    const r = await p(
+      'contract Token {\n  struct Order {\n    uint256 amount;\n    address buyer;\n  }\n}',
+    );
     expect(r.symbols.some((s: any) => s.name === 'Order' && s.metadata?.struct)).toBe(true);
   });
 });
@@ -155,7 +172,9 @@ describe('PowerShell', () => {
 
   it('extracts Verb-Noun function', async () => {
     const r = await p('function Get-UserList {\n  param()\n}');
-    expect(r.symbols.some((s: any) => s.name === 'Get-UserList' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'Get-UserList' && s.kind === 'function')).toBe(
+      true,
+    );
   });
 
   it('extracts class', async () => {
@@ -193,12 +212,16 @@ describe('Apex', () => {
 
   it('extracts class', async () => {
     const r = await p('public class AccountService {\n}');
-    expect(r.symbols.some((s: any) => s.name === 'AccountService' && s.kind === 'class')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'AccountService' && s.kind === 'class')).toBe(
+      true,
+    );
   });
 
   it('extracts interface', async () => {
     const r = await p('public interface IProcessor {\n}');
-    expect(r.symbols.some((s: any) => s.name === 'IProcessor' && s.kind === 'interface')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'IProcessor' && s.kind === 'interface')).toBe(
+      true,
+    );
   });
 
   it('extracts enum', async () => {
@@ -208,12 +231,16 @@ describe('Apex', () => {
 
   it('extracts trigger', async () => {
     const r = await p('trigger AccountTrigger on Account (before insert, after update) {\n}');
-    expect(r.symbols.some((s: any) => s.name === 'AccountTrigger' && s.metadata?.trigger)).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'AccountTrigger' && s.metadata?.trigger)).toBe(
+      true,
+    );
   });
 
   it('extracts constant', async () => {
     const r = await p('static final Integer MAX_RETRIES = 3;');
-    expect(r.symbols.some((s: any) => s.name === 'MAX_RETRIES' && s.kind === 'constant')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'MAX_RETRIES' && s.kind === 'constant')).toBe(
+      true,
+    );
   });
 });
 
@@ -235,7 +262,9 @@ describe('PL/SQL', () => {
   });
 
   it('extracts function', async () => {
-    const r = await p('CREATE FUNCTION get_name(p_id NUMBER) RETURN VARCHAR2 AS\nBEGIN\n  RETURN NULL;\nEND;');
+    const r = await p(
+      'CREATE FUNCTION get_name(p_id NUMBER) RETURN VARCHAR2 AS\nBEGIN\n  RETURN NULL;\nEND;',
+    );
     expect(r.symbols.some((s: any) => s.name === 'get_name' && s.kind === 'function')).toBe(true);
   });
 
@@ -280,7 +309,9 @@ describe('MATLAB (upgraded)', () => {
 
   it('extracts constant (all-caps)', async () => {
     const r = await p('MAX_ITERATIONS = 1000;');
-    expect(r.symbols.some((s: any) => s.name === 'MAX_ITERATIONS' && s.kind === 'constant')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'MAX_ITERATIONS' && s.kind === 'constant')).toBe(
+      true,
+    );
   });
 
   it('extracts import edge', async () => {
@@ -308,7 +339,9 @@ describe('COBOL (upgraded)', () => {
 
   it('extracts SECTION', async () => {
     const r = await p('       WORKING-STORAGE SECTION.');
-    expect(r.symbols.some((s: any) => s.name === 'WORKING-STORAGE' && s.kind === 'class')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'WORKING-STORAGE' && s.kind === 'class')).toBe(
+      true,
+    );
   });
 
   it('extracts 01-level record', async () => {
@@ -361,7 +394,11 @@ describe('Common Lisp (upgraded)', () => {
 
   it('extracts defmacro', async () => {
     const r = await p('(defmacro with-gensyms ((&rest names) &body body)\n  `(let () ,@body))');
-    expect(r.symbols.some((s: any) => s.name === 'with-gensyms' && s.kind === 'function' && s.metadata?.macro)).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'with-gensyms' && s.kind === 'function' && s.metadata?.macro,
+      ),
+    ).toBe(true);
   });
 
   it('extracts defmethod', async () => {
@@ -371,7 +408,9 @@ describe('Common Lisp (upgraded)', () => {
 
   it('extracts defparameter and defvar', async () => {
     const r = await p('(defparameter *debug-mode* nil)\n(defvar *count* 0)');
-    expect(r.symbols.some((s: any) => s.name === '*debug-mode*' && s.kind === 'variable')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === '*debug-mode*' && s.kind === 'variable')).toBe(
+      true,
+    );
     expect(r.symbols.some((s: any) => s.name === '*count*' && s.kind === 'variable')).toBe(true);
   });
 
@@ -382,12 +421,20 @@ describe('Common Lisp (upgraded)', () => {
 
   it('extracts defsystem (ASDF)', async () => {
     const r = await p('(defsystem "my-project"\n  :depends-on ("cl-json" "hunchentoot"))');
-    expect(r.symbols.some((s: any) => s.name === 'my-project' && s.kind === 'module' && s.metadata?.asdf)).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my-project' && s.kind === 'module' && s.metadata?.asdf,
+      ),
+    ).toBe(true);
   });
 
   it('extracts define-setf-expander', async () => {
     const r = await p('(define-setf-expander my-accessor (place)\n  (values))');
-    expect(r.symbols.some((s: any) => s.name === 'my-accessor' && s.kind === 'function' && s.metadata?.setf)).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my-accessor' && s.kind === 'function' && s.metadata?.setf,
+      ),
+    ).toBe(true);
   });
 
   it('extracts use-package edge', async () => {
@@ -414,7 +461,11 @@ describe('Zig (upgraded)', () => {
 
   it('extracts pub function', async () => {
     const r = await parseZig('pub fn init(allocator: std.mem.Allocator) void {}');
-    expect(r.symbols.some((s: any) => s.name === 'init' && s.kind === 'function' && s.metadata?.exported)).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'init' && s.kind === 'function' && s.metadata?.exported,
+      ),
+    ).toBe(true);
   });
 
   it('extracts struct with fields', async () => {

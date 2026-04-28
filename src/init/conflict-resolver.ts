@@ -44,17 +44,23 @@ export function fixConflict(conflict: Conflict, opts: { dryRun?: boolean } = {})
     case 'global_artifact':
       return fixGlobalArtifact(conflict, opts);
     default:
-      return { conflictId: conflict.id, action: 'skipped', detail: 'No fix strategy for this category', target: conflict.target };
+      return {
+        conflictId: conflict.id,
+        action: 'skipped',
+        detail: 'No fix strategy for this category',
+        target: conflict.target,
+      };
   }
 }
 
 /**
  * Fix all fixable conflicts. Returns results for each.
  */
-export function fixAllConflicts(conflicts: Conflict[], opts: { dryRun?: boolean } = {}): FixResult[] {
-  return conflicts
-    .filter((c) => c.fixable)
-    .map((c) => fixConflict(c, opts));
+export function fixAllConflicts(
+  conflicts: Conflict[],
+  opts: { dryRun?: boolean } = {},
+): FixResult[] {
+  return conflicts.filter((c) => c.fixable).map((c) => fixConflict(c, opts));
 }
 
 // ---------------------------------------------------------------------------
@@ -71,11 +77,21 @@ function fixMcpServer(conflict: Conflict, opts: { dryRun?: boolean }): FixResult
   const serverName = conflict.id.split(':')[1];
 
   if (opts.dryRun) {
-    return { conflictId: conflict.id, action: 'disabled', detail: `Would comment out "${serverName}" in ${shortPath(configPath)}`, target: configPath };
+    return {
+      conflictId: conflict.id,
+      action: 'disabled',
+      detail: `Would comment out "${serverName}" in ${shortPath(configPath)}`,
+      target: configPath,
+    };
   }
 
   if (!fs.existsSync(configPath)) {
-    return { conflictId: conflict.id, action: 'skipped', detail: 'Config file no longer exists', target: configPath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: 'Config file no longer exists',
+      target: configPath,
+    };
   }
 
   try {
@@ -83,13 +99,28 @@ function fixMcpServer(conflict: Conflict, opts: { dryRun?: boolean }): FixResult
     const result = commentOutJsonKey(raw, serverName);
 
     if (!result) {
-      return { conflictId: conflict.id, action: 'skipped', detail: `Server "${serverName}" not found (already disabled?)`, target: configPath };
+      return {
+        conflictId: conflict.id,
+        action: 'skipped',
+        detail: `Server "${serverName}" not found (already disabled?)`,
+        target: configPath,
+      };
     }
 
     fs.writeFileSync(configPath, result);
-    return { conflictId: conflict.id, action: 'disabled', detail: `Commented out "${serverName}" in ${shortPath(configPath)}`, target: configPath };
+    return {
+      conflictId: conflict.id,
+      action: 'disabled',
+      detail: `Commented out "${serverName}" in ${shortPath(configPath)}`,
+      target: configPath,
+    };
   } catch (err) {
-    return { conflictId: conflict.id, action: 'skipped', detail: `Failed to update config: ${(err as Error).message}`, target: configPath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: `Failed to update config: ${(err as Error).message}`,
+      target: configPath,
+    };
   }
 }
 
@@ -124,8 +155,12 @@ export function commentOutJsonKey(raw: string, key: string): string | null {
     // Strip string literals to avoid counting braces inside strings
     const stripped = lines[i].replace(/"(?:[^"\\]|\\.)*"/g, '""');
     for (const ch of stripped) {
-      if (ch === '{' || ch === '[') { braceDepth++; foundOpen = true; }
-      else if (ch === '}' || ch === ']') { braceDepth--; }
+      if (ch === '{' || ch === '[') {
+        braceDepth++;
+        foundOpen = true;
+      } else if (ch === '}' || ch === ']') {
+        braceDepth--;
+      }
     }
 
     if (foundOpen && braceDepth <= 0) {
@@ -142,7 +177,7 @@ export function commentOutJsonKey(raw: string, key: string): string | null {
 
   // Comment out lines [startLine..endLine]
   for (let i = startLine; i <= endLine; i++) {
-    lines[i] = '// ' + lines[i];
+    lines[i] = `// ${lines[i]}`;
   }
 
   return lines.join('\n');
@@ -156,24 +191,40 @@ function fixHookInSettings(conflict: Conflict, opts: { dryRun?: boolean }): FixR
   const competitor = conflict.competitor;
 
   if (opts.dryRun) {
-    return { conflictId: conflict.id, action: 'removed', detail: `Would remove ${competitor} hooks from ${shortPath(settingsPath)}`, target: settingsPath };
+    return {
+      conflictId: conflict.id,
+      action: 'removed',
+      detail: `Would remove ${competitor} hooks from ${shortPath(settingsPath)}`,
+      target: settingsPath,
+    };
   }
 
   if (!fs.existsSync(settingsPath)) {
-    return { conflictId: conflict.id, action: 'skipped', detail: 'Settings file no longer exists', target: settingsPath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: 'Settings file no longer exists',
+      target: settingsPath,
+    };
   }
 
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
     const hooks = settings.hooks as Record<string, unknown[]> | undefined;
     if (!hooks) {
-      return { conflictId: conflict.id, action: 'skipped', detail: 'No hooks section found', target: settingsPath };
+      return {
+        conflictId: conflict.id,
+        action: 'skipped',
+        detail: 'No hooks section found',
+        target: settingsPath,
+      };
     }
 
     let modified = false;
     // Use the original detection regex when available; fall back to literal competitor name
-    const competitorPattern = conflict.detectionPattern
-      ?? new RegExp(competitor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const competitorPattern =
+      conflict.detectionPattern ??
+      new RegExp(competitor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
     for (const [event, entries] of Object.entries(hooks)) {
       if (!Array.isArray(entries)) continue;
@@ -197,17 +248,32 @@ function fixHookInSettings(conflict: Conflict, opts: { dryRun?: boolean }): FixR
 
     // Clean up empty hooks object
     if (Object.keys(hooks).length === 0) {
-      delete settings.hooks;
+      settings.hooks = undefined;
     }
 
     if (!modified) {
-      return { conflictId: conflict.id, action: 'skipped', detail: 'Hook entries already removed', target: settingsPath };
+      return {
+        conflictId: conflict.id,
+        action: 'skipped',
+        detail: 'Hook entries already removed',
+        target: settingsPath,
+      };
     }
 
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-    return { conflictId: conflict.id, action: 'removed', detail: `Removed ${competitor} hooks from ${shortPath(settingsPath)}`, target: settingsPath };
+    fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+    return {
+      conflictId: conflict.id,
+      action: 'removed',
+      detail: `Removed ${competitor} hooks from ${shortPath(settingsPath)}`,
+      target: settingsPath,
+    };
   } catch (err) {
-    return { conflictId: conflict.id, action: 'skipped', detail: `Failed to update settings: ${(err as Error).message}`, target: settingsPath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: `Failed to update settings: ${(err as Error).message}`,
+      target: settingsPath,
+    };
   }
 }
 
@@ -218,18 +284,38 @@ function fixHookScript(conflict: Conflict, opts: { dryRun?: boolean }): FixResul
   const scriptPath = conflict.target;
 
   if (opts.dryRun) {
-    return { conflictId: conflict.id, action: 'removed', detail: `Would delete ${shortPath(scriptPath)}`, target: scriptPath };
+    return {
+      conflictId: conflict.id,
+      action: 'removed',
+      detail: `Would delete ${shortPath(scriptPath)}`,
+      target: scriptPath,
+    };
   }
 
   if (!fs.existsSync(scriptPath)) {
-    return { conflictId: conflict.id, action: 'skipped', detail: 'Script already removed', target: scriptPath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: 'Script already removed',
+      target: scriptPath,
+    };
   }
 
   try {
     fs.unlinkSync(scriptPath);
-    return { conflictId: conflict.id, action: 'removed', detail: `Deleted ${shortPath(scriptPath)}`, target: scriptPath };
+    return {
+      conflictId: conflict.id,
+      action: 'removed',
+      detail: `Deleted ${shortPath(scriptPath)}`,
+      target: scriptPath,
+    };
   } catch (err) {
-    return { conflictId: conflict.id, action: 'skipped', detail: `Failed to delete: ${(err as Error).message}`, target: scriptPath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: `Failed to delete: ${(err as Error).message}`,
+      target: scriptPath,
+    };
   }
 }
 
@@ -244,20 +330,42 @@ function fixClaudeMdBlock(conflict: Conflict, opts: { dryRun?: boolean }): FixRe
   const filePath = conflict.target;
 
   if (opts.dryRun) {
-    return { conflictId: conflict.id, action: 'cleaned', detail: `Would remove ${conflict.competitor} content from ${shortPath(filePath)}`, target: filePath };
+    return {
+      conflictId: conflict.id,
+      action: 'cleaned',
+      detail: `Would remove ${conflict.competitor} content from ${shortPath(filePath)}`,
+      target: filePath,
+    };
   }
 
   if (!fs.existsSync(filePath)) {
-    return { conflictId: conflict.id, action: 'skipped', detail: 'File no longer exists', target: filePath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: 'File no longer exists',
+      target: filePath,
+    };
   }
 
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
 
     // Strategy 1: Remove marker-delimited blocks: <!-- tool:start --> ... <!-- tool:end -->
-    const tools = ['jcodemunch', 'code-index', 'repomix', 'aider', 'cline', 'cody', 'greptile', 'sourcegraph', 'code-compass', 'repo-map'];
+    const tools = [
+      'jcodemunch',
+      'code-index',
+      'repomix',
+      'aider',
+      'cline',
+      'cody',
+      'greptile',
+      'sourcegraph',
+      'code-compass',
+      'repo-map',
+    ];
     const markerPattern = new RegExp(
-      `<!-- ?(${tools.join('|')}):start ?-->[\\s\\S]*?<!-- ?\\1:end ?-->\\n?`, 'gi',
+      `<!-- ?(${tools.join('|')}):start ?-->[\\s\\S]*?<!-- ?\\1:end ?-->\\n?`,
+      'gi',
     );
 
     let updated = content.replace(markerPattern, '');
@@ -270,20 +378,40 @@ function fixClaudeMdBlock(conflict: Conflict, opts: { dryRun?: boolean }): FixRe
       fs.unlinkSync(filePath);
       // Also remove from MEMORY.md index if present
       removeFromMemoryIndex(filePath);
-      return { conflictId: conflict.id, action: 'removed', detail: `Deleted memory file ${shortPath(filePath)}`, target: filePath };
+      return {
+        conflictId: conflict.id,
+        action: 'removed',
+        detail: `Deleted memory file ${shortPath(filePath)}`,
+        target: filePath,
+      };
     }
 
     // Clean up excessive blank lines left behind
-    updated = updated.replace(/\n{3,}/g, '\n\n').trim() + '\n';
+    updated = `${updated.replace(/\n{3,}/g, '\n\n').trim()}\n`;
 
     if (updated === content) {
-      return { conflictId: conflict.id, action: 'skipped', detail: 'No competing content found to remove', target: filePath };
+      return {
+        conflictId: conflict.id,
+        action: 'skipped',
+        detail: 'No competing content found to remove',
+        target: filePath,
+      };
     }
 
     fs.writeFileSync(filePath, updated);
-    return { conflictId: conflict.id, action: 'cleaned', detail: `Removed ${conflict.competitor} content from ${shortPath(filePath)}`, target: filePath };
+    return {
+      conflictId: conflict.id,
+      action: 'cleaned',
+      detail: `Removed ${conflict.competitor} content from ${shortPath(filePath)}`,
+      target: filePath,
+    };
   } catch (err) {
-    return { conflictId: conflict.id, action: 'skipped', detail: `Failed to update: ${(err as Error).message}`, target: filePath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: `Failed to update: ${(err as Error).message}`,
+      target: filePath,
+    };
   }
 }
 
@@ -291,12 +419,12 @@ function fixClaudeMdBlock(conflict: Conflict, opts: { dryRun?: boolean }): FixRe
 const COMPETITOR_HEADING_NAMES: Record<string, string[]> = {
   'jcodemunch-mcp': ['jcodemunch', 'jCodeMunch', 'code-index'],
   'code-index': ['code-index', 'codeindex'],
-  'repomix': ['repomix', 'repopack'],
-  'aider': ['aider'],
-  'cline': ['cline'],
+  repomix: ['repomix', 'repopack'],
+  aider: ['aider'],
+  cline: ['cline'],
   'sourcegraph-cody': ['cody', 'sourcegraph'],
-  'sourcegraph': ['sourcegraph'],
-  'greptile': ['greptile'],
+  sourcegraph: ['sourcegraph'],
+  greptile: ['greptile'],
   'code-compass': ['code-compass', 'codecompass'],
   'repo-map': ['repo-map', 'repomap'],
 };
@@ -371,7 +499,9 @@ function removeFromMemoryIndex(deletedFilePath: string): void {
     if (updated !== content) {
       fs.writeFileSync(indexPath, updated);
     }
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 }
 
 /**
@@ -381,11 +511,21 @@ function fixConfigFile(conflict: Conflict, opts: { dryRun?: boolean }): FixResul
   const filePath = conflict.target;
 
   if (opts.dryRun) {
-    return { conflictId: conflict.id, action: 'removed', detail: `Would delete ${shortPath(filePath)}`, target: filePath };
+    return {
+      conflictId: conflict.id,
+      action: 'removed',
+      detail: `Would delete ${shortPath(filePath)}`,
+      target: filePath,
+    };
   }
 
   if (!fs.existsSync(filePath)) {
-    return { conflictId: conflict.id, action: 'skipped', detail: 'Already removed', target: filePath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: 'Already removed',
+      target: filePath,
+    };
   }
 
   try {
@@ -395,9 +535,19 @@ function fixConfigFile(conflict: Conflict, opts: { dryRun?: boolean }): FixResul
     } else {
       fs.unlinkSync(filePath);
     }
-    return { conflictId: conflict.id, action: 'removed', detail: `Deleted ${shortPath(filePath)}`, target: filePath };
+    return {
+      conflictId: conflict.id,
+      action: 'removed',
+      detail: `Deleted ${shortPath(filePath)}`,
+      target: filePath,
+    };
   } catch (err) {
-    return { conflictId: conflict.id, action: 'skipped', detail: `Failed to delete: ${(err as Error).message}`, target: filePath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: `Failed to delete: ${(err as Error).message}`,
+      target: filePath,
+    };
   }
 }
 
@@ -408,18 +558,38 @@ function fixGlobalArtifact(conflict: Conflict, opts: { dryRun?: boolean }): FixR
   const dirPath = conflict.target;
 
   if (opts.dryRun) {
-    return { conflictId: conflict.id, action: 'removed', detail: `Would remove ${shortPath(dirPath)}`, target: dirPath };
+    return {
+      conflictId: conflict.id,
+      action: 'removed',
+      detail: `Would remove ${shortPath(dirPath)}`,
+      target: dirPath,
+    };
   }
 
   if (!fs.existsSync(dirPath)) {
-    return { conflictId: conflict.id, action: 'skipped', detail: 'Directory already removed', target: dirPath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: 'Directory already removed',
+      target: dirPath,
+    };
   }
 
   try {
     fs.rmSync(dirPath, { recursive: true, force: true });
-    return { conflictId: conflict.id, action: 'removed', detail: `Removed ${shortPath(dirPath)}`, target: dirPath };
+    return {
+      conflictId: conflict.id,
+      action: 'removed',
+      detail: `Removed ${shortPath(dirPath)}`,
+      target: dirPath,
+    };
   } catch (err) {
-    return { conflictId: conflict.id, action: 'skipped', detail: `Failed to remove: ${(err as Error).message}`, target: dirPath };
+    return {
+      conflictId: conflict.id,
+      action: 'skipped',
+      detail: `Failed to remove: ${(err as Error).message}`,
+      target: dirPath,
+    };
   }
 }
 
@@ -429,6 +599,6 @@ function fixGlobalArtifact(conflict: Conflict, opts: { dryRun?: boolean }): FixR
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   return p;
 }

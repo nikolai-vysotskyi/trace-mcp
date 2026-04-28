@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { OllamaProvider } from '../../src/ai/ollama.js';
-import { createAIProvider } from '../../src/ai/index.js';
+import { describe, expect, it } from 'vitest';
 import { FallbackProvider } from '../../src/ai/fallback.js';
+import { createAIProvider } from '../../src/ai/index.js';
+import { OllamaProvider } from '../../src/ai/ollama.js';
 import type { TraceMcpConfig } from '../../src/config.js';
 
 describe('OllamaProvider', () => {

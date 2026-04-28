@@ -7,12 +7,12 @@
  * sessions and closes resources when no sessions remain.
  */
 
-import type { ServerDeps } from '../server/server.js';
 import type { TraceMcpConfig } from '../config.js';
-import { TopologyStore } from '../topology/topology-db.js';
-import { DecisionStore } from '../memory/decision-store.js';
-import { TOPOLOGY_DB_PATH, DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
+import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
+import { DecisionStore } from '../memory/decision-store.js';
+import type { ServerDeps } from '../server/server.js';
+import { TopologyStore } from '../topology/topology-db.js';
 
 interface PoolEntry {
   topoStore: TopologyStore | null;
@@ -31,9 +31,7 @@ export class ProjectResourcePool {
     let entry = this.pools.get(projectRoot);
     if (!entry) {
       ensureGlobalDirs();
-      const topoStore = config.topology?.enabled
-        ? new TopologyStore(TOPOLOGY_DB_PATH)
-        : null;
+      const topoStore = config.topology?.enabled ? new TopologyStore(TOPOLOGY_DB_PATH) : null;
       const decisionStore = new DecisionStore(DECISIONS_DB_PATH);
       entry = { topoStore, decisionStore, refCount: 0 };
       this.pools.set(projectRoot, entry);
@@ -62,8 +60,16 @@ export class ProjectResourcePool {
   disposeProject(projectRoot: string): void {
     const entry = this.pools.get(projectRoot);
     if (!entry) return;
-    try { entry.topoStore?.close(); } catch { /* best-effort */ }
-    try { entry.decisionStore.close(); } catch { /* best-effort */ }
+    try {
+      entry.topoStore?.close();
+    } catch {
+      /* best-effort */
+    }
+    try {
+      entry.decisionStore.close();
+    } catch {
+      /* best-effort */
+    }
     this.pools.delete(projectRoot);
     logger.debug({ projectRoot }, 'Resource pool: disposed project resources');
   }

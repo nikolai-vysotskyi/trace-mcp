@@ -4,40 +4,33 @@
  */
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
 // --- Extraction patterns (YAML-based, regex on raw content) -------------------
 
 // name: "workflow name"
-const WORKFLOW_NAME_RE =
-  /^name:\s*['"]?([^\n'"]+)['"]?/m;
+const WORKFLOW_NAME_RE = /^name:\s*['"]?([^\n'"]+)['"]?/m;
 
 // on: push / on: [push, pull_request] / on:\n  push:\n  pull_request:
-const TRIGGER_RE =
-  /^on:\s*(?:\[([^\]]+)\]|(\w+))/m;
+const TRIGGER_RE = /^on:\s*(?:\[([^\]]+)\]|(\w+))/m;
 
 // jobs:\n  job-name:
-const JOB_RE =
-  /^\s{2}(\w[\w-]*):\s*$/gm;
+const JOB_RE = /^\s{2}(\w[\w-]*):\s*$/gm;
 
 // uses: actions/checkout@v4
-const USES_RE =
-  /uses:\s*['"]?([^'"\n]+)['"]?/g;
+const USES_RE = /uses:\s*['"]?([^'"\n]+)['"]?/g;
 
 // run: npm test
-const RUN_RE =
-  /run:\s*[|>]?\s*\n?\s*(.+)/g;
+const _RUN_RE = /run:\s*[|>]?\s*\n?\s*(.+)/g;
 
 // needs: [job1, job2] or needs: job1
-const NEEDS_RE =
-  /needs:\s*(?:\[([^\]]+)\]|(\w[\w-]*))/g;
+const _NEEDS_RE = /needs:\s*(?:\[([^\]]+)\]|(\w[\w-]*))/g;
 
 // --- Helpers -------------------------------------------------------------------
 
@@ -96,8 +89,8 @@ export class GithubActionsPlugin implements FrameworkPlugin {
   };
 
   detect(ctx: ProjectContext): boolean {
-    return ctx.configFiles.some((f) =>
-      f.startsWith('.github/workflows/') && (f.endsWith('.yml') || f.endsWith('.yaml')),
+    return ctx.configFiles.some(
+      (f) => f.startsWith('.github/workflows/') && (f.endsWith('.yml') || f.endsWith('.yaml')),
     );
   }
 

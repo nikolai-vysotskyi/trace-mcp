@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  FastifyPlugin,
-  extractFastifyRoutes,
   extractFastifyHooks,
   extractFastifyPlugins,
+  extractFastifyRoutes,
+  FastifyPlugin,
 } from '../../../src/indexer/plugins/integration/framework/fastify/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

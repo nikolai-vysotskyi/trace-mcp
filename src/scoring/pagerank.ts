@@ -24,14 +24,16 @@ export function computePageRank(
 ): Map<number, number> {
   // Fast cache check: if same DB and edge count hasn't changed, reuse
   const dbName = db.name;
-  const countRow = db.prepare('SELECT COUNT(*) as cnt FROM edges WHERE resolved = 1').get() as { cnt: number };
+  const countRow = db.prepare('SELECT COUNT(*) as cnt FROM edges WHERE resolved = 1').get() as {
+    cnt: number;
+  };
   if (_cache && _cache.dbName === dbName && _cache.edgeCount === countRow.cnt) {
     return _cache.result;
   }
 
-  const edges = db.prepare(
-    'SELECT source_node_id, target_node_id FROM edges WHERE resolved = 1',
-  ).all() as EdgeRecord[];
+  const edges = db
+    .prepare('SELECT source_node_id, target_node_id FROM edges WHERE resolved = 1')
+    .all() as EdgeRecord[];
 
   // Collect all unique node IDs
   const nodeSet = new Set<number>();
@@ -80,7 +82,7 @@ export function computePageRank(
         continue;
       }
 
-      const share = (scores.get(nodeId) ?? 0) * dampingFactor / targets.length;
+      const share = ((scores.get(nodeId) ?? 0) * dampingFactor) / targets.length;
       for (const target of targets) {
         newScores.set(target, (newScores.get(target) ?? base) + share);
       }

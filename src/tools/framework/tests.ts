@@ -1,7 +1,7 @@
 import path from 'node:path';
+import { err, ok } from 'neverthrow';
 import type { Store } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
-import { ok, err } from 'neverthrow';
 import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface TestReference {

@@ -31,14 +31,17 @@ export class LspServerManager {
     if (this.failed.has(language)) return null;
 
     // Respect concurrent limit
-    const activeCount = Array.from(this.clients.values()).filter(c => c.isAlive()).length;
+    const activeCount = Array.from(this.clients.values()).filter((c) => c.isAlive()).length;
     if (activeCount >= this.maxConcurrent) {
-      logger.debug({ language, active: activeCount, max: this.maxConcurrent }, 'LSP concurrent limit reached');
+      logger.debug(
+        { language, active: activeCount, max: this.maxConcurrent },
+        'LSP concurrent limit reached',
+      );
       return null;
     }
 
     // Find spec
-    const spec = this.specs.find(s => s.language === language);
+    const spec = this.specs.find((s) => s.language === language);
     if (!spec) return null;
 
     // Attempt to start

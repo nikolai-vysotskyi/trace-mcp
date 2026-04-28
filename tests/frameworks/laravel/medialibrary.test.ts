@@ -1,11 +1,11 @@
 /**
  * Tests for spatie/laravel-medialibrary extraction.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  extractMediaLibraryModel,
   buildMediaLibraryModelEdges,
   buildMediaLibraryModelSymbols,
+  extractMediaLibraryModel,
 } from '../../../src/indexer/plugins/integration/framework/laravel/medialibrary.js';
 
 const MEDIA_MODEL = `<?php

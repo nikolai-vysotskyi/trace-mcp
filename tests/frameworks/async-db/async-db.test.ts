@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { AsyncDbPlugin } from '../../../src/indexer/plugins/integration/orm/async-db/index.js';
 
 const plugin = new AsyncDbPlugin();

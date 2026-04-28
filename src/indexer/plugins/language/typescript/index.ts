@@ -4,34 +4,39 @@
  * Extracts functions, classes, variables (exported const/let), types,
  * interfaces, enums, methods, and import edges from TS/JS source files.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  getFullSignature,
-  isExported,
-  isDefaultExport,
-  isAsync,
-  getNodeName,
-  extractImportEdges,
-  extractClassMethods,
-  extractDecorators,
+  collectLocalTypes,
   collectNodeTypes,
   extractCallSites,
-  collectLocalTypes,
-  extractTypeReferences,
+  extractClassMethods,
+  extractDecorators,
+  extractImportEdges,
   extractModuleCallSites,
+  extractTypeReferences,
+  getFullSignature,
+  getNodeName,
+  isAsync,
+  isDefaultExport,
+  isExported,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 import {
+  detectMinEsVersion,
   detectMinNodeVersion,
   detectMinNodeVersionFromAPIs,
   detectMinTsVersion,
   detectMinTsVersionFromSource,
-  detectMinEsVersion,
 } from './version-features.js';
 
 const TSX_EXTENSIONS = new Set(['.tsx', '.jsx']);
@@ -47,7 +52,10 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
   supportedVersions = ['12', '14', '16', '17', '18', '19', '20', '21', '22', '23', '24'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const ext = filePath.substring(filePath.lastIndexOf('.'));
       const sourceCode = content.toString('utf-8');
@@ -76,7 +84,11 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       // call graph can attribute these calls to something.
       const moduleCallSites = extractModuleCallSites(root);
       if (moduleCallSites.length > 0) {
-        const moduleName = filePath.split('/').pop()?.replace(/\.[^.]+$/, '') ?? '__module__';
+        const moduleName =
+          filePath
+            .split('/')
+            .pop()
+            ?.replace(/\.[^.]+$/, '') ?? '__module__';
         symbols.push({
           symbolId: makeSymbolId(filePath, '__module__', 'namespace'),
           name: `__module__:${moduleName}`,
@@ -267,11 +279,11 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
         // as functions so they participate in the call graph. These are often
         // re-exported via `export { foo }` statements at module bottom.
         const valueNode = child.childForFieldName('value');
-        const isFunctionLike = !!valueNode && (
-          valueNode.type === 'arrow_function'
-          || valueNode.type === 'function_expression'
-          || valueNode.type === 'generator_function'
-        );
+        const isFunctionLike =
+          !!valueNode &&
+          (valueNode.type === 'arrow_function' ||
+            valueNode.type === 'function_expression' ||
+            valueNode.type === 'generator_function');
 
         // Skip non-exported non-function variables — they're usually constants
         // or local state that would only bloat symbol counts.
@@ -362,7 +374,10 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
   }
 
   private extractHeritage(node: TSNode): { extends: string | null; implements: string[] } {
-    const result: { extends: string | null; implements: string[] } = { extends: null, implements: [] };
+    const result: { extends: string | null; implements: string[] } = {
+      extends: null,
+      implements: [],
+    };
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
       if (!child) continue;

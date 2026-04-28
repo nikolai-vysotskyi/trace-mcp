@@ -3,15 +3,16 @@
  * Verifies that the BladePlugin.resolveEdges creates blade_extends and
  * blade_includes edges in the DB after a real pipeline run.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import { BladePlugin } from '../../src/indexer/plugins/integration/view/blade/index.js';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('Blade @extends / @include e2e', () => {
   let store: Store;

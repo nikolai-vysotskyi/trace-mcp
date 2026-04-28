@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  SequelizePlugin,
-  extractSequelizeModel,
   extractSequelizeMigration,
+  extractSequelizeModel,
+  SequelizePlugin,
 } from '../../../src/indexer/plugins/integration/orm/sequelize/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -67,10 +67,7 @@ describe('SequelizePlugin', () => {
 
 describe('Sequelize model extraction', () => {
   describe('User model (class-based)', () => {
-    const source = fs.readFileSync(
-      path.join(S6_FIXTURE, 'models/user.ts'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(S6_FIXTURE, 'models/user.ts'), 'utf-8');
     const result = extractSequelizeModel(source, 'models/user.ts');
 
     it('extracts model', () => {
@@ -134,10 +131,7 @@ describe('Sequelize model extraction', () => {
   });
 
   describe('Post model', () => {
-    const source = fs.readFileSync(
-      path.join(S6_FIXTURE, 'models/post.ts'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(S6_FIXTURE, 'models/post.ts'), 'utf-8');
     const result = extractSequelizeModel(source, 'models/post.ts');
 
     it('extracts model', () => {

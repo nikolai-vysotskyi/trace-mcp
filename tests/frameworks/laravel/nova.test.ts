@@ -3,12 +3,13 @@
  * Covers: Resource→Model, relationship fields, actions/filters/lenses,
  * metrics, and v4+ fieldsForIndex()/panels.
  */
-import { describe, it, expect } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  extractNovaResource,
   extractNovaMetric,
+  extractNovaResource,
 } from '../../../src/indexer/plugins/integration/framework/laravel/nova.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/nova-v5');

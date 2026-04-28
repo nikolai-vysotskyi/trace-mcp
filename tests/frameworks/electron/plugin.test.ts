@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { ElectronPlugin } from '../../../src/indexer/plugins/integration/tooling/electron/index.js';
 import type { ProjectContext, ResolveContext } from '../../../src/plugin-api/types.js';
 
@@ -84,11 +84,20 @@ describe('ElectronPlugin', () => {
       const names = plugin.registerSchema().edgeTypes!.map((e) => e.name);
       expect(names).toHaveLength(14);
       for (const expected of [
-        'electron_ipc_handle', 'electron_ipc_main_on',
-        'electron_ipc_invoke', 'electron_ipc_send', 'electron_ipc_send_sync', 'electron_ipc_on',
-        'electron_webcontents_send', 'electron_preload_api', 'electron_browser_window',
-        'electron_utility_fork', 'electron_parent_port', 'electron_message_channel',
-        'electron_protocol_handle', 'electron_deprecated',
+        'electron_ipc_handle',
+        'electron_ipc_main_on',
+        'electron_ipc_invoke',
+        'electron_ipc_send',
+        'electron_ipc_send_sync',
+        'electron_ipc_on',
+        'electron_webcontents_send',
+        'electron_preload_api',
+        'electron_browser_window',
+        'electron_utility_fork',
+        'electron_parent_port',
+        'electron_message_channel',
+        'electron_protocol_handle',
+        'electron_deprecated',
       ]) {
         expect(names).toContain(expected);
       }
@@ -110,7 +119,9 @@ describe('ElectronPlugin', () => {
       );
       expect(edges).toHaveLength(3);
       const channels = edges.map((e) => (e.metadata as Record<string, string>).channel);
-      expect(channels).toEqual(expect.arrayContaining(['select-folder', 'open-file', 'get-app-version']));
+      expect(channels).toEqual(
+        expect.arrayContaining(['select-folder', 'open-file', 'get-app-version']),
+      );
     });
 
     it('extracts ipcMain.handleOnce', () => {
@@ -126,8 +137,9 @@ describe('ElectronPlugin', () => {
         (e) => (e.metadata as Record<string, string>).variant === 'on',
       );
       expect(edges).toHaveLength(2);
-      expect(edges.map((e) => (e.metadata as Record<string, string>).channel))
-        .toEqual(expect.arrayContaining(['log-event', 'request-data']));
+      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toEqual(
+        expect.arrayContaining(['log-event', 'request-data']),
+      );
     });
 
     it('extracts ipcMain.once', () => {
@@ -147,7 +159,9 @@ describe('ElectronPlugin', () => {
 
     it('extracts event.sender.send (reply pattern)', () => {
       const edges = edgesOfType(data, 'electron_webcontents_send');
-      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toContain('data-response');
+      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toContain(
+        'data-response',
+      );
     });
 
     it('extracts BrowserWindow', () => {
@@ -185,8 +199,9 @@ describe('ElectronPlugin', () => {
     it('extracts ipcRenderer.invoke channels', () => {
       const edges = edgesOfType(data, 'electron_ipc_invoke');
       expect(edges).toHaveLength(3);
-      expect(edges.map((e) => (e.metadata as Record<string, string>).channel))
-        .toEqual(expect.arrayContaining(['select-folder', 'open-file', 'get-app-version']));
+      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toEqual(
+        expect.arrayContaining(['select-folder', 'open-file', 'get-app-version']),
+      );
     });
 
     it('extracts ipcRenderer.send', () => {
@@ -205,8 +220,9 @@ describe('ElectronPlugin', () => {
 
     it('extracts ipcRenderer.on channels', () => {
       const edges = edgesOfType(data, 'electron_ipc_on');
-      expect(edges.map((e) => (e.metadata as Record<string, string>).channel))
-        .toEqual(expect.arrayContaining(['update-available', 'download-progress', 'data-response']));
+      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toEqual(
+        expect.arrayContaining(['update-available', 'download-progress', 'data-response']),
+      );
     });
   });
 
@@ -239,8 +255,9 @@ describe('ElectronPlugin', () => {
     it('extracts ipcRenderer.invoke channels', () => {
       const edges = edgesOfType(data, 'electron_ipc_invoke');
       expect(edges).toHaveLength(2);
-      expect(edges.map((e) => (e.metadata as Record<string, string>).channel))
-        .toEqual(expect.arrayContaining(['select-folder', 'open-file']));
+      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toEqual(
+        expect.arrayContaining(['select-folder', 'open-file']),
+      );
     });
 
     it('extracts ipcRenderer.send', () => {
@@ -252,8 +269,9 @@ describe('ElectronPlugin', () => {
     it('extracts ipcRenderer.on (for main→renderer push)', () => {
       const edges = edgesOfType(data, 'electron_ipc_on');
       expect(edges).toHaveLength(2);
-      expect(edges.map((e) => (e.metadata as Record<string, string>).channel))
-        .toEqual(expect.arrayContaining(['update-available', 'data-response']));
+      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toEqual(
+        expect.arrayContaining(['update-available', 'data-response']),
+      );
     });
   });
 
@@ -300,7 +318,9 @@ describe('ElectronPlugin', () => {
 
     it('resolves renderer send → main on', () => {
       const sendEdges = edges.filter(
-        (e) => e.edgeType === 'electron_ipc_send' && (e.metadata as Record<string, string>).channel === 'log-event',
+        (e) =>
+          e.edgeType === 'electron_ipc_send' &&
+          (e.metadata as Record<string, string>).channel === 'log-event',
       );
       expect(sendEdges.length).toBeGreaterThanOrEqual(1);
       expect(sendEdges[0].target).toBe('src/main/index.ts');
@@ -321,7 +341,8 @@ describe('ElectronPlugin', () => {
 
     it('resolves event.sender.send → renderer on (data-response)', () => {
       const dataEdges = edges.filter(
-        (e) => e.edgeType === 'electron_webcontents_send' &&
+        (e) =>
+          e.edgeType === 'electron_webcontents_send' &&
           (e.metadata as Record<string, string>).channel === 'data-response',
       );
       expect(dataEdges.length).toBeGreaterThanOrEqual(1);
@@ -334,7 +355,9 @@ describe('ElectronPlugin', () => {
   describe('deprecated APIs', () => {
     it('flags BrowserView as deprecated with warning', () => {
       const source = `import { BrowserView } from 'electron';\nconst v = new BrowserView({});`;
-      const data = plugin.extractNodes('legacy.ts', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('legacy.ts', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       const deprecated = edgesOfType(data, 'electron_deprecated');
       expect(deprecated).toHaveLength(1);
       expect((deprecated[0].metadata as Record<string, string>).api).toBe('BrowserView');
@@ -356,7 +379,9 @@ describe('ElectronPlugin', () => {
   describe('modern APIs', () => {
     it('detects MessageChannelMain', () => {
       const source = `import { MessageChannelMain } from 'electron';\nconst { port1, port2 } = new MessageChannelMain();`;
-      const data = plugin.extractNodes('ports.ts', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('ports.ts', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       expect(edgesOfType(data, 'electron_message_channel')).toHaveLength(1);
     });
 
@@ -364,7 +389,9 @@ describe('ElectronPlugin', () => {
       const source = `import { WebContentsView, BaseWindow } from 'electron';
 const win = new BaseWindow({ width: 800 });
 const view = new WebContentsView();`;
-      const data = plugin.extractNodes('modern.ts', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('modern.ts', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       const types = edgesOfType(data, 'electron_browser_window').map(
         (e) => (e.metadata as Record<string, string>).type,
       );
@@ -374,7 +401,9 @@ const view = new WebContentsView();`;
 
     it('detects utilityProcess.fork with file reference', () => {
       const source = `import { utilityProcess } from 'electron';\nconst child = utilityProcess.fork('./worker.js');`;
-      const data = plugin.extractNodes('main.ts', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('main.ts', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       const edges = edgesOfType(data, 'electron_utility_fork');
       expect(edges).toHaveLength(1);
       expect((edges[0].metadata as Record<string, string>).modulePath).toBe('./worker.js');
@@ -384,15 +413,21 @@ const view = new WebContentsView();`;
       const source = `import { BrowserWindow } from 'electron';
 const win = new BrowserWindow({});
 win.webContents.postMessage('port-transfer', null, [port1]);`;
-      const data = plugin.extractNodes('ports-main.ts', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('ports-main.ts', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       const edges = edgesOfType(data, 'electron_webcontents_send');
-      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toContain('port-transfer');
+      expect(edges.map((e) => (e.metadata as Record<string, string>).channel)).toContain(
+        'port-transfer',
+      );
     });
 
     it('detects ipcRenderer.postMessage', () => {
       const source = `import { ipcRenderer } from 'electron';
 ipcRenderer.postMessage('port-reply', null, [port1]);`;
-      const data = plugin.extractNodes('renderer-port.ts', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('renderer-port.ts', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       const edges = edgesOfType(data, 'electron_ipc_send');
       expect(edges).toHaveLength(1);
       expect((edges[0].metadata as Record<string, string>).variant).toBe('postMessage');
@@ -402,7 +437,9 @@ ipcRenderer.postMessage('port-reply', null, [port1]);`;
       const source = `import { autoUpdater } from 'electron';
 autoUpdater.setFeedURL({ url: 'https://example.com' });
 autoUpdater.checkForUpdates();`;
-      const data = plugin.extractNodes('updater.ts', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('updater.ts', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       expect(data.metadata?.hasAutoUpdater).toBe(true);
     });
   });
@@ -417,14 +454,18 @@ autoUpdater.checkForUpdates();`;
 
     it('ignores ts without electron import', () => {
       const source = 'import React from "react";\nexport const App = () => null;';
-      const data = plugin.extractNodes('app.tsx', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('app.tsx', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       expect(data.edges).toBeUndefined();
     });
 
     it('detects parentPort without electron import (utility process)', () => {
       const source = `process.parentPort.on('message', (e) => {});
 process.parentPort.postMessage({ done: true });`;
-      const data = plugin.extractNodes('worker.ts', Buffer.from(source), 'typescript')._unsafeUnwrap();
+      const data = plugin
+        .extractNodes('worker.ts', Buffer.from(source), 'typescript')
+        ._unsafeUnwrap();
       expect(data.frameworkRole).toBe('electron_utility');
       expect(edgesOfType(data, 'electron_parent_port')).toHaveLength(1);
     });

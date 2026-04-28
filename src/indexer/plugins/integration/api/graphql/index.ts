@@ -11,19 +11,18 @@
  * - TypeDefs string literals inside .ts files (gql`...` template literals)
  */
 import fs from 'node:fs';
-import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   LanguagePlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
-  RawSymbol,
   RawEdge,
+  RawSymbol,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 // ── Language plugin: .graphql / .gql files ────────────────────────────────
 
@@ -60,8 +59,17 @@ export class GraphQLPlugin implements FrameworkPlugin {
       ...(ctx.packageJson?.dependencies as Record<string, string> | undefined),
       ...(ctx.packageJson?.devDependencies as Record<string, string> | undefined),
     };
-    const gqlDeps = ['graphql', 'apollo-server', '@apollo/server', 'type-graphql',
-      'nexus', 'pothos', '@pothos/core', 'mercurius', 'graphql-yoga'];
+    const gqlDeps = [
+      'graphql',
+      'apollo-server',
+      '@apollo/server',
+      'type-graphql',
+      'nexus',
+      'pothos',
+      '@pothos/core',
+      'mercurius',
+      'graphql-yoga',
+    ];
     if (gqlDeps.some((d) => d in deps)) return true;
 
     // Also check for any .graphql file in the project root
@@ -75,8 +83,16 @@ export class GraphQLPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'graphql_resolves', category: 'graphql', description: 'Resolver function implements a GraphQL field' },
-        { name: 'graphql_references_type', category: 'graphql', description: 'Field/resolver references a GraphQL type' },
+        {
+          name: 'graphql_resolves',
+          category: 'graphql',
+          description: 'Resolver function implements a GraphQL field',
+        },
+        {
+          name: 'graphql_references_type',
+          category: 'graphql',
+          description: 'Field/resolver references a GraphQL type',
+        },
       ],
     };
   }
@@ -102,9 +118,8 @@ export class GraphQLPlugin implements FrameworkPlugin {
       status: 'ok',
       symbols: [...sdlSymbols, ...resolverInfo.symbols],
       edges: resolverInfo.edges.length > 0 ? resolverInfo.edges : undefined,
-      frameworkRole: sdlSymbols.length > 0 || resolverInfo.symbols.length > 0
-        ? 'graphql_resolver'
-        : undefined,
+      frameworkRole:
+        sdlSymbols.length > 0 || resolverInfo.symbols.length > 0 ? 'graphql_resolver' : undefined,
     });
   }
 
@@ -143,7 +158,10 @@ function extractSchemaSymbols(source: string, filePath: string): RawSymbol[] {
       if (source[j] === '{') braceDepth++;
       else if (source[j] === '}') {
         braceDepth--;
-        if (braceDepth === 0) { endPos = j + 1; break; }
+        if (braceDepth === 0) {
+          endPos = j + 1;
+          break;
+        }
       }
     }
 
@@ -164,16 +182,20 @@ function extractSchemaSymbols(source: string, filePath: string): RawSymbol[] {
     });
 
     // Extract fields from type/input/interface blocks
-    if ((keyword === 'type' || keyword === 'input' || keyword === 'interface') && blockContent.includes('{')) {
+    if (
+      (keyword === 'type' || keyword === 'input' || keyword === 'interface') &&
+      blockContent.includes('{')
+    ) {
       const bodyMatch = blockContent.match(/\{([\s\S]*)\}/);
       if (bodyMatch) {
-        const fieldRegex = /^\s*(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w!\[\]]+)/gm;
+        const fieldRegex = /^\s*(\w+)\s*(?:\([^)]*\))?\s*:\s*([\w![\]]+)/gm;
         let fieldMatch: RegExpExecArray | null;
         while ((fieldMatch = fieldRegex.exec(bodyMatch[1])) !== null) {
           const fieldName = fieldMatch[1];
           if (['__typename', ''].includes(fieldName)) continue;
           const bodyMatchIndex = bodyMatch.index ?? 0;
-          const fieldLineOffset = blockContent.slice(0, bodyMatchIndex + fieldMatch.index).split('\n').length - 1;
+          const fieldLineOffset =
+            blockContent.slice(0, bodyMatchIndex + fieldMatch.index).split('\n').length - 1;
           symbols.push({
             symbolId: `${filePath}::${name}::${fieldName}#method`,
             name: fieldName,
@@ -254,7 +276,8 @@ function extractResolverObjects(source: string, filePath: string): ResolverResul
     const body = typeBody.join('');
     while ((fieldMatch = fieldRegex.exec(body)) !== null) {
       const fieldName = fieldMatch[1];
-      const lineIdx = source.slice(0, match.index + typeMatch.index + fieldMatch.index).split('\n').length - 1;
+      const lineIdx =
+        source.slice(0, match.index + typeMatch.index + fieldMatch.index).split('\n').length - 1;
 
       symbols.push({
         symbolId: `${filePath}::${typeName}::${fieldName}#function`,

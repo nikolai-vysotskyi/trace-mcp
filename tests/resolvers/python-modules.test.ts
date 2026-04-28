@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PyModuleResolver } from '../../src/indexer/resolvers/python-modules.js';
 
 /** Create a file (and all parent dirs) with empty content. */
@@ -15,7 +15,7 @@ describe('PyModuleResolver', () => {
   let root: string;
 
   beforeEach(() => {
-    root = join(tmpdir(), 'pymod-test-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
+    root = join(tmpdir(), `pymod-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     mkdirSync(root, { recursive: true });
   });
 

@@ -13,8 +13,8 @@ export interface PipelineProgress {
   phase: PipelinePhase;
   processed: number;
   total: number;
-  startedAt: number;   // epoch ms, 0 if idle
-  completedAt: number;  // epoch ms, 0 if not done
+  startedAt: number; // epoch ms, 0 if idle
+  completedAt: number; // epoch ms, 0 if not done
   error?: string;
 }
 
@@ -76,22 +76,45 @@ export class ProgressState {
 
     // Notify listeners
     for (const listener of this.listeners) {
-      try { listener(name, { ...current }); } catch { /* ignore */ }
+      try {
+        listener(name, { ...current });
+      } catch {
+        /* ignore */
+      }
     }
 
     // Log progress on phase changes and periodically during running
     if (partial.phase === 'running' && partial.total !== undefined) {
-      logger.info({ pipeline: name, total: current.total }, '%s started: %d items to process', name, current.total);
+      logger.info(
+        { pipeline: name, total: current.total },
+        '%s started: %d items to process',
+        name,
+        current.total,
+      );
     } else if (partial.phase === 'completed') {
-      const elapsed = current.completedAt > 0 && current.startedAt > 0
-        ? Math.round((current.completedAt - current.startedAt) / 1000)
-        : 0;
-      logger.info({ pipeline: name, processed: current.processed, elapsed }, '%s completed: %d items in %ds', name, current.processed, elapsed);
+      const elapsed =
+        current.completedAt > 0 && current.startedAt > 0
+          ? Math.round((current.completedAt - current.startedAt) / 1000)
+          : 0;
+      logger.info(
+        { pipeline: name, processed: current.processed, elapsed },
+        '%s completed: %d items in %ds',
+        name,
+        current.processed,
+        elapsed,
+      );
     } else if (partial.phase === 'error') {
       logger.error({ pipeline: name, error: current.error }, '%s failed: %s', name, current.error);
     } else if (partial.processed !== undefined && current.total > 0) {
       const pct = Math.round((current.processed / current.total) * 100);
-      logger.info({ pipeline: name, processed: current.processed, total: current.total, pct }, '%s progress: %d/%d (%d%%)', name, current.processed, current.total, pct);
+      logger.info(
+        { pipeline: name, processed: current.processed, total: current.total, pct },
+        '%s progress: %d/%d (%d%%)',
+        name,
+        current.processed,
+        current.total,
+        pct,
+      );
     }
   }
 
@@ -107,12 +130,22 @@ export class ProgressState {
     if (!this.db) return;
     const p = this[name];
     try {
-      this.db.prepare(`
+      this.db
+        .prepare(`
         INSERT OR REPLACE INTO indexing_progress
           (pipeline, phase, processed, total, started_at, completed_at, error, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(name, p.phase, p.processed, p.total,
-        p.startedAt, p.completedAt, p.error ?? null, Date.now());
+      `)
+        .run(
+          name,
+          p.phase,
+          p.processed,
+          p.total,
+          p.startedAt,
+          p.completedAt,
+          p.error ?? null,
+          Date.now(),
+        );
     } catch (e) {
       logger.debug({ error: e }, 'Failed to persist progress');
     }
@@ -167,7 +200,7 @@ export function readProgressFromDb(db: Database.Database): ProgressSnapshot | nu
 
     if (rows.length === 0) return null;
 
-    const map = new Map(rows.map(r => [r.pipeline, r]));
+    const map = new Map(rows.map((r) => [r.pipeline, r]));
     const toProgress = (name: PipelineName): PipelineProgress => {
       const r = map.get(name);
       if (!r) return idleProgress();
@@ -195,8 +228,12 @@ export function readProgressFromDb(db: Database.Database): ProgressSnapshot | nu
 
 export function writeServerPid(db: Database.Database): void {
   try {
-    db.prepare(`INSERT OR REPLACE INTO server_state (key, value) VALUES ('pid', ?)`).run(String(process.pid));
-    db.prepare(`INSERT OR REPLACE INTO server_state (key, value) VALUES ('started_at', ?)`).run(new Date().toISOString());
+    db.prepare(`INSERT OR REPLACE INTO server_state (key, value) VALUES ('pid', ?)`).run(
+      String(process.pid),
+    );
+    db.prepare(`INSERT OR REPLACE INTO server_state (key, value) VALUES ('started_at', ?)`).run(
+      new Date().toISOString(),
+    );
   } catch {
     // Table may not exist yet (pre-migration-18 DB)
   }
@@ -212,8 +249,12 @@ export function clearServerPid(db: Database.Database): void {
 
 function readServerPid(db: Database.Database): { pid: number; startedAt: string } | null {
   try {
-    const pidRow = db.prepare(`SELECT value FROM server_state WHERE key = 'pid'`).get() as { value: string } | undefined;
-    const startedRow = db.prepare(`SELECT value FROM server_state WHERE key = 'started_at'`).get() as { value: string } | undefined;
+    const pidRow = db.prepare(`SELECT value FROM server_state WHERE key = 'pid'`).get() as
+      | { value: string }
+      | undefined;
+    const startedRow = db
+      .prepare(`SELECT value FROM server_state WHERE key = 'started_at'`)
+      .get() as { value: string } | undefined;
     if (!pidRow) return null;
     return { pid: Number(pidRow.value), startedAt: startedRow?.value ?? 'unknown' };
   } catch {

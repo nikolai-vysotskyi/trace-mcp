@@ -1,7 +1,7 @@
 /**
  * Tests for Python control flow patterns in the CFG extractor.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { extractCFG } from '../../src/indexer/cfg-extractor.js';
 
 describe('CFG extractor — Python patterns', () => {
@@ -97,7 +97,9 @@ async def fetch(pool):
     async with pool.acquire() as conn:
         return await conn.fetch("SELECT 1")
 `);
-    const tryNode = cfg.nodes.find((n) => n.kind === 'try' && n.code_snippet.includes('async with'));
+    const tryNode = cfg.nodes.find(
+      (n) => n.kind === 'try' && n.code_snippet.includes('async with'),
+    );
     expect(tryNode).toBeDefined();
   });
 

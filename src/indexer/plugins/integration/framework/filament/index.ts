@@ -28,10 +28,10 @@ import * as path from 'node:path';
 import { ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -40,85 +40,147 @@ import type {
 
 // Panel provider
 const PANEL_RESOURCES_RE = /->resources\(\s*\[([\s\S]*?)\]\s*\)/g;
-const PANEL_PAGES_RE     = /->pages\(\s*\[([\s\S]*?)\]\s*\)/g;
-const PANEL_WIDGETS_RE   = /->widgets\(\s*\[([\s\S]*?)\]\s*\)/g;
-const PANEL_PLUGINS_RE   = /->plugins\(\s*\[([\s\S]*?)\]\s*\)/g;
-const PANEL_ID_RE        = /->id\(\s*['"]([^'"]+)['"]\s*\)/;
-const PANEL_PATH_RE      = /->path\(\s*['"]([^'"]+)['"]\s*\)/;
-const PANEL_TENANT_RE    = /->tenant\(\s*([A-Z][\w\\]+)::class/;
-const PANEL_SPA_RE       = /->spa\(\)/;
-const PANEL_TOP_NAV_RE   = /->topNavigation\(\)/;
-const PANEL_AUTH_RE      = /->(login|registration|passwordReset|emailVerification|profile)\(\)/g;
-const PANEL_DISCOVER_RE  = /->discover(Resources|Pages|Widgets|Clusters)\(\s*in:\s*['"]([^'"]+)['"]\s*,\s*for:\s*['"]([^'"]+)['"]\s*\)/g;
+const PANEL_PAGES_RE = /->pages\(\s*\[([\s\S]*?)\]\s*\)/g;
+const PANEL_WIDGETS_RE = /->widgets\(\s*\[([\s\S]*?)\]\s*\)/g;
+const PANEL_PLUGINS_RE = /->plugins\(\s*\[([\s\S]*?)\]\s*\)/g;
+const PANEL_ID_RE = /->id\(\s*['"]([^'"]+)['"]\s*\)/;
+const PANEL_PATH_RE = /->path\(\s*['"]([^'"]+)['"]\s*\)/;
+const PANEL_TENANT_RE = /->tenant\(\s*([A-Z][\w\\]+)::class/;
+const PANEL_SPA_RE = /->spa\(\)/;
+const PANEL_TOP_NAV_RE = /->topNavigation\(\)/;
+const PANEL_AUTH_RE = /->(login|registration|passwordReset|emailVerification|profile)\(\)/g;
+const PANEL_DISCOVER_RE =
+  /->discover(Resources|Pages|Widgets|Clusters)\(\s*in:\s*['"]([^'"]+)['"]\s*,\s*for:\s*['"]([^'"]+)['"]\s*\)/g;
 
 // Resource
-const RESOURCE_MODEL_RE        = /protected\s+static\s+\??\s*string\s+\$model\s*=\s*([A-Z][\w\\]+)::class/;
-const RESOURCE_PAGE_RE         = /['"](\w+)['"]\s*=>\s*([\w\\]+)::route\(\s*['"]([^'"]+)['"]\s*\)/g;
-const RELATION_CLASS_RE        = /([\w\\]+RelationManager)::class/g;
-const RESOURCE_CLUSTER_RE      = /protected\s+static\s+\??\s*string\s+\$cluster\s*=\s*([A-Z][\w\\]+)::class/;
-const RECORD_TITLE_ATTR_RE     = /protected\s+static\s+\??\s*string\s+\$recordTitleAttribute\s*=\s*['"](\w+)['"]/;
+const RESOURCE_MODEL_RE = /protected\s+static\s+\??\s*string\s+\$model\s*=\s*([A-Z][\w\\]+)::class/;
+const RESOURCE_PAGE_RE = /['"](\w+)['"]\s*=>\s*([\w\\]+)::route\(\s*['"]([^'"]+)['"]\s*\)/g;
+const RELATION_CLASS_RE = /([\w\\]+RelationManager)::class/g;
+const RESOURCE_CLUSTER_RE =
+  /protected\s+static\s+\??\s*string\s+\$cluster\s*=\s*([A-Z][\w\\]+)::class/;
+const RECORD_TITLE_ATTR_RE =
+  /protected\s+static\s+\??\s*string\s+\$recordTitleAttribute\s*=\s*['"](\w+)['"]/;
 
 // Navigation
-const NAV_GROUP_RE   = /protected\s+static\s+\??\s*string\s+\$navigationGroup\s*=\s*['"]([^'"]+)['"]/;
-const NAV_ICON_RE    = /protected\s+static\s+\??\s*string\s+\$navigationIcon\s*=\s*['"]([^'"]+)['"]/;
-const NAV_LABEL_RE   = /protected\s+static\s+\??\s*string\s+\$navigationLabel\s*=\s*['"]([^'"]+)['"]/;
-const NAV_SORT_RE    = /protected\s+static\s+\??\s*int\s+\$navigationSort\s*=\s*(\d+)/;
-const NAV_PARENT_RE  = /protected\s+static\s+\??\s*string\s+\$navigationParentItem\s*=\s*['"]([^'"]+)['"]/;
+const NAV_GROUP_RE = /protected\s+static\s+\??\s*string\s+\$navigationGroup\s*=\s*['"]([^'"]+)['"]/;
+const NAV_ICON_RE = /protected\s+static\s+\??\s*string\s+\$navigationIcon\s*=\s*['"]([^'"]+)['"]/;
+const NAV_LABEL_RE = /protected\s+static\s+\??\s*string\s+\$navigationLabel\s*=\s*['"]([^'"]+)['"]/;
+const NAV_SORT_RE = /protected\s+static\s+\??\s*int\s+\$navigationSort\s*=\s*(\d+)/;
+const NAV_PARENT_RE =
+  /protected\s+static\s+\??\s*string\s+\$navigationParentItem\s*=\s*['"]([^'"]+)['"]/;
 
 // Relation manager
 const RELATION_NAME_RE = /protected\s+static\s+string\s+\$relationship\s*=\s*['"](\w+)['"]/;
 
 // Form fields — all Filament v3 field components
 const FORM_FIELD_COMPONENTS = new Set([
-  'TextInput', 'Select', 'Textarea', 'Toggle', 'ToggleButtons', 'Checkbox',
-  'CheckboxList', 'Radio', 'DatePicker', 'DateTimePicker', 'TimePicker',
-  'FileUpload', 'RichEditor', 'MarkdownEditor', 'ColorPicker', 'KeyValue',
-  'Repeater', 'Builder', 'Hidden', 'TagsInput', 'MorphToSelect',
-  'SpatieMediaLibraryFileUpload', 'SpatieTagsInput',
+  'TextInput',
+  'Select',
+  'Textarea',
+  'Toggle',
+  'ToggleButtons',
+  'Checkbox',
+  'CheckboxList',
+  'Radio',
+  'DatePicker',
+  'DateTimePicker',
+  'TimePicker',
+  'FileUpload',
+  'RichEditor',
+  'MarkdownEditor',
+  'ColorPicker',
+  'KeyValue',
+  'Repeater',
+  'Builder',
+  'Hidden',
+  'TagsInput',
+  'MorphToSelect',
+  'SpatieMediaLibraryFileUpload',
+  'SpatieTagsInput',
 ]);
 
 // Form layout components
 const FORM_LAYOUT_COMPONENTS = new Set([
-  'Section', 'Tabs', 'Tab', 'Grid', 'Fieldset', 'Split', 'Wizard', 'Step',
-  'Group', 'Placeholder',
+  'Section',
+  'Tabs',
+  'Tab',
+  'Grid',
+  'Fieldset',
+  'Split',
+  'Wizard',
+  'Step',
+  'Group',
+  'Placeholder',
 ]);
 
 // Table columns — all Filament v3 column types
 const TABLE_COLUMN_COMPONENTS = new Set([
-  'TextColumn', 'IconColumn', 'ImageColumn', 'ColorColumn',
-  'SelectColumn', 'ToggleColumn', 'CheckboxColumn', 'TextInputColumn',
-  'SpatieMediaLibraryImageColumn', 'SpatieTagsColumn', 'ViewColumn',
+  'TextColumn',
+  'IconColumn',
+  'ImageColumn',
+  'ColorColumn',
+  'SelectColumn',
+  'ToggleColumn',
+  'CheckboxColumn',
+  'TextInputColumn',
+  'SpatieMediaLibraryImageColumn',
+  'SpatieTagsColumn',
+  'ViewColumn',
 ]);
 
 // Table filters
 const TABLE_FILTER_COMPONENTS = new Set([
-  'Filter', 'SelectFilter', 'TernaryFilter', 'TrashedFilter', 'QueryBuilder',
+  'Filter',
+  'SelectFilter',
+  'TernaryFilter',
+  'TrashedFilter',
+  'QueryBuilder',
 ]);
 
 // Actions — all Filament v3 action types
 const ACTION_COMPONENTS = new Set([
-  'Action', 'CreateAction', 'EditAction', 'DeleteAction', 'ViewAction',
-  'ForceDeleteAction', 'RestoreAction', 'ReplicateAction',
-  'ImportAction', 'ExportAction',
-  'AttachAction', 'DetachAction', 'AssociateAction', 'DissociateAction',
-  'BulkAction', 'DeleteBulkAction', 'ForceDeleteBulkAction', 'RestoreBulkAction',
-  'DetachBulkAction', 'DissociateBulkAction',
-  'ActionGroup', 'BulkActionGroup',
+  'Action',
+  'CreateAction',
+  'EditAction',
+  'DeleteAction',
+  'ViewAction',
+  'ForceDeleteAction',
+  'RestoreAction',
+  'ReplicateAction',
+  'ImportAction',
+  'ExportAction',
+  'AttachAction',
+  'DetachAction',
+  'AssociateAction',
+  'DissociateAction',
+  'BulkAction',
+  'DeleteBulkAction',
+  'ForceDeleteBulkAction',
+  'RestoreBulkAction',
+  'DetachBulkAction',
+  'DissociateBulkAction',
+  'ActionGroup',
+  'BulkActionGroup',
 ]);
 
 // Infolist entries
 const INFOLIST_ENTRY_COMPONENTS = new Set([
-  'TextEntry', 'IconEntry', 'ImageEntry', 'ColorEntry',
-  'KeyValueEntry', 'RepeatableEntry', 'ViewEntry',
+  'TextEntry',
+  'IconEntry',
+  'ImageEntry',
+  'ColorEntry',
+  'KeyValueEntry',
+  'RepeatableEntry',
+  'ViewEntry',
 ]);
 
 // Generic ::make('name') extractor
 const MAKE_CALL_RE = /(\w+)::make\(\s*['"]([^'"]*)['"]\s*\)/g;
 
 // ->actions([...]) / ->headerActions([...]) / ->bulkActions([...])
-const TABLE_ACTIONS_RE       = /->actions\(\s*\[([\s\S]*?)\]\s*\)/g;
+const TABLE_ACTIONS_RE = /->actions\(\s*\[([\s\S]*?)\]\s*\)/g;
 const TABLE_HEADER_ACTIONS_RE = /->headerActions\(\s*\[([\s\S]*?)\]\s*\)/g;
-const TABLE_BULK_ACTIONS_RE  = /->bulkActions\(\s*\[([\s\S]*?)\]\s*\)/g;
+const TABLE_BULK_ACTIONS_RE = /->bulkActions\(\s*\[([\s\S]*?)\]\s*\)/g;
 
 // Relationship calls
 const RELATIONSHIP_CALL_RE = /->relationship\(\s*['"](\w+)['"]\s*,\s*['"](\w+)['"]\s*\)/g;
@@ -130,11 +192,12 @@ const NOTIFICATION_BROADCAST_RE = /->broadcast\(/;
 
 // Importer / Exporter
 const IMPORTER_MODEL_RE = /protected\s+static\s+\??\s*string\s+\$model\s*=\s*([A-Z][\w\\]+)::class/;
-const IMPORT_COLUMN_RE  = /ImportColumn::make\(\s*['"]([^'"]+)['"]\s*\)/g;
-const EXPORT_COLUMN_RE  = /ExportColumn::make\(\s*['"]([^'"]+)['"]\s*\)/g;
+const IMPORT_COLUMN_RE = /ImportColumn::make\(\s*['"]([^'"]+)['"]\s*\)/g;
+const EXPORT_COLUMN_RE = /ExportColumn::make\(\s*['"]([^'"]+)['"]\s*\)/g;
 
 // Livewire interop traits
-const LIVEWIRE_TRAITS_RE = /use\s+(InteractsWithForms|InteractsWithTable|InteractsWithActions|InteractsWithInfolists)/g;
+const LIVEWIRE_TRAITS_RE =
+  /use\s+(InteractsWithForms|InteractsWithTable|InteractsWithActions|InteractsWithInfolists)/g;
 const LIVEWIRE_CONTRACTS_RE = /implements\s+[\w\\,\s]*(HasForms|HasTable|HasActions|HasInfolists)/g;
 
 // Class reference list items
@@ -219,35 +282,107 @@ export class FilamentPlugin implements FrameworkPlugin {
     return {
       edgeTypes: [
         // Panel
-        { name: 'filament_panel_resource',   category: 'filament', description: 'Panel registers a resource' },
-        { name: 'filament_panel_widget',     category: 'filament', description: 'Panel registers a widget' },
-        { name: 'filament_panel_page',       category: 'filament', description: 'Panel registers a page' },
-        { name: 'filament_panel_cluster',    category: 'filament', description: 'Panel discovers a cluster' },
-        { name: 'filament_panel_plugin',     category: 'filament', description: 'Panel registers a plugin' },
-        { name: 'filament_panel_tenant',     category: 'filament', description: 'Panel uses tenant model' },
+        {
+          name: 'filament_panel_resource',
+          category: 'filament',
+          description: 'Panel registers a resource',
+        },
+        {
+          name: 'filament_panel_widget',
+          category: 'filament',
+          description: 'Panel registers a widget',
+        },
+        {
+          name: 'filament_panel_page',
+          category: 'filament',
+          description: 'Panel registers a page',
+        },
+        {
+          name: 'filament_panel_cluster',
+          category: 'filament',
+          description: 'Panel discovers a cluster',
+        },
+        {
+          name: 'filament_panel_plugin',
+          category: 'filament',
+          description: 'Panel registers a plugin',
+        },
+        {
+          name: 'filament_panel_tenant',
+          category: 'filament',
+          description: 'Panel uses tenant model',
+        },
         // Resource
-        { name: 'filament_resource_model',   category: 'filament', description: 'Resource binds to Eloquent model' },
-        { name: 'filament_resource_page',    category: 'filament', description: 'Resource declares a page route' },
-        { name: 'filament_resource_relation', category: 'filament', description: 'Resource uses a relation manager' },
-        { name: 'filament_resource_action',  category: 'filament', description: 'Resource/table/page action' },
+        {
+          name: 'filament_resource_model',
+          category: 'filament',
+          description: 'Resource binds to Eloquent model',
+        },
+        {
+          name: 'filament_resource_page',
+          category: 'filament',
+          description: 'Resource declares a page route',
+        },
+        {
+          name: 'filament_resource_relation',
+          category: 'filament',
+          description: 'Resource uses a relation manager',
+        },
+        {
+          name: 'filament_resource_action',
+          category: 'filament',
+          description: 'Resource/table/page action',
+        },
         // Form
-        { name: 'filament_form_field',       category: 'filament', description: 'Form schema field' },
-        { name: 'filament_form_layout',      category: 'filament', description: 'Form layout component (Section, Tabs, etc.)' },
+        { name: 'filament_form_field', category: 'filament', description: 'Form schema field' },
+        {
+          name: 'filament_form_layout',
+          category: 'filament',
+          description: 'Form layout component (Section, Tabs, etc.)',
+        },
         // Table
-        { name: 'filament_table_column',     category: 'filament', description: 'Table column definition' },
-        { name: 'filament_table_filter',     category: 'filament', description: 'Table filter definition' },
-        { name: 'filament_table_action',     category: 'filament', description: 'Table row/header/bulk action' },
+        {
+          name: 'filament_table_column',
+          category: 'filament',
+          description: 'Table column definition',
+        },
+        {
+          name: 'filament_table_filter',
+          category: 'filament',
+          description: 'Table filter definition',
+        },
+        {
+          name: 'filament_table_action',
+          category: 'filament',
+          description: 'Table row/header/bulk action',
+        },
         // Infolist
-        { name: 'filament_infolist_entry',   category: 'filament', description: 'Infolist display entry' },
+        {
+          name: 'filament_infolist_entry',
+          category: 'filament',
+          description: 'Infolist display entry',
+        },
         // Relations
-        { name: 'filament_relationship',     category: 'filament', description: 'Field references an Eloquent relationship' },
+        {
+          name: 'filament_relationship',
+          category: 'filament',
+          description: 'Field references an Eloquent relationship',
+        },
         // Cluster
-        { name: 'filament_cluster_member',   category: 'filament', description: 'Resource/page belongs to a cluster' },
+        {
+          name: 'filament_cluster_member',
+          category: 'filament',
+          description: 'Resource/page belongs to a cluster',
+        },
         // Notification
-        { name: 'filament_notification',     category: 'filament', description: 'Sends a notification' },
+        {
+          name: 'filament_notification',
+          category: 'filament',
+          description: 'Sends a notification',
+        },
         // Import / Export
-        { name: 'filament_importer',         category: 'filament', description: 'CSV importer definition' },
-        { name: 'filament_exporter',         category: 'filament', description: 'CSV exporter definition' },
+        { name: 'filament_importer', category: 'filament', description: 'CSV importer definition' },
+        { name: 'filament_exporter', category: 'filament', description: 'CSV exporter definition' },
       ],
     };
   }
@@ -290,8 +425,10 @@ export class FilamentPlugin implements FrameworkPlugin {
       for (const m of source.matchAll(PANEL_RESOURCES_RE)) {
         for (const cls of extractClassRefs(m[1])) {
           result.edges!.push({
-            source: filePath, target: shortClass(cls),
-            edgeType: 'filament_panel_resource', metadata: { class: cls },
+            source: filePath,
+            target: shortClass(cls),
+            edgeType: 'filament_panel_resource',
+            metadata: { class: cls },
           });
         }
       }
@@ -300,8 +437,10 @@ export class FilamentPlugin implements FrameworkPlugin {
       for (const m of source.matchAll(PANEL_PAGES_RE)) {
         for (const cls of extractClassRefs(m[1])) {
           result.edges!.push({
-            source: filePath, target: shortClass(cls),
-            edgeType: 'filament_panel_page', metadata: { class: cls },
+            source: filePath,
+            target: shortClass(cls),
+            edgeType: 'filament_panel_page',
+            metadata: { class: cls },
           });
         }
       }
@@ -310,8 +449,10 @@ export class FilamentPlugin implements FrameworkPlugin {
       for (const m of source.matchAll(PANEL_WIDGETS_RE)) {
         for (const cls of extractClassRefs(m[1])) {
           result.edges!.push({
-            source: filePath, target: shortClass(cls),
-            edgeType: 'filament_panel_widget', metadata: { class: cls },
+            source: filePath,
+            target: shortClass(cls),
+            edgeType: 'filament_panel_widget',
+            metadata: { class: cls },
           });
         }
       }
@@ -323,8 +464,10 @@ export class FilamentPlugin implements FrameworkPlugin {
           const name = cls[1] ?? cls[2];
           if (name) {
             result.edges!.push({
-              source: filePath, target: name,
-              edgeType: 'filament_panel_plugin', metadata: { plugin: name },
+              source: filePath,
+              target: name,
+              edgeType: 'filament_panel_plugin',
+              metadata: { plugin: name },
             });
           }
         }
@@ -334,8 +477,10 @@ export class FilamentPlugin implements FrameworkPlugin {
       const tenantMatch = PANEL_TENANT_RE.exec(source);
       if (tenantMatch) {
         result.edges!.push({
-          source: filePath, target: shortClass(tenantMatch[1]),
-          edgeType: 'filament_panel_tenant', metadata: { model: tenantMatch[1] },
+          source: filePath,
+          target: shortClass(tenantMatch[1]),
+          edgeType: 'filament_panel_tenant',
+          metadata: { model: tenantMatch[1] },
         });
         result.metadata.tenantModel = tenantMatch[1];
       }
@@ -344,10 +489,16 @@ export class FilamentPlugin implements FrameworkPlugin {
       for (const m of source.matchAll(PANEL_DISCOVER_RE)) {
         const kind = m[1].toLowerCase(); // Resources, Pages, Widgets, Clusters
         result.edges!.push({
-          source: filePath, target: m[2],
-          edgeType: kind === 'clusters' ? 'filament_panel_cluster' :
-                    kind === 'resources' ? 'filament_panel_resource' :
-                    kind === 'pages' ? 'filament_panel_page' : 'filament_panel_widget',
+          source: filePath,
+          target: m[2],
+          edgeType:
+            kind === 'clusters'
+              ? 'filament_panel_cluster'
+              : kind === 'resources'
+                ? 'filament_panel_resource'
+                : kind === 'pages'
+                  ? 'filament_panel_page'
+                  : 'filament_panel_widget',
           metadata: { discovery: true, directory: m[2], namespace: m[3] },
         });
       }
@@ -361,39 +512,51 @@ export class FilamentPlugin implements FrameworkPlugin {
       const modelMatch = RESOURCE_MODEL_RE.exec(source);
       if (modelMatch) {
         result.edges!.push({
-          source: filePath, target: shortClass(modelMatch[1]),
-          edgeType: 'filament_resource_model', metadata: { model: modelMatch[1] },
+          source: filePath,
+          target: shortClass(modelMatch[1]),
+          edgeType: 'filament_resource_model',
+          metadata: { model: modelMatch[1] },
         });
       }
 
       // Global search
       const titleAttr = RECORD_TITLE_ATTR_RE.exec(source);
       if (titleAttr) {
-        result.metadata = { ...result.metadata, recordTitleAttribute: titleAttr[1], globalSearch: true };
+        result.metadata = {
+          ...result.metadata,
+          recordTitleAttribute: titleAttr[1],
+          globalSearch: true,
+        };
       }
 
       // Cluster membership
       const clusterMatch = RESOURCE_CLUSTER_RE.exec(source);
       if (clusterMatch) {
         result.edges!.push({
-          source: filePath, target: shortClass(clusterMatch[1]),
-          edgeType: 'filament_cluster_member', metadata: { cluster: clusterMatch[1] },
+          source: filePath,
+          target: shortClass(clusterMatch[1]),
+          edgeType: 'filament_cluster_member',
+          metadata: { cluster: clusterMatch[1] },
         });
       }
 
       // Resource pages
       for (const m of source.matchAll(RESOURCE_PAGE_RE)) {
         result.edges!.push({
-          source: filePath, target: shortClass(m[2]),
-          edgeType: 'filament_resource_page', metadata: { slug: m[1], route: m[3], page: m[2] },
+          source: filePath,
+          target: shortClass(m[2]),
+          edgeType: 'filament_resource_page',
+          metadata: { slug: m[1], route: m[3], page: m[2] },
         });
       }
 
       // Relation managers
       for (const m of source.matchAll(RELATION_CLASS_RE)) {
         result.edges!.push({
-          source: filePath, target: shortClass(m[1]),
-          edgeType: 'filament_resource_relation', metadata: { class: m[1] },
+          source: filePath,
+          target: shortClass(m[1]),
+          edgeType: 'filament_resource_relation',
+          metadata: { class: m[1] },
         });
       }
 
@@ -405,7 +568,11 @@ export class FilamentPlugin implements FrameworkPlugin {
     }
 
     // ── Custom Page (requires Filament\Pages\Page import) ────────
-    if (source.includes('extends Page') && source.includes('Filament\\Pages\\Page') && !source.includes('extends PanelProvider')) {
+    if (
+      source.includes('extends Page') &&
+      source.includes('Filament\\Pages\\Page') &&
+      !source.includes('extends PanelProvider')
+    ) {
       result.frameworkRole = result.frameworkRole ?? 'filament_page';
 
       // Navigation metadata
@@ -415,8 +582,10 @@ export class FilamentPlugin implements FrameworkPlugin {
       const clusterMatch = RESOURCE_CLUSTER_RE.exec(source);
       if (clusterMatch) {
         result.edges!.push({
-          source: filePath, target: shortClass(clusterMatch[1]),
-          edgeType: 'filament_cluster_member', metadata: { cluster: clusterMatch[1] },
+          source: filePath,
+          target: shortClass(clusterMatch[1]),
+          edgeType: 'filament_cluster_member',
+          metadata: { cluster: clusterMatch[1] },
         });
       }
     }
@@ -450,13 +619,17 @@ export class FilamentPlugin implements FrameworkPlugin {
       result.frameworkRole = result.frameworkRole ?? 'filament_widget';
 
       // Chart type
-      const chartType = /protected\s+function\s+getType\(\)\s*:\s*string\s*\{[^}]*return\s+['"](\w+)['"]/.exec(source);
+      const chartType =
+        /protected\s+function\s+getType\(\)\s*:\s*string\s*\{[^}]*return\s+['"](\w+)['"]/.exec(
+          source,
+        );
       if (chartType) {
         result.metadata = { ...result.metadata, chartType: chartType[1] };
       }
 
       // Polling interval
-      const polling = /protected\s+static\s+\??\s*string\s+\$pollingInterval\s*=\s*['"]([^'"]+)['"]/.exec(source);
+      const polling =
+        /protected\s+static\s+\??\s*string\s+\$pollingInterval\s*=\s*['"]([^'"]+)['"]/.exec(source);
       if (polling) {
         result.metadata = { ...result.metadata, pollingInterval: polling[1] };
       }
@@ -471,8 +644,10 @@ export class FilamentPlugin implements FrameworkPlugin {
       const modelMatch = IMPORTER_MODEL_RE.exec(source);
       if (modelMatch) {
         result.edges!.push({
-          source: filePath, target: shortClass(modelMatch[1]),
-          edgeType: 'filament_importer', metadata: { model: modelMatch[1] },
+          source: filePath,
+          target: shortClass(modelMatch[1]),
+          edgeType: 'filament_importer',
+          metadata: { model: modelMatch[1] },
         });
       }
 
@@ -490,8 +665,10 @@ export class FilamentPlugin implements FrameworkPlugin {
       const modelMatch = IMPORTER_MODEL_RE.exec(source);
       if (modelMatch) {
         result.edges!.push({
-          source: filePath, target: shortClass(modelMatch[1]),
-          edgeType: 'filament_exporter', metadata: { model: modelMatch[1] },
+          source: filePath,
+          target: shortClass(modelMatch[1]),
+          edgeType: 'filament_exporter',
+          metadata: { model: modelMatch[1] },
         });
       }
 
@@ -504,11 +681,16 @@ export class FilamentPlugin implements FrameworkPlugin {
 
     // ── Notifications ───────────────────────────────────────────
     if (NOTIFICATION_RE.test(source)) {
-      const notifType = NOTIFICATION_DB_RE.test(source) ? 'database' :
-                        NOTIFICATION_BROADCAST_RE.test(source) ? 'broadcast' : 'flash';
+      const notifType = NOTIFICATION_DB_RE.test(source)
+        ? 'database'
+        : NOTIFICATION_BROADCAST_RE.test(source)
+          ? 'broadcast'
+          : 'flash';
       result.edges!.push({
-        source: filePath, target: 'Notification',
-        edgeType: 'filament_notification', metadata: { type: notifType },
+        source: filePath,
+        target: 'Notification',
+        edgeType: 'filament_notification',
+        metadata: { type: notifType },
       });
     }
 
@@ -534,33 +716,45 @@ export class FilamentPlugin implements FrameworkPlugin {
 
       if (FORM_FIELD_COMPONENTS.has(component)) {
         result.edges!.push({
-          source: filePath, target: name,
-          edgeType: 'filament_form_field', metadata: { component, field: name },
+          source: filePath,
+          target: name,
+          edgeType: 'filament_form_field',
+          metadata: { component, field: name },
         });
       } else if (FORM_LAYOUT_COMPONENTS.has(component)) {
         result.edges!.push({
-          source: filePath, target: name,
-          edgeType: 'filament_form_layout', metadata: { component, label: name },
+          source: filePath,
+          target: name,
+          edgeType: 'filament_form_layout',
+          metadata: { component, label: name },
         });
       } else if (TABLE_COLUMN_COMPONENTS.has(component)) {
         result.edges!.push({
-          source: filePath, target: name,
-          edgeType: 'filament_table_column', metadata: { component, column: name },
+          source: filePath,
+          target: name,
+          edgeType: 'filament_table_column',
+          metadata: { component, column: name },
         });
       } else if (TABLE_FILTER_COMPONENTS.has(component)) {
         result.edges!.push({
-          source: filePath, target: name,
-          edgeType: 'filament_table_filter', metadata: { component, filter: name },
+          source: filePath,
+          target: name,
+          edgeType: 'filament_table_filter',
+          metadata: { component, filter: name },
         });
       } else if (ACTION_COMPONENTS.has(component)) {
         result.edges!.push({
-          source: filePath, target: name || component,
-          edgeType: 'filament_resource_action', metadata: { component, action: name || component },
+          source: filePath,
+          target: name || component,
+          edgeType: 'filament_resource_action',
+          metadata: { component, action: name || component },
         });
       } else if (INFOLIST_ENTRY_COMPONENTS.has(component)) {
         result.edges!.push({
-          source: filePath, target: name,
-          edgeType: 'filament_infolist_entry', metadata: { component, entry: name },
+          source: filePath,
+          target: name,
+          edgeType: 'filament_infolist_entry',
+          metadata: { component, entry: name },
         });
       }
     }
@@ -569,24 +763,30 @@ export class FilamentPlugin implements FrameworkPlugin {
     for (const m of source.matchAll(TABLE_ACTIONS_RE)) {
       for (const name of extractActionNames(m[1])) {
         result.edges!.push({
-          source: filePath, target: name,
-          edgeType: 'filament_table_action', metadata: { scope: 'row', action: name },
+          source: filePath,
+          target: name,
+          edgeType: 'filament_table_action',
+          metadata: { scope: 'row', action: name },
         });
       }
     }
     for (const m of source.matchAll(TABLE_HEADER_ACTIONS_RE)) {
       for (const name of extractActionNames(m[1])) {
         result.edges!.push({
-          source: filePath, target: name,
-          edgeType: 'filament_table_action', metadata: { scope: 'header', action: name },
+          source: filePath,
+          target: name,
+          edgeType: 'filament_table_action',
+          metadata: { scope: 'header', action: name },
         });
       }
     }
     for (const m of source.matchAll(TABLE_BULK_ACTIONS_RE)) {
       for (const name of extractActionNames(m[1])) {
         result.edges!.push({
-          source: filePath, target: name,
-          edgeType: 'filament_table_action', metadata: { scope: 'bulk', action: name },
+          source: filePath,
+          target: name,
+          edgeType: 'filament_table_action',
+          metadata: { scope: 'bulk', action: name },
         });
       }
     }
@@ -594,8 +794,10 @@ export class FilamentPlugin implements FrameworkPlugin {
     // Relationship calls on form fields
     for (const m of source.matchAll(RELATIONSHIP_CALL_RE)) {
       result.edges!.push({
-        source: filePath, target: m[1],
-        edgeType: 'filament_relationship', metadata: { relationship: m[1], display: m[2] },
+        source: filePath,
+        target: m[1],
+        edgeType: 'filament_relationship',
+        metadata: { relationship: m[1], display: m[2] },
       });
     }
   }
@@ -603,11 +805,16 @@ export class FilamentPlugin implements FrameworkPlugin {
   /** Extract navigation metadata from a resource, page, or cluster */
   private extractNavigationMeta(source: string, result: FileParseResult): void {
     const nav: Record<string, string | number | undefined> = {};
-    const g = NAV_GROUP_RE.exec(source);    if (g) nav.navigationGroup = g[1];
-    const i = NAV_ICON_RE.exec(source);     if (i) nav.navigationIcon = i[1];
-    const l = NAV_LABEL_RE.exec(source);    if (l) nav.navigationLabel = l[1];
-    const s = NAV_SORT_RE.exec(source);     if (s) nav.navigationSort = parseInt(s[1], 10);
-    const p = NAV_PARENT_RE.exec(source);   if (p) nav.navigationParentItem = p[1];
+    const g = NAV_GROUP_RE.exec(source);
+    if (g) nav.navigationGroup = g[1];
+    const i = NAV_ICON_RE.exec(source);
+    if (i) nav.navigationIcon = i[1];
+    const l = NAV_LABEL_RE.exec(source);
+    if (l) nav.navigationLabel = l[1];
+    const s = NAV_SORT_RE.exec(source);
+    if (s) nav.navigationSort = parseInt(s[1], 10);
+    const p = NAV_PARENT_RE.exec(source);
+    if (p) nav.navigationParentItem = p[1];
     if (Object.keys(nav).length > 0) {
       result.metadata = { ...result.metadata, ...nav };
     }

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { FastAPIPlugin } from '../../../src/indexer/plugins/integration/framework/fastapi/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

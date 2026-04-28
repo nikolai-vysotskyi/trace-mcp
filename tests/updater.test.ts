@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock fs before importing the module under test
 vi.mock('node:fs');
@@ -87,7 +87,7 @@ describe('runPostUpdateMigrations', () => {
   });
 
   afterEach(() => {
-    delete (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED;
+    (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = undefined;
     vi.restoreAllMocks();
   });
 
@@ -123,7 +123,8 @@ describe('runPostUpdateMigrations', () => {
     expect(migrateGlobalConfig).toHaveBeenCalled();
 
     // Should have called hook installers
-    const { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook } = await import('../src/init/hooks.js');
+    const { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook } =
+      await import('../src/init/hooks.js');
     expect(installGuardHook).toHaveBeenCalledWith({ global: true });
     expect(installReindexHook).toHaveBeenCalledWith({ global: true });
     expect(installPrecompactHook).toHaveBeenCalledWith({ global: true });
@@ -144,7 +145,10 @@ describe('runPostUpdateMigrations', () => {
 
     // Override detectGuardHook to return false
     const detector = await import('../src/init/detector.js');
-    vi.mocked(detector.detectGuardHook).mockReturnValue({ hasGuardHook: false, guardHookVersion: null });
+    vi.mocked(detector.detectGuardHook).mockReturnValue({
+      hasGuardHook: false,
+      guardHookVersion: null,
+    });
 
     await runPostUpdateMigrations();
 
@@ -160,7 +164,9 @@ describe('runPostUpdateMigrations', () => {
     setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.9.0' });
 
     const hooks = await import('../src/init/hooks.js');
-    vi.mocked(hooks.installGuardHook).mockImplementation(() => { throw new Error('hook fail'); });
+    vi.mocked(hooks.installGuardHook).mockImplementation(() => {
+      throw new Error('hook fail');
+    });
 
     // Should not throw
     await runPostUpdateMigrations();
@@ -176,7 +182,9 @@ describe('runPostUpdateMigrations', () => {
     setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.9.0' });
 
     const claudeMd = await import('../src/init/claude-md.js');
-    vi.mocked(claudeMd.updateClaudeMd).mockImplementation(() => { throw new Error('claude-md fail'); });
+    vi.mocked(claudeMd.updateClaudeMd).mockImplementation(() => {
+      throw new Error('claude-md fail');
+    });
 
     await runPostUpdateMigrations();
 
@@ -200,7 +208,7 @@ describe('checkAndInstallUpdate', () => {
   });
 
   afterEach(() => {
-    delete (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED;
+    (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = undefined;
     vi.restoreAllMocks();
   });
 
@@ -216,15 +224,20 @@ describe('checkAndInstallUpdate', () => {
 
     const { spawnSync } = await import('node:child_process');
     vi.mocked(spawnSync).mockReturnValue({
-      status: 0, stdout: '', stderr: '', pid: 0, output: [], signal: null,
+      status: 0,
+      stdout: '',
+      stderr: '',
+      pid: 0,
+      output: [],
+      signal: null,
     });
 
     const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
     expect(result).toBe(false);
     // Must NOT have attempted npm install (no spawnSync call for `npm install`).
-    const installCalls = vi.mocked(spawnSync).mock.calls.filter(
-      (c) => Array.isArray(c[1]) && c[1].includes('install'),
-    );
+    const installCalls = vi
+      .mocked(spawnSync)
+      .mock.calls.filter((c) => Array.isArray(c[1]) && c[1].includes('install'));
     expect(installCalls).toHaveLength(0);
   });
 
@@ -234,7 +247,12 @@ describe('checkAndInstallUpdate', () => {
     const { spawnSync } = await import('node:child_process');
     // Every spawnSync call (npm root probe + install attempts) returns failure.
     vi.mocked(spawnSync).mockReturnValue({
-      status: 1, stdout: '', stderr: 'npm error something broke', pid: 0, output: [], signal: null,
+      status: 1,
+      stdout: '',
+      stderr: 'npm error something broke',
+      pid: 0,
+      output: [],
+      signal: null,
     });
 
     const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
@@ -253,13 +271,20 @@ describe('checkAndInstallUpdate', () => {
     // Mock npm install success
     const { spawnSync } = await import('node:child_process');
     vi.mocked(spawnSync).mockReturnValue({
-      status: 0, stdout: '', stderr: '', pid: 0, output: [], signal: null,
+      status: 0,
+      stdout: '',
+      stderr: '',
+      pid: 0,
+      output: [],
+      signal: null,
     });
 
     // Mock fetchLatestVersion to return 2.0.0
     const https = await import('node:https');
     vi.mocked(https.get).mockImplementation((_url: unknown, _opts: unknown, cb: unknown) => {
-      const callback = cb as (res: { on: (event: string, handler: (data?: string) => void) => void }) => void;
+      const callback = cb as (res: {
+        on: (event: string, handler: (data?: string) => void) => void;
+      }) => void;
       callback({
         on: (event: string, handler: (data?: string) => void) => {
           if (event === 'data') handler(JSON.stringify({ version: '2.0.0' }));

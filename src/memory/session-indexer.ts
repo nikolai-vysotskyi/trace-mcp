@@ -36,7 +36,18 @@ const MAX_CHUNK_CHARS = 2000;
 /** Minimum message length to index (skip trivial messages) */
 const MIN_MESSAGE_CHARS = 50;
 
-function extractTextFromMessage(msg: any): { text: string; files: string[] } {
+interface SessionMessageContentItem {
+  type?: string;
+  text?: string;
+  input?: unknown;
+}
+
+interface SessionMessage {
+  role?: string;
+  content?: string | (string | SessionMessageContentItem)[];
+}
+
+function extractTextFromMessage(msg: SessionMessage): { text: string; files: string[] } {
   const textParts: string[] = [];
   const files: string[] = [];
 
@@ -72,7 +83,7 @@ function truncateChunk(text: string): string {
   if (lastPeriod > MAX_CHUNK_CHARS * 0.5) {
     return truncated.slice(0, lastPeriod + 1);
   }
-  return truncated + '...';
+  return `${truncated}...`;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -85,14 +96,14 @@ function indexSessionFile(
   decisionStore: DecisionStore,
 ): number {
   const content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split('\n').filter(l => l.trim());
+  const lines = content.split('\n').filter((l) => l.trim());
   const sessionId = path.basename(filePath, '.jsonl');
 
   const chunks: SessionChunkInput[] = [];
   let chunkIndex = 0;
 
   for (const line of lines) {
-    let record: any;
+    let record: { type?: string; timestamp?: string; message?: SessionMessage };
     try {
       record = JSON.parse(line);
     } catch {
@@ -101,16 +112,16 @@ function indexSessionFile(
 
     const timestamp = record.timestamp || '';
     let role: 'user' | 'assistant' | null = null;
-    let msg: any = null;
+    let msg: SessionMessage | null = null;
 
     // Claude Code format
     if (record.type === 'assistant' || record.type === 'user') {
       role = record.type;
-      msg = record.message;
+      msg = record.message ?? null;
     }
     // Claw Code format
     if (record.type === 'message') {
-      msg = record.message;
+      msg = record.message ?? null;
       if (msg?.role === 'assistant') role = 'assistant';
       else if (msg?.role === 'user') role = 'user';
     }
@@ -152,7 +163,11 @@ export function indexSessions(
   const start = Date.now();
   const sessions = listAllSessions();
 
-  let scanned = 0, indexed = 0, skipped = 0, chunksAdded = 0, errors = 0;
+  let scanned = 0;
+  let indexed = 0;
+  let skipped = 0;
+  let chunksAdded = 0;
+  let errors = 0;
 
   for (const session of sessions) {
     scanned++;

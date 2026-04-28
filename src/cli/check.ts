@@ -4,18 +4,23 @@
  * Exit code 0 = pass, 1 = fail. Designed for CI pipelines.
  */
 
+import fs from 'node:fs';
 import { Command } from 'commander';
+import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { loadConfig } from '../config.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { getProject } from '../registry.js';
-import { findProjectRoot } from '../project-root.js';
-import { evaluateQualityGates, formatGateReport, QualityGatesConfigSchema, type QualityGatesConfig } from '../tools/quality/quality-gates.js';
-import { logger } from '../logger.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
+import { logger } from '../logger.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import fs from 'node:fs';
+import { findProjectRoot } from '../project-root.js';
+import { getProject } from '../registry.js';
+import {
+  evaluateQualityGates,
+  formatGateReport,
+  type QualityGatesConfig,
+  QualityGatesConfigSchema,
+} from '../tools/quality/quality-gates.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);
@@ -29,12 +34,7 @@ export const checkCommand = new Command('check')
   .option('--format <fmt>', 'Output format: text | json (default: text)', 'text')
   .option('--index', 'Re-index the project before checking', false)
   .option('--fail-on <level>', 'Override fail_on: error | warning | none')
-  .action(async (opts: {
-    config?: string;
-    format: string;
-    index: boolean;
-    failOn?: string;
-  }) => {
+  .action(async (opts: { config?: string; format: string; index: boolean; failOn?: string }) => {
     let projectRoot: string;
     try {
       projectRoot = findProjectRoot(process.cwd());
@@ -44,13 +44,15 @@ export const checkCommand = new Command('check')
 
     // Load config
     const configResult = await loadConfig(projectRoot);
-    const config = configResult.isOk() ? configResult.value : {
-      root: projectRoot,
-      include: ['**/*'],
-      exclude: ['vendor/**', 'node_modules/**', '.git/**'],
-      db: { path: '' },
-      plugins: [],
-    };
+    const config = configResult.isOk()
+      ? configResult.value
+      : {
+          root: projectRoot,
+          include: ['**/*'],
+          exclude: ['vendor/**', 'node_modules/**', '.git/**'],
+          db: { path: '' },
+          plugins: [],
+        };
 
     // Load quality gates config
     let gatesConfig: QualityGatesConfig;
@@ -61,7 +63,9 @@ export const checkCommand = new Command('check')
         const raw = JSON.parse(fs.readFileSync(opts.config, 'utf-8'));
         const parsed = QualityGatesConfigSchema.safeParse(raw.quality_gates ?? raw);
         if (!parsed.success) {
-          console.error(`Invalid quality gates config: ${parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+          console.error(
+            `Invalid quality gates config: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+          );
           process.exit(2);
         }
         gatesConfig = parsed.data;
@@ -71,7 +75,7 @@ export const checkCommand = new Command('check')
       }
     } else {
       // Try loading from project config's quality_gates section
-      const rawConfig = (config as Record<string, unknown>);
+      const rawConfig = config as Record<string, unknown>;
       if (rawConfig.quality_gates) {
         const parsed = QualityGatesConfigSchema.safeParse(rawConfig.quality_gates);
         gatesConfig = parsed.success ? parsed.data : getDefaultGatesConfig();
@@ -91,7 +95,7 @@ export const checkCommand = new Command('check')
     }
 
     // Check if any rules are configured
-    const hasRules = Object.values(gatesConfig.rules).some(r => r !== undefined);
+    const hasRules = Object.values(gatesConfig.rules).some((r) => r !== undefined);
     if (!hasRules) {
       console.log('No quality gate rules configured. Using defaults.');
       gatesConfig = getDefaultGatesConfig();
@@ -122,7 +126,7 @@ export const checkCommand = new Command('check')
 
     // Output
     if (opts.format === 'json') {
-      process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     } else {
       process.stdout.write(formatGateReport(report));
     }

@@ -10,14 +10,15 @@
  * shuts them down. Worker spawn cost is non-trivial (~150-300 ms each because
  * of WASM init + plugin loading), so callers should gate use by batch size.
  */
-import { Worker } from 'node:worker_threads';
-import os from 'node:os';
+
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { logger } from '../logger.js';
-import type { FileExtraction } from './pipeline-state.js';
-import type { WorkspaceInfo } from './monorepo.js';
+import { Worker } from 'node:worker_threads';
 import type { FileRow } from '../db/types.js';
+import { logger } from '../logger.js';
+import type { WorkspaceInfo } from './monorepo.js';
+import type { FileExtraction } from './pipeline-state.js';
 
 export interface ExtractRequest {
   relPath: string;
@@ -35,8 +36,13 @@ export type ExtractResponse =
   | { kind: 'error' }
   | { kind: 'ok'; extraction: FileExtraction };
 
-interface InternalRequest extends ExtractRequest { id: number }
-interface InternalResponse { id: number; result: ExtractResponse }
+interface InternalRequest extends ExtractRequest {
+  id: number;
+}
+interface InternalResponse {
+  id: number;
+  result: ExtractResponse;
+}
 
 const DEFAULT_WORKER_COUNT = Math.max(1, Math.min(8, os.cpus().length - 1));
 
@@ -51,7 +57,9 @@ function resolveWorkerEntry(): URL | null {
   const url = new URL('./extract-worker.js', import.meta.url);
   try {
     if (fs.existsSync(fileURLToPath(url))) return url;
-  } catch { /* fallthrough */ }
+  } catch {
+    /* fallthrough */
+  }
   return null;
 }
 
@@ -67,7 +75,10 @@ export class ExtractPool {
   private workers: Worker[] = [];
   private busy: boolean[] = [];
   private queue: InternalRequest[] = [];
-  private pending = new Map<number, { resolve: (r: ExtractResponse) => void; reject: (e: Error) => void }>();
+  private pending = new Map<
+    number,
+    { resolve: (r: ExtractResponse) => void; reject: (e: Error) => void }
+  >();
   private nextId = 0;
   private terminated = false;
   private workerEntry: URL | null;
@@ -101,7 +112,10 @@ export class ExtractPool {
 
   async extract(req: ExtractRequest): Promise<ExtractResponse> {
     if (!this.workerEntry) throw new Error('Extract worker pool unavailable in this runtime');
-    if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null; }
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
     this.ensureStarted();
     const id = ++this.nextId;
     return new Promise<ExtractResponse>((resolve, reject) => {
@@ -120,7 +134,12 @@ export class ExtractPool {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null;
-      if (this.pending.size === 0 && this.queue.length === 0 && !this.terminated && this.workers.length > 0) {
+      if (
+        this.pending.size === 0 &&
+        this.queue.length === 0 &&
+        !this.terminated &&
+        this.workers.length > 0
+      ) {
         this.idleTeardown().catch(() => 0);
       }
     }, IDLE_TERMINATE_MS);
@@ -168,13 +187,20 @@ export class ExtractPool {
       p.reject(err);
       this.pending.delete(id);
     }
-    try { this.workers[workerIdx]?.terminate().catch(() => {}); } catch { /* ignore */ }
+    try {
+      this.workers[workerIdx]?.terminate().catch(() => {});
+    } catch {
+      /* ignore */
+    }
     if (!this.terminated) this.spawn(workerIdx);
   }
 
   async terminate(): Promise<void> {
     this.terminated = true;
-    if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null; }
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
     const workers = this.workers;
     this.workers = [];
     this.busy = [];
@@ -182,14 +208,5 @@ export class ExtractPool {
     this.pending.clear();
     this.queue = [];
     await Promise.all(workers.map((w) => w.terminate().catch(() => 0)));
-  }
-
-  /** Reset state after auto-terminate so a subsequent extract() can re-spawn. */
-  private reset(): void {
-    this.terminated = false;
-    this.workers = [];
-    this.busy = [];
-    this.pending.clear();
-    this.queue = [];
   }
 }

@@ -8,12 +8,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -22,16 +21,13 @@ const ROUTE_RE =
   /\b(\w+)\s*\.\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|CONNECT|TRACE)\s*\(\s*"([^"]+)"/g;
 
 // g := e.Group("/api")
-const GROUP_RE =
-  /\b(\w+)\s*\.\s*Group\s*\(\s*"([^"]+)"/g;
+const GROUP_RE = /\b(\w+)\s*\.\s*Group\s*\(\s*"([^"]+)"/g;
 
 // e.Use(middleware) or e.Pre(middleware)
-const MIDDLEWARE_RE =
-  /\b(\w+)\s*\.\s*(?:Use|Pre)\s*\(\s*(\w[\w.]*)/g;
+const MIDDLEWARE_RE = /\b(\w+)\s*\.\s*(?:Use|Pre)\s*\(\s*(\w[\w.]*)/g;
 
 // e.Static("/assets", "./public")
-const STATIC_RE =
-  /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
+const STATIC_RE = /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
 
 interface EchoRoute {
   method: string;
@@ -177,7 +173,7 @@ export class EchoPlugin implements FrameworkPlugin {
     const middlewares = extractEchoMiddleware(source);
     if (middlewares.length > 0) {
       result.frameworkRole = result.frameworkRole ?? 'echo_middleware';
-      for (const mw of middlewares) {
+      for (const _mw of middlewares) {
         result.routes!.push({
           method: 'USE',
           uri: '/',

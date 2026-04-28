@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { detectConflicts } from '../../src/init/conflict-detector.js';
 import { createTmpFixture, removeTmpDir } from '../test-utils.js';
 
@@ -79,7 +79,9 @@ describe('detectConflicts', () => {
     });
 
     const report = detectConflicts(root);
-    const repomix = report.conflicts.find((c) => c.competitor === 'repomix' && c.category === 'mcp_server');
+    const repomix = report.conflicts.find(
+      (c) => c.competitor === 'repomix' && c.category === 'mcp_server',
+    );
     expect(repomix).toBeDefined();
   });
 
@@ -135,7 +137,10 @@ describe('detectConflicts', () => {
 
     const report = detectConflicts(root);
     const dirConflicts = report.conflicts.filter(
-      (c) => c.category === 'config_file' && c.target.startsWith(root) && c.summary.includes('directory'),
+      (c) =>
+        c.category === 'config_file' &&
+        c.target.startsWith(root) &&
+        c.summary.includes('directory'),
     );
     expect(dirConflicts.length).toBeGreaterThanOrEqual(2);
   });
@@ -144,7 +149,8 @@ describe('detectConflicts', () => {
 
   it('detects competing CLAUDE.md with marker blocks', () => {
     const root = fixture({
-      'CLAUDE.md': '# Project\n\n<!-- jcodemunch:start -->\nUse jcodemunch tools\n<!-- jcodemunch:end -->',
+      'CLAUDE.md':
+        '# Project\n\n<!-- jcodemunch:start -->\nUse jcodemunch tools\n<!-- jcodemunch:end -->',
     });
 
     const report = detectConflicts(root);

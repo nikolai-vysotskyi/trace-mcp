@@ -1,23 +1,27 @@
 /**
  * Rust Language Plugin — tree-sitter based symbol extraction.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
+  extractEnumVariants,
+  extractImplMethods,
+  extractImportEdges,
   extractSignature,
+  extractStructFields,
+  extractTraitMethods,
   getNodeName,
   isPublic,
-  extractImportEdges,
-  extractStructFields,
-  extractImplMethods,
-  extractEnumVariants,
-  extractTraitMethods,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 
 export class RustLanguagePlugin implements LanguagePlugin {
@@ -29,7 +33,10 @@ export class RustLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.rs'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('rust');
       const sourceCode = content.toString('utf-8');
@@ -225,7 +232,7 @@ export class RustLanguagePlugin implements LanguagePlugin {
     const traitNode = node.childForFieldName('trait');
     if (traitNode) {
       // Create an edge for trait implementation
-      const meta: Record<string, unknown> = {
+      const _meta: Record<string, unknown> = {
         rustKind: 'impl',
         trait: traitNode.text,
       };

@@ -8,8 +8,7 @@
  */
 
 import type { Store } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,26 +60,31 @@ export function planBatchChange(
   const breakingChanges = input.breakingChanges ?? [];
 
   // Find files that import this package — search edges + symbols
-  const importEdges = store.db.prepare(`
+  const importEdges = store.db
+    .prepare(`
     SELECT DISTINCT f.path, f.id as file_id
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.metadata LIKE ?
     ORDER BY f.path
-  `).all(`%"module":"${pkg}%`) as { path: string; file_id: number }[];
+  `)
+    .all(`%"module":"${pkg}%`) as { path: string; file_id: number }[];
 
   // Also search for direct package name references in symbol IDs
-  const directRefs = store.db.prepare(`
+  const directRefs = store.db
+    .prepare(`
     SELECT DISTINCT f.path, f.id as file_id
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE (s.symbol_id LIKE ? OR s.fqn LIKE ? OR s.name LIKE ?)
     AND f.path NOT LIKE '%node_modules%'
     AND f.path NOT LIKE '%vendor%'
-  `).all(`%${pkg}%`, `%${pkg}%`, `%${pkg}%`) as { path: string; file_id: number }[];
+  `)
+    .all(`%${pkg}%`, `%${pkg}%`, `%${pkg}%`) as { path: string; file_id: number }[];
 
   // Also search for import edges that reference this package
-  const edgeImports = store.db.prepare(`
+  const edgeImports = store.db
+    .prepare(`
     SELECT DISTINCT f.path, f.id as file_id
     FROM edges e
     JOIN edge_types et ON e.edge_type_id = et.id
@@ -89,7 +93,8 @@ export function planBatchChange(
     JOIN files f ON ss.file_id = f.id
     WHERE et.name IN ('imports', 'requires')
     AND e.metadata LIKE ?
-  `).all(`%${pkg}%`) as { path: string; file_id: number }[];
+  `)
+    .all(`%${pkg}%`) as { path: string; file_id: number }[];
 
   // Merge and deduplicate
   const fileMap = new Map<string, number>();
@@ -105,11 +110,18 @@ export function planBatchChange(
 
   // Process files in batch
   for (const [filePath, fileId] of fileEntries) {
-    const symbols = store.db.prepare(`
+    const symbols = store.db
+      .prepare(`
       SELECT name, symbol_id, line_start, metadata
       FROM symbols
       WHERE file_id = ?
-    `).all(fileId) as { name: string; symbol_id: string; line_start: number | null; metadata: string | null }[];
+    `)
+      .all(fileId) as {
+      name: string;
+      symbol_id: string;
+      line_start: number | null;
+      metadata: string | null;
+    }[];
 
     const imports: string[] = [];
     const symbolsUsing: string[] = [];
@@ -138,11 +150,7 @@ export function planBatchChange(
   }
 
   // Risk assessment
-  const risk = affectedFiles.length > 20
-    ? 'high'
-    : affectedFiles.length > 5
-      ? 'medium'
-      : 'low';
+  const risk = affectedFiles.length > 20 ? 'high' : affectedFiles.length > 5 ? 'medium' : 'low';
 
   // Generate PR template
   const prTemplate = generatePrTemplate(input, affectedFiles, risk);
@@ -189,9 +197,8 @@ function generatePrTemplate(
     lines.push('### Affected Files');
     const shown = affected.slice(0, 20);
     for (const af of shown) {
-      const refs = af.line_references.length > 0
-        ? ` (lines: ${af.line_references.join(', ')})`
-        : '';
+      const refs =
+        af.line_references.length > 0 ? ` (lines: ${af.line_references.join(', ')})` : '';
       lines.push(`- \`${af.file}\`${refs}`);
       if (af.imports.length > 0) {
         lines.push(`  - Imports: ${af.imports.join(', ')}`);

@@ -1,13 +1,23 @@
-import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
+import type { Store } from '../../src/db/store.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { getImplementations, getApiSurface, getPluginRegistry, getTypeHierarchy, getDeadExports, getDependencyGraph, getUntestedExports, getUntestedSymbols, selfAudit } from '../../src/tools/analysis/introspect.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import {
+  getApiSurface,
+  getDeadExports,
+  getDependencyGraph,
+  getImplementations,
+  getPluginRegistry,
+  getTypeHierarchy,
+  getUntestedExports,
+  getUntestedSymbols,
+  selfAudit,
+} from '../../src/tools/analysis/introspect.js';
 import { search } from '../../src/tools/navigation/navigation.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/ts-heritage');
 
@@ -258,9 +268,10 @@ describe('getDeadExports', () => {
 
   it('does not include symbols from test files', () => {
     const result = getDeadExports(store);
-    const testFiles = result.dead_exports.filter((d) =>
-      /(?:^|\/)(?:tests?|__tests__|spec)\//.test(d.file) ||
-      /\.(?:test|spec)\.[jt]sx?$/.test(d.file),
+    const testFiles = result.dead_exports.filter(
+      (d) =>
+        /(?:^|\/)(?:tests?|__tests__|spec)\//.test(d.file) ||
+        /\.(?:test|spec)\.[jt]sx?$/.test(d.file),
     );
     expect(testFiles).toHaveLength(0);
   });
@@ -279,10 +290,11 @@ describe('ESM import edge resolution', () => {
     const importEdges = store.getEdgesByType('imports');
     const withSpecifiers = importEdges.filter((e) => {
       if (!e.metadata) return false;
-      const meta = typeof e.metadata === 'string'
-        ? JSON.parse(e.metadata) as Record<string, unknown>
-        : e.metadata;
-      return Array.isArray(meta['specifiers']) && (meta['specifiers'] as string[]).length > 0;
+      const meta =
+        typeof e.metadata === 'string'
+          ? (JSON.parse(e.metadata) as Record<string, unknown>)
+          : e.metadata;
+      return Array.isArray(meta.specifiers) && (meta.specifiers as string[]).length > 0;
     });
     expect(withSpecifiers.length).toBeGreaterThan(0);
   });
@@ -294,12 +306,13 @@ describe('ESM import edge resolution', () => {
     const allSpecifiers: string[] = [];
     for (const edge of importEdges) {
       if (!edge.metadata) continue;
-      const meta = typeof edge.metadata === 'string'
-        ? JSON.parse(edge.metadata) as Record<string, unknown>
-        : edge.metadata;
-      const specs = meta['specifiers'];
+      const meta =
+        typeof edge.metadata === 'string'
+          ? (JSON.parse(edge.metadata) as Record<string, unknown>)
+          : edge.metadata;
+      const specs = meta.specifiers;
       if (Array.isArray(specs)) {
-        allSpecifiers.push(...specs as string[]);
+        allSpecifiers.push(...(specs as string[]));
       }
     }
     expect(allSpecifiers).toContain('fromJSON');
@@ -380,7 +393,9 @@ describe('getUntestedSymbols', () => {
     expect(result.by_level).toBeDefined();
     expect(typeof result.by_level.unreached).toBe('number');
     expect(typeof result.by_level.imported_not_called).toBe('number');
-    expect(result.by_level.unreached + result.by_level.imported_not_called).toBe(result.total_untested);
+    expect(result.by_level.unreached + result.by_level.imported_not_called).toBe(
+      result.total_untested,
+    );
   });
 
   it('covers more symbols than get_untested_exports (includes non-exported)', () => {

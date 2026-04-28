@@ -16,18 +16,18 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { globalRe } from '../../../../../utils/regex.js';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   RawRoute,
   RawSymbol,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
+import { globalRe } from '../../../../../utils/regex.js';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ interface N8nNode {
 
 interface N8nConnectionTarget {
   node: string;
-  type: string;   // "main", "ai_languageModel", "ai_tool", etc.
+  type: string; // "main", "ai_languageModel", "ai_tool", etc.
   index: number;
 }
 
@@ -69,7 +69,7 @@ interface N8nConnection {
   sourceOutput: number;
   targetNode: string;
   targetInput: number;
-  connectionType: string;   // "main", "ai_languageModel", "ai_tool", etc.
+  connectionType: string; // "main", "ai_languageModel", "ai_tool", etc.
 }
 
 interface N8nWorkflowSettings {
@@ -175,10 +175,18 @@ const STICKY_NOTE_TYPE = 'n8n-nodes-base.stickyNote';
 // -- Connection types for AI/LangChain wiring --
 
 const AI_CONNECTION_TYPES = new Set([
-  'ai_agent', 'ai_chain', 'ai_document', 'ai_embedding',
-  'ai_languageModel', 'ai_memory', 'ai_outputParser',
-  'ai_retriever', 'ai_reranker', 'ai_textSplitter',
-  'ai_tool', 'ai_vectorStore',
+  'ai_agent',
+  'ai_chain',
+  'ai_document',
+  'ai_embedding',
+  'ai_languageModel',
+  'ai_memory',
+  'ai_outputParser',
+  'ai_retriever',
+  'ai_reranker',
+  'ai_textSplitter',
+  'ai_tool',
+  'ai_vectorStore',
 ]);
 
 // -- Service domain classification for ALL integration nodes --
@@ -187,201 +195,455 @@ const AI_CONNECTION_TYPES = new Set([
 // Pattern: n8n-nodes-base.<nodeName> → lookup SERVICE_DOMAINS[<nodeName lower>]
 
 type N8nServiceDomain =
-  | 'communication' | 'database' | 'cloud_storage' | 'dev_tools'
-  | 'crm_sales' | 'marketing' | 'productivity' | 'finance'
-  | 'analytics' | 'cms' | 'social_media' | 'ecommerce'
-  | 'cloud_infra' | 'security' | 'iot_hardware' | 'hr_recruiting'
-  | 'support' | 'design' | 'forms_surveys' | 'other';
+  | 'communication'
+  | 'database'
+  | 'cloud_storage'
+  | 'dev_tools'
+  | 'crm_sales'
+  | 'marketing'
+  | 'productivity'
+  | 'finance'
+  | 'analytics'
+  | 'cms'
+  | 'social_media'
+  | 'ecommerce'
+  | 'cloud_infra'
+  | 'security'
+  | 'iot_hardware'
+  | 'hr_recruiting'
+  | 'support'
+  | 'design'
+  | 'forms_surveys'
+  | 'other';
 
 // Each key is the lowercased short name from n8n-nodes-base.<name> (without Trigger suffix).
 // This lets us classify both action and trigger variants of every node.
 const SERVICE_DOMAINS: Record<string, N8nServiceDomain> = {
   // ── Communication ──────────────────────────────────────────────
-  slack: 'communication', discord: 'communication', telegram: 'communication',
-  telegrambot: 'communication', microsoftteams: 'communication', mattermost: 'communication',
-  rocketchat: 'communication', zulip: 'communication', googlechat: 'communication',
-  matrix: 'communication', gotify: 'communication', pushbullet: 'communication',
-  pushover: 'communication', pushcut: 'communication', line: 'communication',
-  sendgrid: 'communication', mailgun: 'communication', mailjet: 'communication',
-  ses: 'communication', mandrill: 'communication', postmark: 'communication',
-  emailsend: 'communication', emailreademail: 'communication', emailreadimap: 'communication',
-  gmail: 'communication', microsoftoutlook: 'communication', imap: 'communication',
-  smtp: 'communication', twilio: 'communication', vonage: 'communication',
-  whatsapp: 'communication', whatsappbusiness: 'communication', signal: 'communication',
-  intercom: 'communication', crisp: 'communication', drift: 'communication',
-  chatwork: 'communication', flock: 'communication', messagebirdSms: 'communication',
+  slack: 'communication',
+  discord: 'communication',
+  telegram: 'communication',
+  telegrambot: 'communication',
+  microsoftteams: 'communication',
+  mattermost: 'communication',
+  rocketchat: 'communication',
+  zulip: 'communication',
+  googlechat: 'communication',
+  matrix: 'communication',
+  gotify: 'communication',
+  pushbullet: 'communication',
+  pushover: 'communication',
+  pushcut: 'communication',
+  line: 'communication',
+  sendgrid: 'communication',
+  mailgun: 'communication',
+  mailjet: 'communication',
+  ses: 'communication',
+  mandrill: 'communication',
+  postmark: 'communication',
+  emailsend: 'communication',
+  emailreademail: 'communication',
+  emailreadimap: 'communication',
+  gmail: 'communication',
+  microsoftoutlook: 'communication',
+  imap: 'communication',
+  smtp: 'communication',
+  twilio: 'communication',
+  vonage: 'communication',
+  whatsapp: 'communication',
+  whatsappbusiness: 'communication',
+  signal: 'communication',
+  intercom: 'communication',
+  crisp: 'communication',
+  drift: 'communication',
+  chatwork: 'communication',
+  flock: 'communication',
+  messagebirdSms: 'communication',
   brevo: 'communication',
 
   // ── Databases ──────────────────────────────────────────────────
-  postgres: 'database', mysql: 'database', mariadb: 'database',
-  mongodb: 'database', redis: 'database', elasticsearch: 'database',
-  microsoftsql: 'database', oracledb: 'database', sqlite: 'database',
-  cockroachdb: 'database', questdb: 'database', timescaledb: 'database',
-  couchdb: 'database', dynamodb: 'database', cassandra: 'database',
-  neo4j: 'database', fauna: 'database', supabase: 'database',
-  firebase: 'database', firebaserealtimedb: 'database',
-  firebasecloudfirestore: 'database', snowflake: 'database',
-  bigquery: 'database', clickhouse: 'database',
-  neondb: 'database', planetscale: 'database', turso: 'database',
-  upstash: 'database', xata: 'database',
+  postgres: 'database',
+  mysql: 'database',
+  mariadb: 'database',
+  mongodb: 'database',
+  redis: 'database',
+  elasticsearch: 'database',
+  microsoftsql: 'database',
+  oracledb: 'database',
+  sqlite: 'database',
+  cockroachdb: 'database',
+  questdb: 'database',
+  timescaledb: 'database',
+  couchdb: 'database',
+  dynamodb: 'database',
+  cassandra: 'database',
+  neo4j: 'database',
+  fauna: 'database',
+  supabase: 'database',
+  firebase: 'database',
+  firebaserealtimedb: 'database',
+  firebasecloudfirestore: 'database',
+  snowflake: 'database',
+  bigquery: 'database',
+  clickhouse: 'database',
+  neondb: 'database',
+  planetscale: 'database',
+  turso: 'database',
+  upstash: 'database',
+  xata: 'database',
 
   // ── Cloud Storage ──────────────────────────────────────────────
-  s3: 'cloud_storage', awss3: 'cloud_storage', minio: 'cloud_storage',
-  googledrive: 'cloud_storage', onedrive: 'cloud_storage',
-  microsoftonedrive: 'cloud_storage', dropbox: 'cloud_storage',
-  box: 'cloud_storage', nextcloud: 'cloud_storage', ftp: 'cloud_storage',
-  sftp: 'cloud_storage', googlecloudstorage: 'cloud_storage',
-  azureblobstorage: 'cloud_storage', backblazeb2: 'cloud_storage',
-  wasabi: 'cloud_storage', filemaker: 'cloud_storage',
+  s3: 'cloud_storage',
+  awss3: 'cloud_storage',
+  minio: 'cloud_storage',
+  googledrive: 'cloud_storage',
+  onedrive: 'cloud_storage',
+  microsoftonedrive: 'cloud_storage',
+  dropbox: 'cloud_storage',
+  box: 'cloud_storage',
+  nextcloud: 'cloud_storage',
+  ftp: 'cloud_storage',
+  sftp: 'cloud_storage',
+  googlecloudstorage: 'cloud_storage',
+  azureblobstorage: 'cloud_storage',
+  backblazeb2: 'cloud_storage',
+  wasabi: 'cloud_storage',
+  filemaker: 'cloud_storage',
 
   // ── Developer Tools ────────────────────────────────────────────
-  github: 'dev_tools', gitlab: 'dev_tools', bitbucket: 'dev_tools',
-  git: 'dev_tools', jira: 'dev_tools', jirasoftware: 'dev_tools',
-  linear: 'dev_tools', sentry: 'dev_tools', grafana: 'dev_tools',
-  pagerduty: 'dev_tools', opsgenie: 'dev_tools', victorops: 'dev_tools',
-  datadog: 'dev_tools', uptimerobot: 'dev_tools', statuspage: 'dev_tools',
-  ssh: 'dev_tools', jenkins: 'dev_tools', circleci: 'dev_tools',
-  travisci: 'dev_tools', docker: 'dev_tools', kubernetes: 'dev_tools',
-  terraform: 'dev_tools', ansible: 'dev_tools', vagrant: 'dev_tools',
-  n8n: 'dev_tools', gist: 'dev_tools', raindrop: 'dev_tools',
-  netlify: 'dev_tools', vercel: 'dev_tools', render: 'dev_tools',
-  railway: 'dev_tools', fly: 'dev_tools', cloudflare: 'dev_tools',
-  postman: 'dev_tools', npm: 'dev_tools', twake: 'dev_tools',
-  coda: 'dev_tools', nocodb: 'dev_tools', baserow: 'dev_tools',
-  gitea: 'dev_tools', taiga: 'dev_tools', sourcify: 'dev_tools',
+  github: 'dev_tools',
+  gitlab: 'dev_tools',
+  bitbucket: 'dev_tools',
+  git: 'dev_tools',
+  jira: 'dev_tools',
+  jirasoftware: 'dev_tools',
+  linear: 'dev_tools',
+  sentry: 'dev_tools',
+  grafana: 'dev_tools',
+  pagerduty: 'dev_tools',
+  opsgenie: 'dev_tools',
+  victorops: 'dev_tools',
+  datadog: 'dev_tools',
+  uptimerobot: 'dev_tools',
+  statuspage: 'dev_tools',
+  ssh: 'dev_tools',
+  jenkins: 'dev_tools',
+  circleci: 'dev_tools',
+  travisci: 'dev_tools',
+  docker: 'dev_tools',
+  kubernetes: 'dev_tools',
+  terraform: 'dev_tools',
+  ansible: 'dev_tools',
+  vagrant: 'dev_tools',
+  n8n: 'dev_tools',
+  gist: 'dev_tools',
+  raindrop: 'dev_tools',
+  netlify: 'dev_tools',
+  vercel: 'dev_tools',
+  render: 'dev_tools',
+  railway: 'dev_tools',
+  fly: 'dev_tools',
+  cloudflare: 'dev_tools',
+  postman: 'dev_tools',
+  npm: 'dev_tools',
+  twake: 'dev_tools',
+  coda: 'dev_tools',
+  nocodb: 'dev_tools',
+  baserow: 'dev_tools',
+  gitea: 'dev_tools',
+  taiga: 'dev_tools',
+  sourcify: 'dev_tools',
 
   // ── CRM & Sales ────────────────────────────────────────────────
-  salesforce: 'crm_sales', hubspot: 'crm_sales', pipedrive: 'crm_sales',
-  copper: 'crm_sales', close: 'crm_sales', freshworks: 'crm_sales',
-  freshworksCrm: 'crm_sales', zohocrm: 'crm_sales', zoho: 'crm_sales',
-  agilecrm: 'crm_sales', capsulecrm: 'crm_sales', highLevel: 'crm_sales',
-  activecampaign: 'crm_sales', keap: 'crm_sales', infusionsoft: 'crm_sales',
-  streak: 'crm_sales', affinity: 'crm_sales', attio: 'crm_sales',
-  nutshell: 'crm_sales', onfleet: 'crm_sales', harvest: 'crm_sales',
-  lemlist: 'crm_sales', phantombuster: 'crm_sales', hunter: 'crm_sales',
-  clearbit: 'crm_sales', uplead: 'crm_sales', apollo: 'crm_sales',
+  salesforce: 'crm_sales',
+  hubspot: 'crm_sales',
+  pipedrive: 'crm_sales',
+  copper: 'crm_sales',
+  close: 'crm_sales',
+  freshworks: 'crm_sales',
+  freshworksCrm: 'crm_sales',
+  zohocrm: 'crm_sales',
+  zoho: 'crm_sales',
+  agilecrm: 'crm_sales',
+  capsulecrm: 'crm_sales',
+  highLevel: 'crm_sales',
+  activecampaign: 'crm_sales',
+  keap: 'crm_sales',
+  infusionsoft: 'crm_sales',
+  streak: 'crm_sales',
+  affinity: 'crm_sales',
+  attio: 'crm_sales',
+  nutshell: 'crm_sales',
+  onfleet: 'crm_sales',
+  harvest: 'crm_sales',
+  lemlist: 'crm_sales',
+  phantombuster: 'crm_sales',
+  hunter: 'crm_sales',
+  clearbit: 'crm_sales',
+  uplead: 'crm_sales',
+  apollo: 'crm_sales',
   lonescale: 'crm_sales',
 
   // ── Marketing ──────────────────────────────────────────────────
-  mailchimp: 'marketing', convertkit: 'marketing', drip: 'marketing',
-  sendinblue: 'marketing', moosend: 'marketing', beehiiv: 'marketing',
-  buttondown: 'marketing', customerio: 'marketing', klaviyo: 'marketing',
-  iterable: 'marketing', campaign_monitor: 'marketing', aweber: 'marketing',
-  mailerlite: 'marketing', emailable: 'marketing', getresponse: 'marketing',
-  autopilot: 'marketing', mautic: 'marketing', onesignal: 'marketing',
-  pushover_marketing: 'marketing', segment: 'marketing',
-  mixpanel: 'marketing', amplitude: 'marketing', plausible: 'marketing',
-  matomo: 'marketing', posthog: 'marketing', rudderstack: 'marketing',
-  googleads: 'marketing', facebookads: 'marketing', linkedinads: 'marketing',
+  mailchimp: 'marketing',
+  convertkit: 'marketing',
+  drip: 'marketing',
+  sendinblue: 'marketing',
+  moosend: 'marketing',
+  beehiiv: 'marketing',
+  buttondown: 'marketing',
+  customerio: 'marketing',
+  klaviyo: 'marketing',
+  iterable: 'marketing',
+  campaign_monitor: 'marketing',
+  aweber: 'marketing',
+  mailerlite: 'marketing',
+  emailable: 'marketing',
+  getresponse: 'marketing',
+  autopilot: 'marketing',
+  mautic: 'marketing',
+  onesignal: 'marketing',
+  pushover_marketing: 'marketing',
+  segment: 'marketing',
+  mixpanel: 'marketing',
+  amplitude: 'marketing',
+  plausible: 'marketing',
+  matomo: 'marketing',
+  posthog: 'marketing',
+  rudderstack: 'marketing',
+  googleads: 'marketing',
+  facebookads: 'marketing',
+  linkedinads: 'marketing',
 
   // ── Productivity ───────────────────────────────────────────────
-  googlesheets: 'productivity', airtable: 'productivity', notion: 'productivity',
-  asana: 'productivity', trello: 'productivity', monday: 'productivity',
-  clickup: 'productivity', todoist: 'productivity', wrike: 'productivity',
-  basecamp: 'productivity', smartsheet: 'productivity', teamwork: 'productivity',
-  microsoftexcel: 'productivity', microsoftword: 'productivity',
-  microsofttodo: 'productivity', googledocs: 'productivity',
-  googleslides: 'productivity', googlecalendar: 'productivity',
-  googlecontacts: 'productivity', googletasks: 'productivity',
-  microsoftoutlookcalendar: 'productivity', applecalendar: 'productivity',
-  caldav: 'productivity', evernote: 'productivity', onenote: 'productivity',
-  roamresearch: 'productivity', obsidian: 'productivity',
-  seatable: 'productivity', milanote: 'productivity',
-  toggletrack: 'productivity', clockify: 'productivity', toggl: 'productivity',
-  timely: 'productivity', rescuetime: 'productivity',
-  cal: 'productivity', calendly: 'productivity', schedule: 'productivity',
+  googlesheets: 'productivity',
+  airtable: 'productivity',
+  notion: 'productivity',
+  asana: 'productivity',
+  trello: 'productivity',
+  monday: 'productivity',
+  clickup: 'productivity',
+  todoist: 'productivity',
+  wrike: 'productivity',
+  basecamp: 'productivity',
+  smartsheet: 'productivity',
+  teamwork: 'productivity',
+  microsoftexcel: 'productivity',
+  microsoftword: 'productivity',
+  microsofttodo: 'productivity',
+  googledocs: 'productivity',
+  googleslides: 'productivity',
+  googlecalendar: 'productivity',
+  googlecontacts: 'productivity',
+  googletasks: 'productivity',
+  microsoftoutlookcalendar: 'productivity',
+  applecalendar: 'productivity',
+  caldav: 'productivity',
+  evernote: 'productivity',
+  onenote: 'productivity',
+  roamresearch: 'productivity',
+  obsidian: 'productivity',
+  seatable: 'productivity',
+  milanote: 'productivity',
+  toggletrack: 'productivity',
+  clockify: 'productivity',
+  toggl: 'productivity',
+  timely: 'productivity',
+  rescuetime: 'productivity',
+  cal: 'productivity',
+  calendly: 'productivity',
+  schedule: 'productivity',
 
   // ── Finance & Accounting ───────────────────────────────────────
-  stripe: 'finance', paypal: 'finance', quickbooks: 'finance',
-  quickbooksonline: 'finance', xero: 'finance', freshbooks: 'finance',
-  wave: 'finance', invoiceninja: 'finance', chargebee: 'finance',
-  recurly: 'finance', paddle: 'finance', gumroad: 'finance',
-  lemonsqueezy: 'finance', mollie: 'finance', square: 'finance',
-  braintree: 'finance', coinbase: 'finance', wise: 'finance',
-  transferwise: 'finance', plaid: 'finance',
+  stripe: 'finance',
+  paypal: 'finance',
+  quickbooks: 'finance',
+  quickbooksonline: 'finance',
+  xero: 'finance',
+  freshbooks: 'finance',
+  wave: 'finance',
+  invoiceninja: 'finance',
+  chargebee: 'finance',
+  recurly: 'finance',
+  paddle: 'finance',
+  gumroad: 'finance',
+  lemonsqueezy: 'finance',
+  mollie: 'finance',
+  square: 'finance',
+  braintree: 'finance',
+  coinbase: 'finance',
+  wise: 'finance',
+  transferwise: 'finance',
+  plaid: 'finance',
 
   // ── Analytics & Monitoring ─────────────────────────────────────
-  googleanalytics: 'analytics', googlebigquery: 'analytics',
-  googletagmanager: 'analytics', hotjar: 'analytics',
-  newrelic: 'analytics', splunk: 'analytics', logdna: 'analytics',
-  elastic: 'analytics', prometheus: 'analytics',
-  kibana: 'analytics', sumo: 'analytics', honeybadger: 'analytics',
-  bugsnag: 'analytics', rollbar: 'analytics', airbrake: 'analytics',
+  googleanalytics: 'analytics',
+  googlebigquery: 'analytics',
+  googletagmanager: 'analytics',
+  hotjar: 'analytics',
+  newrelic: 'analytics',
+  splunk: 'analytics',
+  logdna: 'analytics',
+  elastic: 'analytics',
+  prometheus: 'analytics',
+  kibana: 'analytics',
+  sumo: 'analytics',
+  honeybadger: 'analytics',
+  bugsnag: 'analytics',
+  rollbar: 'analytics',
+  airbrake: 'analytics',
   raygun: 'analytics',
 
   // ── CMS & Content ──────────────────────────────────────────────
-  wordpress: 'cms', ghost: 'cms', strapi: 'cms', contentful: 'cms',
-  webflow: 'cms', sanity: 'cms', directus: 'cms', prismic: 'cms',
-  cockpit: 'cms', storyblok: 'cms', buttercms: 'cms', agilitycms: 'cms',
-  medium: 'cms', devto: 'cms', hashnode: 'cms', blogger: 'cms',
-  discourse: 'cms', lemmy: 'cms', grafbase: 'cms', payload: 'cms',
+  wordpress: 'cms',
+  ghost: 'cms',
+  strapi: 'cms',
+  contentful: 'cms',
+  webflow: 'cms',
+  sanity: 'cms',
+  directus: 'cms',
+  prismic: 'cms',
+  cockpit: 'cms',
+  storyblok: 'cms',
+  buttercms: 'cms',
+  agilitycms: 'cms',
+  medium: 'cms',
+  devto: 'cms',
+  hashnode: 'cms',
+  blogger: 'cms',
+  discourse: 'cms',
+  lemmy: 'cms',
+  grafbase: 'cms',
+  payload: 'cms',
 
   // ── Social Media ───────────────────────────────────────────────
-  twitter: 'social_media', x: 'social_media', facebook: 'social_media',
-  facebookgraph: 'social_media', facebookleadads: 'social_media',
-  instagram: 'social_media', linkedin: 'social_media', reddit: 'social_media',
-  pinterest: 'social_media', tumblr: 'social_media', mastodon: 'social_media',
-  youtube: 'social_media', tiktok: 'social_media', snapchat: 'social_media',
-  buffer: 'social_media', hootsuite: 'social_media',
+  twitter: 'social_media',
+  x: 'social_media',
+  facebook: 'social_media',
+  facebookgraph: 'social_media',
+  facebookleadads: 'social_media',
+  instagram: 'social_media',
+  linkedin: 'social_media',
+  reddit: 'social_media',
+  pinterest: 'social_media',
+  tumblr: 'social_media',
+  mastodon: 'social_media',
+  youtube: 'social_media',
+  tiktok: 'social_media',
+  snapchat: 'social_media',
+  buffer: 'social_media',
+  hootsuite: 'social_media',
 
   // ── eCommerce ──────────────────────────────────────────────────
-  shopify: 'ecommerce', woocommerce: 'ecommerce', magento: 'ecommerce',
-  bigcommerce: 'ecommerce', prestashop: 'ecommerce', saleor: 'ecommerce',
-  medusa: 'ecommerce', etsy: 'ecommerce', ebay: 'ecommerce',
-  amazon: 'ecommerce', amazonses: 'ecommerce', amazonsns: 'ecommerce',
+  shopify: 'ecommerce',
+  woocommerce: 'ecommerce',
+  magento: 'ecommerce',
+  bigcommerce: 'ecommerce',
+  prestashop: 'ecommerce',
+  saleor: 'ecommerce',
+  medusa: 'ecommerce',
+  etsy: 'ecommerce',
+  ebay: 'ecommerce',
+  amazon: 'ecommerce',
+  amazonses: 'ecommerce',
+  amazonsns: 'ecommerce',
   amazonrekognition: 'ecommerce',
 
   // ── Cloud Infrastructure ───────────────────────────────────────
-  awslambda: 'cloud_infra', awssns: 'cloud_infra', awssqs: 'cloud_infra',
-  awsdynamodb: 'cloud_infra', awsses: 'cloud_infra',
-  awstextract: 'cloud_infra', awstranscribe: 'cloud_infra',
-  awscomprehend: 'cloud_infra', awsrekognition: 'cloud_infra',
-  googlecloud: 'cloud_infra', googlecloudfunctions: 'cloud_infra',
-  googlecloudnaturallanguage: 'cloud_infra', googlecloudtranslate: 'cloud_infra',
-  googlevision: 'cloud_infra', googlespeechtotext: 'cloud_infra',
-  googlesheetsheet: 'cloud_infra', googleperspective: 'cloud_infra',
-  azuredevops: 'cloud_infra', azurecognitive: 'cloud_infra',
+  awslambda: 'cloud_infra',
+  awssns: 'cloud_infra',
+  awssqs: 'cloud_infra',
+  awsdynamodb: 'cloud_infra',
+  awsses: 'cloud_infra',
+  awstextract: 'cloud_infra',
+  awstranscribe: 'cloud_infra',
+  awscomprehend: 'cloud_infra',
+  awsrekognition: 'cloud_infra',
+  googlecloud: 'cloud_infra',
+  googlecloudfunctions: 'cloud_infra',
+  googlecloudnaturallanguage: 'cloud_infra',
+  googlecloudtranslate: 'cloud_infra',
+  googlevision: 'cloud_infra',
+  googlespeechtotext: 'cloud_infra',
+  googlesheetsheet: 'cloud_infra',
+  googleperspective: 'cloud_infra',
+  azuredevops: 'cloud_infra',
+  azurecognitive: 'cloud_infra',
   azureopenai: 'cloud_infra',
 
   // ── Security ───────────────────────────────────────────────────
-  thehive: 'security', misp: 'security', urlscanio: 'security',
-  virustotal: 'security', alienvault: 'security', crowdstrike: 'security',
-  securityscorecard: 'security', snyk: 'security',
-  haveibeenpwned: 'security', shodan: 'security',
+  thehive: 'security',
+  misp: 'security',
+  urlscanio: 'security',
+  virustotal: 'security',
+  alienvault: 'security',
+  crowdstrike: 'security',
+  securityscorecard: 'security',
+  snyk: 'security',
+  haveibeenpwned: 'security',
+  shodan: 'security',
 
   // ── Support & Helpdesk ─────────────────────────────────────────
-  zendesk: 'support', freshdesk: 'support', freshservice: 'support',
-  helpscout: 'support', servicedesk: 'support', servicenow: 'support',
-  zammad: 'support', happyfox: 'support', front: 'support',
-  kustomer: 'support', helpscoutdocs: 'support',
+  zendesk: 'support',
+  freshdesk: 'support',
+  freshservice: 'support',
+  helpscout: 'support',
+  servicedesk: 'support',
+  servicenow: 'support',
+  zammad: 'support',
+  happyfox: 'support',
+  front: 'support',
+  kustomer: 'support',
+  helpscoutdocs: 'support',
 
   // ── HR & Recruiting ────────────────────────────────────────────
-  bamboohr: 'hr_recruiting', workable: 'hr_recruiting', greenhouse: 'hr_recruiting',
-  lever: 'hr_recruiting', personio: 'hr_recruiting', gusto: 'hr_recruiting',
-  deel: 'hr_recruiting', rippling: 'hr_recruiting', recruitee: 'hr_recruiting',
+  bamboohr: 'hr_recruiting',
+  workable: 'hr_recruiting',
+  greenhouse: 'hr_recruiting',
+  lever: 'hr_recruiting',
+  personio: 'hr_recruiting',
+  gusto: 'hr_recruiting',
+  deel: 'hr_recruiting',
+  rippling: 'hr_recruiting',
+  recruitee: 'hr_recruiting',
 
   // ── Design & Media ─────────────────────────────────────────────
-  figma: 'design', canva: 'design', bannerbear: 'design',
-  cloudinary: 'design', imgbb: 'design', unsplash: 'design',
-  pexels: 'design', giphy: 'design',
+  figma: 'design',
+  canva: 'design',
+  bannerbear: 'design',
+  cloudinary: 'design',
+  imgbb: 'design',
+  unsplash: 'design',
+  pexels: 'design',
+  giphy: 'design',
 
   // ── Forms & Surveys ────────────────────────────────────────────
-  typeform: 'forms_surveys', jotform: 'forms_surveys', surveymonkey: 'forms_surveys',
-  googleforms: 'forms_surveys', tally: 'forms_surveys', formio: 'forms_surveys',
-  wufoo: 'forms_surveys', form: 'forms_surveys', formstack: 'forms_surveys',
+  typeform: 'forms_surveys',
+  jotform: 'forms_surveys',
+  surveymonkey: 'forms_surveys',
+  googleforms: 'forms_surveys',
+  tally: 'forms_surveys',
+  formio: 'forms_surveys',
+  wufoo: 'forms_surveys',
+  form: 'forms_surveys',
+  formstack: 'forms_surveys',
 
   // ── IoT & Hardware ─────────────────────────────────────────────
-  mqtt: 'iot_hardware', homeassistant: 'iot_hardware', philipshue: 'iot_hardware',
+  mqtt: 'iot_hardware',
+  homeassistant: 'iot_hardware',
+  philipshue: 'iot_hardware',
 };
 
 /** Resolve the service domain of an n8n node from its type string. */
 export function getServiceDomain(nodeType: string): N8nServiceDomain | undefined {
-  const shortName = nodeType.replace(/^n8n-nodes-base\./, '').replace(/^@n8n\/n8n-nodes-langchain\./, '');
+  const shortName = nodeType
+    .replace(/^n8n-nodes-base\./, '')
+    .replace(/^@n8n\/n8n-nodes-langchain\./, '');
   // Strip Trigger/Tool suffix to match the base service name
   const baseName = shortName.replace(/Trigger$/, '').replace(/Tool$/, '');
-  return SERVICE_DOMAINS[baseName.toLowerCase()]
-    ?? SERVICE_DOMAINS[shortName.toLowerCase()]
-    ?? undefined;
+  return (
+    SERVICE_DOMAINS[baseName.toLowerCase()] ?? SERVICE_DOMAINS[shortName.toLowerCase()] ?? undefined
+  );
 }
 
 // ── Expression dependency parsing ────────────────────────────────────────
@@ -477,9 +739,11 @@ export function computeWorkflowComplexity(workflow: N8nWorkflow): WorkflowComple
   // Cyclomatic complexity: count conditionals + 1
   let cyclomaticComplexity = 1;
   for (const node of workflow.nodes) {
-    if (node.type === 'n8n-nodes-base.if'
-      || node.type === 'n8n-nodes-base.switch'
-      || node.type === 'n8n-nodes-base.filter') {
+    if (
+      node.type === 'n8n-nodes-base.if' ||
+      node.type === 'n8n-nodes-base.switch' ||
+      node.type === 'n8n-nodes-base.filter'
+    ) {
       cyclomaticComplexity++;
     }
   }
@@ -510,7 +774,7 @@ export function computeWorkflowComplexity(workflow: N8nWorkflow): WorkflowComple
     while (queue.length > 0) {
       const { name, depth } = queue.shift()!;
       if (depth > maxDepth) maxDepth = depth;
-      for (const next of (adj.get(name) ?? [])) {
+      for (const next of adj.get(name) ?? []) {
         if (!visited.has(next)) {
           visited.add(next);
           queue.push({ name: next, depth: depth + 1 });
@@ -528,9 +792,8 @@ export function computeWorkflowComplexity(workflow: N8nWorkflow): WorkflowComple
       nodesWithOutgoing++;
     }
   }
-  const branchingFactor = nodesWithOutgoing > 0
-    ? Math.round((totalOutgoing / nodesWithOutgoing) * 100) / 100
-    : 0;
+  const branchingFactor =
+    nodesWithOutgoing > 0 ? Math.round((totalOutgoing / nodesWithOutgoing) * 100) / 100 : 0;
 
   // hasLoop: check if splitInBatches has a connection back to itself
   let hasLoop = false;
@@ -547,10 +810,13 @@ export function computeWorkflowComplexity(workflow: N8nWorkflow): WorkflowComple
       const queue = [...neighbors];
       while (queue.length > 0) {
         const curr = queue.shift()!;
-        if (curr === node.name) { hasLoop = true; break; }
+        if (curr === node.name) {
+          hasLoop = true;
+          break;
+        }
         if (visited.has(curr)) continue;
         visited.add(curr);
-        for (const next of (adj.get(curr) ?? [])) {
+        for (const next of adj.get(curr) ?? []) {
           if (!visited.has(next)) queue.push(next);
         }
       }
@@ -572,7 +838,10 @@ export function computeWorkflowComplexity(workflow: N8nWorkflow): WorkflowComple
 
 // ── Disconnected node detection ─────────────────────────────────────────
 
-export function findDisconnectedNodes(workflow: N8nWorkflow, connections: N8nConnection[]): N8nNode[] {
+export function findDisconnectedNodes(
+  workflow: N8nWorkflow,
+  connections: N8nConnection[],
+): N8nNode[] {
   const incoming = new Set<string>();
   const outgoing = new Set<string>();
   for (const conn of connections) {
@@ -626,9 +895,13 @@ export function extractCustomNodeDefinitions(ctx: ProjectContext): CustomNodeDef
           const source = fs.readFileSync(filePath, 'utf-8');
           const def = parseCustomNodeSource(filePath, source);
           if (def) results.push(def);
-        } catch { /* skip unreadable files */ }
+        } catch {
+          /* skip unreadable files */
+        }
       }
-    } catch { /* skip inaccessible dirs */ }
+    } catch {
+      /* skip inaccessible dirs */
+    }
   }
 
   return results;
@@ -646,7 +919,9 @@ function collectNodeFiles(dir: string): string[] {
         results.push(fullPath);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return results;
 }
 
@@ -694,8 +969,8 @@ function parseCustomNodeSource(filePath: string, source: string): CustomNodeDefi
     const propsBlock = extractBalancedBracket(source, source.indexOf('[', propsStart));
     if (propsBlock) {
       // Match top-level { name: '...' } entries (depth=1 curly braces)
-      const topLevelNameRe = /\{\s*name\s*[:=]\s*['"]([^'"]+)['"]/g;
-      let m: RegExpExecArray | null;
+      const _topLevelNameRe = /\{\s*name\s*[:=]\s*['"]([^'"]+)['"]/g;
+      let _m: RegExpExecArray | null;
       // Walk through and only match at bracket depth 0 (relative to propsBlock content)
       let depth = 0;
       let idx = 0;
@@ -727,14 +1002,30 @@ function parseCustomNodeSource(filePath: string, source: string): CustomNodeDefi
     }
   }
 
-  return { filePath, name, displayName, group, version, credentialTypes, parameterNames, operationNames };
+  return {
+    filePath,
+    name,
+    displayName,
+    group,
+    version,
+    credentialTypes,
+    parameterNames,
+    operationNames,
+  };
 }
 
 // ── Node category classification ─────────────────────────────────────────
 
 type N8nNodeCategory =
-  | 'trigger' | 'code' | 'flow_control' | 'data_transform'
-  | 'ai' | 'subworkflow' | 'http_request' | 'sticky_note' | 'action';
+  | 'trigger'
+  | 'code'
+  | 'flow_control'
+  | 'data_transform'
+  | 'ai'
+  | 'subworkflow'
+  | 'http_request'
+  | 'sticky_note'
+  | 'action';
 
 export function classifyNode(node: N8nNode): N8nNodeCategory {
   if (node.type === STICKY_NOTE_TYPE) return 'sticky_note';
@@ -762,8 +1053,7 @@ export function isTriggerNode(node: N8nNode): boolean {
 }
 
 function isAiNode(node: N8nNode): boolean {
-  return node.type.startsWith('@n8n/n8n-nodes-langchain.')
-    || node.type.includes('langchain');
+  return node.type.startsWith('@n8n/n8n-nodes-langchain.') || node.type.includes('langchain');
 }
 
 // ── Framework role classification ────────────────────────────────────────
@@ -772,12 +1062,14 @@ function classifyWorkflowRole(workflow: N8nWorkflow): string {
   const hasAi = workflow.nodes.some(isAiNode);
   const hasTrigger = workflow.nodes.some(isTriggerNode);
   const hasWebhook = workflow.nodes.some((n) => n.type === 'n8n-nodes-base.webhook');
-  const hasSchedule = workflow.nodes.some((n) =>
-    n.type === 'n8n-nodes-base.scheduleTrigger' || n.type === 'n8n-nodes-base.cron',
+  const hasSchedule = workflow.nodes.some(
+    (n) => n.type === 'n8n-nodes-base.scheduleTrigger' || n.type === 'n8n-nodes-base.cron',
   );
   const isErrorHandler = workflow.nodes.some((n) => n.type === 'n8n-nodes-base.errorTrigger');
-  const isSubWorkflow = workflow.nodes.some((n) =>
-    n.type === 'n8n-nodes-base.executeWorkflowTrigger' || n.type === 'n8n-nodes-base.workflowTrigger',
+  const isSubWorkflow = workflow.nodes.some(
+    (n) =>
+      n.type === 'n8n-nodes-base.executeWorkflowTrigger' ||
+      n.type === 'n8n-nodes-base.workflowTrigger',
   );
 
   if (isErrorHandler) return 'n8n_error_workflow';
@@ -794,7 +1086,12 @@ function classifyWorkflowRole(workflow: N8nWorkflow): string {
 export function parseN8nWorkflow(content: Buffer): N8nWorkflow | null {
   try {
     const json = JSON.parse(content.toString('utf-8'));
-    if (json && Array.isArray(json.nodes) && json.connections && typeof json.connections === 'object') {
+    if (
+      json &&
+      Array.isArray(json.nodes) &&
+      json.connections &&
+      typeof json.connections === 'object'
+    ) {
       return json as N8nWorkflow;
     }
     return null;
@@ -854,7 +1151,8 @@ export function extractRoutes(workflow: N8nWorkflow): RawRoute[] {
 
     // Form trigger endpoints
     if (node.type === 'n8n-nodes-base.formTrigger' && node.parameters) {
-      const formPath = (node.parameters.path as string) ?? (node.parameters.formTitle as string) ?? '/form';
+      const formPath =
+        (node.parameters.path as string) ?? (node.parameters.formTitle as string) ?? '/form';
       routes.push({
         method: 'FORM',
         uri: formPath.startsWith('/') ? formPath : `/${formPath}`,
@@ -864,10 +1162,13 @@ export function extractRoutes(workflow: N8nWorkflow): RawRoute[] {
     }
 
     // Schedule triggers as CRON routes
-    if ((node.type === 'n8n-nodes-base.scheduleTrigger' || node.type === 'n8n-nodes-base.cron') && node.parameters) {
+    if (
+      (node.type === 'n8n-nodes-base.scheduleTrigger' || node.type === 'n8n-nodes-base.cron') &&
+      node.parameters
+    ) {
       const rule = node.parameters.rule as Record<string, unknown> | undefined;
-      const cronExpr = (node.parameters.cronExpression as string)
-        ?? (rule ? JSON.stringify(rule) : 'schedule');
+      const cronExpr =
+        (node.parameters.cronExpression as string) ?? (rule ? JSON.stringify(rule) : 'schedule');
       routes.push({
         method: 'CRON',
         uri: cronExpr,
@@ -877,7 +1178,10 @@ export function extractRoutes(workflow: N8nWorkflow): RawRoute[] {
     }
 
     // Sub-workflow entry points
-    if (node.type === 'n8n-nodes-base.executeWorkflowTrigger' || node.type === 'n8n-nodes-base.workflowTrigger') {
+    if (
+      node.type === 'n8n-nodes-base.executeWorkflowTrigger' ||
+      node.type === 'n8n-nodes-base.workflowTrigger'
+    ) {
       routes.push({
         method: 'WORKFLOW',
         uri: `trigger:${node.name}`,
@@ -887,8 +1191,10 @@ export function extractRoutes(workflow: N8nWorkflow): RawRoute[] {
     }
 
     // Chat/MCP triggers
-    if (node.type === '@n8n/n8n-nodes-langchain.chatTrigger'
-      || node.type === '@n8n/n8n-nodes-langchain.manualChatTrigger') {
+    if (
+      node.type === '@n8n/n8n-nodes-langchain.chatTrigger' ||
+      node.type === '@n8n/n8n-nodes-langchain.manualChatTrigger'
+    ) {
       routes.push({
         method: 'CHAT',
         uri: `/chat/${node.name.replace(/\s+/g, '-').toLowerCase()}`,
@@ -920,11 +1226,12 @@ export function extractCodeNodes(workflow: N8nWorkflow): Array<{
   const results: Array<{ node: N8nNode; code: string; language: string; nodeDeps: string[] }> = [];
   for (const node of workflow.nodes) {
     if (!CODE_TYPES.has(node.type) || !node.parameters) continue;
-    const code = (node.parameters.jsCode as string)
-      ?? (node.parameters.functionCode as string)
-      ?? (node.parameters.code as string)
-      ?? (node.parameters.pythonCode as string)
-      ?? '';
+    const code =
+      (node.parameters.jsCode as string) ??
+      (node.parameters.functionCode as string) ??
+      (node.parameters.code as string) ??
+      (node.parameters.pythonCode as string) ??
+      '';
     if (!code.trim()) continue;
 
     const lang = (node.parameters.language as string) ?? 'javascript';
@@ -971,13 +1278,16 @@ export function extractHttpRequests(workflow: N8nWorkflow): Array<{
   method: string;
   authentication?: string;
 }> {
-  const requests: Array<{ node: N8nNode; url: string; method: string; authentication?: string }> = [];
+  const requests: Array<{ node: N8nNode; url: string; method: string; authentication?: string }> =
+    [];
   for (const node of workflow.nodes) {
     if (!HTTP_REQUEST_TYPES.has(node.type) || !node.parameters) continue;
     const url = (node.parameters.url as string) ?? '';
-    const method = ((node.parameters.method as string)
-      ?? (node.parameters.requestMethod as string)
-      ?? 'GET').toUpperCase();
+    const method = (
+      (node.parameters.method as string) ??
+      (node.parameters.requestMethod as string) ??
+      'GET'
+    ).toUpperCase();
     if (!url) continue;
 
     const authentication = node.parameters.authentication as string | undefined;
@@ -995,7 +1305,13 @@ export function extractStickyNotes(workflow: N8nWorkflow): Array<{
   height?: number;
   color?: number;
 }> {
-  const notes: Array<{ node: N8nNode; content: string; width?: number; height?: number; color?: number }> = [];
+  const notes: Array<{
+    node: N8nNode;
+    content: string;
+    width?: number;
+    height?: number;
+    color?: number;
+  }> = [];
   for (const node of workflow.nodes) {
     if (node.type !== STICKY_NOTE_TYPE || !node.parameters) continue;
     const content = (node.parameters.content as string) ?? '';
@@ -1013,9 +1329,20 @@ export function extractStickyNotes(workflow: N8nWorkflow): Array<{
 
 // ── AI node extraction ───────────────────────────────────────────────────
 
-type AiNodeRole = 'agent' | 'chain' | 'llm' | 'embedding' | 'memory'
-  | 'vector_store' | 'retriever' | 'tool' | 'output_parser' | 'document_loader'
-  | 'text_splitter' | 'reranker' | 'standalone';
+type AiNodeRole =
+  | 'agent'
+  | 'chain'
+  | 'llm'
+  | 'embedding'
+  | 'memory'
+  | 'vector_store'
+  | 'retriever'
+  | 'tool'
+  | 'output_parser'
+  | 'document_loader'
+  | 'text_splitter'
+  | 'reranker'
+  | 'standalone';
 
 export function classifyAiNode(nodeType: string): AiNodeRole {
   const t = nodeType.replace('@n8n/n8n-nodes-langchain.', '');
@@ -1045,10 +1372,11 @@ export function extractAiNodes(workflow: N8nWorkflow): Array<{
     const role = classifyAiNode(node.type);
     let model: string | undefined;
     if (node.parameters) {
-      model = (node.parameters.model as string)
-        ?? (node.parameters.modelId as string)
-        ?? (node.parameters.modelName as string)
-        ?? undefined;
+      model =
+        (node.parameters.model as string) ??
+        (node.parameters.modelId as string) ??
+        (node.parameters.modelName as string) ??
+        undefined;
     }
     results.push({ node, role, ...(model ? { model } : {}) });
   }
@@ -1102,13 +1430,24 @@ export function extractCredentialUsages(workflow: N8nWorkflow): CredentialUsage[
 
 interface FlowControlInfo {
   node: N8nNode;
-  controlType: 'conditional' | 'switch' | 'merge' | 'loop' | 'wait' | 'filter' | 'respond' | 'other';
+  controlType:
+    | 'conditional'
+    | 'switch'
+    | 'merge'
+    | 'loop'
+    | 'wait'
+    | 'filter'
+    | 'respond'
+    | 'other';
   outputCount?: number;
   mergeMode?: string;
   batchSize?: number;
 }
 
-export function extractFlowControl(workflow: N8nWorkflow, connections: N8nConnection[]): FlowControlInfo[] {
+export function extractFlowControl(
+  workflow: N8nWorkflow,
+  connections: N8nConnection[],
+): FlowControlInfo[] {
   const results: FlowControlInfo[] = [];
   for (const node of workflow.nodes) {
     if (!FLOW_CONTROL_TYPES.has(node.type)) continue;
@@ -1175,16 +1514,20 @@ export class N8nPlugin implements FrameworkPlugin {
         ...(ctx.packageJson.dependencies as Record<string, string> | undefined),
         ...(ctx.packageJson.devDependencies as Record<string, string> | undefined),
       };
-      if (Object.keys(deps).some((k) =>
-        k.startsWith('n8n-nodes') || k === 'n8n-workflow' || k === 'n8n-core',
-      )) {
+      if (
+        Object.keys(deps).some(
+          (k) => k.startsWith('n8n-nodes') || k === 'n8n-workflow' || k === 'n8n-core',
+        )
+      ) {
         return true;
       }
     }
 
     try {
       if (fs.existsSync(path.join(ctx.rootPath, '.n8n'))) return true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Check for *.node.ts files (custom node development)
     const nodeDirs = ['nodes', 'src/nodes'];
@@ -1195,7 +1538,9 @@ export class N8nPlugin implements FrameworkPlugin {
           const files = collectNodeFiles(fullDir);
           if (files.length > 0) return true;
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     const searchDirs = ['workflows', 'n8n', '.n8n', '.'];
@@ -1208,14 +1553,16 @@ export class N8nPlugin implements FrameworkPlugin {
           try {
             const content = fs.readFileSync(path.join(fullDir, file));
             if (parseN8nWorkflow(content)) return true;
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
-    return ctx.configFiles.some(
-      (f) => f.includes('n8n') || f.includes('.n8n'),
-    );
+    return ctx.configFiles.some((f) => f.includes('n8n') || f.includes('.n8n'));
   }
 
   registerSchema() {
@@ -1233,19 +1580,71 @@ export class N8nPlugin implements FrameworkPlugin {
         { name: 'n8n_sticky_note' },
       ],
       edgeTypes: [
-        { name: 'n8n_connection', category: 'n8n', description: 'Data flow between workflow nodes' },
-        { name: 'n8n_ai_connection', category: 'n8n', description: 'AI/LangChain typed connection (model, tool, memory, etc.)' },
-        { name: 'n8n_error_connection', category: 'n8n', description: 'Error output branch connection' },
-        { name: 'n8n_triggers', category: 'n8n', description: 'Trigger initiates workflow execution' },
-        { name: 'n8n_webhook_route', category: 'n8n', description: 'Webhook endpoint exposed by workflow' },
-        { name: 'n8n_calls_subworkflow', category: 'n8n', description: 'Node invokes another workflow' },
-        { name: 'n8n_http_request', category: 'n8n', description: 'HTTP request to external service' },
-        { name: 'n8n_uses_credential', category: 'n8n', description: 'Node references a credential' },
-        { name: 'n8n_expression_dep', category: 'n8n', description: 'Implicit data dependency via expression ($node["Name"])' },
-        { name: 'n8n_error_workflow', category: 'n8n', description: 'Workflow-level error handler reference' },
-        { name: 'n8n_conditional_branch', category: 'n8n', description: 'Conditional branch output (IF true/false, Switch cases)' },
-        { name: 'n8n_external_service', category: 'n8n', description: 'Node connects to an external service (database, API, SaaS)' },
-        { name: 'n8n_shared_credential', category: 'n8n', description: 'Workflows coupled by shared credential usage' },
+        {
+          name: 'n8n_connection',
+          category: 'n8n',
+          description: 'Data flow between workflow nodes',
+        },
+        {
+          name: 'n8n_ai_connection',
+          category: 'n8n',
+          description: 'AI/LangChain typed connection (model, tool, memory, etc.)',
+        },
+        {
+          name: 'n8n_error_connection',
+          category: 'n8n',
+          description: 'Error output branch connection',
+        },
+        {
+          name: 'n8n_triggers',
+          category: 'n8n',
+          description: 'Trigger initiates workflow execution',
+        },
+        {
+          name: 'n8n_webhook_route',
+          category: 'n8n',
+          description: 'Webhook endpoint exposed by workflow',
+        },
+        {
+          name: 'n8n_calls_subworkflow',
+          category: 'n8n',
+          description: 'Node invokes another workflow',
+        },
+        {
+          name: 'n8n_http_request',
+          category: 'n8n',
+          description: 'HTTP request to external service',
+        },
+        {
+          name: 'n8n_uses_credential',
+          category: 'n8n',
+          description: 'Node references a credential',
+        },
+        {
+          name: 'n8n_expression_dep',
+          category: 'n8n',
+          description: 'Implicit data dependency via expression ($node["Name"])',
+        },
+        {
+          name: 'n8n_error_workflow',
+          category: 'n8n',
+          description: 'Workflow-level error handler reference',
+        },
+        {
+          name: 'n8n_conditional_branch',
+          category: 'n8n',
+          description: 'Conditional branch output (IF true/false, Switch cases)',
+        },
+        {
+          name: 'n8n_external_service',
+          category: 'n8n',
+          description: 'Node connects to an external service (database, API, SaaS)',
+        },
+        {
+          name: 'n8n_shared_credential',
+          category: 'n8n',
+          description: 'Workflows coupled by shared credential usage',
+        },
       ],
     };
   }
@@ -1341,9 +1740,10 @@ export class N8nPlugin implements FrameworkPlugin {
       if (isAiNode(node)) {
         meta.aiRole = classifyAiNode(node.type);
         if (node.parameters) {
-          const model = (node.parameters.model as string)
-            ?? (node.parameters.modelId as string)
-            ?? (node.parameters.modelName as string);
+          const model =
+            (node.parameters.model as string) ??
+            (node.parameters.modelId as string) ??
+            (node.parameters.modelName as string);
           if (model) meta.aiModel = model;
         }
       }
@@ -1369,7 +1769,7 @@ export class N8nPlugin implements FrameworkPlugin {
         symbolId: `${filePath}::${node.name}#constant`,
         name: node.name,
         kind: 'constant',
-        signature: `[n8n:${node.type}${node.typeVersion ? '@' + node.typeVersion : ''}] ${node.name}`,
+        signature: `[n8n:${node.type}${node.typeVersion ? `@${node.typeVersion}` : ''}] ${node.name}`,
         byteStart: Math.max(byteStart, 0),
         byteEnd: Math.max(byteEnd, 0),
         metadata: meta,
@@ -1563,7 +1963,10 @@ export class N8nPlugin implements FrameworkPlugin {
     // Build maps for cross-file resolution
     const workflowByName = new Map<string, { fileId: number; path: string }>();
     const workflowById = new Map<string, { fileId: number; path: string }>();
-    const credentialUsers = new Map<string, Array<{ fileId: number; path: string; nodeName: string }>>();
+    const credentialUsers = new Map<
+      string,
+      Array<{ fileId: number; path: string; nodeName: string }>
+    >();
 
     for (const file of workflowFiles) {
       const content = ctx.readFile(file.path);
@@ -1580,7 +1983,9 @@ export class N8nPlugin implements FrameworkPlugin {
         if (!cred.credentialId) continue;
         const key = `${cred.credentialType}:${cred.credentialId}`;
         if (!credentialUsers.has(key)) credentialUsers.set(key, []);
-        credentialUsers.get(key)!.push({ fileId: file.id, path: file.path, nodeName: cred.node.name });
+        credentialUsers
+          .get(key)!
+          .push({ fileId: file.id, path: file.path, nodeName: cred.node.name });
       }
     }
 
@@ -1615,8 +2020,9 @@ export class N8nPlugin implements FrameworkPlugin {
 
       // Error workflow resolution
       if (wf.settings?.errorWorkflow) {
-        const target = workflowById.get(wf.settings.errorWorkflow)
-          ?? workflowByName.get(wf.settings.errorWorkflow);
+        const target =
+          workflowById.get(wf.settings.errorWorkflow) ??
+          workflowByName.get(wf.settings.errorWorkflow);
         if (target) {
           const symbols = ctx.getSymbolsByFile(target.fileId);
           if (symbols.length > 0) {

@@ -1,5 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { validatePath, detectSecrets, validateFileSize, validateArtisanCommand, escapeRegExp, isSensitiveFile, isBinaryBuffer } from '../../src/utils/security.js';
+import { describe, expect, it } from 'vitest';
+import {
+  detectSecrets,
+  escapeRegExp,
+  isBinaryBuffer,
+  isSensitiveFile,
+  validateArtisanCommand,
+  validateFileSize,
+  validatePath,
+} from '../../src/utils/security.js';
 
 describe('security', () => {
   describe('path traversal', () => {
@@ -52,7 +60,7 @@ describe('security', () => {
       const result = validatePath('app/..%2f..%2f..%2fetc/passwd', root);
       // %2f is not decoded by path.resolve, so this stays in root — that's fine
       if (result.isOk()) {
-        expect(result._unsafeUnwrap().startsWith(root + '/')).toBe(true);
+        expect(result._unsafeUnwrap().startsWith(`${root}/`)).toBe(true);
       }
     });
 

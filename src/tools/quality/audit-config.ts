@@ -6,10 +6,10 @@
  * Single-pass per file, no N+1: batch-collects references then validates.
  */
 
-import type { Store } from '../../db/store.js';
-import { fuzzySearch } from '../../db/fuzzy.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fuzzySearch } from '../../db/fuzzy.js';
+import type { Store } from '../../db/store.js';
 
 interface AuditOptions {
   configFiles?: string[];

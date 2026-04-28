@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
 
 const plugin = new PythonLanguagePlugin();
@@ -14,7 +14,10 @@ async function extract(code: string, filePath = 'mypackage/module.py') {
 describe('PythonLanguagePlugin', () => {
   beforeAll(async () => {
     const probe = await plugin.extractSymbols('probe.py', Buffer.from('x = 1\n'));
-    expect(probe.isOk(), `Python parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+    expect(
+      probe.isOk(),
+      `Python parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`,
+    ).toBe(true);
   });
 
   it('has correct manifest', () => {
@@ -87,22 +90,16 @@ class MyABC(abc.ABC):
     });
 
     it('does not emit re-exports for non-__init__ files', async () => {
-      const result = await extract(
-        `from .models import User\n`,
-        'mypackage/views.py',
-      );
+      const result = await extract(`from .models import User\n`, 'mypackage/views.py');
       const reexports = result.edges?.filter((e) => e.edgeType === 'py_reexports') ?? [];
       expect(reexports.length).toBe(0);
     });
 
     it('detects wildcard re-exports', async () => {
-      const result = await extract(
-        `from .models import *\n`,
-        'mypackage/__init__.py',
-      );
+      const result = await extract(`from .models import *\n`, 'mypackage/__init__.py');
       const reexports = result.edges?.filter((e) => e.edgeType === 'py_reexports') ?? [];
       expect(reexports.length).toBe(1);
-      expect((reexports[0].metadata?.specifiers as string[])).toContain('*');
+      expect(reexports[0].metadata?.specifiers as string[]).toContain('*');
     });
 
     it('sets isPackageInit metadata', async () => {
@@ -360,9 +357,9 @@ if TYPE_CHECKING:
 def greet(user):
     pass
       `);
-      const tcImports = result.edges?.filter(
-        (e) => e.edgeType === 'py_imports' && e.metadata?.typeOnly === true,
-      ) ?? [];
+      const tcImports =
+        result.edges?.filter((e) => e.edgeType === 'py_imports' && e.metadata?.typeOnly === true) ??
+        [];
       expect(tcImports.length).toBe(2);
       expect(tcImports[0].metadata?.from).toBe('myapp.models');
       expect(tcImports[1].metadata?.from).toBe('myapp.services');
@@ -486,9 +483,7 @@ class Foo:
     def name(self):
         del self._name
       `);
-      const methods = result.symbols.filter(
-        (s) => s.name === 'name' && s.kind === 'method',
-      );
+      const methods = result.symbols.filter((s) => s.name === 'name' && s.kind === 'method');
       expect(methods.length).toBe(3);
 
       const getter = methods.find((m) => m.metadata?.property === true);
@@ -513,9 +508,10 @@ try:
 except ImportError:
     import json
       `);
-      const condImports = result.edges?.filter(
-        (e) => e.edgeType === 'py_imports' && e.metadata?.conditional === true,
-      ) ?? [];
+      const condImports =
+        result.edges?.filter(
+          (e) => e.edgeType === 'py_imports' && e.metadata?.conditional === true,
+        ) ?? [];
       expect(condImports.length).toBeGreaterThanOrEqual(1);
       expect(condImports[0].metadata?.from).toBe('ujson');
     });
@@ -527,9 +523,10 @@ try:
 except ModuleNotFoundError:
     from json import dumps
       `);
-      const condImports = result.edges?.filter(
-        (e) => e.edgeType === 'py_imports' && e.metadata?.conditional === true,
-      ) ?? [];
+      const condImports =
+        result.edges?.filter(
+          (e) => e.edgeType === 'py_imports' && e.metadata?.conditional === true,
+        ) ?? [];
       expect(condImports.length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -644,7 +641,9 @@ class User:
       `);
       expect(result.symbols.find((s) => s.name === 'greet' && s.kind === 'function')).toBeDefined();
       expect(result.symbols.find((s) => s.name === 'User' && s.kind === 'class')).toBeDefined();
-      expect(result.symbols.find((s) => s.name === '__init__' && s.kind === 'method')).toBeDefined();
+      expect(
+        result.symbols.find((s) => s.name === '__init__' && s.kind === 'method'),
+      ).toBeDefined();
       expect(result.symbols.find((s) => s.name === 'name' && s.kind === 'property')).toBeDefined();
     });
 
@@ -676,8 +675,12 @@ class Point:
 MAX_RETRIES = 3
 default_timeout = 30
       `);
-      expect(result.symbols.find((s) => s.name === 'MAX_RETRIES' && s.kind === 'constant')).toBeDefined();
-      expect(result.symbols.find((s) => s.name === 'default_timeout' && s.kind === 'variable')).toBeDefined();
+      expect(
+        result.symbols.find((s) => s.name === 'MAX_RETRIES' && s.kind === 'constant'),
+      ).toBeDefined();
+      expect(
+        result.symbols.find((s) => s.name === 'default_timeout' && s.kind === 'variable'),
+      ).toBeDefined();
     });
 
     it('extracts async functions', async () => {
@@ -715,10 +718,7 @@ class UserSchema(BaseModel):
     });
 
     it('handles .pyi stub files', async () => {
-      const result = await extract(
-        `def foo(x: int) -> str: ...\n`,
-        'mypackage/module.pyi',
-      );
+      const result = await extract(`def foo(x: int) -> str: ...\n`, 'mypackage/module.pyi');
       expect(result.language).toBe('python');
       expect(result.symbols.find((s) => s.name === 'foo')).toBeDefined();
     });

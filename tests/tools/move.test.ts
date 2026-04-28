@@ -1,16 +1,16 @@
-import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
-import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { applyMove } from '../../src/tools/refactoring/move.js';
+import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════════════
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
-  return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
+  return store.insertFile(filePath, lang, `hash_${filePath}`, 100);
 }
 
 function insertSymbol(
@@ -41,12 +41,7 @@ function insertSymbol(
   });
 }
 
-function insertEdge(
-  store: Store,
-  srcNodeId: number,
-  tgtNodeId: number,
-  edgeType: string,
-): void {
+function insertEdge(store: Store, srcNodeId: number, tgtNodeId: number, edgeType: string): void {
   store.insertEdge(srcNodeId, tgtNodeId, edgeType, true);
 }
 
@@ -68,7 +63,12 @@ describe('applyMove — symbol mode', () => {
 
   it('returns error for unknown symbol', () => {
     store = createTestStore();
-    const result = applyMove(store, '/tmp', { mode: 'symbol', symbol_id: 'nope#function', target_file: 'b.ts', dry_run: false });
+    const result = applyMove(store, '/tmp', {
+      mode: 'symbol',
+      symbol_id: 'nope#function',
+      target_file: 'b.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Symbol not found');
   });
@@ -77,7 +77,12 @@ describe('applyMove — symbol mode', () => {
     store = createTestStore();
     const fileId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileId, 'foo', { lineStart: undefined, lineEnd: undefined });
-    const result = applyMove(store, '/tmp', { mode: 'symbol', symbol_id: 'src/a.ts::foo#function', target_file: 'b.ts', dry_run: false });
+    const result = applyMove(store, '/tmp', {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'b.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(false);
     expect(result.error).toContain('no line range');
   });
@@ -93,7 +98,12 @@ describe('applyMove — symbol mode', () => {
     insertSymbol(store, fileA, 'foo', { lineStart: 1, lineEnd: 1, metadata: { exported: true } });
     insertSymbol(store, fileB, 'foo', { lineStart: 1, lineEnd: 1, metadata: { exported: true } });
 
-    const result = applyMove(store, tmpDir, { mode: 'symbol', symbol_id: 'src/a.ts::foo#function', target_file: 'src/b.ts', dry_run: false });
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Name collision');
   });
@@ -101,13 +111,19 @@ describe('applyMove — symbol mode', () => {
   it('moves a symbol to a new file (dry run)', () => {
     store = createTestStore();
     tmpDir = createTmpFixture({
-      'src/a.ts': 'export function foo() {\n  return 1;\n}\n\nexport function bar() {\n  return 2;\n}\n',
+      'src/a.ts':
+        'export function foo() {\n  return 1;\n}\n\nexport function bar() {\n  return 2;\n}\n',
     });
     const fileA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileA, 'foo', { lineStart: 1, lineEnd: 3, metadata: { exported: true } });
     insertSymbol(store, fileA, 'bar', { lineStart: 5, lineEnd: 7, metadata: { exported: true } });
 
-    const result = applyMove(store, tmpDir, { mode: 'symbol', symbol_id: 'src/a.ts::foo#function', target_file: 'src/b.ts', dry_run: true });
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: true,
+    });
     expect(result.success).toBe(true);
     expect(result.edits.length).toBeGreaterThan(0);
     // Dry run: source file should be unchanged
@@ -119,13 +135,19 @@ describe('applyMove — symbol mode', () => {
   it('moves a symbol to a new file (apply)', () => {
     store = createTestStore();
     tmpDir = createTmpFixture({
-      'src/a.ts': 'export function foo() {\n  return 1;\n}\n\nexport function bar() {\n  return 2;\n}\n',
+      'src/a.ts':
+        'export function foo() {\n  return 1;\n}\n\nexport function bar() {\n  return 2;\n}\n',
     });
     const fileA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileA, 'foo', { lineStart: 1, lineEnd: 3, metadata: { exported: true } });
     insertSymbol(store, fileA, 'bar', { lineStart: 5, lineEnd: 7, metadata: { exported: true } });
 
-    const result = applyMove(store, tmpDir, { mode: 'symbol', symbol_id: 'src/a.ts::foo#function', target_file: 'src/b.ts', dry_run: false });
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(true);
 
     // Source file should no longer contain foo
@@ -149,7 +171,12 @@ describe('applyMove — symbol mode', () => {
     insertSymbol(store, fileA, 'foo', { lineStart: 1, lineEnd: 3, metadata: { exported: true } });
     insertSymbol(store, fileB, 'bar', { lineStart: 1, lineEnd: 3, metadata: { exported: true } });
 
-    const result = applyMove(store, tmpDir, { mode: 'symbol', symbol_id: 'src/a.ts::foo#function', target_file: 'src/b.ts', dry_run: false });
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(true);
 
     const targetContent = readFile(tmpDir, 'src/b.ts');
@@ -168,7 +195,11 @@ describe('applyMove — symbol mode', () => {
     const consumerFileId = insertFile(store, 'src/consumer.ts');
     insertFile(store, 'src/target.ts');
 
-    const symId = insertSymbol(store, utilsFileId, 'helper', { lineStart: 1, lineEnd: 1, metadata: { exported: true } });
+    const _symId = insertSymbol(store, utilsFileId, 'helper', {
+      lineStart: 1,
+      lineEnd: 1,
+      metadata: { exported: true },
+    });
 
     // Create graph edges: consumer → utils (file-level import)
     const utilsNodeId = store.createNode('file', utilsFileId);
@@ -176,7 +207,12 @@ describe('applyMove — symbol mode', () => {
     store.ensureEdgeType('imports', 'structural', 'File imports');
     insertEdge(store, consumerNodeId, utilsNodeId, 'imports');
 
-    const result = applyMove(store, tmpDir, { mode: 'symbol', symbol_id: 'src/utils.ts::helper#function', target_file: 'src/target.ts', dry_run: false });
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/utils.ts::helper#function',
+      target_file: 'src/target.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(true);
 
     // Consumer should now import from target
@@ -193,7 +229,12 @@ describe('applyMove — symbol mode', () => {
     const fileA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fileA, 'foo', { lineStart: 2, lineEnd: 4, metadata: { exported: true } });
 
-    const result = applyMove(store, tmpDir, { mode: 'symbol', symbol_id: 'src/a.ts::foo#function', target_file: 'src/b.ts', dry_run: false });
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(true);
 
     const targetContent = readFile(tmpDir, 'src/b.ts');
@@ -217,7 +258,12 @@ describe('applyMove — file mode', () => {
   it('returns error when source file not found', () => {
     store = createTestStore();
     tmpDir = createTmpFixture({});
-    const result = applyMove(store, tmpDir, { mode: 'file', source_file: 'nope.ts', new_path: 'moved.ts', dry_run: false });
+    const result = applyMove(store, tmpDir, {
+      mode: 'file',
+      source_file: 'nope.ts',
+      new_path: 'moved.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Source file not found');
   });
@@ -229,7 +275,12 @@ describe('applyMove — file mode', () => {
       'src/b.ts': 'export const y = 2;\n',
     });
     insertFile(store, 'src/a.ts');
-    const result = applyMove(store, tmpDir, { mode: 'file', source_file: 'src/a.ts', new_path: 'src/b.ts', dry_run: false });
+    const result = applyMove(store, tmpDir, {
+      mode: 'file',
+      source_file: 'src/a.ts',
+      new_path: 'src/b.ts',
+      dry_run: false,
+    });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Target path already exists');
   });
@@ -295,16 +346,17 @@ describe('applyMove — file mode', () => {
     expect(fs.existsSync(path.join(tmpDir, 'src/moved/a.ts'))).toBe(false);
 
     // Importer should be unchanged
-    expect(readFile(tmpDir, 'src/main.ts')).toContain("./a");
+    expect(readFile(tmpDir, 'src/main.ts')).toContain('./a');
   });
 
   it('updates own relative imports when file moves to different directory', () => {
     store = createTestStore();
     tmpDir = createTmpFixture({
-      'src/utils/helper.ts': "import { config } from '../config';\nexport function help() { return config; }\n",
+      'src/utils/helper.ts':
+        "import { config } from '../config';\nexport function help() { return config; }\n",
       'src/config.ts': 'export const config = {};\n',
     });
-    const helperFileId = insertFile(store, 'src/utils/helper.ts');
+    const _helperFileId = insertFile(store, 'src/utils/helper.ts');
 
     const result = applyMove(store, tmpDir, {
       mode: 'file',

@@ -9,20 +9,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawComponent,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
 // --- Regex patterns ---
 
 // @Component({ selector: 'app-root', ... })
-const COMPONENT_RE =
-  /@Component\s*\(\s*\{[^}]*selector\s*:\s*['"]([^'"]+)['"]/gs;
+const COMPONENT_RE = /@Component\s*\(\s*\{[^}]*selector\s*:\s*['"]([^'"]+)['"]/gs;
 
 // @Injectable()
 const INJECTABLE_RE = /@Injectable\s*\(/g;
@@ -31,41 +29,31 @@ const INJECTABLE_RE = /@Injectable\s*\(/g;
 const NGMODULE_RE = /@NgModule\s*\(/g;
 
 // @Directive({ selector: '[appHighlight]' })
-const DIRECTIVE_RE =
-  /@Directive\s*\(\s*\{[^}]*selector\s*:\s*['"]([^'"]+)['"]/gs;
+const DIRECTIVE_RE = /@Directive\s*\(\s*\{[^}]*selector\s*:\s*['"]([^'"]+)['"]/gs;
 
 // @Pipe({ name: 'myPipe' })
-const PIPE_RE =
-  /@Pipe\s*\(\s*\{[^}]*name\s*:\s*['"]([^'"]+)['"]/gs;
+const PIPE_RE = /@Pipe\s*\(\s*\{[^}]*name\s*:\s*['"]([^'"]+)['"]/gs;
 
 // @Input('alias') propName  or  @Input() propName
-const INPUT_RE =
-  /@Input\s*\(\s*(?:['"]([^'"]*)['"]\s*)?\)\s*(\w+)/g;
+const INPUT_RE = /@Input\s*\(\s*(?:['"]([^'"]*)['"]\s*)?\)\s*(\w+)/g;
 
 // @Output('alias') eventName  or  @Output() eventName
-const OUTPUT_RE =
-  /@Output\s*\(\s*(?:['"]([^'"]*)['"]\s*)?\)\s*(\w+)/g;
+const OUTPUT_RE = /@Output\s*\(\s*(?:['"]([^'"]*)['"]\s*)?\)\s*(\w+)/g;
 
 // inject(ServiceName)
 const INJECT_RE = /inject\s*\(\s*(\w+)\s*\)/g;
 
 // Constructor injection: constructor(private someService: SomeService, ...)
-const CTOR_INJECT_RE =
-  /constructor\s*\(([^)]*)\)/g;
+const CTOR_INJECT_RE = /constructor\s*\(([^)]*)\)/g;
 
 // NgModule declarations, imports, providers arrays
-const NGMODULE_DECLARATIONS_RE =
-  /@NgModule\s*\(\s*\{[^}]*declarations\s*:\s*\[([^\]]*)\]/gs;
-const NGMODULE_IMPORTS_RE =
-  /@NgModule\s*\(\s*\{[^}]*imports\s*:\s*\[([^\]]*)\]/gs;
-const NGMODULE_PROVIDERS_RE =
-  /@NgModule\s*\(\s*\{[^}]*providers\s*:\s*\[([^\]]*)\]/gs;
+const _NGMODULE_DECLARATIONS_RE = /@NgModule\s*\(\s*\{[^}]*declarations\s*:\s*\[([^\]]*)\]/gs;
+const NGMODULE_IMPORTS_RE = /@NgModule\s*\(\s*\{[^}]*imports\s*:\s*\[([^\]]*)\]/gs;
+const NGMODULE_PROVIDERS_RE = /@NgModule\s*\(\s*\{[^}]*providers\s*:\s*\[([^\]]*)\]/gs;
 
 // Template component usage: <app-some-component or <SomeComponent
-const TEMPLATE_RE =
-  /template\s*:\s*`([^`]*)`/gs;
-const TEMPLATE_TAG_RE =
-  /<([a-z][\w-]*[a-z\d])/g;
+const TEMPLATE_RE = /template\s*:\s*`([^`]*)`/gs;
+const TEMPLATE_TAG_RE = /<([a-z][\w-]*[a-z\d])/g;
 
 /** Extract class name preceding a decorator. */
 function extractClassName(source: string, decoratorIndex: number): string | null {
@@ -129,10 +117,22 @@ export class AngularPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'angular_renders', category: 'angular', description: 'Component renders child component in template' },
-        { name: 'angular_injects', category: 'angular', description: 'Component or service injects a dependency' },
+        {
+          name: 'angular_renders',
+          category: 'angular',
+          description: 'Component renders child component in template',
+        },
+        {
+          name: 'angular_injects',
+          category: 'angular',
+          description: 'Component or service injects a dependency',
+        },
         { name: 'angular_provides', category: 'angular', description: 'Module provides a service' },
-        { name: 'angular_imports_module', category: 'angular', description: 'Module imports another module' },
+        {
+          name: 'angular_imports_module',
+          category: 'angular',
+          description: 'Module imports another module',
+        },
       ],
     };
   }
@@ -363,28 +363,118 @@ export class AngularPlugin implements FrameworkPlugin {
 // --- Helpers ---
 
 const HTML_TAGS = new Set([
-  'a', 'abbr', 'address', 'area', 'article', 'aside', 'audio',
-  'b', 'base', 'bdi', 'bdo', 'blockquote', 'body', 'br', 'button',
-  'canvas', 'caption', 'cite', 'code', 'col', 'colgroup',
-  'data', 'datalist', 'dd', 'del', 'details', 'dfn', 'dialog', 'div', 'dl', 'dt',
-  'em', 'embed',
-  'fieldset', 'figcaption', 'figure', 'footer', 'form',
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hgroup', 'hr', 'html',
-  'i', 'iframe', 'img', 'input', 'ins',
+  'a',
+  'abbr',
+  'address',
+  'area',
+  'article',
+  'aside',
+  'audio',
+  'b',
+  'base',
+  'bdi',
+  'bdo',
+  'blockquote',
+  'body',
+  'br',
+  'button',
+  'canvas',
+  'caption',
+  'cite',
+  'code',
+  'col',
+  'colgroup',
+  'data',
+  'datalist',
+  'dd',
+  'del',
+  'details',
+  'dfn',
+  'dialog',
+  'div',
+  'dl',
+  'dt',
+  'em',
+  'embed',
+  'fieldset',
+  'figcaption',
+  'figure',
+  'footer',
+  'form',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'head',
+  'header',
+  'hgroup',
+  'hr',
+  'html',
+  'i',
+  'iframe',
+  'img',
+  'input',
+  'ins',
   'kbd',
-  'label', 'legend', 'li', 'link',
-  'main', 'map', 'mark', 'menu', 'meta', 'meter',
-  'nav', 'noscript',
-  'object', 'ol', 'optgroup', 'option', 'output',
-  'p', 'param', 'picture', 'pre', 'progress',
+  'label',
+  'legend',
+  'li',
+  'link',
+  'main',
+  'map',
+  'mark',
+  'menu',
+  'meta',
+  'meter',
+  'nav',
+  'noscript',
+  'object',
+  'ol',
+  'optgroup',
+  'option',
+  'output',
+  'p',
+  'param',
+  'picture',
+  'pre',
+  'progress',
   'q',
-  'rp', 'rt', 'ruby',
-  's', 'samp', 'script', 'search', 'section', 'select', 'slot', 'small',
-  'source', 'span', 'strong', 'style', 'sub', 'summary', 'sup',
-  'table', 'tbody', 'td', 'template', 'textarea', 'tfoot', 'th', 'thead',
-  'time', 'title', 'tr', 'track',
-  'u', 'ul',
-  'var', 'video',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'script',
+  'search',
+  'section',
+  'select',
+  'slot',
+  'small',
+  'source',
+  'span',
+  'strong',
+  'style',
+  'sub',
+  'summary',
+  'sup',
+  'table',
+  'tbody',
+  'td',
+  'template',
+  'textarea',
+  'tfoot',
+  'th',
+  'thead',
+  'time',
+  'title',
+  'tr',
+  'track',
+  'u',
+  'ul',
+  'var',
+  'video',
   'wbr',
 ]);
 

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  SocketIoPlugin,
   extractSocketEvents,
   extractSocketNamespaces,
+  SocketIoPlugin,
 } from '../../../src/indexer/plugins/integration/realtime/socketio/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

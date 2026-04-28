@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
 import fg from 'fast-glob';
+import { parse as parseYaml } from 'yaml';
 import { logger } from '../logger.js';
 
 export interface WorkspaceInfo {
@@ -29,14 +29,18 @@ export function detectWorkspaces(rootPath: string): WorkspaceInfo[] {
   // 4. Implicit workspace detection: if root has no manifest files, scan 1-2
   //    levels deep for directories with package.json or composer.json.
   //    Covers the common "folder of projects" layout (e.g. ~/projects/the/).
-  const hasRootManifest = fs.existsSync(path.join(rootPath, 'package.json'))
-    || fs.existsSync(path.join(rootPath, 'composer.json'))
-    || fs.existsSync(path.join(rootPath, 'pnpm-workspace.yaml'));
+  const hasRootManifest =
+    fs.existsSync(path.join(rootPath, 'package.json')) ||
+    fs.existsSync(path.join(rootPath, 'composer.json')) ||
+    fs.existsSync(path.join(rootPath, 'pnpm-workspace.yaml'));
 
   if (!hasRootManifest) {
     const implicitResult = detectImplicitWorkspaces(rootPath);
     if (implicitResult.length > 0) {
-      logger.info({ count: implicitResult.length }, 'Detected implicit workspaces from nested manifest files');
+      logger.info(
+        { count: implicitResult.length },
+        'Detected implicit workspaces from nested manifest files',
+      );
       return implicitResult;
     }
   }
@@ -139,7 +143,16 @@ function detectComposerWorkspaces(rootPath: string): WorkspaceInfo[] {
   }
 }
 
-const SKIP_DIRS = new Set(['node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__', '.next', '.nuxt']);
+const SKIP_DIRS = new Set([
+  'node_modules',
+  'vendor',
+  '.git',
+  'dist',
+  'build',
+  '__pycache__',
+  '.next',
+  '.nuxt',
+]);
 
 /**
  * Fallback: scan 1-2 levels deep for directories with package.json or composer.json.
@@ -160,7 +173,9 @@ function detectImplicitWorkspaces(rootPath: string): WorkspaceInfo[] {
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch { return; }
+    } catch {
+      return;
+    }
 
     for (const entry of entries) {
       if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
@@ -233,7 +248,9 @@ function resolveWorkspaceName(rootPath: string, relPath: string): string {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { name?: string };
       if (pkg.name) return pkg.name;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // Try composer.json name
   try {
@@ -242,7 +259,9 @@ function resolveWorkspaceName(rootPath: string, relPath: string): string {
       const composer = JSON.parse(fs.readFileSync(composerPath, 'utf-8')) as { name?: string };
       if (composer.name) return composer.name;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // Fallback to directory path
   return relPath;

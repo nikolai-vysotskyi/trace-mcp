@@ -11,82 +11,83 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
-import { extractRoutes } from './routes.js';
+import { extractBroadcastingEvent, extractChannelAuthorizations } from './broadcasting.js';
+import { buildBillableModelEdges, extractBillableModel, extractCashierWebhook } from './cashier.js';
+import {
+  resolveComposerLaravelProviders,
+  resolveDispatchEdges,
+  resolveEloquentEdges,
+  resolveEventEdges,
+  resolveFormRequestEdges,
+} from './edges.js';
 import { extractEloquentModel } from './eloquent.js';
-import { extractMigrations } from './migrations.js';
-import { extractFormRequest } from './requests.js';
+import {
+  buildEloquentSortableModelSymbols,
+  extractEloquentSortableModel,
+} from './eloquent-sortable.js';
 import { detectEventDispatches } from './events.js';
+import { processFilamentNode, resolveFilamentEdges } from './filament.js';
+import {
+  buildHorizonConfigEdges,
+  buildHorizonConfigSymbols,
+  buildHorizonJobEdges,
+  extractHorizonConfig,
+  extractHorizonJob,
+} from './horizon.js';
+import { buildDataClassEdges, extractDataClass } from './laravel-data.js';
+import {
+  buildLaravelFavoriteEdges,
+  buildLaravelFavoriteSymbols,
+  extractLaravelFavoriteModel,
+} from './laravel-favorite.js';
+import {
+  buildLaravelFilemanagerRoutes,
+  extractLaravelFilemanagerConfig,
+  extractLaravelFilemanagerMacro,
+} from './laravel-filemanager.js';
 import {
   isLivewireFile,
   processLivewireNode,
-  resolveLivewirePhpEdges,
   resolveLivewireBladeEdges,
+  resolveLivewirePhpEdges,
 } from './livewire.js';
-import { processFilamentNode, resolveFilamentEdges } from './filament.js';
-import { processNovaNode, resolveNovaEdges } from './nova.js';
 import {
-  extractBroadcastingEvent,
-  extractChannelAuthorizations,
-} from './broadcasting.js';
-import { extractDataClass, buildDataClassEdges } from './laravel-data.js';
-import {
-  extractHorizonConfig,
-  extractHorizonJob,
-  buildHorizonJobEdges,
-  buildHorizonConfigEdges,
-  buildHorizonConfigSymbols,
-} from './horizon.js';
-import { extractBillableModel, extractCashierWebhook, buildBillableModelEdges } from './cashier.js';
-import { extractSearchableModel, buildSearchableModelEdges, buildSearchableModelSymbols } from './scout.js';
-import { extractSocialiteUsage, buildSocialiteEdges } from './socialite.js';
-import {
-  extractMediaLibraryModel,
   buildMediaLibraryModelEdges,
   buildMediaLibraryModelSymbols,
+  extractMediaLibraryModel,
 } from './medialibrary.js';
 import {
-  extractEloquentSortableModel,
-  buildEloquentSortableModelSymbols,
-} from './eloquent-sortable.js';
-import {
-  extractLaravelFavoriteModel,
-  buildLaravelFavoriteEdges,
-  buildLaravelFavoriteSymbols,
-} from './laravel-favorite.js';
-import {
-  extractLaravelFilemanagerConfig,
-  extractLaravelFilemanagerMacro,
-  buildLaravelFilemanagerRoutes,
-} from './laravel-filemanager.js';
-import {
-  extractFeatureDefinitions,
-  extractFeatureUsages,
-  extractFeatureBladeUsages,
-  extractFeatureMiddlewareUsages,
-} from './pennant.js';
-import {
-  parseKernelMiddleware,
-  parseBootstrapMiddleware,
-  parseRouteServiceProviderNamespace,
-  parseBootstrapRouting,
   type MiddlewareConfig,
+  parseBootstrapMiddleware,
+  parseBootstrapRouting,
+  parseKernelMiddleware,
+  parseRouteServiceProviderNamespace,
 } from './middleware.js';
+import { extractMigrations } from './migrations.js';
+import { processNovaNode, resolveNovaEdges } from './nova.js';
 import {
-  resolveEloquentEdges,
-  resolveFormRequestEdges,
-  resolveEventEdges,
-  resolveDispatchEdges,
-  resolveComposerLaravelProviders,
-} from './edges.js';
+  extractFeatureBladeUsages,
+  extractFeatureDefinitions,
+  extractFeatureMiddlewareUsages,
+  extractFeatureUsages,
+} from './pennant.js';
+import { extractFormRequest } from './requests.js';
+import { extractRoutes } from './routes.js';
+import {
+  buildSearchableModelEdges,
+  buildSearchableModelSymbols,
+  extractSearchableModel,
+} from './scout.js';
+import { buildSocialiteEdges, extractSocialiteUsage } from './socialite.js';
 
 export class LaravelPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -209,54 +210,186 @@ export class LaravelPlugin implements FrameworkPlugin {
         { name: 'middleware_guards', category: 'laravel', description: 'Route -> Middleware' },
         { name: 'migrates', category: 'laravel', description: 'Migration -> table' },
         // Nova edges
-        { name: 'nova_resource_for', category: 'nova', description: 'Nova Resource → Eloquent Model' },
-        { name: 'nova_field_relationship', category: 'nova', description: 'Nova Resource → related Nova Resource via field' },
+        {
+          name: 'nova_resource_for',
+          category: 'nova',
+          description: 'Nova Resource → Eloquent Model',
+        },
+        {
+          name: 'nova_field_relationship',
+          category: 'nova',
+          description: 'Nova Resource → related Nova Resource via field',
+        },
         { name: 'nova_action_on', category: 'nova', description: 'Action → Resource' },
         { name: 'nova_filter_on', category: 'nova', description: 'Filter → Resource' },
         { name: 'nova_lens_on', category: 'nova', description: 'Lens → Resource' },
         { name: 'nova_metric_queries', category: 'nova', description: 'Metric → Eloquent Model' },
         // Filament edges
-        { name: 'filament_resource_for', category: 'filament', description: 'Resource → Eloquent Model' },
-        { name: 'filament_relation_manager', category: 'filament', description: 'Resource → RelationManager' },
-        { name: 'filament_form_relationship', category: 'filament', description: 'Form field →relationship() → Model' },
-        { name: 'filament_page_for', category: 'filament', description: 'Page registered on Resource' },
-        { name: 'filament_panel_registers', category: 'filament', description: 'PanelProvider → Resource/Page/Widget' },
-        { name: 'filament_widget_queries', category: 'filament', description: 'Widget → Eloquent Model' },
+        {
+          name: 'filament_resource_for',
+          category: 'filament',
+          description: 'Resource → Eloquent Model',
+        },
+        {
+          name: 'filament_relation_manager',
+          category: 'filament',
+          description: 'Resource → RelationManager',
+        },
+        {
+          name: 'filament_form_relationship',
+          category: 'filament',
+          description: 'Form field →relationship() → Model',
+        },
+        {
+          name: 'filament_page_for',
+          category: 'filament',
+          description: 'Page registered on Resource',
+        },
+        {
+          name: 'filament_panel_registers',
+          category: 'filament',
+          description: 'PanelProvider → Resource/Page/Widget',
+        },
+        {
+          name: 'filament_widget_queries',
+          category: 'filament',
+          description: 'Widget → Eloquent Model',
+        },
         // Livewire edges
-        { name: 'livewire_renders', category: 'livewire', description: 'Component class → Blade view' },
-        { name: 'livewire_dispatches', category: 'livewire', description: 'Component dispatches event' },
-        { name: 'livewire_listens', category: 'livewire', description: 'Component listens for event' },
-        { name: 'livewire_child_of', category: 'livewire', description: 'Blade <livewire:child/> → Component' },
-        { name: 'livewire_uses_model', category: 'livewire', description: 'Component → Eloquent Model' },
+        {
+          name: 'livewire_renders',
+          category: 'livewire',
+          description: 'Component class → Blade view',
+        },
+        {
+          name: 'livewire_dispatches',
+          category: 'livewire',
+          description: 'Component dispatches event',
+        },
+        {
+          name: 'livewire_listens',
+          category: 'livewire',
+          description: 'Component listens for event',
+        },
+        {
+          name: 'livewire_child_of',
+          category: 'livewire',
+          description: 'Blade <livewire:child/> → Component',
+        },
+        {
+          name: 'livewire_uses_model',
+          category: 'livewire',
+          description: 'Component → Eloquent Model',
+        },
         { name: 'livewire_form', category: 'livewire', description: 'Component → Form class (v3)' },
-        { name: 'livewire_action', category: 'livewire', description: 'wire:click → Component method' },
+        {
+          name: 'livewire_action',
+          category: 'livewire',
+          description: 'wire:click → Component method',
+        },
         // Pennant edges
-        { name: 'feature_defined_in', category: 'pennant', description: 'Feature flag defined via Feature::define()' },
-        { name: 'feature_checked_by', category: 'pennant', description: 'Feature flag checked in PHP/Blade' },
-        { name: 'feature_gates_route', category: 'pennant', description: 'Route protected by features middleware' },
+        {
+          name: 'feature_defined_in',
+          category: 'pennant',
+          description: 'Feature flag defined via Feature::define()',
+        },
+        {
+          name: 'feature_checked_by',
+          category: 'pennant',
+          description: 'Feature flag checked in PHP/Blade',
+        },
+        {
+          name: 'feature_gates_route',
+          category: 'pennant',
+          description: 'Route protected by features middleware',
+        },
         // Broadcasting edges
-        { name: 'broadcasts_on', category: 'broadcasting', description: 'Event broadcasts on a channel' },
-        { name: 'channel_authorized_by', category: 'broadcasting', description: 'Channel authorization callback or class' },
-        { name: 'broadcast_as', category: 'broadcasting', description: 'Event broadcast name override' },
+        {
+          name: 'broadcasts_on',
+          category: 'broadcasting',
+          description: 'Event broadcasts on a channel',
+        },
+        {
+          name: 'channel_authorized_by',
+          category: 'broadcasting',
+          description: 'Channel authorization callback or class',
+        },
+        {
+          name: 'broadcast_as',
+          category: 'broadcasting',
+          description: 'Event broadcast name override',
+        },
         // laravel-data edges
-        { name: 'data_nests', category: 'laravel-data', description: 'Data class property references another Data class' },
-        { name: 'data_collects', category: 'laravel-data', description: 'DataCollection<T> references a Data class' },
-        { name: 'data_maps_from', category: 'laravel-data', description: 'Data class maps from an Eloquent model' },
+        {
+          name: 'data_nests',
+          category: 'laravel-data',
+          description: 'Data class property references another Data class',
+        },
+        {
+          name: 'data_collects',
+          category: 'laravel-data',
+          description: 'DataCollection<T> references a Data class',
+        },
+        {
+          name: 'data_maps_from',
+          category: 'laravel-data',
+          description: 'Data class maps from an Eloquent model',
+        },
         // Horizon edges
-        { name: 'horizon_job_on_queue', category: 'horizon', description: 'Job dispatched to a specific queue' },
-        { name: 'horizon_job_connection', category: 'horizon', description: 'Job uses a specific queue connection' },
-        { name: 'horizon_supervises_queue', category: 'horizon', description: 'Horizon supervisor manages a queue' },
+        {
+          name: 'horizon_job_on_queue',
+          category: 'horizon',
+          description: 'Job dispatched to a specific queue',
+        },
+        {
+          name: 'horizon_job_connection',
+          category: 'horizon',
+          description: 'Job uses a specific queue connection',
+        },
+        {
+          name: 'horizon_supervises_queue',
+          category: 'horizon',
+          description: 'Horizon supervisor manages a queue',
+        },
         // Cashier edges
-        { name: 'cashier_billable', category: 'cashier', description: 'Model uses Billable trait (Stripe integration)' },
-        { name: 'cashier_subscription', category: 'cashier', description: 'Model uses subscription method' },
-        { name: 'cashier_webhook', category: 'cashier', description: 'Route handles Cashier/Stripe webhook' },
+        {
+          name: 'cashier_billable',
+          category: 'cashier',
+          description: 'Model uses Billable trait (Stripe integration)',
+        },
+        {
+          name: 'cashier_subscription',
+          category: 'cashier',
+          description: 'Model uses subscription method',
+        },
+        {
+          name: 'cashier_webhook',
+          category: 'cashier',
+          description: 'Route handles Cashier/Stripe webhook',
+        },
         // Scout edges
-        { name: 'scout_searchable', category: 'scout', description: 'Model uses Searchable trait (full-text search index)' },
+        {
+          name: 'scout_searchable',
+          category: 'scout',
+          description: 'Model uses Searchable trait (full-text search index)',
+        },
         // Socialite edges
-        { name: 'socialite_uses_provider', category: 'socialite', description: 'Controller uses Socialite OAuth provider' },
-        { name: 'socialite_custom_provider', category: 'socialite', description: 'Custom Socialite OAuth provider class' },
+        {
+          name: 'socialite_uses_provider',
+          category: 'socialite',
+          description: 'Controller uses Socialite OAuth provider',
+        },
+        {
+          name: 'socialite_custom_provider',
+          category: 'socialite',
+          description: 'Custom Socialite OAuth provider class',
+        },
         // Media library edges
-        { name: 'medialibrary_collection', category: 'medialibrary', description: 'Model declares a spatie media collection' },
+        {
+          name: 'medialibrary_collection',
+          category: 'medialibrary',
+          description: 'Model declares a spatie media collection',
+        },
       ],
     };
   }
@@ -523,7 +656,12 @@ export class LaravelPlugin implements FrameworkPlugin {
         for (const usage of extractFeatureBladeUsages(source)) {
           edges.push({
             edgeType: 'feature_checked_by',
-            metadata: { featureName: usage.name, filePath: file.path, line: usage.line, usageType: 'blade' },
+            metadata: {
+              featureName: usage.name,
+              filePath: file.path,
+              line: usage.line,
+              usageType: 'blade',
+            },
           });
         }
       }
@@ -562,7 +700,9 @@ export class LaravelPlugin implements FrameworkPlugin {
     return routeMiddleware.map((m) => {
       const baseName = m.split(':')[0];
       const resolved = this.resolveMiddlewareAlias(baseName);
-      return resolved !== baseName ? `${resolved}${m.includes(':') ? ':' + m.split(':').slice(1).join(':') : ''}` : m;
+      return resolved !== baseName
+        ? `${resolved}${m.includes(':') ? `:${m.split(':').slice(1).join(':')}` : ''}`
+        : m;
     });
   }
 

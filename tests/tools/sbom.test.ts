@@ -1,10 +1,10 @@
-import { describe, test, expect, beforeEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import path from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { beforeEach, describe, expect, test } from 'vitest';
 import { generateSbom } from '../../src/tools/project/sbom.js';
 
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-sbom-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-sbom-test-${process.pid}`);
 
 function writeJson(relPath: string, data: unknown): void {
   const absPath = path.join(TEST_DIR, relPath);
@@ -95,9 +95,7 @@ describe('SBOM Generation', () => {
         { name: 'laravel/framework', version: 'v10.48.0', license: ['MIT'] },
         { name: 'symfony/console', version: 'v6.4.0', license: ['MIT'] },
       ],
-      'packages-dev': [
-        { name: 'phpunit/phpunit', version: '10.5.0', license: ['BSD-3-Clause'] },
-      ],
+      'packages-dev': [{ name: 'phpunit/phpunit', version: '10.5.0', license: ['BSD-3-Clause'] }],
     });
 
     const result = generateSbom(TEST_DIR, {});
@@ -129,12 +127,15 @@ describe('SBOM Generation', () => {
   // -------------------------------------------------------------------
 
   test('parses requirements.txt', () => {
-    writeText('requirements.txt', `
+    writeText(
+      'requirements.txt',
+      `
 flask==2.3.0
 requests>=2.28.0
 # comment
 numpy~=1.24
-`);
+`,
+    );
 
     const result = generateSbom(TEST_DIR, {});
     expect(result.isOk()).toBe(true);
@@ -150,7 +151,9 @@ numpy~=1.24
   // -------------------------------------------------------------------
 
   test('parses go.mod', () => {
-    writeText('go.mod', `module github.com/example/app
+    writeText(
+      'go.mod',
+      `module github.com/example/app
 
 go 1.21
 
@@ -158,7 +161,8 @@ require (
 \tgithub.com/gin-gonic/gin v1.9.1
 \tgithub.com/lib/pq v1.10.9 // indirect
 )
-`);
+`,
+    );
 
     const result = generateSbom(TEST_DIR, {});
     expect(result.isOk()).toBe(true);
@@ -172,13 +176,16 @@ require (
   });
 
   test('go excludes indirect when includeTransitive=false', () => {
-    writeText('go.mod', `module example.com/app
+    writeText(
+      'go.mod',
+      `module example.com/app
 
 require (
 \tgithub.com/direct v1.0.0
 \tgithub.com/indirect v2.0.0 // indirect
 )
-`);
+`,
+    );
 
     const result = generateSbom(TEST_DIR, { includeTransitive: false });
     expect(result.isOk()).toBe(true);
@@ -192,14 +199,19 @@ require (
   // -------------------------------------------------------------------
 
   test('parses Cargo.lock', () => {
-    writeText('Cargo.toml', `[package]
+    writeText(
+      'Cargo.toml',
+      `[package]
 name = "myapp"
 version = "0.1.0"
 
 [dependencies]
 serde = "1.0"
-`);
-    writeText('Cargo.lock', `[[package]]
+`,
+    );
+    writeText(
+      'Cargo.lock',
+      `[[package]]
 name = "serde"
 version = "1.0.195"
 checksum = "abc123"
@@ -207,7 +219,8 @@ checksum = "abc123"
 [[package]]
 name = "serde_derive"
 version = "1.0.195"
-`);
+`,
+    );
 
     const result = generateSbom(TEST_DIR, {});
     expect(result.isOk()).toBe(true);
@@ -223,7 +236,9 @@ version = "1.0.195"
   // -------------------------------------------------------------------
 
   test('parses pom.xml', () => {
-    writeText('pom.xml', `<?xml version="1.0"?>
+    writeText(
+      'pom.xml',
+      `<?xml version="1.0"?>
 <project>
   <dependencies>
     <dependency>
@@ -238,7 +253,8 @@ version = "1.0.195"
     </dependency>
   </dependencies>
 </project>
-`);
+`,
+    );
 
     const result = generateSbom(TEST_DIR, {});
     expect(result.isOk()).toBe(true);
@@ -362,7 +378,7 @@ version = "1.0.195"
     const result = generateSbom(TEST_DIR, {});
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
-    expect(data.license_summary['MIT']).toBe(2);
+    expect(data.license_summary.MIT).toBe(2);
     expect(data.license_summary['Apache-2.0']).toBe(1);
   });
 

@@ -9,11 +9,17 @@
  * For preprocessor files (.scss, .sass, .less, .styl, .stylus): regex fallback
  * since tree-sitter-css only handles pure CSS syntax.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 
 export class CssLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
@@ -24,7 +30,10 @@ export class CssLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.css', '.scss', '.sass', '.less', '.styl', '.stylus'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     const ext = filePath.substring(filePath.lastIndexOf('.'));
     if (ext === '.css') {
       return this.extractWithTreeSitter(filePath, content);
@@ -36,7 +45,10 @@ export class CssLanguagePlugin implements LanguagePlugin {
   // tree-sitter path (pure CSS only)
   // ---------------------------------------------------------------------------
 
-  private async extractWithTreeSitter(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  private async extractWithTreeSitter(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('css');
       const sourceCode = content.toString('utf-8');
@@ -97,7 +109,8 @@ export class CssLanguagePlugin implements LanguagePlugin {
 
         case 'at_rule': {
           // @font-face is parsed as a generic at_rule with an at_keyword child
-          const keyword = child.namedChildren.find(c => c.type === 'at_keyword') ?? child.namedChildren[0];
+          const keyword =
+            child.namedChildren.find((c) => c.type === 'at_keyword') ?? child.namedChildren[0];
           if (keyword && (keyword.text === '@font-face' || keyword.text === 'font-face')) {
             this.extractTsFontFace(child, filePath, symbols);
           }
@@ -132,12 +145,13 @@ export class CssLanguagePlugin implements LanguagePlugin {
       if (child.type === 'call_expression') {
         // url("path")
         const arg = child.namedChildren.find(
-          c => c.type === 'arguments' || c.type === 'string_value',
+          (c) => c.type === 'arguments' || c.type === 'string_value',
         );
         if (arg) {
-          const strNode = arg.type === 'string_value'
-            ? arg
-            : arg.namedChildren.find(c => c.type === 'string_value');
+          const strNode =
+            arg.type === 'string_value'
+              ? arg
+              : arg.namedChildren.find((c) => c.type === 'string_value');
           if (strNode) {
             edges.push({
               edgeType: 'imports',
@@ -171,13 +185,15 @@ export class CssLanguagePlugin implements LanguagePlugin {
     seenIds: Set<string>,
   ): void {
     // Walk selectors
-    const selectors = node.childForFieldName('selectors') ?? node.namedChildren.find(c => c.type === 'selectors');
+    const selectors =
+      node.childForFieldName('selectors') ?? node.namedChildren.find((c) => c.type === 'selectors');
     if (selectors) {
       this.extractTsSelectors(selectors, filePath, symbols, seenClasses, seenIds, node);
     }
 
     // Walk block for declarations (custom properties) and nested rules
-    const block = node.childForFieldName('block') ?? node.namedChildren.find(c => c.type === 'block');
+    const block =
+      node.childForFieldName('block') ?? node.namedChildren.find((c) => c.type === 'block');
     if (block) {
       for (const child of block.namedChildren) {
         if (child.type === 'declaration') {
@@ -202,7 +218,9 @@ export class CssLanguagePlugin implements LanguagePlugin {
     for (const child of node.children) {
       switch (child.type) {
         case 'class_selector': {
-          const nameNode = child.namedChildren.find(c => c.type === 'class_name') ?? child.childForFieldName('name');
+          const nameNode =
+            child.namedChildren.find((c) => c.type === 'class_name') ??
+            child.childForFieldName('name');
           const name = nameNode ? nameNode.text : child.text.replace(/^\./, '');
           if (!seenClasses.has(name)) {
             seenClasses.add(name);
@@ -223,7 +241,9 @@ export class CssLanguagePlugin implements LanguagePlugin {
         }
 
         case 'id_selector': {
-          const nameNode = child.namedChildren.find(c => c.type === 'id_name') ?? child.childForFieldName('name');
+          const nameNode =
+            child.namedChildren.find((c) => c.type === 'id_name') ??
+            child.childForFieldName('name');
           const name = nameNode ? nameNode.text : child.text.replace(/^#/, '');
           if (!seenIds.has(name)) {
             seenIds.add(name);
@@ -254,8 +274,15 @@ export class CssLanguagePlugin implements LanguagePlugin {
   }
 
   /** Extract CSS custom property (--var-name) from a declaration node. */
-  private extractTsDeclaration(node: TSNode, filePath: string, symbols: RawSymbol[], seenVars: Set<string>): void {
-    const propNode = node.childForFieldName('property') ?? node.namedChildren.find(c => c.type === 'property_name');
+  private extractTsDeclaration(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seenVars: Set<string>,
+  ): void {
+    const propNode =
+      node.childForFieldName('property') ??
+      node.namedChildren.find((c) => c.type === 'property_name');
     if (!propNode) return;
 
     const propName = propNode.text;
@@ -278,7 +305,8 @@ export class CssLanguagePlugin implements LanguagePlugin {
 
   /** Extract @keyframes name. */
   private extractTsKeyframes(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
-    const nameNode = node.childForFieldName('name') ?? node.namedChildren.find(c => c.type === 'keyframes_name');
+    const nameNode =
+      node.childForFieldName('name') ?? node.namedChildren.find((c) => c.type === 'keyframes_name');
     if (!nameNode) return;
 
     const name = nameNode.text;
@@ -297,17 +325,19 @@ export class CssLanguagePlugin implements LanguagePlugin {
   /** Extract @font-face with font-family name. */
   private extractTsFontFace(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
     // Find the block and look for font-family declaration
-    const block = node.namedChildren.find(c => c.type === 'block');
+    const block = node.namedChildren.find((c) => c.type === 'block');
     if (!block) return;
 
     for (const child of block.namedChildren) {
       if (child.type !== 'declaration') continue;
-      const propNode = child.childForFieldName('property') ?? child.namedChildren.find(c => c.type === 'property_name');
+      const propNode =
+        child.childForFieldName('property') ??
+        child.namedChildren.find((c) => c.type === 'property_name');
       if (!propNode || propNode.text !== 'font-family') continue;
 
-      const valNode = child.namedChildren.find(
-        c => c.type === 'string_value' || c.type === 'plain_value',
-      ) ?? child.childForFieldName('value');
+      const valNode =
+        child.namedChildren.find((c) => c.type === 'string_value' || c.type === 'plain_value') ??
+        child.childForFieldName('value');
       if (!valNode) continue;
 
       // Strip quotes from string values
@@ -332,7 +362,11 @@ export class CssLanguagePlugin implements LanguagePlugin {
   // Regex fallback path (preprocessors: SCSS, SASS, LESS, Stylus)
   // ---------------------------------------------------------------------------
 
-  private extractWithRegex(filePath: string, content: Buffer, ext: string): TraceMcpResult<FileParseResult> {
+  private extractWithRegex(
+    filePath: string,
+    content: Buffer,
+    ext: string,
+  ): TraceMcpResult<FileParseResult> {
     const source = content.toString('utf-8');
     const symbols: RawSymbol[] = [];
     const edges: RawEdge[] = [];
@@ -340,7 +374,8 @@ export class CssLanguagePlugin implements LanguagePlugin {
     const language = LANG_MAP[ext] ?? 'css';
 
     // --- @import / @use / @forward edges ---
-    const importRe = /@(?:import|use|forward)\s+['"]([^'"]+)['"]|@import\s+url\(\s*['"]?([^'")]+)['"]?\s*\)/gm;
+    const importRe =
+      /@(?:import|use|forward)\s+['"]([^'"]+)['"]|@import\s+url\(\s*['"]?([^'")]+)['"]?\s*\)/gm;
     let m: RegExpExecArray | null;
     while ((m = importRe.exec(source)) !== null) {
       edges.push({
@@ -394,10 +429,19 @@ export class CssLanguagePlugin implements LanguagePlugin {
       while ((m = lessVarRe.exec(source)) !== null) {
         const name = m[1];
         // Skip @import, @media, @keyframes, etc.
-        if (name.startsWith('@import') || name.startsWith('@media') || name.startsWith('@keyframes')
-            || name === '@font-face' || name.startsWith('@charset') || name.startsWith('@supports')
-            || name.startsWith('@namespace') || name.startsWith('@layer') || name.startsWith('@container')
-            || name.startsWith('@page')) continue;
+        if (
+          name.startsWith('@import') ||
+          name.startsWith('@media') ||
+          name.startsWith('@keyframes') ||
+          name === '@font-face' ||
+          name.startsWith('@charset') ||
+          name.startsWith('@supports') ||
+          name.startsWith('@namespace') ||
+          name.startsWith('@layer') ||
+          name.startsWith('@container') ||
+          name.startsWith('@page')
+        )
+          continue;
         if (seenVars.has(name)) continue;
         seenVars.add(name);
         symbols.push({
@@ -434,7 +478,8 @@ export class CssLanguagePlugin implements LanguagePlugin {
     }
 
     // --- @mixin definitions (SCSS/SASS/LESS) ---
-    const mixinRe = /@mixin\s+([a-zA-Z_][a-zA-Z0-9_-]*)|\.([a-zA-Z_][a-zA-Z0-9_-]*)\s*\(.*\)\s*\{/gm;
+    const mixinRe =
+      /@mixin\s+([a-zA-Z_][a-zA-Z0-9_-]*)|\.([a-zA-Z_][a-zA-Z0-9_-]*)\s*\(.*\)\s*\{/gm;
     if (ext === '.scss' || ext === '.sass' || ext === '.less') {
       while ((m = mixinRe.exec(source)) !== null) {
         const name = m[1] ?? m[2];

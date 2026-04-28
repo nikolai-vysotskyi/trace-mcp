@@ -6,12 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -22,32 +21,25 @@ const CLI_PACKAGES = ['commander', 'yargs', '@oclif/core', 'clipanion', 'cac', '
 // --- Extraction patterns -------------------------------------------------------
 
 // .command('name', 'description')  or  .command('name <arg>')
-const COMMAND_RE =
-  /\.command\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
+const COMMAND_RE = /\.command\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
 
 // .option('-f, --flag <value>', 'description')
-const OPTION_RE =
-  /\.option\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
+const OPTION_RE = /\.option\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
 
 // .argument('<name>', 'description')
-const ARGUMENT_RE =
-  /\.argument\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
+const _ARGUMENT_RE = /\.argument\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
 
 // .name('cli-name')
-const NAME_RE =
-  /\.name\(\s*['"]([^'"]+)['"]/g;
+const _NAME_RE = /\.name\(\s*['"]([^'"]+)['"]/g;
 
 // .description('text')
-const DESCRIPTION_RE =
-  /\.description\(\s*['"]([^'"]+)['"]/g;
+const _DESCRIPTION_RE = /\.description\(\s*['"]([^'"]+)['"]/g;
 
 // new Command('name') or program = new Command()
-const NEW_COMMAND_RE =
-  /new\s+Command\(\s*(?:['"]([^'"]+)['"])?\s*\)/g;
+const NEW_COMMAND_RE = /new\s+Command\(\s*(?:['"]([^'"]+)['"])?\s*\)/g;
 
 // Commander/yargs import detection
-const CLI_IMPORT_RE =
-  /(?:import|require)\s*(?:\(|{)?\s*.*(?:commander|Command|yargs)\b/;
+const CLI_IMPORT_RE = /(?:import|require)\s*(?:\(|{)?\s*.*(?:commander|Command|yargs)\b/;
 
 // --- Helpers -------------------------------------------------------------------
 

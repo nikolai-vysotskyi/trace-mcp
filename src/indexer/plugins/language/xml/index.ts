@@ -17,8 +17,15 @@
  *   - Generic XML (id / name fallback)
  */
 import { ok } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../../errors.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -35,10 +42,10 @@ function symId(filePath: string, name: string, kind: string): string {
 }
 
 interface Tag {
-  tag: string;      // full tag name (e.g. "xs:element")
-  local: string;    // local part (e.g. "element")
-  attrs: string;    // raw attribute string
-  offset: number;   // byte offset of '<'
+  tag: string; // full tag name (e.g. "xs:element")
+  local: string; // local part (e.g. "element")
+  attrs: string; // raw attribute string
+  offset: number; // byte offset of '<'
 }
 
 /** O(n) tag scanner — no regex backtracking. */
@@ -48,7 +55,10 @@ function* scanTags(source: string): Generator<Tag> {
     const lt = source.indexOf('<', pos);
     if (lt === -1) break;
     const next = source[lt + 1];
-    if (!next || next === '/' || next === '!' || next === '?') { pos = lt + 2; continue; }
+    if (!next || next === '/' || next === '!' || next === '?') {
+      pos = lt + 2;
+      continue;
+    }
     const gt = source.indexOf('>', lt + 1);
     if (gt === -1) break;
     const content = source.slice(lt + 1, gt);
@@ -56,7 +66,12 @@ function* scanTags(source: string): Generator<Tag> {
     if (nm) {
       const full = nm[1];
       const colon = full.lastIndexOf(':');
-      yield { tag: full, local: colon >= 0 ? full.slice(colon + 1) : full, attrs: content.slice(nm[0].length), offset: lt };
+      yield {
+        tag: full,
+        local: colon >= 0 ? full.slice(colon + 1) : full,
+        attrs: content.slice(nm[0].length),
+        offset: lt,
+      };
     }
     pos = gt + 1;
   }
@@ -81,13 +96,23 @@ function getTextContent(source: string, offset: number): string | undefined {
 // ── Dialect detection ──────────────────────────────────────────────────────
 
 type XmlDialect =
-  | 'xsd' | 'wsdl' | 'xslt' | 'xul'
-  | 'rss' | 'atom'
+  | 'xsd'
+  | 'wsdl'
+  | 'xslt'
+  | 'xul'
+  | 'rss'
+  | 'atom'
   | 'sitemap'
-  | 'maven-pom' | 'maven-settings'
+  | 'maven-pom'
+  | 'maven-settings'
   | 'dotnet-project'
   | 'android-manifest'
-  | 'spring-beans' | 'web-xml' | 'struts' | 'hibernate' | 'logback' | 'log4j'
+  | 'spring-beans'
+  | 'web-xml'
+  | 'struts'
+  | 'hibernate'
+  | 'logback'
+  | 'log4j'
   | 'ant-build'
   | 'plist'
   | 'svg'
@@ -106,12 +131,20 @@ function detectDialect(filePath: string, rootTag: string, rootAttrs: string): Xm
   if (fn.endsWith('.xul')) return 'xul';
   if (fn.endsWith('.svg')) return 'svg';
   if (fn.endsWith('.plist')) return 'plist';
-  if (fn.endsWith('.csproj') || fn.endsWith('.fsproj') || fn.endsWith('.vbproj') || fn.endsWith('.props') || fn.endsWith('.targets')) return 'dotnet-project';
+  if (
+    fn.endsWith('.csproj') ||
+    fn.endsWith('.fsproj') ||
+    fn.endsWith('.vbproj') ||
+    fn.endsWith('.props') ||
+    fn.endsWith('.targets')
+  )
+    return 'dotnet-project';
   if (fn.endsWith('pom.xml') || fn.includes('/pom.xml')) return 'maven-pom';
   if (fn.endsWith('build.xml')) return 'ant-build';
   if (fn.endsWith('web.xml')) return 'web-xml';
   if (fn.endsWith('struts.xml') || fn.endsWith('struts-config.xml')) return 'struts';
-  if (fn.endsWith('androidmanifest.xml') || fn.includes('androidmanifest')) return 'android-manifest';
+  if (fn.endsWith('androidmanifest.xml') || fn.includes('androidmanifest'))
+    return 'android-manifest';
   if (fn.endsWith('logback.xml')) return 'logback';
   if (fn.endsWith('log4j.xml') || fn.endsWith('log4j2.xml')) return 'log4j';
   if (fn.endsWith('hibernate.cfg.xml') || fn.includes('hibernate')) return 'hibernate';
@@ -127,14 +160,16 @@ function detectDialect(filePath: string, rootTag: string, rootAttrs: string): Xm
   if (localRoot === 'project' && rootAttrs.includes('maven')) return 'maven-pom';
   if (localRoot === 'project' && rootAttrs.includes('ant')) return 'ant-build';
   if (localRoot === 'manifest' && rootAttrs.includes('android')) return 'android-manifest';
-  if (localRoot === 'beans' || (localRoot === 'beans' && rootAttrs.includes('springframework'))) return 'spring-beans';
+  if (localRoot === 'beans' || (localRoot === 'beans' && rootAttrs.includes('springframework')))
+    return 'spring-beans';
   if (lower === 'svg') return 'svg';
   if (localRoot === 'plist') return 'plist';
   if (localRoot === 'book' || localRoot === 'article') return 'docbook';
   if (localRoot === 'window' || localRoot === 'dialog' || localRoot === 'overlay') return 'xul';
   if (localRoot === 'configuration' && rootAttrs.includes('log4j')) return 'log4j';
   if (localRoot === 'configuration' && rootAttrs.includes('logback')) return 'logback';
-  if (localRoot === 'project' && (rootAttrs.includes('Sdk=') || rootAttrs.includes('ToolsVersion'))) return 'dotnet-project';
+  if (localRoot === 'project' && (rootAttrs.includes('Sdk=') || rootAttrs.includes('ToolsVersion')))
+    return 'dotnet-project';
 
   return 'generic';
 }
@@ -158,11 +193,28 @@ function getDialectRules(dialect: XmlDialect): TagRule[] {
   switch (dialect) {
     case 'xsd':
       return [
-        { tags: new Set(['complextype', 'simpletype', 'element', 'attribute', 'attributegroup', 'group']), attr: 'name', kind: 'type', xmlKind: 'schemaType' },
+        {
+          tags: new Set([
+            'complextype',
+            'simpletype',
+            'element',
+            'attribute',
+            'attributegroup',
+            'group',
+          ]),
+          attr: 'name',
+          kind: 'type',
+          xmlKind: 'schemaType',
+        },
       ];
     case 'wsdl':
       return [
-        { tags: new Set(['message', 'porttype', 'binding', 'service']), attr: 'name', kind: 'type', xmlKind: 'wsdl' },
+        {
+          tags: new Set(['message', 'porttype', 'binding', 'service']),
+          attr: 'name',
+          kind: 'type',
+          xmlKind: 'wsdl',
+        },
         { tags: new Set(['operation']), attr: 'name', kind: 'function', xmlKind: 'wsdl' },
         { tags: new Set(['part']), attr: 'name', kind: 'property', xmlKind: 'wsdl' },
       ];
@@ -191,21 +243,61 @@ function getDialectRules(dialect: XmlDialect): TagRule[] {
     case 'maven-pom':
       return [
         { tags: new Set(['groupid']), attr: '__text', kind: 'namespace', xmlKind: 'mavenGroup' },
-        { tags: new Set(['artifactid']), attr: '__text', kind: 'constant', xmlKind: 'mavenArtifact' },
-        { tags: new Set(['plugin']), attr: '__child_artifactid', kind: 'constant', xmlKind: 'mavenPlugin' },
+        {
+          tags: new Set(['artifactid']),
+          attr: '__text',
+          kind: 'constant',
+          xmlKind: 'mavenArtifact',
+        },
+        {
+          tags: new Set(['plugin']),
+          attr: '__child_artifactid',
+          kind: 'constant',
+          xmlKind: 'mavenPlugin',
+        },
       ];
     case 'dotnet-project':
       return [
-        { tags: new Set(['packagereference']), attr: 'Include', kind: 'constant', xmlKind: 'nuget' },
-        { tags: new Set(['projectreference']), attr: 'Include', kind: 'constant', xmlKind: 'projectRef' },
-        { tags: new Set(['compile', 'content', 'none', 'embeddedresource']), attr: 'Include', kind: 'constant', xmlKind: 'msbuildItem' },
+        {
+          tags: new Set(['packagereference']),
+          attr: 'Include',
+          kind: 'constant',
+          xmlKind: 'nuget',
+        },
+        {
+          tags: new Set(['projectreference']),
+          attr: 'Include',
+          kind: 'constant',
+          xmlKind: 'projectRef',
+        },
+        {
+          tags: new Set(['compile', 'content', 'none', 'embeddedresource']),
+          attr: 'Include',
+          kind: 'constant',
+          xmlKind: 'msbuildItem',
+        },
       ];
     case 'android-manifest':
       return [
-        { tags: new Set(['activity', 'service', 'receiver', 'provider']), attr: 'android:name', kind: 'class', xmlKind: 'android' },
-        { tags: new Set(['permission', 'uses-permission']), attr: 'android:name', kind: 'constant', xmlKind: 'androidPermission' },
+        {
+          tags: new Set(['activity', 'service', 'receiver', 'provider']),
+          attr: 'android:name',
+          kind: 'class',
+          xmlKind: 'android',
+        },
+        {
+          tags: new Set(['permission', 'uses-permission']),
+          attr: 'android:name',
+          kind: 'constant',
+          xmlKind: 'androidPermission',
+        },
         { tags: new Set(['intent-filter']), attr: '__skip', kind: 'constant', xmlKind: '' },
-        { tags: new Set(['action']), attr: 'android:name', kind: 'constant', xmlKind: 'androidAction' },
+        {
+          tags: new Set(['action']),
+          attr: 'android:name',
+          kind: 'constant',
+          xmlKind: 'androidAction',
+        },
       ];
     case 'spring-beans':
       return [
@@ -216,8 +308,18 @@ function getDialectRules(dialect: XmlDialect): TagRule[] {
       ];
     case 'web-xml':
       return [
-        { tags: new Set(['servlet-name', 'filter-name', 'listener']), attr: '__text', kind: 'class', xmlKind: 'webXml' },
-        { tags: new Set(['servlet-class', 'filter-class', 'listener-class']), attr: '__text', kind: 'type', xmlKind: 'webXmlClass' },
+        {
+          tags: new Set(['servlet-name', 'filter-name', 'listener']),
+          attr: '__text',
+          kind: 'class',
+          xmlKind: 'webXml',
+        },
+        {
+          tags: new Set(['servlet-class', 'filter-class', 'listener-class']),
+          attr: '__text',
+          kind: 'type',
+          xmlKind: 'webXmlClass',
+        },
         { tags: new Set(['url-pattern']), attr: '__text', kind: 'constant', xmlKind: 'urlPattern' },
       ];
     case 'struts':
@@ -229,7 +331,12 @@ function getDialectRules(dialect: XmlDialect): TagRule[] {
     case 'hibernate':
       return [
         { tags: new Set(['class']), attr: 'name', kind: 'class', xmlKind: 'hibernateClass' },
-        { tags: new Set(['property', 'id', 'set', 'bag', 'list', 'map']), attr: 'name', kind: 'property', xmlKind: 'hibernateProperty' },
+        {
+          tags: new Set(['property', 'id', 'set', 'bag', 'list', 'map']),
+          attr: 'name',
+          kind: 'property',
+          xmlKind: 'hibernateProperty',
+        },
       ];
     case 'logback':
     case 'log4j':
@@ -242,26 +349,67 @@ function getDialectRules(dialect: XmlDialect): TagRule[] {
       return [
         { tags: new Set(['target']), attr: 'name', kind: 'function', xmlKind: 'antTarget' },
         { tags: new Set(['property']), attr: 'name', kind: 'variable', xmlKind: 'antProperty' },
-        { tags: new Set(['path', 'fileset', 'patternset']), attr: 'id', kind: 'constant', xmlKind: 'antRef' },
-        { tags: new Set(['macrodef', 'taskdef']), attr: 'name', kind: 'function', xmlKind: 'antMacro' },
+        {
+          tags: new Set(['path', 'fileset', 'patternset']),
+          attr: 'id',
+          kind: 'constant',
+          xmlKind: 'antRef',
+        },
+        {
+          tags: new Set(['macrodef', 'taskdef']),
+          attr: 'name',
+          kind: 'function',
+          xmlKind: 'antMacro',
+        },
       ];
     case 'plist':
-      return [
-        { tags: new Set(['key']), attr: '__text', kind: 'property', xmlKind: 'plistKey' },
-      ];
+      return [{ tags: new Set(['key']), attr: '__text', kind: 'property', xmlKind: 'plistKey' }];
     case 'svg':
       return [
-        { tags: new Set(['lineargradient', 'radialgradient', 'clippath', 'mask', 'pattern', 'symbol', 'marker']), attr: 'id', kind: 'constant', xmlKind: 'svgDef' },
-        { tags: new Set(['g', 'rect', 'circle', 'path', 'text', 'image', 'use']), attr: 'id', kind: 'constant', xmlKind: 'svgElement' },
+        {
+          tags: new Set([
+            'lineargradient',
+            'radialgradient',
+            'clippath',
+            'mask',
+            'pattern',
+            'symbol',
+            'marker',
+          ]),
+          attr: 'id',
+          kind: 'constant',
+          xmlKind: 'svgDef',
+        },
+        {
+          tags: new Set(['g', 'rect', 'circle', 'path', 'text', 'image', 'use']),
+          attr: 'id',
+          kind: 'constant',
+          xmlKind: 'svgElement',
+        },
       ];
     case 'xul':
       return [
-        { tags: new Set(['command', 'key', 'broadcaster']), attr: 'id', kind: 'constant', xmlKind: 'xul' },
-        { tags: new Set(['menuitem', 'toolbarbutton', 'button']), attr: 'id', kind: 'constant', xmlKind: 'xulWidget' },
+        {
+          tags: new Set(['command', 'key', 'broadcaster']),
+          attr: 'id',
+          kind: 'constant',
+          xmlKind: 'xul',
+        },
+        {
+          tags: new Set(['menuitem', 'toolbarbutton', 'button']),
+          attr: 'id',
+          kind: 'constant',
+          xmlKind: 'xulWidget',
+        },
       ];
     case 'docbook':
       return [
-        { tags: new Set(['chapter', 'section', 'appendix', 'part']), attr: 'id', kind: 'namespace', xmlKind: 'docbookSection' },
+        {
+          tags: new Set(['chapter', 'section', 'appendix', 'part']),
+          attr: 'id',
+          kind: 'namespace',
+          xmlKind: 'docbookSection',
+        },
       ];
     default:
       return [];
@@ -295,8 +443,19 @@ export class XmlLanguagePlugin implements LanguagePlugin {
   };
 
   supportedExtensions = [
-    '.xml', '.xul', '.xsl', '.xslt', '.xsd', '.wsdl', '.svg', '.plist',
-    '.csproj', '.fsproj', '.vbproj', '.props', '.targets',
+    '.xml',
+    '.xul',
+    '.xsl',
+    '.xslt',
+    '.xsd',
+    '.wsdl',
+    '.svg',
+    '.plist',
+    '.csproj',
+    '.fsproj',
+    '.vbproj',
+    '.props',
+    '.targets',
   ];
 
   extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
@@ -305,15 +464,25 @@ export class XmlLanguagePlugin implements LanguagePlugin {
     const edges: RawEdge[] = [];
     const seen = new Set<string>();
 
-    const add = (name: string, kind: SymbolKind, offset: number, meta?: Record<string, unknown>) => {
+    const add = (
+      name: string,
+      kind: SymbolKind,
+      offset: number,
+      meta?: Record<string, unknown>,
+    ) => {
       if (!name) return;
       const id = symId(filePath, name, kind);
       if (seen.has(id)) return;
       seen.add(id);
       symbols.push({
-        symbolId: id, name, kind, fqn: name,
-        byteStart: offset, byteEnd: offset + name.length,
-        lineStart: lineAt(source, offset), lineEnd: lineAt(source, offset),
+        symbolId: id,
+        name,
+        kind,
+        fqn: name,
+        byteStart: offset,
+        byteEnd: offset + name.length,
+        lineStart: lineAt(source, offset),
+        lineEnd: lineAt(source, offset),
         metadata: meta,
       });
     };
@@ -324,12 +493,23 @@ export class XmlLanguagePlugin implements LanguagePlugin {
     let importTags = new Set(['import', 'include']);
 
     // Noise tags whose `name` attribute is NOT structural
-    const nameNoise = new Set(['input', 'meta', 'param', 'option', 'select', 'textarea', 'button', 'form', 'a', 'img']);
+    const nameNoise = new Set([
+      'input',
+      'meta',
+      'param',
+      'option',
+      'select',
+      'textarea',
+      'button',
+      'form',
+      'a',
+      'img',
+    ]);
 
     // Track parent tags for RSS/Atom/Sitemap text content extraction
-    let pendingTextTag: { local: string; offset: number } | null = null;
+    const _pendingTextTag: { local: string; offset: number } | null = null;
     let insideRssItem = false;
-    let insideAtomEntry = false;
+    let _insideAtomEntry = false;
 
     for (const { tag, local, attrs, offset } of scanTags(source)) {
       const ll = local.toLowerCase();
@@ -357,7 +537,7 @@ export class XmlLanguagePlugin implements LanguagePlugin {
         if (rule.attr === '__text_title') {
           // We need to find <title> child — mark for next iteration
           if (ll === 'item') insideRssItem = true;
-          if (ll === 'entry') insideAtomEntry = true;
+          if (ll === 'entry') _insideAtomEntry = true;
           continue;
         }
 
@@ -374,7 +554,7 @@ export class XmlLanguagePlugin implements LanguagePlugin {
       }
 
       // RSS <title> inside <item> or <channel>
-      if ((dialect === 'rss') && ll === 'title') {
+      if (dialect === 'rss' && ll === 'title') {
         const text = getTextContent(source, offset);
         if (text) {
           if (insideRssItem) {
@@ -386,10 +566,10 @@ export class XmlLanguagePlugin implements LanguagePlugin {
       }
       if (dialect === 'rss' && ll === 'item') insideRssItem = true;
       // Rough tracking: when we see the next <item> or </channel>, reset
-      if (dialect === 'rss' && (ll === 'channel' || ll === 'item')) insideRssItem = (ll === 'item');
+      if (dialect === 'rss' && (ll === 'channel' || ll === 'item')) insideRssItem = ll === 'item';
 
       // Atom <title> inside <entry>
-      if ((dialect === 'atom') && ll === 'title') {
+      if (dialect === 'atom' && ll === 'title') {
         const text = getTextContent(source, offset);
         if (text) add(text, 'constant', offset, { xmlKind: 'atomEntry', tag });
       }
@@ -430,7 +610,10 @@ export class XmlLanguagePlugin implements LanguagePlugin {
       }
 
       // .NET PackageReference / ProjectReference
-      if (dialect === 'dotnet-project' && (ll === 'packagereference' || ll === 'projectreference')) {
+      if (
+        dialect === 'dotnet-project' &&
+        (ll === 'packagereference' || ll === 'projectreference')
+      ) {
         const inc = getAttr(attrs, 'Include');
         if (inc) edges.push({ edgeType: 'imports', metadata: { from: inc, tag, dialect } });
       }
@@ -473,13 +656,15 @@ export class XmlLanguagePlugin implements LanguagePlugin {
           // references the current document — not an external edge.
           const hashIdx = useHref.indexOf('#');
           const target = hashIdx < 0 ? useHref : useHref.slice(0, hashIdx);
-          if (target) edges.push({ edgeType: 'imports', metadata: { from: target, tag: 'use', dialect } });
+          if (target)
+            edges.push({ edgeType: 'imports', metadata: { from: target, tag: 'use', dialect } });
         }
       }
       // SVG <image href="...">
       if (dialect === 'svg' && ll === 'image') {
         const imgHref = href ?? getAttr(attrs, 'xlink:href');
-        if (imgHref) edges.push({ edgeType: 'imports', metadata: { from: imgHref, tag: 'image', dialect } });
+        if (imgHref)
+          edges.push({ edgeType: 'imports', metadata: { from: imgHref, tag: 'image', dialect } });
       }
     }
 

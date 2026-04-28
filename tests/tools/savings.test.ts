@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SavingsTracker, loadPersistentSavings, SAVINGS_PATH } from '../../src/savings.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { loadPersistentSavings, SavingsTracker } from '../../src/savings.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 // Use a temp dir to avoid polluting real ~/.trace-mcp
@@ -36,7 +36,7 @@ describe('SavingsTracker', () => {
       expect(stats.total_tokens_saved).toBeGreaterThan(0);
       expect(stats.total_actual_tokens).toBeGreaterThan(0);
       expect(stats.reduction_pct).toBeGreaterThan(0);
-      expect(stats.per_tool['search'].calls).toBe(1);
+      expect(stats.per_tool.search.calls).toBe(1);
     });
 
     it('records an unknown tool with default cost', () => {
@@ -45,7 +45,7 @@ describe('SavingsTracker', () => {
       const stats = tracker.getSessionStats();
       expect(stats.total_calls).toBe(1);
       expect(stats.total_raw_tokens).toBe(500); // DEFAULT_RAW_COST
-      expect(stats.per_tool['unknown_tool_xyz'].calls).toBe(1);
+      expect(stats.per_tool.unknown_tool_xyz.calls).toBe(1);
     });
 
     it('accepts custom actual token count', () => {
@@ -65,8 +65,8 @@ describe('SavingsTracker', () => {
       tracker.recordCall('get_outline');
       const stats = tracker.getSessionStats();
       expect(stats.total_calls).toBe(3);
-      expect(stats.per_tool['search'].calls).toBe(2);
-      expect(stats.per_tool['get_outline'].calls).toBe(1);
+      expect(stats.per_tool.search.calls).toBe(2);
+      expect(stats.per_tool.get_outline.calls).toBe(1);
     });
 
     it('computes reduction percentage correctly', () => {
@@ -117,7 +117,7 @@ describe('SavingsTracker', () => {
       expect(stats.total_calls).toBe(10000);
       // per_tool should only have 5 entries, not 10000
       expect(Object.keys(stats.per_tool).length).toBe(5);
-      expect(stats.per_tool['search'].calls).toBe(2000);
+      expect(stats.per_tool.search.calls).toBe(2000);
     });
   });
 });

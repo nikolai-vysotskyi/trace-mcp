@@ -6,10 +6,10 @@
 
 import type { Store } from '../../db/store.js';
 import type { EsModuleResolver } from '../../indexer/resolvers/es-modules.js';
-import type { RefactorResult } from './shared.js';
-import { applyRename, extractFunction } from './refactor.js';
-import { applyMove } from './move.js';
 import { changeSignature, type SignatureChange } from './change-signature.js';
+import { applyMove } from './move.js';
+import { applyRename, extractFunction } from './refactor.js';
+import type { RefactorResult } from './shared.js';
 
 export interface PlanRefactoringParams {
   type: 'rename' | 'move' | 'extract' | 'signature';
@@ -55,31 +55,51 @@ export function planRefactoring(
 
     case 'move': {
       if (params.symbol_id && params.target_file) {
-        return applyMove(store, projectRoot, {
-          mode: 'symbol',
-          symbol_id: params.symbol_id,
-          target_file: params.target_file,
-          dry_run: true,
-        }, resolver);
+        return applyMove(
+          store,
+          projectRoot,
+          {
+            mode: 'symbol',
+            symbol_id: params.symbol_id,
+            target_file: params.target_file,
+            dry_run: true,
+          },
+          resolver,
+        );
       }
       if (params.source_file && params.new_path) {
-        return applyMove(store, projectRoot, {
-          mode: 'file',
-          source_file: params.source_file,
-          new_path: params.new_path,
-          dry_run: true,
-        }, resolver);
+        return applyMove(
+          store,
+          projectRoot,
+          {
+            mode: 'file',
+            source_file: params.source_file,
+            new_path: params.new_path,
+            dry_run: true,
+          },
+          resolver,
+        );
       }
-      return errorResult('plan_refactoring', 'Move requires (symbol_id + target_file) or (source_file + new_path)');
+      return errorResult(
+        'plan_refactoring',
+        'Move requires (symbol_id + target_file) or (source_file + new_path)',
+      );
     }
 
     case 'extract': {
       if (!params.file_path || !params.start_line || !params.end_line || !params.function_name) {
-        return errorResult('plan_refactoring', 'Extract requires file_path, start_line, end_line, and function_name');
+        return errorResult(
+          'plan_refactoring',
+          'Extract requires file_path, start_line, end_line, and function_name',
+        );
       }
       return extractFunction(
-        store, projectRoot,
-        params.file_path, params.start_line, params.end_line, params.function_name,
+        store,
+        projectRoot,
+        params.file_path,
+        params.start_line,
+        params.end_line,
+        params.function_name,
         true,
       );
     }
@@ -92,7 +112,10 @@ export function planRefactoring(
     }
 
     default:
-      return errorResult('plan_refactoring', `Unknown refactoring type: ${(params as any).type}`);
+      return errorResult(
+        'plan_refactoring',
+        `Unknown refactoring type: ${(params as { type: string }).type}`,
+      );
   }
 }
 

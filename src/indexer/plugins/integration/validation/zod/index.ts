@@ -6,10 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -19,20 +19,18 @@ import type {
  * Also matches export const, export default, let, var
  */
 const ZOD_OBJECT_RE =
-  /(?:export\s+(?:default\s+)?)?(?:const|let|var)\s+(\w+)\s*=\s*z\.object\s*\(\s*\{([^]*?)\}\s*\)/g;
+  /(?:export\s+(?:default\s+)?)?(?:const|let|var)\s+(\w+)\s*=\s*z\.object\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
 
 /**
  * Match individual fields inside z.object({ ... })
  * e.g., name: z.string(), age: z.number().optional()
  */
-const ZOD_FIELD_RE =
-  /(\w+)\s*:\s*z\.(\w+)\s*\(([^)]*)\)([.\w()]*)/g;
+const ZOD_FIELD_RE = /(\w+)\s*:\s*z\.(\w+)\s*\(([^)]*)\)([.\w()]*)/g;
 
 /**
  * Match type inference: type X = z.infer<typeof schemaName>
  */
-const ZOD_INFER_RE =
-  /type\s+(\w+)\s*=\s*z\.infer\s*<\s*typeof\s+(\w+)\s*>/g;
+const ZOD_INFER_RE = /type\s+(\w+)\s*=\s*z\.infer\s*<\s*typeof\s+(\w+)\s*>/g;
 
 interface ZodField {
   name: string;
@@ -140,9 +138,7 @@ export class ZodPlugin implements FrameworkPlugin {
 
   registerSchema() {
     return {
-      edgeTypes: [
-        { name: 'zod_schema', category: 'zod', description: 'Zod schema definition' },
-      ],
+      edgeTypes: [{ name: 'zod_schema', category: 'zod', description: 'Zod schema definition' }],
     };
   }
 

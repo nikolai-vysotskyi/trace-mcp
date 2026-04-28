@@ -42,10 +42,20 @@ export function detectBreakingChanges(
     const snapshot = topoStore.getLatestSnapshot(contract.id);
     if (!snapshot) continue;
 
-    let oldEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+    let oldEndpoints: Array<{
+      method: string | null;
+      path: string;
+      requestSchema?: string;
+      responseSchema?: string;
+    }> = [];
     try {
       const parsed = JSON.parse(snapshot.endpoints_json) as {
-        endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }>;
+        endpoints?: Array<{
+          method?: string;
+          path: string;
+          requestSchema?: string;
+          responseSchema?: string;
+        }>;
       };
       oldEndpoints = (parsed.endpoints ?? []).map((e) => ({
         method: e.method ?? null,
@@ -53,7 +63,9 @@ export function detectBreakingChanges(
         requestSchema: e.requestSchema,
         responseSchema: e.responseSchema,
       }));
-    } catch { continue; }
+    } catch {
+      continue;
+    }
 
     const currentEndpoints = topoStore.getEndpointsByService(ep.service_id).map((e) => ({
       method: e.method,
@@ -62,8 +74,9 @@ export function detectBreakingChanges(
       responseSchema: e.response_schema,
     }));
 
-    const epDiffs = diffEndpoints(oldEndpoints, currentEndpoints)
-      .filter((d) => d.endpoint.path === ep.path && (d.endpoint.method ?? '*') === (ep.method ?? '*'));
+    const epDiffs = diffEndpoints(oldEndpoints, currentEndpoints).filter(
+      (d) => d.endpoint.path === ep.path && (d.endpoint.method ?? '*') === (ep.method ?? '*'),
+    );
 
     if (epDiffs.length > 0 && epDiffs.some((d) => d.breaking)) {
       return epDiffs;
@@ -84,15 +97,20 @@ export function resolveSymbolsAtLocation(
   try {
     const db = new Database(dbPath, { readonly: true });
     try {
-      const rows = db.prepare(`
+      const rows = db
+        .prepare(`
         SELECT s.symbol_id, s.name, s.kind, s.fqn
         FROM symbols s
         JOIN files f ON s.file_id = f.id
         WHERE f.path LIKE ? AND s.line_start <= ? AND (s.line_end >= ? OR s.line_end IS NULL)
         ORDER BY (s.line_end - s.line_start) ASC
         LIMIT 5
-      `).all(`%${filePath}`, line, line) as Array<{
-        symbol_id: string; name: string; kind: string; fqn: string | null;
+      `)
+        .all(`%${filePath}`, line, line) as Array<{
+        symbol_id: string;
+        name: string;
+        kind: string;
+        fqn: string | null;
       }>;
       return rows.map((r) => ({ symbolId: r.symbol_id, name: r.name, kind: r.kind, fqn: r.fqn }));
     } finally {

@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { discoverClaudeSessions, decodeClaudeProjectName } from '../../src/tools/advanced/claude-sessions.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  decodeClaudeProjectName,
+  discoverClaudeSessions,
+} from '../../src/tools/advanced/claude-sessions.js';
 
 // ── decodeClaudeProjectName ───────────────────────────────────────────────────
 //
@@ -33,7 +36,7 @@ describe('decodeClaudeProjectName', () => {
 // unambiguous (no literal dashes in the path segments).
 
 describe('discoverClaudeSessions', () => {
-  let claudeRoot: string;  // stands in for ~/.claude/projects
+  let claudeRoot: string; // stands in for ~/.claude/projects
   let projectsDir: string;
   let realProject: string; // a dash-free path that will round-trip cleanly
 

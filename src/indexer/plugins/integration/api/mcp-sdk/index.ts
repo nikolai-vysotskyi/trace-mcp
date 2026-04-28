@@ -9,12 +9,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -27,17 +26,14 @@ const MCP_SDK_PKG = '@modelcontextprotocol/sdk';
 // server.tool("name", "description", { schema }, handler)
 // server.tool("name", { schema }, handler)
 // server.tool("name", handler)
-const TOOL_RE =
-  /\.tool\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
+const TOOL_RE = /\.tool\(\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?/g;
 
 // server.resource("name", template, handler)  — resource with template
 // server.resource("name", handler)
-const RESOURCE_RE =
-  /\.resource\(\s*['"]([^'"]+)['"]/g;
+const RESOURCE_RE = /\.resource\(\s*['"]([^'"]+)['"]/g;
 
 // server.prompt("name", ...)
-const PROMPT_RE =
-  /\.prompt\(\s*['"]([^'"]+)['"]/g;
+const PROMPT_RE = /\.prompt\(\s*['"]([^'"]+)['"]/g;
 
 // McpServer import detection
 const MCP_SERVER_IMPORT_RE =

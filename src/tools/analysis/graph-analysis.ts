@@ -73,7 +73,8 @@ export function buildFileGraph(store: Store): FileGraph {
   const pathMap = new Map<number, string>();
 
   // Single query: resolve all import edges to file-level in one pass
-  const rows = store.db.prepare(`
+  const rows = store.db
+    .prepare(`
     SELECT
       CASE WHEN n1.node_type = 'file' THEN n1.ref_id ELSE s1.file_id END as src_file_id,
       CASE WHEN n2.node_type = 'file' THEN n2.ref_id ELSE s2.file_id END as tgt_file_id
@@ -84,7 +85,8 @@ export function buildFileGraph(store: Store): FileGraph {
     LEFT JOIN symbols s1 ON n1.node_type = 'symbol' AND n1.ref_id = s1.id
     LEFT JOIN symbols s2 ON n2.node_type = 'symbol' AND n2.ref_id = s2.id
     WHERE et.name IN ('esm_imports', 'imports', 'py_imports', 'py_reexports')
-  `).all() as Array<{ src_file_id: number | null; tgt_file_id: number | null }>;
+  `)
+    .all() as Array<{ src_file_id: number | null; tgt_file_id: number | null }>;
 
   for (const row of rows) {
     const srcFileId = row.src_file_id;
@@ -108,9 +110,9 @@ export function buildFileGraph(store: Store): FileGraph {
     for (let i = 0; i < fileIds.length; i += 500) {
       const chunk = fileIds.slice(i, i + 500);
       const placeholders = chunk.map(() => '?').join(',');
-      const fileRows = store.db.prepare(
-        `SELECT id, path FROM files WHERE id IN (${placeholders})`,
-      ).all(...chunk) as Array<{ id: number; path: string }>;
+      const fileRows = store.db
+        .prepare(`SELECT id, path FROM files WHERE id IN (${placeholders})`)
+        .all(...chunk) as Array<{ id: number; path: string }>;
       for (const f of fileRows) pathMap.set(f.id, f.path);
     }
   }
@@ -118,10 +120,10 @@ export function buildFileGraph(store: Store): FileGraph {
   return { forward, reverse, pathMap, allFileIds };
 }
 
-function getFileIdForSymbol(store: Store, symbolRefId: number): number | undefined {
-  const sym = store.db
-    .prepare('SELECT file_id FROM symbols WHERE id = ?')
-    .get(symbolRefId) as { file_id: number } | undefined;
+function _getFileIdForSymbol(store: Store, symbolRefId: number): number | undefined {
+  const sym = store.db.prepare('SELECT file_id FROM symbols WHERE id = ?').get(symbolRefId) as
+    | { file_id: number }
+    | undefined;
   return sym?.file_id;
 }
 
@@ -206,9 +208,7 @@ function dfsForward(
   visited: Set<number>,
   finishOrder: number[],
 ): void {
-  const stack: Array<{ node: number; phase: 'enter' | 'exit' }> = [
-    { node: start, phase: 'enter' },
-  ];
+  const stack: Array<{ node: number; phase: 'enter' | 'exit' }> = [{ node: start, phase: 'enter' }];
 
   while (stack.length > 0) {
     const { node, phase } = stack.pop()!;
@@ -260,7 +260,12 @@ function dfsReverse(
 
 export function getPageRank(
   store: Store,
-  options: { damping?: number; maxIterations?: number; tolerance?: number; prebuiltGraph?: FileGraph } = {},
+  options: {
+    damping?: number;
+    maxIterations?: number;
+    tolerance?: number;
+    prebuiltGraph?: FileGraph;
+  } = {},
 ): PageRankResult[] {
   const { damping = 0.85, maxIterations = 100, tolerance = 1e-6 } = options;
   const graph = options.prebuiltGraph ?? buildFileGraph(store);
@@ -269,7 +274,9 @@ export function getPageRank(
   if (N === 0) return [];
 
   const nodeIndex = new Map<number, number>();
-  nodes.forEach((id, i) => nodeIndex.set(id, i));
+  nodes.forEach((id, i) => {
+    nodeIndex.set(id, i);
+  });
 
   // Initialize scores uniformly
   let scores = new Float64Array(N).fill(1 / N);
@@ -336,7 +343,8 @@ export function getExtractionCandidates(
 
   // Single query: find complex symbols with their distinct caller file count
   // This replaces ~7500 N+1 queries with 1 query
-  const rows = store.db.prepare(`
+  const rows = store.db
+    .prepare(`
     SELECT
       s.symbol_id, s.name, f.path, s.cyclomatic,
       COUNT(DISTINCT caller_file.id) as caller_file_count
@@ -356,7 +364,8 @@ export function getExtractionCandidates(
     HAVING COUNT(DISTINCT caller_file.id) >= ?
     ORDER BY s.cyclomatic * COUNT(DISTINCT caller_file.id) DESC
     LIMIT ?
-  `).all(minCyclomatic, minCallers, limit) as Array<{
+  `)
+    .all(minCyclomatic, minCallers, limit) as Array<{
     symbol_id: string;
     name: string;
     path: string;
@@ -402,9 +411,8 @@ export function getRepoHealth(store: Store): RepoHealthResult {
 
   const unstable = coupling.filter((c) => c.assessment === 'unstable');
   const totalInstability = coupling.reduce((sum, c) => sum + c.instability, 0);
-  const avgInstability = coupling.length > 0
-    ? Math.round((totalInstability / coupling.length) * 1000) / 1000
-    : 0;
+  const avgInstability =
+    coupling.length > 0 ? Math.round((totalInstability / coupling.length) * 1000) / 1000 : 0;
 
   return {
     summary: {

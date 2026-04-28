@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS embedding_meta (
 
 export class DimensionMismatchError extends Error {
   constructor(expected: number, got: number) {
-    super(`Vector dimension mismatch: expected ${expected}, got ${got}. Run embed_repo with force=true to re-embed.`);
+    super(
+      `Vector dimension mismatch: expected ${expected}, got ${got}. Run embed_repo with force=true to re-embed.`,
+    );
     this.name = 'DimensionMismatchError';
   }
 }
@@ -42,9 +44,9 @@ export class BlobVectorStore implements VectorStore {
       throw new DimensionMismatchError(this.cachedDim, vector.length);
     }
     const buf = Buffer.from(new Float32Array(vector).buffer);
-    this.db.prepare(
-      'INSERT OR REPLACE INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)',
-    ).run(id, buf);
+    this.db
+      .prepare('INSERT OR REPLACE INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)')
+      .run(id, buf);
   }
 
   search(query: number[], limit: number): { id: number; score: number }[] {
@@ -90,7 +92,9 @@ export class BlobVectorStore implements VectorStore {
   }
 
   count(): number {
-    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM symbol_embeddings').get() as { cnt: number };
+    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM symbol_embeddings').get() as {
+      cnt: number;
+    };
     return row.cnt;
   }
 
@@ -111,9 +115,9 @@ export class BlobVectorStore implements VectorStore {
   }
 
   getMeta(): { model: string; dim: number } | null {
-    const rows = this.db.prepare(
-      "SELECT key, value FROM embedding_meta WHERE key IN ('model', 'dim')",
-    ).all() as { key: string; value: string }[];
+    const rows = this.db
+      .prepare("SELECT key, value FROM embedding_meta WHERE key IN ('model', 'dim')")
+      .all() as { key: string; value: string }[];
     if (rows.length < 2) return null;
     const map = new Map(rows.map((r) => [r.key, r.value]));
     const model = map.get('model');

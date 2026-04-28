@@ -1,16 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import {
   getCouplingMetrics,
   getDependencyCycles,
-  getPageRank,
   getExtractionCandidates,
+  getPageRank,
   getRepoHealth,
 } from '../../src/tools/analysis/graph-analysis.js';
 import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, path: string, lang = 'typescript'): number {
-  return store.insertFile(path, lang, 'hash_' + path, 100);
+  return store.insertFile(path, lang, `hash_${path}`, 100);
 }
 
 function insertSymbol(

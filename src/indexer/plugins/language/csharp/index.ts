@@ -5,27 +5,32 @@
  * delegates, methods, properties, fields, events, constructors,
  * and using directive edges from C# source files.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
-  extractSignature,
-  extractModifiers,
   extractAttributes,
   extractBaseTypes,
-  extractImportEdges,
+  extractClassEvents,
+  extractClassFields,
   extractClassMethods,
   extractClassProperties,
-  extractClassFields,
-  extractClassEvents,
   extractEnumMembers,
+  extractImportEdges,
+  extractModifiers,
   extractNamespaceName,
+  extractSignature,
   getNodeName,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 
 export class CSharpLanguagePlugin implements LanguagePlugin {
@@ -36,12 +41,12 @@ export class CSharpLanguagePlugin implements LanguagePlugin {
   };
 
   supportedExtensions = ['.cs'];
-  supportedVersions = [
-    '7.0', '7.1', '7.2', '7.3',
-    '8.0', '9.0', '10.0', '11.0', '12.0', '13.0',
-  ];
+  supportedVersions = ['7.0', '7.1', '7.2', '7.3', '8.0', '9.0', '10.0', '11.0', '12.0', '13.0'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('csharp');
       const sourceCode = content.toString('utf-8');
@@ -165,7 +170,9 @@ export class CSharpLanguagePlugin implements LanguagePlugin {
     if (modifiers.includes('static')) meta.static = true;
     if (modifiers.includes('partial')) meta.partial = true;
 
-    const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+    const visibility = modifiers.find((m) =>
+      ['public', 'private', 'protected', 'internal'].includes(m),
+    );
     if (visibility) meta.visibility = visibility;
 
     symbols.push({
@@ -207,7 +214,9 @@ export class CSharpLanguagePlugin implements LanguagePlugin {
     if (baseTypes.length > 0) meta.baseTypes = baseTypes;
     if (modifiers.includes('partial')) meta.partial = true;
 
-    const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+    const visibility = modifiers.find((m) =>
+      ['public', 'private', 'protected', 'internal'].includes(m),
+    );
     if (visibility) meta.visibility = visibility;
 
     symbols.push({
@@ -253,7 +262,9 @@ export class CSharpLanguagePlugin implements LanguagePlugin {
     if (modifiers.includes('ref')) meta.ref = true;
     if (modifiers.includes('partial')) meta.partial = true;
 
-    const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+    const visibility = modifiers.find((m) =>
+      ['public', 'private', 'protected', 'internal'].includes(m),
+    );
     if (visibility) meta.visibility = visibility;
 
     symbols.push({
@@ -291,7 +302,9 @@ export class CSharpLanguagePlugin implements LanguagePlugin {
     const meta: Record<string, unknown> = {};
 
     if (attrs.length > 0) meta.attributes = attrs;
-    const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+    const visibility = modifiers.find((m) =>
+      ['public', 'private', 'protected', 'internal'].includes(m),
+    );
     if (visibility) meta.visibility = visibility;
 
     symbols.push({
@@ -335,7 +348,9 @@ export class CSharpLanguagePlugin implements LanguagePlugin {
     if (modifiers.includes('sealed')) meta.sealed = true;
     if (modifiers.includes('partial')) meta.partial = true;
 
-    const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+    const visibility = modifiers.find((m) =>
+      ['public', 'private', 'protected', 'internal'].includes(m),
+    );
     if (visibility) meta.visibility = visibility;
 
     symbols.push({
@@ -372,7 +387,9 @@ export class CSharpLanguagePlugin implements LanguagePlugin {
     const meta: Record<string, unknown> = { csharpKind: 'delegate' };
 
     if (attrs.length > 0) meta.attributes = attrs;
-    const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+    const visibility = modifiers.find((m) =>
+      ['public', 'private', 'protected', 'internal'].includes(m),
+    );
     if (visibility) meta.visibility = visibility;
 
     symbols.push({

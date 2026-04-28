@@ -2,7 +2,7 @@
  * Helper utilities for the Scala language plugin.
  * Extracts AST-walking logic to keep the main plugin manageable.
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
@@ -92,8 +92,18 @@ export function isCaseDefinition(node: TSNode): boolean {
 export function extractModifiers(node: TSNode): string[] {
   const modifiers: string[] = [];
   const modifierTypes = new Set([
-    'sealed', 'abstract', 'final', 'implicit', 'lazy', 'override',
-    'private', 'protected', 'open', 'transparent', 'inline', 'opaque',
+    'sealed',
+    'abstract',
+    'final',
+    'implicit',
+    'lazy',
+    'override',
+    'private',
+    'protected',
+    'open',
+    'transparent',
+    'inline',
+    'opaque',
     'export',
   ]);
 
@@ -102,16 +112,28 @@ export function extractModifiers(node: TSNode): string[] {
     const child = node.child(i);
     if (!child) continue;
     // Stop at the main definition keyword
-    if (child.text === 'class' || child.text === 'object' || child.text === 'trait' ||
-        child.text === 'def' || child.text === 'val' || child.text === 'var' ||
-        child.text === 'type' || child.text === 'enum' || child.text === 'given') {
+    if (
+      child.text === 'class' ||
+      child.text === 'object' ||
+      child.text === 'trait' ||
+      child.text === 'def' ||
+      child.text === 'val' ||
+      child.text === 'var' ||
+      child.text === 'type' ||
+      child.text === 'enum' ||
+      child.text === 'given'
+    ) {
       break;
     }
     if (modifierTypes.has(child.text)) {
       modifiers.push(child.text);
     }
     // Handle modifiers node wrapping multiple modifier keywords
-    if (child.type === 'modifiers' || child.type === 'access_modifier' || child.type === 'annotation') {
+    if (
+      child.type === 'modifiers' ||
+      child.type === 'access_modifier' ||
+      child.type === 'annotation'
+    ) {
       for (const inner of child.isNamed ? [child] : []) {
         if (modifierTypes.has(inner.text)) modifiers.push(inner.text);
       }
@@ -142,11 +164,17 @@ export function extractInheritance(node: TSNode): { extends?: string[]; mixins?:
     if (child.type === 'extends_clause') {
       // The extends clause contains the parent type(s)
       for (const grandchild of child.namedChildren) {
-        if (grandchild.type === 'type_identifier' || grandchild.type === 'generic_type' ||
-            grandchild.type === 'stable_type_identifier') {
-          const name = grandchild.type === 'generic_type'
-            ? (grandchild.childForFieldName('name')?.text ?? grandchild.namedChildren[0]?.text ?? grandchild.text)
-            : grandchild.text;
+        if (
+          grandchild.type === 'type_identifier' ||
+          grandchild.type === 'generic_type' ||
+          grandchild.type === 'stable_type_identifier'
+        ) {
+          const name =
+            grandchild.type === 'generic_type'
+              ? (grandchild.childForFieldName('name')?.text ??
+                grandchild.namedChildren[0]?.text ??
+                grandchild.text)
+              : grandchild.text;
           extendsNames.push(name);
         }
       }
@@ -163,11 +191,15 @@ export function extractInheritance(node: TSNode): { extends?: string[]; mixins?:
       continue;
     }
     if (seenWith && child.isNamed) {
-      if (child.type === 'type_identifier' || child.type === 'generic_type' ||
-          child.type === 'stable_type_identifier') {
-        const name = child.type === 'generic_type'
-          ? (child.childForFieldName('name')?.text ?? child.namedChildren[0]?.text ?? child.text)
-          : child.text;
+      if (
+        child.type === 'type_identifier' ||
+        child.type === 'generic_type' ||
+        child.type === 'stable_type_identifier'
+      ) {
+        const name =
+          child.type === 'generic_type'
+            ? (child.childForFieldName('name')?.text ?? child.namedChildren[0]?.text ?? child.text)
+            : child.text;
         mixinNames.push(name);
       }
       seenWith = false;
@@ -205,12 +237,15 @@ function extractTypeParamNames(typeParams: TSNode): string[] | undefined {
       params.push(name.text);
     } else if (child.type === 'identifier' || child.type === 'type_identifier') {
       params.push(child.text);
-    } else if (child.type === '_variant_type_parameter' || child.type === 'covariant_type_parameter' ||
-               child.type === 'contravariant_type_parameter') {
+    } else if (
+      child.type === '_variant_type_parameter' ||
+      child.type === 'covariant_type_parameter' ||
+      child.type === 'contravariant_type_parameter'
+    ) {
       // Variance annotations: +A or -B — get the inner name
-      const innerName = child.childForFieldName('name') ?? child.namedChildren.find(
-        (c) => c.type === 'identifier' || c.type === 'type_identifier',
-      );
+      const innerName =
+        child.childForFieldName('name') ??
+        child.namedChildren.find((c) => c.type === 'identifier' || c.type === 'type_identifier');
       if (innerName) params.push(innerName.text);
     }
   }
@@ -238,12 +273,15 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
       const braceMatch = importText.match(/^([\w.]+)\.\{([^}]+)\}$/);
       if (braceMatch) {
         const from = braceMatch[1];
-        const specifiers = braceMatch[2].split(',').map((s) => {
-          const renamed = s.trim().split(/\s*(?:=>|as)\s*/);
-          // Always store the original name, not the rename target.
-          // `import mutable.{Map => MMap}` → specifier = "Map" (matches the export).
-          return renamed[0].trim();
-        }).filter((s) => s !== '_' && s.length > 0);
+        const specifiers = braceMatch[2]
+          .split(',')
+          .map((s) => {
+            const renamed = s.trim().split(/\s*(?:=>|as)\s*/);
+            // Always store the original name, not the rename target.
+            // `import mutable.{Map => MMap}` → specifier = "Map" (matches the export).
+            return renamed[0].trim();
+          })
+          .filter((s) => s !== '_' && s.length > 0);
         const hasWildcard = braceMatch[2].includes('_');
 
         edges.push({
@@ -442,11 +480,16 @@ export function extractEnumCases(
 
   for (const child of body.namedChildren) {
     // Scala 3 enum cases: `case North, South` or `case Color(r: Int, g: Int, b: Int)`
-    if (child.type === 'enum_case_definitions' || child.type === 'simple_enum_case' || child.type === 'enum_case') {
+    if (
+      child.type === 'enum_case_definitions' ||
+      child.type === 'simple_enum_case' ||
+      child.type === 'enum_case'
+    ) {
       // May contain multiple case names
       for (const inner of child.namedChildren) {
         if (inner.type === 'identifier' || inner.type === 'simple_enum_case') {
-          const name = inner.type === 'identifier' ? inner.text : getNodeName(inner) ?? inner.text;
+          const name =
+            inner.type === 'identifier' ? inner.text : (getNodeName(inner) ?? inner.text);
           symbols.push({
             symbolId: makeSymbolId(filePath, name, 'enum_case', enumName),
             name,
@@ -465,7 +508,9 @@ export function extractEnumCases(
         const caseName = getNodeName(child);
         if (caseName) {
           // Avoid duplicates if we already extracted from namedChildren
-          const exists = symbols.some((s) => s.name === caseName && s.parentSymbolId === enumSymbolId);
+          const exists = symbols.some(
+            (s) => s.name === caseName && s.parentSymbolId === enumSymbolId,
+          );
           if (!exists) {
             symbols.push({
               symbolId: makeSymbolId(filePath, caseName, 'enum_case', enumName),

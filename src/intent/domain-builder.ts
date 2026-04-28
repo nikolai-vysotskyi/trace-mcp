@@ -4,9 +4,13 @@
  */
 
 import type { Store } from '../db/store.js';
-import { DomainStore } from './domain-store.js';
-import { classifyBatch, inferTaxonomyHeuristic, type ClassifiableSymbol } from './heuristic-classifier.js';
 import { logger } from '../logger.js';
+import { DomainStore } from './domain-store.js';
+import {
+  type ClassifiableSymbol,
+  classifyBatch,
+  inferTaxonomyHeuristic,
+} from './heuristic-classifier.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -112,7 +116,12 @@ export class DomainBuilder {
     }
 
     let newMappings = 0;
-    const mappings: Array<{ symbolId: number; domainId: number; relevance: number; inferredBy: string }> = [];
+    const mappings: Array<{
+      symbolId: number;
+      domainId: number;
+      relevance: number;
+      inferredBy: string;
+    }> = [];
 
     for (const [symbolId, suggestion] of classifications) {
       const domainName = suggestion.domainPath[0];
@@ -172,13 +181,15 @@ export class DomainBuilder {
   }
 
   private getAllClassifiableSymbols(limit: number): ClassifiableSymbol[] {
-    const rows = this.store.db.prepare(`
+    const rows = this.store.db
+      .prepare(`
       SELECT s.id, s.name, s.kind, s.fqn, f.path as file_path
       FROM symbols s
       JOIN files f ON s.file_id = f.id
       WHERE s.kind IN ('class', 'function', 'method', 'interface', 'trait', 'enum', 'type')
       LIMIT ?
-    `).all(limit) as Array<{
+    `)
+      .all(limit) as Array<{
       id: number;
       name: string;
       kind: string;
@@ -207,13 +218,15 @@ export class DomainBuilder {
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      const rows = this.store.db.prepare(`
+      const rows = this.store.db
+        .prepare(`
         SELECT s.id, s.name, s.kind, s.fqn, f.path as file_path
         FROM symbols s
         JOIN files f ON s.file_id = f.id
         WHERE s.kind IN ('class', 'function', 'method', 'interface', 'trait', 'enum', 'type')
         LIMIT ? OFFSET ?
-      `).all(batchSize, offset) as Array<{
+      `)
+        .all(batchSize, offset) as Array<{
         id: number;
         name: string;
         kind: string;
@@ -232,7 +245,12 @@ export class DomainBuilder {
       }));
 
       const classifications = classifyBatch(symbols, this.config.domain_hints);
-      const mappings: Array<{ symbolId: number; domainId: number; relevance: number; inferredBy: string }> = [];
+      const mappings: Array<{
+        symbolId: number;
+        domainId: number;
+        relevance: number;
+        inferredBy: string;
+      }> = [];
 
       for (const [symbolId, suggestion] of classifications) {
         const domainName = suggestion.domainPath[0];

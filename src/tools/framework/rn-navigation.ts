@@ -3,7 +3,7 @@
  *
  * Builds full navigation tree from RN screens + navigators.
  */
-import type { Store, RnScreenRow } from '../../db/store.js';
+import type { RnScreenRow, Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
 
 interface NavigationNode {
@@ -25,9 +25,7 @@ interface NavigationGraphResult {
 /**
  * Build navigation graph from all indexed RN screens.
  */
-export function getNavigationGraph(
-  store: Store,
-): TraceMcpResult<NavigationGraphResult> {
+export function getNavigationGraph(store: Store): TraceMcpResult<NavigationGraphResult> {
   const allScreens = store.getAllRnScreens();
 
   // Build edges from edges table (rn_navigates_to)
@@ -62,10 +60,7 @@ export function getNavigationGraph(
  * Build a map of screen -> screens it navigates to,
  * using rn_navigates_to edges from the graph.
  */
-function buildNavigatesMap(
-  store: Store,
-  allScreens: RnScreenRow[],
-): Map<string, string[]> {
+function buildNavigatesMap(store: Store, allScreens: RnScreenRow[]): Map<string, string[]> {
   const map = new Map<string, string[]>();
 
   // Pre-build nodeId → screenName lookup in one batch query (avoids O(edges*screens) N+1)

@@ -2,29 +2,35 @@
  * Kotlin Language Plugin — tree-sitter based symbol extraction.
  * Uses web-tree-sitter WASM for accurate AST parsing.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
-import { detectMinKotlinVersion } from './version-features.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
-  extractPackageName,
-  extractSignature,
+  detectClassKind,
   extractAnnotations,
-  extractModifiers,
-  extractImportEdges,
-  extractHeritage,
   extractClassMethods,
   extractClassProperties,
-  extractEnumEntries,
   extractCompanionObject,
-  detectClassKind,
+  extractEnumEntries,
+  extractHeritage,
+  extractImportEdges,
+  extractModifiers,
+  extractPackageName,
+  extractSignature,
   getNodeName,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
+import { detectMinKotlinVersion } from './version-features.js';
 
 export class KotlinLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
@@ -36,7 +42,10 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.kt', '.kts'];
   supportedVersions = ['1.0', '1.1', '1.3', '1.4', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('kotlin');
       const sourceCode = content.toString('utf-8');
@@ -74,7 +83,12 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private walkTopLevel(root: TSNode, filePath: string, packageName: string | undefined, symbols: RawSymbol[]): void {
+  private walkTopLevel(
+    root: TSNode,
+    filePath: string,
+    packageName: string | undefined,
+    symbols: RawSymbol[],
+  ): void {
     for (const child of root.namedChildren) {
       switch (child.type) {
         case 'class_declaration':
@@ -233,7 +247,9 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
     if (modifiers.includes('suspend')) meta.suspend = true;
     if (modifiers.includes('inline')) meta.inline = true;
 
-    const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+    const visibility = modifiers.find((m) =>
+      ['public', 'private', 'protected', 'internal'].includes(m),
+    );
     if (visibility) meta.visibility = visibility;
 
     symbols.push({
@@ -299,7 +315,9 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
     if (typeText) meta.type = typeText;
     if (isVal) meta.val = true;
 
-    const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+    const visibility = modifiers.find((m) =>
+      ['public', 'private', 'protected', 'internal'].includes(m),
+    );
     if (visibility) meta.visibility = visibility;
 
     symbols.push({

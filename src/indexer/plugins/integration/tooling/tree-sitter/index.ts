@@ -6,10 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -36,16 +36,13 @@ const TREE_SITTER_PACKAGES = [
 ];
 
 // Parser.setLanguage(...), parser.parse(...)
-const PARSER_USAGE_RE =
-  /(?:parser|Parser)\s*\.\s*(?:setLanguage|parse|getLanguage)\s*\(/g;
+const PARSER_USAGE_RE = /(?:parser|Parser)\s*\.\s*(?:setLanguage|parse|getLanguage)\s*\(/g;
 
 // Tree-sitter query patterns: (function_declaration name: (identifier) @name)
-const QUERY_PATTERN_RE =
-  /\(\s*\w+(?:_\w+)*\s+(?:name|value|body):\s*\(\w+\)\s*@\w+/g;
+const QUERY_PATTERN_RE = /\(\s*\w+(?:_\w+)*\s+(?:name|value|body):\s*\(\w+\)\s*@\w+/g;
 
 // tree-sitter import
-const TS_IMPORT_RE =
-  /(?:import|require)\s*(?:\(|{)?\s*.*(?:tree-sitter|Parser)\b/;
+const TS_IMPORT_RE = /(?:import|require)\s*(?:\(|{)?\s*.*(?:tree-sitter|Parser)\b/;
 
 export class TreeSitterPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -88,8 +85,16 @@ export class TreeSitterPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'ts_parser_usage', category: 'tree-sitter', description: 'Tree-sitter parser usage' },
-        { name: 'ts_query_pattern', category: 'tree-sitter', description: 'Tree-sitter query pattern' },
+        {
+          name: 'ts_parser_usage',
+          category: 'tree-sitter',
+          description: 'Tree-sitter parser usage',
+        },
+        {
+          name: 'ts_query_pattern',
+          category: 'tree-sitter',
+          description: 'Tree-sitter query pattern',
+        },
       ],
     };
   }

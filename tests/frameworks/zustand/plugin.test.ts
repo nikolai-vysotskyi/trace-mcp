@@ -1,13 +1,12 @@
 /**
  * Tests for Zustand / Redux Toolkit state management plugin.
  */
-import { describe, it, expect } from 'vitest';
-import { ok } from 'neverthrow';
+import { describe, expect, it } from 'vitest';
 import {
-  ZustandReduxPlugin,
-  extractZustandStores,
-  extractReduxSlices,
   extractDispatches,
+  extractReduxSlices,
+  extractZustandStores,
+  ZustandReduxPlugin,
 } from '../../../src/indexer/plugins/integration/state/zustand/index.js';
 
 // ── detect() ──────────────────────────────────────────────────
@@ -16,27 +15,33 @@ describe('ZustandReduxPlugin.detect()', () => {
   const plugin = new ZustandReduxPlugin();
 
   it('returns true when zustand is in deps', () => {
-    expect(plugin.detect({
-      rootPath: '/test',
-      packageJson: { dependencies: { zustand: '^4.0.0', react: '18' } },
-      configFiles: [],
-    })).toBe(true);
+    expect(
+      plugin.detect({
+        rootPath: '/test',
+        packageJson: { dependencies: { zustand: '^4.0.0', react: '18' } },
+        configFiles: [],
+      }),
+    ).toBe(true);
   });
 
   it('returns true when @reduxjs/toolkit is in deps', () => {
-    expect(plugin.detect({
-      rootPath: '/test',
-      packageJson: { dependencies: { '@reduxjs/toolkit': '^1.9.0', react: '18' } },
-      configFiles: [],
-    })).toBe(true);
+    expect(
+      plugin.detect({
+        rootPath: '/test',
+        packageJson: { dependencies: { '@reduxjs/toolkit': '^1.9.0', react: '18' } },
+        configFiles: [],
+      }),
+    ).toBe(true);
   });
 
   it('returns false when neither is present', () => {
-    expect(plugin.detect({
-      rootPath: '/test',
-      packageJson: { dependencies: { react: '18' } },
-      configFiles: [],
-    })).toBe(false);
+    expect(
+      plugin.detect({
+        rootPath: '/test',
+        packageJson: { dependencies: { react: '18' } },
+        configFiles: [],
+      }),
+    ).toBe(false);
   });
 });
 

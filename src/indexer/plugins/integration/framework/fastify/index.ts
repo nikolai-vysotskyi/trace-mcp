@@ -6,12 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -24,12 +23,10 @@ const ROUTE_OBJECT_RE =
   /\.route\s*\(\s*\{[^}]*?method\s*:\s*['"`]([^'"`]+)['"`][^}]*?url\s*:\s*['"`]([^'"`]+)['"`]/g;
 
 // fastify.addHook('onRequest', ...)
-const HOOK_RE =
-  /\.addHook\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const HOOK_RE = /\.addHook\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 // fastify.register(pluginName, ...)
-const REGISTER_RE =
-  /\.register\s*\(\s*([A-Za-z][\w.]*)/g;
+const REGISTER_RE = /\.register\s*\(\s*([A-Za-z][\w.]*)/g;
 
 interface FastifyRoute {
   method: string;

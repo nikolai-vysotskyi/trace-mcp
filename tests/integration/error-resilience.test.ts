@@ -2,15 +2,15 @@
  * Integration: Error resilience.
  * Does the pipeline handle broken files, missing references, mixed valid/invalid?
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore, createTmpFixture, createTmpDir, removeTmpDir } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore, createTmpDir, createTmpFixture, removeTmpDir } from '../test-utils.js';
 
 describe('error resilience', () => {
   let cleanup: (() => void)[] = [];
@@ -56,7 +56,7 @@ describe('error resilience', () => {
   });
 
   it('survives broken Vue SFC', async () => {
-    const { store, pipeline } = setupPipeline({
+    const { pipeline } = setupPipeline({
       'Component.vue': '<script>\nthis is not valid {{ js\n</script>\n<template><div></template>',
     });
 
@@ -151,7 +151,7 @@ Route::get('/test', [NonExistentController::class, 'index']);`,
   });
 
   it('handles files with no matching language plugin', async () => {
-    const { store, pipeline } = setupPipeline({
+    const { pipeline } = setupPipeline({
       'readme.md': '# Hello',
       'config.yaml': 'key: value',
       'app.py': 'print("hello")',

@@ -62,7 +62,9 @@ export function formatMarkdown(report: CIReport): string {
   // Blast radius
   if (report.blastRadius.totalAffected > 0) {
     const truncNote = report.blastRadius.truncated ? ' (truncated)' : '';
-    lines.push(`<details><summary>Blast Radius (${report.blastRadius.totalAffected} files affected${truncNote})</summary>`);
+    lines.push(
+      `<details><summary>Blast Radius (${report.blastRadius.totalAffected} files affected${truncNote})</summary>`,
+    );
     lines.push('');
     lines.push('| File | Edge Type | Depth |');
     lines.push('|------|-----------|-------|');
@@ -79,7 +81,9 @@ export function formatMarkdown(report: CIReport): string {
 
   // Test coverage gaps
   if (report.testCoverage.gaps.length > 0) {
-    lines.push(`<details><summary>Test Coverage Gaps (${report.testCoverage.gaps.length} untested symbols)</summary>`);
+    lines.push(
+      `<details><summary>Test Coverage Gaps (${report.testCoverage.gaps.length} untested symbols)</summary>`,
+    );
     lines.push('');
     lines.push('| Symbol | File | Kind | Signature |');
     lines.push('|--------|------|------|-----------|');
@@ -97,15 +101,21 @@ export function formatMarkdown(report: CIReport): string {
 
   // Risk analysis
   if (report.riskAnalysis.files.length > 0) {
-    lines.push(`<details><summary>Risk Analysis (overall: ${report.riskAnalysis.overallLevel}, score: ${report.riskAnalysis.overallScore})</summary>`);
+    lines.push(
+      `<details><summary>Risk Analysis (overall: ${report.riskAnalysis.overallLevel}, score: ${report.riskAnalysis.overallScore})</summary>`,
+    );
     lines.push('');
     lines.push('| File | Complexity | Churn | Coupling | Blast | Score |');
     lines.push('|------|-----------|-------|----------|-------|-------|');
     for (const f of report.riskAnalysis.files) {
-      lines.push(`| \`${f.file}\` | ${f.complexity} | ${f.churn} | ${f.coupling} | ${f.blastSize} | **${f.score}** |`);
+      lines.push(
+        `| \`${f.file}\` | ${f.complexity} | ${f.churn} | ${f.coupling} | ${f.blastSize} | **${f.score}** |`,
+      );
     }
     lines.push('');
-    lines.push('_Signals normalized 0-1. Score = 0.30*complexity + 0.25*churn + 0.25*coupling + 0.20*blast_');
+    lines.push(
+      '_Signals normalized 0-1. Score = 0.30*complexity + 0.25*churn + 0.25*coupling + 0.20*blast_',
+    );
     lines.push('');
     lines.push('</details>');
     lines.push('');
@@ -113,12 +123,16 @@ export function formatMarkdown(report: CIReport): string {
 
   // Architecture violations
   if (report.architectureViolations.totalViolations > 0) {
-    lines.push(`<details><summary>Architecture Violations (${report.architectureViolations.totalViolations})</summary>`);
+    lines.push(
+      `<details><summary>Architecture Violations (${report.architectureViolations.totalViolations})</summary>`,
+    );
     lines.push('');
     lines.push('| Source File | Source Layer | Target File | Target Layer | Rule |');
     lines.push('|------------|-------------|-------------|--------------|------|');
     for (const v of report.architectureViolations.violations) {
-      lines.push(`| \`${v.source_file}\` | ${v.source_layer} | \`${v.target_file}\` | ${v.target_layer} | ${v.rule} |`);
+      lines.push(
+        `| \`${v.source_file}\` | ${v.source_layer} | \`${v.target_file}\` | ${v.target_layer} | ${v.rule} |`,
+      );
     }
     lines.push('');
     lines.push('</details>');
@@ -127,7 +141,9 @@ export function formatMarkdown(report: CIReport): string {
 
   // Dead code
   if (report.deadCode.totalDead > 0) {
-    lines.push(`<details><summary>Dead Exports Introduced (${report.deadCode.totalDead})</summary>`);
+    lines.push(
+      `<details><summary>Dead Exports Introduced (${report.deadCode.totalDead})</summary>`,
+    );
     lines.push('');
     lines.push('| Symbol | File | Kind |');
     lines.push('|--------|------|------|');
@@ -142,7 +158,9 @@ export function formatMarkdown(report: CIReport): string {
   // Domain analysis
   if (report.domainAnalysis) {
     const da = report.domainAnalysis;
-    lines.push(`<details><summary>Domain Boundaries (${da.domainsAffected.length} domains)</summary>`);
+    lines.push(
+      `<details><summary>Domain Boundaries (${da.domainsAffected.length} domains)</summary>`,
+    );
     lines.push('');
     if (da.reviewTeams.length > 0) {
       lines.push(`**Review needed from:** ${da.reviewTeams.join(', ')}`);
@@ -171,7 +189,9 @@ export function formatMarkdown(report: CIReport): string {
   // Code ownership
   if (report.ownershipAnalysis) {
     const oa = report.ownershipAnalysis;
-    lines.push(`<details><summary>Code Ownership (${oa.teamsCrossed.length} contributors)</summary>`);
+    lines.push(
+      `<details><summary>Code Ownership (${oa.teamsCrossed.length} contributors)</summary>`,
+    );
     lines.push('');
     lines.push(`**Teams involved:** ${oa.teamsCrossed.join(', ')}`);
     lines.push('');
@@ -188,7 +208,9 @@ export function formatMarkdown(report: CIReport): string {
   // Deployment impact
   if (report.deploymentImpact) {
     const di = report.deploymentImpact;
-    lines.push(`<details><summary>Deployment Impact (${di.servicesAffected.length} services)</summary>`);
+    lines.push(
+      `<details><summary>Deployment Impact (${di.servicesAffected.length} services)</summary>`,
+    );
     lines.push('');
     lines.push('| Service | Type | Changed Files |');
     lines.push('|---------|------|--------------|');
@@ -213,9 +235,15 @@ export function formatMarkdown(report: CIReport): string {
     lines.push('| Metric | Delta | |');
     lines.push('|--------|-------|-|');
     lines.push(`| Risk score | ${formatDelta(b.riskDelta)} | ${arrow(b.riskDelta, true)} |`);
-    lines.push(`| Untested gaps | ${formatDeltaInt(b.untestedDelta)} | ${arrow(b.untestedDelta, true)} |`);
-    lines.push(`| Violations | ${formatDeltaInt(b.violationsDelta)} | ${arrow(b.violationsDelta, true)} |`);
-    lines.push(`| Dead exports | ${formatDeltaInt(b.deadExportsDelta)} | ${arrow(b.deadExportsDelta, true)} |`);
+    lines.push(
+      `| Untested gaps | ${formatDeltaInt(b.untestedDelta)} | ${arrow(b.untestedDelta, true)} |`,
+    );
+    lines.push(
+      `| Violations | ${formatDeltaInt(b.violationsDelta)} | ${arrow(b.violationsDelta, true)} |`,
+    );
+    lines.push(
+      `| Dead exports | ${formatDeltaInt(b.deadExportsDelta)} | ${arrow(b.deadExportsDelta, true)} |`,
+    );
     if (b.regressionDetected) {
       lines.push('');
       lines.push('**Warning: quality regression detected**');
@@ -227,7 +255,9 @@ export function formatMarkdown(report: CIReport): string {
 
   // Footer
   lines.push('---');
-  lines.push('_Generated by [trace-mcp](https://github.com/nikolai-vysotskyi/trace-mcp) CI Report_');
+  lines.push(
+    '_Generated by [trace-mcp](https://github.com/nikolai-vysotskyi/trace-mcp) CI Report_',
+  );
 
   return lines.join('\n');
 }

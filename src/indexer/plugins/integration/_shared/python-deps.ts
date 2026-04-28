@@ -16,12 +16,16 @@ export function hasPythonDep(ctx: ProjectContext, pkg: string): boolean {
   try {
     const content = fs.readFileSync(path.join(ctx.rootPath, 'pyproject.toml'), 'utf-8');
     if (new RegExp(`["']${escapeRegExp(pkg)}[>=<\\[!~\\s"']`, 'i').test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   try {
     const content = fs.readFileSync(path.join(ctx.rootPath, 'requirements.txt'), 'utf-8');
     if (new RegExp(`^${escapeRegExp(pkg)}\\b`, 'im').test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return false;
 }

@@ -1,15 +1,5 @@
-/**
- * Python import resolver — resolves py_imports edges to file-level dependencies.
- *
- * Handles:
- * - Absolute imports: `from myapp.models import User` → `myapp/models.py`
- * - Relative imports: `from . import utils` → sibling `utils.py`
- * - Package imports: `import myapp.models` → `myapp/models.py` or `myapp/models/__init__.py`
- * - __init__.py awareness: `from myapp import models` → `myapp/__init__.py` re-export
- */
-import * as path from 'node:path';
-import type { PipelineState } from '../pipeline-state.js';
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 /**
  * Resolve Python import edges from pendingImports into file��file edges.
@@ -20,9 +10,9 @@ export function resolvePythonImportEdges(state: PipelineState): void {
   if (state.pendingImports.size === 0) return;
 
   // Collect all indexed Python files for resolution
-  const allPyFiles = store.db.prepare(
-    `SELECT id, path FROM files WHERE language = 'python'`,
-  ).all() as Array<{ id: number; path: string }>;
+  const allPyFiles = store.db
+    .prepare(`SELECT id, path FROM files WHERE language = 'python'`)
+    .all() as Array<{ id: number; path: string }>;
 
   if (allPyFiles.length === 0) return;
 
@@ -48,9 +38,9 @@ export function resolvePythonImportEdges(state: PipelineState): void {
     }
   }
 
-  const importsEdgeType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('imports') as { id: number } | undefined;
+  const importsEdgeType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('imports') as { id: number } | undefined;
   if (!importsEdgeType) return;
 
   const insertStmt = store.db.prepare(

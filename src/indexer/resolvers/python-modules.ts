@@ -11,12 +11,7 @@
  * - Package vs module distinction (__init__.py)
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join, dirname, relative, normalize } from 'node:path';
-
-interface PyModuleResolveResult {
-  path: string;
-  isPackage: boolean;
-}
+import { dirname, join } from 'node:path';
 
 export class PyModuleResolver {
   private sourceRoots: string[];
@@ -55,11 +50,7 @@ export class PyModuleResolver {
    * @param name - The module name after the dots, or null for bare relative (`from . import X`)
    * @param importingFile - Path of the file containing the import, relative to project root
    */
-  resolveRelative(
-    dots: number,
-    name: string | null,
-    importingFile: string,
-  ): string | null {
+  resolveRelative(dots: number, name: string | null, importingFile: string): string | null {
     const normFile = importingFile.replace(/\\/g, '/');
 
     // Determine the package directory of the importing file.
@@ -193,7 +184,7 @@ export class PyModuleResolver {
 
     // [tool.setuptools.packages.find] → where = ["src"]
     const setupToolsWhereMatch = content.match(
-      /\[tool\.setuptools\.packages\.find\][^\[]*?where\s*=\s*\[([^\]]*)\]/s,
+      /\[tool\.setuptools\.packages\.find\][^[]*?where\s*=\s*\[([^\]]*)\]/s,
     );
     if (setupToolsWhereMatch) {
       const dirs = this.parseTomlStringArray(setupToolsWhereMatch[1]);
@@ -202,9 +193,7 @@ export class PyModuleResolver {
 
     // [tool.poetry.packages] → [{include = "myapp", from = "src"}]
     // This is an array of inline tables — extract `from` values
-    const poetryPkgSection = content.match(
-      /\[tool\.poetry\][^\[]*?packages\s*=\s*\[([^\]]*)\]/s,
-    );
+    const poetryPkgSection = content.match(/\[tool\.poetry\][^[]*?packages\s*=\s*\[([^\]]*)\]/s);
     if (poetryPkgSection) {
       const fromMatches = poetryPkgSection[1].matchAll(/from\s*=\s*"([^"]*)"/g);
       for (const m of fromMatches) {

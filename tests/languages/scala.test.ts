@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { ScalaLanguagePlugin } from '../../src/indexer/plugins/language/scala/index.js';
 
 const plugin = new ScalaLanguagePlugin();
@@ -14,7 +14,10 @@ async function extract(code: string, filePath = 'src/main/scala/App.scala') {
 describe('ScalaLanguagePlugin', () => {
   beforeAll(async () => {
     const probe = await plugin.extractSymbols('probe.scala', Buffer.from('class Probe\n'));
-    expect(probe.isOk(), `Scala parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+    expect(
+      probe.isOk(),
+      `Scala parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`,
+    ).toBe(true);
   });
 
   it('has correct manifest', () => {

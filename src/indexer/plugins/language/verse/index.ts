@@ -4,8 +4,9 @@
  * Extracts: class definitions, public methods, properties, variables.
  * Verse is the programming language for Unreal Editor for Fortnite (UEFN).
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'verse',

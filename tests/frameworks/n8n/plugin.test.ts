@@ -1,36 +1,32 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { WorkflowComplexity } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
 import {
-  N8nPlugin,
-  parseN8nWorkflow,
-  extractConnections,
-  extractTriggers,
-  extractRoutes,
-  extractCodeNodes,
-  extractSubWorkflowCalls,
-  extractHttpRequests,
-  extractStickyNotes,
+  classifyAiNode,
+  classifyNode,
+  computeWorkflowComplexity,
+  createExpressionInfo,
   extractAiNodes,
   extractAllExpressionDeps,
+  extractCodeNodes,
+  extractConnections,
   extractCredentialUsages,
-  extractFlowControl,
-  classifyNode,
-  classifyAiNode,
+  extractCustomNodeDefinitions,
   extractExpressionDeps,
+  extractFlowControl,
+  extractHttpRequests,
+  extractRoutes,
+  extractStickyNotes,
+  extractSubWorkflowCalls,
+  extractTriggers,
+  extractWorkflowExpressionInfo,
+  findDisconnectedNodes,
   getServiceDomain,
   isTriggerNode,
+  N8nPlugin,
   parseExpressions,
-  createExpressionInfo,
-  extractWorkflowExpressionInfo,
-  computeWorkflowComplexity,
-  findDisconnectedNodes,
-  extractCustomNodeDefinitions,
-} from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
-import type {
-  ExpressionInfo,
-  WorkflowComplexity,
-  CustomNodeDefinition,
+  parseN8nWorkflow,
 } from '../../../src/indexer/plugins/integration/tooling/n8n/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -240,97 +236,193 @@ describe('N8nPlugin', () => {
 
   describe('classifyNode()', () => {
     it('classifies trigger nodes', () => {
-      expect(classifyNode({ name: 'T', type: 'n8n-nodes-base.webhook', position: [0, 0] })).toBe('trigger');
-      expect(classifyNode({ name: 'T', type: 'n8n-nodes-base.scheduleTrigger', position: [0, 0] })).toBe('trigger');
-      expect(classifyNode({ name: 'T', type: 'n8n-nodes-base.gmailTrigger', position: [0, 0] })).toBe('trigger');
+      expect(classifyNode({ name: 'T', type: 'n8n-nodes-base.webhook', position: [0, 0] })).toBe(
+        'trigger',
+      );
+      expect(
+        classifyNode({ name: 'T', type: 'n8n-nodes-base.scheduleTrigger', position: [0, 0] }),
+      ).toBe('trigger');
+      expect(
+        classifyNode({ name: 'T', type: 'n8n-nodes-base.gmailTrigger', position: [0, 0] }),
+      ).toBe('trigger');
     });
 
     it('classifies code nodes', () => {
-      expect(classifyNode({ name: 'C', type: 'n8n-nodes-base.code', position: [0, 0] })).toBe('code');
-      expect(classifyNode({ name: 'C', type: 'n8n-nodes-base.function', position: [0, 0] })).toBe('code');
+      expect(classifyNode({ name: 'C', type: 'n8n-nodes-base.code', position: [0, 0] })).toBe(
+        'code',
+      );
+      expect(classifyNode({ name: 'C', type: 'n8n-nodes-base.function', position: [0, 0] })).toBe(
+        'code',
+      );
     });
 
     it('classifies flow control nodes', () => {
-      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.if', position: [0, 0] })).toBe('flow_control');
-      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.switch', position: [0, 0] })).toBe('flow_control');
-      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.merge', position: [0, 0] })).toBe('flow_control');
-      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.splitInBatches', position: [0, 0] })).toBe('flow_control');
-      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.wait', position: [0, 0] })).toBe('flow_control');
+      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.if', position: [0, 0] })).toBe(
+        'flow_control',
+      );
+      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.switch', position: [0, 0] })).toBe(
+        'flow_control',
+      );
+      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.merge', position: [0, 0] })).toBe(
+        'flow_control',
+      );
+      expect(
+        classifyNode({ name: 'F', type: 'n8n-nodes-base.splitInBatches', position: [0, 0] }),
+      ).toBe('flow_control');
+      expect(classifyNode({ name: 'F', type: 'n8n-nodes-base.wait', position: [0, 0] })).toBe(
+        'flow_control',
+      );
     });
 
     it('classifies data transform nodes', () => {
-      expect(classifyNode({ name: 'D', type: 'n8n-nodes-base.set', position: [0, 0] })).toBe('data_transform');
-      expect(classifyNode({ name: 'D', type: 'n8n-nodes-base.itemLists', position: [0, 0] })).toBe('data_transform');
-      expect(classifyNode({ name: 'D', type: 'n8n-nodes-base.crypto', position: [0, 0] })).toBe('data_transform');
+      expect(classifyNode({ name: 'D', type: 'n8n-nodes-base.set', position: [0, 0] })).toBe(
+        'data_transform',
+      );
+      expect(classifyNode({ name: 'D', type: 'n8n-nodes-base.itemLists', position: [0, 0] })).toBe(
+        'data_transform',
+      );
+      expect(classifyNode({ name: 'D', type: 'n8n-nodes-base.crypto', position: [0, 0] })).toBe(
+        'data_transform',
+      );
     });
 
     it('classifies AI nodes', () => {
-      expect(classifyNode({ name: 'A', type: '@n8n/n8n-nodes-langchain.agent', position: [0, 0] })).toBe('ai');
-      expect(classifyNode({ name: 'A', type: '@n8n/n8n-nodes-langchain.lmChatOpenAi', position: [0, 0] })).toBe('ai');
+      expect(
+        classifyNode({ name: 'A', type: '@n8n/n8n-nodes-langchain.agent', position: [0, 0] }),
+      ).toBe('ai');
+      expect(
+        classifyNode({
+          name: 'A',
+          type: '@n8n/n8n-nodes-langchain.lmChatOpenAi',
+          position: [0, 0],
+        }),
+      ).toBe('ai');
     });
 
     it('classifies sticky notes', () => {
-      expect(classifyNode({ name: 'S', type: 'n8n-nodes-base.stickyNote', position: [0, 0] })).toBe('sticky_note');
+      expect(classifyNode({ name: 'S', type: 'n8n-nodes-base.stickyNote', position: [0, 0] })).toBe(
+        'sticky_note',
+      );
     });
 
     it('classifies subworkflow nodes', () => {
-      expect(classifyNode({ name: 'E', type: 'n8n-nodes-base.executeWorkflow', position: [0, 0] })).toBe('subworkflow');
-      expect(classifyNode({ name: 'E', type: '@n8n/n8n-nodes-langchain.toolWorkflow', position: [0, 0] })).toBe('subworkflow');
+      expect(
+        classifyNode({ name: 'E', type: 'n8n-nodes-base.executeWorkflow', position: [0, 0] }),
+      ).toBe('subworkflow');
+      expect(
+        classifyNode({
+          name: 'E',
+          type: '@n8n/n8n-nodes-langchain.toolWorkflow',
+          position: [0, 0],
+        }),
+      ).toBe('subworkflow');
     });
 
     it('classifies http request nodes', () => {
-      expect(classifyNode({ name: 'H', type: 'n8n-nodes-base.httpRequest', position: [0, 0] })).toBe('http_request');
-      expect(classifyNode({ name: 'H', type: 'n8n-nodes-base.graphql', position: [0, 0] })).toBe('http_request');
+      expect(
+        classifyNode({ name: 'H', type: 'n8n-nodes-base.httpRequest', position: [0, 0] }),
+      ).toBe('http_request');
+      expect(classifyNode({ name: 'H', type: 'n8n-nodes-base.graphql', position: [0, 0] })).toBe(
+        'http_request',
+      );
     });
 
     it('falls back to action for generic nodes', () => {
-      expect(classifyNode({ name: 'G', type: 'n8n-nodes-base.postgres', position: [0, 0] })).toBe('action');
-      expect(classifyNode({ name: 'G', type: 'n8n-nodes-base.slack', position: [0, 0] })).toBe('action');
+      expect(classifyNode({ name: 'G', type: 'n8n-nodes-base.postgres', position: [0, 0] })).toBe(
+        'action',
+      );
+      expect(classifyNode({ name: 'G', type: 'n8n-nodes-base.slack', position: [0, 0] })).toBe(
+        'action',
+      );
     });
   });
 
   describe('classifyAiNode()', () => {
-    it('classifies agent', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.agent')).toBe('agent'));
-    it('classifies chain', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.chainLlm')).toBe('chain'));
-    it('classifies llm', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.lmChatOpenAi')).toBe('llm'));
-    it('classifies embedding', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.embeddingsOpenAi')).toBe('embedding'));
-    it('classifies memory', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.memoryBufferWindow')).toBe('memory'));
-    it('classifies vector_store', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.vectorStoreQdrant')).toBe('vector_store'));
-    it('classifies retriever', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.retrieverVectorStore')).toBe('retriever'));
-    it('classifies tool', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.toolWorkflow')).toBe('tool'));
-    it('classifies output_parser', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.outputParserStructured')).toBe('output_parser'));
-    it('classifies document_loader', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.documentDefaultDataLoader')).toBe('document_loader'));
-    it('classifies text_splitter', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter')).toBe('text_splitter'));
-    it('classifies standalone', () => expect(classifyAiNode('@n8n/n8n-nodes-langchain.openAi')).toBe('standalone'));
+    it('classifies agent', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.agent')).toBe('agent'));
+    it('classifies chain', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.chainLlm')).toBe('chain'));
+    it('classifies llm', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.lmChatOpenAi')).toBe('llm'));
+    it('classifies embedding', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.embeddingsOpenAi')).toBe('embedding'));
+    it('classifies memory', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.memoryBufferWindow')).toBe('memory'));
+    it('classifies vector_store', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.vectorStoreQdrant')).toBe('vector_store'));
+    it('classifies retriever', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.retrieverVectorStore')).toBe('retriever'));
+    it('classifies tool', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.toolWorkflow')).toBe('tool'));
+    it('classifies output_parser', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.outputParserStructured')).toBe(
+        'output_parser',
+      ));
+    it('classifies document_loader', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.documentDefaultDataLoader')).toBe(
+        'document_loader',
+      ));
+    it('classifies text_splitter', () =>
+      expect(
+        classifyAiNode('@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter'),
+      ).toBe('text_splitter'));
+    it('classifies standalone', () =>
+      expect(classifyAiNode('@n8n/n8n-nodes-langchain.openAi')).toBe('standalone'));
   });
 
   // ── isTriggerNode() — pattern-based trigger detection ──────────────────
 
   describe('isTriggerNode()', () => {
     it('matches core triggers', () => {
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.webhook', position: [0, 0] })).toBe(true);
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.cron', position: [0, 0] })).toBe(true);
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.emailReadImap', position: [0, 0] })).toBe(true);
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.webhook', position: [0, 0] })).toBe(
+        true,
+      );
+      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.cron', position: [0, 0] })).toBe(
+        true,
+      );
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-base.emailReadImap', position: [0, 0] }),
+      ).toBe(true);
     });
 
     it('matches ANY node ending in Trigger (pattern-based)', () => {
       // These are NOT in any hardcoded set — they work by suffix matching
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.shopifyTrigger', position: [0, 0] })).toBe(true);
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.hubspotTrigger', position: [0, 0] })).toBe(true);
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.notionTrigger', position: [0, 0] })).toBe(true);
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.typeformTrigger', position: [0, 0] })).toBe(true);
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.jiraTrigger', position: [0, 0] })).toBe(true);
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.woocommerceTrigger', position: [0, 0] })).toBe(true);
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-base.salesforceTrigger', position: [0, 0] })).toBe(true);
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-base.shopifyTrigger', position: [0, 0] }),
+      ).toBe(true);
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-base.hubspotTrigger', position: [0, 0] }),
+      ).toBe(true);
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-base.notionTrigger', position: [0, 0] }),
+      ).toBe(true);
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-base.typeformTrigger', position: [0, 0] }),
+      ).toBe(true);
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-base.jiraTrigger', position: [0, 0] }),
+      ).toBe(true);
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-base.woocommerceTrigger', position: [0, 0] }),
+      ).toBe(true);
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-base.salesforceTrigger', position: [0, 0] }),
+      ).toBe(true);
     });
 
     it('matches community/custom node triggers', () => {
-      expect(isTriggerNode({ name: 'T', type: 'n8n-nodes-custom.myServiceTrigger', position: [0, 0] })).toBe(true);
+      expect(
+        isTriggerNode({ name: 'T', type: 'n8n-nodes-custom.myServiceTrigger', position: [0, 0] }),
+      ).toBe(true);
     });
 
     it('does not match action nodes', () => {
-      expect(isTriggerNode({ name: 'N', type: 'n8n-nodes-base.slack', position: [0, 0] })).toBe(false);
-      expect(isTriggerNode({ name: 'N', type: 'n8n-nodes-base.postgres', position: [0, 0] })).toBe(false);
+      expect(isTriggerNode({ name: 'N', type: 'n8n-nodes-base.slack', position: [0, 0] })).toBe(
+        false,
+      );
+      expect(isTriggerNode({ name: 'N', type: 'n8n-nodes-base.postgres', position: [0, 0] })).toBe(
+        false,
+      );
     });
   });
 
@@ -778,26 +870,42 @@ describe('N8nPlugin', () => {
 
     describe('symbol extraction', () => {
       it('excludes sticky notes from symbols', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         expect(parsed.symbols.find((s) => s.name === 'Sticky Note')).toBeUndefined();
       });
 
       it('includes typeVersion in signature', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const validate = parsed.symbols.find((s) => s.name === 'Validate Order');
         expect(validate!.signature).toContain('@2');
       });
 
       it('captures node category in metadata', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
-        expect(parsed.symbols.find((s) => s.name === 'Check Amount')!.metadata!.category).toBe('flow_control');
-        expect(parsed.symbols.find((s) => s.name === 'Save to Database')!.metadata!.category).toBe('action');
-        expect(parsed.symbols.find((s) => s.name === 'Validate Order')!.metadata!.category).toBe('code');
-        expect(parsed.symbols.find((s) => s.name === 'Format Response')!.metadata!.category).toBe('data_transform');
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
+        expect(parsed.symbols.find((s) => s.name === 'Check Amount')!.metadata!.category).toBe(
+          'flow_control',
+        );
+        expect(parsed.symbols.find((s) => s.name === 'Save to Database')!.metadata!.category).toBe(
+          'action',
+        );
+        expect(parsed.symbols.find((s) => s.name === 'Validate Order')!.metadata!.category).toBe(
+          'code',
+        );
+        expect(parsed.symbols.find((s) => s.name === 'Format Response')!.metadata!.category).toBe(
+          'data_transform',
+        );
       });
 
       it('captures error handling settings on nodes', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
 
         const validate = parsed.symbols.find((s) => s.name === 'Validate Order');
         const eh = validate!.metadata!.errorHandling as Record<string, unknown>;
@@ -811,41 +919,59 @@ describe('N8nPlugin', () => {
       });
 
       it('captures per-node notes', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const db = parsed.symbols.find((s) => s.name === 'Save to Database');
         expect(db!.metadata!.notes).toContain('duplicate key');
       });
 
       it('captures full credential info on symbols', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const db = parsed.symbols.find((s) => s.name === 'Save to Database');
-        const creds = db!.metadata!.credentials as Array<{ type: string; id: string; name: string }>;
+        const creds = db!.metadata!.credentials as Array<{
+          type: string;
+          id: string;
+          name: string;
+        }>;
         expect(creds[0].type).toBe('postgres');
         expect(creds[0].id).toBe('1');
         expect(creds[0].name).toBe('Production DB');
       });
 
       it('captures AI metadata on AI node symbols', () => {
-        const parsed = plugin.extractNodes('ai.json', fs.readFileSync(AI_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('ai.json', fs.readFileSync(AI_WF), 'json')
+          ._unsafeUnwrap();
         const llm = parsed.symbols.find((s) => s.name === 'OpenAI Model');
         expect(llm!.metadata!.aiRole).toBe('llm');
         expect(llm!.metadata!.aiModel).toBe('gpt-4o');
       });
 
       it('captures flow control metadata (merge mode, batch size)', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
-        expect(parsed.symbols.find((s) => s.name === 'Merge Results')!.metadata!.mergeMode).toBe('multiplex');
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
+        expect(parsed.symbols.find((s) => s.name === 'Merge Results')!.metadata!.mergeMode).toBe(
+          'multiplex',
+        );
         expect(parsed.symbols.find((s) => s.name === 'Process Items')!.metadata!.batchSize).toBe(5);
       });
 
       it('captures serviceDomain on integration nodes', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const db = parsed.symbols.find((s) => s.name === 'Save to Database');
         expect(db!.metadata!.serviceDomain).toBe('database');
       });
 
       it('captures serviceDomain on error handler nodes', () => {
-        const parsed = plugin.extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')
+          ._unsafeUnwrap();
         const slack = parsed.symbols.find((s) => s.name === 'Alert Slack Critical');
         expect(slack!.metadata!.serviceDomain).toBe('communication');
         const pg = parsed.symbols.find((s) => s.name === 'Log to DB');
@@ -855,7 +981,9 @@ describe('N8nPlugin', () => {
 
     describe('metadata', () => {
       it('includes settings, pinData, templateId, sticky notes', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         expect((parsed.metadata!.settings as any).timezone).toBe('America/New_York');
         expect(parsed.metadata!.hasPinData).toBe(true);
         expect(parsed.metadata!.templateId).toBe('tmpl-orders-v2');
@@ -864,7 +992,9 @@ describe('N8nPlugin', () => {
       });
 
       it('normalizes tag objects to strings', () => {
-        const parsed = plugin.extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')
+          ._unsafeUnwrap();
         const tags = parsed.metadata!.tags as string[];
         expect(tags).toContain('error-handling');
         expect(tags).toContain('infrastructure');
@@ -873,7 +1003,9 @@ describe('N8nPlugin', () => {
 
     describe('edge extraction', () => {
       it('creates typed main connection edges', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const mainEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_connection');
         expect(mainEdges.length).toBeGreaterThanOrEqual(8);
         for (const e of mainEdges) {
@@ -882,7 +1014,9 @@ describe('N8nPlugin', () => {
       });
 
       it('creates AI connection edges with ai type', () => {
-        const parsed = plugin.extractNodes('ai.json', fs.readFileSync(AI_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('ai.json', fs.readFileSync(AI_WF), 'json')
+          ._unsafeUnwrap();
         const aiEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_ai_connection');
         expect(aiEdges.length).toBeGreaterThanOrEqual(5);
 
@@ -893,7 +1027,9 @@ describe('N8nPlugin', () => {
       });
 
       it('creates conditional branch edges for IF node', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const branchEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_conditional_branch');
         const trueBranch = branchEdges.filter((e) => e.metadata!.branch === 'true');
         const falseBranch = branchEdges.filter((e) => e.metadata!.branch === 'false');
@@ -902,7 +1038,9 @@ describe('N8nPlugin', () => {
       });
 
       it('creates conditional branch edges for switch node', () => {
-        const parsed = plugin.extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')
+          ._unsafeUnwrap();
         const branchEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_conditional_branch');
         expect(branchEdges.length).toBe(3);
         expect(branchEdges[0].metadata!.branch).toBe('case_0');
@@ -911,13 +1049,17 @@ describe('N8nPlugin', () => {
       });
 
       it('creates trigger edges', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const triggerEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_triggers');
         expect(triggerEdges.length).toBeGreaterThanOrEqual(1);
       });
 
       it('creates credential edges with full detail', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const credEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_uses_credential');
         expect(credEdges.length).toBe(2);
 
@@ -927,7 +1069,9 @@ describe('N8nPlugin', () => {
       });
 
       it('creates expression dependency edges', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const exprEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_expression_dep');
         expect(exprEdges.length).toBe(2);
         const targets = exprEdges.map((e) => e.targetSymbolId);
@@ -935,28 +1079,36 @@ describe('N8nPlugin', () => {
       });
 
       it('creates error workflow edge from settings', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const errEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_error_workflow');
         expect(errEdges.length).toBe(1);
         expect(errEdges[0].metadata!.targetWorkflowId).toBe('wf-err-001');
       });
 
       it('creates sub-workflow edges', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const subEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_calls_subworkflow');
         expect(subEdges.length).toBe(1);
         expect(subEdges[0].metadata!.targetWorkflowId).toBe('payment-flow');
       });
 
       it('creates HTTP request edges with authentication', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const httpEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_http_request');
         expect(httpEdges.length).toBe(1);
         expect(httpEdges[0].metadata!.authentication).toBe('headerAuth');
       });
 
       it('creates external service edges with domain', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const svcEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_external_service');
         expect(svcEdges.length).toBeGreaterThanOrEqual(1);
         const pgEdge = svcEdges.find((e) => e.metadata!.service === 'postgres');
@@ -965,14 +1117,18 @@ describe('N8nPlugin', () => {
       });
 
       it('aggregates serviceDomains in workflow metadata', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         const domains = parsed.metadata!.serviceDomains as string[];
         expect(domains).toBeDefined();
         expect(domains).toContain('database');
       });
 
       it('creates external service edges for error handler', () => {
-        const parsed = plugin.extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('err.json', fs.readFileSync(ERROR_WF), 'json')
+          ._unsafeUnwrap();
         const svcEdges = parsed.edges!.filter((e) => e.edgeType === 'n8n_external_service');
         const domains = new Set(svcEdges.map((e) => e.metadata!.serviceDomain));
         expect(domains.has('communication')).toBe(true); // slack nodes
@@ -982,14 +1138,18 @@ describe('N8nPlugin', () => {
 
     describe('routes', () => {
       it('extracts webhook routes', () => {
-        const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+          ._unsafeUnwrap();
         expect(parsed.routes!.length).toBe(1);
         expect(parsed.routes![0].method).toBe('POST');
         expect(parsed.routes![0].uri).toBe('/orders/new');
       });
 
       it('extracts CHAT routes from AI workflow', () => {
-        const parsed = plugin.extractNodes('ai.json', fs.readFileSync(AI_WF), 'json')._unsafeUnwrap();
+        const parsed = plugin
+          .extractNodes('ai.json', fs.readFileSync(AI_WF), 'json')
+          ._unsafeUnwrap();
         const chats = parsed.routes!.filter((r) => r.method === 'CHAT');
         expect(chats.length).toBe(1);
       });
@@ -1089,7 +1249,7 @@ describe('N8nPlugin', () => {
   describe('parseExpressions()', () => {
     it('parses $("Node Name") shorthand syntax', () => {
       const info = createExpressionInfo();
-      parseExpressions('={{ $(\'My Node\').item.json.field }}', info);
+      parseExpressions("={{ $('My Node').item.json.field }}", info);
       expect(info.nodeDeps.has('My Node')).toBe(true);
     });
 
@@ -1131,12 +1291,15 @@ describe('N8nPlugin', () => {
 
     it('combines all patterns in a single expression', () => {
       const info = createExpressionInfo();
-      parseExpressions({
-        a: '={{ $node["A"].json.x }}',
-        b: '={{ $("B").item.json.y }}',
-        c: '={{ $env.SECRET }}',
-        d: '={{ $execution.mode }}',
-      }, info);
+      parseExpressions(
+        {
+          a: '={{ $node["A"].json.x }}',
+          b: '={{ $("B").item.json.y }}',
+          c: '={{ $env.SECRET }}',
+          d: '={{ $execution.mode }}',
+        },
+        info,
+      );
       expect(info.nodeDeps.has('A')).toBe(true);
       expect(info.nodeDeps.has('B')).toBe(true);
       expect(info.envVars.has('SECRET')).toBe(true);
@@ -1145,7 +1308,7 @@ describe('N8nPlugin', () => {
 
     it('backward-compatible extractExpressionDeps includes shorthand', () => {
       const deps = new Set<string>();
-      extractExpressionDeps('={{ $(\'ShortNode\').json }}', deps);
+      extractExpressionDeps("={{ $('ShortNode').json }}", deps);
       expect(deps.has('ShortNode')).toBe(true);
     });
   });
@@ -1172,13 +1335,17 @@ describe('N8nPlugin', () => {
 
   describe('extractNodes() expression metadata', () => {
     it('includes envVars in workflow metadata', () => {
-      const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+      const parsed = plugin
+        .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+        ._unsafeUnwrap();
       expect(parsed.metadata!.envVars).toBeDefined();
-      expect((parsed.metadata!.envVars as string[])).toContain('API_KEY');
+      expect(parsed.metadata!.envVars as string[]).toContain('API_KEY');
     });
 
     it('includes usesExecution in workflow metadata', () => {
-      const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+      const parsed = plugin
+        .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+        ._unsafeUnwrap();
       expect(parsed.metadata!.usesExecution).toBe(true);
     });
   });
@@ -1243,7 +1410,9 @@ describe('N8nPlugin', () => {
     });
 
     it('reports complexity in extractNodes metadata', () => {
-      const parsed = plugin.extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')._unsafeUnwrap();
+      const parsed = plugin
+        .extractNodes('order.json', fs.readFileSync(ORDER_WF), 'json')
+        ._unsafeUnwrap();
       const complexity = parsed.metadata!.complexity as WorkflowComplexity;
       expect(complexity).toBeDefined();
       expect(complexity.nodeCount).toBe(12);
@@ -1292,7 +1461,7 @@ describe('N8nPlugin', () => {
           { name: 'Orphan', type: 'n8n-nodes-base.set', position: [200, 200] },
         ],
         connections: {
-          'Trigger': { main: [[{ node: 'Connected', type: 'main', index: 0 }]] },
+          Trigger: { main: [[{ node: 'Connected', type: 'main', index: 0 }]] },
         },
       };
       const conns = extractConnections(wf);
@@ -1311,12 +1480,12 @@ describe('N8nPlugin', () => {
           { name: 'Orphan', type: 'n8n-nodes-base.set', position: [200, 200] },
         ],
         connections: {
-          'Trigger': { main: [[{ node: 'Action', type: 'main', index: 0 }]] },
+          Trigger: { main: [[{ node: 'Action', type: 'main', index: 0 }]] },
         },
       });
       const parsed = plugin.extractNodes('test.json', Buffer.from(wfJson), 'json')._unsafeUnwrap();
       expect(parsed.metadata!.disconnectedNodes).toBeDefined();
-      expect((parsed.metadata!.disconnectedNodes as string[])).toContain('Orphan');
+      expect(parsed.metadata!.disconnectedNodes as string[]).toContain('Orphan');
     });
 
     it('omits disconnectedNodes from metadata when none exist', () => {
@@ -1345,8 +1514,8 @@ describe('N8nPlugin', () => {
       expect(sharedCreds.length).toBeGreaterThanOrEqual(1);
 
       // postgres:1 is shared between order-processing and error-handler
-      const pgShared = sharedCreds.find((e) =>
-        e.metadata!.credentialType === 'postgres' && e.metadata!.credentialId === '1',
+      const pgShared = sharedCreds.find(
+        (e) => e.metadata!.credentialType === 'postgres' && e.metadata!.credentialId === '1',
       );
       expect(pgShared).toBeDefined();
       expect(pgShared!.resolved).toBe(true);
@@ -1359,8 +1528,8 @@ describe('N8nPlugin', () => {
       const sharedCreds = edges.filter((e) => e.edgeType === 'n8n_shared_credential');
 
       // httpHeaderAuth id=5 is only in order-processing, should NOT appear
-      const httpShared = sharedCreds.find((e) =>
-        e.metadata!.credentialType === 'httpHeaderAuth' && e.metadata!.credentialId === '5',
+      const httpShared = sharedCreds.find(
+        (e) => e.metadata!.credentialType === 'httpHeaderAuth' && e.metadata!.credentialId === '5',
       );
       expect(httpShared).toBeUndefined();
     });
@@ -1391,7 +1560,7 @@ function createMockResolveContext() {
       const content = fileContents[file.path];
       if (!content) return [];
       const wf = parseN8nWorkflow(Buffer.from(content));
-      if (!wf || !wf.nodes.length) return [];
+      if (!wf?.nodes.length) return [];
       return [{ symbolId: `${file.path}::${wf.nodes[0].name}#constant` }];
     },
   } as any;

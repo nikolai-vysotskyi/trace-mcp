@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ── Types (mirrored from api-client.ts — renderer can't import main process modules) ──
 
@@ -48,8 +48,21 @@ export interface SettingsState {
 }
 
 type SSEEvent =
-  | { type: 'project_status'; project: string; status: string; error?: string; progress?: ProgressSnapshot }
-  | { type: 'indexing_progress'; project: string; phase: string; current?: number; processed?: number; total: number }
+  | {
+      type: 'project_status';
+      project: string;
+      status: string;
+      error?: string;
+      progress?: ProgressSnapshot;
+    }
+  | {
+      type: 'indexing_progress';
+      project: string;
+      phase: string;
+      current?: number;
+      processed?: number;
+      total: number;
+    }
   | { type: 'indexing_done'; project: string }
   | { type: 'client_connect'; clientId: string; transport: string; project?: string; name?: string }
   | { type: 'client_update'; clientId: string; project?: string; name?: string }
@@ -230,14 +243,18 @@ export function useDaemon() {
   const reindexProject = useCallback(async (root: string) => {
     // Optimistic: set status to indexing immediately
     setProjects((prev) =>
-      prev.map((p) => p.root === root ? { ...p, status: 'indexing', progress: undefined } : p),
+      prev.map((p) => (p.root === root ? { ...p, status: 'indexing', progress: undefined } : p)),
     );
     try {
-      await fetch(`${BASE}/api/projects/reindex?project=${encodeURIComponent(root)}`, { method: 'POST' });
+      await fetch(`${BASE}/api/projects/reindex?project=${encodeURIComponent(root)}`, {
+        method: 'POST',
+      });
     } catch {
       // Revert on failure
       setProjects((prev) =>
-        prev.map((p) => p.root === root && p.status === 'indexing' ? { ...p, status: 'ready' } : p),
+        prev.map((p) =>
+          p.root === root && p.status === 'indexing' ? { ...p, status: 'ready' } : p,
+        ),
       );
     }
   }, []);
@@ -245,7 +262,7 @@ export function useDaemon() {
   const [restarting, setRestarting] = useState(false);
 
   const restartDaemon = useCallback(async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.restartDaemon) return;
 
     setRestarting(true);
@@ -257,8 +274,13 @@ export function useDaemon() {
         await new Promise((r) => setTimeout(r, 500));
         try {
           const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(500) });
-          if (res.ok) { ready = true; break; }
-        } catch { /* not ready yet */ }
+          if (res.ok) {
+            ready = true;
+            break;
+          }
+        } catch {
+          /* not ready yet */
+        }
       }
       if (ready) {
         await fetchProjects();
@@ -274,21 +296,35 @@ export function useDaemon() {
     }
   }, [fetchProjects, fetchClients, fetchSettings]);
 
-  const updateSettings = useCallback(async (patch: Record<string, unknown>) => {
-    try {
-      await fetch(`${BASE}/api/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      await fetchSettings();
-    } catch {
-      // ignore
-    }
-  }, [fetchSettings]);
+  const updateSettings = useCallback(
+    async (patch: Record<string, unknown>) => {
+      try {
+        await fetch(`${BASE}/api/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+        await fetchSettings();
+      } catch {
+        // ignore
+      }
+    },
+    [fetchSettings],
+  );
 
   return {
-    projects, clients, settings, loading, connected, restarting,
-    addProject, removeProject, reindexProject, restartDaemon, updateSettings, fetchSettings, fetchClients,
+    projects,
+    clients,
+    settings,
+    loading,
+    connected,
+    restarting,
+    addProject,
+    removeProject,
+    reindexProject,
+    restartDaemon,
+    updateSettings,
+    fetchSettings,
+    fetchClients,
   };
 }

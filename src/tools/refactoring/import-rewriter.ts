@@ -50,14 +50,14 @@ export function computeNewImportSpecifier(
     // try '@/utils/bar'
     const aliasPrefix = oldSpecifier.split('/').slice(0, 1).join('/');
     if (aliasPrefix.startsWith('@') || aliasPrefix.startsWith('~')) {
-      const oldSuffix = oldSpecifier.slice(aliasPrefix.length);
+      const _oldSuffix = oldSpecifier.slice(aliasPrefix.length);
       // Compute what the suffix would be for the new path
       const resolved = resolver.resolve(aliasPrefix, importingFilePath);
       if (resolved) {
         const aliasRoot = path.dirname(resolved);
         const newRelToAlias = path.relative(aliasRoot, newTargetAbsPath);
         if (!newRelToAlias.startsWith('..')) {
-          const newSpecifier = aliasPrefix + '/' + stripExtension(newRelToAlias);
+          const newSpecifier = `${aliasPrefix}/${stripExtension(newRelToAlias)}`;
           // Verify it resolves correctly
           const check = resolver.resolve(newSpecifier, importingFilePath);
           if (check && normalizePath(check) === normalizePath(newTargetAbsPath)) {
@@ -76,10 +76,7 @@ export function computeNewImportSpecifier(
  * Compute a relative import specifier from one file to another.
  * Strips extensions per TS/JS convention and ensures leading './'.
  */
-export function computeRelativeSpecifier(
-  fromFile: string,
-  toFile: string,
-): string {
+export function computeRelativeSpecifier(fromFile: string, toFile: string): string {
   const fromDir = path.dirname(fromFile);
   let rel = path.relative(fromDir, toFile);
 
@@ -93,7 +90,7 @@ export function computeRelativeSpecifier(
 
   // Ensure leading './' for same-directory or child imports
   if (!rel.startsWith('.') && !rel.startsWith('/')) {
-    rel = './' + rel;
+    rel = `./${rel}`;
   }
 
   // Normalize separators to forward slashes
@@ -247,7 +244,12 @@ export function rewriteImportForMovedTarget(
   dryRun: boolean,
   resolver?: EsModuleResolver,
 ): FileEdit[] {
-  const oldSpecifier = findImportSpecifier(importerAbsPath, oldTargetAbsPath, projectRoot, resolver);
+  const oldSpecifier = findImportSpecifier(
+    importerAbsPath,
+    oldTargetAbsPath,
+    projectRoot,
+    resolver,
+  );
   if (!oldSpecifier) return [];
 
   const newSpecifier = computeNewImportSpecifier(

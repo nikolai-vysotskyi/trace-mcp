@@ -1,14 +1,28 @@
-import { describe, it, expect } from 'vitest';
-import { packContext } from '../../src/tools/refactoring/pack-context.js';
+import { describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import type { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { packContext } from '../../src/tools/refactoring/pack-context.js';
 
 function createMockStore(files: { id: number; path: string }[] = []): Store {
   const symbols = new Map<number, any[]>();
   for (const f of files) {
     symbols.set(f.id, [
-      { name: 'TestClass', kind: 'class', fqn: 'TestClass', signature: 'class TestClass', line_start: 1, line_end: 10 },
-      { name: 'testFunc', kind: 'function', fqn: 'testFunc', signature: 'function testFunc(): void', line_start: 12, line_end: 20 },
+      {
+        name: 'TestClass',
+        kind: 'class',
+        fqn: 'TestClass',
+        signature: 'class TestClass',
+        line_start: 1,
+        line_end: 10,
+      },
+      {
+        name: 'testFunc',
+        kind: 'function',
+        fqn: 'testFunc',
+        signature: 'function testFunc(): void',
+        line_start: 12,
+        line_end: 20,
+      },
     ]);
   }
 
@@ -16,10 +30,29 @@ function createMockStore(files: { id: number; path: string }[] = []): Store {
     getAllFiles: () => files,
     getSymbolsByFile: (id: number) => symbols.get(id) ?? [],
     getAllRoutes: () => [
-      { method: 'GET', uri: '/api/users', handler: 'UserController.index', file_id: 1, metadata: null },
-      { method: 'POST', uri: '/api/users', handler: 'UserController.store', file_id: 1, metadata: null },
+      {
+        method: 'GET',
+        uri: '/api/users',
+        handler: 'UserController.index',
+        file_id: 1,
+        metadata: null,
+      },
+      {
+        method: 'POST',
+        uri: '/api/users',
+        handler: 'UserController.store',
+        file_id: 1,
+        metadata: null,
+      },
     ],
-    searchSymbols: () => ({ items: files.map((f) => ({ symbol: { name: 'TestClass', kind: 'class', fqn: 'TestClass', line_start: 1 }, file: f, score: 1 })), total: files.length }),
+    searchSymbols: () => ({
+      items: files.map((f) => ({
+        symbol: { name: 'TestClass', kind: 'class', fqn: 'TestClass', line_start: 1 },
+        file: f,
+        score: 1,
+      })),
+      total: files.length,
+    }),
     db: { prepare: () => ({ all: () => [], get: () => null }) },
     getFile: () => null,
   } as unknown as Store;

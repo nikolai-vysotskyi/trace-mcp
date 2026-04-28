@@ -2,17 +2,18 @@
  * Integration: Vue component tree through full pipeline.
  * Does get_component_tree actually work after a real pipeline run?
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { getComponentTree } from '../../src/tools/framework/components.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { getChangeImpact } from '../../src/tools/analysis/impact.js';
+import { getComponentTree } from '../../src/tools/framework/components.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('Vue component tree e2e', () => {
   let store: Store;
@@ -66,8 +67,14 @@ describe('Vue component tree e2e', () => {
     if (result.isErr()) {
       // If there's no component entry, the tool won't work — document this
       console.log('get_component_tree error:', result.error);
-      console.log('Components in DB:', store.getAllComponents().map(c => `${c.name} fileId=${c.file_id}`));
-      console.log('Files:', files.map(f => `id=${f.id} ${f.path}`));
+      console.log(
+        'Components in DB:',
+        store.getAllComponents().map((c) => `${c.name} fileId=${c.file_id}`),
+      );
+      console.log(
+        'Files:',
+        files.map((f) => `id=${f.id} ${f.path}`),
+      );
       // This is a known gap: VueLanguagePlugin creates components,
       // but only if extractNodes in framework plugin also runs
       return;
@@ -80,11 +87,7 @@ describe('Vue component tree e2e', () => {
   });
 
   it('get_change_impact finds dependents of UserCard.vue', () => {
-    const result = getChangeImpact(
-      store,
-      { filePath: 'src/components/UserCard.vue' },
-      3,
-    );
+    const result = getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }, 3);
     if (result.isErr()) {
       console.log('get_change_impact error:', result.error);
       return;
@@ -92,7 +95,9 @@ describe('Vue component tree e2e', () => {
 
     const impact = result.value;
     expect(impact.target.path).toContain('UserCard.vue');
-    console.log(`Change impact: ${impact.totalAffected} affected, dependents:`,
-      impact.dependents.map((d) => `${d.path} (${d.edgeTypes.join(', ')})`));
+    console.log(
+      `Change impact: ${impact.totalAffected} affected, dependents:`,
+      impact.dependents.map((d) => `${d.path} (${d.edgeTypes.join(', ')})`),
+    );
   });
 });

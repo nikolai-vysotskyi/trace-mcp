@@ -12,18 +12,17 @@
  * and packages/app/src/main/daemon-lifecycle.ts (electron app).
  */
 
+import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { execSync, spawn } from 'node:child_process';
 import {
-  TRACE_MCP_HOME,
-  DEFAULT_DAEMON_PORT,
   DAEMON_LOG_PATH,
+  DEFAULT_DAEMON_PORT,
   LAUNCHD_PLIST_PATH,
+  TRACE_MCP_HOME,
 } from '../global.js';
-import { getDaemonHealth, isDaemonRunning } from './client.js';
 import { logger } from '../logger.js';
+import { getDaemonHealth, isDaemonRunning } from './client.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 // Bump when the plist contents (env vars, args, KeepAlive policy, throttle) change.
@@ -42,8 +41,9 @@ function runQuiet(cmd: string): { ok: boolean; stderr?: string } {
   try {
     execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'] });
     return { ok: true };
-  } catch (err: any) {
-    return { ok: false, stderr: err?.stderr?.toString?.() ?? String(err) };
+  } catch (err) {
+    const stderr = (err as { stderr?: { toString?: () => string } })?.stderr;
+    return { ok: false, stderr: stderr?.toString?.() ?? String(err) };
   }
 }
 
@@ -135,7 +135,7 @@ function installPlist(port: number): void {
   fs.writeFileSync(LAUNCHD_PLIST_PATH, generatePlist(binaryPath, port), 'utf-8');
 }
 
-function isPlistLoaded(): boolean {
+function _isPlistLoaded(): boolean {
   try {
     const out = execSync(`launchctl list ${PLIST_LABEL} 2>&1`, { encoding: 'utf-8' });
     return !out.includes('Could not find service');
@@ -230,12 +230,16 @@ function readDaemonPid(): number | null {
   const pidFile = getPidFilePath();
   if (!fs.existsSync(pidFile)) return null;
   const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
-  if (isNaN(pid)) return null;
+  if (Number.isNaN(pid)) return null;
   try {
     process.kill(pid, 0);
     return pid;
   } catch {
-    try { fs.unlinkSync(pidFile); } catch { /* noop */ }
+    try {
+      fs.unlinkSync(pidFile);
+    } catch {
+      /* noop */
+    }
     return null;
   }
 }
@@ -249,8 +253,14 @@ function stopDaemonByPid(): void {
     } else {
       process.kill(pid, 'SIGTERM');
     }
-  } catch { /* already dead */ }
-  try { fs.unlinkSync(getPidFilePath()); } catch { /* noop */ }
+  } catch {
+    /* already dead */
+  }
+  try {
+    fs.unlinkSync(getPidFilePath());
+  } catch {
+    /* noop */
+  }
 }
 
 function ensureDaemonGeneric(port: number): EnsureResult {
@@ -261,12 +271,18 @@ function ensureDaemonGeneric(port: number): EnsureResult {
   if (!fs.existsSync(TRACE_MCP_HOME)) fs.mkdirSync(TRACE_MCP_HOME, { recursive: true });
 
   let binaryPath: string;
-  try { binaryPath = resolveTraceMcpBinary(); }
-  catch (err) { return { ok: false, error: (err as Error).message }; }
+  try {
+    binaryPath = resolveTraceMcpBinary();
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
 
   let logFd: number;
-  try { logFd = fs.openSync(DAEMON_LOG_PATH, 'a'); }
-  catch (err) { return { ok: false, error: `Cannot open log: ${(err as Error).message}` }; }
+  try {
+    logFd = fs.openSync(DAEMON_LOG_PATH, 'a');
+  } catch (err) {
+    return { ok: false, error: `Cannot open log: ${(err as Error).message}` };
+  }
 
   try {
     const child = spawn(binaryPath, ['serve-http', '--port', String(port)], {
@@ -284,7 +300,11 @@ function ensureDaemonGeneric(port: number): EnsureResult {
   } catch (err) {
     return { ok: false, error: `Spawn failed: ${(err as Error).message}` };
   } finally {
-    try { fs.closeSync(logFd); } catch { /* noop */ }
+    try {
+      fs.closeSync(logFd);
+    } catch {
+      /* noop */
+    }
   }
 
   return { ok: true, strategy: 'detached' };
@@ -370,12 +390,14 @@ function acquireSpawnLock(): boolean {
       const stat = fs.statSync(SPAWN_LOCK_PATH);
       const age = Date.now() - stat.mtimeMs;
       const pid = parseInt(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8').trim(), 10);
-      const dead = isNaN(pid) || !isProcessAlive(pid);
+      const dead = Number.isNaN(pid) || !isProcessAlive(pid);
       if (dead || age > SPAWN_LOCK_STALE_MS) {
         fs.writeFileSync(SPAWN_LOCK_PATH, String(process.pid), 'utf-8');
         return true;
       }
-    } catch { /* race with another process — give up */ }
+    } catch {
+      /* race with another process — give up */
+    }
     return false;
   }
 }
@@ -386,7 +408,9 @@ function releaseSpawnLock(): void {
     if (pid === process.pid) {
       fs.unlinkSync(SPAWN_LOCK_PATH);
     }
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -430,7 +454,9 @@ export async function tryAutoSpawnDaemon(
     logger.debug('tryAutoSpawnDaemon: lock held by another process, waiting');
     const waitMs = Math.max(0, deadline - Date.now());
     const up = await waitForDaemonUp(port, waitMs);
-    return up ? { ok: true, alreadyRunning: true } : { ok: false, error: 'timeout waiting for concurrent spawn' };
+    return up
+      ? { ok: true, alreadyRunning: true }
+      : { ok: false, error: 'timeout waiting for concurrent spawn' };
   }
 
   try {

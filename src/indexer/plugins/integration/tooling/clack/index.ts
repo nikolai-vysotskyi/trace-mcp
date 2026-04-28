@@ -6,31 +6,32 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
 const PROMPT_PACKAGES = [
-  '@clack/prompts', '@clack/core',
-  'inquirer', '@inquirer/prompts',
-  'prompts', 'enquirer',
+  '@clack/prompts',
+  '@clack/core',
+  'inquirer',
+  '@inquirer/prompts',
+  'prompts',
+  'enquirer',
 ];
 
 // clack.intro('...'), clack.outro('...')
-const CLACK_FLOW_RE =
-  /(?:intro|outro|spinner|log\.(?:info|warn|error|success|step))\s*\(/g;
+const CLACK_FLOW_RE = /(?:intro|outro|spinner|log\.(?:info|warn|error|success|step))\s*\(/g;
 
 // clack.text({...}), clack.select({...}), clack.confirm({...}), clack.multiselect({...})
 const CLACK_PROMPT_RE =
   /(?:text|select|confirm|multiselect|selectKey|group|password|isCancel)\s*\(\s*\{/g;
 
 // inquirer.prompt([...]), prompt({...})
-const INQUIRER_PROMPT_RE =
-  /(?:inquirer\.prompt|prompt)\s*\(\s*[\[{]/g;
+const INQUIRER_PROMPT_RE = /(?:inquirer\.prompt|prompt)\s*\(\s*[[{]/g;
 
 // Import detection
 const PROMPT_IMPORT_RE =

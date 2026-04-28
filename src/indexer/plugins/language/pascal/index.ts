@@ -7,12 +7,16 @@
  * Comment stripping: { }, (* *), //
  * Scope: begin-end (Pascal uses 'end' keyword for scope termination)
  */
-import { createMultiPassPlugin, type CommentStyle, type ScopeConfig } from '../regex-base-v2.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin, type ScopeConfig } from '../regex-base-v2.js';
 
 const comments: CommentStyle = {
   line: ['//'],
-  block: [['{', '}'], ['(*', '*)']],
+  block: [
+    ['{', '}'],
+    ['(*', '*)'],
+  ],
   strings: ["'"],
 };
 
@@ -75,7 +79,11 @@ const _plugin = createMultiPassPlugin({
 
   symbolPatterns: [
     // Top-level procedure/function (not inside class)
-    { kind: 'function', pattern: /^\s*(?:class\s+)?procedure\s+(?:(\w+)\.)?(\w+)/gim, nameGroup: 2 },
+    {
+      kind: 'function',
+      pattern: /^\s*(?:class\s+)?procedure\s+(?:(\w+)\.)?(\w+)/gim,
+      nameGroup: 2,
+    },
     { kind: 'function', pattern: /^\s*(?:class\s+)?function\s+(?:(\w+)\.)?(\w+)/gim, nameGroup: 2 },
     // Constructor/destructor at top level (implementation section)
     { kind: 'function', pattern: /^\s*constructor\s+(?:(\w+)\.)?(\w+)/gim, nameGroup: 2 },
@@ -95,7 +103,11 @@ const _plugin = createMultiPassPlugin({
     // property declarations (also at top level in implementation)
     { kind: 'property', pattern: /^\s*property\s+(\w+)/gim },
     // var declarations (resourcestring, threadvar)
-    { kind: 'variable', pattern: /^\s*(\w+)\s*:\s*(?:string|integer|boolean|byte|word|cardinal|real|double|extended|pointer|TObject)\b/gim },
+    {
+      kind: 'variable',
+      pattern:
+        /^\s*(\w+)\s*:\s*(?:string|integer|boolean|byte|word|cardinal|real|double|extended|pointer|TObject)\b/gim,
+    },
   ],
 
   importPatterns: [

@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import type { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { searchFts } from '../../src/db/fts.js';
-import type { RawSymbol } from '../../src/plugin-api/types.js';
-import type { RawOrmModel, RawRnScreen } from '../../src/plugin-api/types.js';
+import type { Store } from '../../src/db/store.js';
+import type { RawOrmModel, RawRnScreen, RawSymbol } from '../../src/plugin-api/types.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('Store', () => {
   let store: Store;
@@ -308,7 +307,10 @@ describe('Store', () => {
       store.insertRnScreen(
         {
           name: 'Camera',
-          metadata: { nativeModules: ['CameraModule'], platformSpecific: { ios: 'Camera.ios.tsx' } },
+          metadata: {
+            nativeModules: ['CameraModule'],
+            platformSpecific: { ios: 'Camera.ios.tsx' },
+          },
         },
         fileId,
       );

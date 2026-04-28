@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { flushSessionSummary, getSessionResume } from '../../src/session/resume.js';
 
 // Use a temp dir to avoid polluting real ~/.trace-mcp
@@ -29,9 +29,13 @@ describe('Session Resume', () => {
           if (content.includes('test-project')) {
             fs.unlinkSync(filePath);
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   });
 
   it('returns empty resume for project with no sessions', () => {
@@ -87,7 +91,7 @@ describe('Session Resume', () => {
     expect(resume.recent_sessions).toHaveLength(2);
 
     // src/server.ts should be a hot file (appeared in both sessions)
-    expect(resume.hot_files.some(f => f.file === 'src/server.ts')).toBe(true);
+    expect(resume.hot_files.some((f) => f.file === 'src/server.ts')).toBe(true);
 
     // "missing" dead end appeared in both sessions
     expect(resume.persistent_dead_ends).toContain('search("missing")');

@@ -4,13 +4,13 @@
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { SessionTracker } from '../session/tracker.js';
 import type { SessionJournal } from '../session/journal.js';
-import type { ToolResponse } from './types.js';
-import { markToolConsultation } from './consultation-markers.js';
+import type { SessionTracker } from '../session/tracker.js';
 import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
 import { COMPACT_CORE_PARAMS } from './compact-params.js';
+import { markToolConsultation } from './consultation-markers.js';
 import { getToolAnnotations } from './tool-annotations.js';
+import type { ToolResponse } from './types.js';
 
 interface ToolGateResult {
   _originalTool: McpServer['tool'];
@@ -28,7 +28,12 @@ function applyParamOverrides(
     const desc = toolOverrides[paramName] ?? sharedOverrides[paramName];
     if (desc) {
       const zodType = schema[paramName];
-      if (zodType && typeof zodType === 'object' && 'describe' in zodType && typeof (zodType as { describe: unknown }).describe === 'function') {
+      if (
+        zodType &&
+        typeof zodType === 'object' &&
+        'describe' in zodType &&
+        typeof (zodType as { describe: unknown }).describe === 'function'
+      ) {
         schema[paramName] = (zodType as { describe: (d: string) => unknown }).describe(desc);
       }
     }
@@ -49,8 +54,14 @@ export function installToolGate(
   savings: SessionTracker,
   journal: SessionJournal,
   j: (value: unknown) => string,
-  extractResultCount: (response: { content: Array<{ type: string; text: string }>; isError?: boolean }) => number,
-  extractCompactResult: (toolName: string, response: { content: Array<{ type: string; text: string }>; isError?: boolean }) => Record<string, unknown> | undefined,
+  extractResultCount: (response: {
+    content: Array<{ type: string; text: string }>;
+    isError?: boolean;
+  }) => number,
+  extractCompactResult: (
+    toolName: string,
+    response: { content: Array<{ type: string; text: string }>; isError?: boolean },
+  ) => Record<string, unknown> | undefined,
   stripMetaFields: (obj: Record<string, unknown>) => void,
   projectRoot?: string,
 ): ToolGateResult {
@@ -75,11 +86,15 @@ export function installToolGate(
 
   const _originalTool = server.tool.bind(server);
   const registeredToolNames: string[] = [];
-  const toolHandlers = new Map<string, (params: Record<string, unknown>) => Promise<ToolResponse>>();
+  const toolHandlers = new Map<
+    string,
+    (params: Record<string, unknown>) => Promise<ToolResponse>
+  >();
   const descriptionOverrides = config.tools?.descriptions ?? {};
-  const sharedParamOverrides = (typeof descriptionOverrides._shared === 'object' && descriptionOverrides._shared !== null)
-    ? descriptionOverrides._shared as Record<string, string>
-    : {};
+  const sharedParamOverrides =
+    typeof descriptionOverrides._shared === 'object' && descriptionOverrides._shared !== null
+      ? (descriptionOverrides._shared as Record<string, string>)
+      : {};
 
   server.tool = ((...args: unknown[]) => {
     const name = args[0] as string;
@@ -123,7 +138,9 @@ export function installToolGate(
         for (const val of Object.values(schema as Record<string, unknown>)) {
           if (val && typeof val === 'object' && '_def' in val) {
             const def = (val as { _def: Record<string, unknown> })._def;
+            // biome-ignore lint/performance/noDelete: Zod attaches `description` as a getter-only property; assigning undefined throws.
             delete def.description;
+            // biome-ignore lint/performance/noDelete: same as above — Zod description is getter-only.
             delete (val as Record<string, unknown>).description;
           }
         }
@@ -149,15 +166,16 @@ export function installToolGate(
 
     // Wrap callback for savings/journal/dedup/hints
     const cbIdx = args.length - 1;
-    const originalCb = args[cbIdx] as Function;
+    const originalCb = args[cbIdx] as (...args: unknown[]) => unknown;
     if (typeof originalCb === 'function') {
       toolHandlers.set(name, async (params: Record<string, unknown>) => {
-        return await originalCb(params) as ToolResponse;
+        return (await originalCb(params)) as ToolResponse;
       });
 
       args[cbIdx] = async (...cbArgs: unknown[]) => {
         savings.recordCall(name);
-        const params = (cbArgs[0] && typeof cbArgs[0] === 'object') ? cbArgs[0] as Record<string, unknown> : {};
+        const params =
+          cbArgs[0] && typeof cbArgs[0] === 'object' ? (cbArgs[0] as Record<string, unknown>) : {};
 
         // Budget-driven auto-defaults: at warning/critical level, silently cap
         // expensive parameters (graph depth, full project map, etc.) before the
@@ -183,21 +201,28 @@ export function installToolGate(
               },
             };
             stripMetaFields(dedupResponse);
-            journal.record(name, params, dupInfo.compact_result._result_count as number ?? 1);
+            journal.record(name, params, (dupInfo.compact_result._result_count as number) ?? 1);
             return { content: [{ type: 'text', text: j(dedupResponse) }] };
           }
 
           // Warn-only path
-          const result = await originalCb(...cbArgs) as { content: Array<{ type: string; text: string }>; isError?: boolean };
+          const result = (await originalCb(...cbArgs)) as {
+            content: Array<{ type: string; text: string }>;
+            isError?: boolean;
+          };
           if (result?.content?.[0]?.text && !result.isError) {
             try {
               const parsed = JSON.parse(result.content[0].text);
-              const obj = (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed))
-                ? parsed : { data: parsed };
+              const obj =
+                parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+                  ? parsed
+                  : { data: parsed };
               obj._duplicate_warning = dupInfo.message;
               stripMetaFields(obj);
               result.content[0].text = JSON.stringify(obj);
-            } catch { /* keep original response */ }
+            } catch {
+              /* keep original response */
+            }
           }
           const count = extractResultCount(result);
           journal.record(name, params, count);
@@ -206,7 +231,10 @@ export function installToolGate(
 
         // Normal path
         const result = await originalCb(...cbArgs);
-        const resultObj = result as { content: Array<{ type: string; text: string }>; isError?: boolean };
+        const resultObj = result as {
+          content: Array<{ type: string; text: string }>;
+          isError?: boolean;
+        };
         const count = extractResultCount(resultObj);
         const compactResult = extractCompactResult(name, resultObj);
         const resultTokens = resultObj?.content?.[0]?.text?.length
@@ -216,21 +244,31 @@ export function installToolGate(
 
         // Optimization hint + budget auto-defaults metadata
         const optHint = journal.getOptimizationHint(name, params);
-        if ((optHint || appliedDefaults.length > 0) && resultObj?.content?.[0]?.text && !resultObj.isError) {
+        if (
+          (optHint || appliedDefaults.length > 0) &&
+          resultObj?.content?.[0]?.text &&
+          !resultObj.isError
+        ) {
           try {
             const parsed = JSON.parse(resultObj.content[0].text);
-            const obj = (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed))
-              ? parsed : { data: parsed };
+            const obj =
+              parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? parsed
+                : { data: parsed };
             if (optHint) obj._optimization_hint = optHint;
             if (appliedDefaults.length > 0) {
               obj._meta = {
-                ...(obj._meta && typeof obj._meta === 'object' ? obj._meta as Record<string, unknown> : {}),
+                ...(obj._meta && typeof obj._meta === 'object'
+                  ? (obj._meta as Record<string, unknown>)
+                  : {}),
                 budget_defaults: appliedDefaults,
               };
             }
             stripMetaFields(obj);
             resultObj.content[0].text = JSON.stringify(obj);
-          } catch { /* keep original response */ }
+          } catch {
+            /* keep original response */
+          }
         }
 
         return result;
@@ -244,7 +282,7 @@ export function installToolGate(
       args.splice(lastIdx, 0, annotations);
     }
 
-    return (_originalTool as Function)(...args);
+    return (_originalTool as (...args: unknown[]) => unknown)(...args);
   }) as typeof server.tool;
 
   // Wrap _originalTool so tools registered outside the gate (session meta-tools)
@@ -256,7 +294,7 @@ export function installToolGate(
     if (typeof oArgs[oLastIdx] === 'function') {
       oArgs.splice(oLastIdx, 0, ann);
     }
-    return (_originalTool as Function)(...oArgs);
+    return (_originalTool as (...args: unknown[]) => unknown)(...oArgs);
   }) as typeof _originalTool;
 
   return { _originalTool: annotatedOriginalTool, registeredToolNames, toolHandlers };

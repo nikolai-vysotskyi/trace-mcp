@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { MessageRouter } from '../../src/daemon/router/message-router.js';
 import type { Backend } from '../../src/daemon/router/types.js';
 
@@ -25,15 +25,27 @@ class FakeBackend implements Backend {
   /** Resolves after fake background cleanup "finishes". */
   backgroundResolver?: () => void;
 
-  constructor(kind: 'proxy' | 'local' = 'proxy') { this.kind = kind; }
-  async start(): Promise<void> { this.started = true; }
+  constructor(kind: 'proxy' | 'local' = 'proxy') {
+    this.kind = kind;
+  }
+  async start(): Promise<void> {
+    this.started = true;
+  }
   async stop(): Promise<void> {
     this.stopped = true;
-    this.backgroundDispose = new Promise<void>((r) => { this.backgroundResolver = r; });
+    this.backgroundDispose = new Promise<void>((r) => {
+      this.backgroundResolver = r;
+    });
   }
-  async send(msg: JSONRPCMessage): Promise<void> { this.sent.push(msg); }
-  emitResponse(msg: JSONRPCMessage): void { this.onmessage?.(msg); }
-  finishBackgroundDispose(): void { this.backgroundResolver?.(); }
+  async send(msg: JSONRPCMessage): Promise<void> {
+    this.sent.push(msg);
+  }
+  emitResponse(msg: JSONRPCMessage): void {
+    this.onmessage?.(msg);
+  }
+  finishBackgroundDispose(): void {
+    this.backgroundResolver?.();
+  }
 }
 
 function req(id: number): JSONRPCMessage {
@@ -49,7 +61,12 @@ describe('router promote/demote flow (session-level contract)', () => {
 
   beforeEach(() => {
     inbox = [];
-    router = new MessageRouter({ sendToClient: (m) => { inbox.push(m); }, drainTimeoutMs: 50 });
+    router = new MessageRouter({
+      sendToClient: (m) => {
+        inbox.push(m);
+      },
+      drainTimeoutMs: 50,
+    });
   });
 
   it('promote: proxy → local on daemon disappear, client sees no gap', async () => {
@@ -136,7 +153,7 @@ describe('router promote/demote flow (session-level contract)', () => {
     await a.start();
     router.setInitialBackend(a);
 
-    await router.ingestFromClient(req(99));  // pending, no response
+    await router.ingestFromClient(req(99)); // pending, no response
     const b = new FakeBackend('local');
     await router.swap(b, { drainTimeoutMs: 10 });
 

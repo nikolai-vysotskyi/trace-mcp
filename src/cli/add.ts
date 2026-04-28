@@ -3,21 +3,28 @@
  * Registers a project: detects root, detects frameworks, creates DB, adds to registry.
  */
 
-import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as p from '@clack/prompts';
-import { findProjectRoot, discoverChildProjects, hasRootMarkers } from '../project-root.js';
-import { detectProject } from '../init/detector.js';
-import { generateConfig } from '../init/config-generator.js';
-import { ensureGlobalDirs, getDbPath } from '../global.js';
-import { registerProject, getProject, unregisterProject, listProjects, findParentProject, updateLastIndexed } from '../registry.js';
-import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
+import { Command } from 'commander';
+import { loadConfig, removeProjectConfig, saveProjectConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
-import { setupProject } from '../project-setup.js';
 import { Store } from '../db/store.js';
-import { PluginRegistry } from '../plugin-api/registry.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
+import { generateConfig } from '../init/config-generator.js';
+import { detectProject } from '../init/detector.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
+import { setupProject } from '../project-setup.js';
+import {
+  findParentProject,
+  getProject,
+  listProjects,
+  registerProject,
+  unregisterProject,
+  updateLastIndexed,
+} from '../registry.js';
 
 async function runIndexing(
   projectRoot: string,
@@ -40,7 +47,12 @@ async function runIndexing(
   try {
     const result = await pipeline.indexAll(true);
     updateLastIndexed(projectRoot);
-    return { indexed: result.indexed, skipped: result.skipped, errors: result.errors, durationMs: result.durationMs };
+    return {
+      indexed: result.indexed,
+      skipped: result.skipped,
+      errors: result.errors,
+      durationMs: result.durationMs,
+    };
   } catch (err) {
     if (!opts.json) {
       p.log.warn(`Indexing failed: ${(err as Error).message}`);
@@ -97,8 +109,8 @@ export const addCommand = new Command('add')
         }
         console.error(
           `Could not find project root from ${resolvedDir}. ` +
-          `No root markers (package.json, .git, composer.json, etc.) found in this directory, ` +
-          `and no child projects discovered in subdirectories.`,
+            `No root markers (package.json, .git, composer.json, etc.) found in this directory, ` +
+            `and no child projects discovered in subdirectories.`,
         );
         process.exit(1);
       }
@@ -121,7 +133,7 @@ export const addCommand = new Command('add')
       } else {
         p.note(
           `This project is already part of multi-root index: ${parentEntry.name}\n` +
-          `Root: ${parentEntry.root}`,
+            `Root: ${parentEntry.root}`,
           'Multi-root',
         );
         p.outro('Use --force to register it separately.');
@@ -135,7 +147,10 @@ export const addCommand = new Command('add')
       if (opts.json) {
         console.log(JSON.stringify({ status: 'already_registered', project: existing }));
       } else {
-        p.note(`Already registered: ${existing.name}\nDB: ${shortPath(existing.dbPath)}`, 'Existing');
+        p.note(
+          `Already registered: ${existing.name}\nDB: ${shortPath(existing.dbPath)}`,
+          'Existing',
+        );
         p.outro('Use --force to re-register.');
       }
       return;
@@ -153,10 +168,14 @@ export const addCommand = new Command('add')
         detectedLines.push(`Languages: ${detection.languages.join(', ')}`);
       }
       if (detection.frameworks.length > 0) {
-        detectedLines.push(`Frameworks: ${detection.frameworks.map((f) => f.version ? `${f.name} ${f.version}` : f.name).join(', ')}`);
+        detectedLines.push(
+          `Frameworks: ${detection.frameworks.map((f) => (f.version ? `${f.name} ${f.version}` : f.name)).join(', ')}`,
+        );
       }
       if (detection.packageManagers.length > 0) {
-        detectedLines.push(`Package managers: ${detection.packageManagers.map((pm) => pm.type).join(', ')}`);
+        detectedLines.push(
+          `Package managers: ${detection.packageManagers.map((pm) => pm.type).join(', ')}`,
+        );
       }
       if (detectedLines.length > 0) {
         p.note(detectedLines.join('\n'), 'Detected');
@@ -171,7 +190,9 @@ export const addCommand = new Command('add')
         spin.start('Indexing project...');
         indexResult = await runIndexing(projectRoot, opts);
         if (indexResult) {
-          spin.stop(`Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`);
+          spin.stop(
+            `Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`,
+          );
         } else {
           spin.stop('Indexing skipped');
         }
@@ -182,16 +203,22 @@ export const addCommand = new Command('add')
 
     // 10. Report
     if (opts.json) {
-      console.log(JSON.stringify({
-        status: existing ? 're-registered' : 'registered',
-        project: entry,
-        migrated,
-        detection: {
-          languages: detection.languages,
-          frameworks: detection.frameworks.map((f) => f.name),
-        },
-        indexing: indexResult ?? undefined,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            status: existing ? 're-registered' : 'registered',
+            project: entry,
+            migrated,
+            detection: {
+              languages: detection.languages,
+              frameworks: detection.frameworks.map((f) => f.name),
+            },
+            indexing: indexResult ?? undefined,
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       const lines: string[] = [];
       lines.push(`Project: ${entry.name}`);
@@ -201,7 +228,9 @@ export const addCommand = new Command('add')
         lines.push(`Migrated existing index from .trace-mcp/index.db`);
       }
       if (indexResult) {
-        lines.push(`Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`);
+        lines.push(
+          `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
+        );
         lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
       }
       p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
@@ -224,8 +253,8 @@ async function handleMultiRoot(
     p.intro('trace-mcp add (multi-root)');
     p.note(
       `No project root markers in ${parentDir}\n` +
-      `Discovered ${childRoots.length} child project(s):\n` +
-      childRoots.map((r) => `  ${path.basename(r)}`).join('\n'),
+        `Discovered ${childRoots.length} child project(s):\n` +
+        childRoots.map((r) => `  ${path.basename(r)}`).join('\n'),
       'Multi-root',
     );
   }
@@ -282,7 +311,7 @@ async function handleMultiRoot(
   const allProjects = listProjects();
   const cleaned: string[] = [];
   for (const proj of allProjects) {
-    if (proj.root.startsWith(parentDir + path.sep) || proj.root.startsWith(parentDir + '/')) {
+    if (proj.root.startsWith(parentDir + path.sep) || proj.root.startsWith(`${parentDir}/`)) {
       // Delete child's DB file
       if (fs.existsSync(proj.dbPath)) {
         fs.unlinkSync(proj.dbPath);
@@ -326,7 +355,9 @@ async function handleMultiRoot(
       spin.start('Indexing multi-root project...');
       indexResult = await runIndexing(parentDir, opts);
       if (indexResult) {
-        spin.stop(`Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`);
+        spin.stop(
+          `Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`,
+        );
       } else {
         spin.stop('Indexing skipped');
       }
@@ -337,14 +368,20 @@ async function handleMultiRoot(
 
   // Report
   if (opts.json) {
-    console.log(JSON.stringify({
-      status: existing ? 're-registered' : 'registered',
-      type: 'multi-root',
-      project: entry,
-      children: childRoots.map((r) => path.basename(r)),
-      cleaned,
-      indexing: indexResult ?? undefined,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          status: existing ? 're-registered' : 'registered',
+          type: 'multi-root',
+          project: entry,
+          children: childRoots.map((r) => path.basename(r)),
+          cleaned,
+          indexing: indexResult ?? undefined,
+        },
+        null,
+        2,
+      ),
+    );
   } else {
     const lines: string[] = [];
     lines.push(`Project: ${entry.name} (multi-root)`);
@@ -352,7 +389,9 @@ async function handleMultiRoot(
     lines.push(`DB: ${shortPath(dbPath)}`);
     lines.push(`Children: ${childRoots.map((r) => path.basename(r)).join(', ')}`);
     if (indexResult) {
-      lines.push(`Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`);
+      lines.push(
+        `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
+      );
       lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
     }
     p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
@@ -366,6 +405,6 @@ async function handleMultiRoot(
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   return p;
 }

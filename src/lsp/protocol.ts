@@ -35,7 +35,7 @@ export interface JsonRpcError {
 // ── Basic LSP Types ───────────────────────────────────────────
 
 export interface Position {
-  line: number;      // 0-based
+  line: number; // 0-based
   character: number; // 0-based
 }
 

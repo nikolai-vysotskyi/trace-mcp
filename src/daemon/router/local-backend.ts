@@ -1,29 +1,34 @@
-import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import fs from 'node:fs';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type Database from 'better-sqlite3';
-
-import { logger } from '../../logger.js';
+import {
+  BlobVectorStore,
+  CachedInferenceService,
+  createAIProvider,
+  EmbeddingPipeline,
+  InferenceCache,
+} from '../../ai/index.js';
+import { SummarizationPipeline } from '../../ai/summarization-pipeline.js';
+import type { TraceMcpConfig } from '../../config.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
-import { PluginRegistry } from '../../plugin-api/registry.js';
+import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../../global.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { FileWatcher } from '../../indexer/watcher.js';
-import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService } from '../../ai/index.js';
-import { SummarizationPipeline } from '../../ai/summarization-pipeline.js';
-import { ProgressState, writeServerPid, clearServerPid } from '../../progress.js';
-import { createServer, type ServerHandle } from '../../server/server.js';
-import { ensureGlobalDirs, TOPOLOGY_DB_PATH, DECISIONS_DB_PATH } from '../../global.js';
-import { TopologyStore } from '../../topology/topology-db.js';
+import { logger } from '../../logger.js';
 import { DecisionStore } from '../../memory/decision-store.js';
+import { PluginRegistry } from '../../plugin-api/registry.js';
+import { clearServerPid, ProgressState, writeServerPid } from '../../progress.js';
+import { createServer, type ServerHandle } from '../../server/server.js';
 import { SubprojectManager } from '../../subproject/manager.js';
-import type { TraceMcpConfig } from '../../config.js';
+import { TopologyStore } from '../../topology/topology-db.js';
 import type { Backend } from './types.js';
 
 export interface LocalBackendOptions {
-  projectRoot: string;     // absolute path watched/indexed
-  indexRoot: string;       // main repo root (differs from projectRoot in git worktrees)
+  projectRoot: string; // absolute path watched/indexed
+  indexRoot: string; // main repo root (differs from projectRoot in git worktrees)
   config: TraceMcpConfig;
   /** Shared DB path resolved by the caller (e.g. ~/.trace-mcp/index/project.db).
    *  LocalBackend will derive a unique session temp DB from this. */
@@ -58,7 +63,6 @@ export class LocalBackend implements Backend {
   private topoStore: TopologyStore | null = null;
   private decisionStore: DecisionStore | null = null;
   private clientTransport: InMemoryTransport | null = null;
-  private serverTransport: InMemoryTransport | null = null;
   private indexingPromise: Promise<void> | null = null;
   private started = false;
   private stopping = false;
@@ -79,32 +83,52 @@ export class LocalBackend implements Backend {
     this.store = new Store(this.db);
     this.registry = PluginRegistry.createWithDefaults();
     this.progress = new ProgressState(this.db);
-    this.pipeline = new IndexingPipeline(this.store, this.registry, config, projectRoot, this.progress);
+    this.pipeline = new IndexingPipeline(
+      this.store,
+      this.registry,
+      config,
+      projectRoot,
+      this.progress,
+    );
     this.watcher = new FileWatcher();
 
     const aiProvider = createAIProvider(config);
     const vectorStore = config.ai?.enabled ? new BlobVectorStore(this.store.db) : null;
     const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
-    const embeddingPipeline = vectorStore && embeddingService
-      ? new EmbeddingPipeline(this.store, embeddingService, vectorStore, this.progress)
-      : null;
+    const embeddingPipeline =
+      vectorStore && embeddingService
+        ? new EmbeddingPipeline(this.store, embeddingService, vectorStore, this.progress)
+        : null;
 
     const inferenceCache = config.ai?.enabled ? new InferenceCache(this.store.db) : null;
     inferenceCache?.evictExpired();
-    const summarizationPipeline = config.ai?.enabled && config.ai.summarize_on_index !== false
-      ? new SummarizationPipeline(
-          this.store,
-          new CachedInferenceService(aiProvider.fastInference(), inferenceCache!, config.ai.fast_model ?? 'fast'),
-          projectRoot,
-          {
-            batchSize: config.ai.summarize_batch_size ?? 20,
-            kinds: config.ai.summarize_kinds ?? ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
-            concurrency: config.ai.concurrency ?? 1,
-          },
-          this.progress,
-          vectorStore,
-        )
-      : null;
+    const summarizationPipeline =
+      config.ai?.enabled && config.ai.summarize_on_index !== false
+        ? new SummarizationPipeline(
+            this.store,
+            new CachedInferenceService(
+              aiProvider.fastInference(),
+              inferenceCache!,
+              config.ai.fast_model ?? 'fast',
+            ),
+            projectRoot,
+            {
+              batchSize: config.ai.summarize_batch_size ?? 20,
+              kinds: config.ai.summarize_kinds ?? [
+                'class',
+                'function',
+                'method',
+                'interface',
+                'trait',
+                'enum',
+                'type',
+              ],
+              concurrency: config.ai.concurrency ?? 1,
+            },
+            this.progress,
+            vectorStore,
+          )
+        : null;
 
     const runEmbeddings = () => {
       if (!embeddingPipeline) return;
@@ -121,37 +145,50 @@ export class LocalBackend implements Backend {
 
     // Kick off initial indexing in the background — do not block start.
     // This promise is tracked so stop() can let it drain before closing the DB.
-    this.indexingPromise = this.pipeline.indexAll().then(() => {
-      if (this.stopping) return;
-      runSummarization();
-      runEmbeddings();
-      runSubprojectAutoSyncSafe(projectRoot, config);
-    }).catch((err) => {
-      logger.error({ error: err }, 'LocalBackend: initial indexing failed');
-    });
+    this.indexingPromise = this.pipeline
+      .indexAll()
+      .then(() => {
+        if (this.stopping) return;
+        runSummarization();
+        runEmbeddings();
+        runSubprojectAutoSyncSafe(projectRoot, config);
+      })
+      .catch((err) => {
+        logger.error({ error: err }, 'LocalBackend: initial indexing failed');
+      });
 
     // Readonly shared stores — may not exist yet.
     try {
       if (config.topology?.enabled && fs.existsSync(TOPOLOGY_DB_PATH)) {
         this.topoStore = new TopologyStore(TOPOLOGY_DB_PATH, { readonly: true });
       }
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
     try {
       if (fs.existsSync(DECISIONS_DB_PATH)) {
         this.decisionStore = new DecisionStore(DECISIONS_DB_PATH, { readonly: true });
       }
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
 
     // Start file watcher.
-    await this.watcher.start(projectRoot, config, async (paths) => {
-      if (this.stopping) return;
-      await this.pipeline!.indexFiles(paths);
-      runSummarization();
-      runEmbeddings();
-    }, undefined, async (deleted) => {
-      if (this.stopping) return;
-      this.pipeline!.deleteFiles(deleted);
-    });
+    await this.watcher.start(
+      projectRoot,
+      config,
+      async (paths) => {
+        if (this.stopping) return;
+        await this.pipeline!.indexFiles(paths);
+        runSummarization();
+        runEmbeddings();
+      },
+      undefined,
+      async (deleted) => {
+        if (this.stopping) return;
+        this.pipeline!.deleteFiles(deleted);
+      },
+    );
 
     // Create McpServer and wire it to our in-memory pair.
     this.handle = createServer(this.store, this.registry, config, projectRoot, this.progress, {
@@ -189,29 +226,65 @@ export class LocalBackend implements Backend {
     if (this.clientTransport) this.clientTransport.onmessage = undefined;
 
     // Stop file watcher right away — no new incremental indexing jobs.
-    try { await this.watcher?.stop(); } catch { /* best-effort */ }
+    try {
+      await this.watcher?.stop();
+    } catch {
+      /* best-effort */
+    }
 
     // Close the in-memory transport pair (stops McpServer from receiving/sending).
-    try { await this.clientTransport?.close(); } catch { /* best-effort */ }
+    try {
+      await this.clientTransport?.close();
+    } catch {
+      /* best-effort */
+    }
     this.clientTransport = null;
     this.serverTransport = null;
 
     // Dispose McpServer (flushes journal/session data).
-    try { this.handle?.dispose(); } catch { /* best-effort */ }
+    try {
+      this.handle?.dispose();
+    } catch {
+      /* best-effort */
+    }
 
     // Hand off heavy cleanup to the background: let any in-flight indexing
     // drain before we close the DB and delete the temp file. Session will
     // await backgroundDispose on process shutdown so nothing leaks.
     const pendingIndex = this.indexingPromise;
     this.backgroundDispose = (async () => {
-      try { await pendingIndex; } catch { /* already logged */ }
-      try { if (this.topoStore) this.topoStore.close(); } catch { /* best-effort */ }
-      try { if (this.decisionStore) this.decisionStore.close(); } catch { /* best-effort */ }
-      try { if (this.db) clearServerPid(this.db); } catch { /* best-effort */ }
-      try { this.db?.close(); } catch { /* best-effort */ }
+      try {
+        await pendingIndex;
+      } catch {
+        /* already logged */
+      }
+      try {
+        if (this.topoStore) this.topoStore.close();
+      } catch {
+        /* best-effort */
+      }
+      try {
+        if (this.decisionStore) this.decisionStore.close();
+      } catch {
+        /* best-effort */
+      }
+      try {
+        if (this.db) clearServerPid(this.db);
+      } catch {
+        /* best-effort */
+      }
+      try {
+        this.db?.close();
+      } catch {
+        /* best-effort */
+      }
       // Delete session-specific temp DB and its WAL/SHM companions.
       for (const suffix of ['', '-wal', '-shm']) {
-        try { fs.unlinkSync(this.dbPath + suffix); } catch { /* may not exist */ }
+        try {
+          fs.unlinkSync(this.dbPath + suffix);
+        } catch {
+          /* may not exist */
+        }
       }
       this.db = null;
       this.store = null;
@@ -255,16 +328,18 @@ function runSubprojectAutoSyncSafe(projectRoot: string, config: TraceMcpConfig):
     }
     const totalEndpoints = services.reduce((sum, s) => sum + s.endpoints, 0);
     const totalClientCalls = services.reduce((sum, s) => sum + s.clientCalls, 0);
-    logger.info({
-      project: projectRoot,
-      subprojects: services.length,
-      serviceNames: services.map((s) => s.name),
-      endpoints: totalEndpoints,
-      clientCalls: totalClientCalls,
-    }, 'Subproject auto-sync completed');
+    logger.info(
+      {
+        project: projectRoot,
+        subprojects: services.length,
+        serviceNames: services.map((s) => s.name),
+        endpoints: totalEndpoints,
+        clientCalls: totalClientCalls,
+      },
+      'Subproject auto-sync completed',
+    );
     topoStore.close();
   } catch (err) {
     logger.warn({ error: err, projectRoot }, 'Subproject auto-sync failed (non-fatal)');
   }
 }
-

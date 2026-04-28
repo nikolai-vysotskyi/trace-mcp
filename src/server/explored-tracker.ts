@@ -8,10 +8,10 @@
  * - Marker file: <sha256(absoluteFilePath)> containing the absolute path
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 interface ExploredTracker {
   /** Mark a file as explored via trace-mcp. Guard hook will allow Read on it. */
@@ -30,9 +30,7 @@ export function createExploredTracker(projectRoot: string): ExploredTracker {
 
   return {
     markExplored(filePath: string): void {
-      const absPath = path.isAbsolute(filePath)
-        ? filePath
-        : path.resolve(projectRoot, filePath);
+      const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath);
       const fileHash = crypto.createHash('sha256').update(absPath).digest('hex');
       try {
         fs.writeFileSync(path.join(markerDir, fileHash), absPath);

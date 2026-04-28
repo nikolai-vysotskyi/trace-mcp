@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
+import { getDeadCodeReachability, getDeadCodeV2 } from '../../src/tools/refactoring/dead-code.js';
 import { createTestStore } from '../test-utils.js';
-import { getDeadCodeV2, getDeadCodeReachability } from '../../src/tools/refactoring/dead-code.js';
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
-  return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
+  return store.insertFile(filePath, lang, `hash_${filePath}`, 100);
 }
 
 function insertExportedSymbol(
@@ -23,7 +23,13 @@ function insertExportedSymbol(
   });
 }
 
-function insertEdge(store: Store, srcNodeId: number, tgtNodeId: number, edgeType: string, metadata?: Record<string, unknown>): void {
+function insertEdge(
+  store: Store,
+  srcNodeId: number,
+  tgtNodeId: number,
+  edgeType: string,
+  metadata?: Record<string, unknown>,
+): void {
   store.insertEdge(srcNodeId, tgtNodeId, edgeType, true, metadata);
 }
 
@@ -405,7 +411,9 @@ describe('getDeadCodeReachability', () => {
 
     const fLibFileNode = store.getNodeId('file', fLib)!;
     const fTestFileNode = store.getNodeId('file', fTest)!;
-    insertEdge(store, fTestFileNode, fLibFileNode, 'esm_imports', { specifiers: ['reachedViaImport'] });
+    insertEdge(store, fTestFileNode, fLibFileNode, 'esm_imports', {
+      specifiers: ['reachedViaImport'],
+    });
 
     const result = getDeadCodeReachability(store);
     expect(result.dead_symbols.map((s) => s.name)).not.toContain('reachedViaImport');

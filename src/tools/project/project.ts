@@ -1,7 +1,7 @@
-import type { Store, IndexStats } from '../../db/store.js';
-import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../../config.js';
-import type { DetectedVersion, ParsedDependency, ProjectContext } from '../../plugin-api/types.js';
+import type { IndexStats, Store } from '../../db/store.js';
+import type { PluginRegistry } from '../../plugin-api/registry.js';
+import type { DetectedVersion, ProjectContext } from '../../plugin-api/types.js';
 import type { ProgressSnapshot } from '../../progress.js';
 
 interface IndexHealthResult {
@@ -17,10 +17,7 @@ interface IndexHealthResult {
   progress?: ProgressSnapshot;
 }
 
-export function getIndexHealth(
-  store: Store,
-  config: TraceMcpConfig,
-): IndexHealthResult {
+export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealthResult {
   const stats = store.getStats();
   const warnings: string[] = [];
 
@@ -38,19 +35,25 @@ export function getIndexHealth(
     if (status === 'ok') status = 'degraded';
     warnings.push(
       `${stats.totalSymbols} symbols indexed but 0 edges linked. ` +
-      `Call graph queries (get_call_graph, find_usages, get_change_impact) will return empty results. ` +
-      `This usually indicates edge resolution failed — check language plugin support and re-run reindex.`,
+        `Call graph queries (get_call_graph, find_usages, get_change_impact) will return empty results. ` +
+        `This usually indicates edge resolution failed — check language plugin support and re-run reindex.`,
     );
-  } else if (stats.totalSymbols > 50 && stats.totalEdges > 0 && stats.totalEdges < stats.totalSymbols * 0.1) {
+  } else if (
+    stats.totalSymbols > 50 &&
+    stats.totalEdges > 0 &&
+    stats.totalEdges < stats.totalSymbols * 0.1
+  ) {
     // Very low edge-to-symbol ratio suggests partial linker failure
     warnings.push(
       `Low edge density: ${stats.totalEdges} edges for ${stats.totalSymbols} symbols ` +
-      `(${Math.round((stats.totalEdges / stats.totalSymbols) * 100)}% ratio). ` +
-      `Some call graph queries may return incomplete results.`,
+        `(${Math.round((stats.totalEdges / stats.totalSymbols) * 100)}% ratio). ` +
+        `Some call graph queries may return incomplete results.`,
     );
   }
 
-  const versionRow = store.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
+  const versionRow = store.db
+    .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+    .get() as { value: string } | undefined;
 
   return {
     status,
@@ -99,9 +102,11 @@ export function getProjectMap(
   const detectedVersions = projectContext?.detectedVersions;
 
   if (summaryOnly) {
-    const languageRows = store.db.prepare(
-      'SELECT language FROM files WHERE language IS NOT NULL GROUP BY language ORDER BY COUNT(*) DESC',
-    ).all() as { language: string }[];
+    const languageRows = store.db
+      .prepare(
+        'SELECT language FROM files WHERE language IS NOT NULL GROUP BY language ORDER BY COUNT(*) DESC',
+      )
+      .all() as { language: string }[];
     return {
       frameworks,
       fileCount: stats.totalFiles,
@@ -111,9 +116,11 @@ export function getProjectMap(
     };
   }
 
-  const languageRows = store.db.prepare(
-    'SELECT language, COUNT(*) as count FROM files WHERE language IS NOT NULL GROUP BY language ORDER BY count DESC',
-  ).all() as { language: string; count: number }[];
+  const languageRows = store.db
+    .prepare(
+      'SELECT language, COUNT(*) as count FROM files WHERE language IS NOT NULL GROUP BY language ORDER BY count DESC',
+    )
+    .all() as { language: string; count: number }[];
 
   let dependencySummary: ProjectMapResult['dependencySummary'];
   if (projectContext?.allDependencies.length) {

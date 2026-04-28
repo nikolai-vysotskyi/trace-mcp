@@ -12,8 +12,9 @@
  *
  * Runs AFTER ESM import resolution so `imports` edges are available.
  */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 interface TsCallSite {
   calleeName: string;
@@ -57,12 +58,13 @@ const TS_JS_LANGS = "('typescript','javascript','tsx','jsx','vue')";
 export function resolveTypeScriptCallEdges(state: PipelineState): void {
   const { store } = state;
 
-  const callsEdgeType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('calls') as { id: number } | undefined;
+  const callsEdgeType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
+    | { id: number }
+    | undefined;
   if (!callsEdgeType) return;
 
-  const symbolsWithCalls = store.db.prepare(`
+  const symbolsWithCalls = store.db
+    .prepare(`
     SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
            p.symbol_id AS parent_symbol_id, s.metadata, f.workspace
       FROM symbols s
@@ -71,18 +73,21 @@ export function resolveTypeScriptCallEdges(state: PipelineState): void {
      WHERE f.language IN ${TS_JS_LANGS}
        AND s.metadata IS NOT NULL
        AND s.metadata LIKE '%"callSites"%'
-  `).all() as SymbolRow[];
+  `)
+    .all() as SymbolRow[];
 
   if (symbolsWithCalls.length === 0) return;
 
-  const allSyms = store.db.prepare(`
+  const allSyms = store.db
+    .prepare(`
     SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
            p.symbol_id AS parent_symbol_id, s.metadata, f.workspace
       FROM symbols s
       JOIN files f ON s.file_id = f.id
       LEFT JOIN symbols p ON s.parent_id = p.id
      WHERE f.language IN ${TS_JS_LANGS}
-  `).all() as SymEntry[];
+  `)
+    .all() as SymEntry[];
 
   // Indexes
   const nameIndex = new Map<string, SymEntry[]>();
@@ -121,7 +126,9 @@ export function resolveTypeScriptCallEdges(state: PipelineState): void {
     try {
       const meta = JSON.parse(s.metadata) as Record<string, unknown>;
       if (typeof meta.extends === 'string') classExtends.set(s.symbol_id, meta.extends);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Build return-type index from signatures: funcName → type
@@ -130,7 +137,8 @@ export function resolveTypeScriptCallEdges(state: PipelineState): void {
   for (const s of allSyms) {
     if (s.kind !== 'function' && s.kind !== 'method') continue;
     const row = store.db.prepare(`SELECT signature FROM symbols WHERE id = ?`).get(s.id) as
-      | { signature: string | null } | undefined;
+      | { signature: string | null }
+      | undefined;
     if (!row?.signature) continue;
     const m = row.signature.match(/\):\s*(?:Promise<)?([A-Z][A-Za-z0-9_]*)/);
     if (m) returnTypeIndex.set(s.name, m[1]);
@@ -155,7 +163,9 @@ export function resolveTypeScriptCallEdges(state: PipelineState): void {
         if (meta.localTypes && typeof meta.localTypes === 'object') {
           localTypes = meta.localTypes as LocalTypes;
         }
-      } catch { continue; }
+      } catch {
+        continue;
+      }
 
       const sourceNodeId = symbolNodeMap.get(sym.id);
       if (sourceNodeId == null) continue;
@@ -167,9 +177,17 @@ export function resolveTypeScriptCallEdges(state: PipelineState): void {
 
       for (const call of callSites) {
         const target = resolveCall(
-          call, parentClassId, fileSymbols, fileImports,
-          nameIndex, symbolsByFile, symbolById, classExtends,
-          returnTypeIndex, localTypes, sourceWorkspace,
+          call,
+          parentClassId,
+          fileSymbols,
+          fileImports,
+          nameIndex,
+          symbolsByFile,
+          symbolById,
+          classExtends,
+          returnTypeIndex,
+          localTypes,
+          sourceWorkspace,
         );
         if (!target) continue;
 
@@ -180,9 +198,7 @@ export function resolveTypeScriptCallEdges(state: PipelineState): void {
         if (call.receiverType) edgeMeta.receiver_type = call.receiverType;
         if (call.isNew) edgeMeta.new = true;
 
-        insertStmt.run(
-          sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta),
-        );
+        insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta));
         created++;
       }
     }
@@ -194,7 +210,10 @@ export function resolveTypeScriptCallEdges(state: PipelineState): void {
 }
 
 /** Pick best candidate from a list, preferring same workspace. Strict: never cross workspace. */
-function pickSameWs<T extends { workspace: string | null }>(candidates: T[], workspace: string | null): T | null {
+function pickSameWs<T extends { workspace: string | null }>(
+  candidates: T[],
+  workspace: string | null,
+): T | null {
   if (candidates.length === 0) return null;
   const sameWs = candidates.filter((c) => c.workspace === workspace);
   if (sameWs.length > 0) return sameWs[0];
@@ -218,15 +237,21 @@ function resolveCall(
 
   // ── 1. this.method() ──
   if (isThisCall && parentClassId) {
-    const sameClass = fileSymbols.find((s) =>
-      s.parent_symbol_id === parentClassId && s.name === calleeName,
+    const sameClass = fileSymbols.find(
+      (s) => s.parent_symbol_id === parentClassId && s.name === calleeName,
     );
     if (sameClass) return sameClass;
 
     // Walk `extends` chain
     const inherited = resolveInheritedMember(
-      parentClassId, calleeName, fileSymbols, fileImports,
-      nameIndex, symbolsByFile, classExtends, sourceWorkspace,
+      parentClassId,
+      calleeName,
+      fileSymbols,
+      fileImports,
+      nameIndex,
+      symbolsByFile,
+      classExtends,
+      sourceWorkspace,
     );
     if (inherited) return inherited;
 
@@ -236,18 +261,25 @@ function resolveCall(
   // ── 2. super.method() ──
   if (isSuperCall && parentClassId) {
     return resolveInheritedMember(
-      parentClassId, calleeName, fileSymbols, fileImports,
-      nameIndex, symbolsByFile, classExtends, sourceWorkspace,
+      parentClassId,
+      calleeName,
+      fileSymbols,
+      fileImports,
+      nameIndex,
+      symbolsByFile,
+      classExtends,
+      sourceWorkspace,
     );
   }
 
   // ── 3. Bare call: foo() or new Foo() ──
   if (!receiver) {
     // Same-file top-level function / class
-    const sameFile = fileSymbols.find((s) =>
-      s.name === calleeName
-      && s.parent_symbol_id == null
-      && (s.kind === 'function' || s.kind === 'class' || (isNew && s.kind === 'class')),
+    const sameFile = fileSymbols.find(
+      (s) =>
+        s.name === calleeName &&
+        s.parent_symbol_id == null &&
+        (s.kind === 'function' || s.kind === 'class' || (isNew && s.kind === 'class')),
     );
     if (sameFile) return sameFile;
 
@@ -257,10 +289,11 @@ function resolveCall(
       if (targetFileIds) {
         for (const tfid of targetFileIds) {
           const syms = symbolsByFile.get(tfid) ?? [];
-          const match = syms.find((s) =>
-            s.name === calleeName
-            && s.parent_symbol_id == null
-            && (s.kind === 'function' || s.kind === 'class' || s.kind === 'variable'),
+          const match = syms.find(
+            (s) =>
+              s.name === calleeName &&
+              s.parent_symbol_id == null &&
+              (s.kind === 'function' || s.kind === 'class' || s.kind === 'variable'),
           );
           if (match) return match;
         }
@@ -271,9 +304,10 @@ function resolveCall(
     // composables used without explicit imports still land in the same workspace).
     const candidates = nameIndex.get(calleeName);
     if (candidates) {
-      const topLevel = candidates.filter((s) =>
-        s.parent_symbol_id == null
-        && (s.kind === 'function' || s.kind === 'class' || s.kind === 'variable'),
+      const topLevel = candidates.filter(
+        (s) =>
+          s.parent_symbol_id == null &&
+          (s.kind === 'function' || s.kind === 'class' || s.kind === 'variable'),
       );
       if (topLevel.length === 0) return null;
       if (topLevel.length === 1) {
@@ -293,8 +327,15 @@ function resolveCall(
   // 4a. Inline: (new Foo()).method()
   if (call.receiverType) {
     const m = resolveMethodOnClass(
-      call.receiverType, calleeName, fileSymbols, fileImports,
-      nameIndex, symbolsByFile, symbolById, classExtends, sourceWorkspace,
+      call.receiverType,
+      calleeName,
+      fileSymbols,
+      fileImports,
+      nameIndex,
+      symbolsByFile,
+      symbolById,
+      classExtends,
+      sourceWorkspace,
     );
     if (m) return m;
   }
@@ -303,8 +344,15 @@ function resolveCall(
   const local = localTypes[receiver];
   if (local?.type) {
     const m = resolveMethodOnClass(
-      local.type, calleeName, fileSymbols, fileImports,
-      nameIndex, symbolsByFile, symbolById, classExtends, sourceWorkspace,
+      local.type,
+      calleeName,
+      fileSymbols,
+      fileImports,
+      nameIndex,
+      symbolsByFile,
+      symbolById,
+      classExtends,
+      sourceWorkspace,
     );
     if (m) return m;
   }
@@ -312,8 +360,14 @@ function resolveCall(
     const retType = returnTypeIndex.get(local.assignedFrom);
     if (retType) {
       const m = resolveMethodOnClass(
-        retType, calleeName, fileSymbols, fileImports,
-        nameIndex, symbolsByFile, symbolById, classExtends,
+        retType,
+        calleeName,
+        fileSymbols,
+        fileImports,
+        nameIndex,
+        symbolsByFile,
+        symbolById,
+        classExtends,
       );
       if (m) return m;
     }
@@ -324,19 +378,26 @@ function resolveCall(
   const thisBinding = localTypes[thisKey];
   if (thisBinding?.type) {
     const m = resolveMethodOnClass(
-      thisBinding.type, calleeName, fileSymbols, fileImports,
-      nameIndex, symbolsByFile, symbolById, classExtends, sourceWorkspace,
+      thisBinding.type,
+      calleeName,
+      fileSymbols,
+      fileImports,
+      nameIndex,
+      symbolsByFile,
+      symbolById,
+      classExtends,
+      sourceWorkspace,
     );
     if (m) return m;
   }
 
   // 4d. Receiver is a class in same file (static method: Cls.foo())
-  const sameFileClass = fileSymbols.find((s) =>
-    s.name === receiver && s.kind === 'class' && s.parent_symbol_id == null,
+  const sameFileClass = fileSymbols.find(
+    (s) => s.name === receiver && s.kind === 'class' && s.parent_symbol_id == null,
   );
   if (sameFileClass) {
-    const method = fileSymbols.find((s) =>
-      s.parent_symbol_id === sameFileClass.symbol_id && s.name === calleeName,
+    const method = fileSymbols.find(
+      (s) => s.parent_symbol_id === sameFileClass.symbol_id && s.name === calleeName,
     );
     if (method) return method;
   }
@@ -350,16 +411,17 @@ function resolveCall(
         // First, try class.method
         const cls = syms.find((s) => s.name === receiver && s.kind === 'class');
         if (cls) {
-          const method = syms.find((s) =>
-            s.parent_symbol_id === cls.symbol_id && s.name === calleeName,
+          const method = syms.find(
+            (s) => s.parent_symbol_id === cls.symbol_id && s.name === calleeName,
           );
           if (method) return method;
         }
         // Or top-level function on receiver module
-        const topFn = syms.find((s) =>
-          s.name === calleeName
-          && s.parent_symbol_id == null
-          && (s.kind === 'function' || s.kind === 'variable'),
+        const topFn = syms.find(
+          (s) =>
+            s.name === calleeName &&
+            s.parent_symbol_id == null &&
+            (s.kind === 'function' || s.kind === 'variable'),
         );
         if (topFn) return topFn;
       }
@@ -388,14 +450,19 @@ function resolveInheritedMember(
     if (!parentName) break;
 
     const parentClass = resolveClassByName(
-      parentName, fileSymbols, fileImports, nameIndex, symbolsByFile, sourceWorkspace,
+      parentName,
+      fileSymbols,
+      fileImports,
+      nameIndex,
+      symbolsByFile,
+      sourceWorkspace,
     );
     if (!parentClass) return null;
 
     // search the parent class for the member
     const syms = symbolsByFile.get(parentClass.file_id) ?? [];
-    const member = syms.find((s) =>
-      s.parent_symbol_id === parentClass.symbol_id && s.name === memberName,
+    const member = syms.find(
+      (s) => s.parent_symbol_id === parentClass.symbol_id && s.name === memberName,
     );
     if (member) return member;
 
@@ -454,20 +521,31 @@ function resolveMethodOnClass(
   classExtends: Map<string, string>,
   sourceWorkspace?: string | null,
 ): SymEntry | null {
-  const cls = resolveClassByName(className, fileSymbols, fileImports, nameIndex, symbolsByFile, sourceWorkspace);
+  const cls = resolveClassByName(
+    className,
+    fileSymbols,
+    fileImports,
+    nameIndex,
+    symbolsByFile,
+    sourceWorkspace,
+  );
   if (!cls) return null;
 
   // Search the class
   const syms = symbolsByFile.get(cls.file_id) ?? [];
-  const method = syms.find((s) =>
-    s.parent_symbol_id === cls.symbol_id && s.name === methodName,
-  );
+  const method = syms.find((s) => s.parent_symbol_id === cls.symbol_id && s.name === methodName);
   if (method) return method;
 
   // Walk parents
   return resolveInheritedMember(
-    cls.symbol_id, methodName, syms, fileImports,
-    nameIndex, symbolsByFile, classExtends, sourceWorkspace,
+    cls.symbol_id,
+    methodName,
+    syms,
+    fileImports,
+    nameIndex,
+    symbolsByFile,
+    classExtends,
+    sourceWorkspace,
   );
 }
 
@@ -479,12 +557,13 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
   const { store } = state;
   const result = new Map<number, Map<string, number[]>>();
 
-  const importEdgeType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('imports') as { id: number } | undefined;
+  const importEdgeType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('imports') as { id: number } | undefined;
   if (!importEdgeType) return result;
 
-  const importEdges = store.db.prepare(`
+  const importEdges = store.db
+    .prepare(`
     SELECT e.source_node_id, e.target_node_id, e.metadata
       FROM edges e
       JOIN nodes ns ON ns.id = e.source_node_id
@@ -492,7 +571,8 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
      WHERE e.edge_type_id = ?
        AND ns.node_type = 'file'
        AND nt.node_type = 'file'
-  `).all(importEdgeType.id) as Array<{
+  `)
+    .all(importEdgeType.id) as Array<{
     source_node_id: number;
     target_node_id: number;
     metadata: string | null;
@@ -513,18 +593,20 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
     for (let i = 0; i < nodeArr.length; i += CHUNK) {
       const chunk = nodeArr.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
-      const rows = store.db.prepare(
-        `SELECT id, ref_id FROM nodes WHERE node_type = 'file' AND id IN (${ph})`,
-      ).all(...chunk) as Array<{ id: number; ref_id: number }>;
+      const rows = store.db
+        .prepare(`SELECT id, ref_id FROM nodes WHERE node_type = 'file' AND id IN (${ph})`)
+        .all(...chunk) as Array<{ id: number; ref_id: number }>;
       for (const r of rows) nodeToFileId.set(r.id, r.ref_id);
     }
   }
 
   // Filter to TS/JS source files (avoid PHP/Python polluting the map)
   const tsJsFileIds = new Set<number>();
-  const fileLangs = store.db.prepare(`
+  const fileLangs = store.db
+    .prepare(`
     SELECT id FROM files WHERE language IN ${TS_JS_LANGS}
-  `).all() as Array<{ id: number }>;
+  `)
+    .all() as Array<{ id: number }>;
   for (const r of fileLangs) tsJsFileIds.add(r.id);
 
   for (const edge of importEdges) {
@@ -538,7 +620,9 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
       try {
         const meta = JSON.parse(edge.metadata) as Record<string, unknown>;
         if (Array.isArray(meta.specifiers)) specifiers = meta.specifiers as string[];
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     let fileMap = result.get(sourceFileId);

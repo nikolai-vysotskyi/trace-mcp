@@ -9,12 +9,21 @@
 
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { isGitRepo } from '../git/git-analysis.js';
-import { buildFileGraph, getCouplingMetrics, getPageRank, type CouplingResult, type PageRankResult } from './graph-analysis.js';
-import { classifyConfidence, type ConfidenceLevel, type Methodology } from '../shared/confidence.js';
+import {
+  type ConfidenceLevel,
+  classifyConfidence,
+  type Methodology,
+} from '../shared/confidence.js';
+import {
+  buildFileGraph,
+  type CouplingResult,
+  getCouplingMetrics,
+  getPageRank,
+  type PageRankResult,
+} from './graph-analysis.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -156,26 +165,26 @@ interface HealthTrendResult {
 // ════════════════════════════════════════════════════════════════════════
 
 const DEFAULT_BUG_WEIGHTS: BugPredictionWeights = {
-  churn: 0.20,
-  fix_ratio: 0.20,
-  complexity: 0.20,
+  churn: 0.2,
+  fix_ratio: 0.2,
+  complexity: 0.2,
   coupling: 0.15,
-  pagerank: 0.10,
+  pagerank: 0.1,
   authors: 0.15,
 };
 
 const DEFAULT_DEBT_WEIGHTS = {
-  complexity: 0.30,
+  complexity: 0.3,
   coupling: 0.25,
   test_gap: 0.25,
-  churn: 0.20,
+  churn: 0.2,
 };
 
 const DEFAULT_RISK_WEIGHTS = {
   blast_radius: 0.25,
-  complexity: 0.20,
-  churn: 0.20,
-  test_gap: 0.20,
+  complexity: 0.2,
+  churn: 0.2,
+  test_gap: 0.2,
   coupling: 0.15,
 };
 
@@ -195,10 +204,7 @@ interface GitFileInfo {
  * Get per-file git stats including fix-commit classification.
  * Uses a single `git log` call for efficiency.
  */
-function getGitFileStatsWithFixes(
-  cwd: string,
-  sinceDays: number,
-): Map<string, GitFileInfo> {
+function getGitFileStatsWithFixes(cwd: string, sinceDays: number): Map<string, GitFileInfo> {
   const args = [
     'log',
     '--pretty=format:__COMMIT__%H|%aI|%aN|%s',
@@ -223,13 +229,16 @@ function getGitFileStatsWithFixes(
 
   const FIX_PATTERN = /\b(fix|bug|patch|hotfix|repair|resolve|correct)\b/i;
 
-  const fileData = new Map<string, {
-    commits: number;
-    authors: Set<string>;
-    firstDate: Date;
-    lastDate: Date;
-    fixCommits: number;
-  }>();
+  const fileData = new Map<
+    string,
+    {
+      commits: number;
+      authors: Set<string>;
+      firstDate: Date;
+      lastDate: Date;
+      fixCommits: number;
+    }
+  >();
 
   let currentDate: Date | null = null;
   let currentAuthor: string | null = null;
@@ -286,10 +295,7 @@ function getGitFileStatsWithFixes(
  * Get co-change commit groups for drift detection.
  * Returns array of [commitHash, Set<filePath>].
  */
-function getCommitFileGroups(
-  cwd: string,
-  sinceDays: number,
-): Array<{ files: Set<string> }> {
+function getCommitFileGroups(cwd: string, sinceDays: number): Array<{ files: Set<string> }> {
   const args = [
     'log',
     '--pretty=format:__COMMIT__%H',
@@ -403,7 +409,9 @@ export function predictBugs(
   }
 
   // Gather all signals — build file graph once, share across analyses
-  const gitStats = isGitRepo(cwd) ? getGitFileStatsWithFixes(cwd, sinceDays) : new Map<string, GitFileInfo>();
+  const gitStats = isGitRepo(cwd)
+    ? getGitFileStatsWithFixes(cwd, sinceDays)
+    : new Map<string, GitFileInfo>();
   const fileGraph = buildFileGraph(store);
   const couplingResults = getCouplingMetrics(store, fileGraph);
   const pagerankResults = getPageRank(store, { prebuiltGraph: fileGraph });
@@ -416,12 +424,14 @@ export function predictBugs(
   for (const p of pagerankResults) pagerankMap.set(p.file, p);
 
   // Get max cyclomatic per file
-  const complexityRows = store.db.prepare(`
+  const complexityRows = store.db
+    .prepare(`
     SELECT f.path, MAX(s.cyclomatic) as max_cyclomatic
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE s.cyclomatic IS NOT NULL
     GROUP BY f.path
-  `).all() as Array<{ path: string; max_cyclomatic: number }>;
+  `)
+    .all() as Array<{ path: string; max_cyclomatic: number }>;
   const complexityMap = new Map<string, number>();
   for (const row of complexityRows) complexityMap.set(row.path, row.max_cyclomatic);
 
@@ -457,17 +467,19 @@ export function predictBugs(
     const sPagerank = pagerankRanks.get(file) ?? 0;
     const sAuthors = clampNormalize(git?.authors ?? 0, 10);
 
-    const score = w.churn * sChurn
-      + w.fix_ratio * sFixRatio
-      + w.complexity * sComplexity
-      + w.coupling * sCoupling
-      + w.pagerank * sPagerank
-      + w.authors * sAuthors;
+    const score =
+      w.churn * sChurn +
+      w.fix_ratio * sFixRatio +
+      w.complexity * sComplexity +
+      w.coupling * sCoupling +
+      w.pagerank * sPagerank +
+      w.authors * sAuthors;
 
     if (score < minScore) continue;
 
-    const signalsFired = [sChurn, sFixRatio, sComplexity, sCoupling, sPagerank, sAuthors]
-      .filter((v) => v > BUG_SIGNAL_FIRE_THRESHOLD).length;
+    const signalsFired = [sChurn, sFixRatio, sComplexity, sCoupling, sPagerank, sAuthors].filter(
+      (v) => v > BUG_SIGNAL_FIRE_THRESHOLD,
+    ).length;
 
     predictions.push({
       file,
@@ -476,12 +488,48 @@ export function predictBugs(
       confidence_level: classifyConfidence(signalsFired, 6),
       signals_fired: signalsFired,
       factors: [
-        { signal: 'churn', raw_value: round(git?.churnPerWeek ?? 0), normalized: round(sChurn), weight: w.churn, contribution: round(w.churn * sChurn) },
-        { signal: 'fix_ratio', raw_value: round(git?.fixRatio ?? 0), normalized: round(sFixRatio), weight: w.fix_ratio, contribution: round(w.fix_ratio * sFixRatio) },
-        { signal: 'complexity', raw_value: complexityMap.get(file) ?? 0, normalized: round(sComplexity), weight: w.complexity, contribution: round(w.complexity * sComplexity) },
-        { signal: 'coupling', raw_value: round(coupling?.instability ?? 0), normalized: round(sCoupling), weight: w.coupling, contribution: round(w.coupling * sCoupling) },
-        { signal: 'pagerank', raw_value: round(pagerankMap.get(file)?.score ?? 0), normalized: round(sPagerank), weight: w.pagerank, contribution: round(w.pagerank * sPagerank) },
-        { signal: 'authors', raw_value: git?.authors ?? 0, normalized: round(sAuthors), weight: w.authors, contribution: round(w.authors * sAuthors) },
+        {
+          signal: 'churn',
+          raw_value: round(git?.churnPerWeek ?? 0),
+          normalized: round(sChurn),
+          weight: w.churn,
+          contribution: round(w.churn * sChurn),
+        },
+        {
+          signal: 'fix_ratio',
+          raw_value: round(git?.fixRatio ?? 0),
+          normalized: round(sFixRatio),
+          weight: w.fix_ratio,
+          contribution: round(w.fix_ratio * sFixRatio),
+        },
+        {
+          signal: 'complexity',
+          raw_value: complexityMap.get(file) ?? 0,
+          normalized: round(sComplexity),
+          weight: w.complexity,
+          contribution: round(w.complexity * sComplexity),
+        },
+        {
+          signal: 'coupling',
+          raw_value: round(coupling?.instability ?? 0),
+          normalized: round(sCoupling),
+          weight: w.coupling,
+          contribution: round(w.coupling * sCoupling),
+        },
+        {
+          signal: 'pagerank',
+          raw_value: round(pagerankMap.get(file)?.score ?? 0),
+          normalized: round(sPagerank),
+          weight: w.pagerank,
+          contribution: round(w.pagerank * sPagerank),
+        },
+        {
+          signal: 'authors',
+          raw_value: git?.authors ?? 0,
+          normalized: round(sAuthors),
+          weight: w.authors,
+          contribution: round(w.authors * sAuthors),
+        },
       ],
     });
   }
@@ -530,7 +578,7 @@ export function detectDrift(
   // Build co-change matrix
   const coChangeCount = new Map<string, number>(); // "fileA|fileB" -> count
   const fileCommitCount = new Map<string, number>();
-  const fileModuleMap = new Map<string, Set<string>>(); // file -> set of modules touched per commit
+  const _fileModuleMap = new Map<string, Set<string>>(); // file -> set of modules touched per commit
 
   // Track shotgun commits per file
   const fileShotgunCount = new Map<string, number>();
@@ -639,25 +687,30 @@ export function getTechDebt(
   const { moduleDepth = 2, sinceDays = 180 } = options;
   const w = { ...DEFAULT_DEBT_WEIGHTS, ...options.weights };
 
-  const gitStats = isGitRepo(cwd) ? getGitFileStatsWithFixes(cwd, sinceDays) : new Map<string, GitFileInfo>();
+  const gitStats = isGitRepo(cwd)
+    ? getGitFileStatsWithFixes(cwd, sinceDays)
+    : new Map<string, GitFileInfo>();
   const fileGraph = buildFileGraph(store);
   const couplingResults = getCouplingMetrics(store, fileGraph);
   const couplingMap = new Map<string, CouplingResult>();
   for (const c of couplingResults) couplingMap.set(c.file, c);
 
   // Get complexity per file
-  const complexityRows = store.db.prepare(`
+  const complexityRows = store.db
+    .prepare(`
     SELECT f.path, MAX(s.cyclomatic) as max_cyclomatic
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE s.cyclomatic IS NOT NULL
     GROUP BY f.path
-  `).all() as Array<{ path: string; max_cyclomatic: number }>;
+  `)
+    .all() as Array<{ path: string; max_cyclomatic: number }>;
   const complexityMap = new Map<string, number>();
   for (const row of complexityRows) complexityMap.set(row.path, row.max_cyclomatic);
 
   // Get test coverage per file — single JOIN query instead of N+1
   const testedFiles = new Set<string>();
-  const testedRows = store.db.prepare(`
+  const testedRows = store.db
+    .prepare(`
     SELECT DISTINCT COALESCE(f1.path, f2.path) as tested_path
     FROM edges e
     JOIN edge_types et ON e.edge_type_id = et.id
@@ -666,7 +719,8 @@ export function getTechDebt(
     LEFT JOIN symbols s ON n.node_type = 'symbol' AND n.ref_id = s.id
     LEFT JOIN files f2 ON s.file_id = f2.id
     WHERE et.name = 'test_covers'
-  `).all() as Array<{ tested_path: string | null }>;
+  `)
+    .all() as Array<{ tested_path: string | null }>;
   for (const row of testedRows) {
     if (row.tested_path) testedFiles.add(row.tested_path);
   }
@@ -695,7 +749,8 @@ export function getTechDebt(
 
     // Complexity: mean of max_cyclomatic, normalized
     const complexities = files.map((f) => complexityMap.get(f) ?? 0).filter((c) => c > 0);
-    const avgComplexity = complexities.length > 0 ? complexities.reduce((a, b) => a + b, 0) / complexities.length : 0;
+    const avgComplexity =
+      complexities.length > 0 ? complexities.reduce((a, b) => a + b, 0) / complexities.length : 0;
     const sComplexity = clampNormalize(avgComplexity, 15);
 
     // Coupling: mean instability
@@ -710,10 +765,11 @@ export function getTechDebt(
     const churnVals = files.map((f) => churnRanks.get(f) ?? 0);
     const sChurn = churnVals.reduce((a, b) => a + b, 0) / churnVals.length;
 
-    const score = w.complexity * sComplexity
-      + w.coupling * sCoupling
-      + w.test_gap * sTestGap
-      + w.churn * sChurn;
+    const score =
+      w.complexity * sComplexity +
+      w.coupling * sCoupling +
+      w.test_gap * sTestGap +
+      w.churn * sChurn;
 
     // Generate recommendations
     const recommendations: TechDebtModule['recommendations'] = [];
@@ -735,7 +791,9 @@ export function getTechDebt(
       });
     }
     if (sTestGap > 0.5) {
-      const untestedImportant = files.filter((f) => !testedFiles.has(f) && (complexityMap.get(f) ?? 0) > 5);
+      const untestedImportant = files.filter(
+        (f) => !testedFiles.has(f) && (complexityMap.get(f) ?? 0) > 5,
+      );
       if (untestedImportant.length > 0) {
         recommendations.push({
           action: `Add tests for ${untestedImportant.length} complex untested file(s)`,
@@ -769,9 +827,8 @@ export function getTechDebt(
 
   modules.sort((a, b) => b.score - a.score);
 
-  const totalScore = modules.length > 0
-    ? modules.reduce((s, m) => s + m.score, 0) / modules.length
-    : 0;
+  const totalScore =
+    modules.length > 0 ? modules.reduce((s, m) => s + m.score, 0) / modules.length : 0;
 
   return ok({
     modules: modules.slice(0, 50),
@@ -787,7 +844,12 @@ export function getTechDebt(
 export function assessChangeRisk(
   store: Store,
   cwd: string,
-  opts: { filePath?: string; symbolId?: string; sinceDays?: number; weights?: Partial<typeof DEFAULT_RISK_WEIGHTS> },
+  opts: {
+    filePath?: string;
+    symbolId?: string;
+    sinceDays?: number;
+    weights?: Partial<typeof DEFAULT_RISK_WEIGHTS>;
+  },
 ): TraceMcpResult<ChangeRiskResult> {
   if (!opts.filePath && !opts.symbolId) {
     return err(validationError('Provide either file_path or symbol_id'));
@@ -840,11 +902,13 @@ export function assessChangeRisk(
   const sBlast = clampNormalize(blastFiles, 50);
 
   // Signal 2: Complexity
-  const complexityRow = store.db.prepare(`
+  const complexityRow = store.db
+    .prepare(`
     SELECT MAX(s.cyclomatic) as max_cyc
     FROM symbols s JOIN files f ON s.file_id = f.id
     WHERE f.path = ?
-  `).get(targetFile) as { max_cyc: number | null } | undefined;
+  `)
+    .get(targetFile) as { max_cyc: number | null } | undefined;
   const sComplexity = clampNormalize(complexityRow?.max_cyc ?? 0, 20);
 
   // Signal 3: Churn
@@ -866,7 +930,8 @@ export function assessChangeRisk(
   // Signal 4: Test gap — single query instead of per-symbol N+1
   let hasTestCoverage = false;
   if (file) {
-    const testRow = store.db.prepare(`
+    const testRow = store.db
+      .prepare(`
       SELECT 1 FROM edges e
       JOIN edge_types et ON e.edge_type_id = et.id
       JOIN nodes n ON e.target_node_id = n.id
@@ -875,7 +940,8 @@ export function assessChangeRisk(
         OR (n.node_type = 'symbol' AND n.ref_id IN (SELECT id FROM symbols WHERE file_id = ?))
       )
       LIMIT 1
-    `).get(file.id, file.id);
+    `)
+      .get(file.id, file.id);
     hasTestCoverage = !!testRow;
   }
   const sTestGap = hasTestCoverage ? 0 : 1;
@@ -889,18 +955,24 @@ export function assessChangeRisk(
   const signalsAvailable = 3 + (gitAvailable ? 1 : 0) + 1; // blast, complexity, test, coupling always; churn if git
   const confidence = signalsAvailable / 5;
 
-  const riskScore = w.blast_radius * sBlast
-    + w.complexity * sComplexity
-    + w.churn * sChurn
-    + w.test_gap * sTestGap
-    + w.coupling * sCoupling;
+  const riskScore =
+    w.blast_radius * sBlast +
+    w.complexity * sComplexity +
+    w.churn * sChurn +
+    w.test_gap * sTestGap +
+    w.coupling * sCoupling;
 
   // Mitigations
   const mitigations: string[] = [];
   if (sTestGap > 0.5) mitigations.push('Add test coverage before modifying this code');
-  if (sBlast > 0.5) mitigations.push(`High blast radius (${blastFiles} files affected) — consider incremental rollout`);
-  if (sComplexity > 0.7) mitigations.push('High complexity — consider refactoring before modifying');
-  if (sChurn > 0.7) mitigations.push('Frequently changed file — review recent change history for context');
+  if (sBlast > 0.5)
+    mitigations.push(
+      `High blast radius (${blastFiles} files affected) — consider incremental rollout`,
+    );
+  if (sComplexity > 0.7)
+    mitigations.push('High complexity — consider refactoring before modifying');
+  if (sChurn > 0.7)
+    mitigations.push('Frequently changed file — review recent change history for context');
 
   return ok({
     target: { file: targetFile, symbol_id: targetSymbolId },
@@ -908,11 +980,41 @@ export function assessChangeRisk(
     risk_level: riskLevel(riskScore),
     confidence: round(confidence),
     factors: [
-      { signal: 'blast_radius', value: round(sBlast), weight: w.blast_radius, contribution: round(w.blast_radius * sBlast), detail: `${blastFiles} files, ${blastSymbols} symbols in blast radius` },
-      { signal: 'complexity', value: round(sComplexity), weight: w.complexity, contribution: round(w.complexity * sComplexity), detail: `Max cyclomatic: ${complexityRow?.max_cyc ?? 0}` },
-      { signal: 'churn', value: round(sChurn), weight: w.churn, contribution: round(w.churn * sChurn), detail: gitAvailable ? `Churn percentile: ${round(sChurn * 100)}%` : 'Git unavailable' },
-      { signal: 'test_gap', value: sTestGap, weight: w.test_gap, contribution: round(w.test_gap * sTestGap), detail: hasTestCoverage ? 'Has test coverage' : 'No test coverage' },
-      { signal: 'coupling', value: round(sCoupling), weight: w.coupling, contribution: round(w.coupling * sCoupling), detail: `Instability: ${round(sCoupling)}` },
+      {
+        signal: 'blast_radius',
+        value: round(sBlast),
+        weight: w.blast_radius,
+        contribution: round(w.blast_radius * sBlast),
+        detail: `${blastFiles} files, ${blastSymbols} symbols in blast radius`,
+      },
+      {
+        signal: 'complexity',
+        value: round(sComplexity),
+        weight: w.complexity,
+        contribution: round(w.complexity * sComplexity),
+        detail: `Max cyclomatic: ${complexityRow?.max_cyc ?? 0}`,
+      },
+      {
+        signal: 'churn',
+        value: round(sChurn),
+        weight: w.churn,
+        contribution: round(w.churn * sChurn),
+        detail: gitAvailable ? `Churn percentile: ${round(sChurn * 100)}%` : 'Git unavailable',
+      },
+      {
+        signal: 'test_gap',
+        value: sTestGap,
+        weight: w.test_gap,
+        contribution: round(w.test_gap * sTestGap),
+        detail: hasTestCoverage ? 'Has test coverage' : 'No test coverage',
+      },
+      {
+        signal: 'coupling',
+        value: round(sCoupling),
+        weight: w.coupling,
+        contribution: round(w.coupling * sCoupling),
+        detail: `Instability: ${round(sCoupling)}`,
+      },
     ],
     mitigations,
     blast_radius: { files: blastFiles, symbols: blastSymbols },
@@ -935,13 +1037,16 @@ export function getHealthTrends(
   const target = opts.filePath ?? opts.module!;
 
   const rows = opts.filePath
-    ? store.db.prepare(`
+    ? (store.db
+        .prepare(`
         SELECT * FROM pi_health_history
         WHERE file_path = ?
         ORDER BY recorded_at DESC
         LIMIT ?
-      `).all(target, limit) as PIHealthRow[]
-    : store.db.prepare(`
+      `)
+        .all(target, limit) as PIHealthRow[])
+    : (store.db
+        .prepare(`
         SELECT file_path, recorded_at,
                AVG(bug_score) as bug_score,
                AVG(complexity_avg) as complexity_avg,
@@ -953,7 +1058,8 @@ export function getHealthTrends(
         GROUP BY recorded_at
         ORDER BY recorded_at DESC
         LIMIT ?
-      `).all(target, limit) as PIHealthRow[];
+      `)
+        .all(target, limit) as PIHealthRow[]);
 
   const dataPoints: HealthTrendPoint[] = rows.reverse().map((r) => ({
     date: r.recorded_at,
@@ -1003,16 +1109,18 @@ function getCachedBugPredictions(
   ttlMs = 60 * 60 * 1000,
 ): BugPredictionResult | null {
   try {
-    const snapshot = store.db.prepare(`
+    const snapshot = store.db
+      .prepare(`
       SELECT id, created_at FROM pi_snapshots
       WHERE snapshot_type = 'bug_prediction'
       ORDER BY created_at DESC LIMIT 1
-    `).get() as { id: number; created_at: string } | undefined;
+    `)
+      .get() as { id: number; created_at: string } | undefined;
 
     if (!snapshot) return null;
-    const snapshotFull = store.db.prepare(
-      'SELECT file_count FROM pi_snapshots WHERE id = ?',
-    ).get(snapshot.id) as { file_count: number | null } | undefined;
+    const snapshotFull = store.db
+      .prepare('SELECT file_count FROM pi_snapshots WHERE id = ?')
+      .get(snapshot.id) as { file_count: number | null } | undefined;
 
     // Check if fresh
     const age = Date.now() - new Date(snapshot.created_at).getTime();
@@ -1062,18 +1170,28 @@ function getCachedBugPredictions(
   }
 }
 
-function saveBugPredictionCache(store: Store, predictions: BugPrediction[], cwd: string): number | null {
+function saveBugPredictionCache(
+  store: Store,
+  predictions: BugPrediction[],
+  cwd: string,
+): number | null {
   try {
     let gitHead: string | null = null;
     try {
-      gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, stdio: 'pipe', timeout: 5000 }).toString('utf-8').trim();
-    } catch { /* git unavailable */ }
+      gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, stdio: 'pipe', timeout: 5000 })
+        .toString('utf-8')
+        .trim();
+    } catch {
+      /* git unavailable */
+    }
 
     return store.db.transaction(() => {
-      const snapshotId = (store.db.prepare(`
+      const snapshotId = store.db
+        .prepare(`
         INSERT INTO pi_snapshots (snapshot_type, git_head, config_hash, file_count, duration_ms)
         VALUES ('bug_prediction', ?, 'default', ?, 0)
-      `).run(gitHead, predictions.length).lastInsertRowid as number);
+      `)
+        .run(gitHead, predictions.length).lastInsertRowid as number;
 
       const insertScore = store.db.prepare(`
         INSERT OR REPLACE INTO pi_bug_scores (snapshot_id, file_id, score, churn_signal, fix_ratio_signal, complexity_signal, coupling_signal, pagerank_signal, author_signal, factors)

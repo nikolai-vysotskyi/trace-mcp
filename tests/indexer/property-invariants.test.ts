@@ -13,12 +13,12 @@
  * these invariants well beyond what example-based tests can cover.
  */
 
-import { describe, it } from 'vitest';
 import * as fc from 'fast-check';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
+import { describe, it } from 'vitest';
 import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang/index.js';
 import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
 import type { LanguagePlugin } from '../../src/plugin-api/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -27,9 +27,9 @@ type PluginEntry = { name: string; plugin: LanguagePlugin; ext: string };
 
 const plugins: PluginEntry[] = [
   { name: 'typescript', plugin: new TypeScriptLanguagePlugin(), ext: '.ts' },
-  { name: 'yaml',       plugin: new YamlLanguagePlugin(),       ext: '.yaml' },
-  { name: 'json',       plugin: new JsonLanguagePlugin(),       ext: '.json' },
-  { name: 'python',     plugin: new PythonLanguagePlugin(),     ext: '.py' },
+  { name: 'yaml', plugin: new YamlLanguagePlugin(), ext: '.yaml' },
+  { name: 'json', plugin: new JsonLanguagePlugin(), ext: '.json' },
+  { name: 'python', plugin: new PythonLanguagePlugin(), ext: '.py' },
 ];
 
 /** Run extractSymbols and return the raw result (ok or err). */
@@ -43,7 +43,9 @@ const FC_OPTS: fc.Parameters<unknown> = { numRuns: 150, seed: 42 };
 // ── Arbitrary generators ─────────────────────────────────────────────────────
 
 /** Generates plausible TypeScript identifiers (alphanumeric, no leading digit). */
-const tsIdentifier = fc.stringMatching(/^[a-zA-Z_$][a-zA-Z0-9_$]{1,19}$/).filter((s) => !/^\d/.test(s));
+const tsIdentifier = fc
+  .stringMatching(/^[a-zA-Z_$][a-zA-Z0-9_$]{1,19}$/)
+  .filter((s) => !/^\d/.test(s));
 
 /** Generates a simple TypeScript function declaration. */
 const tsFunctionArb = tsIdentifier.map(
@@ -51,9 +53,9 @@ const tsFunctionArb = tsIdentifier.map(
 );
 
 /** Generates a TS source with 1–5 exported functions. */
-const tsSourceArb = fc.array(tsFunctionArb, { minLength: 1, maxLength: 5 }).map((decls) =>
-  decls.join('\n\n'),
-);
+const tsSourceArb = fc
+  .array(tsFunctionArb, { minLength: 1, maxLength: 5 })
+  .map((decls) => decls.join('\n\n'));
 
 /** Generates a simple YAML key: value mapping. */
 const yamlSourceArb = fc
@@ -76,12 +78,10 @@ const jsonSourceArb = fc
   });
 
 /** Generates a Python source with 1–4 top-level functions. */
-const pyFunctionArb = tsIdentifier.map(
-  (name) => `def ${name}(x, y):\n    return x + y\n`,
-);
-const pySourceArb = fc.array(pyFunctionArb, { minLength: 1, maxLength: 4 }).map((decls) =>
-  decls.join('\n'),
-);
+const pyFunctionArb = tsIdentifier.map((name) => `def ${name}(x, y):\n    return x + y\n`);
+const pySourceArb = fc
+  .array(pyFunctionArb, { minLength: 1, maxLength: 4 })
+  .map((decls) => decls.join('\n'));
 
 // ── Invariant 1: ID uniqueness ───────────────────────────────────────────────
 //
@@ -90,10 +90,13 @@ const pySourceArb = fc.array(pyFunctionArb, { minLength: 1, maxLength: 4 }).map(
 describe('Invariant 1: ID uniqueness', () => {
   for (const { name, plugin, ext } of plugins) {
     const arb =
-      name === 'typescript' ? tsSourceArb
-      : name === 'yaml'     ? yamlSourceArb
-      : name === 'json'     ? jsonSourceArb
-      : pySourceArb;
+      name === 'typescript'
+        ? tsSourceArb
+        : name === 'yaml'
+          ? yamlSourceArb
+          : name === 'json'
+            ? jsonSourceArb
+            : pySourceArb;
 
     it(`[${name}] no duplicate symbolIds for any generated source`, async () => {
       await fc.assert(
@@ -122,10 +125,13 @@ describe('Invariant 1: ID uniqueness', () => {
 describe('Invariant 2: Extraction idempotency', () => {
   for (const { name, plugin, ext } of plugins) {
     const arb =
-      name === 'typescript' ? tsSourceArb
-      : name === 'yaml'     ? yamlSourceArb
-      : name === 'json'     ? jsonSourceArb
-      : pySourceArb;
+      name === 'typescript'
+        ? tsSourceArb
+        : name === 'yaml'
+          ? yamlSourceArb
+          : name === 'json'
+            ? jsonSourceArb
+            : pySourceArb;
 
     it(`[${name}] same input always produces same symbolId set`, async () => {
       await fc.assert(
@@ -141,9 +147,9 @@ describe('Invariant 2: Extraction idempotency', () => {
           if (added.length > 0 || removed.length > 0) {
             throw new Error(
               `Non-idempotent extraction!\n` +
-              `  Added on 2nd call:   ${added.join(', ')}\n` +
-              `  Removed on 2nd call: ${removed.join(', ')}\n` +
-              `Source:\n${source}`,
+                `  Added on 2nd call:   ${added.join(', ')}\n` +
+                `  Removed on 2nd call: ${removed.join(', ')}\n` +
+                `Source:\n${source}`,
             );
           }
         }),
@@ -219,10 +225,13 @@ describe('Invariant 3: No self-imports', () => {
 describe('Invariant 4: Symbol byte ranges are valid', () => {
   for (const { name, plugin, ext } of plugins) {
     const arb =
-      name === 'typescript' ? tsSourceArb
-      : name === 'yaml'     ? yamlSourceArb
-      : name === 'json'     ? jsonSourceArb
-      : pySourceArb;
+      name === 'typescript'
+        ? tsSourceArb
+        : name === 'yaml'
+          ? yamlSourceArb
+          : name === 'json'
+            ? jsonSourceArb
+            : pySourceArb;
 
     it(`[${name}] all symbols have 0 <= byteStart < byteEnd <= contentLength`, async () => {
       await fc.assert(
@@ -231,11 +240,16 @@ describe('Invariant 4: Symbol byte ranges are valid', () => {
           const result = await extract(plugin, `file${ext}`, source);
           if (result.isErr()) return;
           for (const sym of result.value.symbols) {
-            if (sym.byteStart < 0 || sym.byteEnd < 0 || sym.byteStart >= sym.byteEnd || sym.byteEnd > buf.byteLength) {
+            if (
+              sym.byteStart < 0 ||
+              sym.byteEnd < 0 ||
+              sym.byteStart >= sym.byteEnd ||
+              sym.byteEnd > buf.byteLength
+            ) {
               throw new Error(
                 `Invalid byte range for symbol ${sym.symbolId}: ` +
-                `[${sym.byteStart}, ${sym.byteEnd}) in buffer of length ${buf.byteLength}\n` +
-                `Source:\n${source}`,
+                  `[${sym.byteStart}, ${sym.byteEnd}) in buffer of length ${buf.byteLength}\n` +
+                  `Source:\n${source}`,
               );
             }
           }

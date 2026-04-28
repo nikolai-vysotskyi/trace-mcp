@@ -4,13 +4,12 @@
  * Does NOT add projects — use `trace-mcp add` for that.
  */
 
-import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as p from '@clack/prompts';
-import { configureMcpClients } from '../init/mcp-client.js';
-import { updateClaudeMd } from '../init/claude-md.js';
+import { Command } from 'commander';
 import { updateAgentsMd } from '../init/agents-md.js';
+import { updateClaudeMd } from '../init/claude-md.js';
 import { installHermesHooks } from '../init/hermes-hooks.js';
 import {
   installGuardHook,
@@ -20,6 +19,7 @@ import {
   cleanupLegacyHooks,
 } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
+import { configureMcpClients } from '../init/mcp-client.js';
 
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
@@ -34,8 +34,17 @@ import {
   readGlobalConfigText,
 } from '../config-jsonc.js';
 import { parse as parseJsonc } from 'jsonc-parser';
-import type { DetectedMcpClient, InitStepResult, InitReport } from '../init/types.js';
-import { detectMcpClients, detectGuardHook, detectProject } from '../init/detector.js';
+import { loadConfig, removeProjectConfig, saveProjectConfig } from '../config.js';
+import {
+  migrateGlobalConfig,
+  modifyGlobalConfigJsonc,
+  readGlobalConfigText,
+} from '../config-jsonc.js';
+import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
+import { ensureGlobalDirs, GLOBAL_CONFIG_PATH, getDbPath } from '../global.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
+import { generateConfig } from '../init/config-generator.js';
 import { detectConflicts } from '../init/conflict-detector.js';
 import { fixAllConflicts } from '../init/conflict-resolver.js';
 import { findProjectRoot, discoverChildProjects, hasRootMarkers } from '../project-root.js';
@@ -52,9 +61,17 @@ import { initializeDatabase } from '../db/schema.js';
 import { setupProject } from '../project-setup.js';
 import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
-import { installGuiApp, isAppInstalled, isAppOutdated } from './install-app.js';
+import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
+import { setupProject } from '../project-setup.js';
+import {
+  getProject,
+  listProjects,
+  registerProject,
+  unregisterProject,
+  updateLastIndexed,
+} from '../registry.js';
 import { ensureDaemonRunning } from './daemon.js';
+import { installGuiApp, isAppInstalled, isAppOutdated } from './install-app.js';
 
 export const initCommand = new Command('init')
   .description('One-time global setup: configure MCP clients, install hooks, set up CLAUDE.md')
@@ -870,7 +887,7 @@ function formatClientName(name: string): string {
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   const cwd = process.cwd();
   if (p.startsWith(cwd)) return p.slice(cwd.length + 1) || '.';
   return p;

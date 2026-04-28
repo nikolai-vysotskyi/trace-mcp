@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { MessageRouter } from '../../src/daemon/router/message-router.js';
 import type { Backend } from '../../src/daemon/router/types.js';
 
@@ -17,14 +17,22 @@ class FakeBackend implements Backend {
   stopped = false;
   sendImpl?: (msg: JSONRPCMessage) => Promise<void>;
 
-  constructor(kind: 'proxy' | 'local' = 'proxy') { this.kind = kind; }
-  async start(): Promise<void> { this.started = true; }
-  async stop(): Promise<void> { this.stopped = true; }
+  constructor(kind: 'proxy' | 'local' = 'proxy') {
+    this.kind = kind;
+  }
+  async start(): Promise<void> {
+    this.started = true;
+  }
+  async stop(): Promise<void> {
+    this.stopped = true;
+  }
   async send(msg: JSONRPCMessage): Promise<void> {
     this.sent.push(msg);
     if (this.sendImpl) await this.sendImpl(msg);
   }
-  emitResponse(msg: JSONRPCMessage): void { this.onmessage?.(msg); }
+  emitResponse(msg: JSONRPCMessage): void {
+    this.onmessage?.(msg);
+  }
 }
 
 function req(id: number, method = 'tools/call'): JSONRPCMessage {
@@ -41,7 +49,9 @@ describe('MessageRouter', () => {
   beforeEach(() => {
     clientInbox = [];
     router = new MessageRouter({
-      sendToClient: (msg) => { clientInbox.push(msg); },
+      sendToClient: (msg) => {
+        clientInbox.push(msg);
+      },
       drainTimeoutMs: 50,
     });
   });
@@ -171,7 +181,9 @@ describe('MessageRouter', () => {
 
   it('synthesizes error response when send() rejects', async () => {
     const a = new FakeBackend();
-    a.sendImpl = async () => { throw new Error('boom'); };
+    a.sendImpl = async () => {
+      throw new Error('boom');
+    };
     await a.start();
     router.setInitialBackend(a);
 

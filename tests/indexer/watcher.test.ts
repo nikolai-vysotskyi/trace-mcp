@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as parcelWatcher from '@parcel/watcher';
-import { FileWatcher } from '../../src/indexer/watcher.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
+import { FileWatcher } from '../../src/indexer/watcher.js';
 
 vi.mock('@parcel/watcher', () => ({
   subscribe: vi.fn(),
@@ -25,7 +25,7 @@ function makeControlledTimer() {
 
   const set = vi.fn((fn: () => void | Promise<void>, _ms: number) => {
     pendingFn = fn;
-    return (++timerId) as unknown as ReturnType<typeof setTimeout>;
+    return ++timerId as unknown as ReturnType<typeof setTimeout>;
   });
 
   const clear = vi.fn(() => {

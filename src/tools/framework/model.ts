@@ -2,12 +2,11 @@
  * get_model_context tool — assembles full context for an Eloquent, Mongoose, or Sequelize model.
  * Returns model symbol + relationships + schema + related controllers/requests.
  */
-import type { Store, SymbolRow, OrmModelRow, OrmAssociationRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import type { OrmAssociationRow, OrmModelRow, Store, SymbolRow } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 
 interface ModelRelationship {
-  type: string;      // edge type name: has_many, belongs_to, etc.
+  type: string; // edge type name: has_many, belongs_to, etc.
   relatedModel: string;
   relatedSymbolId?: string;
   method?: string;
@@ -41,9 +40,20 @@ interface ModelContextResult {
   relatedRequests: { name: string; symbolId: string; fqn: string | null }[];
   ormMetadata?: Record<string, unknown>;
   /** Nova resource referencing this model */
-  nova?: { resource: EcosystemRef; actions: string[]; filters: string[]; lenses: string[]; metrics: string[] };
+  nova?: {
+    resource: EcosystemRef;
+    actions: string[];
+    filters: string[];
+    lenses: string[];
+    metrics: string[];
+  };
   /** Filament resource referencing this model */
-  filament?: { resource: EcosystemRef; relationManagers: string[]; pages: string[]; widgets: string[] };
+  filament?: {
+    resource: EcosystemRef;
+    relationManagers: string[];
+    pages: string[];
+    widgets: string[];
+  };
   /** Livewire components using this model */
   livewireComponents?: EcosystemRef[];
   /** Data classes (DTOs) wrapping this model */
@@ -68,9 +78,9 @@ export function getModelContext(
     modelSymbol = store.getSymbolByFqn(`App\\Models\\${modelName}`);
   }
   if (!modelSymbol) {
-    const allSymbols = store.db.prepare(
-      "SELECT * FROM symbols WHERE name = ? AND kind = 'class'",
-    ).all(modelName) as SymbolRow[];
+    const allSymbols = store.db
+      .prepare("SELECT * FROM symbols WHERE name = ? AND kind = 'class'")
+      .all(modelName) as SymbolRow[];
     modelSymbol = allSymbols[0];
   }
 
@@ -111,9 +121,7 @@ function buildOrmModelContext(
   ormModel: OrmModelRow,
 ): TraceMcpResult<ModelContextResult> {
   const file = store.getFileById(ormModel.file_id);
-  const metadata: Record<string, unknown> = ormModel.metadata
-    ? JSON.parse(ormModel.metadata)
-    : {};
+  const metadata: Record<string, unknown> = ormModel.metadata ? JSON.parse(ormModel.metadata) : {};
 
   // Associations from orm_associations table
   const assocRows: OrmAssociationRow[] = store.getOrmAssociationsByModel(ormModel.id);
@@ -124,17 +132,18 @@ function buildOrmModelContext(
   }));
 
   // Schema from fields column (Mongoose/Sequelize)
-  const fields: Record<string, unknown>[] = ormModel.fields
-    ? JSON.parse(ormModel.fields)
-    : [];
+  const fields: Record<string, unknown>[] = ormModel.fields ? JSON.parse(ormModel.fields) : [];
 
-  const schema: ModelSchema[] = fields.length > 0
-    ? [{
-        tableName: ormModel.collection_or_table ?? ormModel.name.toLowerCase() + 's',
-        columns: fields,
-        operation: 'schema',
-      }]
-    : [];
+  const schema: ModelSchema[] =
+    fields.length > 0
+      ? [
+          {
+            tableName: ormModel.collection_or_table ?? `${ormModel.name.toLowerCase()}s`,
+            columns: fields,
+            operation: 'schema',
+          },
+        ]
+      : [];
 
   return ok({
     model: {
@@ -158,15 +167,26 @@ function getRelationships(store: Store, modelSymbol: SymbolRow): ModelRelationsh
   const nodeId = store.getNodeId('symbol', modelSymbol.id);
   if (!nodeId) return relationships;
 
-  const relEdgeTypes = new Set(['has_many', 'belongs_to', 'belongs_to_many', 'has_one', 'morphs_to']);
+  const relEdgeTypes = new Set([
+    'has_many',
+    'belongs_to',
+    'belongs_to_many',
+    'has_one',
+    'morphs_to',
+  ]);
 
   const outEdges = store.getOutgoingEdges(nodeId).filter((e) => relEdgeTypes.has(e.edge_type_name));
   const inEdges = store.getIncomingEdges(nodeId).filter((e) => relEdgeTypes.has(e.edge_type_name));
 
   // Batch resolve all referenced nodes
-  const allNodeIds = [...outEdges.map((e) => e.target_node_id), ...inEdges.map((e) => e.source_node_id)];
+  const allNodeIds = [
+    ...outEdges.map((e) => e.target_node_id),
+    ...inEdges.map((e) => e.source_node_id),
+  ];
   const nodeRefs = store.getNodeRefsBatch(allNodeIds);
-  const symRefIds = [...nodeRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const symRefIds = [...nodeRefs.values()]
+    .filter((r) => r.nodeType === 'symbol')
+    .map((r) => r.refId);
   const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
 
   for (const edge of outEdges) {
@@ -237,7 +257,9 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
   // Batch resolve all incoming source nodes
   const sourceNodeIds = incoming.map((e) => e.source_node_id);
   const sourceRefs = store.getNodeRefsBatch(sourceNodeIds);
-  const srcSymRefIds = [...sourceRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+  const srcSymRefIds = [...sourceRefs.values()]
+    .filter((r) => r.nodeType === 'symbol')
+    .map((r) => r.refId);
   const srcSymMap = srcSymRefIds.length > 0 ? store.getSymbolsByIds(srcSymRefIds) : new Map();
 
   // Helper: resolve source symbol from pre-fetched maps
@@ -261,12 +283,18 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
       // Batch resolve sub-edge targets
       const subTargetIds = subEdges.map((e) => e.target_node_id);
       const subRefs = store.getNodeRefsBatch(subTargetIds);
-      const subSymIds = [...subRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+      const subSymIds = [...subRefs.values()]
+        .filter((r) => r.nodeType === 'symbol')
+        .map((r) => r.refId);
       const subSymMap = subSymIds.length > 0 ? store.getSymbolsByIds(subSymIds) : new Map();
       for (const out of subEdges) {
         const ref = subRefs.get(out.target_node_id);
         const sym = ref?.nodeType === 'symbol' ? subSymMap.get(ref.refId) : undefined;
-        const name = sym ? (sym.fqn ?? sym.name) : (out.metadata ? (JSON.parse(out.metadata) as Record<string, unknown>).targetFqn as string : undefined);
+        const name = sym
+          ? (sym.fqn ?? sym.name)
+          : out.metadata
+            ? ((JSON.parse(out.metadata) as Record<string, unknown>).targetFqn as string)
+            : undefined;
         if (!name) continue;
         if (out.edge_type_name === 'nova_action_on') actions.push(name);
         if (out.edge_type_name === 'nova_filter_on') filters.push(name);
@@ -276,7 +304,10 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
     }
     result.nova = {
       resource: { name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id },
-      actions, filters, lenses, metrics,
+      actions,
+      filters,
+      lenses,
+      metrics,
     };
     break;
   }
@@ -294,12 +325,18 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
       const subEdges = store.getOutgoingEdges(srcNid);
       const subTargetIds = subEdges.map((e) => e.target_node_id);
       const subRefs = store.getNodeRefsBatch(subTargetIds);
-      const subSymIds = [...subRefs.values()].filter((r) => r.nodeType === 'symbol').map((r) => r.refId);
+      const subSymIds = [...subRefs.values()]
+        .filter((r) => r.nodeType === 'symbol')
+        .map((r) => r.refId);
       const subSymMap = subSymIds.length > 0 ? store.getSymbolsByIds(subSymIds) : new Map();
       for (const out of subEdges) {
         const ref = subRefs.get(out.target_node_id);
         const sym = ref?.nodeType === 'symbol' ? subSymMap.get(ref.refId) : undefined;
-        const name = sym ? (sym.fqn ?? sym.name) : (out.metadata ? (JSON.parse(out.metadata) as Record<string, unknown>).targetFqn as string : undefined);
+        const name = sym
+          ? (sym.fqn ?? sym.name)
+          : out.metadata
+            ? ((JSON.parse(out.metadata) as Record<string, unknown>).targetFqn as string)
+            : undefined;
         if (!name) continue;
         if (out.edge_type_name === 'filament_relation_manager') relationManagers.push(name);
         if (out.edge_type_name === 'filament_page_for') pages.push(name);
@@ -308,7 +345,9 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
     }
     result.filament = {
       resource: { name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id },
-      relationManagers, pages, widgets,
+      relationManagers,
+      pages,
+      widgets,
     };
     break;
   }
@@ -318,7 +357,8 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
   for (const edge of incoming) {
     if (edge.edge_type_name !== 'livewire_uses_model') continue;
     const src = getSrcSym(edge.source_node_id);
-    if (src) lwComponents.push({ name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id });
+    if (src)
+      lwComponents.push({ name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id });
   }
   if (lwComponents.length > 0) result.livewireComponents = lwComponents;
 
@@ -327,7 +367,8 @@ function getEcosystemRefs(store: Store, modelSymbol: SymbolRow): Partial<ModelCo
   for (const edge of incoming) {
     if (edge.edge_type_name !== 'data_wraps') continue;
     const src = getSrcSym(edge.source_node_id);
-    if (src) dataClasses.push({ name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id });
+    if (src)
+      dataClasses.push({ name: src.name, fqn: src.fqn ?? undefined, symbolId: src.symbol_id });
   }
   if (dataClasses.length > 0) result.dataClasses = dataClasses;
 
@@ -341,7 +382,7 @@ function modelNameToTable(name: string): string {
   // Simple snake_case + plural
   const snake = short.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
   // Simple pluralization
-  if (snake.endsWith('y') && !/[aeiou]y$/.test(snake)) return snake.slice(0, -1) + 'ies';
-  if (/(?:s|sh|ch|x|z)$/.test(snake)) return snake + 'es';
-  return snake + 's';
+  if (snake.endsWith('y') && !/[aeiou]y$/.test(snake)) return `${snake.slice(0, -1)}ies`;
+  if (/(?:s|sh|ch|x|z)$/.test(snake)) return `${snake}es`;
+  return `${snake}s`;
 }

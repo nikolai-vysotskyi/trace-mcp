@@ -1,7 +1,7 @@
-import { defineConfig } from 'tsup';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { Plugin } from 'esbuild';
+import { defineConfig } from 'tsup';
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 
@@ -75,8 +75,8 @@ ${namedExportsSrc}`,
 
 export default defineConfig({
   entry: {
-    'index': 'src/index.ts',
-    'cli': 'src/cli.ts',
+    index: 'src/index.ts',
+    cli: 'src/cli.ts',
     // Worker entry. Built next to cli.js so the pool can resolve it via
     // `new URL('./extract-worker.js', import.meta.url)`.
     'extract-worker': 'src/indexer/extract-worker.ts',
@@ -102,6 +102,6 @@ export default defineConfig({
 const require = __tmcpCreateRequire(import.meta.url);`,
   },
   define: {
-    'PKG_VERSION_INJECTED': JSON.stringify(version),
+    PKG_VERSION_INJECTED: JSON.stringify(version),
   },
 });

@@ -1,12 +1,12 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
-import { markToolConsultation } from '../../src/server/consultation-markers.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { projectHash } from '../../src/global.js';
+import { markToolConsultation } from '../../src/server/consultation-markers.js';
 
-const TEST_ROOT = path.join(os.tmpdir(), 'trace-mcp-test-consultation-' + process.pid);
+const TEST_ROOT = path.join(os.tmpdir(), `trace-mcp-test-consultation-${process.pid}`);
 
 function getMarkerDir(): string {
   return path.join(os.tmpdir(), `trace-mcp-consulted-${projectHash(path.resolve(TEST_ROOT))}`);
@@ -21,7 +21,9 @@ afterEach(() => {
   const dir = getMarkerDir();
   try {
     fs.rmSync(dir, { recursive: true, force: true });
-  } catch { /* may not exist */ }
+  } catch {
+    /* may not exist */
+  }
 });
 
 describe('markToolConsultation', () => {
@@ -64,10 +66,7 @@ describe('markToolConsultation', () => {
 
     it('extracts files from get_context_bundle symbol_ids array', () => {
       markToolConsultation(TEST_ROOT, 'get_context_bundle', {
-        symbol_ids: [
-          'src/a.ts::Foo#class',
-          'src/b.ts::Bar#function',
-        ],
+        symbol_ids: ['src/a.ts::Foo#class', 'src/b.ts::Bar#function'],
       });
 
       const dir = getMarkerDir();

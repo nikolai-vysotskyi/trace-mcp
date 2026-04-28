@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:fs');
 const mockFs = vi.mocked(fs);
@@ -35,7 +34,9 @@ describe('updateClaudeMd', () => {
 
   it('returns skipped on dry run when file has existing block', () => {
     mockFs.existsSync.mockReturnValue(true);
-    mockFs.readFileSync.mockReturnValue(`Some content\n${START_MARKER}\nold block\n${END_MARKER}\n`);
+    mockFs.readFileSync.mockReturnValue(
+      `Some content\n${START_MARKER}\nold block\n${END_MARKER}\n`,
+    );
 
     const result = updateClaudeMd('/project', { dryRun: true });
     expect(result.action).toBe('skipped');

@@ -24,15 +24,19 @@ const REGRESSION_THRESHOLD = 0.15; // 15% risk score increase = regression
  * Save current report metrics as the baseline for future comparisons.
  */
 export function captureBaseline(store: Store, report: CIReport, commitHash: string): void {
-  store.insertGraphSnapshot(SNAPSHOT_TYPE, {
-    riskScore: report.riskAnalysis.overallScore,
-    riskLevel: report.riskAnalysis.overallLevel,
-    untestedGaps: report.testCoverage.totalUntested,
-    violations: report.architectureViolations.totalViolations,
-    deadExports: report.deadCode.totalDead,
-    changedFiles: report.summary.changedFileCount,
-    affectedFiles: report.summary.affectedFileCount,
-  }, commitHash);
+  store.insertGraphSnapshot(
+    SNAPSHOT_TYPE,
+    {
+      riskScore: report.riskAnalysis.overallScore,
+      riskLevel: report.riskAnalysis.overallLevel,
+      untestedGaps: report.testCoverage.totalUntested,
+      violations: report.architectureViolations.totalViolations,
+      deadExports: report.deadCode.totalDead,
+      changedFiles: report.summary.changedFileCount,
+      affectedFiles: report.summary.affectedFileCount,
+    },
+    commitHash,
+  );
 }
 
 /**

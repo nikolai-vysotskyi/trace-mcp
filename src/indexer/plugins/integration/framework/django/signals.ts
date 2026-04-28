@@ -20,15 +20,9 @@ interface SignalConnection {
  * Extract signal connections from Django source code.
  * Returns edges of type django_signal_receiver.
  */
-export function extractSignalConnections(
-  source: string,
-  filePath: string,
-): RawEdge[] {
+export function extractSignalConnections(source: string, filePath: string): RawEdge[] {
   const edges: RawEdge[] = [];
-  const connections = [
-    ...extractReceiverDecorators(source),
-    ...extractConnectCalls(source),
-  ];
+  const connections = [...extractReceiverDecorators(source), ...extractConnectCalls(source)];
 
   for (const conn of connections) {
     edges.push({
@@ -62,9 +56,7 @@ function extractReceiverDecorators(source: string): SignalConnection[] {
     const line = lines[i].trim();
 
     // Match @receiver(...) decorator
-    const decoratorMatch = line.match(
-      /^@receiver\s*\(\s*(.+)\s*\)\s*$/,
-    );
+    const decoratorMatch = line.match(/^@receiver\s*\(\s*(.+)\s*\)\s*$/);
     if (!decoratorMatch) continue;
 
     const argsStr = decoratorMatch[1];

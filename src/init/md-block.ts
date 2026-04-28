@@ -16,7 +16,18 @@ export const START_MARKER = '<!-- trace-mcp:start -->';
 export const END_MARKER = '<!-- trace-mcp:end -->';
 
 /** Competing tools whose marker blocks should be removed on upsert. */
-const COMPETING_MARKER_TOOLS = ['jcodemunch', 'code-index', 'repomix', 'aider', 'cline', 'cody', 'greptile', 'sourcegraph', 'code-compass', 'repo-map'];
+const COMPETING_MARKER_TOOLS = [
+  'jcodemunch',
+  'code-index',
+  'repomix',
+  'aider',
+  'cline',
+  'cody',
+  'greptile',
+  'sourcegraph',
+  'code-compass',
+  'repo-map',
+];
 
 export const TRACE_MCP_ROUTING_BLOCK = `${START_MARKER}
 ## trace-mcp Tool Routing
@@ -47,7 +58,10 @@ Start sessions with \`get_project_map\` (summary_only=true).
 ${END_MARKER}`;
 
 /** Upsert the trace-mcp routing block into `filePath`. Idempotent. */
-export function upsertTraceMcpBlock(filePath: string, opts: { dryRun?: boolean } = {}): InitStepResult {
+export function upsertTraceMcpBlock(
+  filePath: string,
+  opts: { dryRun?: boolean } = {},
+): InitStepResult {
   if (opts.dryRun) {
     if (!fs.existsSync(filePath)) {
       return { target: filePath, action: 'skipped', detail: `Would create ${basename(filePath)}` };
@@ -60,7 +74,7 @@ export function upsertTraceMcpBlock(filePath: string, opts: { dryRun?: boolean }
   }
 
   if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, TRACE_MCP_ROUTING_BLOCK + '\n');
+    fs.writeFileSync(filePath, `${TRACE_MCP_ROUTING_BLOCK}\n`);
     return { target: filePath, action: 'created' };
   }
 
@@ -87,12 +101,14 @@ export function upsertTraceMcpBlock(filePath: string, opts: { dryRun?: boolean }
 
   content = cleanupWhitespace(content);
   const separator = content.endsWith('\n') ? '\n' : '\n\n';
-  fs.writeFileSync(filePath, content + separator + TRACE_MCP_ROUTING_BLOCK + '\n');
+  fs.writeFileSync(filePath, `${content + separator + TRACE_MCP_ROUTING_BLOCK}\n`);
   const cleaned = originalContent !== content;
   return {
     target: filePath,
     action: 'updated',
-    detail: cleaned ? 'Appended trace-mcp block and removed competing sections' : 'Appended trace-mcp block',
+    detail: cleaned
+      ? 'Appended trace-mcp block and removed competing sections'
+      : 'Appended trace-mcp block',
   };
 }
 
@@ -104,7 +120,8 @@ function basename(p: string): string {
 
 function removeCompetingBlocks(content: string): string {
   const markerPattern = new RegExp(
-    `<!-- ?(${COMPETING_MARKER_TOOLS.join('|')}):start ?-->[\\s\\S]*?<!-- ?\\1:end ?-->\\n?`, 'gi',
+    `<!-- ?(${COMPETING_MARKER_TOOLS.join('|')}):start ?-->[\\s\\S]*?<!-- ?\\1:end ?-->\\n?`,
+    'gi',
   );
   let result = content.replace(markerPattern, '');
   result = removeCompetingHeadingSections(result);
@@ -135,15 +152,33 @@ function removeOrphanedTraceMcpContent(content: string): string {
   const markerBlock = content.slice(startIdx, endIdx + END_MARKER.length);
   const after = content.slice(endIdx + END_MARKER.length);
   const traceMcpHeadingRe = /^(#{1,6})\s+trace-mcp\b/i;
-  const cleanBefore = filterSections(before.split('\n'), (heading) => traceMcpHeadingRe.test(heading)).join('\n');
-  const cleanAfter = filterSections(after.split('\n'), (heading) => traceMcpHeadingRe.test(heading)).join('\n');
+  const cleanBefore = filterSections(before.split('\n'), (heading) =>
+    traceMcpHeadingRe.test(heading),
+  ).join('\n');
+  const cleanAfter = filterSections(after.split('\n'), (heading) =>
+    traceMcpHeadingRe.test(heading),
+  ).join('\n');
   return cleanBefore + markerBlock + cleanAfter;
 }
 
 function removeCompetingHeadingSections(content: string): string {
-  const competitorNames = ['jcodemunch', 'jCodeMunch', 'code-index', 'repomix', 'repopack', 'aider', 'cline', 'cody', 'greptile', 'sourcegraph', 'code-compass', 'repo-map'];
+  const competitorNames = [
+    'jcodemunch',
+    'jCodeMunch',
+    'code-index',
+    'repomix',
+    'repopack',
+    'aider',
+    'cline',
+    'cody',
+    'greptile',
+    'sourcegraph',
+    'code-compass',
+    'repo-map',
+  ];
   const competitorRe = new RegExp(`\\b(?:${competitorNames.join('|')})\\b`, 'i');
-  const competingHeadingRe = /^(#{1,6})\s+(?:jCodeMunch|jcodemunch|code-index|repomix|aider|cline|cody|greptile|sourcegraph|code-compass|repo-map)\b/i;
+  const competingHeadingRe =
+    /^(#{1,6})\s+(?:jCodeMunch|jcodemunch|code-index|repomix|aider|cline|cody|greptile|sourcegraph|code-compass|repo-map)\b/i;
 
   let lines = content.split('\n');
   lines = filterSections(lines, (headingLine) => competingHeadingRe.test(headingLine));
@@ -160,7 +195,10 @@ function removeCompetingHeadingSections(content: string): string {
   return lines.join('\n');
 }
 
-function filterSections(lines: string[], shouldRemove: (heading: string, level: number, body: string) => boolean): string[] {
+function filterSections(
+  lines: string[],
+  shouldRemove: (heading: string, level: number, body: string) => boolean,
+): string[] {
   const output: string[] = [];
   let skipping = false;
   let skipLevel = 0;
@@ -213,7 +251,7 @@ function lookAheadSection(lines: string[], start: number, level: number): string
 }
 
 function cleanupWhitespace(content: string): string {
-  return content.replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  return `${content.replace(/\n{3,}/g, '\n\n').trim()}\n`;
 }
 
 function escapeRegex(s: string): string {

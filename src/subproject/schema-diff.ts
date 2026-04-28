@@ -51,8 +51,12 @@ export function diffSchemas(
 
   const oldProps = (oldSchema.properties ?? {}) as Record<string, Record<string, unknown>>;
   const newProps = (newSchema.properties ?? {}) as Record<string, Record<string, unknown>>;
-  const oldRequired = new Set(Array.isArray(oldSchema.required) ? oldSchema.required as string[] : []);
-  const newRequired = new Set(Array.isArray(newSchema.required) ? newSchema.required as string[] : []);
+  const oldRequired = new Set(
+    Array.isArray(oldSchema.required) ? (oldSchema.required as string[]) : [],
+  );
+  const newRequired = new Set(
+    Array.isArray(newSchema.required) ? (newSchema.required as string[]) : [],
+  );
 
   const oldKeys = new Set(Object.keys(oldProps));
   const newKeys = new Set(Object.keys(newProps));
@@ -171,11 +175,13 @@ export function diffSchemas(
 
     // Recurse into array items
     if (oldType === 'array' && newType === 'array' && oldProp.items && newProp.items) {
-      diffs.push(...diffSchemas(
-        oldProp.items as Record<string, unknown>,
-        newProp.items as Record<string, unknown>,
-        `${fieldPath}[]`,
-      ));
+      diffs.push(
+        ...diffSchemas(
+          oldProp.items as Record<string, unknown>,
+          newProp.items as Record<string, unknown>,
+          `${fieldPath}[]`,
+        ),
+      );
     }
   }
 
@@ -212,8 +218,8 @@ export function diffEndpoints(
     const oldRes = parseSchemaField(oldEp.responseSchema);
     const newRes = parseSchemaField(newEp.responseSchema);
 
-    const requestChanges = (oldReq && newReq) ? diffSchemas(oldReq, newReq) : [];
-    const responseChanges = (oldRes && newRes) ? diffSchemas(oldRes, newRes) : [];
+    const requestChanges = oldReq && newReq ? diffSchemas(oldReq, newReq) : [];
+    const responseChanges = oldRes && newRes ? diffSchemas(oldRes, newRes) : [];
 
     if (requestChanges.length > 0 || responseChanges.length > 0) {
       results.push({
@@ -236,11 +242,16 @@ function endpointKey(ep: { method: string | null; path: string }): string {
   return `${(ep.method ?? '*').toUpperCase()} ${ep.path}`;
 }
 
-function parseSchemaField(schema: string | Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+function parseSchemaField(
+  schema: string | Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
   if (!schema) return null;
   if (typeof schema === 'object') return schema;
-  try { return JSON.parse(schema) as Record<string, unknown>; }
-  catch { return null; }
+  try {
+    return JSON.parse(schema) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 function getSchemaType(prop: Record<string, unknown> | undefined): string {
@@ -268,8 +279,8 @@ function levenshtein(a: string, b: string): number {
     for (let j = 1; j <= n; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
       curr[j] = Math.min(
-        prev[j] + 1,      // deletion
-        curr[j - 1] + 1,  // insertion
+        prev[j] + 1, // deletion
+        curr[j - 1] + 1, // insertion
         prev[j - 1] + cost, // substitution
       );
     }

@@ -1,25 +1,21 @@
-import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
+import type { Store } from '../../src/db/store.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { search, getSymbol, getFileOutline } from '../../src/tools/navigation/navigation.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { getFileOutline, getSymbol, search } from '../../src/tools/navigation/navigation.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');
 
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'src/**/*.ts',
-      'components/**/*.vue',
-    ],
+    include: ['app/**/*.php', 'src/**/*.ts', 'components/**/*.vue'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],

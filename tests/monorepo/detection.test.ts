@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { detectWorkspaces } from '../../src/indexer/monorepo.js';
 import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
 
@@ -69,9 +69,7 @@ describe('detectWorkspaces', () => {
   it('detects composer path repositories', () => {
     writeJson(path.join(tmpDir, 'composer.json'), {
       name: 'my/monorepo',
-      repositories: [
-        { type: 'path', url: 'packages/*' },
-      ],
+      repositories: [{ type: 'path', url: 'packages/*' }],
     });
     writeJson(path.join(tmpDir, 'packages/auth/composer.json'), { name: 'my/auth' });
     writeJson(path.join(tmpDir, 'packages/billing/composer.json'), { name: 'my/billing' });

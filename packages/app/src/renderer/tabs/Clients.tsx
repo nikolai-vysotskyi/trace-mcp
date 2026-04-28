@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StatusDot } from '../components/StatusDot';
-import { useDaemon, ClientInfo } from '../hooks/useDaemon';
+import { type ClientInfo, useDaemon } from '../hooks/useDaemon';
 
 // ── All supported MCP clients (same order as CLI init) ────────────
 type ClientName =
@@ -90,6 +90,7 @@ function LevelPopover({
     >
       {LEVELS.map((l, i) => (
         <button
+          type="button"
           key={l.value}
           onClick={() => onSelect(l.value)}
           className="w-full text-left px-3 py-2 transition-colors hover:brightness-110"
@@ -245,6 +246,7 @@ function SupportedClientRow({
       ) : (
         <>
           <button
+            type="button"
             onClick={handleConnect}
             disabled={configuring}
             className="text-[10px] px-2 py-0.5 rounded font-medium transition-colors"
@@ -314,6 +316,7 @@ export function Clients() {
           Daemon not reachable
         </div>
         <button
+          type="button"
           onClick={() => restartDaemon()}
           disabled={restarting}
           className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
@@ -361,6 +364,7 @@ export function Clients() {
             Supported Clients
           </h2>
           <button
+            type="button"
             onClick={() => detectClients()}
             className="p-1 rounded-md transition-colors hover:opacity-80"
             style={{ color: 'var(--text-secondary)' }}
@@ -416,6 +420,7 @@ export function Clients() {
             Active Sessions
           </h2>
           <button
+            type="button"
             onClick={() => fetchClients()}
             className="p-1 rounded-md transition-colors hover:opacity-80"
             style={{ color: 'var(--text-secondary)' }}

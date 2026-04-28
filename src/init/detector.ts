@@ -4,7 +4,6 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { buildProjectContext } from '../indexer/project-context.js';

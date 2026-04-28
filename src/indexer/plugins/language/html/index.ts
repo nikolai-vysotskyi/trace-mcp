@@ -4,11 +4,17 @@
  * Extracts: script/link references, id/class attributes, meta tags,
  * form elements, custom elements, and import edges to linked resources.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 
 const FORM_TAGS = new Set(['input', 'select', 'textarea', 'button']);
 
@@ -38,7 +44,10 @@ export class HtmlLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.html', '.htm'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('html');
       const sourceCode = content.toString('utf-8');
@@ -144,7 +153,7 @@ export class HtmlLanguagePlugin implements LanguagePlugin {
       // Inline script block — check for raw_text content in the element
       if (!src) {
         const rawText = element.namedChildren.find((c) => c.type === 'raw_text');
-        if (rawText && rawText.text.trim()) {
+        if (rawText?.text.trim()) {
           const scriptType = getAttr(tag, 'type') ?? 'text/javascript';
           symbols.push({
             symbolId: `${filePath}::inline-script@${element.startIndex}#variable`,

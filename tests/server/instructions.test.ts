@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildInstructions } from '../../src/server/instructions.js';
 
 describe('buildInstructions — verbosity', () => {
@@ -44,7 +44,7 @@ describe('buildInstructions — agent_behavior', () => {
     const out = buildInstructions('typescript', 'full', 'strict');
     expect(out).toContain('Agent Behavior (applies to all tasks');
     expect(out).toContain('No flattery');
-    expect(out).toContain('Disagree when the user\'s premise is wrong');
+    expect(out).toContain("Disagree when the user's premise is wrong");
     expect(out).toContain('Never fabricate');
     expect(out).toContain('two plausible interpretations');
     expect(out).toContain('Rewrite vague asks into verifiable goals');

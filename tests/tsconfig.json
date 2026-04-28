@@ -13,11 +13,6 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": [
-    "./**/*.ts",
-    "../src/**/*.ts"
-  ],
-  "exclude": [
-    "fixtures"
-  ]
+  "include": ["./**/*.ts", "../src/**/*.ts"],
+  "exclude": ["fixtures"]
 }

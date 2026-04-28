@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { checkRenameSafe } from '../../src/tools/refactoring/rename-check.js';
+import { createTestStore } from '../test-utils.js';
 
 function insertFile(store: Store, filePath: string): number {
-  return store.insertFile(filePath, 'typescript', 'hash_' + filePath, 100);
+  return store.insertFile(filePath, 'typescript', `hash_${filePath}`, 100);
 }
 
 function insertSymbol(store: Store, fileId: number, name: string, kind = 'function'): number {

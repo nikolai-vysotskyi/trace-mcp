@@ -1,8 +1,8 @@
 /** Pass 2d: Resolve ES module import specifiers to file→file graph edges. */
 import path from 'node:path';
+import { logger } from '../../logger.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { EsModuleResolver } from '../resolvers/es-modules.js';
-import { logger } from '../../logger.js';
 import { PhantomPackageFactory } from './phantom-externals.js';
 
 /**
@@ -13,7 +13,8 @@ import { PhantomPackageFactory } from './phantom-externals.js';
 function npmBucketFor(specifier: string): string | null {
   if (!specifier) return null;
   if (specifier.startsWith('.') || specifier.startsWith('/')) return null;
-  if (specifier.startsWith('@/') || specifier.startsWith('~') || specifier.startsWith('#')) return null;
+  if (specifier.startsWith('@/') || specifier.startsWith('~') || specifier.startsWith('#'))
+    return null;
   if (specifier.startsWith('node:')) return specifier.split('/')[0];
   if (specifier.startsWith('@')) {
     const parts = specifier.split('/');
@@ -53,9 +54,9 @@ export function resolveEsmImportEdges(state: PipelineState): void {
     for (let i = 0; i < ids.length; i += CHUNK) {
       const chunk = ids.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
-      const rows = store.db.prepare(
-        `SELECT id, workspace FROM files WHERE id IN (${ph})`,
-      ).all(...chunk) as Array<{ id: number; workspace: string | null }>;
+      const rows = store.db
+        .prepare(`SELECT id, workspace FROM files WHERE id IN (${ph})`)
+        .all(...chunk) as Array<{ id: number; workspace: string | null }>;
       for (const r of rows) fileWorkspace.set(r.id, r.workspace);
     }
   }
@@ -65,15 +66,23 @@ export function resolveEsmImportEdges(state: PipelineState): void {
     const cached = targetFileCache.get(relPath);
     if (cached !== undefined) return cached;
     const f = store.getFile(relPath);
-    if (!f) { targetFileCache.set(relPath, null); return null; }
+    if (!f) {
+      targetFileCache.set(relPath, null);
+      return null;
+    }
     const nodeId = store.getNodeId('file', f.id);
-    if (nodeId == null) { targetFileCache.set(relPath, null); return null; }
+    if (nodeId == null) {
+      targetFileCache.set(relPath, null);
+      return null;
+    }
     const entry = { id: f.id, nodeId };
     targetFileCache.set(relPath, entry);
     return entry;
   };
 
-  const importsEdgeType = store.db.prepare('SELECT id FROM edge_types WHERE name = ?').get('imports') as { id: number } | undefined;
+  const importsEdgeType = store.db
+    .prepare('SELECT id FROM edge_types WHERE name = ?')
+    .get('imports') as { id: number } | undefined;
   if (!importsEdgeType) return;
 
   const insertStmt = store.db.prepare(
@@ -84,12 +93,22 @@ export function resolveEsmImportEdges(state: PipelineState): void {
   );
 
   // Languages whose `imports` edges carry filesystem-path specifiers (vs FQNs
-   // like PHP's `use`). CSS/HTML/XML/SVG `@import`/href/src targets resolve via
-   // the same oxc-resolver pass — without this, asset files stay isolated.
-   const TS_JS_LANGS = new Set([
-    'typescript', 'javascript', 'tsx', 'jsx', 'vue',
-    'css', 'scss', 'sass', 'less', 'stylus',
-    'html', 'xml', 'svg',
+  // like PHP's `use`). CSS/HTML/XML/SVG `@import`/href/src targets resolve via
+  // the same oxc-resolver pass — without this, asset files stay isolated.
+  const TS_JS_LANGS = new Set([
+    'typescript',
+    'javascript',
+    'tsx',
+    'jsx',
+    'vue',
+    'css',
+    'scss',
+    'sass',
+    'less',
+    'stylus',
+    'html',
+    'xml',
+    'svg',
   ]);
 
   store.db.transaction(() => {
@@ -121,9 +140,18 @@ export function resolveEsmImportEdges(state: PipelineState): void {
       for (const [from, specifiers] of consolidated) {
         if (!from) continue;
         // External URL (HTML/CSS href to CDN) — not a file nor an npm package.
-        if (from.startsWith('http://') || from.startsWith('https://') || from.startsWith('//')
-            || from.startsWith('data:')) continue;
-        const isRelative = from.startsWith('.') || from.startsWith('/') || from.startsWith('@/') || from.startsWith('~');
+        if (
+          from.startsWith('http://') ||
+          from.startsWith('https://') ||
+          from.startsWith('//') ||
+          from.startsWith('data:')
+        )
+          continue;
+        const isRelative =
+          from.startsWith('.') ||
+          from.startsWith('/') ||
+          from.startsWith('@/') ||
+          from.startsWith('~');
 
         // Always try the path resolver first. Bare specifiers may still be
         // local — tsconfig/jsconfig `baseUrl` or `paths` can turn something

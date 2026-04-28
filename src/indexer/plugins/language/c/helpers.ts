@@ -1,10 +1,16 @@
 /**
  * Helper utilities for the C language plugin (tree-sitter).
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
+
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
-export function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parentName?: string): string {
+export function makeSymbolId(
+  filePath: string,
+  name: string,
+  kind: SymbolKind,
+  parentName?: string,
+): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;
   return `${filePath}::${name}#${kind}`;
 }
@@ -46,13 +52,30 @@ export function extractQualifiers(node: TSNode): string[] {
  * C declarators can nest: pointer_declarator -> function_declarator -> identifier
  */
 export function findDeclaratorName(node: TSNode): string | undefined {
-  if (node.type === 'identifier' || node.type === 'field_identifier' || node.type === 'type_identifier' || node.type === 'primitive_type') return node.text;
+  if (
+    node.type === 'identifier' ||
+    node.type === 'field_identifier' ||
+    node.type === 'type_identifier' ||
+    node.type === 'primitive_type'
+  )
+    return node.text;
   const declarator = node.childForFieldName('declarator');
   if (declarator) return findDeclaratorName(declarator);
   // Fallback: look through named children
   for (const child of node.namedChildren) {
-    if (child.type === 'identifier' || child.type === 'field_identifier' || child.type === 'type_identifier' || child.type === 'primitive_type') return child.text;
-    if (child.type === 'pointer_declarator' || child.type === 'function_declarator' || child.type === 'array_declarator' || child.type === 'parenthesized_declarator') {
+    if (
+      child.type === 'identifier' ||
+      child.type === 'field_identifier' ||
+      child.type === 'type_identifier' ||
+      child.type === 'primitive_type'
+    )
+      return child.text;
+    if (
+      child.type === 'pointer_declarator' ||
+      child.type === 'function_declarator' ||
+      child.type === 'array_declarator' ||
+      child.type === 'parenthesized_declarator'
+    ) {
       const found = findDeclaratorName(child);
       if (found) return found;
     }

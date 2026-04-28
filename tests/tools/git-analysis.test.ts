@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { getChurnRate, getHotspots, isGitRepo } from '../../src/tools/git/git-analysis.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -10,12 +10,8 @@ vi.mock('node:child_process', () => ({
 
 const mockExecFileSync = vi.mocked(execFileSync);
 
-function insertFileWithComplexity(
-  store: Store,
-  path: string,
-  cyclomatic: number,
-): number {
-  const fileId = store.insertFile(path, 'typescript', 'hash_' + path, 100);
+function insertFileWithComplexity(store: Store, path: string, cyclomatic: number): number {
+  const fileId = store.insertFile(path, 'typescript', `hash_${path}`, 100);
   store.insertSymbol(fileId, {
     symbolId: `sym:${path}::main`,
     name: 'main',
@@ -60,18 +56,20 @@ describe('getChurnRate', () => {
       const argList = args as string[];
       if (argList[0] === 'rev-parse') return Buffer.from('true');
       if (argList[0] === 'log') {
-        return Buffer.from([
-          '__COMMIT__abc123|2026-03-01T10:00:00Z|Alice',
-          'src/a.ts',
-          'src/b.ts',
-          '',
-          '__COMMIT__def456|2026-03-15T10:00:00Z|Bob',
-          'src/a.ts',
-          '',
-          '__COMMIT__ghi789|2026-04-01T10:00:00Z|Alice',
-          'src/a.ts',
-          'src/c.ts',
-        ].join('\n'));
+        return Buffer.from(
+          [
+            '__COMMIT__abc123|2026-03-01T10:00:00Z|Alice',
+            'src/a.ts',
+            'src/b.ts',
+            '',
+            '__COMMIT__def456|2026-03-15T10:00:00Z|Bob',
+            'src/a.ts',
+            '',
+            '__COMMIT__ghi789|2026-04-01T10:00:00Z|Alice',
+            'src/a.ts',
+            'src/c.ts',
+          ].join('\n'),
+        );
       }
       return Buffer.from('');
     });
@@ -101,11 +99,9 @@ describe('getChurnRate', () => {
       const argList = args as string[];
       if (argList[0] === 'rev-parse') return Buffer.from('true');
       if (argList[0] === 'log') {
-        return Buffer.from([
-          '__COMMIT__abc|2026-03-01T10:00:00Z|Alice',
-          'src/a.ts',
-          'docs/readme.md',
-        ].join('\n'));
+        return Buffer.from(
+          ['__COMMIT__abc|2026-03-01T10:00:00Z|Alice', 'src/a.ts', 'docs/readme.md'].join('\n'),
+        );
       }
       return Buffer.from('');
     });
@@ -143,20 +139,22 @@ describe('getHotspots', () => {
       const argList = args as string[];
       if (argList[0] === 'rev-parse') return Buffer.from('true');
       if (argList[0] === 'log') {
-        return Buffer.from([
-          '__COMMIT__a|2026-03-01T10:00:00Z|Alice',
-          'src/hot.ts',
-          '__COMMIT__b|2026-03-05T10:00:00Z|Bob',
-          'src/hot.ts',
-          '__COMMIT__c|2026-03-10T10:00:00Z|Alice',
-          'src/hot.ts',
-          '__COMMIT__d|2026-03-15T10:00:00Z|Bob',
-          'src/hot.ts',
-          '__COMMIT__e|2026-03-20T10:00:00Z|Alice',
-          'src/hot.ts',
-          '__COMMIT__f|2026-03-01T10:00:00Z|Alice',
-          'src/cold.ts',
-        ].join('\n'));
+        return Buffer.from(
+          [
+            '__COMMIT__a|2026-03-01T10:00:00Z|Alice',
+            'src/hot.ts',
+            '__COMMIT__b|2026-03-05T10:00:00Z|Bob',
+            'src/hot.ts',
+            '__COMMIT__c|2026-03-10T10:00:00Z|Alice',
+            'src/hot.ts',
+            '__COMMIT__d|2026-03-15T10:00:00Z|Bob',
+            'src/hot.ts',
+            '__COMMIT__e|2026-03-20T10:00:00Z|Alice',
+            'src/hot.ts',
+            '__COMMIT__f|2026-03-01T10:00:00Z|Alice',
+            'src/cold.ts',
+          ].join('\n'),
+        );
       }
       return Buffer.from('');
     });

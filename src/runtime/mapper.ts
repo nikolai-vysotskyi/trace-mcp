@@ -8,8 +8,8 @@
  */
 
 import type { Store } from '../db/store.js';
-import type { RuntimeSpanRow } from './types.js';
 import { logger } from '../logger.js';
+import type { RuntimeSpanRow } from './types.js';
 
 interface MappingConfig {
   fqnAttributes: string[];
@@ -18,9 +18,7 @@ interface MappingConfig {
 
 const DEFAULT_CONFIG: MappingConfig = {
   fqnAttributes: ['code.function', 'code.namespace', 'code.filepath'],
-  routePatterns: [
-    /^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(.+)$/,
-  ],
+  routePatterns: [/^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(.+)$/],
 };
 
 export class SpanMapper {
@@ -35,9 +33,11 @@ export class SpanMapper {
 
   /** Map all unmapped spans. Returns count of newly mapped spans. */
   mapUnmapped(limit = 500): number {
-    const unmapped = this.store.db.prepare(`
+    const unmapped = this.store.db
+      .prepare(`
       SELECT * FROM runtime_spans WHERE mapped_node_id IS NULL LIMIT ?
-    `).all(limit) as RuntimeSpanRow[];
+    `)
+      .all(limit) as RuntimeSpanRow[];
 
     if (unmapped.length === 0) return 0;
 
@@ -67,7 +67,11 @@ export class SpanMapper {
   mapSpan(span: RuntimeSpanRow): { nodeId: number; method: string } | null {
     let attrs: Array<{ key: string; value: { stringValue?: string; intValue?: string } }> = [];
     if (span.attributes) {
-      try { attrs = JSON.parse(span.attributes); } catch { /* corrupted attributes, skip */ }
+      try {
+        attrs = JSON.parse(span.attributes);
+      } catch {
+        /* corrupted attributes, skip */
+      }
     }
 
     // Strategy 1: FQN from code.function + code.namespace
@@ -99,7 +103,12 @@ export class SpanMapper {
           // Find enclosing symbol
           const symbols = this.store.getSymbolsByFile(file.id);
           for (const sym of symbols) {
-            if (sym.line_start && sym.line_end && lineNum >= sym.line_start && lineNum <= sym.line_end) {
+            if (
+              sym.line_start &&
+              sym.line_end &&
+              lineNum >= sym.line_start &&
+              lineNum <= sym.line_end
+            ) {
               const nodeId = this.store.getNodeId('symbol', sym.id);
               if (nodeId) return { nodeId, method: 'file_line' };
             }
@@ -144,7 +153,10 @@ export class SpanMapper {
     return null;
   }
 
-  private getAttr(attrs: Array<{ key: string; value: { stringValue?: string; intValue?: string } }>, key: string): string | undefined {
+  private getAttr(
+    attrs: Array<{ key: string; value: { stringValue?: string; intValue?: string } }>,
+    key: string,
+  ): string | undefined {
     const kv = attrs.find((a) => a.key === key);
     return kv?.value.stringValue ?? kv?.value.intValue;
   }

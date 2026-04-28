@@ -5,8 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
-import { REGISTRY_PATH, ensureGlobalDirs, getDbPath, projectName } from './global.js';
+import { ensureGlobalDirs, getDbPath, projectName, REGISTRY_PATH } from './global.js';
 
 export interface RegistryEntry {
   name: string;
@@ -41,8 +40,8 @@ function loadRegistry(): Registry {
 /** Atomic write: tmp file + rename to avoid partial reads. */
 function saveRegistry(reg: Registry): void {
   ensureGlobalDirs();
-  const tmp = REGISTRY_PATH + '.tmp.' + process.pid;
-  fs.writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
+  const tmp = `${REGISTRY_PATH}.tmp.${process.pid}`;
+  fs.writeFileSync(tmp, `${JSON.stringify(reg, null, 2)}\n`);
   fs.renameSync(tmp, REGISTRY_PATH);
 }
 
@@ -136,7 +135,7 @@ export function listProjects(): RegistryEntry[] {
 }
 
 /** Remove entries whose root directory no longer exists. Returns removed paths. */
-function pruneStaleProjects(): string[] {
+function _pruneStaleProjects(): string[] {
   const reg = loadRegistry();
   const removed: string[] = [];
 

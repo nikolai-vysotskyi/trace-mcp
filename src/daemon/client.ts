@@ -11,7 +11,9 @@ export interface DaemonHealthResponse {
  * Check if the daemon is running by pinging its health endpoint.
  * Returns the health response if reachable, null otherwise.
  */
-export async function getDaemonHealth(port = DEFAULT_DAEMON_PORT): Promise<DaemonHealthResponse | null> {
+export async function getDaemonHealth(
+  port = DEFAULT_DAEMON_PORT,
+): Promise<DaemonHealthResponse | null> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/health`, {
       signal: AbortSignal.timeout(500),

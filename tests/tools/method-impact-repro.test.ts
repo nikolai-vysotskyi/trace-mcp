@@ -6,16 +6,17 @@
  * method-level incoming edges for instance.method() call patterns,
  * INCLUDING when the instance type comes from parameter annotations.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
-import { getChangeImpact } from '../../src/tools/analysis/impact.js';
-import { findReferences } from '../../src/tools/framework/references.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
 import type { Store } from '../../src/db/store.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { PythonLanguagePlugin } from '../../src/indexer/plugins/language/python/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { getChangeImpact } from '../../src/tools/analysis/impact.js';
+import { findReferences } from '../../src/tools/framework/references.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/python-project');
 
@@ -59,7 +60,8 @@ describe('Issue #54: method-level impact analysis', () => {
 
   it('resolves method calls on parameter-annotated instances to edges', () => {
     // verify_and_save(user: User, ...) calls user.save() and user.validate()
-    const callEdges = store.db.prepare(`
+    const callEdges = store.db
+      .prepare(`
       SELECT s1.name AS caller, s2.name AS callee
       FROM edges e
       JOIN nodes n1 ON e.source_node_id = n1.id
@@ -68,7 +70,8 @@ describe('Issue #54: method-level impact analysis', () => {
       JOIN symbols s2 ON n2.node_type = 'symbol' AND n2.ref_id = s2.id
       JOIN edge_types et ON e.edge_type_id = et.id
       WHERE et.name = 'calls' AND s1.name = 'verify_and_save'
-    `).all() as { caller: string; callee: string }[];
+    `)
+      .all() as { caller: string; callee: string }[];
 
     const callees = callEdges.map((e) => e.callee);
     // user.save() where user: User comes from parameter annotation
@@ -115,9 +118,7 @@ describe('Issue #54: method-level impact analysis', () => {
 
     // Get unique files from find_usages (calls edges only)
     const refFiles = new Set(
-      refs.references
-        .filter((r) => r.edge_type === 'calls')
-        .map((r) => r.file),
+      refs.references.filter((r) => r.edge_type === 'calls').map((r) => r.file),
     );
 
     // Get files from get_change_impact

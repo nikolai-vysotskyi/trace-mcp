@@ -1,9 +1,9 @@
-import https from 'node:https';
 import { spawnSync } from 'node:child_process';
-import path from 'node:path';
 import fs from 'node:fs';
+import https from 'node:https';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TRACE_MCP_HOME, ensureGlobalDirs, getDbPath } from './global.js';
+import { ensureGlobalDirs, getDbPath, TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
 
 declare const PKG_VERSION_INJECTED: string;
@@ -187,12 +187,18 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
 
   if (cache && now - cache.lastChecked < intervalMs) {
     latestVersion = cache.latestVersion;
-    logger.debug({ current: CURRENT_VERSION, latest: latestVersion }, 'Auto-update: using cached version info');
+    logger.debug(
+      { current: CURRENT_VERSION, latest: latestVersion },
+      'Auto-update: using cached version info',
+    );
   } else {
     try {
       latestVersion = await fetchLatestVersion();
       writeCache({ lastChecked: now, latestVersion });
-      logger.debug({ current: CURRENT_VERSION, latest: latestVersion }, 'Auto-update: fetched latest version from registry');
+      logger.debug(
+        { current: CURRENT_VERSION, latest: latestVersion },
+        'Auto-update: fetched latest version from registry',
+      );
     } catch (e) {
       logger.debug({ error: e }, 'Auto-update: registry check skipped (unreachable)');
       return false;
@@ -357,7 +363,13 @@ export async function runPostUpdateMigrations(): Promise<void> {
   if (projects.length > 0) {
     logger.info({ count: projects.length }, 'Post-update: reindexing registered projects...');
 
-    const [{ initializeDatabase }, { Store }, { PluginRegistry }, { IndexingPipeline }, { loadConfig }] = await Promise.all([
+    const [
+      { initializeDatabase },
+      { Store },
+      { PluginRegistry },
+      { IndexingPipeline },
+      { loadConfig },
+    ] = await Promise.all([
       import('./db/schema.js'),
       import('./db/store.js'),
       import('./plugin-api/registry.js'),
@@ -367,14 +379,20 @@ export async function runPostUpdateMigrations(): Promise<void> {
 
     for (const proj of projects) {
       if (!fs.existsSync(proj.root)) {
-        logger.debug({ root: proj.root }, 'Post-update: skipping stale project (directory missing)');
+        logger.debug(
+          { root: proj.root },
+          'Post-update: skipping stale project (directory missing)',
+        );
         continue;
       }
 
       try {
         const configResult = await loadConfig(proj.root);
         if (configResult.isErr()) {
-          logger.warn({ root: proj.root, error: configResult.error }, 'Post-update: config load failed, skipping');
+          logger.warn(
+            { root: proj.root, error: configResult.error },
+            'Post-update: config load failed, skipping',
+          );
           continue;
         }
 
@@ -390,11 +408,19 @@ export async function runPostUpdateMigrations(): Promise<void> {
         db.close();
 
         logger.info(
-          { root: proj.root, indexed: result.indexed, skipped: result.skipped, errors: result.errors },
+          {
+            root: proj.root,
+            indexed: result.indexed,
+            skipped: result.skipped,
+            errors: result.errors,
+          },
           'Post-update: project reindexed',
         );
       } catch (err) {
-        logger.warn({ root: proj.root, error: err }, 'Post-update: project reindex failed (non-fatal)');
+        logger.warn(
+          { root: proj.root, error: err },
+          'Post-update: project reindex failed (non-fatal)',
+        );
       }
     }
   }

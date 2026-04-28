@@ -4,32 +4,38 @@
  * Extracts classes, methods, functions, interfaces, traits, enums,
  * constants, properties, and enum_cases from PHP source files.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  extractNamespace,
-  extractUseStatements,
-  extractClassHeritage,
-  extractInterfaceExtends,
-  extractCallSites,
-  extractTypeRef,
-  extractParamTypes,
-  makeSymbolId,
-  makeFqn,
-  extractSignature,
-  extractAttributes,
-  extractPromotedProperties,
-  extractPropertySymbol,
-  extractConstantSymbols,
-  extractModifiers,
-  extractPropertyHooks,
-  isReadonly,
-  getVisibility,
   collectNodeTypes,
+  extractAttributes,
+  extractCallSites,
+  extractClassHeritage,
+  extractConstantSymbols,
+  extractInterfaceExtends,
+  extractModifiers,
+  extractNamespace,
+  extractParamTypes,
+  extractPromotedProperties,
+  extractPropertyHooks,
+  extractPropertySymbol,
+  extractSignature,
+  extractTypeRef,
+  extractUseStatements,
+  getVisibility,
+  isReadonly,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 import { detectMinPhpVersion } from './version-features.js';
 
@@ -70,12 +76,29 @@ export class PhpLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.php'];
   supportedVersions = [
-    '5.0', '5.1', '5.2', '5.3', '5.4', '5.5', '5.6',
-    '7.0', '7.1', '7.2', '7.3', '7.4',
-    '8.0', '8.1', '8.2', '8.3', '8.4',
+    '5.0',
+    '5.1',
+    '5.2',
+    '5.3',
+    '5.4',
+    '5.5',
+    '5.6',
+    '7.0',
+    '7.1',
+    '7.2',
+    '7.3',
+    '7.4',
+    '8.0',
+    '8.1',
+    '8.2',
+    '8.3',
+    '8.4',
   ];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('php');
       const sourceCode = content.toString('utf-8');
@@ -119,7 +142,13 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private walkTopLevel(root: TSNode, filePath: string, namespace: string | undefined, symbols: RawSymbol[], edges: RawEdge[]): void {
+  private walkTopLevel(
+    root: TSNode,
+    filePath: string,
+    namespace: string | undefined,
+    symbols: RawSymbol[],
+    edges: RawEdge[],
+  ): void {
     for (const node of root.namedChildren) {
       switch (node.type) {
         case 'class_declaration':
@@ -154,7 +183,11 @@ export class PhpLanguagePlugin implements LanguagePlugin {
   }
 
   private extractClass(
-    node: TSNode, filePath: string, namespace: string | undefined, symbols: RawSymbol[], edges: RawEdge[],
+    node: TSNode,
+    filePath: string,
+    namespace: string | undefined,
+    symbols: RawSymbol[],
+    edges: RawEdge[],
   ): void {
     const nameNode = node.childForFieldName('name');
     if (!nameNode) return;
@@ -199,8 +232,12 @@ export class PhpLanguagePlugin implements LanguagePlugin {
   }
 
   private extractClassLike(
-    node: TSNode, filePath: string, namespace: string | undefined,
-    symbols: RawSymbol[], _edges: RawEdge[], kind: 'interface' | 'trait',
+    node: TSNode,
+    filePath: string,
+    namespace: string | undefined,
+    symbols: RawSymbol[],
+    _edges: RawEdge[],
+    kind: 'interface' | 'trait',
   ): void {
     const nameNode = node.childForFieldName('name');
     if (!nameNode) return;
@@ -234,7 +271,10 @@ export class PhpLanguagePlugin implements LanguagePlugin {
   }
 
   private extractEnum(
-    node: TSNode, filePath: string, namespace: string | undefined, symbols: RawSymbol[],
+    node: TSNode,
+    filePath: string,
+    namespace: string | undefined,
+    symbols: RawSymbol[],
   ): void {
     const nameNode = node.childForFieldName('name');
     if (!nameNode) return;
@@ -259,8 +299,8 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     if (body) {
       for (const child of body.namedChildren) {
         if (child.type === 'enum_case') {
-          const caseName = child.childForFieldName('name')
-            ?? child.namedChildren.find((c) => c.type === 'name');
+          const caseName =
+            child.childForFieldName('name') ?? child.namedChildren.find((c) => c.type === 'name');
           if (!caseName) continue;
           symbols.push({
             symbolId: makeSymbolId(filePath, caseName.text, 'enum_case', name),
@@ -279,7 +319,10 @@ export class PhpLanguagePlugin implements LanguagePlugin {
   }
 
   private extractFunction(
-    node: TSNode, filePath: string, namespace: string | undefined, symbols: RawSymbol[],
+    node: TSNode,
+    filePath: string,
+    namespace: string | undefined,
+    symbols: RawSymbol[],
   ): void {
     const nameNode = node.childForFieldName('name');
     if (!nameNode) return;
@@ -307,8 +350,12 @@ export class PhpLanguagePlugin implements LanguagePlugin {
   }
 
   private extractClassMembers(
-    body: TSNode, filePath: string, className: string,
-    namespace: string | undefined, classSymbolId: string, symbols: RawSymbol[],
+    body: TSNode,
+    filePath: string,
+    className: string,
+    namespace: string | undefined,
+    classSymbolId: string,
+    symbols: RawSymbol[],
   ): void {
     for (const child of body.namedChildren) {
       switch (child.type) {
@@ -326,8 +373,12 @@ export class PhpLanguagePlugin implements LanguagePlugin {
   }
 
   private extractMethod(
-    node: TSNode, filePath: string, className: string,
-    namespace: string | undefined, classSymbolId: string, symbols: RawSymbol[],
+    node: TSNode,
+    filePath: string,
+    className: string,
+    namespace: string | undefined,
+    classSymbolId: string,
+    symbols: RawSymbol[],
   ): void {
     const nameNode = node.childForFieldName('name');
     if (!nameNode) return;
@@ -354,11 +405,17 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     // Return type is after formal_parameters, before compound_statement
     let sawParams = false;
     for (const child of node.namedChildren) {
-      if (child.type === 'formal_parameters') { sawParams = true; continue; }
+      if (child.type === 'formal_parameters') {
+        sawParams = true;
+        continue;
+      }
       if (!sawParams) continue;
       if (child.type === 'compound_statement') break;
       const retType = extractTypeRef(child);
-      if (retType) { metadata.returnType = retType; break; }
+      if (retType) {
+        metadata.returnType = retType;
+        break;
+      }
     }
 
     // Extract call sites + local variable types from method body
@@ -395,14 +452,24 @@ export class PhpLanguagePlugin implements LanguagePlugin {
 
     // Extract constructor-promoted properties
     if (name === '__construct') {
-      const promoted = extractPromotedProperties(node, filePath, className, namespace, classSymbolId);
+      const promoted = extractPromotedProperties(
+        node,
+        filePath,
+        className,
+        namespace,
+        classSymbolId,
+      );
       symbols.push(...promoted);
     }
   }
 
   private extractProperty(
-    node: TSNode, filePath: string, className: string,
-    namespace: string | undefined, classSymbolId: string, symbols: RawSymbol[],
+    node: TSNode,
+    filePath: string,
+    className: string,
+    namespace: string | undefined,
+    classSymbolId: string,
+    symbols: RawSymbol[],
   ): void {
     const sym = extractPropertySymbol(node, filePath, className, namespace, classSymbolId);
     if (sym) symbols.push(sym);
@@ -410,14 +477,25 @@ export class PhpLanguagePlugin implements LanguagePlugin {
     // Extract property hooks (PHP 8.4+)
     const propName = sym?.name;
     if (propName) {
-      const hooks = extractPropertyHooks(node, filePath, className, namespace, classSymbolId, propName);
+      const hooks = extractPropertyHooks(
+        node,
+        filePath,
+        className,
+        namespace,
+        classSymbolId,
+        propName,
+      );
       symbols.push(...hooks);
     }
   }
 
   private extractConstant(
-    node: TSNode, filePath: string, className: string,
-    namespace: string | undefined, classSymbolId: string, symbols: RawSymbol[],
+    node: TSNode,
+    filePath: string,
+    className: string,
+    namespace: string | undefined,
+    classSymbolId: string,
+    symbols: RawSymbol[],
   ): void {
     symbols.push(...extractConstantSymbols(node, filePath, className, namespace, classSymbolId));
   }

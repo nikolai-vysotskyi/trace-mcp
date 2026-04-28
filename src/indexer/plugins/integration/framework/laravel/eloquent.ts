@@ -19,9 +19,9 @@ const RELATIONSHIP_MAP: Record<string, string> = {
 
 interface EloquentRelationship {
   methodName: string;
-  type: string;       // e.g. 'hasMany'
+  type: string; // e.g. 'hasMany'
   relatedClass: string; // FQN of related model
-  edgeType: string;   // e.g. 'has_many'
+  edgeType: string; // e.g. 'has_many'
 }
 
 interface EloquentModelInfo {
@@ -39,10 +39,7 @@ interface EloquentModelInfo {
  * Check if a PHP source file contains an Eloquent model class.
  * Returns the model info if found, null otherwise.
  */
-export function extractEloquentModel(
-  source: string,
-  filePath: string,
-): EloquentModelInfo | null {
+export function extractEloquentModel(source: string, filePath: string): EloquentModelInfo | null {
   // Check for Model extends
   const classMatch = source.match(
     /class\s+(\w+)\s+extends\s+(?:\\?(?:Illuminate\\Database\\Eloquent\\)?)?Model\b/,
@@ -87,9 +84,7 @@ function buildUseMap(source: string): Map<string, string> {
 
 /** Extract $fillable property values. */
 function extractFillable(source: string): string[] {
-  const match = source.match(
-    /\$fillable\s*=\s*\[([\s\S]*?)\]/,
-  );
+  const match = source.match(/\$fillable\s*=\s*\[([\s\S]*?)\]/);
   if (!match) return [];
 
   const items: string[] = [];
@@ -103,9 +98,7 @@ function extractFillable(source: string): string[] {
 
 /** Extract $casts property. */
 function extractCasts(source: string): Record<string, string> {
-  const match = source.match(
-    /\$casts\s*=\s*\[([\s\S]*?)\]/,
-  );
+  const match = source.match(/\$casts\s*=\s*\[([\s\S]*?)\]/);
   if (!match) return {};
 
   const casts: Record<string, string> = {};
@@ -174,7 +167,7 @@ function resolveClassRef(
 ): string {
   // Fully qualified: \App\Models\Post::class
   const fqnMatch = ref.match(/^\\?([\w\\]+)::class$/);
-  if (fqnMatch && fqnMatch[1].includes('\\')) return fqnMatch[1];
+  if (fqnMatch?.[1].includes('\\')) return fqnMatch[1];
 
   // Short name: Post::class
   const shortMatch = ref.match(/^(\w+)::class$/);
@@ -193,9 +186,7 @@ function resolveClassRef(
  * Build edges from an extracted model's relationships.
  * Maps model FQN -> related model FQN via edge type.
  */
-function buildRelationshipEdges(
-  modelInfo: EloquentModelInfo,
-): RawEdge[] {
+function _buildRelationshipEdges(modelInfo: EloquentModelInfo): RawEdge[] {
   return modelInfo.relationships.map((rel) => ({
     sourceSymbolId: undefined,
     targetSymbolId: undefined,

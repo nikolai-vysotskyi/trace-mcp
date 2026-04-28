@@ -68,10 +68,12 @@ export class RuntimeAggregator {
     this.db.transaction(() => {
       for (const row of rows) {
         // Compute percentiles
-        const durations = this.getDurations.all(row.node_id, row.bucket) as Array<{ duration_us: number }>;
+        const durations = this.getDurations.all(row.node_id, row.bucket) as Array<{
+          duration_us: number;
+        }>;
         const sorted = durations.map((d) => d.duration_us);
         const percentiles = [
-          { p: 50, v: percentile(sorted, 0.50) },
+          { p: 50, v: percentile(sorted, 0.5) },
           { p: 95, v: percentile(sorted, 0.95) },
           { p: 99, v: percentile(sorted, 0.99) },
         ];

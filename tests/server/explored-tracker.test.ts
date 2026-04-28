@@ -1,11 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createExploredTracker } from '../../src/server/explored-tracker.js';
 
-const TEST_ROOT = path.join(os.tmpdir(), 'trace-mcp-test-explored-' + process.pid);
+const TEST_ROOT = path.join(os.tmpdir(), `trace-mcp-test-explored-${process.pid}`);
 
 function getMarkerDir(): string {
   const hash = crypto.createHash('sha256').update(TEST_ROOT).digest('hex').slice(0, 12);
@@ -16,7 +16,9 @@ afterEach(() => {
   const dir = getMarkerDir();
   try {
     fs.rmSync(dir, { recursive: true, force: true });
-  } catch { /* may not exist */ }
+  } catch {
+    /* may not exist */
+  }
 });
 
 describe('createExploredTracker', () => {

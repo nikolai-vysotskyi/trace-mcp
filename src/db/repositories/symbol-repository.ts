@@ -37,15 +37,26 @@ export class SymbolRepository {
     parentIdOverride: number | null | undefined,
     createNode: (nodeType: string, refId: number) => number,
   ): number {
-    const parentId = parentIdOverride !== undefined
-      ? parentIdOverride
-      : sym.parentSymbolId
-        ? (this.db.prepare('SELECT id FROM symbols WHERE symbol_id = ?').get(sym.parentSymbolId) as { id: number } | undefined)?.id ?? null
-        : null;
+    const parentId =
+      parentIdOverride !== undefined
+        ? parentIdOverride
+        : sym.parentSymbolId
+          ? ((
+              this.db
+                .prepare('SELECT id FROM symbols WHERE symbol_id = ?')
+                .get(sym.parentSymbolId) as { id: number } | undefined
+            )?.id ?? null)
+          : null;
 
-    const cyclomatic = (sym.metadata as Record<string, unknown> | undefined)?.['cyclomatic'] as number | undefined ?? null;
-    const maxNesting = (sym.metadata as Record<string, unknown> | undefined)?.['max_nesting'] as number | undefined ?? null;
-    const paramCount = (sym.metadata as Record<string, unknown> | undefined)?.['param_count'] as number | undefined ?? null;
+    const cyclomatic =
+      ((sym.metadata as Record<string, unknown> | undefined)?.cyclomatic as number | undefined) ??
+      null;
+    const maxNesting =
+      ((sym.metadata as Record<string, unknown> | undefined)?.max_nesting as number | undefined) ??
+      null;
+    const paramCount =
+      ((sym.metadata as Record<string, unknown> | undefined)?.param_count as number | undefined) ??
+      null;
 
     // Guard: auto-generate symbolId if missing (framework plugins may omit it)
     const symbolIdStr = sym.symbolId || `file:${fileId}::${sym.name}#${sym.kind}`;
@@ -87,9 +98,9 @@ export class SymbolRepository {
       if (parentSymbolIds.length > 0) {
         const unique = [...new Set(parentSymbolIds)];
         const placeholders = unique.map(() => '?').join(',');
-        const rows = this.db.prepare(
-          `SELECT symbol_id, id FROM symbols WHERE symbol_id IN (${placeholders})`,
-        ).all(...unique) as { symbol_id: string; id: number }[];
+        const rows = this.db
+          .prepare(`SELECT symbol_id, id FROM symbols WHERE symbol_id IN (${placeholders})`)
+          .all(...unique) as { symbol_id: string; id: number }[];
         for (const row of rows) parentIdMap.set(row.symbol_id, row.id);
       }
 
@@ -135,44 +146,49 @@ export class SymbolRepository {
   }
 
   getSymbolChildren(parentId: number): SymbolRow[] {
-    return this.db.prepare(
-      'SELECT * FROM symbols WHERE parent_id = ?',
-    ).all(parentId) as SymbolRow[];
+    return this.db
+      .prepare('SELECT * FROM symbols WHERE parent_id = ?')
+      .all(parentId) as SymbolRow[];
   }
 
   getSymbolByName(name: string, kind?: string): SymbolRow | undefined {
     if (kind) {
-      return this.db.prepare(
-        'SELECT * FROM symbols WHERE name = ? AND kind = ? LIMIT 1',
-      ).get(name, kind) as SymbolRow | undefined;
+      return this.db
+        .prepare('SELECT * FROM symbols WHERE name = ? AND kind = ? LIMIT 1')
+        .get(name, kind) as SymbolRow | undefined;
     }
-    return this.db.prepare(
-      'SELECT * FROM symbols WHERE name = ? LIMIT 1',
-    ).get(name) as SymbolRow | undefined;
+    return this.db.prepare('SELECT * FROM symbols WHERE name = ? LIMIT 1').get(name) as
+      | SymbolRow
+      | undefined;
   }
 
   getExportedSymbols(filePattern?: string): SymbolWithFilePath[] {
     if (filePattern) {
       const likePattern = filePattern.replace(/\*/g, '%').replace(/\?/g, '_');
-      return this.db.prepare(
-        `SELECT s.*, f.path as file_path
+      return this.db
+        .prepare(
+          `SELECT s.*, f.path as file_path
          FROM symbols s
          JOIN files f ON s.file_id = f.id
          WHERE json_extract(s.metadata, '$.exported') = 1
          AND f.path LIKE ?`,
-      ).all(likePattern) as SymbolWithFilePath[];
+        )
+        .all(likePattern) as SymbolWithFilePath[];
     }
-    return this.db.prepare(
-      `SELECT s.*, f.path as file_path
+    return this.db
+      .prepare(
+        `SELECT s.*, f.path as file_path
        FROM symbols s
        JOIN files f ON s.file_id = f.id
        WHERE json_extract(s.metadata, '$.exported') = 1`,
-    ).all() as SymbolWithFilePath[];
+      )
+      .all() as SymbolWithFilePath[];
   }
 
   findImplementors(name: string): SymbolWithFilePath[] {
-    return this.db.prepare(
-      `SELECT s.*, f.path as file_path
+    return this.db
+      .prepare(
+        `SELECT s.*, f.path as file_path
        FROM symbols s
        JOIN files f ON s.file_id = f.id
        WHERE s.metadata IS NOT NULL AND (
@@ -180,7 +196,8 @@ export class SymbolRepository {
          OR json_extract(s.metadata, '$.extends') LIKE '%"' || ? || '"%'
          OR json_extract(s.metadata, '$.extends') = ?
        )`,
-    ).all(name, name, name) as SymbolWithFilePath[];
+      )
+      .all(name, name, name) as SymbolWithFilePath[];
   }
 
   getSymbolsWithHeritage(fileIds?: number[]): (SymbolRow & { file_path: string })[] {
@@ -192,7 +209,9 @@ export class SymbolRepository {
           OR json_extract(s.metadata, '$.implements') IS NOT NULL)`;
     if (fileIds && fileIds.length > 0) {
       const ph = fileIds.map(() => '?').join(',');
-      return this.db.prepare(`${base} AND s.file_id IN (${ph})`).all(...fileIds) as (SymbolRow & { file_path: string })[];
+      return this.db.prepare(`${base} AND s.file_id IN (${ph})`).all(...fileIds) as (SymbolRow & {
+        file_path: string;
+      })[];
     }
     return this.db.prepare(base).all() as (SymbolRow & { file_path: string })[];
   }
@@ -204,9 +223,9 @@ export class SymbolRepository {
     for (let i = 0; i < ids.length; i += CHUNK) {
       const chunk = ids.slice(i, i + CHUNK);
       const placeholders = chunk.map(() => '?').join(',');
-      const rows = this.db.prepare(
-        `SELECT * FROM symbols WHERE id IN (${placeholders})`,
-      ).all(...chunk) as SymbolRow[];
+      const rows = this.db
+        .prepare(`SELECT * FROM symbols WHERE id IN (${placeholders})`)
+        .all(...chunk) as SymbolRow[];
       for (const row of rows) map.set(row.id, row);
     }
     return map;
@@ -214,17 +233,19 @@ export class SymbolRepository {
 
   findSymbolByRole(name: string, frameworkRole?: string): SymbolRow | undefined {
     if (frameworkRole) {
-      return this.db.prepare(
-        `SELECT s.* FROM symbols s
+      return this.db
+        .prepare(
+          `SELECT s.* FROM symbols s
          JOIN files f ON s.file_id = f.id
          WHERE f.framework_role = ?
            AND (s.name = ? OR s.fqn LIKE ?)
          LIMIT 1`,
-      ).get(frameworkRole, name, `%\\${name}`) as SymbolRow | undefined;
+        )
+        .get(frameworkRole, name, `%\\${name}`) as SymbolRow | undefined;
     }
-    return this.db.prepare(
-      'SELECT * FROM symbols WHERE name = ? AND kind = ? LIMIT 1',
-    ).get(name, 'class') as SymbolRow | undefined;
+    return this.db
+      .prepare('SELECT * FROM symbols WHERE name = ? AND kind = ? LIMIT 1')
+      .get(name, 'class') as SymbolRow | undefined;
   }
 
   updateSymbolSummary(symbolId: number, summary: string): void {
@@ -234,24 +255,31 @@ export class SymbolRepository {
   countUnsummarizedSymbols(kinds: string[]): number {
     if (kinds.length === 0) return 0;
     const placeholders = kinds.map(() => '?').join(',');
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(`
       SELECT COUNT(*) as cnt FROM symbols s
       JOIN files f ON s.file_id = f.id
       WHERE s.summary IS NULL AND s.kind IN (${placeholders}) AND f.gitignored = 0
-    `).get(...kinds) as { cnt: number };
+    `)
+      .get(...kinds) as { cnt: number };
     return row.cnt;
   }
 
   countUnembeddedSymbols(): number {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(`
       SELECT COUNT(*) as cnt FROM symbols s
       LEFT JOIN symbol_embeddings se ON se.symbol_id = s.id
       WHERE se.symbol_id IS NULL
-    `).get() as { cnt: number };
+    `)
+      .get() as { cnt: number };
     return row.cnt;
   }
 
-  getUnsummarizedSymbols(kinds: string[], limit: number): {
+  getUnsummarizedSymbols(
+    kinds: string[],
+    limit: number,
+  ): {
     id: number;
     name: string;
     fqn: string | null;
@@ -263,13 +291,15 @@ export class SymbolRepository {
   }[] {
     if (kinds.length === 0) return [];
     const placeholders = kinds.map(() => '?').join(',');
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT s.id, s.name, s.fqn, s.kind, s.signature, f.path as file_path, s.byte_start, s.byte_end
       FROM symbols s
       JOIN files f ON s.file_id = f.id
       WHERE s.summary IS NULL AND s.kind IN (${placeholders}) AND f.gitignored = 0
       LIMIT ?
-    `).all(...kinds, limit) as {
+    `)
+      .all(...kinds, limit) as {
       id: number;
       name: string;
       fqn: string | null;
