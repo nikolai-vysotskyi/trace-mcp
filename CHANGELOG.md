@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.32.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.1...v1.32.2) (2026-04-28)
+
+
+### Bug Fixes
+
+* **app:** coalesce remaining res.statusCode → number ?? 0 ([#116](https://github.com/nikolai-vysotskyi/trace-mcp/issues/116)) ([3482f8f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3482f8f21d350382a072c3b44a97588c5706e748))
+
 ## [1.32.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.0...v1.32.1) (2026-04-28)
 
 
