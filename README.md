@@ -20,19 +20,21 @@
 </p>
 
 <p align="center">
-  <strong>The optimization layer for LLM applications.</strong><br>
-  Make AI systems faster, more efficient, and reliable at scale.
+  <strong>AI agents recompute the same work. trace-mcp makes them reuse instead.</strong><br>
+  The recomputation → reuse layer for AI systems.
 </p>
 
 <p align="center">
-  <em>~40–50% lower token usage on average in real production systems.<br>
-  Up to 94–99% reduction in structured tasks like code navigation and search.</em>
+  <strong>40–50% fewer tokens</strong> on average &nbsp;·&nbsp; <strong>up to 2× effective capacity</strong> &nbsp;·&nbsp; <strong>up to 97% less redundant processing</strong>
+  <br>
+  <sub>Based on early benchmarks across agent workflows with repeated context and dependency traversal.</sub>
 </p>
 
-> Your AI agent reads `UserController.php` and sees a class.
-> trace-mcp reads it and sees a route → controller → Eloquent model → Inertia render → Vue page — **in one graph.**
+> AI systems don't scale because they recompute instead of reuse. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it already discovered. Token bills grow. Latency grows. Reasoning quality drops. The model isn't the bottleneck — the recomputation leak is.
 >
-> Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 58 framework integrations across 81 languages, 138 tools.
+> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 58 framework integrations across 81 languages, 138 tools.
+>
+> **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP for code and knowledge — no second tool to plug in.
 
 <p align="center">
   <img src="docs/images/app-graph.png" alt="trace-mcp desktop app — GPU graph explorer" width="820" />
@@ -44,16 +46,16 @@
 
 ## Why this matters
 
-AI is bottlenecked not by models, but by infrastructure. Inference cost, context overhead, and retry loops grow faster than model quality — and every LLM call is paid for in tokens × latency × retries. With each model generation, the gap between *what AI could do* and *what production budgets allow* widens.
+AI is bottlenecked not by models, but by **recomputation**. Agents treat the context window like a database — they re-read the same files, re-traverse the same dependencies, and re-inflate context every turn with structure they already computed five steps ago. Token bills, latency, and hallucinations all grow with project size instead of with task complexity.
 
-trace-mcp is the systemic optimization layer that makes AI applications **cheaper, faster, and more accurate in production**:
+trace-mcp closes the recomputation leak. The graph is built once, kept incrementally fresh, and served to every agent that asks — so the same work isn't paid for over and over.
 
 - **Lower cost** — fewer tokens per successful answer, on average and at peak
 - **Lower latency** — fewer sequential tool calls, fewer round-trips to the model
 - **Higher accuracy** — less noise in context means fewer hallucinations and stronger first-response correctness
 - **Production stability** — context that scales with project size, not against it
 
-We're starting with code intelligence — the hardest, noisiest context most agents handle today. The same optimization layer extends to any LLM application that needs to reason over structured data.
+We started with code intelligence — the hardest, noisiest context most agents handle today — and the same engine now indexes markdown knowledge vaults (Obsidian, Logseq, plain MD) as a peer domain. Wikilinks, tags, frontmatter, and embeds become graph edges and symbol metadata; `search`, `find_usages`, `get_change_impact`, and `apply_rename` work identically over both.
 
 ---
 
@@ -68,8 +70,10 @@ We're starting with code intelligence — the hardest, noisiest context most age
 | "Show me the request flow from URL to rendered page" | Route → Middleware → Controller → Service → View with prop mapping | `get_request_flow` — framework-aware edge traversal |
 | "Find all untested code in this module" | Symbols classified as "unreached" or "imported but never called in tests" | `get_untested_symbols` — test-to-source mapping |
 | "What's the impact of this API change on other services?" | Cross-subproject client calls with confidence scores | `get_subproject_impact` — topology graph traversal |
+| "What notes link to this concept?" | Backlinks across the vault, with section + alias context | `find_usages` on a `note:<basename>` symbol |
+| "What breaks if I rename this note?" | Every `[[wikilink]]` and `[text](path.md)` that references it | `get_change_impact` — wikilink-aware reverse graph |
 
-**Three things no other tool does:**
+**Four things no other tool does:**
 
 1. **Framework-aware edges** — trace-mcp understands that `Inertia::render('Users/Show')` connects PHP to Vue, that `@Injectable()` creates a DI dependency, that `$user->posts()` means a `posts` table from migrations. 58 integrations across 15 frameworks, 7 ORMs, 13 UI libraries.
 
@@ -77,15 +81,17 @@ We're starting with code intelligence — the hardest, noisiest context most age
 
 3. **Cross-session intelligence** — past sessions are mined for decisions and indexed for search. When you start a new session, `get_wake_up` gives you orientation in ~300 tokens; `plan_turn` shows relevant past decisions for your task; `get_session_resume` carries over structural context from previous sessions.
 
+4. **Code and knowledge in one graph** — point trace-mcp at a markdown vault (Obsidian, Logseq, plain MD) and the same engine indexes it: each note becomes a `note:<basename>` symbol, headings become nested sections, `[[wikilinks]]` and `![[embeds]]` become graph edges, frontmatter and `#tags` ride on metadata. PageRank, Signal Fusion ranking, embeddings, and rename refactoring all apply unchanged. The agent does not learn a second tool — it learns one graph that happens to contain both your codebase and your second brain.
+
 ---
 
 ## The problem
 
-AI coding agents are language-aware but **framework-blind**.
+AI coding agents recompute the same work every turn — and they're **framework-blind** while doing it.
 
-They don't know that `Inertia::render('Users/Show', $data)` connects a Laravel controller to `resources/js/Pages/Users/Show.vue`. They don't know that `$user->posts()` means the `posts` table defined three migrations ago. They can't trace a request from URL to rendered pixel.
+They re-read `UserController.php`, then re-read it again next turn. They don't know that `Inertia::render('Users/Show', $data)` connects a Laravel controller to `resources/js/Pages/Users/Show.vue`. They don't know that `$user->posts()` means the `posts` table defined three migrations ago. They can't trace a request from URL to rendered pixel — so they trace it again, and again, every session.
 
-So they brute-read files, guess at relationships, and miss cross-language edges entirely. The bigger the project, the worse it gets.
+The result: 5–15× repeated reads of hot files in a single task, context windows used as scratch databases, and agents that get more expensive the bigger the project gets — instead of more capable.
 
 ## The solution
 
@@ -149,18 +155,19 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 
 ## Token reduction — measured, not marketed
 
-AI agents burn tokens reading files they don't need. trace-mcp returns **precision context** — only the symbols, edges, and signatures relevant to the query.
+AI agents burn tokens recomputing what they already discovered last turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp replaces that with **precision context**: only the symbols, edges, and signatures relevant to the query, served from a graph that was computed once.
 
 **What to expect — by workload:**
 
 | Workload | Typical reduction |
 |---|---|
 | **Mixed real-world production** (code-aware tasks across a typical session) | **~40–50% on average** |
-| **Structured code-navigation tasks** (symbol lookup, impact analysis, type hierarchy, call graph) | **up to 94–99%** |
+| **Effective capacity at the same context budget** | **up to ~2×** |
+| **Structured code-navigation tasks** (symbol lookup, impact analysis, type hierarchy, call graph) | **up to 97% less redundant processing** |
 | **Targeted research / planning queries** (composite tasks that replace ~10 sequential operations) | **up to ~40× on individual calls** |
 | Non-code workloads (raw text, unstructured data) | Out of scope today |
 
-The peaks are real — they show up consistently in structured benchmarks. The averages are honest: in a typical session, you're mixing those high-leverage calls with reads, edits, and cheaper queries, and the net usually lands at 30–60% depending on stack and task mix.
+The averages are the honest number to plan against: across a typical session you're mixing high-leverage graph queries with reads, edits, and cheaper calls, and the net usually lands at 30–60% depending on stack and task mix. The peaks (up to 97% on individual structured calls) are real and reproducible — that's where recomputation gets eliminated most cleanly — but they're per-call, not per-session.
 
 **Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols → 929 files, 5,197 symbols in v1.30):
 
@@ -182,7 +189,7 @@ Composite task              223,721 tokens      14,245 tokens       93.6%
 Total                       702,532 tokens      50,812 tokens       92.8%
 ```
 
-**92.8% reduction in this benchmark** — but read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **~40–50% on average**. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
+Across 11 structured task categories, recomputation drops by **up to ~97% per call** when the agent reuses the graph instead of re-reading files — peaks where the math gets dramatic. Read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **~40–50% on average**. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
 
 **Savings scale with project size.** On a 650-file project, structured-task savings cluster around ~522K tokens per session. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
 
@@ -191,10 +198,10 @@ Total                       702,532 tokens      50,812 tokens       92.8%
 ### Run it on your codebase
 
 ```bash
-trace-mcp benchmark .
+npx trace-mcp benchmark .
 ```
 
-Per-category token savings against your actual repo in ~30 seconds — no signup, all local. Numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols) under structured benchmarks; production reduction on mixed workloads will be lower (typically 30–60% depending on stack), but the per-task patterns hold for any well-supported stack.
+Per-category token savings against your actual repo in ~5 minutes — no install, no signup, all local. Numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols) under structured benchmarks; production reduction on mixed workloads will be lower (typically 30–60% depending on stack), but the per-task patterns hold for any well-supported stack.
 
 <details>
 <summary>Methodology</summary>
@@ -203,11 +210,11 @@ Measured using `benchmark_project` — runs eleven real task categories (symbol 
 
 Reproduce it yourself:
 ```
-# Via MCP tool
-benchmark_project  # runs against the current project
+# Via CLI (no install)
+npx trace-mcp benchmark /path/to/project
 
-# Or via CLI
-trace-mcp benchmark /path/to/project
+# Or via MCP tool
+benchmark_project  # runs against the current project
 ```
 </details>
 
@@ -242,11 +249,23 @@ trace-mcp benchmark /path/to/project
 
 **Other:** GraphQL, Socket.io, Celery, Zustand, Pydantic, Zod, n8n, React Query/SWR, Playwright/Cypress/Jest/Vitest/Mocha
 
+**Knowledge vaults:** Obsidian, Logseq, plain markdown — `[[wikilinks]]`, `![[embeds]]`, `[text](path.md)`, frontmatter (YAML), `#tags`, ATX headings. Each note becomes a `note:<basename>` symbol with sections nested inside; wikilinks resolve to `references` / `embeds` edges between notes. Mix vault and code in one project — point `root` at a directory that contains both and run a single `find_usages` across them.
+
 > Full details: [Supported frameworks](docs/supported-frameworks.md) · [All tools](docs/tools-reference.md)
 
 ---
 
 ## Quick start
+
+**See your waste first — 5 minutes, no setup, no signup:**
+
+```bash
+npx trace-mcp benchmark .
+```
+
+Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact analysis, call graph, type hierarchy, …), and prints per-task token cost — without trace-mcp vs. with. You'll see exactly where your agent recomputes work it could reuse.
+
+**Then wire it into your AI agent:**
 
 ```bash
 npm install -g trace-mcp
@@ -265,6 +284,15 @@ Then in your MCP client:
 > get_project_map to see what frameworks are detected
 > get_task_context("fix the login bug") to get full execution context for a task
 > get_change_impact on app/Models/User.php to see what depends on it
+```
+
+**Indexing a markdown vault (Obsidian / Logseq / plain MD).** Point `trace-mcp add` at the vault root — `.md`/`.mdx`/`.markdown` are picked up by default. Each note becomes a `note:<basename>` symbol, headings nest as sections, `[[wikilinks]]` and `![[embeds]]` resolve to graph edges, frontmatter `aliases:` make alternate names resolvable, and `#tags` aggregate so every note carrying `#sgr` is one `find_usages` away.
+
+```
+> find_usages on note:my-concept     // backlinks across the vault
+> find_usages on tag:sgr             // every note tagged #sgr
+> get_change_impact on note:legacy   // what breaks if I rename or delete it
+> search "schema-guided reasoning"   // PageRank + embeddings over the vault
 ```
 
 > Prefer a GUI? The [desktop app](#desktop-app) handles install, indexing, MCP-client wiring, and re-indexing without touching a terminal.

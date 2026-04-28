@@ -5,7 +5,11 @@
 
 import { Command } from 'commander';
 import { AnalyticsStore } from '../analytics/analytics-store.js';
-import { formatBenchmarkMarkdown, runBenchmark } from '../analytics/benchmark.js';
+import {
+  formatBenchmarkMarkdown,
+  formatBenchmarkShareReport,
+  runBenchmark,
+} from '../analytics/benchmark.js';
 import { analyzeRealSavings } from '../analytics/real-savings.js';
 import { getOptimizationReport, getSessionAnalytics } from '../analytics/session-analytics.js';
 import { syncAnalytics } from '../analytics/sync.js';
@@ -206,56 +210,86 @@ analyticsCommand
   });
 
 // --- benchmark ---
+export async function runBenchmarkAction(opts: {
+  queries: string;
+  seed: string;
+  format: string;
+}): Promise<void> {
+  let projectRoot: string;
+  try {
+    projectRoot = findProjectRoot(process.cwd());
+  } catch {
+    projectRoot = process.cwd();
+  }
+
+  const dbPath = resolveDbPath(projectRoot);
+  const db = initializeDatabase(dbPath);
+  const store = new Store(db);
+  try {
+    const result = runBenchmark(store, {
+      queries: parseInt(opts.queries, 10),
+      seed: parseInt(opts.seed, 10),
+      projectName: projectRoot,
+    });
+
+    if (opts.format === 'json') {
+      console.log(JSON.stringify(result, null, 2));
+    } else if (opts.format === 'markdown') {
+      console.log(formatBenchmarkMarkdown(result));
+    } else if (opts.format === 'share') {
+      console.log(formatBenchmarkShareReport(result));
+    } else {
+      const wasted = result.totals.baseline_tokens - result.totals.trace_mcp_tokens;
+      console.log(`\n⚡ Recomputation leak in this codebase\n`);
+      console.log(
+        `   ${result.totals.reduction_pct}% recomputed work · ${wasted.toLocaleString()} tokens that don't need to be paid for`,
+      );
+      console.log(
+        `   ${result.index_stats.files.toLocaleString()} files / ${result.index_stats.symbols.toLocaleString()} symbols indexed\n`,
+      );
+
+      for (const s of result.scenarios) {
+        const reduction = s.reduction_pct.toFixed(1);
+        console.log(
+          `   ${s.name.padEnd(22)} ${s.baseline_tokens.toLocaleString().padStart(10)} → ${s.trace_mcp_tokens.toLocaleString().padStart(8)} tokens   (${reduction}% saved)`,
+        );
+      }
+
+      console.log(
+        `\n   ${'TOTAL'.padEnd(22)} ${result.totals.baseline_tokens.toLocaleString().padStart(10)} → ${result.totals.trace_mcp_tokens.toLocaleString().padStart(8)} tokens   (${result.totals.reduction_pct}% saved)`,
+      );
+      console.log(`\n👉 Share this result: trace-mcp benchmark . --format share`);
+      console.log(`   Wire it into your agent: npx trace-mcp init`);
+    }
+  } finally {
+    db.close();
+  }
+}
+
 analyticsCommand
   .command('benchmark')
   .description('Run synthetic token efficiency benchmark')
   .option('--queries <n>', 'Queries per scenario', '10')
   .option('--seed <n>', 'Random seed', '42')
-  .option('--format <fmt>', 'Output: json | markdown | text', 'text')
-  .action(async (opts: { queries: string; seed: string; format: string }) => {
-    let projectRoot: string;
-    try {
-      projectRoot = findProjectRoot(process.cwd());
-    } catch {
-      projectRoot = process.cwd();
-    }
+  .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
+  .action(runBenchmarkAction);
 
-    const dbPath = resolveDbPath(projectRoot);
-    const db = initializeDatabase(dbPath);
-    const store = new Store(db);
-    try {
-      const result = runBenchmark(store, {
-        queries: parseInt(opts.queries, 10),
-        seed: parseInt(opts.seed, 10),
-        projectName: projectRoot,
-      });
-
-      if (opts.format === 'json') {
-        console.log(JSON.stringify(result, null, 2));
-      } else if (opts.format === 'markdown') {
-        console.log(formatBenchmarkMarkdown(result));
-      } else {
-        console.log(`\n⚡ Token Efficiency Benchmark\n`);
-        console.log(`Project: ${result.project}`);
-        console.log(
-          `Index: ${result.index_stats.files} files, ${result.index_stats.symbols} symbols\n`,
-        );
-
-        for (const s of result.scenarios) {
-          const reduction = s.reduction_pct.toFixed(1);
-          console.log(
-            `${s.name}: ${s.baseline_tokens.toLocaleString()} → ${s.trace_mcp_tokens.toLocaleString()} tokens (${reduction}% reduction)`,
-          );
-        }
-
-        console.log(
-          `\nTotal: ${result.totals.baseline_tokens.toLocaleString()} → ${result.totals.trace_mcp_tokens.toLocaleString()} (${result.totals.reduction_pct}% reduction)`,
-        );
+export const benchmarkCommand = new Command('benchmark')
+  .description(
+    'Show where this project recomputes work — token-waste benchmark across structured tasks',
+  )
+  .argument('[path]', 'Project path (defaults to current directory)')
+  .option('--queries <n>', 'Queries per scenario', '10')
+  .option('--seed <n>', 'Random seed', '42')
+  .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
+  .action(
+    async (path: string | undefined, opts: { queries: string; seed: string; format: string }) => {
+      if (path && path !== '.') {
+        process.chdir(path);
       }
-    } finally {
-      db.close();
-    }
-  });
+      await runBenchmarkAction(opts);
+    },
+  );
 
 // --- coverage ---
 analyticsCommand

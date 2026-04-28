@@ -678,3 +678,71 @@ export function formatBenchmarkMarkdown(result: BenchmarkResult): string {
   }
   return lines.join('\n');
 }
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function projectLabel(project: string): string {
+  if (!project || project === 'unknown') return 'this project';
+  const parts = project.split(/[/\\]/).filter(Boolean);
+  return parts[parts.length - 1] || project;
+}
+
+/**
+ * Share-friendly summary card. Designed to be paste-able into Slack, GitHub
+ * issues, X, HN comments — surfaces the recomputation-leak headline, top
+ * hotspots, and a one-line CTA so the report itself is a growth loop.
+ */
+export function formatBenchmarkShareReport(result: BenchmarkResult): string {
+  const wasted = result.totals.baseline_tokens - result.totals.trace_mcp_tokens;
+  const sonnetPrice = MODEL_PRICING['claude-sonnet-4-6'] ?? 3.0 / 1_000_000;
+  const wastedDollars = wasted * sonnetPrice;
+  const opusPrice = MODEL_PRICING['claude-opus-4-6'] ?? 5.0 / 1_000_000;
+  const wastedDollarsOpus = wasted * opusPrice;
+
+  const top = [...result.scenarios]
+    .sort(
+      (a, b) => b.baseline_tokens - b.trace_mcp_tokens - (a.baseline_tokens - a.trace_mcp_tokens),
+    )
+    .slice(0, 3);
+
+  const bar = '━'.repeat(56);
+  const lines: string[] = [];
+  lines.push(bar);
+  lines.push(` trace-mcp benchmark · ${projectLabel(result.project)}`);
+  lines.push(bar);
+  lines.push('');
+  lines.push(' Your AI agent recomputes work worth:');
+  lines.push(
+    `   ${formatTokens(wasted)} tokens per benchmark run · ~$${wastedDollars.toFixed(2)} (Sonnet) / ~$${wastedDollarsOpus.toFixed(2)} (Opus)`,
+  );
+  lines.push('');
+  lines.push(` trace-mcp cuts this by ${result.totals.reduction_pct}%:`);
+  lines.push(
+    `   ${formatTokens(result.totals.baseline_tokens)} → ${formatTokens(result.totals.trace_mcp_tokens)} tokens`,
+  );
+  lines.push(
+    `   across ${result.index_stats.files.toLocaleString()} files / ${result.index_stats.symbols.toLocaleString()} symbols`,
+  );
+  lines.push('');
+  if (top.length > 0) {
+    lines.push(' Top recomputation hotspots:');
+    top.forEach((s, i) => {
+      const pct = `${s.reduction_pct.toFixed(1)}%`.padStart(6);
+      const name = s.name.padEnd(20);
+      lines.push(
+        `   ${i + 1}. ${name} ${pct} saved   (${formatTokens(s.baseline_tokens)} → ${formatTokens(s.trace_mcp_tokens)})`,
+      );
+    });
+    lines.push('');
+  }
+  lines.push(' Run on your own codebase:');
+  lines.push('   npx trace-mcp benchmark .');
+  lines.push('');
+  lines.push(' trace-mcp.com · github.com/nikolai-vysotskyi/trace-mcp');
+  lines.push(bar);
+  return lines.join('\n');
+}
