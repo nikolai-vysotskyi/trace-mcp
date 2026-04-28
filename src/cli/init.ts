@@ -12,11 +12,11 @@ import { updateAgentsMd } from '../init/agents-md.js';
 import { updateClaudeMd } from '../init/claude-md.js';
 import { installHermesHooks } from '../init/hermes-hooks.js';
 import {
-  cleanupLegacyHooks,
   installGuardHook,
-  installPrecompactHook,
   installReindexHook,
+  installPrecompactHook,
   installWorktreeHook,
+  cleanupLegacyHooks,
 } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
 import { configureMcpClients } from '../init/mcp-client.js';
@@ -24,7 +24,15 @@ import { configureMcpClients } from '../init/mcp-client.js';
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
-
+import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
+import { installTweakccPrompts, detectTweakccPrompts } from '../init/tweakcc.js';
+import { formatReport } from '../init/reporter.js';
+import { ensureGlobalDirs, getDbPath, GLOBAL_CONFIG_PATH } from '../global.js';
+import {
+  migrateGlobalConfig,
+  modifyGlobalConfigJsonc,
+  readGlobalConfigText,
+} from '../config-jsonc.js';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { loadConfig, removeProjectConfig, saveProjectConfig } from '../config.js';
 import {
@@ -39,10 +47,19 @@ import { IndexingPipeline } from '../indexer/pipeline.js';
 import { generateConfig } from '../init/config-generator.js';
 import { detectConflicts } from '../init/conflict-detector.js';
 import { fixAllConflicts } from '../init/conflict-resolver.js';
-import { detectGuardHook, detectMcpClients, detectProject } from '../init/detector.js';
-import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
-import { detectTweakccPrompts, installTweakccPrompts } from '../init/tweakcc.js';
-import type { DetectedMcpClient, InitStepResult } from '../init/types.js';
+import { findProjectRoot, discoverChildProjects, hasRootMarkers } from '../project-root.js';
+import { generateConfig } from '../init/config-generator.js';
+import {
+  registerProject,
+  getProject,
+  listProjects,
+  updateLastIndexed,
+  unregisterProject,
+} from '../registry.js';
+import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
+import { initializeDatabase } from '../db/schema.js';
+import { setupProject } from '../project-setup.js';
+import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
 import { setupProject } from '../project-setup.js';
@@ -100,7 +117,7 @@ export const initCommand = new Command('init')
 
       // Detect existing MCP clients and hook state
       const mcpClients = detectMcpClients();
-      detectGuardHook();
+      const { hasGuardHook, guardHookVersion } = detectGuardHook();
 
       // --- Interactive questions ---
       let selectedClients: DetectedMcpClient['name'][] = [];
@@ -519,7 +536,16 @@ export const initCommand = new Command('init')
         const header = opts.dryRun ? 'trace-mcp init (dry run)' : 'trace-mcp init';
         console.log(header);
         for (const step of steps) {
-          console.log(`  ${shortPath(step.target)}  ${step.detail ?? step.action}`);
+          // Strip all control characters (CR/LF + escape sequences) from
+          // interpolated values. Both `step.target` (config path) and
+          // `step.detail` are produced by our own init code, but CodeQL
+          // tracks them as user-influenced; the regex sanitizer leaves the
+          // output human-readable while neutralising log-injection.
+          const sanitize = (s: string): string => s.replace(/[\x00-\x1f\x7f]/g, ' ');
+          const target = sanitize(shortPath(step.target));
+          const detail = sanitize(String(step.detail ?? step.action));
+          // codeql[js/log-injection]: target/detail are sanitized above.
+          console.log(`  ${target}  ${detail}`);
         }
         if (!opts.dryRun) {
           console.log(

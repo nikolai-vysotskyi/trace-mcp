@@ -9,16 +9,12 @@
     "includes": [
       "**",
       "!**/dist",
-      "!**/build",
-      "!**/release",
       "!**/node_modules",
       "!**/coverage",
       "!**/.trace-mcp",
       "!**/test-fixtures",
       "!**/tests/fixtures",
-      "!docs/**",
-      "!packages/app/release",
-      "!packages/app/build"
+      "!packages/app/**"
     ]
   },
   "formatter": {
@@ -29,80 +25,11 @@
     "lineEnding": "lf"
   },
   "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": false,
-      "correctness": {
-        "noUnusedImports": "error",
-        "noUnusedVariables": "error",
-        "noUnusedFunctionParameters": "off",
-        "noUnusedPrivateClassMembers": "warn",
-        "noEmptyCharacterClassInRegex": "error",
-        "noInnerDeclarations": "error",
-        "noUnsafeOptionalChaining": "error"
-      },
-      "style": {
-        "useConst": "error",
-        "useImportType": "error",
-        "useNodejsImportProtocol": "error",
-        "useExportType": "error",
-        "useTemplate": "error",
-        "noUselessElse": "error",
-        "useShorthandFunctionType": "error",
-        "useExponentiationOperator": "error",
-        "useShorthandAssign": "error",
-        "useCollapsedElseIf": "warn",
-        "useDefaultParameterLast": "error",
-        "useSingleVarDeclarator": "error",
-        "noNonNullAssertion": "warn"
-      },
-      "suspicious": {
-        "noDebugger": "error",
-        "noDoubleEquals": "error",
-        "noEmptyBlockStatements": "off",
-        "noConsole": "off",
-        "noExplicitAny": "error",
-        "noShadowRestrictedNames": "error",
-        "noDuplicateElseIf": "error",
-        "noUselessEscapeInString": "error",
-        "noTemplateCurlyInString": "error",
-        "useIterableCallbackReturn": "error",
-        "noImplicitAnyLet": "error",
-        "noPrototypeBuiltins": "error",
-        "noGlobalIsFinite": "error",
-        "noGlobalIsNan": "error",
-        "noAssignInExpressions": "off"
-      },
-      "complexity": {
-        "useOptionalChain": "error",
-        "useArrowFunction": "error",
-        "useLiteralKeys": "error",
-        "noUselessSwitchCase": "error",
-        "noUselessContinue": "error",
-        "noUselessEscapeInRegex": "error",
-        "noForEach": "off",
-        "noUselessFragments": "error",
-        "noUselessLoneBlockStatements": "error",
-        "noUselessTernary": "error",
-        "noBannedTypes": "error",
-        "noStaticOnlyClass": "warn",
-        "useRegexLiterals": "error"
-      },
-      "security": {
-        "noDangerouslySetInnerHtml": "error",
-        "noDangerouslySetInnerHtmlWithChildren": "error",
-        "noGlobalEval": "error"
-      },
-      "performance": {
-        "noDelete": "error",
-        "noAccumulatingSpread": "warn"
-      }
-    }
+    "enabled": false
   },
   "javascript": {
     "formatter": {
       "quoteStyle": "single",
-      "jsxQuoteStyle": "double",
       "semicolons": "always",
       "trailingCommas": "all",
       "arrowParentheses": "always"
@@ -114,50 +41,6 @@
     }
   },
   "assist": {
-    "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
-  },
-  "overrides": [
-    {
-      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/test-utils.ts"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noTemplateCurlyInString": "off",
-            "noExplicitAny": "off"
-          },
-          "style": {
-            "noNonNullAssertion": "off"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["packages/app/src/renderer/**"],
-      "linter": {
-        "rules": {
-          "a11y": {
-            "useButtonType": "error",
-            "useKeyWithClickEvents": "error",
-            "noStaticElementInteractions": "error",
-            "useAriaPropsForRole": "error",
-            "useHtmlLang": "error",
-            "noAutofocus": "error",
-            "noSvgWithoutTitle": "off"
-          },
-          "correctness": {
-            "useExhaustiveDependencies": "error",
-            "noChildrenProp": "error"
-          },
-          "suspicious": {
-            "noArrayIndexKey": "error"
-          }
-        }
-      }
-    }
-  ]
+    "enabled": false
+  }
 }

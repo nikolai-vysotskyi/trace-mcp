@@ -9,6 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 import YAML from 'yaml';
+import { applyEdits, modify, parse as parseJsonc, type FormattingOptions } from 'jsonc-parser';
+import type { DetectedMcpClient, InitStepResult } from './types.js';
 import { getLauncherPath } from './launcher.js';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 
@@ -120,7 +122,7 @@ export function configureMcpClients(
         detail: hasClaudeCode
           ? 'Enable Settings → Agents → MCP servers → "File-based MCP servers" to inherit trace-mcp from Claude Code, or paste: ' +
             snippet
-          : `Open Settings → Agents → MCP servers → + Add → paste: ${snippet}`,
+          : 'Open Settings → Agents → MCP servers → + Add → paste: ' + snippet,
       });
       continue;
     }
@@ -518,9 +520,12 @@ function writeAmpJsoncEntry(configPath: string, entry: McpServerEntry): 'created
 
   let isNew = true;
   let content = '{}';
-  if (fs.existsSync(configPath)) {
-    isNew = false;
+  // Atomic read: avoids TOCTOU between existsSync and readFileSync.
+  try {
     content = fs.readFileSync(configPath, 'utf-8') || '{}';
+    isNew = false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
   }
 
   // jsonc-parser preserves comments and formatting around untouched regions.
@@ -528,7 +533,7 @@ function writeAmpJsoncEntry(configPath: string, entry: McpServerEntry): 'created
     formattingOptions: AMP_FORMATTING,
   });
   const updated = applyEdits(content, edits);
-  fs.writeFileSync(configPath, updated.endsWith('\n') ? updated : `${updated}\n`);
+  fs.writeFileSync(configPath, updated.endsWith('\n') ? updated : updated + '\n');
   return isNew ? 'created' : 'updated';
 }
 
@@ -563,12 +568,13 @@ function writeFactoryJsonEntry(
 
   let config: Record<string, unknown> = {};
   let isNew = true;
-  if (fs.existsSync(configPath)) {
-    try {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      isNew = false;
-    } catch {
-      /* malformed — overwrite */
+  // Atomic read: avoids TOCTOU between existsSync and readFileSync.
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    isNew = false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+      // malformed JSON — overwrite
     }
   }
 
@@ -576,7 +582,7 @@ function writeFactoryJsonEntry(
     config.mcpServers = {};
   }
   (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
-  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   return isNew ? 'created' : 'updated';
 }
 

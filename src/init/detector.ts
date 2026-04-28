@@ -5,17 +5,17 @@
 
 import fs from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
-import Database from 'better-sqlite3';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { buildProjectContext } from '../indexer/project-context.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
+import Database from 'better-sqlite3';
 import type {
-  DetectedFramework,
-  DetectedMcpClient,
   DetectionResult,
   PackageManagerInfo,
+  DetectedFramework,
+  DetectedMcpClient,
 } from './types.js';
+import { GUARD_HOOK_VERSION } from './types.js';
 
 const HOME = os.homedir();
 

@@ -1,7 +1,7 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import os from 'node:os';
 
 // detector.ts and mcp-client.ts compute `const HOME = os.homedir()` at module
 // load, so we have to reset modules and re-import per test after stubbing HOME.
@@ -21,7 +21,12 @@ beforeEach(async () => {
 
   vi.stubEnv('HOME', fakeHome);
   vi.stubEnv('USERPROFILE', fakeHome);
-  // Force re-evaluation of module-level `const HOME = os.homedir()` against the stub.
+  // os.homedir() on macOS reads getpwuid_r, not $HOME — env stubs alone are
+  // not enough. Spy on os.homedir() so the module-level `const HOME =
+  // os.homedir()` captures the sandbox path. Without this, every test that
+  // exercises a writer leaks into the real user config.
+  vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+  // Force re-evaluation of module-level `const HOME = os.homedir()` against the spy.
   vi.resetModules();
   ({ detectMcpClients } = await import('../../src/init/detector.js'));
   ({ configureMcpClients } = await import('../../src/init/mcp-client.js'));
@@ -29,6 +34,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   fs.rmSync(sandbox, { recursive: true, force: true });
 });
 

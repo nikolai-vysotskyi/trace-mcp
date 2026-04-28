@@ -1,8 +1,8 @@
-import { exec, spawn } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { app, dialog, ipcMain, nativeImage, shell } from 'electron';
+import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
+import { execFile, spawn } from 'child_process';
+import os from 'os';
+import path from 'path';
+import fs from 'fs';
 import { createTray, showMenuWindow } from './tray';
 
 // SharedArrayBuffer needed for cosmos.gl workers. GPU compositing + Skia
@@ -296,8 +296,11 @@ ipcMain.handle(
     }
 
     return new Promise<{ ok: boolean; error?: string }>((resolve) => {
-      exec(
-        `trace-mcp init ${flags.join(' ')}`,
+      // Use execFile to avoid shell interpretation: flags like project paths
+      // could contain whitespace or special chars and must not be evaluated.
+      execFile(
+        'trace-mcp',
+        ['init', ...flags],
         {
           timeout: 30_000,
         },
@@ -533,21 +536,83 @@ ipcMain.handle('check-for-update', async () => {
 
 // IPC: apply update (runs npm update -g trace-mcp, which triggers postinstall → app update)
 
-// Resolve npm binary path. GUI-launched Electron inherits a minimal env from
-// launchd / Finder — `process.env.SHELL -lc` runs a login-non-interactive
-// shell that does NOT source `.zshrc`, so nvm/Herd-managed `npm` is invisible.
-// We try, in order: interactive login shell (sources .zshrc/.bashrc),
-// non-interactive login shell, then a scan of common nvm/Homebrew paths.
-function execCapture(cmd: string, timeoutMs = 30_000): Promise<string | null> {
-  return new Promise((resolve) => {
-    exec(cmd, { encoding: 'utf-8', timeout: timeoutMs }, (err, stdout) => {
-      if (err) {
-        resolve(null);
-        return;
+// Resolve npm binary path. GUI-launched Electron inherits a minimal env
+// from launchd / Finder — process.env.PATH does not include nvm/Herd
+// versions of npm. We scan the filesystem for known Node managers and
+// system layouts; this covers the vast majority of macOS/Linux setups
+// without invoking a subshell (which would otherwise be needed to source
+// .zshrc / .bashrc).
+let cachedNpmBin: string | null | undefined;
+async function resolveNpmBin(): Promise<string | null> {
+  if (cachedNpmBin !== undefined) return cachedNpmBin;
+  const home = os.homedir();
+  const guesses: string[] = [
+    // Homebrew (Apple Silicon and Intel)
+    '/opt/homebrew/bin/npm',
+    '/usr/local/bin/npm',
+    // Linux system
+    '/usr/bin/npm',
+    // nvm convenience symlink
+    path.join(home, '.nvm/current/bin/npm'),
+    // Volta
+    path.join(home, '.volta/bin/npm'),
+    // pnpm-managed Node
+    path.join(home, '.local/share/pnpm/npm'),
+  ];
+  // Scan latest version directories of common Node managers.
+  const versionedBases = [
+    // nvm
+    path.join(home, '.nvm/versions/node'),
+    // Herd
+    path.join(home, 'Library/Application Support/Herd/config/nvm/versions/node'),
+    // fnm
+    path.join(home, 'Library/Application Support/fnm/node-versions'),
+    path.join(home, '.local/share/fnm/node-versions'),
+    // asdf
+    path.join(home, '.asdf/installs/nodejs'),
+  ];
+  for (const base of versionedBases) {
+    try {
+      const versions = fs.readdirSync(base).sort().reverse();
+      for (const v of versions) {
+        guesses.push(path.join(base, v, 'bin', 'npm'));
+        // asdf layout: <base>/<version>/.npm/bin/npm doesn't exist; skip.
       }
-      const line = (stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
-      resolve(line || null);
-    });
+    } catch {
+      /* dir absent — skip */
+    }
+  }
+  for (const g of guesses) {
+    if (fs.existsSync(g)) {
+      cachedNpmBin = g;
+      appendUpdateLog({ event: 'resolve-npm:scan-found', npmBin: g });
+      return g;
+    }
+  }
+  appendUpdateLog({ event: 'resolve-npm:not-found', scanned: guesses });
+  cachedNpmBin = null;
+  return null;
+}
+
+async function resolveNpmRoot(): Promise<string | null> {
+  const npmBin = await resolveNpmBin();
+  if (!npmBin) return null;
+  return new Promise((resolve) => {
+    // execFile bypasses shell parsing — npmBin is a filesystem path that
+    // could in theory contain a space or quote.
+    execFile(
+      npmBin,
+      ['root', '-g'],
+      { encoding: 'utf-8', timeout: 30_000 },
+      (err, stdout) => {
+        if (err) {
+          resolve(null);
+          return;
+        }
+        const line = (stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
+        resolve(line || null);
+      },
+    );
   });
 }
 
@@ -667,7 +732,7 @@ function appendUpdateLog(entry: Record<string, unknown>): void {
     fs.mkdirSync(path.dirname(UPDATE_LOG), { recursive: true });
     fs.appendFileSync(
       UPDATE_LOG,
-      `${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`,
+      JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n',
     );
   } catch {
     /* logging must never break the update */
@@ -684,9 +749,10 @@ ipcMain.handle('apply-update', async () => {
     appendUpdateLog({ event: 'apply-update:no-npm' });
     return { ok: false, error: `${msg}\n\nFull log: ${UPDATE_LOG}` };
   }
-  // Pass through a login shell only to inherit `HOME`, `USER` etc. — but
-  // execute the resolved npm binary directly so we don't depend on PATH.
-  const npmCmd = `${JSON.stringify(npmBin)} install -g trace-mcp@latest --force`;
+  // Execute the resolved npm binary directly with execFile (no shell) so we
+  // don't depend on PATH and avoid command-line injection if npmBin contains
+  // unusual characters.
+  const npmArgs = ['install', '-g', 'trace-mcp@latest', '--force'];
 
   const npmRoot = await resolveNpmRoot();
   if (npmRoot) cleanStaleScratchDirs(npmRoot);
@@ -694,8 +760,9 @@ ipcMain.handle('apply-update', async () => {
   const runOnce = () =>
     new Promise<{ err?: Error; stderr: string; stdout: string; code?: number; signal?: string }>(
       (resolve) => {
-        const child = exec(
-          npmCmd,
+        const child = execFile(
+          npmBin,
+          npmArgs,
           { encoding: 'utf-8', timeout: 600_000, maxBuffer: 16 * 1024 * 1024 },
           (err, stdout, stderr) => {
             resolve({
@@ -712,7 +779,7 @@ ipcMain.handle('apply-update', async () => {
 
   appendUpdateLog({
     event: 'apply-update:start',
-    cmd: npmCmd,
+    cmd: `${npmBin} ${npmArgs.join(' ')}`,
     npmBin,
     npmRoot,
     shell: process.env.SHELL ?? null,
