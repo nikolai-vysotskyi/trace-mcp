@@ -22,25 +22,6 @@ interface DomainRow {
   updated_at: string;
 }
 
-interface SymbolDomainRow {
-  id: number;
-  symbol_id: number;
-  domain_id: number;
-  relevance: number;
-  is_manual: number;
-  inferred_by: string;
-  metadata: string | null;
-}
-
-interface FileDomainRow {
-  id: number;
-  file_id: number;
-  domain_id: number;
-  relevance: number;
-  is_manual: number;
-  inferred_by: string;
-}
-
 interface DomainTreeNode {
   id: number;
   name: string;

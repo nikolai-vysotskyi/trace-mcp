@@ -42,14 +42,6 @@ const COLUMN_TYPES: Record<string, string> = {
   uuidMorphs: 'morphs',
 };
 
-interface MigrationColumn {
-  name: string;
-  type: string;
-  nullable?: boolean;
-  unique?: boolean;
-  default?: string;
-}
-
 interface MigrationExtractionResult {
   migrations: RawMigration[];
   warnings: string[];

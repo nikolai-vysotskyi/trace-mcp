@@ -56,7 +56,7 @@ describe('error resilience', () => {
   });
 
   it('survives broken Vue SFC', async () => {
-    const { store, pipeline } = setupPipeline({
+    const { pipeline } = setupPipeline({
       'Component.vue': '<script>\nthis is not valid {{ js\n</script>\n<template><div></template>',
     });
 
@@ -151,7 +151,7 @@ Route::get('/test', [NonExistentController::class, 'index']);`,
   });
 
   it('handles files with no matching language plugin', async () => {
-    const { store, pipeline } = setupPipeline({
+    const { pipeline } = setupPipeline({
       'readme.md': '# Hello',
       'config.yaml': 'key: value',
       'app.py': 'print("hello")',

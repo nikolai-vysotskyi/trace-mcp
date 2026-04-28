@@ -116,9 +116,6 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
   ],
 };
 
-/** All known preset names */
-type PresetName = keyof typeof TOOL_PRESETS;
-
 /** Resolve a preset by name, returning the tool set or null if unknown. */
 export function resolvePreset(name: string): Set<string> | 'all' | null {
   const preset = TOOL_PRESETS[name];

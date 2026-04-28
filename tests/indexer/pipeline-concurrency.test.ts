@@ -73,7 +73,7 @@ describe('IndexingPipeline serialization lock', () => {
   });
 
   it('second indexAll after error still runs', async () => {
-    const { pipeline, store } = makeSetup();
+    const { pipeline } = makeSetup();
 
     // Force the first indexAll to produce errors by closing DB mid-way — instead
     // just confirm that a second call always resolves even if the first one threw.

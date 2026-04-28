@@ -17,7 +17,7 @@ model User {
   email String @unique
 }
 `;
-    const { models, associations } = parsePrismaSchema(source);
+    const { models } = parsePrismaSchema(source);
 
     it('extracts model with name=User', () => {
       expect(models).toHaveLength(1);
@@ -136,7 +136,7 @@ model User {
   posts Post[]
 }
 `;
-    const { models, associations } = parsePrismaSchema(source);
+    const { associations } = parsePrismaSchema(source);
 
     it('creates association with kind=belongsTo for owning side', () => {
       const assoc = associations.find(

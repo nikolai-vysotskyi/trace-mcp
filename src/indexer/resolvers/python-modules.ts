@@ -13,11 +13,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-interface PyModuleResolveResult {
-  path: string;
-  isPackage: boolean;
-}
-
 export class PyModuleResolver {
   private sourceRoots: string[];
 

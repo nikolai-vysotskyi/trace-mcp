@@ -131,12 +131,6 @@ const DEFAULT_MAX_FILE_SIZE = 1_048_576; // 1 MB
 
 const ARTISAN_WHITELIST = new Set(['route:list', 'model:show', 'event:list']);
 
-interface SecurityConfig {
-  secretPatterns?: string[];
-  maxFileSizeBytes?: number;
-  rootPath: string;
-}
-
 export function validatePath(filePath: string, rootPath: string): TraceMcpResult<string> {
   const resolved = path.resolve(rootPath, filePath);
   const normalizedRoot = path.resolve(rootPath);

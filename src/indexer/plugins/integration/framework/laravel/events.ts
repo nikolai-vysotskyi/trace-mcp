@@ -9,11 +9,6 @@ interface EventListenerMapping {
   listenerClasses: string[];
 }
 
-interface EventDispatch {
-  eventClass: string;
-  location: string; // 'ClassName::methodName' or similar
-}
-
 /**
  * Extract $listen mappings from an EventServiceProvider source.
  * Returns Event -> Listener[] pairs.

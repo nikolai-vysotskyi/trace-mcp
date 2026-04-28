@@ -56,7 +56,7 @@ describe('getComponentTree JSON.parse safety', () => {
   });
 
   it('still builds children when root JSON fields are corrupted', () => {
-    const { db, store } = setupWithCorruptedComponent();
+    const { store } = setupWithCorruptedComponent();
 
     // Add a child file + component with valid JSON
     const childFileId = store.insertFile('src/Child.vue', 'vue', 'def456', 100);

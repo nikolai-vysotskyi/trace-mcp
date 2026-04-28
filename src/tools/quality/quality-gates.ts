@@ -29,7 +29,6 @@ import { type SecurityScanResult, scanSecurity } from './security-scan.js';
 // ---------------------------------------------------------------------------
 
 const GateSeverity = z.enum(['error', 'warning']);
-type GateSeverity = z.infer<typeof GateSeverity>;
 
 const GateScope = z.enum(['all', 'new_symbols', 'changed_symbols']);
 
@@ -58,7 +57,6 @@ export const QualityGatesConfigSchema = z.object({
 });
 
 export type QualityGatesConfig = z.infer<typeof QualityGatesConfigSchema>;
-type QualityGateRuleName = keyof QualityGatesConfig['rules'];
 
 // ---------------------------------------------------------------------------
 // Result types

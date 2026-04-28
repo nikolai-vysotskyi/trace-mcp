@@ -139,7 +139,7 @@ export async function getDomainMap(
   store: Store,
   options: { depth?: number; includeSymbols?: boolean; symbolsPerDomain?: number } = {},
 ): Promise<TraceMcpResult<DomainMapResult>> {
-  const { depth = 3, includeSymbols = true, symbolsPerDomain = 5 } = options;
+  const { depth = 3 } = options;
   const domainStore = new DomainStore(store.db);
 
   let tree = domainStore.getDomainTree();
@@ -173,7 +173,7 @@ export async function getDomainContext(
   domainName: string,
   options: { includeRelated?: boolean; tokenBudget?: number } = {},
 ): Promise<TraceMcpResult<DomainContextResult>> {
-  const { includeRelated = false, tokenBudget = 4000 } = options;
+  const { includeRelated = false } = options;
   const domainStore = new DomainStore(store.db);
 
   // Find domain (supports "parent/child" path notation)

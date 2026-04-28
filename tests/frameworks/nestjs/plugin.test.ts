@@ -72,7 +72,7 @@ describe('NestJSPlugin', () => {
         path.join(FIXTURE_DIR, 'src/users/users.controller.ts'),
         'utf-8',
       );
-      const { basePath, routes, guards } = extractControllerRoutes(source, 'users.controller.ts');
+      const { basePath, routes } = extractControllerRoutes(source, 'users.controller.ts');
       expect(basePath).toBe('users');
       expect(routes).toHaveLength(3);
 

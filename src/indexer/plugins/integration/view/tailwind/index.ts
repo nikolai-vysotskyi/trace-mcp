@@ -80,12 +80,6 @@ interface TailwindConfigMeta {
   corePlugins: string[] | null;
 }
 
-interface TailwindClassInventory {
-  static: string[]; // definite static classes
-  dynamic: string[]; // classes extracted from cn/clsx/cva args
-  helpers: string[]; // which helpers are used: cn, clsx, twMerge, cva, tv
-}
-
 // ─── Config file patterns ─────────────────────────────────────
 
 const CONFIG_FILE_NAMES = [

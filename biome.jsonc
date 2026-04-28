@@ -33,7 +33,7 @@
       "recommended": false,
       "correctness": {
         "noUnusedImports": "error",
-        "noUnusedVariables": "warn",
+        "noUnusedVariables": "error",
         "noUnusedFunctionParameters": "off",
         "noUnusedPrivateClassMembers": "warn"
       },
