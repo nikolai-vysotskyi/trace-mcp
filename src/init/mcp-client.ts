@@ -9,8 +9,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 import YAML from 'yaml';
-import { applyEdits, modify, parse as parseJsonc, type FormattingOptions } from 'jsonc-parser';
-import type { DetectedMcpClient, InitStepResult } from './types.js';
 import { getLauncherPath } from './launcher.js';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 
