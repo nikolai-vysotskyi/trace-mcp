@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.32.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.0...v1.32.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* **app:** drop duplicate resolveNpmBin/Root + tighten statusCode types ([#115](https://github.com/nikolai-vysotskyi/trace-mcp/issues/115)) ([627ec43](https://github.com/nikolai-vysotskyi/trace-mcp/commit/627ec4395319a4c4b747e7c81de768580760e339))
+
+
+### Chores
+
+* **landing:** bump 'up to 97%' to 'up to 99%' in remaining copy ([0fc5534](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0fc5534cfa80cb4473e27c51e103ddf32dbce47a))
+
 ## [1.32.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.31.0...v1.32.0) (2026-04-28)
 
 
