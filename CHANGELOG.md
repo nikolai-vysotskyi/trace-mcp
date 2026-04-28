@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.32.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.4...v1.32.5) (2026-04-28)
+
+
+### Bug Fixes
+
+* **daemon:** auto-register project on first MCP connect ([ac112c6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ac112c6a4b563590c39e254bda9367f76dad46c8))
+
 ## [1.32.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.3...v1.32.4) (2026-04-28)
 
 
