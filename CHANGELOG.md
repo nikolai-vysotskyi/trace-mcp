@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.32.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.2...v1.32.3) (2026-04-28)
+
+
+### Bug Fixes
+
+* **cli:** import detectMcpClients in init command ([cd4871f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cd4871f31d4ea61ca787e8872305acf7ac147a04))
+* **install:** drop simple-git-hooks from postinstall ([c3286d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c3286d7e588fe0a3c47b5dac81b03b7cede21131))
+
 ## [1.32.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.1...v1.32.2) (2026-04-28)
 
 
