@@ -40,6 +40,7 @@ import { Store } from '../db/store.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { generateConfig } from '../init/config-generator.js';
 import { detectConflicts } from '../init/conflict-detector.js';
+import { detectMcpClients } from '../init/detector.js';
 import { fixAllConflicts } from '../init/conflict-resolver.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
