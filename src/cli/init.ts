@@ -35,31 +35,12 @@ import {
 } from '../config-jsonc.js';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { loadConfig, removeProjectConfig, saveProjectConfig } from '../config.js';
-import {
-  migrateGlobalConfig,
-  modifyGlobalConfigJsonc,
-  readGlobalConfigText,
-} from '../config-jsonc.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { ensureGlobalDirs, GLOBAL_CONFIG_PATH, getDbPath } from '../global.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { generateConfig } from '../init/config-generator.js';
 import { detectConflicts } from '../init/conflict-detector.js';
 import { fixAllConflicts } from '../init/conflict-resolver.js';
-import { findProjectRoot, discoverChildProjects, hasRootMarkers } from '../project-root.js';
-import { generateConfig } from '../init/config-generator.js';
-import {
-  registerProject,
-  getProject,
-  listProjects,
-  updateLastIndexed,
-  unregisterProject,
-} from '../registry.js';
-import { saveProjectConfig, removeProjectConfig, loadConfig } from '../config.js';
-import { initializeDatabase } from '../db/schema.js';
-import { setupProject } from '../project-setup.js';
-import { Store } from '../db/store.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
 import { setupProject } from '../project-setup.js';
