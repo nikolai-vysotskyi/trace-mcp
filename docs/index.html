@@ -1009,59 +1009,6 @@
       .usecase:last-child { border-bottom: none; }
     }
 
-    /* ── Pilot section ── */
-    .pilot-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0;
-      border: 1px solid var(--border-visible);
-    }
-    .pilot-col {
-      padding: 32px 28px;
-      display: flex; flex-direction: column;
-      gap: 16px;
-    }
-    .pilot-col:first-child { border-right: 1px solid var(--border); }
-    .pilot-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: flex; flex-direction: column;
-      gap: 10px;
-    }
-    .pilot-list li {
-      font-family: var(--font-body);
-      font-size: 16px;
-      color: var(--text-display);
-      line-height: 1.45;
-      padding-left: 20px;
-      position: relative;
-    }
-    .pilot-list li::before {
-      content: "→";
-      position: absolute;
-      left: 0;
-      color: var(--text-disabled);
-      font-family: var(--font-mono);
-    }
-    .pilot-text {
-      font-size: 15px;
-      color: var(--text-primary);
-      line-height: 1.6;
-    }
-    .pilot-text strong { color: var(--text-display); font-weight: 600; }
-    .pilot-cta {
-      display: flex; flex-wrap: wrap; gap: 12px;
-      margin-top: 12px;
-    }
-    @media (max-width: 700px) {
-      .pilot-grid { grid-template-columns: 1fr; }
-      .pilot-col:first-child {
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-      }
-    }
-
     /* ── Integrations marquee ── */
     .integrations-list {
       display: flex; flex-wrap: wrap; gap: 1px;
@@ -1594,7 +1541,7 @@
     }
     .tool-row {
       display: grid;
-      grid-template-columns: 220px 1fr 140px;
+      grid-template-columns: minmax(260px, 280px) 1fr 140px;
       gap: 32px;
       padding: 28px 0;
       border-bottom: 1px solid var(--border);
@@ -1604,11 +1551,13 @@
     .tool-row:hover { padding-left: 12px; }
     .tool-name {
       font-family: var(--font-mono);
-      font-size: clamp(18px, 2.2vw, 24px);
+      font-size: clamp(16px, 1.7vw, 20px);
       font-weight: 700;
       color: var(--text-display);
       letter-spacing: -0.01em;
-      line-height: 1;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+      min-width: 0;
     }
     .tool-name::before {
       content: '/ ';
@@ -1956,8 +1905,8 @@
         <a href="#install" class="btn btn-primary">
           See your waste in 5 minutes <span class="arrow">&rarr;</span>
         </a>
-        <a href="#pilot" class="btn btn-secondary">
-          Run a pilot
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" rel="noopener" class="btn btn-secondary">
+          View on GitHub
         </a>
         <span class="hero-install" onclick="copyInstall(this)">
           <code>npx trace-mcp benchmark .</code>
@@ -2731,45 +2680,6 @@
     </div>
   </section>
 
-  <!-- ── PILOT ── -->
-  <section id="pilot" class="pilot">
-    <div class="container">
-      <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">/ Pilot Program</span></div>
-        <div>
-          <h2 class="section-title">Run a focused pilot &mdash; <span class="em">measure the impact.</span></h2>
-          <p class="section-lede">If you're shipping AI features in production and hitting cost, latency, or quality ceilings, we'll run a 2&ndash;4 week pilot with one or two real use cases. Minimal integration. Clear before/after metrics.</p>
-        </div>
-      </div>
-
-      <div class="pilot-grid">
-        <div class="pilot-col">
-          <span class="label">/ What we measure</span>
-          <ul class="pilot-list">
-            <li>Tokens per successful answer</li>
-            <li>First-response accuracy &mdash; queries resolved without retry</li>
-            <li>Retries and fallback calls</li>
-            <li>End-to-end latency</li>
-            <li>User success rate on a fixed evaluation set</li>
-          </ul>
-        </div>
-        <div class="pilot-col">
-          <span class="label">/ What you get</span>
-          <p class="pilot-text">A clear, before/after report on whether context optimization moves the metrics that matter for your stack &mdash; and a path to scale usage with confidence instead of throttling it on cost.</p>
-          <p class="pilot-text"><strong>We're not optimizing for cost reduction in isolation.</strong> We're optimizing for systems that work at scale: teams that move from unstable usage to reliable production and <em>then</em> grow their LLM footprint.</p>
-          <div class="pilot-cta">
-            <a href="https://github.com/nikolai-vysotskyi/trace-mcp/issues/new?labels=pilot&amp;title=Pilot+request" target="_blank" rel="noopener" class="btn btn-primary">
-              Request a pilot <span class="arrow">&rarr;</span>
-            </a>
-            <a href="https://github.com/nikolai-vysotskyi" target="_blank" rel="noopener" class="btn btn-secondary">
-              Reach the maintainer
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <!-- ── FINAL CTA ── -->
   <section class="cta">
     <div class="cta-bg-num" aria-hidden="true">94%</div>
@@ -2786,10 +2696,7 @@
         <a href="#install" class="btn btn-primary">
           Get started in minutes <span class="arrow">&rarr;</span>
         </a>
-        <a href="#pilot" class="btn btn-secondary">
-          Run a pilot
-        </a>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="btn btn-secondary">
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" rel="noopener" class="btn btn-secondary">
           Star on github
         </a>
       </div>
@@ -2807,7 +2714,6 @@
         <a href="#product">Product view</a>
         <a href="#capabilities">Capabilities</a>
         <a href="#benchmark">Benchmark</a>
-        <a href="#pilot">Pilot program</a>
         <a href="#install">Install</a>
       </div>
       <div class="footer-col">
