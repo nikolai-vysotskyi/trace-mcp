@@ -359,14 +359,14 @@ function fetchLatestFromNpm(): Promise<{ status: number; version?: string }> {
         });
         res.on('end', () => {
           if (res.statusCode !== 200 || !data) {
-            resolve({ status: res.statusCode });
+            resolve({ status: res.statusCode ?? 0 });
             return;
           }
           try {
             const version = String(JSON.parse(data).version || '').replace(/^v/, '');
             resolve({ status: 200, version: version || undefined });
           } catch {
-            resolve({ status: res.statusCode });
+            resolve({ status: res.statusCode ?? 0 });
           }
         });
       },
@@ -413,19 +413,23 @@ function fetchLatestRelease(): Promise<{
     const req = https.get(
       'https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest',
       { timeout: 10000, headers },
-      (res) => {
+      (res: import('node:http').IncomingMessage) => {
         if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
           // Follow once.
           https
-            .get(res.headers.location, { timeout: 10000, headers }, (res2) => {
-              let d = '';
-              res2.on('data', (c: string) => {
-                d += c;
-              });
-              res2.on('end', () =>
-                resolve({ status: res2.statusCode, body: d, etag: res2.headers.etag }),
-              );
-            })
+            .get(
+              res.headers.location,
+              { timeout: 10000, headers },
+              (res2: import('node:http').IncomingMessage) => {
+                let d = '';
+                res2.on('data', (c: string) => {
+                  d += c;
+                });
+                res2.on('end', () =>
+                  resolve({ status: res2.statusCode ?? 0, body: d, etag: res2.headers.etag as string | undefined }),
+                );
+              },
+            )
             .on('error', reject);
           return;
         }
@@ -603,78 +607,6 @@ async function resolveNpmRoot(): Promise<string | null> {
     execFile(
       npmBin,
       ['root', '-g'],
-      { encoding: 'utf-8', timeout: 30_000 },
-      (err, stdout) => {
-        if (err) {
-          resolve(null);
-          return;
-        }
-        const line = (stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
-        resolve(line || null);
-      },
-    );
-  });
-}
-
-let cachedNpmBin: string | null | undefined;
-async function resolveNpmBin(): Promise<string | null> {
-  if (cachedNpmBin !== undefined) return cachedNpmBin;
-  const sh = process.env.SHELL;
-  const candidates: Array<() => Promise<string | null>> = [];
-  if (sh) {
-    // Interactive login first — sources .zshrc/.bashrc where nvm/Herd lives.
-    candidates.push(() => execCapture(`${sh} -ilc 'command -v npm'`));
-    candidates.push(() => execCapture(`${sh} -lc 'command -v npm'`));
-  }
-  candidates.push(() =>
-    execCapture(`/usr/bin/env npm --version >/dev/null 2>&1 && /usr/bin/env which npm`),
-  );
-  for (const probe of candidates) {
-    const found = await probe();
-    if (found && fs.existsSync(found)) {
-      cachedNpmBin = found;
-      appendUpdateLog({ event: 'resolve-npm:found', npmBin: found });
-      return found;
-    }
-  }
-  // Filesystem scan — common nvm / Herd / Homebrew layouts.
-  const home = os.homedir();
-  const guesses = [
-    '/opt/homebrew/bin/npm',
-    '/usr/local/bin/npm',
-    path.join(home, '.nvm/current/bin/npm'),
-  ];
-  // Scan latest Herd/nvm versions if present.
-  for (const baseRel of [
-    'Library/Application Support/Herd/config/nvm/versions/node',
-    '.nvm/versions/node',
-  ]) {
-    const base = path.join(home, baseRel);
-    try {
-      const versions = fs.readdirSync(base).sort().reverse();
-      for (const v of versions) guesses.push(path.join(base, v, 'bin', 'npm'));
-    } catch {
-      /* dir absent — skip */
-    }
-  }
-  for (const g of guesses) {
-    if (fs.existsSync(g)) {
-      cachedNpmBin = g;
-      appendUpdateLog({ event: 'resolve-npm:scan-found', npmBin: g });
-      return g;
-    }
-  }
-  appendUpdateLog({ event: 'resolve-npm:not-found', shell: sh ?? null, scanned: guesses });
-  cachedNpmBin = null;
-  return null;
-}
-
-async function resolveNpmRoot(): Promise<string | null> {
-  const npmBin = await resolveNpmBin();
-  if (!npmBin) return null;
-  return new Promise((resolve) => {
-    exec(
-      `${JSON.stringify(npmBin)} root -g`,
       { encoding: 'utf-8', timeout: 30_000 },
       (err, stdout) => {
         if (err) {
