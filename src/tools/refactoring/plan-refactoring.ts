@@ -112,7 +112,10 @@ export function planRefactoring(
     }
 
     default:
-      return errorResult('plan_refactoring', `Unknown refactoring type: ${(params as any).type}`);
+      return errorResult(
+        'plan_refactoring',
+        `Unknown refactoring type: ${(params as { type: string }).type}`,
+      );
   }
 }
 

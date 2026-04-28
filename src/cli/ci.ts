@@ -124,7 +124,7 @@ export const ciReportCommand = new Command('ci-report')
       // Compare with baseline (if exists)
       const baseline = compareWithBaseline(store, report);
       if (baseline) {
-        (report as any).baseline = baseline;
+        (report as typeof report & { baseline: typeof baseline }).baseline = baseline;
       }
 
       // Save baseline if requested

@@ -589,7 +589,8 @@ export class TailwindPlugin implements FrameworkPlugin {
     let tMatch: RegExpExecArray | null;
     while ((tMatch = themeRe.exec(source)) !== null) {
       const modMatch = V4_THEME_MODIFIER_RE.exec(tMatch[0]);
-      const modifier: 'inline' | 'reference' | null = (modMatch?.[1] as any) ?? null;
+      const modifier: 'inline' | 'reference' | null =
+        (modMatch?.[1] as 'inline' | 'reference' | undefined) ?? null;
       const body = extractBraceBody(source, tMatch.index + tMatch[0].length);
 
       // Group custom properties by prefix

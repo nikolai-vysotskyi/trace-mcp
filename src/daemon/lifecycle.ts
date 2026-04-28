@@ -41,8 +41,9 @@ function runQuiet(cmd: string): { ok: boolean; stderr?: string } {
   try {
     execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'] });
     return { ok: true };
-  } catch (err: any) {
-    return { ok: false, stderr: err?.stderr?.toString?.() ?? String(err) };
+  } catch (err) {
+    const stderr = (err as { stderr?: { toString?: () => string } })?.stderr;
+    return { ok: false, stderr: stderr?.toString?.() ?? String(err) };
   }
 }
 

@@ -470,7 +470,8 @@ function updateCallSites(
 
     for (let i = 0; i < lines.length; i++) {
       // Skip the definition line itself
-      if (fileId === symbol.file_id && i === (symbol as any).line_start - 1) continue;
+      if (fileId === symbol.file_id && i === (symbol as { line_start: number }).line_start - 1)
+        continue;
 
       callPattern.lastIndex = 0;
       const match = callPattern.exec(lines[i]);

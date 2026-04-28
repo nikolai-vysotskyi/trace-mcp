@@ -149,7 +149,7 @@ memoryCommand
         const projectRoot = path.resolve(opts.project);
         const decisions = store.queryDecisions({
           project_root: projectRoot,
-          type: opts.type as any,
+          type: opts.type as Parameters<typeof store.queryDecisions>[0]['type'],
           search: opts.search,
           limit: parseInt(opts.limit, 10),
         });

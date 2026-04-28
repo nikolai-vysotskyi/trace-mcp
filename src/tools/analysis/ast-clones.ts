@@ -197,7 +197,7 @@ export async function detectAstClones(
   }>;
 
   const fileContentCache = new Map<number, string>();
-  const parsedTreeCache = new Map<number, { tree: any; content: string } | null>();
+  const parsedTreeCache = new Map<number, { tree: unknown; content: string } | null>();
   const candidates: CloneCandidate[] = [];
   const filesSet = new Set<number>();
   let symbolsScanned = 0;
