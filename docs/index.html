@@ -537,34 +537,30 @@
       .hero-massive .pct { font-size: 0.45em; }
       .hero-metrics { align-items: stretch; text-align: left; gap: 28px; }
       .hero-metrics-foot { text-align: left; max-width: 100%; order: 99; }
-      .hero-metric--hero { order: -1; gap: 8px; }
+      .hero-metric--hero { order: -1; gap: 16px; }
       .hero-metric--hero .hero-metric-value {
         font-family: var(--font-display);
-        font-size: clamp(96px, 30vw, 140px);
+        font-size: clamp(80px, 24vw, 112px);
         line-height: 0.85;
         letter-spacing: -0.04em;
         white-space: nowrap;
         display: block;
-      }
-      .hero-metric--hero .hero-metric-value .prefix {
-        display: block;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        font-weight: 400;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--text-secondary);
-        margin-bottom: 8px;
-        line-height: 1;
       }
       .hero-metric--hero .hero-metric-value .unit {
         font-family: var(--font-mono);
         font-size: 0.32em;
         vertical-align: top;
         margin-left: 6px;
+        color: var(--text-secondary);
       }
       .hero-metric--hero .hero-metric-label {
-        font-size: 12px;
+        font-family: var(--font-body);
+        font-size: clamp(20px, 5.4vw, 24px);
+        font-weight: 500;
+        letter-spacing: -0.015em;
+        line-height: 1.25;
+        color: var(--text-display);
+        text-transform: none;
         margin-top: 4px;
       }
       .hero-metric:not(.hero-metric--hero) {
@@ -1940,17 +1936,17 @@
         <div class="hero-side">
           <span class="label">/ Measured On Real Workflows</span>
           <div class="hero-metrics">
-            <div class="hero-metric">
+            <div class="hero-metric hero-metric--hero">
               <span class="hero-metric-value">40&ndash;50<span class="unit">%</span></span>
-              <span class="hero-metric-label">Fewer tokens, on average</span>
+              <span class="hero-metric-label">Cut AI costs by 40&ndash;50% on average.</span>
+            </div>
+            <div class="hero-metric">
+              <span class="hero-metric-value">up to 99<span class="unit">%</span></span>
+              <span class="hero-metric-label">Less redundant processing</span>
             </div>
             <div class="hero-metric">
               <span class="hero-metric-value">up to 2<span class="unit">&times;</span></span>
               <span class="hero-metric-label">Effective capacity</span>
-            </div>
-            <div class="hero-metric hero-metric--hero">
-              <span class="hero-metric-value"><span class="prefix">up to </span>99<span class="unit">%</span></span>
-              <span class="hero-metric-label">Less redundant processing</span>
             </div>
             <span class="hero-metrics-foot">Based on early benchmarks across agent workflows with repeated context and dependency traversal.</span>
           </div>
