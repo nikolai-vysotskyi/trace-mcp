@@ -51,7 +51,12 @@ import { IndexingPipeline } from './indexer/pipeline.js';
 import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
 import { attachFileLogging, logger } from './logger.js';
 import { PluginRegistry } from './plugin-api/registry.js';
-import { detectGitWorktree, findProjectRoot } from './project-root.js';
+import {
+  detectGitWorktree,
+  discoverChildProjectsRecursive,
+  findProjectRoot,
+  hasRootMarkers,
+} from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
 import { createServer } from './server/server.js';
@@ -597,9 +602,40 @@ program
             // New session: create transport + server
             transport = (await createSessionTransport(projectRoot)) ?? undefined;
             if (!transport) {
-              res.writeHead(404, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
-              return;
+              // Auto-register the project on first MCP connect when the path
+              // is plausibly a real project root. This recovers the common
+              // case where the daemon was respawned after auto-update and
+              // lost its in-memory project list while a stdio session is
+              // asking for a perfectly valid project root (or umbrella
+              // workspace containing nested projects).
+              const canAutoAdd =
+                fs.existsSync(projectRoot) &&
+                !isDangerousProjectRoot(projectRoot) &&
+                (hasRootMarkers(projectRoot) ||
+                  discoverChildProjectsRecursive(projectRoot, 3).length > 0);
+              if (canAutoAdd && !projectManager.getProject(projectRoot)) {
+                try {
+                  await projectManager.addProject(projectRoot);
+                  subscribeToProjectProgress(projectRoot);
+                  broadcastEvent({
+                    type: 'project_status',
+                    project: projectRoot,
+                    status: 'indexing',
+                  });
+                  logger.info({ projectRoot }, 'Auto-registered project on first MCP connect');
+                  transport = (await createSessionTransport(projectRoot)) ?? undefined;
+                } catch (err) {
+                  logger.warn(
+                    { err: String(err), projectRoot },
+                    'Auto-register on MCP connect failed',
+                  );
+                }
+              }
+              if (!transport) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+                return;
+              }
             }
           } else {
             // No session ID and not an initialize. This most commonly happens
