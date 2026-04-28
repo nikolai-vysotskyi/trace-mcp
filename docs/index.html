@@ -515,25 +515,28 @@
     @media (max-width: 700px) {
       .hero { padding: 88px 0 56px; }
       .hero-meta { margin-bottom: 28px; }
-      .hero-headline { font-size: clamp(32px, 8.5vw, 48px); }
+      .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
       .hero-grid {
-        grid-template-columns: 1fr auto;
-        gap: 16px;
+        grid-template-columns: 1fr;
+        gap: 32px;
         align-items: start;
       }
       .hero-side {
-        align-items: flex-end;
+        align-items: flex-start;
         min-width: 0;
-        gap: 4px;
+        gap: 12px;
+        text-align: left;
       }
-      .hero-side .label { display: none; }
-      .hero-side-label { display: none; }
+      .hero-side-label { text-align: left; max-width: 100%; }
       .hero-massive {
-        font-size: 56px;
+        font-size: clamp(72px, 18vw, 96px);
         line-height: 0.9;
-        text-align: right;
+        text-align: left;
+        white-space: nowrap;
       }
       .hero-massive .pct { font-size: 0.45em; }
+      .hero-metrics { align-items: flex-start; text-align: left; }
+      .hero-metrics-foot { text-align: left; max-width: 100%; }
       .hero-desc { margin-top: 24px; font-size: 16px; }
       .hero-cta { margin-top: 24px; gap: 8px; }
       .hero-cta .btn { padding: 12px 22px; font-size: 11px; }
