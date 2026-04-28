@@ -957,7 +957,7 @@
     /* ── Use cases (when to use) ── */
     .usecase-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 0;
       border: 1px solid var(--border-visible);
     }
@@ -1131,6 +1131,9 @@
 
     @media (max-width: 900px) {
       .qs-grid { grid-template-columns: 1fr; gap: 32px; }
+    }
+    @media (max-width: 600px) {
+      .terminal-body { padding: 16px; font-size: 11px; line-height: 1.7; }
     }
 
     /* ── FAQ ── */
@@ -2423,7 +2426,7 @@
         </div>
       </div>
 
-      <div class="usecase-grid reveal" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="usecase-grid reveal">
         <div class="usecase">
           <span class="usecase-when">/ 01 · AI Coding Agents</span>
           <span class="usecase-title">Navigate large repos. Make correct changes.</span>
