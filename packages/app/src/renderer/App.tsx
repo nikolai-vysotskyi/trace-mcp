@@ -487,6 +487,7 @@ function UpdateBanner() {
     }
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runCheck is intentionally captured once on mount; adding it would tear down the polling interval on every state update inside runCheck (setState calls), defeating the 10-min cadence. The cancelledRef guards against state updates after unmount.
   useEffect(() => {
     cancelledRef.current = false;
     runCheck();
@@ -497,7 +498,6 @@ function UpdateBanner() {
       clearInterval(poll);
       clearInterval(tick);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleUpdate = async () => {

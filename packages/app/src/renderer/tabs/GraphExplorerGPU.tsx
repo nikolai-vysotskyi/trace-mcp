@@ -631,6 +631,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // so the popup snaps back to its normal top offset. Uses `settings.stressTest`
   // directly — destructured `stressTest` isn't declared until further down,
   // referencing it here would hit the TDZ at render time.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: settings.stressTest / pendingBreak / brokenEdgeKeys.size are intentional re-attach triggers — when stress mode changes or the HUD body remounts (broken-edge counter changes), the ref points to a different DOM node and the ResizeObserver must be re-bound.
   useEffect(() => {
     const el = stressHudRef.current;
     if (!el) {
@@ -808,6 +809,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // In bottleneck mode the user cares about architectural chokepoints, not
   // routine imports — so clicking a red node should surface just the hot
   // connections that earned it that color, not its whole import fan-out.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: highlightNeighborhood is declared further below in the same component (TDZ); referencing it via closure works at runtime because callbacks fire after render but adding it to deps creates a forward ref that TS rejects.
   const highlightBottleneckEdgesFor = useCallback((seedIdx: number) => {
     const graph = graphRef.current;
     const data = payloadRef.current;
@@ -893,6 +895,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, []);
 
   // ── focusNode (for imperative handle) ─────────────────────────
+  // biome-ignore lint/correctness/useExhaustiveDependencies: highlightNeighborhood is declared further below (TDZ); see highlightBottleneckEdgesFor for the same pattern.
   const focusNode = useCallback(
     (id: string) => {
       const graph = graphRef.current;
@@ -1004,6 +1007,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     graph.setConfigPartial({ linkVisibilityDistanceRange: [100000, 200000] });
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: themeSpec kept as dep so the callback re-creates after a theme switch — keeps cosmos.gl color buffers consistent with the new palette without an explicit re-render path.
   const clearHighlight = useCallback(() => {
     const graph = graphRef.current;
     const orig = origColorsRef.current;
@@ -1306,6 +1310,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, [showLabels]);
 
   // ── Fetch + render ────────────────────────────────────────────
+  // biome-ignore lint/correctness/useExhaustiveDependencies: renderGraph is declared further below (TDZ); we capture it via closure at call time. Adding it would force a forward reference that breaks the TS block-scope check.
   const loadGraph = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -1378,6 +1383,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   ]);
 
   // Render (or re-render) the graph from a payload. Reuses existing Graph instance.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clearHighlight is captured via closure (declared above). showFPS is intentionally listed: cosmos.gl reads its FPS overlay flag at construction, so flipping showFPS must rebuild the Graph instance via this callback's recreate path.
   const renderGraph = useCallback(
     (data: GraphPayload) => {
       const container = containerRef.current;
@@ -1956,6 +1962,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, [loadGraph]);
 
   // ── Recolor WITHOUT refetch when colorBy changes ──────────────
+  // biome-ignore lint/correctness/useExhaustiveDependencies: themeSpec.background is read inside but tracked only via the parent themeSpec triggers above; recoloring on bottleneck-mode toggles is the intended behavior, not on bare theme background changes (which already flow through setLinkColors elsewhere).
   useEffect(() => {
     const graph = graphRef.current;
     const data = payloadRef.current;
@@ -2182,6 +2189,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // shrinks with the run size so ×100 completes in ~30 s instead of 70+.
   const breakNextEdgeRef = useRef(breakNextEdge);
   breakNextEdgeRef.current = breakNextEdge;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: brokenEdgeKeys.size is an intentional trigger — each successful break advances the chain by re-arming the timer; without it the auto-loop stalls after the first iteration.
   useEffect(() => {
     if (autoSteps <= 0) return;
     if (pendingBreak) return;
@@ -2381,6 +2389,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // Pauses or resumes the solver. The breathing interval above keeps the
   // simulation continuously re-heated while live=true; when live flips
   // false we pause cosmos.gl and the interval effect tears itself down.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stats is an intentional trigger — when the graph payload changes (new node/edge counts), we re-evaluate isSimulationRunning so the live toggle reflects post-load state.
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) return;
@@ -2414,6 +2423,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, []);
 
   // ── Search: collect ALL matches; cap preview list at 8 ───────
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stats is the proxy that signals "nodesRef.current has been replaced" — the ref itself isn't a tracked dep, but stats updates each time the payload reloads.
   const { searchMatches, searchTotal } = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q || q.length < 2) return { searchMatches: [] as VizNode[], searchTotal: 0 };
@@ -2572,6 +2582,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // Top hotspot edges for the bottleneck sidebar. Depends on `stats` (set after
   // each fetch) so toggling modes — which retriggers loadGraph and repopulates
   // payloadRef.current.edges with bottleneckScore — recomputes the list.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above — stats is the proxy for payloadRef.current updates.
   const topBottlenecks = useMemo(() => {
     const data = payloadRef.current;
     if (!data) return [] as VizEdge[];
@@ -2624,6 +2635,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, [searchQuery, clearHighlight]);
 
   // ── Workspace/group list (for "highlight group" dropdown) ────
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stats is the proxy that signals nodesRef.current was replaced after a new payload load.
   const workspaceList = useMemo(() => {
     const counts = new Map<string, number>();
     for (const n of nodesRef.current) {

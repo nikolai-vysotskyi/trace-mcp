@@ -194,6 +194,7 @@ export function ProjectOverview({
     [root],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: status is an intentional trigger — refetches the project overview after the project transitions out of 'indexing' so the panel reflects the new totals.
   useEffect(() => {
     fetchStats();
     fetchCoverage();

@@ -58,9 +58,10 @@ export function ProjectDetail({ root, status, progress, onBack, onReindex }: Pro
     }
   }, [root]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: status is an intentional trigger — refetches stats after the project transitions out of 'indexing' so the panel reflects the new totals.
   useEffect(() => {
     fetchStats();
-  }, [fetchStats, status]); // refetch when status changes (e.g. after reindex)
+  }, [fetchStats, status]);
 
   return (
     <div className="space-y-3">

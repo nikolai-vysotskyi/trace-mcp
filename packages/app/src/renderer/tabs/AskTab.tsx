@@ -71,6 +71,7 @@ export function AskTab({ root }: { root: string }) {
     };
   }, [root]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: messages and streaming are intentional triggers — the effect re-runs to scroll the view as new chat content arrives or streaming finishes; the ref read is not a real dep.
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streaming]);

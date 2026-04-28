@@ -134,7 +134,7 @@
             "noSvgWithoutTitle": "off"
           },
           "correctness": {
-            "useExhaustiveDependencies": "warn",
+            "useExhaustiveDependencies": "error",
             "noChildrenProp": "error"
           },
           "suspicious": {
