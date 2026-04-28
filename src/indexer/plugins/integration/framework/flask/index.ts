@@ -15,7 +15,7 @@ import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
 import { parseError } from '../../../../../errors.js';
-import { getParser } from '../../../../../parser/tree-sitter.js';
+import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 import type {
   EdgeTypeDeclaration,
   FileParseResult,
@@ -164,7 +164,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    *   @bp.route('/path')                           → GET
    */
   private extractRoutes(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -172,7 +172,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find((c: any) => c.type === 'function_definition');
+      const funcDef = decoratedDef.children.find((c: TSNode) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -180,7 +180,7 @@ export class FlaskPlugin implements FrameworkPlugin {
       for (const child of decoratedDef.children) {
         if (child.type !== 'decorator') continue;
 
-        const callNode = child.children.find((c: any) => c.type === 'call');
+        const callNode = child.children.find((c: TSNode) => c.type === 'call');
         if (!callNode) continue;
 
         const funcRef = callNode.childForFieldName('function');
@@ -228,7 +228,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    * Extract app.register_blueprint(bp, url_prefix='/api') calls.
    */
   private extractBlueprintMounts(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -266,7 +266,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    * Extract @app.before_request / @bp.before_request hooks.
    */
   private extractBeforeRequestHooks(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -274,7 +274,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find((c: any) => c.type === 'function_definition');
+      const funcDef = decoratedDef.children.find((c: TSNode) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -283,7 +283,7 @@ export class FlaskPlugin implements FrameworkPlugin {
         if (child.type !== 'decorator') continue;
 
         // @app.before_request is an attribute access, not a call
-        const attrNode = child.children.find((c: any) => c.type === 'attribute');
+        const attrNode = child.children.find((c: TSNode) => c.type === 'attribute');
         if (!attrNode) continue;
 
         const attrName = attrNode.childForFieldName('attribute')?.text;
@@ -306,7 +306,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    * Extract @app.errorhandler(404) / @app.errorhandler(Exception) decorators.
    */
   private extractErrorHandlers(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -314,7 +314,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find((c: any) => c.type === 'function_definition');
+      const funcDef = decoratedDef.children.find((c: TSNode) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -322,7 +322,7 @@ export class FlaskPlugin implements FrameworkPlugin {
       for (const child of decoratedDef.children) {
         if (child.type !== 'decorator') continue;
 
-        const callNode = child.children.find((c: any) => c.type === 'call');
+        const callNode = child.children.find((c: TSNode) => c.type === 'call');
         if (!callNode) continue;
 
         const funcRef = callNode.childForFieldName('function');
@@ -349,8 +349,8 @@ export class FlaskPlugin implements FrameworkPlugin {
 
   // ─── Tree-sitter helpers ───────────────────────────────────────────
 
-  private findAllByType(node: any, type: string): any[] {
-    const results: any[] = [];
+  private findAllByType(node: TSNode, type: string): TSNode[] {
+    const results: TSNode[] = [];
     if (node.type === type) results.push(node);
     for (const child of node.children ?? []) {
       results.push(...this.findAllByType(child, type));
@@ -358,7 +358,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     return results;
   }
 
-  private extractFirstStringArg(args: any): string | null {
+  private extractFirstStringArg(args: TSNode): string | null {
     for (const child of args.children ?? []) {
       if (child.type === 'string') {
         return this.unquote(child.text);
@@ -370,7 +370,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     return null;
   }
 
-  private getFirstArgText(args: any): string | null {
+  private getFirstArgText(args: TSNode): string | null {
     for (const child of args.children ?? []) {
       if (
         child.type === 'keyword_argument' ||
@@ -384,7 +384,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     return null;
   }
 
-  private extractKeywordArg(args: any, name: string): string | null {
+  private extractKeywordArg(args: TSNode, name: string): string | null {
     for (const child of args.children ?? []) {
       if (child.type !== 'keyword_argument') continue;
       const key = child.childForFieldName('name')?.text;
@@ -401,7 +401,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    * Extract methods=['GET', 'POST'] keyword argument.
    * Returns an array of method strings, or null if not found.
    */
-  private extractMethodsArg(args: any): string[] | null {
+  private extractMethodsArg(args: TSNode): string[] | null {
     for (const child of args.children ?? []) {
       if (child.type !== 'keyword_argument') continue;
       const key = child.childForFieldName('name')?.text;
