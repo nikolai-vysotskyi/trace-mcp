@@ -9,7 +9,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, type Stats, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import { TraceignoreMatcher } from '../../utils/traceignore.js';
@@ -170,7 +170,7 @@ function manualSearch(
       if (traceignore.isSkippedDir(entry)) continue;
 
       const full = path.join(dir, entry);
-      let stat;
+      let stat: Stats;
       try {
         stat = statSync(full);
       } catch {

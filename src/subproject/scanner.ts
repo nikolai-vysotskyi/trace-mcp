@@ -334,7 +334,7 @@ function scanFileContent(filePath: string, content: string, results: ScannedClie
   for (const pattern of CALL_PATTERNS) {
     // Reset regex state
     pattern.regex.lastIndex = 0;
-    let match;
+    let match: RegExpExecArray | null;
 
     while ((match = pattern.regex.exec(content)) !== null) {
       const url = pattern.extractUrl(match);

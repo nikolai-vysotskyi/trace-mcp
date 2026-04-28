@@ -118,7 +118,7 @@ export function getDataflow(
 
       // Detect mutations: param.prop = value  or  param[key] = value
       const mutationPattern = new RegExp(`\\b${escapeRegex(param.name)}\\.(\\w+)\\s*=(?!=)`, 'g');
-      let mutMatch;
+      let mutMatch: RegExpExecArray | null;
       while ((mutMatch = mutationPattern.exec(line)) !== null) {
         mutations.push({
           expression: line.trim(),
@@ -129,7 +129,7 @@ export function getDataflow(
 
       // Detect call arguments: someFunc(param) or someFunc(param.prop)
       const callPattern = new RegExp(`(\\w+)\\s*\\([^)]*\\b${escapeRegex(param.name)}\\b`, 'g');
-      let callMatch;
+      let callMatch: RegExpExecArray | null;
       while ((callMatch = callPattern.exec(line)) !== null) {
         const calledFn = callMatch[1];
         // Skip common keywords
@@ -163,7 +163,7 @@ export function getDataflow(
         `(\\w+)\\s*\\([^)]*\\b${escapeRegex(param.name)}\\.(\\w+)`,
         'g',
       );
-      let propMatch;
+      let propMatch: RegExpExecArray | null;
       while ((propMatch = propPassPattern.exec(line)) !== null) {
         const calledFn = propMatch[1];
         if (

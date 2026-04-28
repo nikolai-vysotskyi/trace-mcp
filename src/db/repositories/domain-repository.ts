@@ -30,7 +30,7 @@ export class DomainRepository {
 
     if (route.controllerSymbolId) {
       const asNum = Number(route.controllerSymbolId);
-      if (!isNaN(asNum)) {
+      if (!Number.isNaN(asNum)) {
         resolvedControllerSymId = asNum;
       } else {
         controllerRef = route.controllerSymbolId;

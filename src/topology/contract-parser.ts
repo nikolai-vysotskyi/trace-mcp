@@ -249,13 +249,13 @@ function parseGraphqlSdl(content: string, specPath: string): ParsedContract | nu
 
   // Match type Query { ... }, type Mutation { ... }
   const typeBlockRegex = /type\s+(Query|Mutation|Subscription)\s*\{([^}]+)\}/g;
-  let match;
+  let match: RegExpExecArray | null;
 
   while ((match = typeBlockRegex.exec(content)) !== null) {
     const typeName = match[1];
     const body = match[2];
     const fieldRegex = /^\s*(\w+)\s*[(:]/gm;
-    let fieldMatch;
+    let fieldMatch: RegExpExecArray | null;
 
     while ((fieldMatch = fieldRegex.exec(body)) !== null) {
       endpoints.push({
@@ -276,13 +276,13 @@ function parseProto(content: string, specPath: string): ParsedContract | null {
   const endpoints: ParsedEndpoint[] = [];
 
   const serviceRegex = /service\s+(\w+)\s*\{([^}]+)\}/g;
-  let serviceMatch;
+  let serviceMatch: RegExpExecArray | null;
 
   while ((serviceMatch = serviceRegex.exec(content)) !== null) {
     const serviceName = serviceMatch[1];
     const body = serviceMatch[2];
     const rpcRegex = /rpc\s+(\w+)\s*\(/g;
-    let rpcMatch;
+    let rpcMatch: RegExpExecArray | null;
 
     while ((rpcMatch = rpcRegex.exec(body)) !== null) {
       endpoints.push({

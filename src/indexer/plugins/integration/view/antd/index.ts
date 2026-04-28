@@ -24,7 +24,7 @@ import type {
  * Match ConfigProvider theme prop: <ConfigProvider theme={{ token: { ... }, components: { ... } }}>
  * Simplified: look for theme={{ token or theme={{ components
  */
-const _CONFIG_PROVIDER_THEME_RE = /ConfigProvider[\s\S]*?theme\s*=\s*\{\s*\{([^]*?)\}\s*\}/g;
+const _CONFIG_PROVIDER_THEME_RE = /ConfigProvider[\s\S]*?theme\s*=\s*\{\s*\{([\s\S]*?)\}\s*\}/g;
 
 /**
  * Match: const theme = { token: { ... }, components: { ... } }

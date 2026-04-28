@@ -90,7 +90,9 @@ interface MermaidDiagramResult {
 
 function detectCommunities(nodeIds: string[], edges: VizEdge[]): Map<string, number> {
   const labels = new Map<string, number>();
-  nodeIds.forEach((id, i) => labels.set(id, i));
+  nodeIds.forEach((id, i) => {
+    labels.set(id, i);
+  });
 
   // Build adjacency list
   const adj = new Map<string, string[]>();
@@ -126,7 +128,9 @@ function detectCommunities(nodeIds: string[], edges: VizEdge[]): Map<string, num
   // Normalize community IDs to 0..N
   const uniqueLabels = [...new Set(labels.values())];
   const remap = new Map<number, number>();
-  uniqueLabels.forEach((l, i) => remap.set(l, i));
+  uniqueLabels.forEach((l, i) => {
+    remap.set(l, i);
+  });
   for (const [id, l] of labels) labels.set(id, remap.get(l)!);
 
   return labels;

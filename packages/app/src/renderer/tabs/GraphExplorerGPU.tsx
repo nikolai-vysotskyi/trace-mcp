@@ -1570,7 +1570,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       const nodes = data.nodes;
       nodesRef.current = nodes;
       const indexById = new Map<string, number>();
-      nodes.forEach((n, i) => indexById.set(n.id, i));
+      nodes.forEach((n, i) => {
+        indexById.set(n.id, i);
+      });
       indexByIdRef.current = indexById;
 
       const commColors = new Map<number, string>();

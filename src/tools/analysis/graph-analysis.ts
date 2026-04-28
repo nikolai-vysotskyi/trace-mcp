@@ -274,7 +274,9 @@ export function getPageRank(
   if (N === 0) return [];
 
   const nodeIndex = new Map<number, number>();
-  nodes.forEach((id, i) => nodeIndex.set(id, i));
+  nodes.forEach((id, i) => {
+    nodeIndex.set(id, i);
+  });
 
   // Initialize scores uniformly
   let scores = new Float64Array(N).fill(1 / N);

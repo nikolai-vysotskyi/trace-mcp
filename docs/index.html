@@ -2898,7 +2898,7 @@
 
   // Format integers with thin separators: 1234 -> "1,234"; 12000 -> "12k"; 1500000 -> "1.5M"
   function formatCount(n) {
-    if (typeof n !== 'number' || !isFinite(n)) return null;
+    if (typeof n !== 'number' || !Number.isFinite(n)) return null;
     if (n >= 1000000) return `${(n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace(/\.0$/, '')}M`;
     if (n >= 10000)   return `${Math.round(n / 1000)}k`;
     if (n >= 1000)    return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;

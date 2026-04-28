@@ -16,8 +16,9 @@
       "!**/.trace-mcp",
       "!**/test-fixtures",
       "!**/tests/fixtures",
-      "!packages/app/release/**",
-      "!packages/app/build/**"
+      "!docs/**",
+      "!packages/app/release",
+      "!packages/app/build"
     ]
   },
   "formatter": {
@@ -35,7 +36,10 @@
         "noUnusedImports": "error",
         "noUnusedVariables": "error",
         "noUnusedFunctionParameters": "off",
-        "noUnusedPrivateClassMembers": "warn"
+        "noUnusedPrivateClassMembers": "warn",
+        "noEmptyCharacterClassInRegex": "error",
+        "noInnerDeclarations": "error",
+        "noUnsafeOptionalChaining": "error"
       },
       "style": {
         "useConst": "error",
@@ -60,7 +64,13 @@
         "noShadowRestrictedNames": "error",
         "noDuplicateElseIf": "error",
         "noUselessEscapeInString": "error",
-        "noTemplateCurlyInString": "error"
+        "noTemplateCurlyInString": "error",
+        "useIterableCallbackReturn": "error",
+        "noImplicitAnyLet": "error",
+        "noPrototypeBuiltins": "error",
+        "noGlobalIsFinite": "error",
+        "noGlobalIsNan": "error",
+        "noAssignInExpressions": "off"
       },
       "complexity": {
         "useOptionalChain": "error",
@@ -74,7 +84,8 @@
         "noUselessLoneBlockStatements": "error",
         "noUselessTernary": "error",
         "noBannedTypes": "error",
-        "noStaticOnlyClass": "warn"
+        "noStaticOnlyClass": "warn",
+        "useRegexLiterals": "error"
       },
       "security": {
         "noDangerouslySetInnerHtml": "error",

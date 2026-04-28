@@ -354,12 +354,14 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       // Auto-mine on first wake-up if store is empty
       const shouldAutoMine = auto_mine !== false;
       const stats = decisionStore.getStats(projectRoot);
-      let mineResult;
+      let mineResult:
+        | (Awaited<ReturnType<typeof mineSessions>> & ReturnType<typeof indexSessions>)
+        | undefined;
       if (shouldAutoMine && stats.total === 0) {
-        mineResult = await mineSessions(decisionStore, { projectRoot });
+        const mined = await mineSessions(decisionStore, { projectRoot });
         // Also index session content for search
         const indexResult = indexSessions(decisionStore, { projectRoot });
-        mineResult = { ...mineResult, ...indexResult };
+        mineResult = { ...mined, ...indexResult };
       }
 
       const wakeUp = assembleWakeUp(decisionStore, projectRoot, {

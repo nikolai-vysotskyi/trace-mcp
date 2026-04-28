@@ -724,7 +724,7 @@ function scanProjectConfigDirs(projectRoot: string): Conflict[] {
     if (!fs.existsSync(fullPath)) continue;
 
     // Only flag directories (files are handled by scanProjectConfigFiles)
-    let stat;
+    let stat: fs.Stats;
     try {
       stat = fs.statSync(fullPath);
     } catch {

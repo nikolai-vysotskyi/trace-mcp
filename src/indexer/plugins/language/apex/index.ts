@@ -41,10 +41,8 @@ const _plugin = createMultiPassPlugin({
         // method: [access] [modifiers] ReturnType methodName(args) {
         {
           kind: 'method',
-          pattern: new RegExp(
-            `^\\s*(?:(?:public|private|protected|global|static|virtual|abstract|override|testMethod)\\s+)*(?:[\\w<>,\\[\\]\\s]+?)\\s+(\\w+)\\s*\\([^)]*\\)\\s*\\{`,
-            'gm',
-          ),
+          pattern:
+            /^\s*(?:(?:public|private|protected|global|static|virtual|abstract|override|testMethod)\s+)*(?:[\w<>,[\]\s]+?)\s+(\w+)\s*\([^)]*\)\s*\{/gm,
         },
         // property: [access] Type PropertyName { get; set; }
         {

@@ -19,7 +19,7 @@ import type {
  * Also matches export const, export default, let, var
  */
 const ZOD_OBJECT_RE =
-  /(?:export\s+(?:default\s+)?)?(?:const|let|var)\s+(\w+)\s*=\s*z\.object\s*\(\s*\{([^]*?)\}\s*\)/g;
+  /(?:export\s+(?:default\s+)?)?(?:const|let|var)\s+(\w+)\s*=\s*z\.object\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
 
 /**
  * Match individual fields inside z.object({ ... })

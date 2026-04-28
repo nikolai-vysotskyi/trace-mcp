@@ -78,7 +78,7 @@ const _plugin = createMultiPassPlugin({
     // $script:VarName or $global:VarName (module-level vars)
     { kind: 'variable', pattern: /\$(?:script|global):(\w+)\s*=/gm },
     // param() block parameter declarations: [Type]$ParamName
-    { kind: 'variable', pattern: /\[Parameter[^]]*\][^$]*\$(\w+)/gm, memberOnly: true },
+    { kind: 'variable', pattern: /\[Parameter[^\]]*\][^$]*\$(\w+)/gm, memberOnly: true },
   ],
 
   importPatterns: [

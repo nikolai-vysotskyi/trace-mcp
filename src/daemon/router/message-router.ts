@@ -26,8 +26,7 @@ function isResponse(msg: JSONRPCMessage): msg is JSONRPCMessage & { id: string |
   return (
     m.id !== undefined &&
     m.id !== null &&
-    (Object.prototype.hasOwnProperty.call(m, 'result') ||
-      Object.prototype.hasOwnProperty.call(m, 'error')) &&
+    (Object.hasOwn(m, 'result') || Object.hasOwn(m, 'error')) &&
     m.method === undefined
   );
 }

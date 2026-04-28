@@ -230,7 +230,7 @@ function readDaemonPid(): number | null {
   const pidFile = getPidFilePath();
   if (!fs.existsSync(pidFile)) return null;
   const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
-  if (isNaN(pid)) return null;
+  if (Number.isNaN(pid)) return null;
   try {
     process.kill(pid, 0);
     return pid;
@@ -390,7 +390,7 @@ function acquireSpawnLock(): boolean {
       const stat = fs.statSync(SPAWN_LOCK_PATH);
       const age = Date.now() - stat.mtimeMs;
       const pid = parseInt(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8').trim(), 10);
-      const dead = isNaN(pid) || !isProcessAlive(pid);
+      const dead = Number.isNaN(pid) || !isProcessAlive(pid);
       if (dead || age > SPAWN_LOCK_STALE_MS) {
         fs.writeFileSync(SPAWN_LOCK_PATH, String(process.pid), 'utf-8');
         return true;
