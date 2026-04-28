@@ -6,6 +6,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.32.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.31.0...v1.32.0) (2026-04-28)
+
+
+### Features
+
+* **docs:** full SEO meta, favicon set from electron tray icon, PWA manifest ([7217e11](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7217e11feab6d919e2335375da86490d030188c3))
+* **homepage:** mobile above-the-fold CTA, trust badges, red primary CTA ([8b6a897](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b6a89787f8b3bfa0e820d7d1fec045d3fd8ff8a))
+* **init:** add AMP, Warp, Factory Droid MCP clients ([#111](https://github.com/nikolai-vysotskyi/trace-mcp/issues/111)) ([9235afb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9235afb41e29b3cb3f3486cc58ffabdbcfa11223))
+* recomputation narrative + knowledge-graph markdown indexing ([#112](https://github.com/nikolai-vysotskyi/trace-mcp/issues/112)) ([b68f61f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b68f61fd15c82d988a26e73099adbc6854852257))
+
+
+### Bug Fixes
+
+* **homepage:** eliminate horizontal scroll on mobile ([c97eab0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c97eab06468c84281829b15a10d50dc537cf4d05))
+* **landing:** collapse hero to single column on mobile ([af7bb71](https://github.com/nikolai-vysotskyi/trace-mcp/commit/af7bb71c988bc9f75c67a63b5cec5ead45d78785))
+* **landing:** mobile hero — make 40–50% the lead metric with a value-prop label ([589393f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/589393fea609fddeda0b73c4efca51f78b7a661e))
+* **landing:** mobile hero — promote 99% as the single hero metric ([3a6475a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a6475a82b375be56ccde51b9471beafd1594d2e))
+* **landing:** mobile overflow on use cases grid and install terminal ([bb588cd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bb588cdaf1d2660d8940805e260fd7aa3b710c49))
+* **landing:** split 'up to' off the giant Doto numeral on mobile ([fbce556](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fbce556441dd63fc87e5ceb6854bfa7d1f34722e))
+* **merge:** drop duplicate imports + restore missing path import ([#113](https://github.com/nikolai-vysotskyi/trace-mcp/issues/113)) ([d06e42d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d06e42d26d187e1571b06adc0a67010087ed4a8c))
+
+
+### Documentation
+
+* **homepage:** restructure around "code intelligence layer for AI agents" positioning ([a99118d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a99118d662ecc3aa49a6c020bd99076c4965390e))
+* **landing:** drop pilot CTAs, send users straight to install/repo ([6c44b7c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c44b7c7daaa6ede4420e58f03346bd977966b42))
+* **positioning:** reframe as optimization layer for LLM apps, honest token numbers ([3b552c3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3b552c3506db658c932b07604e4f185c118645dd))
+* **readme:** add Star History chart ([614cf32](https://github.com/nikolai-vysotskyi/trace-mcp/commit/614cf32d6819c7ba26cbd20ffd0c3fdd8fc020d7))
+
+
+### Chores
+
+* **ci:** hold off on electron major bumps ([861c75a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/861c75ac8f7808d9c413c0c1d58cfb66335e790f))
+* **ci:** hold off on vite + plugin-react major bumps in app ([02cafac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/02cafacb9ea67d8e2911c8b8dc7d7532bbad9442))
+* **ci:** hold off on web-tree-sitter minor/major bumps ([45b303f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/45b303f1d6a4929e1e9c745d508cbaa7d562ae4e))
+* **ci:** ignore major bumps for @types/node ([20702a3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/20702a3141db964a46a8f3b632da17ae7b85858a))
+* **ci:** include chore/ci/build in release-please changelog ([135e1ce](https://github.com/nikolai-vysotskyi/trace-mcp/commit/135e1ce8d8122c77c155fb9fbb66eb7eabc37a38))
+* **deps:** bump typescript to 6.0.3 (root + app) ([#103](https://github.com/nikolai-vysotskyi/trace-mcp/issues/103)) ([836d4cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/836d4cfaae6cad0e081fd646a4f16e550ebfb480))
+* **deps:** bump zod from 3.24 to 4.3.6 ([#105](https://github.com/nikolai-vysotskyi/trace-mcp/issues/105)) ([3e774ac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3e774acd3971861429d8b1d6a123071fc013f73b))
+* **security:** bump electron to 41.3.0, drop stale pnpm-lock ([#109](https://github.com/nikolai-vysotskyi/trace-mcp/issues/109)) ([4b45f87](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4b45f87a9e4e555f643f65a555516b7ef66af59a))
+* **tooling:** introduce Biome as formatter (root) ([#110](https://github.com/nikolai-vysotskyi/trace-mcp/issues/110)) ([7149fa5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7149fa5886dd370ef13330ac1fea66128590e502))
+
+
+### CI/CD
+
+* **release:** sign Electron release artifacts with SLSA provenance ([#108](https://github.com/nikolai-vysotskyi/trace-mcp/issues/108)) ([1ac88ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ac88ec15d7973346b2c9cc5e16367ee3290ea0a))
+* **security:** add CodeQL, Semgrep, OSSF Scorecard, Dependabot ([f252ce2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f252ce2dc656a1e75b6a3d6436f1832587872ba9))
+* **security:** pin all GitHub Actions by SHA, add top-level read perms ([71253c0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/71253c0c538eb9c73f3c1f8d54415467ab7a8972))
+
 ## [1.31.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.30.0...v1.31.0) (2026-04-24)
 
 
