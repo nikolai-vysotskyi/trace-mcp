@@ -2808,7 +2808,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               return (
                 <button
                   type="button"
-                  key={`${e.source}|${e.target}|${i}`}
+                  key={`${e.source}|${e.target}`}
                   onClick={() => focusBottleneckEdge(e)}
                   className="cosmos-gpu-bn-row"
                   title={`${e.source} → ${e.target}\nScore ${score.toFixed(3)}${e.isBridge ? ' (bridge)' : ''}`}
@@ -3427,7 +3427,16 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             >
               {searchTotal > 1 && (
                 <li
+                  role="option"
+                  aria-selected={false}
+                  tabIndex={0}
                   onClick={doSelectAllMatches}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      doSelectAllMatches();
+                    }
+                  }}
                   className="px-2.5 py-1.5 mb-1 rounded-md cursor-pointer hover:bg-blue-500/20 text-[11px] font-semibold"
                   style={{ color: '#60a5fa' }}
                 >
@@ -3436,8 +3445,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               )}
               {searchMatches.map((n) => (
                 <li
+                  role="option"
+                  aria-selected={false}
+                  tabIndex={0}
                   key={n.id}
                   onClick={() => doFocus(n)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      doFocus(n);
+                    }
+                  }}
                   className="px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-white/10 dark:hover:bg-white/10 font-mono text-[11px] break-all"
                 >
                   <div>{shortLabel(n)}</div>
@@ -3755,6 +3773,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                         Copy this and paste into Claude / ChatGPT to investigate the bottleneck and
                         get refactoring suggestions.
                       </div>
+                      {/* biome-ignore lint/a11y/useKeyWithClickEvents: text can be selected with the keyboard natively (⇧+arrows / ⌘A); the onClick is a mouse-only convenience. */}
                       <pre
                         onClick={(e) => {
                           // Single-click selects the whole prompt so ⌘C works

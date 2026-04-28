@@ -861,6 +861,13 @@ export function App() {
 
           {/* Resize handle */}
           <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            aria-valuenow={sidebarWidth}
+            aria-valuemin={SIDEBAR_MIN}
+            aria-valuemax={SIDEBAR_MAX}
+            tabIndex={-1}
             onMouseDown={onMouseDown}
             style={
               {

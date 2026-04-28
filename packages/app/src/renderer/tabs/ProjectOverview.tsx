@@ -634,6 +634,7 @@ export function ProjectOverview({
               return (
                 <button
                   type="button"
+                  // biome-ignore lint/suspicious/noArrayIndexKey: composite key (file+line) may collide for multiple smells in the same line; index disambiguates within a stable, sliced 25-item list.
                   key={`${f.file}:${f.line}:${i}`}
                   onClick={() => {
                     const api = (window as any).electronAPI;
@@ -861,6 +862,7 @@ export function ProjectOverview({
                                   }}
                                 >
                                   <input
+                                    // biome-ignore lint/a11y/noAutofocus: input only mounts when user clicks the group badge (editingGroup === svc.id); auto-focus is the expected UX for inline editors.
                                     autoFocus
                                     value={groupInput}
                                     onChange={(e) => setGroupInput(e.target.value)}

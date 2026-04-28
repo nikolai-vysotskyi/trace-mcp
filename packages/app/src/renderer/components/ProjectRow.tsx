@@ -54,9 +54,17 @@ export function ProjectRow({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className="px-2 py-1.5 rounded-md group cursor-pointer hover:brightness-110 transition-all"
       style={{ background: 'var(--bg-secondary)' }}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
     >
       <div className="flex items-center gap-2">
         <StatusDot status={statusToDot(status)} />
@@ -80,6 +88,8 @@ export function ProjectRow({
             </div>
           )}
         </div>
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: presentational wrapper that only stops bubbling so child <button>s handle keyboard nav themselves. */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: same — wrapper has no semantic role; children carry the actions. */}
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           {!confirmRemove ? (
             <>

@@ -153,11 +153,14 @@ function Tooltip({ text }: { text: string }) {
   const [show, setShow] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: tooltip wrapper has no click — onMouseEnter/Leave only show the tooltip; keyboard users get parity via onFocus/onBlur on the inner ⓘ icon.
     <span
       ref={ref}
       style={{ position: 'relative', display: 'inline-flex' }}
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}
+      onFocus={() => setShow(true)}
+      onBlur={() => setShow(false)}
     >
       <span
         style={{
@@ -721,6 +724,7 @@ function ModelSelectCtrl({
             <input
               type="text"
               value={filter}
+              // biome-ignore lint/a11y/noAutofocus: search input only renders inside the model picker dropdown after the user opens it; auto-focus is the expected UX.
               autoFocus
               placeholder="Filter models…"
               onChange={(e) => setFilter(e.target.value)}
@@ -961,6 +965,7 @@ function SectionList({
     <div>
       {visibleGroups.map((group, gi) => (
         <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: groups are derived from a static config slice with stable order; no insert/reorder.
           key={gi}
           style={{
             background: 'var(--bg-grouped)',
@@ -1516,7 +1521,7 @@ function DiffPanel({ entries, onClose }: { entries: DiffEntry[]; onClose: () => 
       <div style={{ maxHeight: 140, overflowY: 'auto' }}>
         {entries.map((e, i) => (
           <div
-            key={i}
+            key={`${e.section}.${e.field}`}
             style={{
               fontSize: 12,
               fontFamily: 'SF Mono, Menlo, monospace',

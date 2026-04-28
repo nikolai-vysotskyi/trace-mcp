@@ -99,6 +99,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
       {showAddInput && (
         <div className="flex gap-1">
           <input
+            // biome-ignore lint/a11y/noAutofocus: input is rendered on-demand by user action (showAddInput); auto-focus is the expected UX for inline editors.
             autoFocus
             type="text"
             placeholder="/path/to/project"

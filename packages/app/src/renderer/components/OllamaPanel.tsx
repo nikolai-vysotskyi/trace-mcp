@@ -204,7 +204,7 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
           ) : (
             <ModelList>
               {running.map((m, i) => (
-                <Row key={m.name + i} last={i === running.length - 1}>
+                <Row key={m.name} last={i === running.length - 1}>
                   <RowInfo
                     title={m.name}
                     subtitle={[
@@ -245,7 +245,7 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
           ) : (
             <ModelList>
               {installed.map((m, i) => (
-                <Row key={m.name + i} last={i === installed.length - 1}>
+                <Row key={m.name} last={i === installed.length - 1}>
                   <RowInfo
                     title={m.name}
                     subtitle={[

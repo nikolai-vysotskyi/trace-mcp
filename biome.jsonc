@@ -126,11 +126,11 @@
         "rules": {
           "a11y": {
             "useButtonType": "error",
-            "useKeyWithClickEvents": "warn",
-            "noStaticElementInteractions": "warn",
+            "useKeyWithClickEvents": "error",
+            "noStaticElementInteractions": "error",
             "useAriaPropsForRole": "error",
             "useHtmlLang": "error",
-            "noAutofocus": "warn",
+            "noAutofocus": "error",
             "noSvgWithoutTitle": "off"
           },
           "correctness": {
@@ -138,7 +138,7 @@
             "noChildrenProp": "error"
           },
           "suspicious": {
-            "noArrayIndexKey": "warn"
+            "noArrayIndexKey": "error"
           }
         }
       }

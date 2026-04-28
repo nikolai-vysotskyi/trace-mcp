@@ -102,7 +102,17 @@ export function WindowTabBar() {
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.title}</span>
           {tab.type === 'project' && (
             <span
+              role="button"
+              tabIndex={0}
+              aria-label={`Close ${tab.title}`}
               onClick={(e) => handleCloseTab(e, tab.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleCloseTab(e as unknown as React.MouseEvent<HTMLSpanElement>, tab.id);
+                }
+              }}
               style={{
                 flexShrink: 0,
                 width: 14,
