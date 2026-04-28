@@ -154,7 +154,11 @@ function parseConversationTurns(filePath: string): ConversationTurn[] {
   const turns: ConversationTurn[] = [];
 
   for (const line of lines) {
-    let record: any;
+    let record: {
+      type?: string;
+      timestamp?: string;
+      message?: ConversationMessage;
+    };
     try {
       record = JSON.parse(line);
     } catch {
@@ -185,8 +189,20 @@ function parseConversationTurns(filePath: string): ConversationTurn[] {
   return turns;
 }
 
+interface ConversationContentItem {
+  type?: string;
+  text?: string;
+  input?: unknown;
+  name?: string;
+}
+
+interface ConversationMessage {
+  role?: string;
+  content?: string | ConversationContentItem[];
+}
+
 function extractTurnContent(
-  msg: any,
+  msg: ConversationMessage,
   role: 'user' | 'assistant',
   timestamp: string,
 ): ConversationTurn | null {

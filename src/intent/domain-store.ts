@@ -22,7 +22,7 @@ interface DomainRow {
   updated_at: string;
 }
 
-interface DomainTreeNode {
+export interface DomainTreeNode {
   id: number;
   name: string;
   description: string | null;
@@ -219,7 +219,14 @@ export class DomainStore {
         WHERE sd.domain_id = ?
         ORDER BY sd.relevance DESC
       `)
-        .all(domainId) as any[];
+        .all(domainId) as Array<{
+        symbol_id: number;
+        symbol_id_str: string;
+        name: string;
+        kind: string;
+        file_path: string;
+        relevance: number;
+      }>;
     }
 
     // Include children: collect all domain IDs
@@ -236,7 +243,14 @@ export class DomainStore {
       WHERE sd.domain_id IN (${placeholders})
       ORDER BY sd.relevance DESC
     `)
-      .all(...domainIds) as any[];
+      .all(...domainIds) as Array<{
+      symbol_id: number;
+      symbol_id_str: string;
+      name: string;
+      kind: string;
+      file_path: string;
+      relevance: number;
+    }>;
   }
 
   getUnclassifiedSymbolIds(
@@ -251,7 +265,13 @@ export class DomainStore {
         AND s.kind IN ('class', 'function', 'method', 'interface', 'trait', 'enum', 'type')
       LIMIT ?
     `)
-      .all(limit) as any[];
+      .all(limit) as Array<{
+      id: number;
+      name: string;
+      kind: string;
+      fqn: string | null;
+      file_path: string;
+    }>;
   }
 
   clearInferredMappings(): void {

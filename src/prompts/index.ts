@@ -174,6 +174,7 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       sections.push('## Key Entry Points\n');
       const context = safe(
         () => getFeatureContext(store, projectRoot, 'main entry point application startup', 4000),
+        // biome-ignore lint/suspicious/noExplicitAny: getFeatureContext return shape predates this prompt's symbols/file/line accessor; legacy fallback object kept until the prompt is rewritten against the actual FeatureContextResult shape.
         { symbols: [] } as any,
       );
       if (context.symbols) {
@@ -211,9 +212,11 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       sections.push(`# Debug: ${description}\n`);
 
       // Feature context for the bug description
-      const context = safe(() => getFeatureContext(store, projectRoot, description, 6000), {
-        symbols: [],
-      } as any);
+      const context = safe(
+        () => getFeatureContext(store, projectRoot, description, 6000),
+        // biome-ignore lint/suspicious/noExplicitAny: same legacy shape as in /onboard above.
+        { symbols: [] } as any,
+      );
       if (context.symbols && context.symbols.length > 0) {
         sections.push('## Relevant Code\n');
         for (const s of context.symbols.slice(0, 10)) {
@@ -264,10 +267,12 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       // Coupling
       const coupling = safe(() => getCouplingMetrics(store), []);
-      const unstable = coupling.filter((c: any) => c.assessment === 'unstable');
+      const unstable = coupling.filter((c: { assessment?: string }) => c.assessment === 'unstable');
       sections.push(`## Coupling (${coupling.length} files)\n`);
       sections.push(`- Unstable: ${unstable.length}`);
-      sections.push(`- Stable: ${coupling.filter((c: any) => c.assessment === 'stable').length}`);
+      sections.push(
+        `- Stable: ${coupling.filter((c: { assessment?: string }) => c.assessment === 'stable').length}`,
+      );
       sections.push('');
 
       // Cycles

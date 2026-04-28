@@ -114,8 +114,8 @@ class TrackedEmbeddingService implements EmbeddingService {
       const result = await this.inner.embed(text, task);
       aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
       return result;
-    } catch (err: any) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+    } catch (err) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
       throw err;
     }
   }
@@ -127,8 +127,8 @@ class TrackedEmbeddingService implements EmbeddingService {
       const result = await this.inner.embedBatch(texts, task);
       aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
       return result;
-    } catch (err: any) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+    } catch (err) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
       throw err;
     }
   }
@@ -159,8 +159,8 @@ class TrackedInferenceService implements InferenceService {
       const result = await this.inner.generate(prompt, options);
       aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
       return result;
-    } catch (err: any) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+    } catch (err) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
       throw err;
     }
   }
@@ -188,8 +188,14 @@ class TrackedInferenceService implements InferenceService {
         yield chunk;
       }
       aiTracker.finish(entry, 'ok', Date.now() - t0, outputLen);
-    } catch (err: any) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, outputLen, err?.message ?? String(err));
+    } catch (err) {
+      aiTracker.finish(
+        entry,
+        'error',
+        Date.now() - t0,
+        outputLen,
+        (err as Error)?.message ?? String(err),
+      );
       throw err;
     }
   }

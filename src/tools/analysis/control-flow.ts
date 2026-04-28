@@ -41,17 +41,29 @@ export function getControlFlow(
   const { symbolId, fqn, format, simplify } = options;
 
   // Find the symbol
-  let symbol: any = null;
-  let file: any = null;
+  type SymbolRow = {
+    id: number;
+    file_id: number;
+    line_start?: number;
+    line_end?: number;
+    fqn?: string | null;
+    name?: string;
+  };
+  type FileRow = { id: number; path: string };
+
+  let symbol: SymbolRow | null = null;
+  let file: FileRow | null = null;
 
   if (symbolId) {
     symbol =
-      store.getSymbolById?.(symbolId) ??
-      store.db.prepare('SELECT * FROM symbols WHERE symbol_id = ?').get(symbolId);
+      (store.getSymbolById?.(Number(symbolId)) as SymbolRow | null) ??
+      (store.db
+        .prepare('SELECT * FROM symbols WHERE symbol_id = ?')
+        .get(symbolId) as SymbolRow | null);
   } else if (fqn) {
     symbol = store.db
       .prepare('SELECT * FROM symbols WHERE fqn = ? OR name = ? LIMIT 1')
-      .get(fqn, fqn);
+      .get(fqn, fqn) as SymbolRow | null;
   }
 
   if (!symbol) {
@@ -59,8 +71,8 @@ export function getControlFlow(
   }
 
   file =
-    store.getFileById?.(symbol.file_id) ??
-    store.db.prepare('SELECT * FROM files WHERE id = ?').get(symbol.file_id);
+    (store.getFileById?.(symbol.file_id) as FileRow | null) ??
+    (store.db.prepare('SELECT * FROM files WHERE id = ?').get(symbol.file_id) as FileRow | null);
 
   if (!file) {
     return err(notFound(`file for symbol`));
@@ -102,7 +114,7 @@ export function getControlFlow(
   }
 
   return ok({
-    symbol: symbol.fqn ?? symbol.name,
+    symbol: symbol.fqn ?? symbol.name ?? '',
     file: file.path,
     format,
     cfg: output,

@@ -36,7 +36,18 @@ const MAX_CHUNK_CHARS = 2000;
 /** Minimum message length to index (skip trivial messages) */
 const MIN_MESSAGE_CHARS = 50;
 
-function extractTextFromMessage(msg: any): { text: string; files: string[] } {
+interface SessionMessageContentItem {
+  type?: string;
+  text?: string;
+  input?: unknown;
+}
+
+interface SessionMessage {
+  role?: string;
+  content?: string | (string | SessionMessageContentItem)[];
+}
+
+function extractTextFromMessage(msg: SessionMessage): { text: string; files: string[] } {
   const textParts: string[] = [];
   const files: string[] = [];
 
@@ -92,7 +103,7 @@ function indexSessionFile(
   let chunkIndex = 0;
 
   for (const line of lines) {
-    let record: any;
+    let record: { type?: string; timestamp?: string; message?: SessionMessage };
     try {
       record = JSON.parse(line);
     } catch {
@@ -101,16 +112,16 @@ function indexSessionFile(
 
     const timestamp = record.timestamp || '';
     let role: 'user' | 'assistant' | null = null;
-    let msg: any = null;
+    let msg: SessionMessage | null = null;
 
     // Claude Code format
     if (record.type === 'assistant' || record.type === 'user') {
       role = record.type;
-      msg = record.message;
+      msg = record.message ?? null;
     }
     // Claw Code format
     if (record.type === 'message') {
-      msg = record.message;
+      msg = record.message ?? null;
       if (msg?.role === 'assistant') role = 'assistant';
       else if (msg?.role === 'user') role = 'user';
     }

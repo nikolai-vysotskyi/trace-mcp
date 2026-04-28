@@ -11,11 +11,18 @@ import type { AIProvider, EmbeddingService, InferenceService } from './interface
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
 const DEFAULT_DIMENSIONS = 384;
 
+type Transformers = typeof import('@huggingface/transformers');
+// FeatureExtractionPipeline is a callable that returns { data: Float32Array }
+type FeatureExtractionPipeline = (
+  text: string,
+  options?: { pooling?: 'mean' | 'cls' | 'none'; normalize?: boolean },
+) => Promise<{ data: ArrayLike<number> }>;
+
 // Lazy singleton — loaded once on first embed call
-let pipelineInstance: any = null;
+let pipelineInstance: FeatureExtractionPipeline | null = null;
 let pipelineModel: string | null = null;
 
-async function getTransformers(): Promise<typeof import('@huggingface/transformers') | null> {
+async function getTransformers(): Promise<Transformers | null> {
   try {
     return await import('@huggingface/transformers');
   } catch {
@@ -23,7 +30,7 @@ async function getTransformers(): Promise<typeof import('@huggingface/transforme
   }
 }
 
-async function getPipeline(model: string): Promise<any> {
+async function getPipeline(model: string): Promise<FeatureExtractionPipeline> {
   if (pipelineInstance && pipelineModel === model) return pipelineInstance;
 
   const transformers = await getTransformers();

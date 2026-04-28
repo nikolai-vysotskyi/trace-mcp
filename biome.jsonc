@@ -56,7 +56,7 @@
         "noDoubleEquals": "error",
         "noEmptyBlockStatements": "off",
         "noConsole": "off",
-        "noExplicitAny": "warn",
+        "noExplicitAny": "error",
         "noShadowRestrictedNames": "error",
         "noDuplicateElseIf": "error",
         "noUselessEscapeInString": "error",

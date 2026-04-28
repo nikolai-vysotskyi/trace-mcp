@@ -161,12 +161,13 @@ export function AskTab({ root }: { root: string }) {
         setStreaming('');
         setPhase('idle');
       }
-    } catch (e: any) {
-      if (e?.name === 'AbortError') {
+    } catch (e) {
+      const err = e as Error;
+      if (err?.name === 'AbortError') {
         setPhase('idle');
         return;
       }
-      setError(e?.message ?? 'Unknown error');
+      setError(err?.message ?? 'Unknown error');
       setPhase('error');
       setStreaming('');
     } finally {

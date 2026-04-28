@@ -28,7 +28,7 @@ function formatUptime(s: number) {
 function gv(d: Record<string, unknown>, f: FieldDef): unknown {
   if (f.nested) {
     const p = d[f.nested];
-    return p && typeof p === 'object' ? (p as any)[f.key] : undefined;
+    return p && typeof p === 'object' ? (p as Record<string, unknown>)[f.key] : undefined;
   }
   return d[f.key];
 }
@@ -36,7 +36,10 @@ function gv(d: Record<string, unknown>, f: FieldDef): unknown {
 function sv(d: Record<string, unknown>, f: FieldDef, v: unknown): Record<string, unknown> {
   const c = { ...d };
   if (f.nested) {
-    const p = c[f.nested] && typeof c[f.nested] === 'object' ? { ...(c[f.nested] as any) } : {};
+    const p =
+      c[f.nested] && typeof c[f.nested] === 'object'
+        ? { ...(c[f.nested] as Record<string, unknown>) }
+        : {};
     if (v !== undefined) p[f.key] = v;
     else delete p[f.key];
     c[f.nested] = Object.keys(p).length ? p : undefined;
@@ -47,12 +50,12 @@ function sv(d: Record<string, unknown>, f: FieldDef, v: unknown): Record<string,
 
 function sd(cfg: Record<string, unknown>, sec: SectionDef): Record<string, unknown> {
   if (sec.key === '_root') {
-    const r: any = {};
+    const r: Record<string, unknown> = {};
     for (const f of sec.fields) if (f.key in cfg) r[f.key] = cfg[f.key];
     return r;
   }
   const v = cfg[sec.key];
-  return v && typeof v === 'object' && !Array.isArray(v) ? (v as any) : {};
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
 function fmt(v: unknown): string {
@@ -526,8 +529,8 @@ async function fetchOpenAICompatModels(
   const res = await fetch(endpoint, { signal, headers });
   if (!res.ok)
     throw new Error(`${label}: ${res.status}${res.status === 401 ? ' (check API key)' : ''}`);
-  const data = await res.json();
-  const list: ModelOption[] = (data.data ?? []).map((m: any) => ({ name: m.id }));
+  const data = (await res.json()) as { data?: { id: string }[] };
+  const list: ModelOption[] = (data.data ?? []).map((m) => ({ name: m.id }));
   list.sort((a, b) => a.name.localeCompare(b.name));
   return list;
 }
@@ -568,9 +571,11 @@ function useProviderModels(
         const url = (baseUrl || defaults?.baseUrl || 'http://localhost:11434').replace(/\/+$/, '');
         const res = await fetch(`${url}/api/tags`, { signal: ctrl.signal });
         if (!res.ok) throw new Error(`Ollama: ${res.status}`);
-        const data = await res.json();
-        const list: ModelOption[] = (data.models ?? []).map((m: any) => ({
-          name: m.name ?? m.model,
+        const data = (await res.json()) as {
+          models?: { name?: string; model?: string; size?: number }[];
+        };
+        const list: ModelOption[] = (data.models ?? []).map((m) => ({
+          name: m.name ?? m.model ?? '',
           size: m.size ? `${(m.size / 1e9).toFixed(1)} GB` : undefined,
         }));
         list.sort((a, b) => a.name.localeCompare(b.name));
@@ -588,8 +593,8 @@ function useProviderModels(
         );
         if (!res.ok)
           throw new Error(`Gemini: ${res.status}${res.status === 400 ? ' (check API key)' : ''}`);
-        const data = await res.json();
-        const list: ModelOption[] = (data.models ?? []).map((m: any) => ({
+        const data = (await res.json()) as { models?: { name?: string }[] };
+        const list: ModelOption[] = (data.models ?? []).map((m) => ({
           name: (m.name ?? '').replace(/^models\//, ''),
         }));
         list.sort((a, b) => a.name.localeCompare(b.name));
@@ -604,8 +609,9 @@ function useProviderModels(
         const modelsUrl = resolvedUrl.endsWith('/v1') ? resolvedUrl : resolvedUrl;
         setModels(await fetchOpenAICompatModels(modelsUrl, key, label, ctrl.signal));
       }
-    } catch (e: any) {
-      if (e.name !== 'AbortError') setError(e.message ?? 'Failed to fetch models');
+    } catch (e) {
+      const err = e as Error;
+      if (err.name !== 'AbortError') setError(err.message ?? 'Failed to fetch models');
     } finally {
       setLoading(false);
     }
@@ -1868,8 +1874,8 @@ function AIActivity() {
       setEntries(data.entries ?? []);
       setStats(data.stats ?? null);
       setError(null);
-    } catch (e: any) {
-      setError(e?.message ?? 'Failed to fetch');
+    } catch (e) {
+      setError((e as Error)?.message ?? 'Failed to fetch');
     } finally {
       setLoading(false);
     }

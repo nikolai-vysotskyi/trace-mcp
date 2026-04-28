@@ -92,7 +92,7 @@ export function getChangedSymbols(
     since = opts.since;
   } else {
     const detected = detectBaseBranch(rootPath, until, opts.defaultBaseBranch);
-    if (detected.isErr()) return detected as any;
+    if (detected.isErr()) return detected as never;
     since = detected.value;
   }
 
@@ -327,7 +327,7 @@ export function compareBranches(
     }
   } else {
     const detected = detectBaseBranch(rootPath, branch, opts.defaultBaseBranch);
-    if (detected.isErr()) return detected as any;
+    if (detected.isErr()) return detected as never;
     mergeBase = detected.value;
     base = opts.defaultBaseBranch ?? 'main';
   }
@@ -353,7 +353,7 @@ export function compareBranches(
     maxBlastDepth: opts.maxBlastDepth ?? 3,
   });
 
-  if (result.isErr()) return result as any;
+  if (result.isErr()) return result as never;
 
   const data = result.value;
   const groupBy = opts.groupBy ?? 'category';

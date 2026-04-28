@@ -99,22 +99,17 @@ export function getRequestFlow(
     const seenEdgeTypes = new Set<string>();
 
     // Collect all outgoing edges from both symbols, then batch resolve targets
-    const allOutEdges: Array<{
-      edge: typeof store extends { getOutgoingEdges(n: number): infer R }
-        ? R extends Array<infer E>
-          ? E
-          : never
-        : never;
-    }> = [];
+    type OutEdge = ReturnType<typeof store.getOutgoingEdges>[number];
+    const allOutEdges: OutEdge[] = [];
     for (const sym of symbolsToCheck) {
       if (!sym) continue;
       const nid = store.getNodeId('symbol', sym.id);
       if (!nid) continue;
       const edges = store.getOutgoingEdges(nid);
-      for (const e of edges) (allOutEdges as any[]).push(e);
+      for (const e of edges) allOutEdges.push(e);
     }
 
-    const targetIds = allOutEdges.map((e: any) => e.target_node_id);
+    const targetIds = allOutEdges.map((e) => e.target_node_id);
     const targetRefs = store.getNodeRefsBatch(targetIds);
     const symIds = [...targetRefs.values()]
       .filter((r) => r.nodeType === 'symbol')
@@ -123,7 +118,7 @@ export function getRequestFlow(
     const targetFileIds = [...new Set([...targetSymMap.values()].map((s) => s.file_id))];
     const targetFileMap = targetFileIds.length > 0 ? store.getFilesByIds(targetFileIds) : new Map();
 
-    for (const edge of allOutEdges as any[]) {
+    for (const edge of allOutEdges) {
       const ref = targetRefs.get(edge.target_node_id);
       if (!ref || ref.nodeType !== 'symbol') continue;
       const targetSym = targetSymMap.get(ref.refId);
@@ -143,7 +138,9 @@ export function getRequestFlow(
         const meta = edge.metadata ? (JSON.parse(edge.metadata) as Record<string, unknown>) : {};
         const file = targetFileMap.get(targetSym.file_id);
         const alreadyAdded = steps.some(
-          (s: any) => s.type === 'inertia_page' && s.details?.pageName === meta.pageName,
+          (s) =>
+            s.type === 'inertia_page' &&
+            (s.details as { pageName?: unknown } | undefined)?.pageName === meta.pageName,
         );
         if (!alreadyAdded) {
           steps.push({

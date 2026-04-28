@@ -209,7 +209,14 @@ export class AnalyticsStore {
         COALESCE(SUM(tool_call_count),0) as tool_calls
       FROM sessions s ${where}
     `)
-      .get() as any;
+      .get() as {
+      cnt: number;
+      input_tokens: number;
+      output_tokens: number;
+      cache_read_tokens: number;
+      cache_create_tokens: number;
+      tool_calls: number;
+    };
 
     const inputCost =
       (summary.input_tokens * 3 +
@@ -226,9 +233,9 @@ export class AnalyticsStore {
       FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id ${where}
       GROUP BY tc.tool_server ORDER BY calls DESC
     `)
-      .all() as any[];
+      .all() as { tool_server: string; calls: number; output_tokens_est: number }[];
 
-    const totalCalls = serverRows.reduce((s: number, r: any) => s + r.calls, 0);
+    const totalCalls = serverRows.reduce((s: number, r) => s + r.calls, 0);
     const byServer: Record<string, { calls: number; output_tokens_est: number; pct: number }> = {};
     for (const r of serverRows) {
       byServer[r.tool_server] = {
@@ -245,7 +252,7 @@ export class AnalyticsStore {
       FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id ${where}
       GROUP BY tc.tool_name ORDER BY output_tokens_est DESC LIMIT 15
     `)
-      .all() as any[];
+      .all() as { name: string; calls: number; output_tokens_est: number }[];
 
     // Top files
     const topFiles = this.db
@@ -255,7 +262,7 @@ export class AnalyticsStore {
       AND tc.target_file IS NOT NULL
       GROUP BY tc.target_file ORDER BY tokens_est DESC LIMIT 15
     `)
-      .all() as any[];
+      .all() as { path: string; reads: number; tokens_est: number }[];
 
     // Models used
     const modelRows = this.db
@@ -264,7 +271,7 @@ export class AnalyticsStore {
       FROM sessions s ${where} AND model IS NOT NULL AND model != ''
       GROUP BY model
     `)
-      .all() as any[];
+      .all() as { model: string; sessions: number; tokens: number }[];
 
     const modelsUsed: Record<string, { sessions: number; tokens: number }> = {};
     for (const r of modelRows) {
@@ -335,16 +342,24 @@ export class AnalyticsStore {
       FROM sessions WHERE started_at >= ?
       GROUP BY DATE(started_at) ORDER BY date
     `)
-      .all(since) as any[];
+      .all(since) as {
+      date: string;
+      sessions: number;
+      tokens: number;
+      cost_usd: number;
+      tool_calls: number;
+    }[];
   }
 
   /** Get synced session count */
   getSyncStats(): { sessions: number; tool_calls: number; files_synced: number } {
-    const sessions = (this.db.prepare('SELECT COUNT(*) as cnt FROM sessions').get() as any).cnt;
-    const toolCalls = (this.db.prepare('SELECT COUNT(*) as cnt FROM tool_calls').get() as any).cnt;
-    const filesSynced = (this.db.prepare('SELECT COUNT(*) as cnt FROM sync_state').get() as any)
-      .cnt;
-    return { sessions, tool_calls: toolCalls, files_synced: filesSynced };
+    const cnt = (stmt: string) =>
+      (this.db.prepare(stmt).get() as { cnt: number } | undefined)?.cnt ?? 0;
+    return {
+      sessions: cnt('SELECT COUNT(*) as cnt FROM sessions'),
+      tool_calls: cnt('SELECT COUNT(*) as cnt FROM tool_calls'),
+      files_synced: cnt('SELECT COUNT(*) as cnt FROM sync_state'),
+    };
   }
 
   close(): void {

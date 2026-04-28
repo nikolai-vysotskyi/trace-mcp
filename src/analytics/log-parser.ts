@@ -96,9 +96,34 @@ function parseToolInput(input: unknown): Record<string, unknown> {
   return {};
 }
 
+interface AssistantUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
+interface AssistantContentItem {
+  type?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+  content?: string | unknown;
+  output?: string | unknown;
+  tool_use_id?: string;
+  is_error?: boolean;
+}
+
+interface AssistantMessage {
+  model?: string;
+  usage?: AssistantUsage;
+  content?: AssistantContentItem[] | string;
+  role?: string;
+}
+
 /** Process an assistant message (shared between Claude Code and Claw Code) */
 function processAssistantMessage(
-  msg: any,
+  msg: AssistantMessage,
   timestamp: string,
   sessionId: string,
   model: string,
@@ -147,8 +172,18 @@ function processAssistantMessage(
   return { model: currentModel, toolCallCount };
 }
 
+interface ToolResultContentItem {
+  content?: string | unknown;
+  output?: string | unknown;
+  tool_use_id?: string;
+  is_error?: boolean;
+}
+
 /** Process a tool result (shared between Claude Code and Claw Code) */
-function processToolResult(item: any, toolResults: Map<string, ToolResultEvent>): void {
+function processToolResult(
+  item: ToolResultContentItem,
+  toolResults: Map<string, ToolResultEvent>,
+): void {
   const resultContent = item.content || item.output || '';
   const outputSize =
     typeof resultContent === 'string' ? resultContent.length : JSON.stringify(resultContent).length;
@@ -181,7 +216,12 @@ export function parseSessionFile(filePath: string, projectPath: string): ParsedS
     let toolCallCount = 0;
 
     for (const line of lines) {
-      let record: any;
+      let record: {
+        timestamp?: string;
+        type?: string;
+        message?: AssistantMessage;
+        toolUseResult?: ToolResultContentItem;
+      } & Record<string, unknown>;
       try {
         record = JSON.parse(line);
       } catch {
@@ -247,8 +287,9 @@ export function parseSessionFile(filePath: string, projectPath: string): ParsedS
       if (record.type === 'session_meta') {
         if (record.session_id && !startedAt) {
           // Use created_at_ms if available
-          if (record.created_at_ms) {
-            startedAt = new Date(record.created_at_ms).toISOString();
+          const createdAtMs = record.created_at_ms;
+          if (typeof createdAtMs === 'number' || typeof createdAtMs === 'string') {
+            startedAt = new Date(createdAtMs).toISOString();
           }
         }
       }

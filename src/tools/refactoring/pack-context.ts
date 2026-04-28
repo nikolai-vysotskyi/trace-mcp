@@ -312,9 +312,10 @@ export function packContext(
   if (include.includes('dependencies')) {
     const ranks = getPageRank(store).slice(0, 20);
     if (ranks.length > 0) {
-      const depLines = ranks.map(
-        (r: any) => `- ${r.file} (importance: ${r.score?.toFixed(3) ?? 'N/A'})`,
-      );
+      const depLines = ranks.map((r) => {
+        const row = r as { file?: string; score?: number };
+        return `- ${row.file} (importance: ${row.score?.toFixed(3) ?? 'N/A'})`;
+      });
       const section =
         format === 'markdown'
           ? `## Key Dependencies (by importance)\n${depLines.join('\n')}\n`
@@ -329,10 +330,10 @@ export function packContext(
   if (include.includes('tests')) {
     const allFiles = store.getAllFiles();
     const testFiles = allFiles.filter(
-      (f: any) => /\.(test|spec)\.\w+$/.test(f.path) || f.path.includes('__tests__'),
+      (f) => /\.(test|spec)\.\w+$/.test(f.path) || f.path.includes('__tests__'),
     );
     if (testFiles.length > 0) {
-      const testLines = testFiles.slice(0, 30).map((f: any) => `- ${f.path}`);
+      const testLines = testFiles.slice(0, 30).map((f) => `- ${f.path}`);
       const section =
         format === 'markdown'
           ? `## Test Files (${testFiles.length} total)\n${testLines.join('\n')}\n`

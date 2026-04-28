@@ -345,11 +345,11 @@ function cmpSemver(a: string, b: string): number {
 
 function fetchLatestFromNpm(): Promise<{ status: number; version?: string }> {
   return new Promise((resolve, reject) => {
-    const https = require('node:https');
+    const https = require('node:https') as typeof import('node:https');
     const req = https.get(
       'https://registry.npmjs.org/trace-mcp/latest',
       { timeout: 10000, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/json' } },
-      (res: any) => {
+      (res) => {
         let data = '';
         res.on('data', (chunk: string) => {
           data += chunk;
@@ -410,11 +410,11 @@ function fetchLatestRelease(): Promise<{
     const req = https.get(
       'https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest',
       { timeout: 10000, headers },
-      (res: any) => {
+      (res) => {
         if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
           // Follow once.
           https
-            .get(res.headers.location, { timeout: 10000, headers }, (res2: any) => {
+            .get(res.headers.location, { timeout: 10000, headers }, (res2) => {
               let d = '';
               res2.on('data', (c: string) => {
                 d += c;
