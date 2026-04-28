@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { loadExternalPlugins } from '../../src/plugin-api/loader.js';
 import { createTestHarness } from '../../src/plugin-api/test-harness.js';
-import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 let tmpDir: string;

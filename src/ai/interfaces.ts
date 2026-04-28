@@ -44,7 +44,11 @@ export interface VectorStore {
 }
 
 export interface RerankerService {
-  rerank(query: string, documents: { id: number; text: string }[], topK: number): Promise<{ id: number; score: number }[]>;
+  rerank(
+    query: string,
+    documents: { id: number; text: string }[],
+    topK: number,
+  ): Promise<{ id: number; score: number }[]>;
 }
 
 export interface AIProvider {

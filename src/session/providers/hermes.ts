@@ -18,17 +18,11 @@
  * tolerate minor version drift between Hermes v8 and future revisions.
  */
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import * as os from 'node:os';
-
-import type {
-  SessionProvider,
-  SessionHandle,
-  RawMessage,
-  DiscoverOpts,
-} from './types.js';
+import * as path from 'node:path';
 import type { ParsedSession } from '../../analytics/log-parser.js';
 import { SqliteSource } from './sqlite-source.js';
+import type { DiscoverOpts, RawMessage, SessionHandle, SessionProvider } from './types.js';
 
 /** Path-segment label used in sourcePath encoding. */
 const PROVIDER_ID = 'hermes';
@@ -119,7 +113,7 @@ function toMs(v: number | string | null | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function toIso(v: number | string | null | undefined): string {
+function _toIso(v: number | string | null | undefined): string {
   const ms = toMs(v, 0);
   return ms > 0 ? new Date(ms).toISOString() : '';
 }
@@ -135,9 +129,7 @@ function pickCol(cols: string[], candidates: string[]): string {
 /** Build a SELECT that normalizes Hermes's schema drift into a stable row
  *  shape (HermesSessionRow). */
 function buildSessionsQuery(source: SqliteSource): string {
-  const cols = source
-    .queryRows<{ name: string }>(`PRAGMA table_info(sessions)`)
-    .map((r) => r.name);
+  const cols = source.queryRows<{ name: string }>(`PRAGMA table_info(sessions)`).map((r) => r.name);
   return `SELECT
       id,
       ${pickCol(cols, ['source'])} AS source,
@@ -149,10 +141,12 @@ function buildSessionsQuery(source: SqliteSource): string {
 }
 
 function buildMessagesQuery(source: SqliteSource): string {
-  const cols = source
-    .queryRows<{ name: string }>(`PRAGMA table_info(messages)`)
-    .map((r) => r.name);
-  const orderBy = cols.includes('timestamp') ? 'timestamp' : cols.includes('created_at') ? 'created_at' : 'id';
+  const cols = source.queryRows<{ name: string }>(`PRAGMA table_info(messages)`).map((r) => r.name);
+  const orderBy = cols.includes('timestamp')
+    ? 'timestamp'
+    : cols.includes('created_at')
+      ? 'created_at'
+      : 'id';
   return `SELECT
       id,
       session_id,
@@ -192,7 +186,6 @@ function normalizeRole(role: string | null): RawMessage['role'] {
     case 'tool_result':
     case 'function':
       return 'tool';
-    case 'system':
     default:
       return role === 'system' ? 'system' : 'assistant';
   }
@@ -309,10 +302,7 @@ export class HermesSessionProvider implements SessionProvider {
     }
   }
 
-  private *streamMessagesSync(
-    source: SqliteSource,
-    handle: SessionHandle,
-  ): Iterable<RawMessage> {
+  private *streamMessagesSync(source: SqliteSource, handle: SessionHandle): Iterable<RawMessage> {
     const sql = buildMessagesQuery(source);
     // Strip a leading profile prefix we added in discover() (profile:id → id).
     const sessionKey = handle.sessionId.includes(':')

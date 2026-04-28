@@ -64,7 +64,7 @@ export async function getStatus(baseUrl?: string): Promise<OllamaStatus> {
 
 export interface InstalledModel {
   name: string;
-  size: number;         // bytes on disk
+  size: number; // bytes on disk
   modified_at?: string; // ISO
   digest?: string;
   details?: {
@@ -76,9 +76,9 @@ export interface InstalledModel {
 
 export interface RunningModel {
   name: string;
-  size: number;           // total bytes loaded
-  size_vram: number;      // bytes in VRAM
-  expires_at?: string;    // ISO — when Ollama will unload on its own
+  size: number; // total bytes loaded
+  size_vram: number; // bytes in VRAM
+  expires_at?: string; // ISO — when Ollama will unload on its own
   digest?: string;
   details?: InstalledModel['details'];
 }
@@ -107,7 +107,10 @@ export async function listRunning(baseUrl?: string): Promise<{ models: RunningMo
 
 /** Unload a currently-loaded model by sending a zero-token generate with keep_alive: 0.
  *  This is the documented way to force-unload without restarting Ollama. */
-export async function unloadModel(name: string, baseUrl?: string): Promise<{ ok: boolean; error?: string }> {
+export async function unloadModel(
+  name: string,
+  baseUrl?: string,
+): Promise<{ ok: boolean; error?: string }> {
   const base = normalizeBase(baseUrl);
   try {
     const res = await fetch(`${base}/api/generate`, {
@@ -124,7 +127,10 @@ export async function unloadModel(name: string, baseUrl?: string): Promise<{ ok:
   }
 }
 
-export async function deleteModel(name: string, baseUrl?: string): Promise<{ ok: boolean; error?: string }> {
+export async function deleteModel(
+  name: string,
+  baseUrl?: string,
+): Promise<{ ok: boolean; error?: string }> {
   const base = normalizeBase(baseUrl);
   try {
     const res = await fetch(`${base}/api/delete`, {
@@ -164,7 +170,9 @@ async function which(bin: string): Promise<string | null> {
  *
  *  After any successful attempt we poll /api/version for up to ~6s to
  *  confirm — returning ok:true without a health check would be a lie. */
-export async function startDaemon(baseUrl?: string): Promise<{ ok: boolean; method?: string; error?: string }> {
+export async function startDaemon(
+  baseUrl?: string,
+): Promise<{ ok: boolean; method?: string; error?: string }> {
   const base = normalizeBase(baseUrl);
 
   // If it's already up, nothing to do.
@@ -225,11 +233,15 @@ export async function startDaemon(baseUrl?: string): Promise<{ ok: boolean; meth
 
   // Health-check — up to ~6s with 300ms polls.
   for (let i = 0; i < 20; i++) {
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
     const s = await getStatus(base);
     if (s.running) return { ok: true, method };
   }
-  return { ok: false, method, error: `${method} attempted but daemon did not become reachable on ${base}` };
+  return {
+    ok: false,
+    method,
+    error: `${method} attempted but daemon did not become reachable on ${base}`,
+  };
 }
 
 /** Stop Ollama. Parallel fall-through to startDaemon:
@@ -238,7 +250,9 @@ export async function startDaemon(baseUrl?: string): Promise<{ ok: boolean; meth
  *    3. Fall-through: pkill the `ollama serve` process we (or anyone else)
  *       started. SIGTERM only — never SIGKILL here. If a user really needs
  *       to force-kill they can use Activity Monitor / `kill -9`. */
-export async function stopDaemon(baseUrl?: string): Promise<{ ok: boolean; method?: string; error?: string }> {
+export async function stopDaemon(
+  baseUrl?: string,
+): Promise<{ ok: boolean; method?: string; error?: string }> {
   const base = normalizeBase(baseUrl);
 
   const attempts: Array<() => Promise<string | null>> = [];
@@ -296,7 +310,7 @@ export async function stopDaemon(baseUrl?: string): Promise<{ ok: boolean; metho
 
   // Confirm it actually went down — up to ~4s.
   for (let i = 0; i < 15; i++) {
-    await new Promise(r => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, 250));
     const s = await getStatus(base);
     if (!s.running) return { ok: true, method };
   }

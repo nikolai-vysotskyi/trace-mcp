@@ -1,11 +1,11 @@
 /**
  * Tests for laravel/cashier extraction.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
+  buildBillableModelEdges,
   extractBillableModel,
   extractCashierWebhook,
-  buildBillableModelEdges,
 } from '../../../src/indexer/plugins/integration/framework/laravel/cashier.js';
 
 // ─── Billable model ──────────────────────────────────────────
@@ -57,14 +57,14 @@ describe('cashier — Billable model extraction', () => {
   it('builds edges', () => {
     const edges = buildBillableModelEdges(info!);
     expect(edges.length).toBeGreaterThanOrEqual(1);
-    const billableEdge = edges.find(e => e.edgeType === 'cashier_billable');
+    const billableEdge = edges.find((e) => e.edgeType === 'cashier_billable');
     expect(billableEdge).toBeDefined();
     expect(billableEdge!.metadata.modelFqn).toBe('App\\Models\\User');
   });
 
   it('builds subscription edges', () => {
     const edges = buildBillableModelEdges(info!);
-    const subEdges = edges.filter(e => e.edgeType === 'cashier_subscription');
+    const subEdges = edges.filter((e) => e.edgeType === 'cashier_subscription');
     expect(subEdges.length).toBeGreaterThanOrEqual(1);
   });
 });

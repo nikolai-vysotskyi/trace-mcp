@@ -1,16 +1,13 @@
-import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { extractEloquentModel } from '../../../src/indexer/plugins/integration/framework/laravel/eloquent.js';
 
 const L10_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');
 
 describe('Eloquent model extraction', () => {
   describe('User model', () => {
-    const source = fs.readFileSync(
-      path.join(L10_FIXTURE, 'app/Models/User.php'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(L10_FIXTURE, 'app/Models/User.php'), 'utf-8');
     const model = extractEloquentModel(source, 'app/Models/User.php');
 
     it('detects Model class', () => {
@@ -40,9 +37,7 @@ describe('Eloquent model extraction', () => {
     });
 
     it('extracts belongsToMany relationship', () => {
-      const btm = model!.relationships.find(
-        (r) => r.type === 'belongsToMany',
-      );
+      const btm = model!.relationships.find((r) => r.type === 'belongsToMany');
       expect(btm).toBeDefined();
       expect(btm!.methodName).toBe('roles');
       expect(btm!.edgeType).toBe('belongs_to_many');
@@ -54,10 +49,7 @@ describe('Eloquent model extraction', () => {
   });
 
   describe('Post model', () => {
-    const source = fs.readFileSync(
-      path.join(L10_FIXTURE, 'app/Models/Post.php'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(L10_FIXTURE, 'app/Models/Post.php'), 'utf-8');
     const model = extractEloquentModel(source, 'app/Models/Post.php');
 
     it('detects belongsTo relationship', () => {

@@ -1,16 +1,16 @@
-import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  ReactNativePlugin,
-  extractNavigatorScreens,
-  extractNavigationCalls,
   extractExpoNavigationCalls,
-  matchExpoRoute,
-  isPlatformSpecificFile,
+  extractNativeModuleNames,
+  extractNavigationCalls,
+  extractNavigatorScreens,
   getPlatform,
   hasNativeModuleUsage,
-  extractNativeModuleNames,
+  isPlatformSpecificFile,
+  matchExpoRoute,
+  ReactNativePlugin,
 } from '../../../src/indexer/plugins/integration/view/react-native/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -130,10 +130,7 @@ const App = createAppContainer(AppNavigator);
 
 describe('Navigation calls extraction', () => {
   it('extracts navigate calls', () => {
-    const source = fs.readFileSync(
-      path.join(RN6_FIXTURE, 'src/screens/HomeScreen.tsx'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(RN6_FIXTURE, 'src/screens/HomeScreen.tsx'), 'utf-8');
     const targets = extractNavigationCalls(source);
     expect(targets).toContain('Profile');
     expect(targets).toContain('Settings');
@@ -176,18 +173,12 @@ describe('Platform-specific file detection', () => {
 
 describe('Native module detection', () => {
   it('detects NativeModules usage', () => {
-    const source = fs.readFileSync(
-      path.join(RN6_FIXTURE, 'src/screens/HomeScreen.tsx'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(RN6_FIXTURE, 'src/screens/HomeScreen.tsx'), 'utf-8');
     expect(hasNativeModuleUsage(source)).toBe(true);
   });
 
   it('extracts module names from destructuring', () => {
-    const source = fs.readFileSync(
-      path.join(RN6_FIXTURE, 'src/screens/HomeScreen.tsx'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(RN6_FIXTURE, 'src/screens/HomeScreen.tsx'), 'utf-8');
     const modules = extractNativeModuleNames(source);
     expect(modules).toContain('CameraModule');
   });

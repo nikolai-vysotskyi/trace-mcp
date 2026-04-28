@@ -1,61 +1,65 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
-import path from 'node:path';
-import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Command } from 'commander';
+
 declare const PKG_VERSION_INJECTED: string;
-const PKG_VERSION = typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+const PKG_VERSION =
+  typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+
+import http from 'node:http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { initializeDatabase } from './db/schema.js';
-import { Store } from './db/store.js';
-import { PluginRegistry } from './plugin-api/registry.js';
-import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
-import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
-import { createServer } from './server/server.js';
-import { logger, attachFileLogging } from './logger.js';
-import { IndexingPipeline } from './indexer/pipeline.js';
-import { FileWatcher } from './indexer/watcher.js';
-import { createAIProvider, BlobVectorStore, EmbeddingPipeline, InferenceCache, CachedInferenceService, aiTracker } from './ai/index.js';
-import { SummarizationPipeline } from './ai/summarization-pipeline.js';
-import { ProgressState, writeServerPid, clearServerPid } from './progress.js';
+import { aiTracker } from './ai/index.js';
 import { detectCoverageRecursive } from './analytics/tech-detector.js';
-import http from 'node:http';
-import { initCommand } from './cli/init.js';
-import { upgradeCommand } from './cli/upgrade.js';
 import { addCommand } from './cli/add.js';
-import { doctorCommand } from './cli/doctor.js';
-import { ciReportCommand } from './cli/ci.js';
-import { checkCommand } from './cli/check.js';
+import { analyticsCommand, benchmarkCommand } from './cli/analytics.js';
+import { askCommand } from './cli/ask.js';
 import { bundlesCommand } from './cli/bundles.js';
-import { subprojectCommand } from './cli/subproject.js';
+import { checkCommand } from './cli/check.js';
+import { ciReportCommand } from './cli/ci.js';
+import { daemonCommand } from './cli/daemon.js';
+import { doctorCommand } from './cli/doctor.js';
+import { exportSecurityContextCommand } from './cli/export-security-context.js';
+import { initCommand } from './cli/init.js';
+import { installAppCommand } from './cli/install-app.js';
 import { memoryCommand } from './cli/memory.js';
-import { analyticsCommand } from './cli/analytics.js';
 import { removeCommand } from './cli/remove.js';
 import { statusCommand } from './cli/status.js';
+import { subprojectCommand } from './cli/subproject.js';
+import { upgradeCommand } from './cli/upgrade.js';
 import { visualizeCommand } from './cli/visualize.js';
+import type { TraceMcpConfig } from './config.js';
+import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
+import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
+import { ProjectManager } from './daemon/project-manager.js';
+import { StdioSession } from './daemon/router/session.js';
+import { initializeDatabase } from './db/schema.js';
+import { Store } from './db/store.js';
+import {
+  DAEMON_LOG_PATH,
+  DEFAULT_DAEMON_PORT,
+  ensureGlobalDirs,
+  GLOBAL_CONFIG_PATH,
+  getDbPath,
+  TOPOLOGY_DB_PATH,
+} from './global.js';
+import { IndexingPipeline } from './indexer/pipeline.js';
+import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
+import { attachFileLogging, logger } from './logger.js';
+import { PluginRegistry } from './plugin-api/registry.js';
+import { detectGitWorktree, findProjectRoot } from './project-root.js';
+import { isDangerousProjectRoot, setupProject } from './project-setup.js';
+import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
+import { createServer } from './server/server.js';
+import { SubprojectManager } from './subproject/manager.js';
 import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
-import { daemonCommand } from './cli/daemon.js';
-import { installAppCommand } from './cli/install-app.js';
-import { askCommand } from './cli/ask.js';
-import { exportSecurityContextCommand } from './cli/export-security-context.js';
-import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
-import { getDbPath, ensureGlobalDirs, TOPOLOGY_DB_PATH, GLOBAL_CONFIG_PATH, stripJsonComments, DAEMON_LOG_PATH } from './global.js';
-import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
-import { setupProject, isDangerousProjectRoot } from './project-setup.js';
-import { findProjectRoot, detectGitWorktree } from './project-root.js';
 import { TopologyStore } from './topology/topology-db.js';
-import { SubprojectManager } from './subproject/manager.js';
-import { ProjectManager } from './daemon/project-manager.js';
-import { isDaemonRunning } from './daemon/client.js';
-import { StdioSession } from './daemon/router/session.js';
-import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
-import { DEFAULT_DAEMON_PORT } from './global.js';
-import type { TraceMcpConfig } from './config.js';
+import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
 
 /**
  * Resolve DB path for a project:
@@ -99,13 +103,16 @@ function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): voi
 
     const totalEndpoints = services.reduce((sum, s) => sum + s.endpoints, 0);
     const totalClientCalls = services.reduce((sum, s) => sum + s.clientCalls, 0);
-    logger.info({
-      project: projectRoot,
-      subprojects: services.length,
-      serviceNames: services.map((s) => s.name),
-      endpoints: totalEndpoints,
-      clientCalls: totalClientCalls,
-    }, 'Subproject auto-sync completed');
+    logger.info(
+      {
+        project: projectRoot,
+        subprojects: services.length,
+        serviceNames: services.map((s) => s.name),
+        endpoints: totalEndpoints,
+        clientCalls: totalClientCalls,
+      },
+      'Subproject auto-sync completed',
+    );
 
     topoStore.close();
   } catch (e) {
@@ -152,7 +159,10 @@ program
     const indexRoot = worktreeInfo?.mainRoot ?? projectRoot;
 
     if (worktreeInfo) {
-      logger.info({ worktreeRoot: projectRoot, mainRoot: worktreeInfo.mainRoot }, 'Git worktree detected — sharing main repo index');
+      logger.info(
+        { worktreeRoot: projectRoot, mainRoot: worktreeInfo.mainRoot },
+        'Git worktree detected — sharing main repo index',
+      );
     }
 
     // Auto-register the index root (main repo if worktree, otherwise current project).
@@ -167,7 +177,10 @@ program
           setupProject(root);
           logger.info({ root }, 'Auto-registered project');
         } else {
-          logger.debug({ cwd: indexRoot, resolvedRoot: root }, 'Skipped auto-register: project root is above CWD');
+          logger.debug(
+            { cwd: indexRoot, resolvedRoot: root },
+            'Skipped auto-register: project root is above CWD',
+          );
         }
       } catch {
         // Not a project dir — will still try to serve with defaults
@@ -194,9 +207,8 @@ program
     const idleTimeoutMs = (config.idle_timeout_minutes ?? 30) * 60_000;
     const daemonStabilityMs = (config.daemon_stability_seconds ?? 30) * 1_000;
     const drainTimeoutMs = config.backend_swap_drain_ms ?? 5_000;
-    const autoSpawnDaemon = process.env.TRACE_MCP_NO_DAEMON === '1'
-      ? false
-      : (config.auto_spawn_daemon ?? true);
+    const autoSpawnDaemon =
+      process.env.TRACE_MCP_NO_DAEMON === '1' ? false : (config.auto_spawn_daemon ?? true);
     const autoSpawnTimeoutMs = (config.daemon_spawn_timeout_seconds ?? 5) * 1_000;
 
     const session = new StdioSession({
@@ -217,19 +229,32 @@ program
       if (shuttingDown) return;
       shuttingDown = true;
       logger.info({ reason }, 'Shutting down trace-mcp server');
-      try { await session.shutdown(reason); } catch (err) {
+      try {
+        await session.shutdown(reason);
+      } catch (err) {
         logger.warn({ err: String(err) }, 'Session shutdown errored');
       }
       process.exit(0);
     };
 
-    process.on('SIGINT', () => { void shutdown('SIGINT'); });
-    process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+    process.on('SIGINT', () => {
+      void shutdown('SIGINT');
+    });
+    process.on('SIGTERM', () => {
+      void shutdown('SIGTERM');
+    });
     // Orphan prevention: when the MCP client exits, stdin closes.
-    process.stdin.on('end', () => { void shutdown('stdin-end'); });
-    process.stdin.on('close', () => { void shutdown('stdin-close'); });
+    process.stdin.on('end', () => {
+      void shutdown('stdin-end');
+    });
+    process.stdin.on('close', () => {
+      void shutdown('stdin-close');
+    });
 
-    logger.info({ projectRoot, indexRoot, idleTimeoutMs, daemonStabilityMs }, 'Starting trace-mcp stdio session...');
+    logger.info(
+      { projectRoot, indexRoot, idleTimeoutMs, daemonStabilityMs },
+      'Starting trace-mcp stdio session...',
+    );
     await session.bootstrap();
     // session.bootstrap() called stdio.start() which resolves when stdin closes.
     // The process stays alive on the stdin event loop; shutdown handlers above
@@ -238,7 +263,9 @@ program
 
 program
   .command('serve-http')
-  .description('Start MCP server (HTTP/SSE transport) — daemon mode, indexes all registered projects')
+  .description(
+    'Start MCP server (HTTP/SSE transport) — daemon mode, indexes all registered projects',
+  )
   .option('-p, --port <port>', 'Port to listen on', '3741')
   .option('--host <host>', 'Host to bind to', '127.0.0.1')
   .action(async (opts: { port: string; host: string }) => {
@@ -268,7 +295,9 @@ program
         if (!projectManager.getProject(root)) {
           await projectManager.addProject(root);
         }
-      } catch { /* cwd is not a project dir — fine */ }
+      } catch {
+        /* cwd is not a project dir — fine */
+      }
     }
 
     // ── Client tracking ─────────────────────────────────────────
@@ -284,9 +313,22 @@ program
 
     // ── SSE event bus ───────────────────────────────────────────
     type DaemonEvent =
-      | { type: 'indexing_progress'; project: string; pipeline: string; phase: string; processed: number; total: number }
+      | {
+          type: 'indexing_progress';
+          project: string;
+          pipeline: string;
+          phase: string;
+          processed: number;
+          total: number;
+        }
       | { type: 'project_status'; project: string; status: string; error?: string }
-      | { type: 'client_connect'; clientId: string; project: string; transport?: string; name?: string }
+      | {
+          type: 'client_connect';
+          clientId: string;
+          project: string;
+          transport?: string;
+          name?: string;
+        }
       | { type: 'client_update'; clientId: string; project?: string; name?: string }
       | { type: 'client_disconnect'; clientId: string; project?: string };
 
@@ -295,7 +337,11 @@ program
     function broadcastEvent(event: DaemonEvent): void {
       const data = `data: ${JSON.stringify(event)}\n\n`;
       for (const res of sseConnections) {
-        try { res.write(data); } catch { sseConnections.delete(res); }
+        try {
+          res.write(data);
+        } catch {
+          sseConnections.delete(res);
+        }
       }
     }
 
@@ -336,7 +382,9 @@ program
     // Reverse lookup: projectRoot → Set<sessionId> (for cleanup)
     const projectSessions = new Map<string, Set<string>>();
 
-    async function createSessionTransport(projectRoot: string): Promise<StreamableHTTPServerTransport | null> {
+    async function createSessionTransport(
+      projectRoot: string,
+    ): Promise<StreamableHTTPServerTransport | null> {
       const managed = projectManager.getProject(projectRoot);
       if (!managed) return null;
 
@@ -350,8 +398,11 @@ program
       // TopologyStore and DecisionStore are shared via resource pool.
       const deps = resourcePool.acquire(projectRoot, managed.config);
       const handle = createServer(
-        managed.store, managed.registry, managed.config,
-        managed.root, managed.progress,
+        managed.store,
+        managed.registry,
+        managed.config,
+        managed.root,
+        managed.progress,
         deps,
       );
       await handle.server.connect(transport);
@@ -403,8 +454,10 @@ program
       // Store handle and client mapping (will be registered after session ID is assigned)
       // The session ID is set by handleRequest during initialize, so we store by transport ref
       // and move to sessionHandles map after the initialize response.
-      (transport as any).__pendingHandle = handle;
-      (transport as any).__pendingClientId = clientId;
+      (
+        transport as unknown as { __pendingHandle?: import('./server/server.js').ServerHandle }
+      ).__pendingHandle = handle;
+      (transport as unknown as { __pendingClientId?: string }).__pendingClientId = clientId;
 
       return transport;
     }
@@ -482,7 +535,10 @@ program
 
       // CORS: allow Electron renderer (and local dev) to read custom headers
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Expose-Headers', 'X-Graph-Nodes, X-Graph-Edges, X-Graph-Communities');
+      res.setHeader(
+        'Access-Control-Expose-Headers',
+        'X-Graph-Nodes, X-Graph-Edges, X-Graph-Communities',
+      );
       if (req.method === 'OPTIONS') {
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -501,7 +557,8 @@ program
 
       // MCP endpoint — route by session ID, create new session on initialize
       if (url.pathname === '/mcp') {
-        const requestedRoot = url.searchParams.get('project') ?? projectManager.listProjects()[0]?.root;
+        const requestedRoot =
+          url.searchParams.get('project') ?? projectManager.listProjects()[0]?.root;
         if (!requestedRoot) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'No projects registered' }));
@@ -527,12 +584,18 @@ program
             transport = getTransportBySessionId(sessionId);
             if (!transport) {
               res.writeHead(404, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Session not found' }, id: null }));
+              res.end(
+                JSON.stringify({
+                  jsonrpc: '2.0',
+                  error: { code: -32000, message: 'Session not found' },
+                  id: null,
+                }),
+              );
               return;
             }
           } else if (req.method === 'POST' && isInitializeRequest(parsedBody)) {
             // New session: create transport + server
-            transport = await createSessionTransport(projectRoot) ?? undefined;
+            transport = (await createSessionTransport(projectRoot)) ?? undefined;
             if (!transport) {
               res.writeHead(404, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
@@ -547,11 +610,13 @@ program
             // returned 400 "Missing session ID" which some clients treat as
             // a hard protocol error rather than recoverable session loss.
             res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              jsonrpc: '2.0',
-              error: { code: -32000, message: 'Session expired, reinitialize required' },
-              id: null,
-            }));
+            res.end(
+              JSON.stringify({
+                jsonrpc: '2.0',
+                error: { code: -32000, message: 'Session expired, reinitialize required' },
+                id: null,
+              }),
+            );
             return;
           }
 
@@ -568,19 +633,29 @@ program
             idleMonitor.onActivity();
 
             // Move pending handle/clientId to session-keyed maps
-            const pendingHandle = (transport as any).__pendingHandle;
-            const pendingClientId = (transport as any).__pendingClientId;
+            const pendingHandle = (
+              transport as unknown as {
+                __pendingHandle?: import('./server/server.js').ServerHandle;
+              }
+            ).__pendingHandle;
+            const pendingClientId = (transport as unknown as { __pendingClientId?: string })
+              .__pendingClientId;
             if (pendingHandle) {
               sessionHandles.set(sid, pendingHandle);
-              delete (transport as any).__pendingHandle;
+              (
+                transport as unknown as {
+                  __pendingHandle?: import('./server/server.js').ServerHandle;
+                }
+              ).__pendingHandle = undefined;
             }
             if (pendingClientId) {
               sessionClients.set(sid, pendingClientId);
-              delete (transport as any).__pendingClientId;
+              (transport as unknown as { __pendingClientId?: string }).__pendingClientId =
+                undefined;
             }
           }
-        } catch (e: any) {
-          if (e?.message === 'BODY_TOO_LARGE') {
+        } catch (e) {
+          if ((e as Error & { stack?: string })?.message === 'BODY_TOO_LARGE') {
             if (!res.headersSent) {
               res.writeHead(413, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ error: 'Request body too large' }));
@@ -603,14 +678,16 @@ program
           status: p.status,
         }));
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          status: 'ok',
-          transport: 'http',
-          version: PKG_VERSION,
-          uptime: Math.floor((Date.now() - startedAt) / 1000),
-          pid: process.pid,
-          projects,
-        }));
+        res.end(
+          JSON.stringify({
+            status: 'ok',
+            transport: 'http',
+            version: PKG_VERSION,
+            uptime: Math.floor((Date.now() - startedAt) / 1000),
+            pid: process.pid,
+            projects,
+          }),
+        );
         return;
       }
 
@@ -639,7 +716,7 @@ program
         try {
           const db = managed.store.db;
           let sql: string;
-          let params: any[];
+          let params: unknown[];
 
           if (isolated) {
             sql = `SELECT s.id, s.fqn, s.kind, f.path as file_path, s.line_start, s.line_end
@@ -650,16 +727,28 @@ program
                    LEFT JOIN edges e_in ON e_in.target_node_id = n.id
                    WHERE e_out.id IS NULL AND e_in.id IS NULL`;
             params = [];
-            if (query) { sql += ` AND s.fqn LIKE ?`; params.push(`%${query}%`); }
-            if (kind) { sql += ` AND s.kind = ?`; params.push(kind); }
+            if (query) {
+              sql += ` AND s.fqn LIKE ?`;
+              params.push(`%${query}%`);
+            }
+            if (kind) {
+              sql += ` AND s.kind = ?`;
+              params.push(kind);
+            }
             sql += ` LIMIT ?`;
             params.push(limit);
           } else {
             sql = `SELECT s.id, s.fqn, s.kind, f.path as file_path, s.line_start, s.line_end
                    FROM symbols s JOIN files f ON f.id = s.file_id WHERE 1=1`;
             params = [];
-            if (query) { sql += ` AND s.fqn LIKE ?`; params.push(`%${query}%`); }
-            if (kind) { sql += ` AND s.kind = ?`; params.push(kind); }
+            if (query) {
+              sql += ` AND s.fqn LIKE ?`;
+              params.push(`%${query}%`);
+            }
+            if (kind) {
+              sql += ` AND s.kind = ?`;
+              params.push(kind);
+            }
             sql += ` ORDER BY s.fqn LIMIT ?`;
             params.push(limit);
           }
@@ -667,9 +756,11 @@ program
           const symbols = db.prepare(sql).all(...params);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ symbols, count: symbols.length }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Query failed' }),
+          );
         }
         return;
       }
@@ -691,16 +782,21 @@ program
         }
         try {
           const db = managed.store.db;
-          const symbol = db.prepare(`
+          const symbol = db
+            .prepare(`
             SELECT s.id, s.fqn, s.kind, f.path as file_path, s.line_start, s.line_end
             FROM symbols s JOIN files f ON f.id = s.file_id WHERE s.id = ?
-          `).get(symbolId);
+          `)
+            .get(symbolId);
           // Find the node for this symbol
-          const node = db.prepare(`SELECT id FROM nodes WHERE node_type = 'symbol' AND ref_id = ?`).get(symbolId) as any;
-          let outgoing: any[] = [];
-          let incoming: any[] = [];
+          const node = db
+            .prepare(`SELECT id FROM nodes WHERE node_type = 'symbol' AND ref_id = ?`)
+            .get(symbolId) as Record<string, unknown> | undefined;
+          let outgoing: unknown[] = [];
+          let incoming: unknown[] = [];
           if (node) {
-            outgoing = db.prepare(`
+            outgoing = db
+              .prepare(`
               SELECT et.name as type, e.metadata,
                      ts.id, ts.fqn, ts.kind, tf.path as file_path
               FROM edges e
@@ -709,8 +805,10 @@ program
               LEFT JOIN symbols ts ON tn.node_type = 'symbol' AND tn.ref_id = ts.id
               LEFT JOIN files tf ON tf.id = ts.file_id
               WHERE e.source_node_id = ?
-            `).all(node.id);
-            incoming = db.prepare(`
+            `)
+              .all(node.id);
+            incoming = db
+              .prepare(`
               SELECT et.name as type, e.metadata,
                      ss.id, ss.fqn, ss.kind, sf.path as file_path
               FROM edges e
@@ -719,13 +817,16 @@ program
               LEFT JOIN symbols ss ON sn.node_type = 'symbol' AND sn.ref_id = ss.id
               LEFT JOIN files sf ON sf.id = ss.file_id
               WHERE e.target_node_id = ?
-            `).all(node.id);
+            `)
+              .all(node.id);
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ symbol, nodeId: node?.id ?? null, outgoing, incoming }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Query failed' }),
+          );
         }
         return;
       }
@@ -748,22 +849,41 @@ program
           const scope = url.searchParams.get('scope') ?? 'project';
           const depth = parseInt(url.searchParams.get('depth') ?? '2', 10);
           const granularity = (url.searchParams.get('granularity') ?? 'file') as 'file' | 'symbol';
-          const layout = (url.searchParams.get('layout') ?? 'force') as 'force' | 'hierarchical' | 'radial';
+          const layout = (url.searchParams.get('layout') ?? 'force') as
+            | 'force'
+            | 'hierarchical'
+            | 'radial';
           const hideIsolated = url.searchParams.get('hideIsolated') !== 'false';
           const symbolKinds = url.searchParams.get('symbolKinds')?.split(',').filter(Boolean);
-          const maxFiles = url.searchParams.has('maxFiles') ? parseInt(url.searchParams.get('maxFiles')!, 10) : undefined;
-          const maxNodes = url.searchParams.has('maxNodes') ? parseInt(url.searchParams.get('maxNodes')!, 10) : undefined;
+          const maxFiles = url.searchParams.has('maxFiles')
+            ? parseInt(url.searchParams.get('maxFiles')!, 10)
+            : undefined;
+          const maxNodes = url.searchParams.has('maxNodes')
+            ? parseInt(url.searchParams.get('maxNodes')!, 10)
+            : undefined;
           const includeBottlenecks = url.searchParams.get('includeBottlenecks') === 'true';
 
           // Open topoStore for subproject support (best-effort)
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
           try {
             if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-          } catch { /* subproject support is optional */ }
+          } catch {
+            /* subproject support is optional */
+          }
 
           try {
             const { nodes, edges, communities } = buildGraphData(managed.store, {
-              scope, depth, granularity, layout, hideIsolated, symbolKinds, maxFiles, maxNodes, topoStore, projectRoot, includeBottlenecks,
+              scope,
+              depth,
+              granularity,
+              layout,
+              hideIsolated,
+              symbolKinds,
+              maxFiles,
+              maxNodes,
+              topoStore,
+              projectRoot,
+              includeBottlenecks,
             });
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -771,9 +891,13 @@ program
           } finally {
             topoStore?.close();
           }
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Graph build failed' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Graph build failed',
+            }),
+          );
         }
         return;
       }
@@ -796,22 +920,43 @@ program
           const scope = url.searchParams.get('scope') ?? 'project';
           const depth = parseInt(url.searchParams.get('depth') ?? '2', 10);
           const granularity = (url.searchParams.get('granularity') ?? 'file') as 'file' | 'symbol';
-          const layout = (url.searchParams.get('layout') ?? 'force') as 'force' | 'hierarchical' | 'radial';
+          const layout = (url.searchParams.get('layout') ?? 'force') as
+            | 'force'
+            | 'hierarchical'
+            | 'radial';
           const hideIsolated = url.searchParams.get('hideIsolated') !== 'false';
           const symbolKinds = url.searchParams.get('symbolKinds')?.split(',').filter(Boolean);
-          const maxFiles = url.searchParams.has('maxFiles') ? parseInt(url.searchParams.get('maxFiles')!, 10) : undefined;
-          const maxNodes = url.searchParams.has('maxNodes') ? parseInt(url.searchParams.get('maxNodes')!, 10) : undefined;
-          const highlightDepth = url.searchParams.has('highlightDepth') ? parseInt(url.searchParams.get('highlightDepth')!, 10) : undefined;
+          const maxFiles = url.searchParams.has('maxFiles')
+            ? parseInt(url.searchParams.get('maxFiles')!, 10)
+            : undefined;
+          const maxNodes = url.searchParams.has('maxNodes')
+            ? parseInt(url.searchParams.get('maxNodes')!, 10)
+            : undefined;
+          const highlightDepth = url.searchParams.has('highlightDepth')
+            ? parseInt(url.searchParams.get('highlightDepth')!, 10)
+            : undefined;
 
           // Open topoStore for subproject support (best-effort)
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
           try {
             if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-          } catch { /* subproject support is optional */ }
+          } catch {
+            /* subproject support is optional */
+          }
 
           try {
             const { nodes, edges, communities } = buildGraphData(managed.store, {
-              scope, depth, granularity, layout, hideIsolated, symbolKinds, maxFiles, maxNodes, topoStore, projectRoot, highlightDepth,
+              scope,
+              depth,
+              granularity,
+              layout,
+              hideIsolated,
+              symbolKinds,
+              maxFiles,
+              maxNodes,
+              topoStore,
+              projectRoot,
+              highlightDepth,
             });
             let html = generateHtml(nodes, edges, communities, layout, { highlightDepth });
 
@@ -827,7 +972,7 @@ program
                 #stats { display: none !important; }
                 .node text { fill: ${textColor} !important; }
               </style>`;
-              html = html.replace('</head>', embeddedCSS + '</head>');
+              html = html.replace('</head>', `${embeddedCSS}</head>`);
             }
 
             // Send stats via headers so the client can skip the separate JSON fetch
@@ -841,9 +986,9 @@ program
           } finally {
             topoStore?.close();
           }
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end(e?.message ?? 'Graph build failed');
+          res.end((e as Error & { stack?: string })?.message ?? 'Graph build failed');
         }
         return;
       }
@@ -864,32 +1009,52 @@ program
         }
         try {
           const db = managed.store.db;
-          const totalSymbols = (db.prepare('SELECT COUNT(*) as c FROM symbols').get() as any)?.c ?? 0;
-          const totalEdges = (db.prepare('SELECT COUNT(*) as c FROM edges').get() as any)?.c ?? 0;
-          const isolatedCount = (db.prepare(`
+          const totalSymbols =
+            (db.prepare('SELECT COUNT(*) as c FROM symbols').get() as { c: number })?.c ?? 0;
+          const totalEdges =
+            (db.prepare('SELECT COUNT(*) as c FROM edges').get() as { c: number })?.c ?? 0;
+          const isolatedCount =
+            (
+              db
+                .prepare(`
             SELECT COUNT(*) as c FROM symbols s
             WHERE NOT EXISTS (
               SELECT 1 FROM nodes n
               JOIN edges e ON e.source_node_id = n.id OR e.target_node_id = n.id
               WHERE n.node_type = 'symbol' AND n.ref_id = s.id
             )
-          `).get() as any)?.c ?? 0;
+          `)
+                .get() as { c: number } | undefined
+            )?.c ?? 0;
 
-          const kindBreakdown = db.prepare('SELECT kind, COUNT(*) as count FROM symbols GROUP BY kind ORDER BY count DESC').all();
-          const edgeBreakdown = db.prepare(`
+          const kindBreakdown = db
+            .prepare(
+              'SELECT kind, COUNT(*) as count FROM symbols GROUP BY kind ORDER BY count DESC',
+            )
+            .all();
+          const edgeBreakdown = db
+            .prepare(`
             SELECT et.name as type, COUNT(*) as count
             FROM edges e JOIN edge_types et ON et.id = e.edge_type_id
             GROUP BY et.name ORDER BY count DESC
-          `).all();
+          `)
+            .all();
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            totalSymbols, totalEdges, isolatedCount,
-            kindBreakdown, edgeBreakdown,
-          }));
-        } catch (e: any) {
+          res.end(
+            JSON.stringify({
+              totalSymbols,
+              totalEdges,
+              isolatedCount,
+              kindBreakdown,
+              edgeBreakdown,
+            }),
+          );
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Query failed' }),
+          );
         }
         return;
       }
@@ -910,15 +1075,24 @@ program
         }
         try {
           const db = managed.store.db;
-          const files = (db.prepare('SELECT COUNT(*) as c FROM files').get() as any)?.c ?? 0;
-          const symbols = (db.prepare('SELECT COUNT(*) as c FROM symbols').get() as any)?.c ?? 0;
-          const edges = (db.prepare('SELECT COUNT(*) as c FROM edges').get() as any)?.c ?? 0;
-          const lastRow = db.prepare('SELECT MAX(indexed_at) as t FROM files').get() as any;
+          const files =
+            (db.prepare('SELECT COUNT(*) as c FROM files').get() as { c: number })?.c ?? 0;
+          const symbols =
+            (db.prepare('SELECT COUNT(*) as c FROM symbols').get() as { c: number })?.c ?? 0;
+          const edges =
+            (db.prepare('SELECT COUNT(*) as c FROM edges').get() as { c: number })?.c ?? 0;
+          const lastRow = db.prepare('SELECT MAX(indexed_at) as t FROM files').get() as
+            | { t: string | null }
+            | undefined;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ files, symbols, edges, lastIndexed: lastRow?.t ?? null }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Failed to get stats' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to get stats',
+            }),
+          );
         }
         return;
       }
@@ -939,14 +1113,18 @@ program
         }
         const categoryParam = url.searchParams.get('category');
         const categories = categoryParam
-          ? categoryParam.split(',').map((c) => c.trim()).filter(Boolean)
+          ? categoryParam
+              .split(',')
+              .map((c) => c.trim())
+              .filter(Boolean)
           : undefined;
         const priorityThreshold = url.searchParams.get('priority_threshold') ?? undefined;
         const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '500', 10), 2000);
         try {
+          type SmellOpts = NonNullable<Parameters<typeof scanCodeSmells>[2]>;
           const result = scanCodeSmells(managed.store, projectRoot, {
-            category: categories as any,
-            priority_threshold: priorityThreshold as any,
+            category: categories as SmellOpts['category'],
+            priority_threshold: priorityThreshold as SmellOpts['priority_threshold'],
             limit,
           });
           if (result.isErr()) {
@@ -956,9 +1134,13 @@ program
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(result.value));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Failed to scan code smells' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to scan code smells',
+            }),
+          );
         }
         return;
       }
@@ -997,7 +1179,10 @@ program
           for (const p of multi.projects) {
             for (const u of p.unknown) {
               const existing = unknownMap.get(u.name);
-              if (!existing || (needPrio[u.needs_plugin] ?? 3) < (needPrio[existing.needs_plugin] ?? 3)) {
+              if (
+                !existing ||
+                (needPrio[u.needs_plugin] ?? 3) < (needPrio[existing.needs_plugin] ?? 3)
+              ) {
                 unknownMap.set(u.name, u);
               }
             }
@@ -1007,18 +1192,24 @@ program
           );
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            coverage: {
-              total_significant: multi.aggregate.total_significant,
-              covered: multi.aggregate.covered,
-              coverage_pct: multi.aggregate.coverage_pct,
-            },
-            gaps,
-            unknown,
-          }));
-        } catch (e: any) {
+          res.end(
+            JSON.stringify({
+              coverage: {
+                total_significant: multi.aggregate.total_significant,
+                covered: multi.aggregate.covered,
+                coverage_pct: multi.aggregate.coverage_pct,
+              },
+              gaps,
+              unknown,
+            }),
+          );
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Failed to detect coverage' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to detect coverage',
+            }),
+          );
         }
         return;
       }
@@ -1136,12 +1327,18 @@ program
             `;
           }
 
-          const files = db.prepare(sql).all(...scopeParams, limit) as { path: string; symbols: number; edges: number }[];
+          const files = db.prepare(sql).all(...scopeParams, limit) as {
+            path: string;
+            symbols: number;
+            edges: number;
+          }[];
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ files, sort: sortBy }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Query failed' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Query failed' }),
+          );
         }
         return;
       }
@@ -1152,7 +1349,9 @@ program
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
           try {
             if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-          } catch { /* subproject support is optional */ }
+          } catch {
+            /* subproject support is optional */
+          }
 
           if (!topoStore) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1181,9 +1380,13 @@ program
           } finally {
             topoStore.close();
           }
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Subproject query failed' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Subproject query failed',
+            }),
+          );
         }
         return;
       }
@@ -1191,10 +1394,15 @@ program
       // REST API: update service project_group
       if (req.method === 'PATCH' && url.pathname === '/api/projects/services') {
         let body = '';
-        req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+        req.on('data', (chunk: Buffer) => {
+          body += chunk.toString();
+        });
         req.on('end', () => {
           try {
-            const { serviceId, projectGroup } = JSON.parse(body) as { serviceId: number; projectGroup: string | null };
+            const { serviceId, projectGroup } = JSON.parse(body) as {
+              serviceId: number;
+              projectGroup: string | null;
+            };
             if (serviceId == null) {
               res.writeHead(400, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ error: 'serviceId is required' }));
@@ -1205,9 +1413,13 @@ program
             try {
               ensureGlobalDirs();
               topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-            } catch (e: any) {
+            } catch (e) {
               res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: e?.message ?? 'Failed to open topology DB' }));
+              res.end(
+                JSON.stringify({
+                  error: (e as Error & { stack?: string })?.message ?? 'Failed to open topology DB',
+                }),
+              );
               return;
             }
 
@@ -1218,7 +1430,7 @@ program
             } finally {
               topoStore.close();
             }
-          } catch (e: any) {
+          } catch (_e) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Invalid JSON body' }));
           }
@@ -1229,7 +1441,9 @@ program
       // REST API: add a subproject to a project
       if (req.method === 'POST' && url.pathname === '/api/projects/subprojects') {
         let body = '';
-        req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+        req.on('data', (chunk: Buffer) => {
+          body += chunk.toString();
+        });
         req.on('end', () => {
           try {
             const { repoPath, project } = JSON.parse(body) as { repoPath: string; project: string };
@@ -1243,9 +1457,13 @@ program
             try {
               ensureGlobalDirs();
               topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-            } catch (e: any) {
+            } catch (e) {
               res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: e?.message ?? 'Failed to open topology DB' }));
+              res.end(
+                JSON.stringify({
+                  error: (e as Error & { stack?: string })?.message ?? 'Failed to open topology DB',
+                }),
+              );
               return;
             }
 
@@ -1254,13 +1472,17 @@ program
               const result = manager.add(repoPath, project);
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify(result));
-            } catch (e: any) {
+            } catch (e) {
               res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: e?.message ?? 'Failed to add subproject' }));
+              res.end(
+                JSON.stringify({
+                  error: (e as Error & { stack?: string })?.message ?? 'Failed to add subproject',
+                }),
+              );
             } finally {
               topoStore?.close();
             }
-          } catch (e: any) {
+          } catch (_e) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Invalid JSON body' }));
           }
@@ -1281,7 +1503,9 @@ program
           let topoStore: InstanceType<typeof TopologyStore> | undefined;
           try {
             if (fs.existsSync(TOPOLOGY_DB_PATH)) topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
-          } catch { /* subproject support is optional */ }
+          } catch {
+            /* subproject support is optional */
+          }
 
           if (!topoStore) {
             res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -1302,9 +1526,13 @@ program
           } finally {
             topoStore.close();
           }
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Subproject delete failed' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Subproject delete failed',
+            }),
+          );
         }
         return;
       }
@@ -1361,9 +1589,11 @@ program
               'Rejected dangerous project root — likely an MCP client spawned trace-mcp with cwd=/ or similar',
             );
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              error: `Refusing to register "${absRoot}" as a project: ${dangerReason}. Configure a "cwd" on the MCP server entry pointing at a specific source directory.`,
-            }));
+            res.end(
+              JSON.stringify({
+                error: `Refusing to register "${absRoot}" as a project: ${dangerReason}. Configure a "cwd" on the MCP server entry pointing at a specific source directory.`,
+              }),
+            );
             return;
           }
 
@@ -1373,9 +1603,18 @@ program
               await projectManager.addProject(ancestor.root);
               subscribeToProjectProgress(ancestor.root);
             }
-            logger.info({ requested: absRoot, parent: ancestor.root }, 'Routing subdirectory request to registered parent project');
+            logger.info(
+              { requested: absRoot, parent: ancestor.root },
+              'Routing subdirectory request to registered parent project',
+            );
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'using_parent', project: ancestor.root, requested: absRoot }));
+            res.end(
+              JSON.stringify({
+                status: 'using_parent',
+                project: ancestor.root,
+                requested: absRoot,
+              }),
+            );
             return;
           }
 
@@ -1384,9 +1623,13 @@ program
           broadcastEvent({ type: 'project_status', project: absRoot, status: 'indexing' });
           res.writeHead(201, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'added', project: absRoot }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Failed to add project' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to add project',
+            }),
+          );
         }
         return;
       }
@@ -1424,16 +1667,41 @@ program
       if (req.method === 'POST' && url.pathname === '/api/clients') {
         try {
           const body = await collectBody(req);
-          const { id, project, transport: t, name } = JSON.parse(body.toString()) as { id: string; project: string; transport: string; name?: string };
+          const {
+            id,
+            project,
+            transport: t,
+            name,
+          } = JSON.parse(body.toString()) as {
+            id: string;
+            project: string;
+            transport: string;
+            name?: string;
+          };
           const now = new Date().toISOString();
-          clients.set(id, { id, name, project, transport: t || 'stdio', connectedAt: now, lastSeen: now });
-          broadcastEvent({ type: 'client_connect', clientId: id, transport: t || 'stdio', project, name });
+          clients.set(id, {
+            id,
+            name,
+            project,
+            transport: t || 'stdio',
+            connectedAt: now,
+            lastSeen: now,
+          });
+          broadcastEvent({
+            type: 'client_connect',
+            clientId: id,
+            transport: t || 'stdio',
+            project,
+            name,
+          });
           idleMonitor.onActivity();
           res.writeHead(201, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'registered' }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Bad request' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Bad request' }),
+          );
         }
         return;
       }
@@ -1447,13 +1715,20 @@ program
           if (existing) {
             if (name) existing.name = name;
             existing.lastSeen = new Date().toISOString();
-            broadcastEvent({ type: 'client_update' as any, clientId: id, name, project: existing.project });
+            broadcastEvent({
+              type: 'client_update',
+              clientId: id,
+              name,
+              project: existing.project,
+            });
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'updated' }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Bad request' }));
+          res.end(
+            JSON.stringify({ error: (e as Error & { stack?: string })?.message ?? 'Bad request' }),
+          );
         }
         return;
       }
@@ -1476,17 +1751,19 @@ program
       if (req.method === 'GET' && url.pathname === '/api/settings') {
         const raw = loadGlobalConfigRaw();
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          settings: raw,
-          path: GLOBAL_CONFIG_PATH,
-          daemon: {
-            port,
-            host,
-            log_path: DAEMON_LOG_PATH,
-            uptime: Math.floor((Date.now() - startedAt) / 1000),
-            pid: process.pid,
-          },
-        }));
+        res.end(
+          JSON.stringify({
+            settings: raw,
+            path: GLOBAL_CONFIG_PATH,
+            daemon: {
+              port,
+              host,
+              log_path: DAEMON_LOG_PATH,
+              uptime: Math.floor((Date.now() - startedAt) / 1000),
+              pid: process.pid,
+            },
+          }),
+        );
         return;
       }
 
@@ -1514,21 +1791,30 @@ program
           fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(merged, null, 2));
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'updated', settings: merged }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'Invalid JSON body' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Invalid JSON body',
+            }),
+          );
         }
         return;
       }
 
       // REST API: AI activity — recent AI requests with timing/status
       if (req.method === 'GET' && url.pathname === '/api/ai/activity') {
-        const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1), 200);
+        const limit = Math.min(
+          Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10) || 50, 1),
+          200,
+        );
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          entries: aiTracker.getRecent(limit),
-          stats: aiTracker.getStats(),
-        }));
+        res.end(
+          JSON.stringify({
+            entries: aiTracker.getRecent(limit),
+            stats: aiTracker.getStats(),
+          }),
+        );
         return;
       }
 
@@ -1549,14 +1835,18 @@ program
         try {
           const { resolveProvider } = await import('./ai/ask-shared.js');
           // Reload config from disk so we pick up settings changed via the UI
-          const freshConfig = (await loadConfig(projectRoot));
+          const freshConfig = await loadConfig(projectRoot);
           const config = freshConfig.isOk() ? freshConfig.value : managed.config;
           const provider = resolveProvider({}, config);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ provider: provider.name }));
-        } catch (e: any) {
+        } catch (e) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: e?.message ?? 'No provider available' }));
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'No provider available',
+            }),
+          );
         }
         return;
       }
@@ -1576,7 +1866,12 @@ program
           return;
         }
 
-        let body: { messages?: { role: string; content: string }[]; model?: string; provider?: string; budget?: number };
+        let body: {
+          messages?: { role: string; content: string }[];
+          model?: string;
+          provider?: string;
+          budget?: number;
+        };
         try {
           const raw = await collectBody(req);
           body = JSON.parse(raw.toString());
@@ -1594,7 +1889,7 @@ program
         }
 
         // Find the latest user message for context retrieval
-        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+        const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
         if (!lastUserMsg) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'No user message found' }));
@@ -1605,7 +1900,7 @@ program
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
+          Connection: 'keep-alive',
         });
 
         const sendEvent = (data: Record<string, unknown>) => {
@@ -1613,19 +1908,21 @@ program
         };
 
         try {
-          const { resolveProvider, gatherContext, buildSystemPrompt, stripContextFromMessage } = await import('./ai/ask-shared.js');
-          const freshConfig = (await loadConfig(projectRoot));
+          const { resolveProvider, gatherContext, buildSystemPrompt, stripContextFromMessage } =
+            await import('./ai/ask-shared.js');
+          const freshConfig = await loadConfig(projectRoot);
           const config = freshConfig.isOk() ? freshConfig.value : managed.config;
-          const provider = resolveProvider(
-            { model: body.model, provider: body.provider },
-            config,
-          );
+          const provider = resolveProvider({ model: body.model, provider: body.provider }, config);
 
           // Phase 1: Retrieve context
           sendEvent({ type: 'phase', phase: 'retrieving' });
           const budget = body.budget ?? 12000;
           const context = await gatherContext(
-            projectRoot, managed.store, managed.registry, lastUserMsg.content, budget,
+            projectRoot,
+            managed.store,
+            managed.registry,
+            lastUserMsg.content,
+            budget,
           );
 
           // Phase 2: Build message array for LLM
@@ -1634,7 +1931,11 @@ program
           const chatMessages = [
             systemMsg,
             // Strip context from older user messages
-            ...messages.slice(0, -1).map(m => stripContextFromMessage(m as any)),
+            ...messages
+              .slice(0, -1)
+              .map((m) =>
+                stripContextFromMessage(m as Parameters<typeof stripContextFromMessage>[0]),
+              ),
             // Latest user message with fresh context
             {
               role: 'user' as const,
@@ -1653,8 +1954,11 @@ program
           }
 
           sendEvent({ type: 'done' });
-        } catch (e: any) {
-          sendEvent({ type: 'error', message: e?.message ?? 'Unknown error' });
+        } catch (e) {
+          sendEvent({
+            type: 'error',
+            message: (e as Error & { stack?: string })?.message ?? 'Unknown error',
+          });
         }
 
         res.end();
@@ -1666,24 +1970,33 @@ program
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
+          Connection: 'keep-alive',
         });
         // Send initial snapshot of all project statuses
         for (const p of projectManager.listProjects()) {
           const snap = p.progress.snapshot();
-          res.write(`data: ${JSON.stringify({
-            type: 'project_status',
-            project: p.root,
-            status: p.status,
-            error: p.error,
-            progress: snap,
-          })}\n\n`);
+          res.write(
+            `data: ${JSON.stringify({
+              type: 'project_status',
+              project: p.root,
+              status: p.status,
+              error: p.error,
+              progress: snap,
+            })}\n\n`,
+          );
         }
         sseConnections.add(res);
-        req.on('close', () => { sseConnections.delete(res); });
+        req.on('close', () => {
+          sseConnections.delete(res);
+        });
         // Keep-alive ping every 30s
         const keepAlive = setInterval(() => {
-          try { res.write(': ping\n\n'); } catch { clearInterval(keepAlive); sseConnections.delete(res); }
+          try {
+            res.write(': ping\n\n');
+          } catch {
+            clearInterval(keepAlive);
+            sseConnections.delete(res);
+          }
         }, 30_000);
         req.on('close', () => clearInterval(keepAlive));
         return;
@@ -1696,7 +2009,11 @@ program
     const shutdown = async () => {
       // Close SSE connections
       for (const res of sseConnections) {
-        try { res.end(); } catch { /* ignore */ }
+        try {
+          res.end();
+        } catch {
+          /* ignore */
+        }
       }
       sseConnections.clear();
       // Unsubscribe progress listeners
@@ -1737,9 +2054,10 @@ program
     // immediate respawn loop — disable in that case. Otherwise default 15 min.
     const managedByLaunchd = process.env.TRACE_MCP_MANAGED_BY === 'launchd';
     const defaultIdleMinutes = managedByLaunchd ? 0 : 15;
-    const configuredIdleMinutes = typeof globalRaw.daemon_idle_exit_minutes === 'number'
-      ? globalRaw.daemon_idle_exit_minutes
-      : defaultIdleMinutes;
+    const configuredIdleMinutes =
+      typeof globalRaw.daemon_idle_exit_minutes === 'number'
+        ? globalRaw.daemon_idle_exit_minutes
+        : defaultIdleMinutes;
     const idleMonitor = new DaemonIdleMonitor({
       idleTimeoutMs: configuredIdleMinutes * 60_000,
       isBusy: () => clients.size > 0 || sessionTransports.size > 0 || sseConnections.size > 0,
@@ -1767,7 +2085,9 @@ program
       let pkgPath: string | null = null;
       try {
         pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
-      } catch { /* unresolvable (e.g. bundled into a single file) — skip */ }
+      } catch {
+        /* unresolvable (e.g. bundled into a single file) — skip */
+      }
       if (pkgPath) {
         const stalenessTimer = setInterval(() => {
           try {
@@ -1779,7 +2099,9 @@ program
               );
               void shutdown();
             }
-          } catch { /* transient read error — try again next tick */ }
+          } catch {
+            /* transient read error — try again next tick */
+          }
         }, 10 * 60_000);
         stalenessTimer.unref();
       }
@@ -1787,12 +2109,17 @@ program
 
     httpServer.listen(port, host, () => {
       const projectCount = projectManager.listProjects().length;
-      logger.info({
-        host, port, projectCount,
-        endpoint: `http://${host}:${port}/mcp`,
-        idleExitMinutes: configuredIdleMinutes,
-        managedByLaunchd,
-      }, 'trace-mcp daemon started');
+      logger.info(
+        {
+          host,
+          port,
+          projectCount,
+          endpoint: `http://${host}:${port}/mcp`,
+          idleExitMinutes: configuredIdleMinutes,
+          managedByLaunchd,
+        },
+        'trace-mcp daemon started',
+      );
     });
   });
 
@@ -1872,7 +2199,10 @@ program
 program
   .command('setup-hooks')
   .description('Install Claude Code PreToolUse guard hook (alias: use `trace-mcp init` instead)')
-  .option('--global', 'Install to ~/.claude/settings.json (default: project-level .claude/settings.local.json)')
+  .option(
+    '--global',
+    'Install to ~/.claude/settings.json (default: project-level .claude/settings.local.json)',
+  )
   .option('--uninstall', 'Remove the hook')
   .action((opts: { global?: boolean; uninstall?: boolean }) => {
     if (opts.uninstall) {
@@ -1920,6 +2250,7 @@ program.addCommand(bundlesCommand);
 program.addCommand(subprojectCommand);
 program.addCommand(memoryCommand);
 program.addCommand(analyticsCommand);
+program.addCommand(benchmarkCommand);
 program.addCommand(statusCommand);
 program.addCommand(visualizeCommand);
 program.addCommand(daemonCommand);

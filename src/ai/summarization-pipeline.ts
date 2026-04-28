@@ -3,13 +3,14 @@
  * Runs after indexing to populate the symbols.summary column using the fast inference model.
  * Uses CachedInferenceService to avoid redundant LLM calls across re-indexes.
  */
-import type { InferenceService, VectorStore } from './interfaces.js';
-import type { Store } from '../db/store.js';
-import type { ProgressState } from '../progress.js';
-import { PROMPTS } from './prompts.js';
-import { logger } from '../logger.js';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Store } from '../db/store.js';
+import { logger } from '../logger.js';
+import type { ProgressState } from '../progress.js';
+import type { InferenceService, VectorStore } from './interfaces.js';
+import { PROMPTS } from './prompts.js';
 
 interface SummarizationConfig {
   batchSize: number;
@@ -40,7 +41,11 @@ export class SummarizationPipeline {
     if (total === 0) return 0;
 
     this.progress?.update('summarization', {
-      phase: 'running', processed: 0, total, startedAt: Date.now(), completedAt: 0,
+      phase: 'running',
+      processed: 0,
+      total,
+      startedAt: Date.now(),
+      completedAt: 0,
     });
 
     try {
@@ -58,15 +63,21 @@ export class SummarizationPipeline {
         }
 
         this.progress?.update('summarization', { processed: totalSummarized });
-        logger.debug({ batch: batch.length, total: totalSummarized }, 'Summarization batch complete');
+        logger.debug(
+          { batch: batch.length, total: totalSummarized },
+          'Summarization batch complete',
+        );
       } while (batch.length === this.config.batchSize);
 
       this.progress?.update('summarization', {
-        phase: 'completed', processed: totalSummarized, completedAt: Date.now(),
+        phase: 'completed',
+        processed: totalSummarized,
+        completedAt: Date.now(),
       });
     } catch (e) {
       this.progress?.update('summarization', {
-        phase: 'error', error: e instanceof Error ? e.message : String(e),
+        phase: 'error',
+        error: e instanceof Error ? e.message : String(e),
       });
       throw e;
     }
@@ -127,7 +138,7 @@ export class SummarizationPipeline {
       const slice = content.slice(byteStart, byteEnd);
       const lines = slice.split('\n');
       if (lines.length > MAX_SOURCE_LINES) {
-        return lines.slice(0, MAX_SOURCE_LINES).join('\n') + '\n// ... truncated';
+        return `${lines.slice(0, MAX_SOURCE_LINES).join('\n')}\n// ... truncated`;
       }
       return slice;
     } catch {

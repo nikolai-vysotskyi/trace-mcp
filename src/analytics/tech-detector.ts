@@ -5,9 +5,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { KNOWN_PACKAGES, type PackageMeta } from './known-packages.js';
-import { logger } from '../logger.js';
 import { discoverChildProjectsRecursive } from '../project-root.js';
+import { KNOWN_PACKAGES, type PackageMeta } from './known-packages.js';
 
 interface DependencyInfo {
   name: string;
@@ -35,9 +34,9 @@ interface UnknownPackage {
   name: string;
   version: string;
   ecosystem: Ecosystem;
-  language_fallback: boolean;   // true = language plugin indexes this code anyway
-  needs_plugin: 'likely' | 'maybe' | 'no';  // heuristic: should we add a dedicated plugin?
-  reason: string;               // human-readable explanation
+  language_fallback: boolean; // true = language plugin indexes this code anyway
+  needs_plugin: 'likely' | 'maybe' | 'no'; // heuristic: should we add a dedicated plugin?
+  reason: string; // human-readable explanation
 }
 
 interface CoverageReport {
@@ -173,7 +172,11 @@ function parseGemfile(filePath: string): RawDep[] {
 
 // --- Manifest detection ---
 
-const MANIFEST_PARSERS: { file: string; ecosystem: Ecosystem; parser: (path: string) => RawDep[] }[] = [
+const MANIFEST_PARSERS: {
+  file: string;
+  ecosystem: Ecosystem;
+  parser: (path: string) => RawDep[];
+}[] = [
   { file: 'package.json', ecosystem: 'npm', parser: parsePackageJson },
   { file: 'composer.json', ecosystem: 'composer', parser: parseComposerJson },
   { file: 'requirements.txt', ecosystem: 'pip', parser: parseRequirementsTxt },
@@ -185,7 +188,7 @@ const MANIFEST_PARSERS: { file: string; ecosystem: Ecosystem; parser: (path: str
 // --- Unknown package heuristics ---
 
 /** All ecosystems have language-level indexing — trace-mcp always parses source code by language */
-const LANGUAGE_FALLBACK_LANGUAGES: Record<Ecosystem, string> = {
+const _LANGUAGE_FALLBACK_LANGUAGES: Record<Ecosystem, string> = {
   npm: 'TypeScript/JavaScript',
   composer: 'PHP',
   pip: 'Python',
@@ -204,10 +207,23 @@ const FRAMEWORK_SIGNAL_PATTERNS: RegExp[] = [
   /^(django|flask|fastapi|rails|spring|express|nestjs|nuxt|next)-/i,
 ];
 
-function assessNeedsPlugin(name: string, ecosystem: Ecosystem): { needs: UnknownPackage['needs_plugin']; reason: string } {
+function assessNeedsPlugin(
+  name: string,
+  ecosystem: Ecosystem,
+): { needs: UnknownPackage['needs_plugin']; reason: string } {
   // Scoped org packages with known framework prefixes
   const frameworkPrefixes: Record<Ecosystem, string[]> = {
-    npm: ['@nestjs/', '@angular/', '@vue/', '@nuxt/', '@trpc/', '@apollo/', '@prisma/', '@tanstack/', '@hono/'],
+    npm: [
+      '@nestjs/',
+      '@angular/',
+      '@vue/',
+      '@nuxt/',
+      '@trpc/',
+      '@apollo/',
+      '@prisma/',
+      '@tanstack/',
+      '@hono/',
+    ],
     composer: ['laravel/', 'symfony/', 'livewire/', 'spatie/', 'filament/'],
     pip: ['django-', 'flask-', 'fastapi-', 'celery-', 'starlette-'],
     go: ['github.com/gin-', 'github.com/labstack/', 'github.com/gofiber/', 'gorm.io/'],
@@ -218,7 +234,10 @@ function assessNeedsPlugin(name: string, ecosystem: Ecosystem): { needs: Unknown
   const prefixes = frameworkPrefixes[ecosystem] ?? [];
   for (const prefix of prefixes) {
     if (name.startsWith(prefix)) {
-      return { needs: 'likely', reason: `extends known framework (${prefix.replace(/[-/]$/, '')})` };
+      return {
+        needs: 'likely',
+        reason: `extends known framework (${prefix.replace(/[-/]$/, '')})`,
+      };
     }
   }
 
@@ -251,7 +270,10 @@ function assessNeedsPlugin(name: string, ecosystem: Ecosystem): { needs: Unknown
 // --- Main ---
 
 /** Detect technologies and assess coverage */
-export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean } = {}): CoverageReport {
+export function detectCoverage(
+  projectRoot: string,
+  opts: { includeDev?: boolean } = {},
+): CoverageReport {
   const { includeDev = false } = opts;
   const manifestsFound: string[] = [];
   const allDeps: DependencyInfo[] = [];
@@ -284,19 +306,24 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
   // chart libs, etc.) that gain nothing from a dedicated plugin are set to
   // `priority: 'none'` directly in KNOWN_PACKAGES so they drop out of both the
   // gap list and the coverage denominator.
-  const significant = allDeps.filter(d => d.priority !== 'none');
-  const covered = significant.filter(d => d.coveredByPlugin !== null);
+  const significant = allDeps.filter((d) => d.priority !== 'none');
+  const covered = significant.filter((d) => d.coveredByPlugin !== null);
   const gaps = significant
-    .filter(d => d.coveredByPlugin === null)
-    .map(d => ({ name: d.name, version: d.version, category: d.category, priority: d.priority as 'high' | 'medium' | 'low' }))
+    .filter((d) => d.coveredByPlugin === null)
+    .map((d) => ({
+      name: d.name,
+      version: d.version,
+      category: d.category,
+      priority: d.priority as 'high' | 'medium' | 'low',
+    }))
     .sort((a, b) => {
       const prio = { high: 0, medium: 1, low: 2 };
       return (prio[a.priority] ?? 3) - (prio[b.priority] ?? 3);
     });
 
   const unknown = allDeps
-    .filter(d => !KNOWN_PACKAGES[d.name] && d.priority === 'none')
-    .map(d => {
+    .filter((d) => !KNOWN_PACKAGES[d.name] && d.priority === 'none')
+    .map((d) => {
       const assessment = assessNeedsPlugin(d.name, d.ecosystem);
       return {
         name: d.name,
@@ -313,8 +340,8 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
     });
 
   const deprecatedDeps = allDeps
-    .filter(d => d.deprecated && d.successor)
-    .map(d => ({ name: d.name, version: d.version, successor: d.successor! }));
+    .filter((d) => d.deprecated && d.successor)
+    .map((d) => ({ name: d.name, version: d.version, successor: d.successor! }));
 
   return {
     project: projectRoot,
@@ -323,9 +350,10 @@ export function detectCoverage(projectRoot: string, opts: { includeDev?: boolean
     coverage: {
       total_significant: significant.length,
       covered: covered.length,
-      coverage_pct: significant.length > 0 ? Math.round(covered.length / significant.length * 100) : 100,
+      coverage_pct:
+        significant.length > 0 ? Math.round((covered.length / significant.length) * 100) : 100,
     },
-    covered: covered.map(d => ({ name: d.name, version: d.version, plugin: d.coveredByPlugin! })),
+    covered: covered.map((d) => ({ name: d.name, version: d.version, plugin: d.coveredByPlugin! })),
     gaps,
     unknown,
     deprecated: deprecatedDeps,
@@ -353,12 +381,11 @@ export function detectCoverageRecursive(
 ): MultiProjectCoverageReport {
   const rootReport = detectCoverage(projectRoot, opts);
   const childRoots = discoverChildProjectsRecursive(projectRoot);
-  const childReports = childRoots.map(child => detectCoverage(child, opts));
+  const childReports = childRoots.map((child) => detectCoverage(child, opts));
 
   // Include root only if it has manifests (skip bare monorepo containers)
-  const allReports = rootReport.manifests_analyzed.length > 0
-    ? [rootReport, ...childReports]
-    : childReports;
+  const allReports =
+    rootReport.manifests_analyzed.length > 0 ? [rootReport, ...childReports] : childReports;
 
   // Deduplicate dependencies by name across all projects
   const significantSet = new Map<string, DependencyInfo>();
@@ -374,7 +401,9 @@ export function detectCoverageRecursive(
   }
 
   const totalSignificant = significantSet.size;
-  const coveredCount = [...significantSet.values()].filter(d => d.coveredByPlugin !== null).length;
+  const coveredCount = [...significantSet.values()].filter(
+    (d) => d.coveredByPlugin !== null,
+  ).length;
 
   return {
     root: projectRoot,
@@ -383,7 +412,8 @@ export function detectCoverageRecursive(
       total_projects: allReports.length,
       total_significant: totalSignificant,
       covered: coveredCount,
-      coverage_pct: totalSignificant > 0 ? Math.round(coveredCount / totalSignificant * 100) : 100,
+      coverage_pct:
+        totalSignificant > 0 ? Math.round((coveredCount / totalSignificant) * 100) : 100,
     },
   };
 }

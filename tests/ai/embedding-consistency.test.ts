@@ -4,26 +4,37 @@
  *  2. EmbeddingPipeline detects model/dim changes and re-embeds.
  *  3. SummarizationPipeline invalidates stale vectors on summary rewrite.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import { BlobVectorStore, DimensionMismatchError } from '../../src/ai/vector-store.js';
-import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
-import { SummarizationPipeline } from '../../src/ai/summarization-pipeline.js';
-import type { Store } from '../../src/db/store.js';
-import type { EmbeddingService, InferenceService } from '../../src/ai/interfaces.js';
+
 import type Database from 'better-sqlite3';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { EmbeddingPipeline } from '../../src/ai/embedding-pipeline.js';
+import type { EmbeddingService, InferenceService } from '../../src/ai/interfaces.js';
+import { SummarizationPipeline } from '../../src/ai/summarization-pipeline.js';
+import { BlobVectorStore, DimensionMismatchError } from '../../src/ai/vector-store.js';
+import type { Store } from '../../src/db/store.js';
+import { createTestStore } from '../test-utils.js';
 
 function mkEmbed(dims: number, model: string): EmbeddingService {
   return {
-    async embed() { return Array.from({ length: dims }, (_, i) => (i + 1) * 0.1); },
-    async embedBatch(texts) { return texts.map(() => Array.from({ length: dims }, (_, i) => (i + 1) * 0.1)); },
-    dimensions() { return dims; },
-    modelName() { return model; },
+    async embed() {
+      return Array.from({ length: dims }, (_, i) => (i + 1) * 0.1);
+    },
+    async embedBatch(texts) {
+      return texts.map(() => Array.from({ length: dims }, (_, i) => (i + 1) * 0.1));
+    },
+    dimensions() {
+      return dims;
+    },
+    modelName() {
+      return model;
+    },
   };
 }
 
 const stubInference: InferenceService = {
-  async generate() { return 'summary text'; },
+  async generate() {
+    return 'summary text';
+  },
 };
 
 function seedThreeSymbols(db: Database.Database): void {
@@ -143,10 +154,18 @@ describe('EmbeddingPipeline.ensureConsistent', () => {
 
   it('no-op embedding service (dims=0) never stamps meta', async () => {
     const noop: EmbeddingService = {
-      async embed() { return []; },
-      async embedBatch(texts) { return texts.map(() => []); },
-      dimensions() { return 0; },
-      modelName() { return ''; },
+      async embed() {
+        return [];
+      },
+      async embedBatch(texts) {
+        return texts.map(() => []);
+      },
+      dimensions() {
+        return 0;
+      },
+      modelName() {
+        return '';
+      },
     };
     const pipeline = new EmbeddingPipeline(store, noop, vectorStore);
     await pipeline.indexUnembedded();
@@ -200,12 +219,11 @@ describe('SummarizationPipeline invalidates stale embeddings', () => {
     const embedPipe = new EmbeddingPipeline(store, mkEmbed(3, 'm'), vectorStore);
     await embedPipe.indexUnembedded();
 
-    const summaryPipe = new SummarizationPipeline(
-      store,
-      stubInference,
-      process.cwd(),
-      { batchSize: 10, kinds: ['class', 'function'], concurrency: 1 },
-    );
+    const summaryPipe = new SummarizationPipeline(store, stubInference, process.cwd(), {
+      batchSize: 10,
+      kinds: ['class', 'function'],
+      concurrency: 1,
+    });
     await summaryPipe.summarizeUnsummarized();
 
     // No vectorStore threaded through → vectors untouched

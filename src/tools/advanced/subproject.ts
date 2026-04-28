@@ -2,11 +2,14 @@
  * Subproject MCP tools — cross-repo impact analysis and dependency graph.
  */
 
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError, notFound } from '../../errors.js';
-import { SubprojectManager, type CrossRepoImpactResult, type SubprojectGraphResult } from '../../subproject/manager.js';
-import type { TopologyStore } from '../../topology/topology-db.js';
+import { err, notFound, ok, type TraceMcpResult, validationError } from '../../errors.js';
+import {
+  type CrossRepoImpactResult,
+  type SubprojectGraphResult,
+  SubprojectManager,
+} from '../../subproject/manager.js';
 import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // 1. SUBPROJECT GRAPH — show all subprojects and their connections
@@ -66,9 +69,7 @@ export function subprojectAddRepo(
 // 4. SUBPROJECT SYNC — re-scan all subprojects
 // ════════════════════════════════════════════════════════════════════════
 
-export function subprojectSync(
-  topoStore: TopologyStore,
-): TraceMcpResult<{
+export function subprojectSync(topoStore: TopologyStore): TraceMcpResult<{
   repos: number;
   servicesUpdated: number;
   endpointsUpdated: number;
@@ -158,7 +159,12 @@ export function getContractVersions(
 ): TraceMcpResult<ContractVersionsResult> {
   const svc = topoStore.getService(opts.service);
   if (!svc) {
-    return err(notFound(opts.service, topoStore.getAllServices().map((s) => s.name)));
+    return err(
+      notFound(
+        opts.service,
+        topoStore.getAllServices().map((s) => s.name),
+      ),
+    );
   }
 
   const snapshots = topoStore.getSnapshotsByService(svc.id, opts.limit ?? 10);
@@ -167,11 +173,30 @@ export function getContractVersions(
 
   for (let i = 0; i < snapshots.length; i++) {
     const snap = snapshots[i];
-    let parsedEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+    let parsedEndpoints: Array<{
+      method: string | null;
+      path: string;
+      requestSchema?: string;
+      responseSchema?: string;
+    }> = [];
     try {
-      const parsed = JSON.parse(snap.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
-      parsedEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
-    } catch { /* malformed JSON */ }
+      const parsed = JSON.parse(snap.endpoints_json) as {
+        endpoints?: Array<{
+          method?: string;
+          path: string;
+          requestSchema?: string;
+          responseSchema?: string;
+        }>;
+      };
+      parsedEndpoints = (parsed.endpoints ?? []).map((e) => ({
+        method: e.method ?? null,
+        path: e.path,
+        requestSchema: e.requestSchema,
+        responseSchema: e.responseSchema,
+      }));
+    } catch {
+      /* malformed JSON */
+    }
 
     const entry: ContractVersionEntry = {
       version: snap.version,
@@ -183,11 +208,30 @@ export function getContractVersions(
     // Diff with the next (older) snapshot
     if (i + 1 < snapshots.length) {
       const olderSnap = snapshots[i + 1];
-      let olderEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+      let olderEndpoints: Array<{
+        method: string | null;
+        path: string;
+        requestSchema?: string;
+        responseSchema?: string;
+      }> = [];
       try {
-        const parsed = JSON.parse(olderSnap.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
-        olderEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
-      } catch { /* malformed JSON */ }
+        const parsed = JSON.parse(olderSnap.endpoints_json) as {
+          endpoints?: Array<{
+            method?: string;
+            path: string;
+            requestSchema?: string;
+            responseSchema?: string;
+          }>;
+        };
+        olderEndpoints = (parsed.endpoints ?? []).map((e) => ({
+          method: e.method ?? null,
+          path: e.path,
+          requestSchema: e.requestSchema,
+          responseSchema: e.responseSchema,
+        }));
+      } catch {
+        /* malformed JSON */
+      }
 
       const diffs = diffEndpoints(olderEndpoints, parsedEndpoints);
       if (diffs.length > 0) {

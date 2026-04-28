@@ -33,13 +33,24 @@ const BILLABLE_RE = /use\s+(?:[\w\\]*\\)?Billable\b/;
 
 // Subscription/charge method calls
 const SUBSCRIPTION_METHODS = [
-  'newSubscription', 'subscription', 'subscribed', 'onTrial',
-  'subscribedToProduct', 'subscribedToPrice', 'onGenericTrial',
+  'newSubscription',
+  'subscription',
+  'subscribed',
+  'onTrial',
+  'subscribedToProduct',
+  'subscribedToPrice',
+  'onGenericTrial',
 ] as const;
 
 const CHARGE_METHODS = [
-  'charge', 'invoiceFor', 'tab', 'invoice', 'pay',
-  'refund', 'createSetupIntent', 'updateDefaultPaymentMethod',
+  'charge',
+  'invoiceFor',
+  'tab',
+  'invoice',
+  'pay',
+  'refund',
+  'createSetupIntent',
+  'updateDefaultPaymentMethod',
 ] as const;
 
 // ─── Model extraction ────────────────────────────────────────
@@ -47,10 +58,7 @@ const CHARGE_METHODS = [
 /**
  * Extract Billable trait usage from a model class.
  */
-export function extractBillableModel(
-  source: string,
-  _filePath: string,
-): BillableModelInfo | null {
+export function extractBillableModel(source: string, _filePath: string): BillableModelInfo | null {
   if (!BILLABLE_RE.test(source)) return null;
   if (!/class\s+\w+/.test(source)) return null;
 

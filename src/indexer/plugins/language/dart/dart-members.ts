@@ -7,7 +7,12 @@ import type { RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 // ── Module-level helpers (no class dependency) ────────────────────────────────
 
-export function makeSymbolId(filePath: string, name: string, kind: string, parent?: string): string {
+export function makeSymbolId(
+  filePath: string,
+  name: string,
+  kind: string,
+  parent?: string,
+): string {
   return parent ? `${filePath}::${parent}.${name}#${kind}` : `${filePath}::${name}#${kind}`;
 }
 
@@ -16,7 +21,9 @@ export function extractSignature(node: TSNode): string {
 }
 
 export function getNodeName(node: TSNode): string | undefined {
-  const nameChild = node.childForFieldName?.('name') ?? node.namedChildren.find(c => c.type === 'identifier' || c.type === 'type_identifier');
+  const nameChild =
+    node.childForFieldName?.('name') ??
+    node.namedChildren.find((c) => c.type === 'identifier' || c.type === 'type_identifier');
   return nameChild?.text || undefined;
 }
 

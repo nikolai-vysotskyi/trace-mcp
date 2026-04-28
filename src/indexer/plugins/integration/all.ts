@@ -1,100 +1,91 @@
 import type { FrameworkPlugin } from '../../../plugin-api/types.js';
-
-// --- framework ---
-import { LaravelPlugin } from './framework/laravel/index.js';
-import { FilamentPlugin } from './framework/filament/index.js';
-import { DjangoPlugin } from './framework/django/index.js';
-import { RailsPlugin } from './framework/rails/index.js';
-import { SpringPlugin } from './framework/spring/index.js';
-import { NestJSPlugin } from './framework/nestjs/index.js';
-import { ExpressPlugin } from './framework/express/index.js';
-import { FastAPIPlugin } from './framework/fastapi/index.js';
-import { FlaskPlugin } from './framework/flask/index.js';
-import { HonoPlugin } from './framework/hono/index.js';
-import { FastifyPlugin } from './framework/fastify/index.js';
-import { NuxtPlugin } from './framework/nuxt/index.js';
-import { NextJSPlugin } from './framework/nextjs/index.js';
-import { GinPlugin } from './framework/gin/index.js';
-import { EchoPlugin } from './framework/echo/index.js';
-
-// --- orm ---
-import { PrismaPlugin } from './orm/prisma/index.js';
-import { TypeORMPlugin } from './orm/typeorm/index.js';
-import { SequelizePlugin } from './orm/sequelize/index.js';
-import { MongoosePlugin } from './orm/mongoose/index.js';
-import { SQLAlchemyPlugin } from './orm/sqlalchemy/index.js';
-import { DrizzlePlugin } from './orm/drizzle/index.js';
-import { RawSqlPlugin } from './orm/raw-sql/index.js';
-import { AsyncDbPlugin } from './orm/async-db/index.js';
-
-// --- view ---
-import { ReactPlugin } from './view/react/index.js';
-import { VueFrameworkPlugin } from './view/vue/index.js';
-import { ReactNativePlugin } from './view/react-native/index.js';
-import { BladePlugin } from './view/blade/index.js';
-import { InertiaPlugin } from './view/inertia/index.js';
-import { ShadcnPlugin } from './view/shadcn/index.js';
-import { MuiPlugin } from './view/mui/index.js';
-import { AntDesignPlugin } from './view/antd/index.js';
-import { HeadlessUiPlugin } from './view/headless-ui/index.js';
-import { NuxtUiPlugin } from './view/nuxt-ui/index.js';
-import { AngularPlugin } from './view/angular/index.js';
-import { SveltePlugin } from './view/svelte/index.js';
-import { TailwindPlugin } from './view/tailwind/index.js';
-import { JsVisualizationPlugin } from './view/js-viz/index.js';
-import { SortablePlugin } from './view/sortable/index.js';
-
+import { DRFPlugin } from './api/drf/index.js';
 // --- api ---
 import { GraphQLPlugin } from './api/graphql/index.js';
-import { TrpcPlugin } from './api/trpc/index.js';
-import { DRFPlugin } from './api/drf/index.js';
 import { McpSdkPlugin } from './api/mcp-sdk/index.js';
-
-// --- validation ---
-import { ZodPlugin } from './validation/zod/index.js';
-import { PydanticPlugin } from './validation/pydantic/index.js';
-
-// --- state ---
-import { ZustandReduxPlugin } from './state/zustand/index.js';
-
+import { TrpcPlugin } from './api/trpc/index.js';
+import { DjangoPlugin } from './framework/django/index.js';
+import { EchoPlugin } from './framework/echo/index.js';
+import { ExpressPlugin } from './framework/express/index.js';
+import { FastAPIPlugin } from './framework/fastapi/index.js';
+import { FastifyPlugin } from './framework/fastify/index.js';
+import { FilamentPlugin } from './framework/filament/index.js';
+import { FlaskPlugin } from './framework/flask/index.js';
+import { GinPlugin } from './framework/gin/index.js';
+import { HonoPlugin } from './framework/hono/index.js';
+// --- framework ---
+import { LaravelPlugin } from './framework/laravel/index.js';
+import { NestJSPlugin } from './framework/nestjs/index.js';
+import { NextJSPlugin } from './framework/nextjs/index.js';
+import { NuxtPlugin } from './framework/nuxt/index.js';
+import { RailsPlugin } from './framework/rails/index.js';
+import { SpringPlugin } from './framework/spring/index.js';
+import { AsyncDbPlugin } from './orm/async-db/index.js';
+import { DrizzlePlugin } from './orm/drizzle/index.js';
+import { MongoosePlugin } from './orm/mongoose/index.js';
+// --- orm ---
+import { PrismaPlugin } from './orm/prisma/index.js';
+import { RawSqlPlugin } from './orm/raw-sql/index.js';
+import { SequelizePlugin } from './orm/sequelize/index.js';
+import { SQLAlchemyPlugin } from './orm/sqlalchemy/index.js';
+import { TypeORMPlugin } from './orm/typeorm/index.js';
 // --- realtime ---
 import { SocketIoPlugin } from './realtime/socketio/index.js';
-
+// --- state ---
+import { ZustandReduxPlugin } from './state/zustand/index.js';
 // --- testing ---
 import { TestingPlugin } from './testing/index.js';
 import { PytestPlugin } from './testing/pytest/index.js';
-
+import { AttrsPyPlugin } from './tooling/attrs-py/index.js';
+import { AwsS3Plugin } from './tooling/aws-s3/index.js';
+import { BuildToolsPlugin } from './tooling/build-tools/index.js';
 // --- tooling ---
 import { CeleryPlugin } from './tooling/celery/index.js';
-import { N8nPlugin } from './tooling/n8n/index.js';
-import { DataFetchingPlugin } from './tooling/data-fetching/index.js';
+import { ClackPlugin } from './tooling/clack/index.js';
 import { CommanderPlugin } from './tooling/commander/index.js';
-import { TreeSitterPlugin } from './tooling/tree-sitter/index.js';
-import { BuildToolsPlugin } from './tooling/build-tools/index.js';
-import { GithubActionsPlugin } from './tooling/github-actions/index.js';
-import { PinoPlugin } from './tooling/pino/index.js';
-import { AwsS3Plugin } from './tooling/aws-s3/index.js';
-import { SupabasePlugin } from './tooling/supabase/index.js';
 import { CosmiconfigPlugin } from './tooling/cosmiconfig/index.js';
-import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
+import { DataFetchingPlugin } from './tooling/data-fetching/index.js';
+import { ElectronPlugin } from './tooling/electron/index.js';
+import { GithubActionsPlugin } from './tooling/github-actions/index.js';
+import { GunicornPlugin } from './tooling/gunicorn/index.js';
 import { IoredisPlugin } from './tooling/ioredis/index.js';
 import { JosePlugin } from './tooling/jose/index.js';
+import { N8nPlugin } from './tooling/n8n/index.js';
+import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
 import { NodemailerPlugin } from './tooling/nodemailer/index.js';
-import { UvicornPlugin } from './tooling/uvicorn/index.js';
-import { GunicornPlugin } from './tooling/gunicorn/index.js';
-import { RedisPyPlugin } from './tooling/redis-py/index.js';
-import { ClackPlugin } from './tooling/clack/index.js';
-import { ElectronPlugin } from './tooling/electron/index.js';
-import { PhpEcosystemPlugin } from './tooling/php-ecosystem/index.js';
-import { PythonHttpClientsPlugin } from './tooling/python-http/index.js';
 import { OpenAIPythonPlugin } from './tooling/openai-py/index.js';
+import { PhpEcosystemPlugin } from './tooling/php-ecosystem/index.js';
+import { PinoPlugin } from './tooling/pino/index.js';
+import { PythonAsyncPlugin } from './tooling/python-async/index.js';
+import { PythonHttpClientsPlugin } from './tooling/python-http/index.js';
+import { PythonImagingPlugin } from './tooling/python-imaging/index.js';
 import { PythonMLPlugin } from './tooling/python-ml/index.js';
 import { PythonScientificPlugin } from './tooling/python-scientific/index.js';
-import { PythonImagingPlugin } from './tooling/python-imaging/index.js';
-import { PythonAsyncPlugin } from './tooling/python-async/index.js';
-import { AttrsPyPlugin } from './tooling/attrs-py/index.js';
+import { RedisPyPlugin } from './tooling/redis-py/index.js';
+import { SupabasePlugin } from './tooling/supabase/index.js';
 import { TqdmPyPlugin } from './tooling/tqdm-py/index.js';
+import { TreeSitterPlugin } from './tooling/tree-sitter/index.js';
+import { UvicornPlugin } from './tooling/uvicorn/index.js';
+import { PydanticPlugin } from './validation/pydantic/index.js';
+// --- validation ---
+import { ZodPlugin } from './validation/zod/index.js';
+import { AngularPlugin } from './view/angular/index.js';
+import { AntDesignPlugin } from './view/antd/index.js';
+import { BladePlugin } from './view/blade/index.js';
+import { HeadlessUiPlugin } from './view/headless-ui/index.js';
+import { InertiaPlugin } from './view/inertia/index.js';
 import { Jinja2Plugin } from './view/jinja2/index.js';
+import { JsVisualizationPlugin } from './view/js-viz/index.js';
+import { MuiPlugin } from './view/mui/index.js';
+import { NuxtUiPlugin } from './view/nuxt-ui/index.js';
+// --- view ---
+import { ReactPlugin } from './view/react/index.js';
+import { ReactNativePlugin } from './view/react-native/index.js';
+import { ShadcnPlugin } from './view/shadcn/index.js';
+import { SortablePlugin } from './view/sortable/index.js';
+import { SveltePlugin } from './view/svelte/index.js';
+import { TailwindPlugin } from './view/tailwind/index.js';
+import { VueFrameworkPlugin } from './view/vue/index.js';
 
 export function createAllIntegrationPlugins(): FrameworkPlugin[] {
   return [

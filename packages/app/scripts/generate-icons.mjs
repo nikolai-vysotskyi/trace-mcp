@@ -9,9 +9,9 @@
  * App icon:   full-colour gradient background with white graph overlay.
  */
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const assetsDir = path.join(__dirname, '..', 'assets');
@@ -26,12 +26,12 @@ function trayIconSVG(size, dim = false, color = 'black') {
 
   // Node positions (viewBox 32x32)
   const nodes = [
-    { x: 16, y: 8, r: 3.2 },   // top center (main)
-    { x: 7, y: 16, r: 2.4 },   // mid-left
-    { x: 25, y: 16, r: 2.4 },  // mid-right
-    { x: 10, y: 25, r: 2.0 },  // bottom-left
-    { x: 22, y: 25, r: 2.0 },  // bottom-right
-    { x: 16, y: 20, r: 2.8 },  // center hub
+    { x: 16, y: 8, r: 3.2 }, // top center (main)
+    { x: 7, y: 16, r: 2.4 }, // mid-left
+    { x: 25, y: 16, r: 2.4 }, // mid-right
+    { x: 10, y: 25, r: 2.0 }, // bottom-left
+    { x: 22, y: 25, r: 2.0 }, // bottom-right
+    { x: 16, y: 20, r: 2.8 }, // center hub
   ];
 
   // Edges (index pairs)
@@ -45,13 +45,16 @@ function trayIconSVG(size, dim = false, color = 'black') {
     [5, 4], // center → bottom-right (cross)
   ];
 
-  const edgesSVG = edges.map(([a, b]) =>
-    `<line x1="${nodes[a].x}" y1="${nodes[a].y}" x2="${nodes[b].x}" y2="${nodes[b].y}" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" opacity="${opacity}"/>`
-  ).join('\n    ');
+  const edgesSVG = edges
+    .map(
+      ([a, b]) =>
+        `<line x1="${nodes[a].x}" y1="${nodes[a].y}" x2="${nodes[b].x}" y2="${nodes[b].y}" stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round" opacity="${opacity}"/>`,
+    )
+    .join('\n    ');
 
-  const nodesSVG = nodes.map(n =>
-    `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="${color}" opacity="${opacity}"/>`
-  ).join('\n    ');
+  const nodesSVG = nodes
+    .map((n) => `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="${color}" opacity="${opacity}"/>`)
+    .join('\n    ');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 32 32">
     ${edgesSVG}
@@ -64,36 +67,47 @@ function trayIconSVG(size, dim = false, color = 'black') {
 function appIconSVG(size) {
   // Original layout — the one that looked great
   const nodes = [
-    { x: 256, y: 100, r: 22 },  // 0 top
-    { x: 120, y: 215, r: 18 },  // 1 mid-left
-    { x: 392, y: 215, r: 18 },  // 2 mid-right
-    { x: 160, y: 365, r: 16 },  // 3 bottom-left
-    { x: 352, y: 365, r: 16 },  // 4 bottom-right
-    { x: 256, y: 265, r: 62 },  // 5 center hub — BIG heart
-    { x: 80,  y: 335, r: 13 },  // 6 far bottom-left
-    { x: 432, y: 335, r: 13 },  // 7 far bottom-right
-    { x: 256, y: 430, r: 15 },  // 8 bottom center
+    { x: 256, y: 100, r: 22 }, // 0 top
+    { x: 120, y: 215, r: 18 }, // 1 mid-left
+    { x: 392, y: 215, r: 18 }, // 2 mid-right
+    { x: 160, y: 365, r: 16 }, // 3 bottom-left
+    { x: 352, y: 365, r: 16 }, // 4 bottom-right
+    { x: 256, y: 265, r: 62 }, // 5 center hub — BIG heart
+    { x: 80, y: 335, r: 13 }, // 6 far bottom-left
+    { x: 432, y: 335, r: 13 }, // 7 far bottom-right
+    { x: 256, y: 430, r: 15 }, // 8 bottom center
   ];
 
   const edges = [
-    [0, 5], [5, 1], [5, 2],
-    [1, 3], [2, 4], [5, 3], [5, 4],
-    [1, 6], [2, 7],
-    [5, 8], [3, 8], [4, 8],
+    [0, 5],
+    [5, 1],
+    [5, 2],
+    [1, 3],
+    [2, 4],
+    [5, 3],
+    [5, 4],
+    [1, 6],
+    [2, 7],
+    [5, 8],
+    [3, 8],
+    [4, 8],
   ];
 
-  const edgesSVG = edges.map(([a, b]) =>
-    `<line x1="${nodes[a].x}" y1="${nodes[a].y}" x2="${nodes[b].x}" y2="${nodes[b].y}" stroke="rgba(255,255,255,0.55)" stroke-width="4.5" stroke-linecap="round"/>`
-  ).join('\n      ');
+  const edgesSVG = edges
+    .map(
+      ([a, b]) =>
+        `<line x1="${nodes[a].x}" y1="${nodes[a].y}" x2="${nodes[b].x}" y2="${nodes[b].y}" stroke="rgba(255,255,255,0.55)" stroke-width="4.5" stroke-linecap="round"/>`,
+    )
+    .join('\n      ');
 
   // Soft glow behind nodes
-  const glowSVG = nodes.map(n =>
-    `<circle cx="${n.x}" cy="${n.y}" r="${n.r * 1.8}" fill="rgba(255,255,255,0.07)"/>`
-  ).join('\n      ');
+  const glowSVG = nodes
+    .map((n) => `<circle cx="${n.x}" cy="${n.y}" r="${n.r * 1.8}" fill="rgba(255,255,255,0.07)"/>`)
+    .join('\n      ');
 
-  const nodesSVG = nodes.map(n =>
-    `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="white" opacity="0.95"/>`
-  ).join('\n      ');
+  const nodesSVG = nodes
+    .map((n) => `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="white" opacity="0.95"/>`)
+    .join('\n      ');
 
   // Single subtle ring around the hub
   const hubRing = `<circle cx="256" cy="265" r="76" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>`;
@@ -150,7 +164,7 @@ function appIconSVG(size) {
 // ── Generate all files ──────────────────────────────────────────────
 
 async function generate() {
-  const { mkdir } = await import('fs/promises');
+  const { mkdir } = await import('node:fs/promises');
   await mkdir(assetsDir, { recursive: true });
   await mkdir(buildDir, { recursive: true });
 
@@ -171,15 +185,15 @@ async function generate() {
       sharp(Buffer.from(svg))
         .png()
         .toFile(outPath)
-        .then(() => console.log(`  ✓ ${cfg.name} (${cfg.size}x${cfg.size})`))
+        .then(() => console.log(`  ✓ ${cfg.name} (${cfg.size}x${cfg.size})`)),
     );
   }
 
   // Tray icons — Windows (white for dark taskbar, black for light taskbar)
   const winTrayConfigs = [
-    { name: 'tray-icon-light.png', size: 32, dim: false, color: 'black' },    // for light taskbar
+    { name: 'tray-icon-light.png', size: 32, dim: false, color: 'black' }, // for light taskbar
     { name: 'tray-icon-dim-light.png', size: 32, dim: true, color: 'black' },
-    { name: 'tray-icon-dark.png', size: 32, dim: false, color: 'white' },     // for dark taskbar
+    { name: 'tray-icon-dark.png', size: 32, dim: false, color: 'white' }, // for dark taskbar
     { name: 'tray-icon-dim-dark.png', size: 32, dim: true, color: 'white' },
   ];
 
@@ -190,7 +204,9 @@ async function generate() {
       sharp(Buffer.from(svg))
         .png()
         .toFile(outPath)
-        .then(() => console.log(`  ✓ ${cfg.name} (${cfg.size}x${cfg.size}, ${cfg.color} — Windows)`))
+        .then(() =>
+          console.log(`  ✓ ${cfg.name} (${cfg.size}x${cfg.size}, ${cfg.color} — Windows)`),
+        ),
     );
   }
 
@@ -204,7 +220,7 @@ async function generate() {
         .resize(size, size)
         .png()
         .toFile(outPath)
-        .then(() => console.log(`  ✓ icon-${size}.png`))
+        .then(() => console.log(`  ✓ icon-${size}.png`)),
     );
   }
 
@@ -215,7 +231,7 @@ async function generate() {
       .resize(512, 512)
       .png()
       .toFile(path.join(buildDir, 'icon.png'))
-      .then(() => console.log(`  ✓ icon.png (512x512)`))
+      .then(() => console.log(`  ✓ icon.png (512x512)`)),
   );
 
   await Promise.all(tasks);
@@ -240,25 +256,25 @@ async function generate() {
     const w = size >= 256 ? 0 : size; // 0 means 256 in ICO format
     const h = w;
     const entry = Buffer.alloc(dirEntrySize);
-    entry.writeUInt8(w, 0);        // width
-    entry.writeUInt8(h, 1);        // height
-    entry.writeUInt8(0, 2);        // color palette
-    entry.writeUInt8(0, 3);        // reserved
-    entry.writeUInt16LE(1, 4);     // color planes
-    entry.writeUInt16LE(32, 6);    // bits per pixel
-    entry.writeUInt32LE(buf.length, 8);   // image size
-    entry.writeUInt32LE(dataOffset, 12);  // data offset
+    entry.writeUInt8(w, 0); // width
+    entry.writeUInt8(h, 1); // height
+    entry.writeUInt8(0, 2); // color palette
+    entry.writeUInt8(0, 3); // reserved
+    entry.writeUInt16LE(1, 4); // color planes
+    entry.writeUInt16LE(32, 6); // bits per pixel
+    entry.writeUInt32LE(buf.length, 8); // image size
+    entry.writeUInt32LE(dataOffset, 12); // data offset
     dirEntries.push(entry);
     dataOffset += buf.length;
   }
 
   const header = Buffer.alloc(headerSize);
-  header.writeUInt16LE(0, 0);           // reserved
-  header.writeUInt16LE(1, 2);           // type = ICO
-  header.writeUInt16LE(numImages, 4);   // count
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type = ICO
+  header.writeUInt16LE(numImages, 4); // count
 
-  const { writeFile } = await import('fs/promises');
-  const icoBuffer = Buffer.concat([header, ...dirEntries, ...pngBuffers.map(p => p.buf)]);
+  const { writeFile } = await import('node:fs/promises');
+  const icoBuffer = Buffer.concat([header, ...dirEntries, ...pngBuffers.map((p) => p.buf)]);
   const icoPath = path.join(buildDir, 'icon.ico');
   await writeFile(icoPath, icoBuffer);
   console.log(`  ✓ icon.ico (${icoSizes.join(', ')}px — Windows)`);
@@ -268,4 +284,7 @@ async function generate() {
   console.log(`  App icons:  ${buildDir}`);
 }
 
-generate().catch(err => { console.error(err); process.exit(1); });
+generate().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

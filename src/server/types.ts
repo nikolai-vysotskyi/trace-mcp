@@ -1,13 +1,18 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { Store } from '../db/store.js';
-import type { PluginRegistry } from '../plugin-api/registry.js';
+import type {
+  AIProvider,
+  BlobVectorStore,
+  EmbeddingService,
+  RerankerService,
+} from '../ai/index.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { SessionTracker } from '../session/tracker.js';
-import type { SessionJournal } from '../session/journal.js';
-import type { AIProvider, RerankerService, EmbeddingService, BlobVectorStore } from '../ai/index.js';
-import type { ProgressState } from '../progress.js';
-import type { TopologyStore } from '../topology/topology-db.js';
+import type { Store } from '../db/store.js';
 import type { DecisionStore } from '../memory/decision-store.js';
+import type { PluginRegistry } from '../plugin-api/registry.js';
+import type { ProgressState } from '../progress.js';
+import type { SessionJournal } from '../session/journal.js';
+import type { SessionTracker } from '../session/tracker.js';
+import type { TopologyStore } from '../topology/topology-db.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 export interface ServerContext {

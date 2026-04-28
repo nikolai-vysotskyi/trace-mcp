@@ -1,23 +1,28 @@
 /**
  * Go Language Plugin — tree-sitter based symbol extraction.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
-import { detectMinGoVersionFromSource } from './version-features.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
+  extractImportEdges,
+  extractInterfaceMethods,
   extractPackageName,
   extractSignature,
-  extractImportEdges,
   extractStructFields,
-  extractInterfaceMethods,
   getNodeName,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
+import { detectMinGoVersionFromSource } from './version-features.js';
 
 export class GoLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
@@ -27,9 +32,24 @@ export class GoLanguagePlugin implements LanguagePlugin {
   };
 
   supportedExtensions = ['.go'];
-  supportedVersions = ['1.11', '1.13', '1.14', '1.16', '1.17', '1.18', '1.19', '1.20', '1.21', '1.22', '1.23'];
+  supportedVersions = [
+    '1.11',
+    '1.13',
+    '1.14',
+    '1.16',
+    '1.17',
+    '1.18',
+    '1.19',
+    '1.20',
+    '1.21',
+    '1.22',
+    '1.23',
+  ];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('go');
       const sourceCode = content.toString('utf-8');
@@ -156,7 +176,9 @@ export class GoLanguagePlugin implements LanguagePlugin {
 
         if (typeNode.type === 'struct_type') {
           const symbolId = makeSymbolId(filePath, name, 'class');
-          const body = typeNode.childForFieldName('body') ?? typeNode.namedChildren.find((c) => c.type === 'field_declaration_list');
+          const body =
+            typeNode.childForFieldName('body') ??
+            typeNode.namedChildren.find((c) => c.type === 'field_declaration_list');
 
           let fieldSymbols: RawSymbol[] = [];
           if (body) {
@@ -180,9 +202,13 @@ export class GoLanguagePlugin implements LanguagePlugin {
           symbols.push(...fieldSymbols);
         } else if (typeNode.type === 'interface_type') {
           const symbolId = makeSymbolId(filePath, name, 'interface');
-          const body = typeNode.namedChildren.find((c) => c.type === 'method_spec' || c.type === 'method_elem')
+          const _body = typeNode.namedChildren.find(
+            (c) => c.type === 'method_spec' || c.type === 'method_elem',
+          )
             ? typeNode
-            : typeNode.namedChildren[0]?.type === 'method_spec' ? typeNode : null;
+            : typeNode.namedChildren[0]?.type === 'method_spec'
+              ? typeNode
+              : null;
 
           // Interface methods live directly inside interface_type
           let methodSymbols: RawSymbol[] = [];

@@ -11,26 +11,32 @@
  *
  * Language-agnostic: works for PHP, TypeScript, Python, Java, Go, Ruby, etc.
  */
-import type { PipelineState } from '../pipeline-state.js';
+
 import { logger } from '../../logger.js';
+import type { PipelineState } from '../pipeline-state.js';
 
 export function resolveMemberOfEdges(state: PipelineState): void {
   const { store } = state;
 
-  const memberOfType = store.db.prepare(
-    `SELECT id FROM edge_types WHERE name = ?`,
-  ).get('member_of') as { id: number } | undefined;
+  const memberOfType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('member_of') as { id: number } | undefined;
   if (!memberOfType) {
-    logger.warn({ edgeType: 'member_of' }, 'edge_types row missing — skipping member_of resolution. Run schema migrations.');
+    logger.warn(
+      { edgeType: 'member_of' },
+      'edge_types row missing — skipping member_of resolution. Run schema migrations.',
+    );
     return;
   }
 
   // Load every symbol that has a parent_id (i.e., is a member of another symbol).
-  const rows = store.db.prepare(`
+  const rows = store.db
+    .prepare(`
     SELECT s.id AS member_id, s.parent_id
     FROM symbols s
     WHERE s.parent_id IS NOT NULL
-  `).all() as Array<{ member_id: number; parent_id: number }>;
+  `)
+    .all() as Array<{ member_id: number; parent_id: number }>;
 
   if (rows.length === 0) return;
 

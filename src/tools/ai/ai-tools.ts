@@ -2,17 +2,26 @@
  * AI-powered MCP tools — require AI to be enabled.
  * Each tool gracefully returns an error message when AI is disabled.
  */
+
+import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
-import { resolveSymbolInput } from '../shared/resolve.js';
-import type { InferenceService, EmbeddingService, VectorStore, RerankerService } from '../../ai/interfaces.js';
+import type {
+  EmbeddingService,
+  InferenceService,
+  RerankerService,
+  VectorStore,
+} from '../../ai/interfaces.js';
 import { PROMPTS } from '../../ai/prompts.js';
-import { readByteRange } from '../../utils/source-reader.js';
-import { assembleStructuredContext, renderStructuredContext } from '../../scoring/structured-assembly.js';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import type { ContextItem } from '../../scoring/assembly.js';
+import {
+  assembleStructuredContext,
+  renderStructuredContext,
+} from '../../scoring/structured-assembly.js';
+import { readByteRange } from '../../utils/source-reader.js';
 import { getChangeImpact } from '../analysis/impact.js';
-import path from 'node:path';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface AIToolsContext {
   store: Store;
@@ -28,8 +37,19 @@ function j(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function symbolToContextItem(sym: SymbolRow, file: FileRow, projectRoot: string, score = 1): ContextItem {
-  const source = readSourceSafe(file.path, sym.byte_start, sym.byte_end, projectRoot, !!file.gitignored);
+function symbolToContextItem(
+  sym: SymbolRow,
+  file: FileRow,
+  projectRoot: string,
+  score = 1,
+): ContextItem {
+  const source = readSourceSafe(
+    file.path,
+    sym.byte_start,
+    sym.byte_end,
+    projectRoot,
+    !!file.gitignored,
+  );
   return {
     id: sym.symbol_id,
     score,
@@ -39,7 +59,13 @@ function symbolToContextItem(sym: SymbolRow, file: FileRow, projectRoot: string,
   };
 }
 
-function readSourceSafe(filePath: string, byteStart: number, byteEnd: number, projectRoot: string, gitignored?: boolean): string | null {
+function readSourceSafe(
+  filePath: string,
+  byteStart: number,
+  byteEnd: number,
+  projectRoot: string,
+  gitignored?: boolean,
+): string | null {
   try {
     const absPath = path.resolve(projectRoot, filePath);
     return readByteRange(absPath, byteStart, byteEnd, gitignored);
@@ -48,7 +74,10 @@ function readSourceSafe(filePath: string, byteStart: number, byteEnd: number, pr
   }
 }
 
-function resolveSymbol(store: Store, opts: { symbolId?: string; fqn?: string }): { sym: SymbolRow; file: FileRow } | null {
+function resolveSymbol(
+  store: Store,
+  opts: { symbolId?: string; fqn?: string },
+): { sym: SymbolRow; file: FileRow } | null {
   const resolved = resolveSymbolInput(store, opts);
   if (!resolved) return null;
   return { sym: resolved.symbol, file: resolved.file };
@@ -102,16 +131,15 @@ function gatherRelatedSymbols(
         if (!parentFile) continue;
         typeContext.push(symbolToContextItem(parentSym, parentFile, projectRoot, 0.4));
       }
-    } catch { /* ignore parse errors */ }
+    } catch {
+      /* ignore parse errors */
+    }
   }
 
   return { dependencies, callers, typeContext };
 }
 
-export function registerAITools(
-  server: McpServer,
-  ctx: AIToolsContext,
-): void {
+export function registerAITools(server: McpServer, ctx: AIToolsContext): void {
   const { store, smartInference, embeddingService, vectorStore, reranker, projectRoot } = ctx;
 
   // ─── explain_symbol ──────────────────────────────────────
@@ -125,7 +153,10 @@ export function registerAITools(
     async ({ symbol_id, fqn }) => {
       const resolved = resolveSymbol(store, { symbolId: symbol_id, fqn });
       if (!resolved) {
-        return { content: [{ type: 'text', text: j({ error: 'Symbol not found' }) }], isError: true };
+        return {
+          content: [{ type: 'text', text: j({ error: 'Symbol not found' }) }],
+          isError: true,
+        };
       }
       const { sym, file } = resolved;
       const primary = [symbolToContextItem(sym, file, projectRoot)];
@@ -155,21 +186,23 @@ export function registerAITools(
       });
 
       return {
-        content: [{
-          type: 'text',
-          text: j({
-            symbol_id: sym.symbol_id,
-            name: sym.name,
-            kind: sym.kind,
-            file: file.path,
-            explanation,
-            related_symbols: [
-              ...related.dependencies.map((d) => d.id),
-              ...related.callers.map((c) => c.id),
-              ...related.typeContext.map((t) => t.id),
-            ],
-          }),
-        }],
+        content: [
+          {
+            type: 'text',
+            text: j({
+              symbol_id: sym.symbol_id,
+              name: sym.name,
+              kind: sym.kind,
+              file: file.path,
+              explanation,
+              related_symbols: [
+                ...related.dependencies.map((d) => d.id),
+                ...related.callers.map((c) => c.id),
+                ...related.typeContext.map((t) => t.id),
+              ],
+            }),
+          },
+        ],
       };
     },
   );
@@ -185,7 +218,10 @@ export function registerAITools(
     async ({ symbol_id, fqn }) => {
       const resolved = resolveSymbol(store, { symbolId: symbol_id, fqn });
       if (!resolved) {
-        return { content: [{ type: 'text', text: j({ error: 'Symbol not found' }) }], isError: true };
+        return {
+          content: [{ type: 'text', text: j({ error: 'Symbol not found' }) }],
+          isError: true,
+        };
       }
       const { sym, file } = resolved;
       const source = readSourceSafe(file.path, sym.byte_start, sym.byte_end, projectRoot);
@@ -214,14 +250,16 @@ export function registerAITools(
       }
 
       return {
-        content: [{
-          type: 'text',
-          text: j({
-            symbol_id: sym.symbol_id,
-            name: sym.name,
-            suggestions,
-          }),
-        }],
+        content: [
+          {
+            type: 'text',
+            text: j({
+              symbol_id: sym.symbol_id,
+              name: sym.name,
+              suggestions,
+            }),
+          },
+        ],
       };
     },
   );
@@ -237,7 +275,9 @@ export function registerAITools(
     async ({ file_path, diff }) => {
       const impactResult = getChangeImpact(store, { filePath: file_path });
       const blastRadius = impactResult.isOk()
-        ? impactResult.value.dependents.map((d) => `${d.edgeTypes.join(', ')}: ${d.path}`).join('\n')
+        ? impactResult.value.dependents
+            .map((d) => `${d.edgeTypes.join(', ')}: ${d.path}`)
+            .join('\n')
         : '';
 
       const prompt = PROMPTS.review_change.build({
@@ -275,20 +315,36 @@ export function registerAITools(
       const resultLimit = maxResults ?? 10;
 
       if (!embeddingService || !vectorStore) {
-        return { content: [{ type: 'text', text: j({ error: 'Vector search requires AI embeddings to be enabled' }) }], isError: true };
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({ error: 'Vector search requires AI embeddings to be enabled' }),
+            },
+          ],
+          isError: true,
+        };
       }
 
       let queryText: string;
       if (symbol_id) {
         const sym = store.getSymbolBySymbolId(symbol_id);
         if (!sym) {
-          return { content: [{ type: 'text', text: j({ error: 'Symbol not found' }) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j({ error: 'Symbol not found' }) }],
+            isError: true,
+          };
         }
-        queryText = [sym.kind, sym.fqn ?? sym.name, sym.signature ?? '', sym.summary ?? ''].join(' ');
+        queryText = [sym.kind, sym.fqn ?? sym.name, sym.signature ?? '', sym.summary ?? ''].join(
+          ' ',
+        );
       } else if (query) {
         queryText = query;
       } else {
-        return { content: [{ type: 'text', text: j({ error: 'Provide symbol_id or query' }) }], isError: true };
+        return {
+          content: [{ type: 'text', text: j({ error: 'Provide symbol_id or query' }) }],
+          isError: true,
+        };
       }
 
       const embedding = await embeddingService.embed(queryText, 'query');
@@ -310,27 +366,35 @@ export function registerAITools(
       if (reranker && vectorResults.length > 1) {
         const docs = vectorResults.map((r) => {
           const sym = store.getSymbolById(r.id);
-          return { id: r.id, text: sym ? `${sym.kind} ${sym.fqn ?? sym.name} ${sym.signature ?? ''}` : '' };
+          return {
+            id: r.id,
+            text: sym ? `${sym.kind} ${sym.fqn ?? sym.name} ${sym.signature ?? ''}` : '',
+          };
         });
         try {
           const reranked = await reranker.rerank(queryText, docs, resultLimit);
           vectorResults = reranked.map((r) => ({ id: r.id, score: r.score }));
-        } catch { /* keep original order */ }
+        } catch {
+          /* keep original order */
+        }
       }
 
-      const results = vectorResults.slice(0, resultLimit).map((r) => {
-        const sym = store.getSymbolById(r.id);
-        const file = sym ? store.getFileById(sym.file_id) : undefined;
-        return {
-          symbol_id: sym?.symbol_id,
-          name: sym?.name,
-          kind: sym?.kind,
-          fqn: sym?.fqn,
-          file: file?.path,
-          similarity: Math.round(r.score * 1000) / 1000,
-          summary: sym?.summary ?? null,
-        };
-      }).filter((r) => r.symbol_id);
+      const results = vectorResults
+        .slice(0, resultLimit)
+        .map((r) => {
+          const sym = store.getSymbolById(r.id);
+          const file = sym ? store.getFileById(sym.file_id) : undefined;
+          return {
+            symbol_id: sym?.symbol_id,
+            name: sym?.name,
+            kind: sym?.kind,
+            fqn: sym?.fqn,
+            file: file?.path,
+            similarity: Math.round(r.score * 1000) / 1000,
+            summary: sym?.summary ?? null,
+          };
+        })
+        .filter((r) => r.symbol_id);
 
       return { content: [{ type: 'text', text: j({ results }) }] };
     },
@@ -341,8 +405,19 @@ export function registerAITools(
     'explain_architecture',
     'AI-powered architecture analysis — layers, patterns, and data flow',
     {
-      scope: z.string().optional().describe('Scope to analyze (e.g. "authentication", "data layer", or empty for full project)'),
-      token_budget: z.number().int().min(500).max(16000).optional().describe('Token budget for context (default 6000)'),
+      scope: z
+        .string()
+        .optional()
+        .describe(
+          'Scope to analyze (e.g. "authentication", "data layer", or empty for full project)',
+        ),
+      token_budget: z
+        .number()
+        .int()
+        .min(500)
+        .max(16000)
+        .optional()
+        .describe('Token budget for context (default 6000)'),
     },
     async ({ scope, token_budget }) => {
       const budget = token_budget ?? 6000;
@@ -352,8 +427,12 @@ export function registerAITools(
 
       if (scope) {
         // Use FTS to find relevant symbols
-        const ftsQuery = scope.split(/\s+/).map((t) => `"${t}"`).join(' OR ');
-        const ftsResults = store.db.prepare(`
+        const ftsQuery = scope
+          .split(/\s+/)
+          .map((t) => `"${t}"`)
+          .join(' OR ');
+        const ftsResults = store.db
+          .prepare(`
           SELECT s.*, f.path as file_path
           FROM symbols_fts fts
           JOIN symbols s ON s.id = fts.rowid
@@ -361,7 +440,8 @@ export function registerAITools(
           WHERE symbols_fts MATCH ?
           ORDER BY rank
           LIMIT 30
-        `).all(ftsQuery) as (SymbolRow & { file_path: string })[];
+        `)
+          .all(ftsQuery) as (SymbolRow & { file_path: string })[];
 
         for (const row of ftsResults) {
           const file = store.getFileById(row.file_id);
@@ -370,13 +450,15 @@ export function registerAITools(
         }
       } else {
         // Get top classes/interfaces as architectural anchors
-        const topSymbols = store.db.prepare(`
+        const topSymbols = store.db
+          .prepare(`
           SELECT s.*, f.path as file_path
           FROM symbols s
           JOIN files f ON f.id = s.file_id
           WHERE s.kind IN ('class', 'interface', 'trait')
           LIMIT 30
-        `).all() as (SymbolRow & { file_path: string })[];
+        `)
+          .all() as (SymbolRow & { file_path: string })[];
 
         for (const row of topSymbols) {
           const file = store.getFileById(row.file_id);

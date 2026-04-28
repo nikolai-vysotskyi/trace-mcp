@@ -10,8 +10,15 @@
  * - **Multi-line signatures**: looks ahead to capture complete signatures
  */
 import { ok } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../plugin-api/types.js';
 import type { TraceMcpResult } from '../../../errors.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../plugin-api/types.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -104,7 +111,8 @@ function buildLineIndex(source: string): number[] {
 }
 
 function lineAtFast(lineStarts: number[], offset: number): number {
-  let lo = 0, hi = lineStarts.length - 1;
+  let lo = 0;
+  let hi = lineStarts.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
     if (lineStarts[mid] <= offset) lo = mid + 1;
@@ -127,7 +135,10 @@ const DEFAULT_COMMENT_STYLE: CommentStyle = {
   strings: ['"', "'"],
 };
 
-export function stripCommentsAndStrings(source: string, style: CommentStyle = DEFAULT_COMMENT_STYLE): string {
+export function stripCommentsAndStrings(
+  source: string,
+  style: CommentStyle = DEFAULT_COMMENT_STYLE,
+): string {
   const chars = [...source];
   const len = source.length;
   let i = 0;
@@ -142,8 +153,14 @@ export function stripCommentsAndStrings(source: string, style: CommentStyle = DE
           i += delim.length;
           // Find closing delimiter (handle escape with backslash)
           while (i < len) {
-            if (source[i] === '\\') { i += 2; continue; }
-            if (source.startsWith(delim, i)) { i += delim.length; break; }
+            if (source[i] === '\\') {
+              i += 2;
+              continue;
+            }
+            if (source.startsWith(delim, i)) {
+              i += delim.length;
+              break;
+            }
             i++;
           }
           // Blank out the string (keep newlines for line counting)
@@ -210,19 +227,21 @@ function findBlockEnd(
 
   if (style === 'braces') {
     return findBraceBlockEnd(stripped, openOffset);
-  } else if (style === 'keyword-end') {
-    return findKeywordBlockEnd(stripped, openOffset, scopeConfig!);
-  } else {
-    return findIndentBlockEnd(stripped, openOffset);
   }
+  if (style === 'keyword-end') {
+    return findKeywordBlockEnd(stripped, openOffset, scopeConfig!);
+  }
+  return findIndentBlockEnd(stripped, openOffset);
 }
 
 function findBraceBlockEnd(source: string, start: number): number {
   let depth = 0;
   let foundOpen = false;
   for (let i = start; i < source.length; i++) {
-    if (source[i] === '{') { depth++; foundOpen = true; }
-    else if (source[i] === '}') {
+    if (source[i] === '{') {
+      depth++;
+      foundOpen = true;
+    } else if (source[i] === '}') {
       depth--;
       if (foundOpen && depth === 0) return i + 1;
     }
@@ -237,8 +256,8 @@ function findKeywordBlockEnd(source: string, start: number, config: ScopeConfig)
   let depth = 0;
   // Scan from start
   const text = source.slice(start);
-  const openRe = new RegExp(openKeywords.source, openKeywords.flags.replace('g', '') + 'g');
-  const endRe = new RegExp(endKeywords.source, endKeywords.flags.replace('g', '') + 'g');
+  const openRe = new RegExp(openKeywords.source, `${openKeywords.flags.replace('g', '')}g`);
+  const endRe = new RegExp(endKeywords.source, `${endKeywords.flags.replace('g', '')}g`);
 
   // Collect all open/close keyword positions
   const events: Array<{ offset: number; type: 'open' | 'close' }> = [];
@@ -332,10 +351,15 @@ function extractSignature(text: string, maxLen = 120): string {
   const firstLine = text.split('\n')[0].trim();
   const braceIdx = firstLine.lastIndexOf('{');
   const sig = braceIdx > 0 ? firstLine.substring(0, braceIdx).trim() : firstLine;
-  return sig.length > maxLen ? sig.slice(0, maxLen) + '…' : sig;
+  return sig.length > maxLen ? `${sig.slice(0, maxLen)}…` : sig;
 }
 
-function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parentName?: string): string {
+function makeSymbolId(
+  filePath: string,
+  name: string,
+  kind: SymbolKind,
+  parentName?: string,
+): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;
   return `${filePath}::${name}#${kind}`;
 }
@@ -364,12 +388,13 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
       const seen = new Set<string>();
 
       // Track container ranges for memberOnly filtering
-      const containerRanges: Array<{ name: string; kind: SymbolKind; start: number; end: number }> = [];
+      const containerRanges: Array<{ name: string; kind: SymbolKind; start: number; end: number }> =
+        [];
 
       // ── Pass 1: Containers ───────────────────────────────────────────
       if (config.containerPatterns) {
         for (const cp of config.containerPatterns) {
-          const flags = cp.pattern.flags.includes('g') ? cp.pattern.flags : cp.pattern.flags + 'g';
+          const flags = cp.pattern.flags.includes('g') ? cp.pattern.flags : `${cp.pattern.flags}g`;
           const re = new RegExp(cp.pattern.source, flags);
           let m: RegExpExecArray | null;
 
@@ -412,8 +437,10 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
             const bodyText = stripped.substring(bodyStart, blockEnd);
             const bodyOriginal = originalSource.substring(bodyStart, blockEnd);
 
-            for (const mp of (cp.memberPatterns ?? [])) {
-              const mFlags = mp.pattern.flags.includes('g') ? mp.pattern.flags : mp.pattern.flags + 'g';
+            for (const mp of cp.memberPatterns ?? []) {
+              const mFlags = mp.pattern.flags.includes('g')
+                ? mp.pattern.flags
+                : `${mp.pattern.flags}g`;
               const mRe = new RegExp(mp.pattern.source, mFlags);
               let mm: RegExpExecArray | null;
 
@@ -426,7 +453,12 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
                 seen.add(mSid);
 
                 const absOffset = bodyStart + mm.index;
-                const memberDoc = extractDocComment(originalSource, absOffset, lineStarts, config.docComments);
+                const memberDoc = extractDocComment(
+                  originalSource,
+                  absOffset,
+                  lineStarts,
+                  config.docComments,
+                );
                 const memberMeta = { ...mp.meta };
                 if (memberDoc) memberMeta.doc = memberDoc;
                 const hasMemberMeta = Object.keys(memberMeta).length > 0;
@@ -453,7 +485,7 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
       // ── Pass 3: Top-level symbols ──────────────────────────────────
       if (config.symbolPatterns) {
         for (const sp of config.symbolPatterns) {
-          const flags = sp.pattern.flags.includes('g') ? sp.pattern.flags : sp.pattern.flags + 'g';
+          const flags = sp.pattern.flags.includes('g') ? sp.pattern.flags : `${sp.pattern.flags}g`;
           const re = new RegExp(sp.pattern.source, flags);
           let m: RegExpExecArray | null;
 
@@ -463,7 +495,7 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
 
             // Check if inside a container
             const insideContainer = containerRanges.find(
-              c => m!.index >= c.start && m!.index < c.end,
+              (c) => m!.index >= c.start && m!.index < c.end,
             );
 
             // memberOnly patterns only match inside containers
@@ -503,7 +535,7 @@ export function createMultiPassPlugin(config: MultiPassConfig): LanguagePlugin {
       if (config.importPatterns) {
         const seenEdges = new Set<string>();
         for (const ip of config.importPatterns) {
-          const flags = ip.pattern.flags.includes('g') ? ip.pattern.flags : ip.pattern.flags + 'g';
+          const flags = ip.pattern.flags.includes('g') ? ip.pattern.flags : `${ip.pattern.flags}g`;
           const re = new RegExp(ip.pattern.source, flags);
           let m: RegExpExecArray | null;
 

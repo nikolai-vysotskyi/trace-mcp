@@ -3,9 +3,9 @@
  * Merges framework presets, deduplicates, applies base excludes.
  */
 
-import { TraceMcpConfigSchema, type TraceMcpConfig } from '../config.js';
+import { type TraceMcpConfig, TraceMcpConfigSchema } from '../config.js';
+import { BASE_EXCLUDE, FRAMEWORK_PRESETS, LANGUAGE_PRESETS } from './presets.js';
 import type { DetectionResult } from './types.js';
-import { FRAMEWORK_PRESETS, LANGUAGE_PRESETS, BASE_EXCLUDE } from './presets.js';
 
 export function generateConfig(detection: DetectionResult): TraceMcpConfig {
   const include = new Set<string>();

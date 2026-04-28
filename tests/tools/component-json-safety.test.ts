@@ -2,7 +2,7 @@
  * Tests that getComponentTree does not crash when stored JSON fields are malformed.
  * This can happen if the DB is written by an older version or if data is corrupted.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { getComponentTree } from '../../src/tools/framework/components.js';
@@ -21,10 +21,10 @@ function setupWithCorruptedComponent() {
     VALUES (?, 'Broken', 'component', ?, ?, ?, ?, 'vue')
   `).run(
     fileId,
-    '{not valid json',       // malformed props
-    '[also broken',          // malformed emits
-    '{"slots": [broken}',   // malformed slots
-    'not json at all',       // malformed composables
+    '{not valid json', // malformed props
+    '[also broken', // malformed emits
+    '{"slots": [broken}', // malformed slots
+    'not json at all', // malformed composables
   );
 
   return { db, store };
@@ -56,12 +56,20 @@ describe('getComponentTree JSON.parse safety', () => {
   });
 
   it('still builds children when root JSON fields are corrupted', () => {
-    const { db, store } = setupWithCorruptedComponent();
+    const { store } = setupWithCorruptedComponent();
 
     // Add a child file + component with valid JSON
     const childFileId = store.insertFile('src/Child.vue', 'vue', 'def456', 100);
     store.insertComponent(
-      { name: 'Child', kind: 'component', props: { label: 'string' }, emits: [], slots: [], composables: [], framework: 'vue' },
+      {
+        name: 'Child',
+        kind: 'component',
+        props: { label: 'string' },
+        emits: [],
+        slots: [],
+        composables: [],
+        framework: 'vue',
+      },
       childFileId,
     );
 

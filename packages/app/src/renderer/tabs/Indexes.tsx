@@ -1,14 +1,23 @@
 import { useState } from 'react';
+import { removeRecentProject } from '../App';
 import { ProjectRow } from '../components/ProjectRow';
 import { useDaemon } from '../hooks/useDaemon';
-import { removeRecentProject } from '../App';
 
 interface IndexesProps {
   onOpenProject: (root: string) => void;
 }
 
 export function Indexes({ onOpenProject }: IndexesProps) {
-  const { projects, loading, connected, restarting, addProject, removeProject, reindexProject, restartDaemon } = useDaemon();
+  const {
+    projects,
+    loading,
+    connected,
+    restarting,
+    addProject,
+    removeProject,
+    reindexProject,
+    restartDaemon,
+  } = useDaemon();
   const [showAddInput, setShowAddInput] = useState(false);
   const [addPath, setAddPath] = useState('');
 
@@ -38,6 +47,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
           Daemon not reachable
         </div>
         <button
+          type="button"
           onClick={() => restartDaemon()}
           disabled={restarting}
           className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
@@ -66,6 +76,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
         </h2>
         <div className="flex gap-1">
           <button
+            type="button"
             onClick={handleAddFolder}
             className="text-xs px-2 py-1 rounded-md font-medium transition-colors"
             style={{ background: 'var(--accent)', color: '#fff' }}
@@ -74,6 +85,7 @@ export function Indexes({ onOpenProject }: IndexesProps) {
             + Add
           </button>
           <button
+            type="button"
             onClick={handleAddManual}
             className="text-xs px-2 py-1 rounded-md font-medium transition-colors"
             style={{ color: 'var(--accent)', border: '1px solid var(--accent)' }}
@@ -87,16 +99,28 @@ export function Indexes({ onOpenProject }: IndexesProps) {
       {showAddInput && (
         <div className="flex gap-1">
           <input
+            // biome-ignore lint/a11y/noAutofocus: input is rendered on-demand by user action (showAddInput); auto-focus is the expected UX for inline editors.
             autoFocus
             type="text"
             placeholder="/path/to/project"
             value={addPath}
             onChange={(e) => setAddPath(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAddManual(); if (e.key === 'Escape') { setShowAddInput(false); setAddPath(''); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAddManual();
+              if (e.key === 'Escape') {
+                setShowAddInput(false);
+                setAddPath('');
+              }
+            }}
             className="flex-1 text-xs px-2 py-1 rounded-md outline-none"
-            style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            style={{
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border)',
+            }}
           />
           <button
+            type="button"
             onClick={handleAddManual}
             className="text-xs px-2 py-1 rounded-md font-medium"
             style={{ background: 'var(--accent)', color: '#fff' }}
@@ -104,7 +128,11 @@ export function Indexes({ onOpenProject }: IndexesProps) {
             OK
           </button>
           <button
-            onClick={() => { setShowAddInput(false); setAddPath(''); }}
+            type="button"
+            onClick={() => {
+              setShowAddInput(false);
+              setAddPath('');
+            }}
             className="text-xs px-2 py-1 rounded-md"
             style={{ color: 'var(--text-secondary)' }}
           >
@@ -135,7 +163,10 @@ export function Indexes({ onOpenProject }: IndexesProps) {
               error={p.error}
               progress={p.progress}
               onReindex={() => reindexProject(p.root)}
-              onRemove={() => { removeProject(p.root); removeRecentProject(p.root); }}
+              onRemove={() => {
+                removeProject(p.root);
+                removeRecentProject(p.root);
+              }}
               onClick={() => onOpenProject(p.root)}
             />
           ))}

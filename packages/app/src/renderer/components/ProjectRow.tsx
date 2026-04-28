@@ -41,14 +41,30 @@ function statusLabel(status: string): string {
   return status;
 }
 
-export function ProjectRow({ root, status, error, progress, onReindex, onRemove, onClick }: ProjectRowProps) {
+export function ProjectRow({
+  root,
+  status,
+  error,
+  progress,
+  onReindex,
+  onRemove,
+  onClick,
+}: ProjectRowProps) {
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className="px-2 py-1.5 rounded-md group cursor-pointer hover:brightness-110 transition-all"
       style={{ background: 'var(--bg-secondary)' }}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
     >
       <div className="flex items-center gap-2">
         <StatusDot status={statusToDot(status)} />
@@ -72,28 +88,50 @@ export function ProjectRow({ root, status, error, progress, onReindex, onRemove,
             </div>
           )}
         </div>
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: presentational wrapper that only stops bubbling so child <button>s handle keyboard nav themselves. */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: same — wrapper has no semantic role; children carry the actions. */}
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           {!confirmRemove ? (
             <>
               <button
+                type="button"
                 onClick={onReindex}
                 disabled={status === 'indexing'}
                 className="w-7 h-7 flex items-center justify-center rounded-lg disabled:opacity-30 transition-colors hover:bg-[var(--bg-active)]"
                 style={{ color: 'var(--text-secondary)' }}
                 title="Re-index"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M1.5 2.5v4h4" />
                   <path d="M2.3 10a6 6 0 1 0 .9-5.6L1.5 6.5" />
                 </svg>
               </button>
               <button
+                type="button"
                 onClick={() => setConfirmRemove(true)}
                 className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--bg-active)]"
                 style={{ color: 'var(--text-tertiary)' }}
                 title="Remove"
               >
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M4 4l8 8M12 4l-8 8" />
                 </svg>
               </button>
@@ -101,14 +139,23 @@ export function ProjectRow({ root, status, error, progress, onReindex, onRemove,
           ) : (
             <>
               <button
+                type="button"
                 onClick={() => setConfirmRemove(false)}
                 className="text-[11px] px-1.5 py-0.5 rounded-md font-medium transition-colors hover:bg-[var(--bg-active)]"
-                style={{ color: 'var(--text-secondary)', background: 'var(--bg-tertiary, var(--bg-secondary))', border: '1px solid var(--border)' }}
+                style={{
+                  color: 'var(--text-secondary)',
+                  background: 'var(--bg-tertiary, var(--bg-secondary))',
+                  border: '1px solid var(--border)',
+                }}
               >
                 Cancel
               </button>
               <button
-                onClick={() => { onRemove(); setConfirmRemove(false); }}
+                type="button"
+                onClick={() => {
+                  onRemove();
+                  setConfirmRemove(false);
+                }}
                 className="text-[11px] px-1.5 py-0.5 rounded-md font-medium transition-colors"
                 style={{ background: '#ff3b3018', color: '#ff3b30', border: '1px solid #ff3b3040' }}
                 title="Confirm removal"

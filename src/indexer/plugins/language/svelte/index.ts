@@ -4,8 +4,9 @@
  * Extracts: script-level exports, component props ($props), reactive declarations,
  * stores, event dispatchers, actions, and import edges.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'svelte',
@@ -23,7 +24,11 @@ const _plugin = createRegexLanguagePlugin({
     // $: name = (reactive declarations - Svelte 4)
     { kind: 'variable', pattern: /^\s*\$:\s+(\w+)\s*=/gm, meta: { reactive: true } },
     // $derived / $state / $effect (Svelte 5 runes)
-    { kind: 'variable', pattern: /^\s*(?:let|const)\s+(\w+)\s*=\s*\$(?:state|derived|effect)/gm, meta: { rune: true } },
+    {
+      kind: 'variable',
+      pattern: /^\s*(?:let|const)\s+(\w+)\s*=\s*\$(?:state|derived|effect)/gm,
+      meta: { rune: true },
+    },
     // function name (non-exported)
     { kind: 'function', pattern: /^\s*(?:async\s+)?function\s+(\w+)/gm },
     // const name = (non-exported)

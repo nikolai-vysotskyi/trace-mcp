@@ -4,17 +4,23 @@
  * artifacts that may conflict with trace-mcp. Optionally fixes them.
  */
 
-import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { Command } from 'commander';
+import fs from 'node:fs';
 import * as p from '@clack/prompts';
-import { detectConflicts, type Conflict, type ConflictSeverity } from '../init/conflict-detector.js';
-import { fixConflict, fixAllConflicts, type FixResult } from '../init/conflict-resolver.js';
-import { findProjectRoot } from '../project-root.js';
-import { getLauncherPath, getLauncherConfigPath, getLauncherDir, readInstalledLauncherVersion, readLauncherConfig } from '../init/launcher.js';
+import { Command } from 'commander';
+import { type ConflictSeverity, detectConflicts } from '../init/conflict-detector.js';
+import { type FixResult, fixAllConflicts, fixConflict } from '../init/conflict-resolver.js';
+import {
+  getLauncherConfigPath,
+  getLauncherDir,
+  getLauncherPath,
+  readInstalledLauncherVersion,
+  readLauncherConfig,
+} from '../init/launcher.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
+import { findProjectRoot } from '../project-root.js';
 
-const SEVERITY_ICON: Record<ConflictSeverity, string> = {
+const _SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',
   warning: '!',
   info: '-',
@@ -33,145 +39,160 @@ export const doctorCommand = new Command('doctor')
   .option('--dry-run', 'Show what --fix would do without making changes')
   .option('--json', 'Output results as JSON')
   .option('--launcher', 'Diagnose the stable-launcher shim instead of scanning conflicts')
-  .action(async (opts: {
-    fix?: boolean;
-    fixInteractive?: boolean;
-    dryRun?: boolean;
-    json?: boolean;
-    launcher?: boolean;
-  }) => {
-    if (opts.launcher) {
-      const code = diagnoseLauncher({ json: opts.json });
-      process.exit(code);
-    }
-    // Detect project root (optional — doctor works without it)
-    let projectRoot: string | undefined;
-    try {
-      projectRoot = findProjectRoot(process.cwd());
-    } catch {
-      // Not in a project — scan global only
-    }
-
-    const report = detectConflicts(projectRoot);
-    const { conflicts } = report;
-
-    // --- JSON output ---
-    if (opts.json) {
-      if (opts.fix || opts.dryRun) {
-        const results = fixAllConflicts(conflicts, { dryRun: opts.dryRun });
-        console.log(JSON.stringify({ conflicts, fixes: results }, null, 2));
-      } else {
-        console.log(JSON.stringify(report, null, 2));
+  .action(
+    async (opts: {
+      fix?: boolean;
+      fixInteractive?: boolean;
+      dryRun?: boolean;
+      json?: boolean;
+      launcher?: boolean;
+    }) => {
+      if (opts.launcher) {
+        const code = diagnoseLauncher({ json: opts.json });
+        process.exit(code);
       }
-      return;
-    }
-
-    // --- No conflicts ---
-    if (conflicts.length === 0) {
-      if (!opts.json) {
-        p.intro('trace-mcp doctor');
-        p.note('No competing tools or conflicting configurations detected.', 'All clear');
-        p.outro('trace-mcp has exclusive control of code intelligence.');
-      }
-      return;
-    }
-
-    // --- Report conflicts ---
-    p.intro('trace-mcp doctor');
-
-    const critical = conflicts.filter((c) => c.severity === 'critical');
-    const warnings = conflicts.filter((c) => c.severity === 'warning');
-    const info = conflicts.filter((c) => c.severity === 'info');
-
-    const summary = [
-      critical.length > 0 ? `${critical.length} critical` : '',
-      warnings.length > 0 ? `${warnings.length} warning${warnings.length > 1 ? 's' : ''}` : '',
-      info.length > 0 ? `${info.length} info` : '',
-    ].filter(Boolean).join(', ');
-
-    p.note(`Found ${conflicts.length} conflict${conflicts.length > 1 ? 's' : ''}: ${summary}`, 'Scan results');
-
-    // Display each conflict
-    const lines: string[] = [];
-    for (const c of conflicts) {
-      lines.push(`  [${SEVERITY_LABEL[c.severity]}] ${c.summary}`);
-      lines.push(`    ${c.detail}`);
-      lines.push(`    Target: ${shortPath(c.target)}${c.fixable ? '  (auto-fixable)' : '  (manual fix)'}`);
-      lines.push('');
-    }
-    console.log(lines.join('\n'));
-
-    // --- Auto-fix mode ---
-    if (opts.fix) {
-      const fixable = conflicts.filter((c) => c.fixable);
-      if (fixable.length === 0) {
-        p.note('No auto-fixable conflicts found. Manual intervention required.', 'Fix');
-        p.outro('See details above for manual fix instructions.');
-        return;
+      // Detect project root (optional — doctor works without it)
+      let projectRoot: string | undefined;
+      try {
+        projectRoot = findProjectRoot(process.cwd());
+      } catch {
+        // Not in a project — scan global only
       }
 
-      if (!opts.dryRun) {
-        const confirm = await p.confirm({
-          message: `Fix ${fixable.length} conflict${fixable.length > 1 ? 's' : ''} automatically?`,
-          initialValue: true,
-        });
-        if (p.isCancel(confirm) || !confirm) {
-          p.cancel('No changes made.');
-          return;
-        }
-      }
+      const report = detectConflicts(projectRoot);
+      const { conflicts } = report;
 
-      const results = fixAllConflicts(fixable, { dryRun: opts.dryRun });
-      printFixResults(results, opts.dryRun);
-      return;
-    }
-
-    // --- Interactive fix mode ---
-    if (opts.fixInteractive) {
-      const fixable = conflicts.filter((c) => c.fixable);
-      if (fixable.length === 0) {
-        p.note('No auto-fixable conflicts found.', 'Fix');
-        p.outro('See details above for manual fix instructions.');
-        return;
-      }
-
-      const results: FixResult[] = [];
-      for (const conflict of fixable) {
-        const answer = await p.confirm({
-          message: `Fix: ${conflict.summary}?`,
-          initialValue: conflict.severity === 'critical',
-        });
-        if (p.isCancel(answer)) {
-          p.cancel('Stopped.');
-          if (results.length > 0) printFixResults(results);
-          return;
-        }
-        if (answer) {
-          results.push(fixConflict(conflict, { dryRun: opts.dryRun }));
+      // --- JSON output ---
+      if (opts.json) {
+        if (opts.fix || opts.dryRun) {
+          const results = fixAllConflicts(conflicts, { dryRun: opts.dryRun });
+          console.log(JSON.stringify({ conflicts, fixes: results }, null, 2));
         } else {
-          results.push({ conflictId: conflict.id, action: 'skipped', detail: 'User skipped', target: conflict.target });
+          console.log(JSON.stringify(report, null, 2));
         }
+        return;
       }
 
-      printFixResults(results, opts.dryRun);
-      return;
-    }
+      // --- No conflicts ---
+      if (conflicts.length === 0) {
+        if (!opts.json) {
+          p.intro('trace-mcp doctor');
+          p.note('No competing tools or conflicting configurations detected.', 'All clear');
+          p.outro('trace-mcp has exclusive control of code intelligence.');
+        }
+        return;
+      }
 
-    // --- No fix requested — just suggest ---
-    const fixable = conflicts.filter((c) => c.fixable);
-    if (fixable.length > 0) {
+      // --- Report conflicts ---
+      p.intro('trace-mcp doctor');
+
+      const critical = conflicts.filter((c) => c.severity === 'critical');
+      const warnings = conflicts.filter((c) => c.severity === 'warning');
+      const info = conflicts.filter((c) => c.severity === 'info');
+
+      const summary = [
+        critical.length > 0 ? `${critical.length} critical` : '',
+        warnings.length > 0 ? `${warnings.length} warning${warnings.length > 1 ? 's' : ''}` : '',
+        info.length > 0 ? `${info.length} info` : '',
+      ]
+        .filter(Boolean)
+        .join(', ');
+
       p.note(
-        `${fixable.length} conflict${fixable.length > 1 ? 's' : ''} can be fixed automatically.\n` +
-        'Run with --fix to fix all, or --fix-interactive to choose individually.',
-        'Tip',
+        `Found ${conflicts.length} conflict${conflicts.length > 1 ? 's' : ''}: ${summary}`,
+        'Scan results',
       );
-    }
 
-    p.outro(critical.length > 0
-      ? 'Critical conflicts detected — fix them for trace-mcp to work correctly.'
-      : 'Minor conflicts detected — trace-mcp will work but may not be preferred by the AI.',
-    );
-  });
+      // Display each conflict
+      const lines: string[] = [];
+      for (const c of conflicts) {
+        lines.push(`  [${SEVERITY_LABEL[c.severity]}] ${c.summary}`);
+        lines.push(`    ${c.detail}`);
+        lines.push(
+          `    Target: ${shortPath(c.target)}${c.fixable ? '  (auto-fixable)' : '  (manual fix)'}`,
+        );
+        lines.push('');
+      }
+      console.log(lines.join('\n'));
+
+      // --- Auto-fix mode ---
+      if (opts.fix) {
+        const fixable = conflicts.filter((c) => c.fixable);
+        if (fixable.length === 0) {
+          p.note('No auto-fixable conflicts found. Manual intervention required.', 'Fix');
+          p.outro('See details above for manual fix instructions.');
+          return;
+        }
+
+        if (!opts.dryRun) {
+          const confirm = await p.confirm({
+            message: `Fix ${fixable.length} conflict${fixable.length > 1 ? 's' : ''} automatically?`,
+            initialValue: true,
+          });
+          if (p.isCancel(confirm) || !confirm) {
+            p.cancel('No changes made.');
+            return;
+          }
+        }
+
+        const results = fixAllConflicts(fixable, { dryRun: opts.dryRun });
+        printFixResults(results, opts.dryRun);
+        return;
+      }
+
+      // --- Interactive fix mode ---
+      if (opts.fixInteractive) {
+        const fixable = conflicts.filter((c) => c.fixable);
+        if (fixable.length === 0) {
+          p.note('No auto-fixable conflicts found.', 'Fix');
+          p.outro('See details above for manual fix instructions.');
+          return;
+        }
+
+        const results: FixResult[] = [];
+        for (const conflict of fixable) {
+          const answer = await p.confirm({
+            message: `Fix: ${conflict.summary}?`,
+            initialValue: conflict.severity === 'critical',
+          });
+          if (p.isCancel(answer)) {
+            p.cancel('Stopped.');
+            if (results.length > 0) printFixResults(results);
+            return;
+          }
+          if (answer) {
+            results.push(fixConflict(conflict, { dryRun: opts.dryRun }));
+          } else {
+            results.push({
+              conflictId: conflict.id,
+              action: 'skipped',
+              detail: 'User skipped',
+              target: conflict.target,
+            });
+          }
+        }
+
+        printFixResults(results, opts.dryRun);
+        return;
+      }
+
+      // --- No fix requested — just suggest ---
+      const fixable = conflicts.filter((c) => c.fixable);
+      if (fixable.length > 0) {
+        p.note(
+          `${fixable.length} conflict${fixable.length > 1 ? 's' : ''} can be fixed automatically.\n` +
+            'Run with --fix to fix all, or --fix-interactive to choose individually.',
+          'Tip',
+        );
+      }
+
+      p.outro(
+        critical.length > 0
+          ? 'Critical conflicts detected — fix them for trace-mcp to work correctly.'
+          : 'Minor conflicts detected — trace-mcp will work but may not be preferred by the AI.',
+      );
+    },
+  );
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -201,7 +222,7 @@ function printFixResults(results: FixResult[], dryRun?: boolean) {
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   const cwd = process.cwd();
   if (p.startsWith(cwd)) return p.slice(cwd.length + 1) || '.';
   return p;
@@ -231,7 +252,10 @@ function diagnoseLauncher(opts: { json?: boolean }): 0 | 1 {
   const nodeExists = !!config.node && fs.existsSync(config.node);
   const cliExists = !!config.cli && fs.existsSync(config.cli);
 
-  let executionCheck: LauncherReport['executionCheck'] = { ok: false, detail: 'launcher not installed' };
+  let executionCheck: LauncherReport['executionCheck'] = {
+    ok: false,
+    detail: 'launcher not installed',
+  };
   if (fs.existsSync(launcherPath)) {
     const run = spawnSync(launcherPath, ['--version'], { encoding: 'utf-8', timeout: 10_000 });
     if (run.status === 0) {

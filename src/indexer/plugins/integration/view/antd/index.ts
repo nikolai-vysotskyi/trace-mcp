@@ -8,16 +8,15 @@
  * Supports antd v5+ and @ant-design/pro-components.
  */
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 // ── Theme / ConfigProvider extraction ─────────────────────────────────────
 
@@ -25,15 +24,13 @@ import type { TraceMcpResult } from '../../../../../errors.js';
  * Match ConfigProvider theme prop: <ConfigProvider theme={{ token: { ... }, components: { ... } }}>
  * Simplified: look for theme={{ token or theme={{ components
  */
-const CONFIG_PROVIDER_THEME_RE =
-  /ConfigProvider[\s\S]*?theme\s*=\s*\{\s*\{([^]*?)\}\s*\}/g;
+const _CONFIG_PROVIDER_THEME_RE = /ConfigProvider[\s\S]*?theme\s*=\s*\{\s*\{([\s\S]*?)\}\s*\}/g;
 
 /**
  * Match: const theme = { token: { ... }, components: { ... } }
  * Used when theme object is passed by reference.
  */
-const THEME_CONFIG_RE =
-  /(?:export\s+)?(?:const|let)\s+(\w+)\s*(?::\s*ThemeConfig\s*)?=\s*\{/g;
+const THEME_CONFIG_RE = /(?:export\s+)?(?:const|let)\s+(\w+)\s*(?::\s*ThemeConfig\s*)?=\s*\{/g;
 
 interface AntdThemeConfig {
   name: string;
@@ -145,11 +142,18 @@ function extractAntdTableColumns(source: string): AntdTableDef[] {
 function extractAntdImports(source: string): { name: string; package: string }[] {
   const imports: { name: string; package: string }[] = [];
 
-  const importRe =
-    /import\s*\{([^}]+)\}\s*from\s*["'](antd|@ant-design\/[^"']+)["']/g;
+  const importRe = /import\s*\{([^}]+)\}\s*from\s*["'](antd|@ant-design\/[^"']+)["']/g;
   let m: RegExpExecArray | null;
   while ((m = importRe.exec(source)) !== null) {
-    const names = m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+    const names = m[1]
+      .split(',')
+      .map((n) =>
+        n
+          .trim()
+          .split(/\s+as\s+/)[0]
+          .trim(),
+      )
+      .filter(Boolean);
     for (const name of names) {
       imports.push({ name, package: m[2] });
     }
@@ -176,19 +180,33 @@ export class AntDesignPlugin implements FrameworkPlugin {
     };
 
     return (
-      'antd' in deps ||
-      '@ant-design/pro-components' in deps ||
-      '@ant-design/pro-layout' in deps
+      'antd' in deps || '@ant-design/pro-components' in deps || '@ant-design/pro-layout' in deps
     );
   }
 
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'antd_theme', category: 'ui-library', description: 'Ant Design theme/ConfigProvider configuration' },
-        { name: 'antd_form', category: 'ui-library', description: 'Ant Design Form definition with fields' },
-        { name: 'antd_table', category: 'ui-library', description: 'Ant Design Table column definition' },
-        { name: 'uses_antd_component', category: 'ui-library', description: 'Imports Ant Design component' },
+        {
+          name: 'antd_theme',
+          category: 'ui-library',
+          description: 'Ant Design theme/ConfigProvider configuration',
+        },
+        {
+          name: 'antd_form',
+          category: 'ui-library',
+          description: 'Ant Design Form definition with fields',
+        },
+        {
+          name: 'antd_table',
+          category: 'ui-library',
+          description: 'Ant Design Table column definition',
+        },
+        {
+          name: 'uses_antd_component',
+          category: 'ui-library',
+          description: 'Imports Ant Design component',
+        },
       ],
     };
   }

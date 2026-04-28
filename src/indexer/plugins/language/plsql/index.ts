@@ -7,8 +7,9 @@
  * Comment stripping: --, block comments
  * Scope: begin-end
  */
-import { createMultiPassPlugin, type CommentStyle, type ScopeConfig } from '../regex-base-v2.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin, type ScopeConfig } from '../regex-base-v2.js';
 
 const comments: CommentStyle = {
   line: ['--'],
@@ -33,7 +34,8 @@ const _plugin = createMultiPassPlugin({
     // CREATE [OR REPLACE] PACKAGE [BODY] name AS/IS
     {
       kind: 'namespace',
-      pattern: /CREATE\s+(?:OR\s+REPLACE\s+)?PACKAGE\s+(?:BODY\s+)?(?:\w+\.)?(\w+)\s+(?:AS|IS)\b/gim,
+      pattern:
+        /CREATE\s+(?:OR\s+REPLACE\s+)?PACKAGE\s+(?:BODY\s+)?(?:\w+\.)?(\w+)\s+(?:AS|IS)\b/gim,
       memberPatterns: [
         // PROCEDURE name inside package
         { kind: 'function', pattern: /^\s*PROCEDURE\s+(\w+)/gim },
@@ -50,16 +52,27 @@ const _plugin = createMultiPassPlugin({
         // SUBTYPE name IS
         { kind: 'type', pattern: /^\s*SUBTYPE\s+(\w+)\s+IS\b/gim },
         // variable declarations: name type [:= value];
-        { kind: 'variable', pattern: /^\s*(\w+)\s+(?:VARCHAR2|NUMBER|INTEGER|BOOLEAN|DATE|TIMESTAMP|CLOB|BLOB|PLS_INTEGER|BINARY_INTEGER)\b/gim },
+        {
+          kind: 'variable',
+          pattern:
+            /^\s*(\w+)\s+(?:VARCHAR2|NUMBER|INTEGER|BOOLEAN|DATE|TIMESTAMP|CLOB|BLOB|PLS_INTEGER|BINARY_INTEGER)\b/gim,
+        },
       ],
     },
     // CREATE [OR REPLACE] TYPE [BODY] name AS/IS OBJECT
     {
       kind: 'class',
-      pattern: /CREATE\s+(?:OR\s+REPLACE\s+)?TYPE\s+(?:BODY\s+)?(?:\w+\.)?(\w+)\s+(?:AS|IS)\s+(?:OBJECT|TABLE|VARRAY)/gim,
+      pattern:
+        /CREATE\s+(?:OR\s+REPLACE\s+)?TYPE\s+(?:BODY\s+)?(?:\w+\.)?(\w+)\s+(?:AS|IS)\s+(?:OBJECT|TABLE|VARRAY)/gim,
       memberPatterns: [
-        { kind: 'method', pattern: /^\s*(?:MEMBER|STATIC|CONSTRUCTOR)\s+(?:PROCEDURE|FUNCTION)\s+(\w+)/gim },
-        { kind: 'property', pattern: /^\s+(\w+)\s+(?:VARCHAR2|NUMBER|INTEGER|DATE|TIMESTAMP|REF|\w+_t)\b/gim },
+        {
+          kind: 'method',
+          pattern: /^\s*(?:MEMBER|STATIC|CONSTRUCTOR)\s+(?:PROCEDURE|FUNCTION)\s+(\w+)/gim,
+        },
+        {
+          kind: 'property',
+          pattern: /^\s+(\w+)\s+(?:VARCHAR2|NUMBER|INTEGER|DATE|TIMESTAMP|REF|\w+_t)\b/gim,
+        },
       ],
     },
   ],
@@ -70,11 +83,18 @@ const _plugin = createMultiPassPlugin({
     // CREATE [OR REPLACE] FUNCTION name
     { kind: 'function', pattern: /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:\w+\.)?(\w+)/gim },
     // CREATE [OR REPLACE] TRIGGER name
-    { kind: 'function', pattern: /CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+(?:\w+\.)?(\w+)/gim, meta: { trigger: true } },
+    {
+      kind: 'function',
+      pattern: /CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+(?:\w+\.)?(\w+)/gim,
+      meta: { trigger: true },
+    },
     // CREATE TABLE name
     { kind: 'class', pattern: /CREATE\s+(?:GLOBAL\s+TEMPORARY\s+)?TABLE\s+(?:\w+\.)?(\w+)/gim },
     // CREATE [OR REPLACE] [MATERIALIZED] VIEW name
-    { kind: 'class', pattern: /CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+(?:\w+\.)?(\w+)/gim },
+    {
+      kind: 'class',
+      pattern: /CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+(?:\w+\.)?(\w+)/gim,
+    },
     // CREATE [UNIQUE] INDEX name
     { kind: 'variable', pattern: /CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:\w+\.)?(\w+)/gim },
     // CREATE SEQUENCE name

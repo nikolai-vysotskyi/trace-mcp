@@ -2,10 +2,10 @@
  * Tests for store deletion operations, particularly that deleteSymbolsByFile
  * correctly removes all symbol nodes (not leaving orphaned entries in `nodes`).
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import type { RawSymbol } from '../../src/plugin-api/types.js';
+import { createTestStore } from '../test-utils.js';
 
 function makeSymbol(id: string, name: string): RawSymbol {
   return {
@@ -86,10 +86,7 @@ describe('Store.deleteSymbolsByFile', () => {
 
     // Re-index: delete then insert new symbols
     store.deleteSymbolsByFile(fileId);
-    store.insertSymbols(fileId, [
-      makeSymbol('foo::new1', 'new1'),
-      makeSymbol('foo::new2', 'new2'),
-    ]);
+    store.insertSymbols(fileId, [makeSymbol('foo::new1', 'new1'), makeSymbol('foo::new2', 'new2')]);
 
     const symbols = store.getSymbolsByFile(fileId);
     expect(symbols).toHaveLength(2);

@@ -7,7 +7,7 @@
  * MUST NOT add required fields on SessionHandle / RawMessage without
  * first updating every consumer that iterates over the registry.
  */
-import type { TokenUsage, ParsedSession } from '../../analytics/log-parser.js';
+import type { ParsedSession, TokenUsage } from '../../analytics/log-parser.js';
 
 export interface DiscoverOpts {
   /** Absolute path of the project being analyzed. Providers that store per-project

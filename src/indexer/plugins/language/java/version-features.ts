@@ -5,24 +5,24 @@
 
 const JAVA_MIN_VERSION: Record<string, string> = {
   // Java 8 — lambda, method reference, default methods
-  'lambda_expression': '8',
-  'method_reference': '8',
+  lambda_expression: '8',
+  method_reference: '8',
 
   // Java 10 — var
-  'local_variable_type': '10', // tree-sitter may emit this for `var`
+  local_variable_type: '10', // tree-sitter may emit this for `var`
 
   // Java 14 — switch expressions, records (preview)
-  'switch_expression': '14',
+  switch_expression: '14',
 
   // Java 15 — text blocks
-  'text_block': '15',
+  text_block: '15',
 
   // Java 16 — records (final), pattern matching instanceof (final)
-  'record_declaration': '16',
-  'instanceof_expression': '16', // pattern form
+  record_declaration: '16',
+  instanceof_expression: '16', // pattern form
 
   // Java 17 — sealed classes
-  'permits': '17',
+  permits: '17',
 };
 
 /** Source-level patterns for Java features. */
@@ -57,14 +57,17 @@ const JAVA_SOURCE_PATTERNS: [RegExp, string, string][] = [
 ];
 
 /** Detect minimum Java version from AST node types. */
-function detectMinJavaVersion(nodeTypes: string[]): string | undefined {
+function _detectMinJavaVersion(nodeTypes: string[]): string | undefined {
   let max = 0;
   let result: string | undefined;
   for (const nt of nodeTypes) {
     const ver = JAVA_MIN_VERSION[nt];
     if (ver) {
       const num = Number(ver);
-      if (num > max) { max = num; result = ver; }
+      if (num > max) {
+        max = num;
+        result = ver;
+      }
     }
   }
   return result;
@@ -77,7 +80,10 @@ export function detectMinJavaVersionFromSource(source: string): string | undefin
   for (const [re, ver] of JAVA_SOURCE_PATTERNS) {
     if (re.test(source)) {
       const num = Number(ver);
-      if (num > max) { max = num; result = ver; }
+      if (num > max) {
+        max = num;
+        result = ver;
+      }
     }
   }
   return result;

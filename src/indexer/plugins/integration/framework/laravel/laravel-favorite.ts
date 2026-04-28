@@ -44,9 +44,7 @@ export function extractLaravelFavoriteModel(
   const className = classMatch[1];
   const fqn = namespace ? `${namespace}\\${className}` : className;
 
-  const role = isFavoriter && isFavoriteable
-    ? 'both'
-    : isFavoriter ? 'favoriter' : 'favoriteable';
+  const role = isFavoriter && isFavoriteable ? 'both' : isFavoriter ? 'favoriter' : 'favoriteable';
 
   return { className, fqn, role };
 }
@@ -89,7 +87,11 @@ export function buildLaravelFavoriteSymbols(info: LaravelFavoriteModelInfo): Raw
       signature: 'public function favorites(): MorphMany',
       byteStart: 0,
       byteEnd: 0,
-      metadata: { frameworkRole: 'laravel_favorite_relation', modelFqn: info.fqn, role: 'favoriter' },
+      metadata: {
+        frameworkRole: 'laravel_favorite_relation',
+        modelFqn: info.fqn,
+        role: 'favoriter',
+      },
     });
   }
   if (info.role === 'favoriteable' || info.role === 'both') {
@@ -100,7 +102,11 @@ export function buildLaravelFavoriteSymbols(info: LaravelFavoriteModelInfo): Raw
       signature: 'public function favoriters(): BelongsToMany',
       byteStart: 0,
       byteEnd: 0,
-      metadata: { frameworkRole: 'laravel_favorite_relation', modelFqn: info.fqn, role: 'favoriteable' },
+      metadata: {
+        frameworkRole: 'laravel_favorite_relation',
+        modelFqn: info.fqn,
+        role: 'favoriteable',
+      },
     });
   }
   return symbols;

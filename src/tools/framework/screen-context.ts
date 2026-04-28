@@ -2,9 +2,8 @@
  * get_screen_context tool — full context for a React Native screen.
  * Returns component info, navigator, navigation edges, deep link, platform variants.
  */
-import type { Store, RnScreenRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import type { RnScreenRow, Store } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 
 interface ScreenContextResult {
   screen: string;
@@ -28,9 +27,7 @@ export function getScreenContext(
   if (!screen) {
     // Try case-insensitive partial match
     const all = store.getAllRnScreens();
-    screen = all.find((s) =>
-      s.name.toLowerCase().includes(screenName.toLowerCase()),
-    );
+    screen = all.find((s) => s.name.toLowerCase().includes(screenName.toLowerCase()));
   }
 
   if (!screen) {
@@ -60,9 +57,7 @@ function buildContext(store: Store, screen: RnScreenRow): ScreenContextResult {
   // Find screens this screen navigates to (from its metadata.navigationCalls)
   const myCalls: string[] = metadata.navigationCalls ?? [];
   for (const target of myCalls) {
-    const found = allScreens.find(
-      (s) => s.name === target || s.component_path?.includes(target),
-    );
+    const found = allScreens.find((s) => s.name === target || s.component_path?.includes(target));
     if (found) navigatesTo.push(found.name);
     else navigatesTo.push(target);
   }

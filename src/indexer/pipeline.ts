@@ -1,30 +1,32 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { cpus } from 'node:os';
+import path from 'node:path';
 import fg from 'fast-glob';
-import type { Store } from '../db/store.js';
-import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { TraceMcpConfig } from '../config.js';
-import type { ResolveContext, ProjectContext, FrameworkPlugin } from '../plugin-api/types.js';
-import { buildProjectContext } from './project-context.js';
+import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
+import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
-import { detectWorkspaces, buildMultiRootWorkspaces, type WorkspaceInfo } from './monorepo.js';
-import { validatePath } from '../utils/security.js';
-import { GitignoreMatcher } from '../utils/gitignore.js';
-import { TraceignoreMatcher } from '../utils/traceignore.js';
+import type { PluginRegistry } from '../plugin-api/registry.js';
+import type { FrameworkPlugin, ProjectContext, ResolveContext } from '../plugin-api/types.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
-import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
-import { FilePersister } from './file-persister.js';
+import { GitignoreMatcher } from '../utils/gitignore.js';
+import { validatePath } from '../utils/security.js';
+import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
-import { FileExtractor } from './file-extractor.js';
 import { EnvIndexer } from './env-indexer.js';
 import { ExtractPool, type ExtractRequest } from './extract-pool.js';
+import { FileExtractor } from './file-extractor.js';
+import { FilePersister } from './file-persister.js';
+import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import type { PipelineState } from './pipeline-state.js';
+import { buildProjectContext } from './project-context.js';
+
 export type { FileExtraction } from './pipeline-state.js';
-import type { FileExtraction } from './pipeline-state.js';
+
 import type { ProgressState } from '../progress.js';
+import type { FileExtraction } from './pipeline-state.js';
 
 export interface IndexingResult {
   totalFiles: number;
@@ -48,7 +50,10 @@ export class IndexingPipeline {
   private _lock: Promise<unknown> = Promise.resolve();
   private _projectContext: ProjectContext | undefined;
   private _fileContentCache = new Map<string, string>();
-  private _pendingImports = new Map<number, { from: string; specifiers: string[]; relPath: string }[]>();
+  private _pendingImports = new Map<
+    number,
+    { from: string; specifiers: string[]; relPath: string }[]
+  >();
   private _gitignore: GitignoreMatcher | undefined;
   private _traceignore: TraceignoreMatcher | undefined;
   private _changedFileIds = new Set<number>();
@@ -131,11 +136,18 @@ export class IndexingPipeline {
   ): Promise<IndexingResult> {
     const result: IndexingResult = {
       totalFiles: relPaths.length,
-      indexed: 0, skipped: 0, errors: 0, durationMs: 0,
+      indexed: 0,
+      skipped: 0,
+      errors: 0,
+      durationMs: 0,
     };
 
     this.progress?.update('indexing', {
-      phase: 'running', processed: 0, total: relPaths.length, startedAt: Date.now(), completedAt: 0,
+      phase: 'running',
+      processed: 0,
+      total: relPaths.length,
+      startedAt: Date.now(),
+      completedAt: 0,
     });
 
     this._projectContext = undefined;
@@ -227,34 +239,48 @@ export class IndexingPipeline {
         // Continuous dispatch: spawn `pool.size` consumers that each pull
         // from a shared queue. Keeps every worker fed without chunk barriers.
         const queue = batch.slice();
-        await Promise.all(Array.from({ length: pool.size }, async () => {
-          while (queue.length > 0) {
-            const relPath = queue.shift();
-            if (!relPath) return;
-            const existing = existingFiles.get(relPath) ?? null;
-            const gitignored = this._gitignore?.isIgnored(relPath) ?? false;
-            const r = await pool.extract({
-              relPath,
-              rootPath: this.rootPath,
-              force,
-              existing,
-              gitignored,
-              workspaces: this.workspaces,
-            } as ExtractRequest);
-            if (r.kind === 'skipped') { result.skipped++; continue; }
-            if (r.kind === 'error') { result.errors++; continue; }
-            extractions.push(r.extraction);
-          }
-        }));
+        await Promise.all(
+          Array.from({ length: pool.size }, async () => {
+            while (queue.length > 0) {
+              const relPath = queue.shift();
+              if (!relPath) return;
+              const existing = existingFiles.get(relPath) ?? null;
+              const gitignored = this._gitignore?.isIgnored(relPath) ?? false;
+              const r = await pool.extract({
+                relPath,
+                rootPath: this.rootPath,
+                force,
+                existing,
+                gitignored,
+                workspaces: this.workspaces,
+              } as ExtractRequest);
+              if (r.kind === 'skipped') {
+                result.skipped++;
+                continue;
+              }
+              if (r.kind === 'error') {
+                result.errors++;
+                continue;
+              }
+              extractions.push(r.extraction);
+            }
+          }),
+        );
       } else {
         for (let c = 0; c < batch.length; c += CONCURRENCY) {
           const chunk = batch.slice(c, c + CONCURRENCY);
           const results = await Promise.all(
-            chunk.map(relPath => extractor.extract(relPath, force)),
+            chunk.map((relPath) => extractor.extract(relPath, force)),
           );
           for (const ext of results) {
-            if (ext === 'skipped') { result.skipped++; continue; }
-            if (ext === 'error') { result.errors++; continue; }
+            if (ext === 'skipped') {
+              result.skipped++;
+              continue;
+            }
+            if (ext === 'error') {
+              result.errors++;
+              continue;
+            }
             extractions.push(ext);
           }
         }
@@ -288,6 +314,8 @@ export class IndexingPipeline {
     edgeResolver.resolvePythonHeritageEdges();
     edgeResolver.resolvePythonCallEdges();
     edgeResolver.resolveTestCoversEdges();
+    edgeResolver.resolveMarkdownWikilinkEdges();
+    edgeResolver.resolveMarkdownTagEdges();
     // Must run last — projects cross-file symbol edges to file-level `imports`
     // edges so the file dependency graph is as rich as the symbol graph.
     edgeResolver.resolveFileProjectionEdges();
@@ -353,14 +381,22 @@ export class IndexingPipeline {
     const store = this.store;
     return {
       rootPath: this.rootPath,
-      getAllFiles: () => store.getAllFiles().map((f) => ({
-        id: f.id, path: f.path, language: f.language,
-      })),
+      getAllFiles: () =>
+        store.getAllFiles().map((f) => ({
+          id: f.id,
+          path: f.path,
+          language: f.language,
+        })),
       getSymbolsByFile: (fileId: number) =>
         store.getSymbolsByFile(fileId).map((s) => ({
-          id: s.id, symbolId: s.symbol_id, name: s.name, kind: s.kind,
-          fqn: s.fqn, lineStart: s.line_start, lineEnd: s.line_end,
-          metadata: s.metadata ? JSON.parse(s.metadata) as Record<string, unknown> : null,
+          id: s.id,
+          symbolId: s.symbol_id,
+          name: s.name,
+          kind: s.kind,
+          fqn: s.fqn,
+          lineStart: s.line_start,
+          lineEnd: s.line_end,
+          metadata: s.metadata ? (JSON.parse(s.metadata) as Record<string, unknown>) : null,
         })),
       getSymbolByFqn: (fqn: string) => {
         const s = store.getSymbolByFqn(fqn);
@@ -373,7 +409,9 @@ export class IndexingPipeline {
         if (cached !== undefined) return cached;
         try {
           return fs.readFileSync(path.resolve(this.rootPath, relPath), 'utf-8');
-        } catch { return undefined; }
+        } catch {
+          return undefined;
+        }
       },
     };
   }
@@ -405,7 +443,9 @@ export class IndexingPipeline {
     if (!this._extractPool) {
       this._extractPool = new ExtractPool();
       if (!this._extractPool.available) {
-        logger.debug('Extract worker pool unavailable in this runtime — using in-process extraction');
+        logger.debug(
+          'Extract worker pool unavailable in this runtime — using in-process extraction',
+        );
       }
     }
     return this._extractPool.available ? this._extractPool : null;
@@ -447,7 +487,10 @@ export class IndexingPipeline {
           onlyFiles: true,
         });
         if (entries.length > 0) {
-          logger.info({ count: entries.length, root: this.rootPath }, 'Workspace root detected — using deep glob patterns');
+          logger.info(
+            { count: entries.length, root: this.rootPath },
+            'Workspace root detected — using deep glob patterns',
+          );
         }
       }
     }

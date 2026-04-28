@@ -1,9 +1,9 @@
+import { err, ok } from 'neverthrow';
 import type { Store } from '../../db/store.js';
-import type { EdgeResolution } from '../../plugin-api/types.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
-import { ok, err } from 'neverthrow';
-import { resolveSymbolInput } from '../shared/resolve.js';
+import type { EdgeResolution } from '../../plugin-api/types.js';
 import { expandMethodViaCha } from '../shared/cha.js';
+import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface CallGraphEdgeInfo {
   /** How this edge was resolved */
@@ -42,25 +42,43 @@ interface CallGraphResult {
 }
 
 /** Read resolution tier from edge column, with fallback inference for legacy data */
-function inferResolution(edge: { resolved: number; resolution_tier?: string; edge_type_name: string }): EdgeResolution {
+function inferResolution(edge: {
+  resolved: number;
+  resolution_tier?: string;
+  edge_type_name: string;
+}): EdgeResolution {
   const tier = edge.resolution_tier;
-  if (tier === 'lsp_resolved' || tier === 'ast_resolved' || tier === 'ast_inferred' || tier === 'text_matched') return tier;
+  if (
+    tier === 'lsp_resolved' ||
+    tier === 'ast_resolved' ||
+    tier === 'ast_inferred' ||
+    tier === 'text_matched'
+  )
+    return tier;
 
   // Fallback for edges indexed before the resolution_tier column existed
   if (!edge.resolved) return 'text_matched';
-  if (edge.edge_type_name === 'imports' || edge.edge_type_name === 'esm_imports') return 'ast_inferred';
+  if (edge.edge_type_name === 'imports' || edge.edge_type_name === 'esm_imports')
+    return 'ast_inferred';
   return 'ast_resolved';
 }
 
 const CALL_EDGE_TYPES = new Set([
-  'calls', 'references',
+  'calls',
+  'references',
   // Framework-specific "call" semantics
-  'dispatches', 'routes_to', 'validates_with',
-  'nest_injects', 'graphql_resolves',
+  'dispatches',
+  'routes_to',
+  'validates_with',
+  'nest_injects',
+  'graphql_resolves',
   // Import-based edges (fallback when no call edges exist)
-  'esm_imports', 'imports', 'uses',
+  'esm_imports',
+  'imports',
+  'uses',
   // Component/rendering edges
-  'renders_component', 'uses_composable',
+  'renders_component',
+  'uses_composable',
 ]);
 
 /**
@@ -91,15 +109,19 @@ export function getCallGraph(
 
   // CHA expansion: collect polymorphically-equivalent methods to merge their edges
   const chaMatches = expandMethodViaCha(store, symbol);
-  const chaAliasNodeIds = chaMatches
-    .filter((m) => m.relation !== 'self')
-    .map((m) => m.nodeId);
+  const chaAliasNodeIds = chaMatches.filter((m) => m.relation !== 'self').map((m) => m.nodeId);
 
   const edgeTypesUsed = new Set<string>();
   const visited = new Set<number>();
 
   const { node: rootNode, tiers } = buildCallNode(
-    store, symbol.id, nodeId, depth, visited, edgeTypesUsed, chaAliasNodeIds,
+    store,
+    symbol.id,
+    nodeId,
+    depth,
+    visited,
+    edgeTypesUsed,
+    chaAliasNodeIds,
   );
 
   return ok({
@@ -135,7 +157,12 @@ function buildCallNode(
     outgoing: Array<EdgeRef & { nodeId: number }>;
     incoming: Array<EdgeRef & { nodeId: number }>;
   }
-  const tiers: ResolutionTiers = { lsp_resolved: 0, ast_resolved: 0, ast_inferred: 0, text_matched: 0 };
+  const tiers: ResolutionTiers = {
+    lsp_resolved: 0,
+    ast_resolved: 0,
+    ast_inferred: 0,
+    text_matched: 0,
+  };
 
   const nodeInfoMap = new Map<number, NodeInfo>();
   const visited = new Set<number>();
@@ -144,7 +171,12 @@ function buildCallNode(
   let frontier = [rootNodeId, ...chaAliasNodeIds];
   visited.add(rootNodeId);
   for (const alias of chaAliasNodeIds) visited.add(alias);
-  nodeInfoMap.set(rootNodeId, { nodeId: rootNodeId, symbolRefId: rootSymbolId, outgoing: [], incoming: [] });
+  nodeInfoMap.set(rootNodeId, {
+    nodeId: rootNodeId,
+    symbolRefId: rootSymbolId,
+    outgoing: [],
+    incoming: [],
+  });
 
   for (let d = 0; d < maxDepth; d++) {
     if (frontier.length === 0) break;
@@ -167,16 +199,30 @@ function buildCallNode(
       tiers[resolution]++;
 
       // Outgoing: pivot is source, target is the callee
-      if (edge.source_node_id === edge.pivot_node_id && !visited.has(edge.target_node_id)
-        && !chaAliasSet.has(edge.target_node_id)) {
-        pivotInfo.outgoing.push({ nodeId: edge.target_node_id, edgeType: edge.edge_type_name, resolution });
+      if (
+        edge.source_node_id === edge.pivot_node_id &&
+        !visited.has(edge.target_node_id) &&
+        !chaAliasSet.has(edge.target_node_id)
+      ) {
+        pivotInfo.outgoing.push({
+          nodeId: edge.target_node_id,
+          edgeType: edge.edge_type_name,
+          resolution,
+        });
         newNeighbors.add(edge.target_node_id);
       }
 
       // Incoming: pivot is target, source is the caller
-      if (edge.target_node_id === edge.pivot_node_id && !visited.has(edge.source_node_id)
-        && !chaAliasSet.has(edge.source_node_id)) {
-        pivotInfo.incoming.push({ nodeId: edge.source_node_id, edgeType: edge.edge_type_name, resolution });
+      if (
+        edge.target_node_id === edge.pivot_node_id &&
+        !visited.has(edge.source_node_id) &&
+        !chaAliasSet.has(edge.source_node_id)
+      ) {
+        pivotInfo.incoming.push({
+          nodeId: edge.source_node_id,
+          edgeType: edge.edge_type_name,
+          resolution,
+        });
         newNeighbors.add(edge.source_node_id);
       }
     }
@@ -204,7 +250,7 @@ function buildCallNode(
   const fileMap = allFileIds.length > 0 ? store.getFilesByIds(allFileIds) : new Map();
 
   // Phase 3: Build tree from pre-fetched data
-  const builtNodes = new Map<number, CallGraphNode>();
+  const _builtNodes = new Map<number, CallGraphNode>();
 
   function buildFromInfo(nodeId: number, depth: number, buildVisited: Set<number>): CallGraphNode {
     const info = nodeInfoMap.get(nodeId);
@@ -218,8 +264,8 @@ function buildCallNode(
     buildVisited.add(nodeId);
 
     if (depth <= 0) {
-      delete node.calls;
-      delete node.called_by;
+      node.calls = undefined;
+      node.called_by = undefined;
       return node;
     }
 
@@ -239,8 +285,8 @@ function buildCallNode(
       node.called_by!.push(child);
     }
 
-    if (node.calls!.length === 0) delete node.calls;
-    if (node.called_by!.length === 0) delete node.called_by;
+    if (node.calls!.length === 0) node.calls = undefined;
+    if (node.called_by!.length === 0) node.called_by = undefined;
     return node;
   }
 
@@ -254,5 +300,13 @@ function makeNode(
   calls: CallGraphNode[],
   called_by: CallGraphNode[],
 ): CallGraphNode {
-  return { symbol_id: symbol.symbol_id, name: symbol.name, kind: symbol.kind, file: filePath, line, calls, called_by };
+  return {
+    symbol_id: symbol.symbol_id,
+    name: symbol.name,
+    kind: symbol.kind,
+    file: filePath,
+    line,
+    calls,
+    called_by,
+  };
 }

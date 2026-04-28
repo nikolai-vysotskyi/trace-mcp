@@ -40,9 +40,21 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const sid = str(dig(r, 'symbol_id'));
     if (sid) {
-      hints.push({ tool: 'get_call_graph', args: { symbol_id: sid }, why: 'See who calls this and what it calls' });
-      hints.push({ tool: 'get_change_impact', args: { symbol_id: sid }, why: 'Check what breaks if you change this' });
-      hints.push({ tool: 'get_tests_for', args: { symbol_id: sid }, why: 'Find tests covering this symbol' });
+      hints.push({
+        tool: 'get_call_graph',
+        args: { symbol_id: sid },
+        why: 'See who calls this and what it calls',
+      });
+      hints.push({
+        tool: 'get_change_impact',
+        args: { symbol_id: sid },
+        why: 'Check what breaks if you change this',
+      });
+      hints.push({
+        tool: 'get_tests_for',
+        args: { symbol_id: sid },
+        why: 'Find tests covering this symbol',
+      });
     }
     return hints;
   },
@@ -54,13 +66,25 @@ const hintGenerators: Record<string, HintGenerator> = {
       const first = items[0] as Record<string, unknown>;
       const sid = str(first?.symbol_id);
       if (sid) {
-        hints.push({ tool: 'get_symbol', args: { symbol_id: sid }, why: 'Read the full source of the top result' });
-        hints.push({ tool: 'get_context_bundle', args: { symbol_id: sid }, why: 'Get the symbol + its imports in one call' });
+        hints.push({
+          tool: 'get_symbol',
+          args: { symbol_id: sid },
+          why: 'Read the full source of the top result',
+        });
+        hints.push({
+          tool: 'get_context_bundle',
+          args: { symbol_id: sid },
+          why: 'Get the symbol + its imports in one call',
+        });
       }
     }
     const total = dig(r, 'total');
     if (typeof total === 'number' && total > 20) {
-      hints.push({ tool: 'search', args: { kind: '<specific_kind>' }, why: `${total} results — narrow with kind/language/file_pattern filters` });
+      hints.push({
+        tool: 'search',
+        args: { kind: '<specific_kind>' },
+        why: `${total} results — narrow with kind/language/file_pattern filters`,
+      });
     }
     return hints;
   },
@@ -72,7 +96,11 @@ const hintGenerators: Record<string, HintGenerator> = {
       const first = symbols[0] as Record<string, unknown>;
       const sid = str(first?.symbol_id);
       if (sid) {
-        hints.push({ tool: 'get_symbol', args: { symbol_id: sid }, why: 'Read the source of a specific symbol' });
+        hints.push({
+          tool: 'get_symbol',
+          args: { symbol_id: sid },
+          why: 'Read the source of a specific symbol',
+        });
       }
     }
     return hints;
@@ -82,18 +110,34 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const deps = arr(dig(r, 'dependents'));
     if (deps.length > 0) {
-      hints.push({ tool: 'get_tests_for', args: { symbol_id: '<affected_symbol>' }, why: 'Find tests for affected dependents' });
+      hints.push({
+        tool: 'get_tests_for',
+        args: { symbol_id: '<affected_symbol>' },
+        why: 'Find tests for affected dependents',
+      });
     }
-    hints.push({ tool: 'check_rename_safe', args: { symbol_id: '<symbol>' }, why: 'Verify rename is safe across all usages' });
+    hints.push({
+      tool: 'check_rename_safe',
+      args: { symbol_id: '<symbol>' },
+      why: 'Verify rename is safe across all usages',
+    });
     return hints;
   },
 
   get_call_graph(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_change_impact', args: { symbol_id: '<symbol>' }, why: 'See full reverse dependency chain beyond direct callers' });
+    hints.push({
+      tool: 'get_change_impact',
+      args: { symbol_id: '<symbol>' },
+      why: 'See full reverse dependency chain beyond direct callers',
+    });
     const callers = arr(dig(r, 'callers'));
     if (callers.length > 5) {
-      hints.push({ tool: 'get_extraction_candidates', args: {}, why: 'High fan-in — check if this is an extraction candidate' });
+      hints.push({
+        tool: 'get_extraction_candidates',
+        args: {},
+        why: 'High fan-in — check if this is an extraction candidate',
+      });
     }
     return hints;
   },
@@ -102,8 +146,16 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const refs = arr(dig(r, 'references'));
     if (refs.length > 0) {
-      hints.push({ tool: 'get_change_impact', args: { symbol_id: '<symbol>' }, why: 'See transitive impact beyond direct references' });
-      hints.push({ tool: 'get_tests_for', args: { symbol_id: '<symbol>' }, why: 'Find tests covering this symbol' });
+      hints.push({
+        tool: 'get_change_impact',
+        args: { symbol_id: '<symbol>' },
+        why: 'See transitive impact beyond direct references',
+      });
+      hints.push({
+        tool: 'get_tests_for',
+        args: { symbol_id: '<symbol>' },
+        why: 'Find tests covering this symbol',
+      });
     }
     return hints;
   },
@@ -112,10 +164,22 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const handler = str(dig(r, 'handler', 'symbol_id'));
     if (handler) {
-      hints.push({ tool: 'get_symbol', args: { symbol_id: handler }, why: 'Read the controller/handler source' });
-      hints.push({ tool: 'get_call_graph', args: { symbol_id: handler }, why: 'See what the handler calls' });
+      hints.push({
+        tool: 'get_symbol',
+        args: { symbol_id: handler },
+        why: 'Read the controller/handler source',
+      });
+      hints.push({
+        tool: 'get_call_graph',
+        args: { symbol_id: handler },
+        why: 'See what the handler calls',
+      });
     }
-    hints.push({ tool: 'get_middleware_chain', args: { url: '<url>' }, why: 'See middleware applied to this route' });
+    hints.push({
+      tool: 'get_middleware_chain',
+      args: { url: '<url>' },
+      why: 'See middleware applied to this route',
+    });
     return hints;
   },
 
@@ -123,8 +187,16 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const name = str(dig(r, 'model', 'name')) || str(dig(r, 'name'));
     if (name) {
-      hints.push({ tool: 'get_schema', args: { table_name: name.toLowerCase() + 's' }, why: 'See the full DB schema for this model\'s table' });
-      hints.push({ tool: 'find_usages', args: { fqn: name }, why: 'Find all places that use this model' });
+      hints.push({
+        tool: 'get_schema',
+        args: { table_name: `${name.toLowerCase()}s` },
+        why: "See the full DB schema for this model's table",
+      });
+      hints.push({
+        tool: 'find_usages',
+        args: { fqn: name },
+        why: 'Find all places that use this model',
+      });
     }
     return hints;
   },
@@ -133,7 +205,11 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const tests = arr(dig(r, 'tests'));
     if (tests.length === 0) {
-      hints.push({ tool: 'get_symbol', args: { symbol_id: '<symbol>' }, why: 'No tests found — read the source to write tests manually' });
+      hints.push({
+        tool: 'get_symbol',
+        args: { symbol_id: '<symbol>' },
+        why: 'No tests found — read the source to write tests manually',
+      });
     }
     return hints;
   },
@@ -145,8 +221,16 @@ const hintGenerators: Record<string, HintGenerator> = {
       const first = symbols[0] as Record<string, unknown>;
       const sid = str(first?.symbol_id);
       if (sid) {
-        hints.push({ tool: 'get_context_bundle', args: { symbol_id: sid }, why: 'Get deeper context for the most relevant symbol' });
-        hints.push({ tool: 'get_change_impact', args: { symbol_id: sid }, why: 'Understand impact before making changes' });
+        hints.push({
+          tool: 'get_context_bundle',
+          args: { symbol_id: sid },
+          why: 'Get deeper context for the most relevant symbol',
+        });
+        hints.push({
+          tool: 'get_change_impact',
+          args: { symbol_id: sid },
+          why: 'Understand impact before making changes',
+        });
       }
     }
     return hints;
@@ -154,7 +238,11 @@ const hintGenerators: Record<string, HintGenerator> = {
 
   get_task_context(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_change_impact', args: { symbol_id: '<entry_point>' }, why: 'Verify blast radius before starting changes' });
+    hints.push({
+      tool: 'get_change_impact',
+      args: { symbol_id: '<entry_point>' },
+      why: 'Verify blast radius before starting changes',
+    });
     return hints;
   },
 
@@ -171,8 +259,16 @@ const hintGenerators: Record<string, HintGenerator> = {
     for (const sym of symbols.slice(0, 1)) {
       const sid = str((sym as Record<string, unknown>)?.symbol_id);
       if (sid) {
-        hints.push({ tool: 'get_change_impact', args: { symbol_id: sid }, why: 'Check what depends on this before editing' });
-        hints.push({ tool: 'get_tests_for', args: { symbol_id: sid }, why: 'Find tests to run after changes' });
+        hints.push({
+          tool: 'get_change_impact',
+          args: { symbol_id: sid },
+          why: 'Check what depends on this before editing',
+        });
+        hints.push({
+          tool: 'get_tests_for',
+          args: { symbol_id: sid },
+          why: 'Find tests to run after changes',
+        });
       }
     }
     return hints;
@@ -180,44 +276,70 @@ const hintGenerators: Record<string, HintGenerator> = {
 
   get_component_tree(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_change_impact', args: { file_path: '<component_path>' }, why: 'See what depends on this component' });
+    hints.push({
+      tool: 'get_change_impact',
+      args: { file_path: '<component_path>' },
+      why: 'See what depends on this component',
+    });
     return hints;
   },
 
   get_event_graph(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_call_graph', args: { symbol_id: '<listener>' }, why: 'Trace what an event listener does' });
+    hints.push({
+      tool: 'get_call_graph',
+      args: { symbol_id: '<listener>' },
+      why: 'Trace what an event listener does',
+    });
     return hints;
   },
 
   get_module_graph(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_di_tree', args: { service_name: '<provider>' }, why: 'Trace DI dependencies for a specific provider' });
+    hints.push({
+      tool: 'get_di_tree',
+      args: { service_name: '<provider>' },
+      why: 'Trace DI dependencies for a specific provider',
+    });
     return hints;
   },
 
   get_di_tree(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_change_impact', args: { symbol_id: '<service>' }, why: 'See what breaks if you change this service' });
+    hints.push({
+      tool: 'get_change_impact',
+      args: { symbol_id: '<service>' },
+      why: 'See what breaks if you change this service',
+    });
     return hints;
   },
 
   get_coupling_metrics(r) {
     const hints: Hint[] = [];
     hints.push({ tool: 'get_dependency_cycles', why: 'Find circular dependency chains' });
-    hints.push({ tool: 'get_extraction_candidates', why: 'Find functions worth extracting to reduce coupling' });
+    hints.push({
+      tool: 'get_extraction_candidates',
+      why: 'Find functions worth extracting to reduce coupling',
+    });
     return hints;
   },
 
   get_dependency_cycles(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_layer_violations', why: 'Check if cycles violate architectural layers' });
+    hints.push({
+      tool: 'get_layer_violations',
+      why: 'Check if cycles violate architectural layers',
+    });
     return hints;
   },
 
   get_dead_code(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'remove_dead_code', args: { symbol_id: '<dead_symbol>' }, why: 'Safely remove confirmed dead code' });
+    hints.push({
+      tool: 'remove_dead_code',
+      args: { symbol_id: '<dead_symbol>' },
+      why: 'Safely remove confirmed dead code',
+    });
     return hints;
   },
 
@@ -225,7 +347,11 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const safe = dig(r, 'safe');
     if (safe === true) {
-      hints.push({ tool: 'apply_rename', args: { symbol_id: '<symbol>', new_name: '<name>' }, why: 'Rename is safe — apply it' });
+      hints.push({
+        tool: 'apply_rename',
+        args: { symbol_id: '<symbol>', new_name: '<name>' },
+        why: 'Rename is safe — apply it',
+      });
     }
     return hints;
   },
@@ -234,7 +360,10 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const suggestions = arr(dig(r, 'non_code_suggestions'));
     if (suggestions.length > 0) {
-      hints.push({ tool: 'apply_codemod', why: 'Apply non-code file suggestions via codemod if desired' });
+      hints.push({
+        tool: 'apply_codemod',
+        why: 'Apply non-code file suggestions via codemod if desired',
+      });
     }
     return hints;
   },
@@ -243,9 +372,16 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const warnings = arr(dig(r, 'warnings'));
     if (warnings.some((w) => str(w).includes('re-export'))) {
-      hints.push({ tool: 'get_dead_exports', why: 'Check if old file has orphaned exports after the move' });
+      hints.push({
+        tool: 'get_dead_exports',
+        why: 'Check if old file has orphaned exports after the move',
+      });
     }
-    hints.push({ tool: 'register_edit', args: { file_path: '<modified_file>' }, why: 'Reindex modified files after move' });
+    hints.push({
+      tool: 'register_edit',
+      args: { file_path: '<modified_file>' },
+      why: 'Reindex modified files after move',
+    });
     return hints;
   },
 
@@ -253,9 +389,17 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const warnings = arr(dig(r, 'warnings'));
     if (warnings.some((w) => str(w).includes('skipped'))) {
-      hints.push({ tool: 'get_symbol', args: { symbol_id: '<symbol>' }, why: 'Review symbol to check skipped parameters' });
+      hints.push({
+        tool: 'get_symbol',
+        args: { symbol_id: '<symbol>' },
+        why: 'Review symbol to check skipped parameters',
+      });
     }
-    hints.push({ tool: 'register_edit', args: { file_path: '<modified_file>' }, why: 'Reindex modified files after signature change' });
+    hints.push({
+      tool: 'register_edit',
+      args: { file_path: '<modified_file>' },
+      why: 'Reindex modified files after signature change',
+    });
     return hints;
   },
 
@@ -264,10 +408,14 @@ const hintGenerators: Record<string, HintGenerator> = {
     const edits = arr(dig(r, 'edits'));
     if (edits.length > 0) {
       const tool = str(dig(r, 'tool'));
-      if (tool === 'apply_rename') hints.push({ tool: 'apply_rename', why: 'Apply the previewed rename' });
-      else if (tool === 'apply_move') hints.push({ tool: 'apply_move', why: 'Apply the previewed move' });
-      else if (tool === 'extract_function') hints.push({ tool: 'extract_function', why: 'Apply the previewed extraction' });
-      else if (tool === 'change_signature') hints.push({ tool: 'change_signature', why: 'Apply the previewed signature change' });
+      if (tool === 'apply_rename')
+        hints.push({ tool: 'apply_rename', why: 'Apply the previewed rename' });
+      else if (tool === 'apply_move')
+        hints.push({ tool: 'apply_move', why: 'Apply the previewed move' });
+      else if (tool === 'extract_function')
+        hints.push({ tool: 'extract_function', why: 'Apply the previewed extraction' });
+      else if (tool === 'change_signature')
+        hints.push({ tool: 'change_signature', why: 'Apply the previewed signature change' });
     }
     return hints;
   },
@@ -286,8 +434,16 @@ const hintGenerators: Record<string, HintGenerator> = {
       const first = files[0] as Record<string, unknown>;
       const fp = str(first?.file);
       if (fp) {
-        hints.push({ tool: 'get_outline', args: { path: fp }, why: 'Examine the highest-churn file' });
-        hints.push({ tool: 'get_change_impact', args: { file_path: fp }, why: 'See blast radius for the hotspot file' });
+        hints.push({
+          tool: 'get_outline',
+          args: { path: fp },
+          why: 'Examine the highest-churn file',
+        });
+        hints.push({
+          tool: 'get_change_impact',
+          args: { file_path: fp },
+          why: 'See blast radius for the hotspot file',
+        });
       }
     }
     return hints;
@@ -301,7 +457,11 @@ const hintGenerators: Record<string, HintGenerator> = {
 
   get_schema(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_model_context', args: { model_name: '<ModelName>' }, why: 'See ORM model relationships for a table' });
+    hints.push({
+      tool: 'get_model_context',
+      args: { model_name: '<ModelName>' },
+      why: 'See ORM model relationships for a table',
+    });
     return hints;
   },
 
@@ -309,7 +469,11 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const nodes = arr(dig(r, 'nodes'));
     if (nodes.length > 0) {
-      hints.push({ tool: 'get_change_impact', args: { symbol_id: '<node>' }, why: 'Analyze impact for a graph result node' });
+      hints.push({
+        tool: 'get_change_impact',
+        args: { symbol_id: '<node>' },
+        why: 'Analyze impact for a graph result node',
+      });
     }
     return hints;
   },
@@ -321,14 +485,26 @@ const hintGenerators: Record<string, HintGenerator> = {
       const first = findings[0] as Record<string, unknown>;
       const modelName = str(first?.model);
       if (modelName) {
-        hints.push({ tool: 'get_model_context', args: { model_name: modelName }, why: 'See full context for the flagged model' });
+        hints.push({
+          tool: 'get_model_context',
+          args: { model_name: modelName },
+          why: 'See full context for the flagged model',
+        });
       }
       const related = arr(first?.related_symbols);
       if (related.length > 0) {
-        hints.push({ tool: 'get_call_graph', args: { symbol_id: str(related[0]) }, why: 'Trace the call path that triggers the antipattern' });
+        hints.push({
+          tool: 'get_call_graph',
+          args: { symbol_id: str(related[0]) },
+          why: 'Trace the call path that triggers the antipattern',
+        });
       }
     }
-    hints.push({ tool: 'scan_security', args: { rules: '["all"]' }, why: 'Also check for security vulnerabilities' });
+    hints.push({
+      tool: 'scan_security',
+      args: { rules: '["all"]' },
+      why: 'Also check for security vulnerabilities',
+    });
     return hints;
   },
 
@@ -336,13 +512,23 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const summary = dig(r, 'summary') as Record<string, number> | undefined;
     if (summary?.empty_function) {
-      hints.push({ tool: 'get_dead_code', why: 'Empty functions may also be dead code — cross-check with dead code analysis' });
+      hints.push({
+        tool: 'get_dead_code',
+        why: 'Empty functions may also be dead code — cross-check with dead code analysis',
+      });
     }
     if (summary?.todo_comment) {
-      hints.push({ tool: 'get_tech_debt', why: 'See overall tech debt score for modules with many TODOs' });
+      hints.push({
+        tool: 'get_tech_debt',
+        why: 'See overall tech debt score for modules with many TODOs',
+      });
     }
     if (summary?.hardcoded_value) {
-      hints.push({ tool: 'scan_security', args: { rules: '["hardcoded_secrets"]' }, why: 'Some hardcoded values may be security-sensitive' });
+      hints.push({
+        tool: 'scan_security',
+        args: { rules: '["hardcoded_secrets"]' },
+        why: 'Some hardcoded values may be security-sensitive',
+      });
     }
     return hints;
   },
@@ -354,7 +540,11 @@ const hintGenerators: Record<string, HintGenerator> = {
       const first = ranked[0] as Record<string, unknown>;
       const sid = str(first?.symbol_id);
       if (sid) {
-        hints.push({ tool: 'get_symbol', args: { symbol_id: sid }, why: 'Read the most important symbol in the codebase' });
+        hints.push({
+          tool: 'get_symbol',
+          args: { symbol_id: sid },
+          why: 'Read the most important symbol in the codebase',
+        });
       }
     }
     return hints;
@@ -364,7 +554,11 @@ const hintGenerators: Record<string, HintGenerator> = {
     const hints: Hint[] = [];
     const results = arr(dig(r, 'batch_results'));
     if (results.length > 0) {
-      hints.push({ tool: 'get_session_stats', args: {}, why: 'Check token savings from this batch vs individual calls' });
+      hints.push({
+        tool: 'get_session_stats',
+        args: {},
+        why: 'Check token savings from this batch vs individual calls',
+      });
     }
     return hints;
   },
@@ -372,23 +566,41 @@ const hintGenerators: Record<string, HintGenerator> = {
   get_optimization_report(r) {
     const hints: Hint[] = [];
     const opts = arr(dig(r, 'optimizations'));
-    const hasRepeated = opts.some((o) => str((o as Record<string, unknown>)?.rule) === 'repeated-file-read');
+    const hasRepeated = opts.some(
+      (o) => str((o as Record<string, unknown>)?.rule) === 'repeated-file-read',
+    );
     if (hasRepeated) {
-      hints.push({ tool: 'get_outline', args: { path: '<frequently_read_file>' }, why: 'Use get_outline + get_symbol instead of repeated full-file reads' });
+      hints.push({
+        tool: 'get_outline',
+        args: { path: '<frequently_read_file>' },
+        why: 'Use get_outline + get_symbol instead of repeated full-file reads',
+      });
     }
-    hints.push({ tool: 'get_real_savings', args: { period: 'today' }, why: 'See actual per-file token savings breakdown' });
+    hints.push({
+      tool: 'get_real_savings',
+      args: { period: 'today' },
+      why: 'See actual per-file token savings breakdown',
+    });
     return hints;
   },
 
   get_real_savings(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_session_stats', args: {}, why: 'See per-tool call counts and savings for this session' });
+    hints.push({
+      tool: 'get_session_stats',
+      args: {},
+      why: 'See per-tool call counts and savings for this session',
+    });
     return hints;
   },
 
   get_session_stats(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_optimization_report', args: { period: 'today' }, why: 'Find specific waste patterns to fix' });
+    hints.push({
+      tool: 'get_optimization_report',
+      args: { period: 'today' },
+      why: 'Find specific waste patterns to fix',
+    });
     return hints;
   },
 };

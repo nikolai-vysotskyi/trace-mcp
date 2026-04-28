@@ -6,13 +6,14 @@
  * file. Without the lock, indexAll() would later overwrite that file with stale
  * content because it collected the file list before the change was applied.
  */
-import { describe, it, expect, vi } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/no-framework');
 
@@ -43,8 +44,14 @@ describe('IndexingPipeline serialization lock', () => {
     // Monkey-patch runPipeline indirectly: intercept at public API level
     // Both calls should complete without throwing and produce valid results
     const [r1, r2] = await Promise.all([
-      pipeline.indexAll().then((r) => { order.push('indexAll'); return r; }),
-      pipeline.indexFiles(['src/utils.ts']).then((r) => { order.push('indexFiles'); return r; }),
+      pipeline.indexAll().then((r) => {
+        order.push('indexAll');
+        return r;
+      }),
+      pipeline.indexFiles(['src/utils.ts']).then((r) => {
+        order.push('indexFiles');
+        return r;
+      }),
     ]);
 
     // Both completed
@@ -59,17 +66,14 @@ describe('IndexingPipeline serialization lock', () => {
   it('concurrent indexAll calls do not throw', async () => {
     const { pipeline } = makeSetup();
 
-    const [r1, r2] = await Promise.all([
-      pipeline.indexAll(),
-      pipeline.indexAll(),
-    ]);
+    const [r1, r2] = await Promise.all([pipeline.indexAll(), pipeline.indexAll()]);
 
     expect(r1.errors).toBe(0);
     expect(r2.errors).toBe(0);
   });
 
   it('second indexAll after error still runs', async () => {
-    const { pipeline, store } = makeSetup();
+    const { pipeline } = makeSetup();
 
     // Force the first indexAll to produce errors by closing DB mid-way — instead
     // just confirm that a second call always resolves even if the first one threw.

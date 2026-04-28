@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { CLanguagePlugin } from '../../src/indexer/plugins/language/c/index.js';
 
 const plugin = new CLanguagePlugin();
@@ -13,8 +13,14 @@ async function extract(code: string, filePath = 'src/main.c') {
 
 describe('CLanguagePlugin', () => {
   beforeAll(async () => {
-    const probe = await plugin.extractSymbols('probe.c', Buffer.from('int probe(void) { return 0; }\n'));
-    expect(probe.isOk(), `C parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`).toBe(true);
+    const probe = await plugin.extractSymbols(
+      'probe.c',
+      Buffer.from('int probe(void) { return 0; }\n'),
+    );
+    expect(
+      probe.isOk(),
+      `C parser init failed: ${JSON.stringify(probe.isErr() ? probe._unsafeUnwrapErr() : '')}`,
+    ).toBe(true);
   });
 
   it('has correct manifest', () => {

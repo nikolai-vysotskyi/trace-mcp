@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildNegativeEvidence } from '../../src/tools/shared/evidence.js';
 
 describe('buildNegativeEvidence', () => {

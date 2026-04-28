@@ -2,7 +2,7 @@
  * Helper utilities for the Java language plugin.
  * Extracts AST-walking logic to keep the main plugin concise.
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
@@ -77,7 +77,10 @@ export function extractAnnotations(node: TSNode): string[] {
 
   for (const child of modifiers.namedChildren) {
     if (child.type === 'marker_annotation' || child.type === 'annotation') {
-      const nameNode = child.childForFieldName('name') ?? findChildByType(child, 'identifier') ?? findChildByType(child, 'scoped_identifier');
+      const nameNode =
+        child.childForFieldName('name') ??
+        findChildByType(child, 'identifier') ??
+        findChildByType(child, 'scoped_identifier');
       if (nameNode) {
         annotations.push(nameNode.text);
       }
@@ -95,7 +98,22 @@ function extractModifierKeywords(node: TSNode): string[] {
   for (let i = 0; i < modifiers.childCount; i++) {
     const child = modifiers.child(i);
     if (!child) continue;
-    if (!child.isNamed && ['public', 'private', 'protected', 'static', 'final', 'abstract', 'default', 'synchronized', 'native', 'transient', 'volatile'].includes(child.text)) {
+    if (
+      !child.isNamed &&
+      [
+        'public',
+        'private',
+        'protected',
+        'static',
+        'final',
+        'abstract',
+        'default',
+        'synchronized',
+        'native',
+        'transient',
+        'volatile',
+      ].includes(child.text)
+    ) {
       keywords.push(child.text);
     }
   }
@@ -109,9 +127,17 @@ export function extractSuperTypes(node: TSNode): { extends_?: string; implements
   const superclass = node.childForFieldName('superclass');
   if (superclass) {
     // superclass node may be a type_identifier itself, or a wrapper containing one
-    const typeNode = superclass.type === 'type_identifier' || superclass.type === 'generic_type' || superclass.type === 'scoped_type_identifier'
-      ? superclass
-      : superclass.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'generic_type' || c.type === 'scoped_type_identifier');
+    const typeNode =
+      superclass.type === 'type_identifier' ||
+      superclass.type === 'generic_type' ||
+      superclass.type === 'scoped_type_identifier'
+        ? superclass
+        : superclass.namedChildren.find(
+            (c) =>
+              c.type === 'type_identifier' ||
+              c.type === 'generic_type' ||
+              c.type === 'scoped_type_identifier',
+          );
     result.extends_ = typeNode ? typeNode.text : superclass.text.replace(/^extends\s+/, '').trim();
   }
 
@@ -351,7 +377,7 @@ export function extractEnumConstants(
 }
 
 /** Check if a name is ALL_CAPS (constant naming convention). */
-function isAllCaps(name: string): boolean {
+function _isAllCaps(name: string): boolean {
   return /^[A-Z][A-Z0-9_]{2,}$/.test(name);
 }
 

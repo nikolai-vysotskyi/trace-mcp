@@ -24,15 +24,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 const TRACKED_PACKAGES = [
   'google/apiclient',
@@ -87,10 +87,7 @@ const DETECTORS: DetectorRule[] = [
   },
   {
     role: 'google_api_client',
-    patterns: [
-      /\bGoogle_Client\b/,
-      /\bGoogle\\(?:Client|Service)\b/,
-    ],
+    patterns: [/\bGoogle_Client\b/, /\bGoogle\\(?:Client|Service)\b/],
   },
   {
     role: 'laravel_ai_call',
@@ -101,10 +98,7 @@ const DETECTORS: DetectorRule[] = [
   },
   {
     role: 'dom_crawler_usage',
-    patterns: [
-      /\bSymfony\\Component\\DomCrawler\\/,
-      /new\s+Crawler\s*\(/,
-    ],
+    patterns: [/\bSymfony\\Component\\DomCrawler\\/, /new\s+Crawler\s*\(/],
   },
   {
     role: 'doctrine_dbal_usage',
@@ -163,10 +157,7 @@ const DETECTORS: DetectorRule[] = [
   },
   {
     role: 'flysystem_s3_adapter_usage',
-    patterns: [
-      /\bLeague\\Flysystem\\AwsS3V3\\/,
-      /\bAwsS3V3Adapter\b/,
-    ],
+    patterns: [/\bLeague\\Flysystem\\AwsS3V3\\/, /\bAwsS3V3Adapter\b/],
   },
   {
     role: 'amocrm_api_usage',

@@ -7,10 +7,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -34,20 +34,16 @@ const PYTHON_SQL_PACKAGES = ['sqlite3', 'psycopg2', 'pymysql', 'asyncpg', 'aiosq
 // --- Extraction patterns -------------------------------------------------------
 
 // db.prepare('SELECT ...'), db.exec('CREATE TABLE ...'), pool.query('INSERT ...')
-const SQL_CALL_RE =
-  /\.(?:prepare|exec|execute|query|run|all|get)\(\s*[`'"]([\s\S]{5,500}?)[`'"]/g;
+const SQL_CALL_RE = /\.(?:prepare|exec|execute|query|run|all|get)\(\s*[`'"]([\s\S]{5,500}?)[`'"]/g;
 
 // CREATE TABLE name
-const CREATE_TABLE_RE =
-  /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`]?(\w+)["'`]?/gi;
+const CREATE_TABLE_RE = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`]?(\w+)["'`]?/gi;
 
 // Common DML: INSERT INTO / UPDATE / DELETE FROM / SELECT ... FROM
-const TABLE_REF_RE =
-  /(?:FROM|INTO|UPDATE|JOIN)\s+["'`]?(\w+)["'`]?/gi;
+const TABLE_REF_RE = /(?:FROM|INTO|UPDATE|JOIN)\s+["'`]?(\w+)["'`]?/gi;
 
 // db.pragma('...')
-const PRAGMA_RE =
-  /\.pragma\(\s*['"]([^'"]+)['"]/g;
+const PRAGMA_RE = /\.pragma\(\s*['"]([^'"]+)['"]/g;
 
 // Import detection
 const SQL_IMPORT_RE =
@@ -98,7 +94,7 @@ function extractSqlStatements(source: string): SqlStatement[] {
     results.push({
       kind: isPragma ? 'pragma' : isDdl ? 'ddl' : 'dml',
       tables,
-      raw: sql.length > 200 ? sql.slice(0, 200) + '…' : sql,
+      raw: sql.length > 200 ? `${sql.slice(0, 200)}…` : sql,
     });
   }
 
@@ -137,7 +133,10 @@ export class RawSqlPlugin implements FrameworkPlugin {
     // Python
     if (ctx.requirementsTxt) {
       for (const line of ctx.requirementsTxt) {
-        const pkgName = line.split(/[=<>!]/)[0].trim().toLowerCase();
+        const pkgName = line
+          .split(/[=<>!]/)[0]
+          .trim()
+          .toLowerCase();
         if (PYTHON_SQL_PACKAGES.includes(pkgName)) return true;
       }
     }
@@ -154,7 +153,9 @@ export class RawSqlPlugin implements FrameworkPlugin {
       for (const p of RAW_SQL_PACKAGES) {
         if (p in deps) return true;
       }
-    } catch { /* not a node project */ }
+    } catch {
+      /* not a node project */
+    }
 
     return false;
   }

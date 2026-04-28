@@ -2,12 +2,18 @@
  * Tests for get_call_graph tool.
  * Uses in-memory store with manually inserted symbols + edges.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { getCallGraph } from '../../src/tools/framework/call-graph.js';
 import { createTestStore } from '../test-utils.js';
 
-function insertSymbol(store: Store, fileId: number, name: string, fqn: string, kind = 'function'): number {
+function insertSymbol(
+  store: Store,
+  fileId: number,
+  name: string,
+  fqn: string,
+  kind = 'function',
+): number {
   return store.insertSymbol(fileId, {
     symbolId: `sym:${fqn}`,
     name,
@@ -77,7 +83,13 @@ describe('get_call_graph', () => {
   });
 
   it('follows framework edge types (dispatches, routes_to)', () => {
-    const controllerId = insertSymbol(store, fileId, 'UserController', 'App::UserController', 'class');
+    const controllerId = insertSymbol(
+      store,
+      fileId,
+      'UserController',
+      'App::UserController',
+      'class',
+    );
     const eventId = insertSymbol(store, fileId, 'UserCreated', 'App::UserCreated', 'class');
 
     const controllerNode = store.getNodeId('symbol', controllerId)!;

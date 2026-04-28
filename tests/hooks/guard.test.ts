@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const HOOK_SCRIPT = path.resolve('hooks/trace-mcp-guard.sh');
 const TMP_BASE = fs.realpathSync(os.tmpdir());
@@ -53,7 +53,10 @@ function runGuard(
 }
 
 describe('trace-mcp-guard.sh', () => {
-  const projectDir = path.join(TMP_BASE, `trace-mcp-guard-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const projectDir = path.join(
+    TMP_BASE,
+    `trace-mcp-guard-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
   let sessionId: string;
 
   beforeEach(() => {
@@ -206,16 +209,26 @@ describe('trace-mcp-guard.sh', () => {
   // ─── Agent ──────────────────────────────────────────────────────
 
   it('denies Agent(Explore) regardless of description', () => {
-    const decision = runGuard('Agent', { subagent_type: 'Explore', description: 'find x' }, sessionId, projectDir);
+    const decision = runGuard(
+      'Agent',
+      { subagent_type: 'Explore', description: 'find x' },
+      sessionId,
+      projectDir,
+    );
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toContain('50K tokens');
   });
 
   it('denies Agent(general-purpose) for exploration verbs (investigate)', () => {
-    const decision = runGuard('Agent', {
-      subagent_type: 'general-purpose',
-      description: 'investigate the auth middleware',
-    }, sessionId, projectDir);
+    const decision = runGuard(
+      'Agent',
+      {
+        subagent_type: 'general-purpose',
+        description: 'investigate the auth middleware',
+      },
+      sessionId,
+      projectDir,
+    );
     expect(decision.allowed).toBe(false);
   });
 
@@ -233,10 +246,15 @@ describe('trace-mcp-guard.sh', () => {
       'map the dependencies of the core package',
     ];
     for (const description of cases) {
-      const decision = runGuard('Agent', {
-        subagent_type: 'general-purpose',
-        description,
-      }, sessionId, projectDir);
+      const decision = runGuard(
+        'Agent',
+        {
+          subagent_type: 'general-purpose',
+          description,
+        },
+        sessionId,
+        projectDir,
+      );
       expect(decision.allowed, `description: "${description}"`).toBe(false);
     }
   });
@@ -249,10 +267,15 @@ describe('trace-mcp-guard.sh', () => {
       'fetch the latest docs for react-query',
     ];
     for (const description of cases) {
-      const decision = runGuard('Agent', {
-        subagent_type: 'general-purpose',
-        description,
-      }, sessionId, projectDir);
+      const decision = runGuard(
+        'Agent',
+        {
+          subagent_type: 'general-purpose',
+          description,
+        },
+        sessionId,
+        projectDir,
+      );
       expect(decision.allowed, `description: "${description}"`).toBe(true);
     }
   });

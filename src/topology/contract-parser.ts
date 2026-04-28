@@ -95,8 +95,8 @@ function resolveRefs(
   if (depth > 5 || !schema || typeof schema !== 'object') return schema;
 
   // Direct $ref: { "$ref": "#/components/schemas/User" }
-  if (typeof schema['$ref'] === 'string') {
-    const refPath = schema['$ref'] as string;
+  if (typeof schema.$ref === 'string') {
+    const refPath = schema.$ref as string;
     const match = /^#\/components\/schemas\/(\w+)$/.exec(refPath);
     if (match && components?.[match[1]] && typeof components[match[1]] === 'object') {
       return resolveRefs(components[match[1]] as Record<string, unknown>, components, depth + 1);
@@ -110,7 +110,11 @@ function resolveRefs(
       const resolved: Record<string, unknown> = {};
       for (const [propName, propSchema] of Object.entries(value as Record<string, unknown>)) {
         if (typeof propSchema === 'object' && propSchema) {
-          resolved[propName] = resolveRefs(propSchema as Record<string, unknown>, components, depth + 1);
+          resolved[propName] = resolveRefs(
+            propSchema as Record<string, unknown>,
+            components,
+            depth + 1,
+          );
         } else {
           resolved[propName] = propSchema;
         }
@@ -171,7 +175,9 @@ function parseOpenApi(content: string, specPath: string): ParsedContract | null 
             // Extract request schema
             let requestSchema: Record<string, unknown> | undefined;
             const reqBody = op?.requestBody as Record<string, unknown> | undefined;
-            const reqContent = reqBody?.content as Record<string, Record<string, unknown>> | undefined;
+            const reqContent = reqBody?.content as
+              | Record<string, Record<string, unknown>>
+              | undefined;
             const reqJsonSchema = reqContent?.['application/json']?.schema;
             if (reqJsonSchema && typeof reqJsonSchema === 'object') {
               requestSchema = resolveRefs(reqJsonSchema as Record<string, unknown>, components);
@@ -194,7 +200,9 @@ function parseOpenApi(content: string, specPath: string): ParsedContract | null 
       }
 
       return { type: 'openapi', specPath, version, endpoints, events: [] };
-    } catch { /* not valid JSON, try YAML approach */ }
+    } catch {
+      /* not valid JSON, try YAML approach */
+    }
   }
 
   // Simple YAML path extraction using regex
@@ -202,8 +210,8 @@ function parseOpenApi(content: string, specPath: string): ParsedContract | null 
   version = versionMatch?.[1] ?? '';
 
   // Extract paths using indentation patterns
-  const pathRegex = /^\s{2}(\/\S+):\s*$/gm;
-  const methodRegex = /^\s{4}(get|post|put|patch|delete|head|options):\s*$/gm;
+  const _pathRegex = /^\s{2}(\/\S+):\s*$/gm;
+  const _methodRegex = /^\s{4}(get|post|put|patch|delete|head|options):\s*$/gm;
 
   let currentPath = '';
   for (const line of content.split('\n')) {
@@ -241,13 +249,13 @@ function parseGraphqlSdl(content: string, specPath: string): ParsedContract | nu
 
   // Match type Query { ... }, type Mutation { ... }
   const typeBlockRegex = /type\s+(Query|Mutation|Subscription)\s*\{([^}]+)\}/g;
-  let match;
+  let match: RegExpExecArray | null;
 
   while ((match = typeBlockRegex.exec(content)) !== null) {
     const typeName = match[1];
     const body = match[2];
-    const fieldRegex = /^\s*(\w+)\s*[\(:]/gm;
-    let fieldMatch;
+    const fieldRegex = /^\s*(\w+)\s*[(:]/gm;
+    let fieldMatch: RegExpExecArray | null;
 
     while ((fieldMatch = fieldRegex.exec(body)) !== null) {
       endpoints.push({
@@ -268,13 +276,13 @@ function parseProto(content: string, specPath: string): ParsedContract | null {
   const endpoints: ParsedEndpoint[] = [];
 
   const serviceRegex = /service\s+(\w+)\s*\{([^}]+)\}/g;
-  let serviceMatch;
+  let serviceMatch: RegExpExecArray | null;
 
   while ((serviceMatch = serviceRegex.exec(content)) !== null) {
     const serviceName = serviceMatch[1];
     const body = serviceMatch[2];
     const rpcRegex = /rpc\s+(\w+)\s*\(/g;
-    let rpcMatch;
+    let rpcMatch: RegExpExecArray | null;
 
     while ((rpcMatch = rpcRegex.exec(body)) !== null) {
       endpoints.push({
@@ -292,7 +300,9 @@ function parseProto(content: string, specPath: string): ParsedContract | null {
 // FILE DISCOVERY
 // ════════════════════════════════════════════════════════════════════════
 
-function findSpecFiles(root: string): Array<{ filePath: string; type: 'openapi' | 'grpc' | 'graphql' }> {
+function findSpecFiles(
+  root: string,
+): Array<{ filePath: string; type: 'openapi' | 'grpc' | 'graphql' }> {
   const results: Array<{ filePath: string; type: 'openapi' | 'grpc' | 'graphql' }> = [];
 
   function walk(dir: string, depth: number): void {
@@ -313,9 +323,17 @@ function findSpecFiles(root: string): Array<{ filePath: string; type: 'openapi' 
       } else if (entry.isFile()) {
         const lower = entry.name.toLowerCase();
 
-        if (lower === 'openapi.yml' || lower === 'openapi.yaml' || lower === 'openapi.json'
-          || lower === 'swagger.yml' || lower === 'swagger.yaml' || lower === 'swagger.json'
-          || lower === 'api-spec.yml' || lower === 'api-spec.yaml' || lower === 'api-spec.json') {
+        if (
+          lower === 'openapi.yml' ||
+          lower === 'openapi.yaml' ||
+          lower === 'openapi.json' ||
+          lower === 'swagger.yml' ||
+          lower === 'swagger.yaml' ||
+          lower === 'swagger.json' ||
+          lower === 'api-spec.yml' ||
+          lower === 'api-spec.yaml' ||
+          lower === 'api-spec.json'
+        ) {
           results.push({ filePath: fullPath, type: 'openapi' });
         } else if (lower === 'schema.graphql' || lower === 'schema.gql') {
           results.push({ filePath: fullPath, type: 'graphql' });
@@ -356,17 +374,25 @@ export function extractRoutesFromDb(dbPath: string, pathPrefix?: string): Parsed
       if (pathPrefix) {
         // Normalise: ensure trailing slash so "fair-laravel" doesn't match "fair-laravel-admin"
         const prefix = pathPrefix.endsWith('/') ? pathPrefix : `${pathPrefix}/`;
-        rows = db.prepare(`
+        rows = db
+          .prepare(`
           SELECT r.method, r.uri, r.name
           FROM routes r
           JOIN files f ON r.file_id = f.id
           WHERE f.path LIKE ? OR f.path LIKE ?
           ORDER BY r.uri
-        `).all(`${prefix}%`, `${pathPrefix}`) as Array<{ method: string; uri: string; name: string | null }>;
+        `)
+          .all(`${prefix}%`, `${pathPrefix}`) as Array<{
+          method: string;
+          uri: string;
+          name: string | null;
+        }>;
       } else {
-        rows = db.prepare(
-          'SELECT method, uri, name FROM routes ORDER BY uri',
-        ).all() as Array<{ method: string; uri: string; name: string | null }>;
+        rows = db.prepare('SELECT method, uri, name FROM routes ORDER BY uri').all() as Array<{
+          method: string;
+          uri: string;
+          name: string | null;
+        }>;
       }
 
       // Filter to HTTP routes only — exclude CLI commands, CI jobs, MCP tools, test routes, etc.
@@ -380,7 +406,10 @@ export function extractRoutesFromDb(dbPath: string, pathPrefix?: string): Parsed
         operationId: r.name ?? undefined,
       }));
 
-      logger.debug({ dbPath, pathPrefix, count: endpoints.length }, 'Extracted routes from trace-mcp DB');
+      logger.debug(
+        { dbPath, pathPrefix, count: endpoints.length },
+        'Extracted routes from trace-mcp DB',
+      );
       return {
         type: 'framework_routes',
         specPath: dbPath,

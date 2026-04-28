@@ -2,15 +2,39 @@
  * Stress tests — verify the system handles large codebases without
  * exploding in memory or time. These use in-memory SQLite.
  */
-import { describe, it, expect } from 'vitest';
-import { createTestStore } from '../test-utils.js';
+import { describe, expect, it } from 'vitest';
 import { searchFts } from '../../src/db/fts.js';
+import { createTestStore } from '../test-utils.js';
 
-const KINDS = ['class', 'function', 'method', 'interface', 'variable', 'type', 'constant', 'property'] as const;
-const PREFIXES = ['User', 'Auth', 'Payment', 'Order', 'Product', 'Cart', 'Invoice', 'Config', 'Logger', 'Metric'];
+const KINDS = [
+  'class',
+  'function',
+  'method',
+  'interface',
+  'variable',
+  'type',
+  'constant',
+  'property',
+] as const;
+const PREFIXES = [
+  'User',
+  'Auth',
+  'Payment',
+  'Order',
+  'Product',
+  'Cart',
+  'Invoice',
+  'Config',
+  'Logger',
+  'Metric',
+];
 const LANGS = ['typescript', 'python', 'go', 'rust', 'java', 'csharp', 'ruby', 'kotlin'];
 
-function seedDatabase(fileCount: number, symbolsPerFile: number, opts?: { workspaces?: string[]; crossWsEdges?: number }) {
+function seedDatabase(
+  fileCount: number,
+  symbolsPerFile: number,
+  opts?: { workspaces?: string[]; crossWsEdges?: number },
+) {
   const store = createTestStore();
   const db = store.db;
 
@@ -22,15 +46,15 @@ function seedDatabase(fileCount: number, symbolsPerFile: number, opts?: { worksp
     `INSERT INTO symbols (file_id, symbol_id, name, kind, fqn, byte_start, byte_end, line_start, line_end, metadata)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  const insertNode = db.prepare(
-    `INSERT OR IGNORE INTO nodes (node_type, ref_id) VALUES (?, ?)`,
-  );
+  const insertNode = db.prepare(`INSERT OR IGNORE INTO nodes (node_type, ref_id) VALUES (?, ?)`);
   const insertEdge = db.prepare(
     `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, is_cross_ws)
      VALUES (?, ?, ?, 1, ?)`,
   );
 
-  const edgeType = db.prepare("SELECT id FROM edge_types WHERE name = 'imports'").get() as { id: number };
+  const edgeType = db.prepare("SELECT id FROM edge_types WHERE name = 'imports'").get() as {
+    id: number;
+  };
   const workspaces = opts?.workspaces ?? [null as any];
   const fileIds: number[] = [];
 
@@ -52,10 +76,23 @@ function seedDatabase(fileCount: number, symbolsPerFile: number, opts?: { worksp
         const kind = KINDS[j % KINDS.length]!;
         const name = `${prefix}${kind.charAt(0).toUpperCase() + kind.slice(1)}${i}_${j}`;
         const symbolId = `${filePath}::${name}#${kind}`;
-        const fqn = ws ? `${ws}.module${Math.floor(i / 10)}.${name}` : `module${Math.floor(i / 10)}.${name}`;
+        const fqn = ws
+          ? `${ws}.module${Math.floor(i / 10)}.${name}`
+          : `module${Math.floor(i / 10)}.${name}`;
         const meta = j % 3 === 0 ? JSON.stringify({ exported: 1 }) : null;
 
-        const symResult = insertSymbol.run(fileId, symbolId, name, kind, fqn, j * 100, (j + 1) * 100, j * 5 + 1, (j + 1) * 5, meta);
+        const symResult = insertSymbol.run(
+          fileId,
+          symbolId,
+          name,
+          kind,
+          fqn,
+          j * 100,
+          (j + 1) * 100,
+          j * 5 + 1,
+          (j + 1) * 5,
+          meta,
+        );
         insertNode.run('symbol', Number(symResult.lastInsertRowid));
       }
     }
@@ -65,7 +102,8 @@ function seedDatabase(fileCount: number, symbolsPerFile: number, opts?: { worksp
       const srcNode = store.getNodeId('file', fileIds[i]!);
       const tgtNode = store.getNodeId('file', fileIds[i + 1]!);
       if (srcNode && tgtNode) {
-        const isCrossWs = workspaces.length > 1 && i % workspaces.length === workspaces.length - 1 ? 1 : 0;
+        const isCrossWs =
+          workspaces.length > 1 && i % workspaces.length === workspaces.length - 1 ? 1 : 0;
         insertEdge.run(srcNode, tgtNode, edgeType.id, isCrossWs);
       }
     }
@@ -172,7 +210,9 @@ describe('Stress: workspace queries at scale', () => {
 
     expect(deps.length).toBeGreaterThan(0);
     expect(elapsed).toBeLessThan(500);
-    console.log(`Cross-workspace dep graph (5 ws, 200 xws edges): ${elapsed}ms, ${deps.length} dependencies`);
+    console.log(
+      `Cross-workspace dep graph (5 ws, 200 xws edges): ${elapsed}ms, ${deps.length} dependencies`,
+    );
   }, 30_000);
 });
 

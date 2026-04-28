@@ -38,9 +38,19 @@ export interface EnvEntry {
 
 const FORMAT_DETECTORS: Array<{ format: EnvValueFormat; test: (v: string) => boolean }> = [
   // UUID: 8-4-4-4-12 hex digits
-  { format: 'uuid', test: (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) },
+  {
+    format: 'uuid',
+    test: (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
+  },
   // URL: scheme://...
-  { format: 'url', test: (v) => /^https?:\/\/.+/i.test(v) || /^(redis|amqp|mqtt|ftp|ftps|ssh|wss?|mongodb(\+srv)?|postgres(ql)?|mysql|sqlite):\/\/.+/i.test(v) },
+  {
+    format: 'url',
+    test: (v) =>
+      /^https?:\/\/.+/i.test(v) ||
+      /^(redis|amqp|mqtt|ftp|ftps|ssh|wss?|mongodb(\+srv)?|postgres(ql)?|mysql|sqlite):\/\/.+/i.test(
+        v,
+      ),
+  },
   // DSN: scheme://user:pass@host or scheme://host — covers DB connection strings not caught by URL
   { format: 'dsn', test: (v) => /^[a-z][a-z0-9+.-]*:\/\/.+/i.test(v) },
   // Email
@@ -52,9 +62,12 @@ const FORMAT_DETECTORS: Array<{ format: EnvValueFormat; test: (v: string) => boo
   // host:port (after IP check to not conflict)
   { format: 'host:port', test: (v) => /^[\w.-]+:\d{1,5}$/.test(v) },
   // Cron expression (5 or 6 fields)
-  { format: 'cron', test: (v) => /^(\S+\s+){4,5}\S+$/.test(v) && /[*\/,\-]/.test(v) },
+  { format: 'cron', test: (v) => /^(\S+\s+){4,5}\S+$/.test(v) && /[*/,-]/.test(v) },
   // JSON object or array
-  { format: 'json', test: (v) => (v.startsWith('{') && v.endsWith('}')) || (v.startsWith('[') && v.endsWith(']')) },
+  {
+    format: 'json',
+    test: (v) => (v.startsWith('{') && v.endsWith('}')) || (v.startsWith('[') && v.endsWith(']')),
+  },
   // CSV: contains commas (and not JSON)
   { format: 'csv', test: (v) => v.includes(',') && !v.startsWith('{') && !v.startsWith('[') },
   // Duration: 30s, 5m, 2h, 1d, 500ms
@@ -62,7 +75,11 @@ const FORMAT_DETECTORS: Array<{ format: EnvValueFormat; test: (v: string) => boo
   // Hex string (at least 8 chars to avoid matching short words)
   { format: 'hex', test: (v) => /^(0x)?[0-9a-f]{8,}$/i.test(v) && !/^\d+$/.test(v) },
   // Base64: long alphanumeric with padding or mixed case + digits (at least 16 chars)
-  { format: 'base64', test: (v) => v.length >= 16 && /^[A-Za-z0-9+/]+=*$/.test(v) && /[A-Z]/.test(v) && /[a-z]/.test(v) },
+  {
+    format: 'base64',
+    test: (v) =>
+      v.length >= 16 && /^[A-Za-z0-9+/]+=*$/.test(v) && /[A-Z]/.test(v) && /[a-z]/.test(v),
+  },
   // Absolute path (unix or windows)
   { format: 'path', test: (v) => /^(\/[\w.-]+)+\/?$/.test(v) || /^[A-Z]:\\/.test(v) },
 ];
@@ -99,10 +116,7 @@ function inferType(value: string): { valueType: EnvValueType; valueFormat: EnvVa
  * Strip surrounding quotes from a value and return whether it was quoted.
  */
 function unquote(raw: string): { value: string; quoted: boolean } {
-  if (
-    (raw.startsWith('"') && raw.endsWith('"')) ||
-    (raw.startsWith("'") && raw.endsWith("'"))
-  ) {
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
     return { value: raw.slice(1, -1), quoted: true };
   }
   return { value: raw, quoted: false };

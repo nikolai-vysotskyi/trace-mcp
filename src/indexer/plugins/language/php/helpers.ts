@@ -31,7 +31,11 @@ export function makeSymbolId(
 }
 
 /** Build a fully qualified name. */
-export function makeFqn(namespace: string | undefined, className: string, memberName?: string): string {
+export function makeFqn(
+  namespace: string | undefined,
+  className: string,
+  memberName?: string,
+): string {
   const base = namespace ? `${namespace}\\${className}` : className;
   return memberName ? `${base}::${memberName}` : base;
 }
@@ -65,15 +69,21 @@ export function isReadonly(node: TSNode): boolean {
  * Extract modifier keywords from a declaration node.
  * Returns flags for static, abstract, final modifiers.
  */
-export function extractModifiers(node: TSNode): { static?: true; 'abstract'?: true; final?: true } {
-  const mods: { static?: true; 'abstract'?: true; final?: true } = {};
+export function extractModifiers(node: TSNode): { static?: true; abstract?: true; final?: true } {
+  const mods: { static?: true; abstract?: true; final?: true } = {};
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
     switch (child.type) {
-      case 'static_modifier': mods.static = true; break;
-      case 'abstract_modifier': mods.abstract = true; break;
-      case 'final_modifier': mods.final = true; break;
+      case 'static_modifier':
+        mods.static = true;
+        break;
+      case 'abstract_modifier':
+        mods.abstract = true;
+        break;
+      case 'final_modifier':
+        mods.final = true;
+        break;
     }
   }
   return mods;
@@ -81,8 +91,12 @@ export function extractModifiers(node: TSNode): { static?: true; 'abstract'?: tr
 
 /** Extract property hooks (get/set) from a property_declaration node (PHP 8.4+). */
 export function extractPropertyHooks(
-  node: TSNode, filePath: string, className: string,
-  namespace: string | undefined, classSymbolId: string, propertyName: string,
+  node: TSNode,
+  filePath: string,
+  className: string,
+  namespace: string | undefined,
+  classSymbolId: string,
+  propertyName: string,
 ): RawSymbol[] {
   const hookList = node.namedChildren.find((c) => c.type === 'property_hook_list');
   if (!hookList) return [];
@@ -167,8 +181,9 @@ export function extractPromotedProperties(
   const symbols: RawSymbol[] = [];
   for (const param of params.namedChildren) {
     if (param.type === 'property_promotion_parameter') {
-      const varName = param.childForFieldName('name')
-        ?? param.namedChildren.find((c) => c.type === 'variable_name');
+      const varName =
+        param.childForFieldName('name') ??
+        param.namedChildren.find((c) => c.type === 'variable_name');
       if (!varName) continue;
       const propName = varName.text.replace(/^\$/, '');
       const readonly = isReadonly(param);
@@ -176,9 +191,12 @@ export function extractPromotedProperties(
 
       // Extract type annotation
       const typeNode = param.namedChildren.find(
-        (c) => c.type === 'named_type' || c.type === 'optional_type'
-          || c.type === 'primitive_type' || c.type === 'union_type'
-          || c.type === 'intersection_type',
+        (c) =>
+          c.type === 'named_type' ||
+          c.type === 'optional_type' ||
+          c.type === 'primitive_type' ||
+          c.type === 'union_type' ||
+          c.type === 'intersection_type',
       );
       const typeRef = extractTypeRef(typeNode);
 
@@ -207,8 +225,11 @@ export function extractPromotedProperties(
 
 /** Extract a property_declaration node into a RawSymbol. */
 export function extractPropertySymbol(
-  node: TSNode, filePath: string, className: string,
-  namespace: string | undefined, classSymbolId: string,
+  node: TSNode,
+  filePath: string,
+  className: string,
+  namespace: string | undefined,
+  classSymbolId: string,
 ): RawSymbol | undefined {
   const propElement = node.namedChildren.find((c) => c.type === 'property_element');
   if (!propElement) return undefined;
@@ -221,9 +242,12 @@ export function extractPropertySymbol(
 
   // Extract type annotation (typed properties)
   const typeNode = node.namedChildren.find(
-    (c) => c.type === 'named_type' || c.type === 'optional_type'
-      || c.type === 'primitive_type' || c.type === 'union_type'
-      || c.type === 'intersection_type',
+    (c) =>
+      c.type === 'named_type' ||
+      c.type === 'optional_type' ||
+      c.type === 'primitive_type' ||
+      c.type === 'union_type' ||
+      c.type === 'intersection_type',
   );
   const typeRef = extractTypeRef(typeNode);
 
@@ -249,21 +273,28 @@ export function extractPropertySymbol(
 
 /** Extract const_element children from a const_declaration node. */
 export function extractConstantSymbols(
-  node: TSNode, filePath: string, className: string,
-  namespace: string | undefined, classSymbolId: string,
+  node: TSNode,
+  filePath: string,
+  className: string,
+  namespace: string | undefined,
+  classSymbolId: string,
 ): RawSymbol[] {
   const symbols: RawSymbol[] = [];
   const vis = getVisibility(node);
   // Typed class constants (PHP 8.3+): look for a type node before const_element
-  const typeNode = node.namedChildren.find((c) =>
-    c.type === 'primitive_type' || c.type === 'named_type' || c.type === 'optional_type'
-    || c.type === 'union_type' || c.type === 'intersection_type',
+  const typeNode = node.namedChildren.find(
+    (c) =>
+      c.type === 'primitive_type' ||
+      c.type === 'named_type' ||
+      c.type === 'optional_type' ||
+      c.type === 'union_type' ||
+      c.type === 'intersection_type',
   );
 
   for (const child of node.namedChildren) {
     if (child.type === 'const_element') {
-      const nameNode = child.childForFieldName('name')
-        ?? child.namedChildren.find((c) => c.type === 'name');
+      const nameNode =
+        child.childForFieldName('name') ?? child.namedChildren.find((c) => c.type === 'name');
       if (!nameNode) continue;
       const name = nameNode.text;
       const metadata: Record<string, unknown> = {};
@@ -312,10 +343,14 @@ export function extractUseStatements(rootNode: TSNode): { fqn: string; alias?: s
 
         for (const clause of group.namedChildren) {
           if (clause.type === 'namespace_use_group_clause') {
-            const nameNode = clause.namedChildren.find((c) => c.type === 'namespace_name' || c.type === 'name');
+            const nameNode = clause.namedChildren.find(
+              (c) => c.type === 'namespace_name' || c.type === 'name',
+            );
             if (nameNode) {
               const fqn = prefix ? `${prefix}\\${nameNode.text}` : nameNode.text;
-              const aliasNode = clause.namedChildren.find((c) => c.type === 'namespace_aliasing_clause');
+              const aliasNode = clause.namedChildren.find(
+                (c) => c.type === 'namespace_aliasing_clause',
+              );
               const alias = aliasNode?.namedChildren.find((c) => c.type === 'name')?.text;
               results.push({ fqn, alias });
             }
@@ -328,7 +363,9 @@ export function extractUseStatements(rootNode: TSNode): { fqn: string; alias?: s
             const qn = clause.namedChildren.find((c) => c.type === 'qualified_name');
             if (qn) {
               const fqn = qn.text;
-              const aliasNode = clause.namedChildren.find((c) => c.type === 'namespace_aliasing_clause');
+              const aliasNode = clause.namedChildren.find(
+                (c) => c.type === 'namespace_aliasing_clause',
+              );
               const alias = aliasNode?.namedChildren.find((c) => c.type === 'name')?.text;
               results.push({ fqn, alias });
             }
@@ -361,11 +398,22 @@ export interface PhpCallSite {
    *  Accesses: 'this_prop'|'member_prop'|'class_const'|'relative_const'|'static_prop'|'relative_static_prop'.
    *  Class ref: 'class_ref' (for Class::class magic constant). */
   type:
-    | 'this' | 'self' | 'parent' | 'static' | 'member' | 'new' | 'function'
-    | 'this_member_call' | 'param_call' | 'local_call'
-    | 'this_prop' | 'member_prop'
-    | 'class_const' | 'relative_const'
-    | 'static_prop' | 'relative_static_prop'
+    | 'this'
+    | 'self'
+    | 'parent'
+    | 'static'
+    | 'member'
+    | 'new'
+    | 'function'
+    | 'this_member_call'
+    | 'param_call'
+    | 'local_call'
+    | 'this_prop'
+    | 'member_prop'
+    | 'class_const'
+    | 'relative_const'
+    | 'static_prop'
+    | 'relative_static_prop'
     | 'class_ref';
   /** Name of the method/property/constant being accessed */
   callee: string;
@@ -456,23 +504,29 @@ export function extractTypeRef(typeNode: TSNode | null | undefined): string | nu
  * Returns a map of param name (without the `$` prefix) to class name reference.
  * Primitive-typed and untyped params are omitted.
  */
-export function extractParamTypes(
-  paramsNode: TSNode | null | undefined,
-): { params: Map<string, string>; promoted: Map<string, string> } {
+export function extractParamTypes(paramsNode: TSNode | null | undefined): {
+  params: Map<string, string>;
+  promoted: Map<string, string>;
+} {
   const params = new Map<string, string>();
   const promoted = new Map<string, string>();
   if (!paramsNode) return { params, promoted };
 
   for (const param of paramsNode.namedChildren) {
-    if (param.type !== 'simple_parameter' && param.type !== 'property_promotion_parameter') continue;
+    if (param.type !== 'simple_parameter' && param.type !== 'property_promotion_parameter')
+      continue;
 
     // Find type and variable_name among children
     let typeNode: TSNode | null = null;
     let varName: string | null = null;
     for (const child of param.namedChildren) {
-      if (child.type === 'named_type' || child.type === 'optional_type'
-          || child.type === 'primitive_type' || child.type === 'union_type'
-          || child.type === 'intersection_type') {
+      if (
+        child.type === 'named_type' ||
+        child.type === 'optional_type' ||
+        child.type === 'primitive_type' ||
+        child.type === 'union_type' ||
+        child.type === 'intersection_type'
+      ) {
         typeNode = child;
       } else if (child.type === 'variable_name') {
         const n = child.namedChildren.find((c) => c.type === 'name');
@@ -648,8 +702,10 @@ export function extractCallSites(
             calls.push({ type: 'this_prop', callee: nameNode.text, line });
           } else {
             calls.push({
-              type: 'member_prop', callee: nameNode.text,
-              receiver: varNameNode?.text, line,
+              type: 'member_prop',
+              callee: nameNode.text,
+              receiver: varNameNode?.text,
+              line,
             });
           }
         }
@@ -681,8 +737,10 @@ export function extractCallSites(
           calls.push({ type: 'relative_const', callee: calleeName, line });
         } else if (scope.type === 'name' || scope.type === 'qualified_name') {
           calls.push({
-            type: 'class_const', callee: calleeName,
-            classRef: scope.text, line,
+            type: 'class_const',
+            callee: calleeName,
+            classRef: scope.text,
+            line,
           });
         }
         break;
@@ -703,8 +761,10 @@ export function extractCallSites(
           calls.push({ type: 'relative_static_prop', callee: nameNode.text, line });
         } else if (scope.type === 'name' || scope.type === 'qualified_name') {
           calls.push({
-            type: 'static_prop', callee: nameNode.text,
-            classRef: scope.text, line,
+            type: 'static_prop',
+            callee: nameNode.text,
+            classRef: scope.text,
+            line,
           });
         }
         break;

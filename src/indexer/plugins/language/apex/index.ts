@@ -7,8 +7,9 @@
  * Comment stripping: //, block comments
  * Scope: braces
  */
-import { createMultiPassPlugin, type CommentStyle } from '../regex-base-v2.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { type CommentStyle, createMultiPassPlugin } from '../regex-base-v2.js';
 
 const comments: CommentStyle = {
   line: ['//'],
@@ -17,7 +18,8 @@ const comments: CommentStyle = {
 };
 
 /** Access modifiers + sharing keywords */
-const ACCESS = /(?:(?:public|private|protected|global|virtual|abstract|with\s+sharing|without\s+sharing|inherited\s+sharing)\s+)*/;
+const ACCESS =
+  /(?:(?:public|private|protected|global|virtual|abstract|with\s+sharing|without\s+sharing|inherited\s+sharing)\s+)*/;
 const ACCESS_SRC = ACCESS.source;
 
 const _plugin = createMultiPassPlugin({
@@ -31,12 +33,24 @@ const _plugin = createMultiPassPlugin({
     // class declaration
     {
       kind: 'class',
-      pattern: new RegExp(`^\\s*${ACCESS_SRC}class\\s+(\\w+)(?:\\s+extends\\s+\\w+)?(?:\\s+implements\\s+[\\w,\\s]+)?\\s*\\{`, 'gim'),
+      pattern: new RegExp(
+        `^\\s*${ACCESS_SRC}class\\s+(\\w+)(?:\\s+extends\\s+\\w+)?(?:\\s+implements\\s+[\\w,\\s]+)?\\s*\\{`,
+        'gim',
+      ),
       memberPatterns: [
         // method: [access] [modifiers] ReturnType methodName(args) {
-        { kind: 'method', pattern: new RegExp(`^\\s*(?:(?:public|private|protected|global|static|virtual|abstract|override|testMethod)\\s+)*(?:[\\w<>,\\[\\]\\s]+?)\\s+(\\w+)\\s*\\([^)]*\\)\\s*\\{`, 'gm') },
+        {
+          kind: 'method',
+          pattern:
+            /^\s*(?:(?:public|private|protected|global|static|virtual|abstract|override|testMethod)\s+)*(?:[\w<>,[\]\s]+?)\s+(\w+)\s*\([^)]*\)\s*\{/gm,
+        },
         // property: [access] Type PropertyName { get; set; }
-        { kind: 'property', pattern: /^\s*(?:(?:public|private|protected|global|static|transient)\s+)*(\w+)\s+(\w+)\s*\{\s*(?:get|set)/gim, nameGroup: 2 },
+        {
+          kind: 'property',
+          pattern:
+            /^\s*(?:(?:public|private|protected|global|static|transient)\s+)*(\w+)\s+(\w+)\s*\{\s*(?:get|set)/gim,
+          nameGroup: 2,
+        },
         // constant: static final Type NAME = value;
         { kind: 'constant', pattern: /\bstatic\s+final\s+\w+\s+(\w+)\s*=/gim },
         // inner class
@@ -49,9 +63,7 @@ const _plugin = createMultiPassPlugin({
     {
       kind: 'interface',
       pattern: new RegExp(`^\\s*${ACCESS_SRC}interface\\s+(\\w+)`, 'gim'),
-      memberPatterns: [
-        { kind: 'method', pattern: /^\s*(?:\w+\s+)*(\w+)\s*\([^)]*\)\s*;/gm },
-      ],
+      memberPatterns: [{ kind: 'method', pattern: /^\s*(?:\w+\s+)*(\w+)\s*\([^)]*\)\s*;/gm }],
     },
     // enum declaration
     {
@@ -72,7 +84,13 @@ const _plugin = createMultiPassPlugin({
 
   symbolPatterns: [
     // Top-level annotations as metadata markers (captures for context)
-    { kind: 'variable', pattern: /@(?:isTest|AuraEnabled|InvocableMethod|InvocableVariable|RemoteAction|TestSetup|TestVisible)\b/gim, nameGroup: 0, memberOnly: true },
+    {
+      kind: 'variable',
+      pattern:
+        /@(?:isTest|AuraEnabled|InvocableMethod|InvocableVariable|RemoteAction|TestSetup|TestVisible)\b/gim,
+      nameGroup: 0,
+      memberOnly: true,
+    },
     // Top-level constant (outside class — rare but possible)
     { kind: 'constant', pattern: /\bstatic\s+final\s+\w+\s+(\w+)\s*=/gim },
   ],

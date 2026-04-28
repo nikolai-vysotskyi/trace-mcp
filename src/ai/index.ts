@@ -6,31 +6,40 @@
  * all reuse OpenAIProvider with different default base URLs and models.
  */
 import type { TraceMcpConfig } from '../config.js';
-import type { AIProvider, EmbeddingService, EmbeddingTask, InferenceService, ChatMessage } from './interfaces.js';
-import { FallbackProvider } from './fallback.js';
-import { OllamaProvider } from './ollama.js';
-import { OpenAIProvider } from './openai.js';
-import { OnnxProvider } from './onnx.js';
-import { GeminiProvider } from './gemini.js';
-import { AnthropicProvider } from './anthropic.js';
-import { VoyageProvider } from './voyage.js';
-import { VertexAIProvider } from './vertex.js';
 import { logger } from '../logger.js';
-import { aiTracker, type AIRequestType } from './tracker.js';
+import { AnthropicProvider } from './anthropic.js';
+import { FallbackProvider } from './fallback.js';
+import { GeminiProvider } from './gemini.js';
+import type {
+  AIProvider,
+  ChatMessage,
+  EmbeddingService,
+  EmbeddingTask,
+  InferenceService,
+} from './interfaces.js';
+import { OllamaProvider } from './ollama.js';
+import { OnnxProvider } from './onnx.js';
+import { OpenAIProvider } from './openai.js';
+import { aiTracker } from './tracker.js';
+import { VertexAIProvider } from './vertex.js';
+import { VoyageProvider } from './voyage.js';
 
 /** Treat empty/whitespace strings as unset — settings UI persists cleared fields as "". */
 const pick = (v: unknown, fallback: string): string =>
   typeof v === 'string' && v.trim() ? v : fallback;
 
 /** Default configurations for OpenAI-compatible providers. */
-const OPENAI_COMPAT_DEFAULTS: Record<string, {
-  baseUrl: string;
-  embeddingModel: string;
-  embeddingDimensions: number;
-  inferenceModel: string;
-  fastModel: string;
-  envKey: string;
-}> = {
+const OPENAI_COMPAT_DEFAULTS: Record<
+  string,
+  {
+    baseUrl: string;
+    embeddingModel: string;
+    embeddingDimensions: number;
+    inferenceModel: string;
+    fastModel: string;
+    envKey: string;
+  }
+> = {
   openai: {
     baseUrl: 'https://api.openai.com/v1',
     embeddingModel: 'text-embedding-3-small',
@@ -91,7 +100,12 @@ const OPENAI_COMPAT_DEFAULTS: Record<string, {
 
 // ── Tracked wrappers ─────────────────────────────────────────────────
 class TrackedEmbeddingService implements EmbeddingService {
-  constructor(private inner: EmbeddingService, private provider: string, private model: string, private url: string) {}
+  constructor(
+    private inner: EmbeddingService,
+    private provider: string,
+    private model: string,
+    private url: string,
+  ) {}
 
   async embed(text: string, task?: EmbeddingTask): Promise<number[]> {
     const entry = aiTracker.start('embed', this.provider, this.model, this.url, text.length);
@@ -100,8 +114,8 @@ class TrackedEmbeddingService implements EmbeddingService {
       const result = await this.inner.embed(text, task);
       aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
       return result;
-    } catch (err: any) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+    } catch (err) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
       throw err;
     }
   }
@@ -113,38 +127,59 @@ class TrackedEmbeddingService implements EmbeddingService {
       const result = await this.inner.embedBatch(texts, task);
       aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
       return result;
-    } catch (err: any) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+    } catch (err) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
       throw err;
     }
   }
 
-  dimensions(): number { return this.inner.dimensions(); }
-  modelName(): string { return this.inner.modelName(); }
+  dimensions(): number {
+    return this.inner.dimensions();
+  }
+  modelName(): string {
+    return this.inner.modelName();
+  }
 }
 
 class TrackedInferenceService implements InferenceService {
-  constructor(private inner: InferenceService, private provider: string, private model: string, private url: string) {}
+  constructor(
+    private inner: InferenceService,
+    private provider: string,
+    private model: string,
+    private url: string,
+  ) {}
 
-  async generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string> {
+  async generate(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number },
+  ): Promise<string> {
     const entry = aiTracker.start('generate', this.provider, this.model, this.url, prompt.length);
     const t0 = Date.now();
     try {
       const result = await this.inner.generate(prompt, options);
       aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
       return result;
-    } catch (err: any) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, err?.message ?? String(err));
+    } catch (err) {
+      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
       throw err;
     }
   }
 
-  async *generateStream(messages: ChatMessage[], options?: { maxTokens?: number; temperature?: number }): AsyncIterable<string> {
+  async *generateStream(
+    messages: ChatMessage[],
+    options?: { maxTokens?: number; temperature?: number },
+  ): AsyncIterable<string> {
     if (!this.inner.generateStream) {
       throw new Error('generateStream not supported');
     }
     const totalInput = messages.reduce((n, m) => n + m.content.length, 0);
-    const entry = aiTracker.start('generate_stream', this.provider, this.model, this.url, totalInput);
+    const entry = aiTracker.start(
+      'generate_stream',
+      this.provider,
+      this.model,
+      this.url,
+      totalInput,
+    );
     const t0 = Date.now();
     let outputLen = 0;
     try {
@@ -153,16 +188,28 @@ class TrackedInferenceService implements InferenceService {
         yield chunk;
       }
       aiTracker.finish(entry, 'ok', Date.now() - t0, outputLen);
-    } catch (err: any) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, outputLen, err?.message ?? String(err));
+    } catch (err) {
+      aiTracker.finish(
+        entry,
+        'error',
+        Date.now() - t0,
+        outputLen,
+        (err as Error)?.message ?? String(err),
+      );
       throw err;
     }
   }
 }
 
 class TrackedAIProvider implements AIProvider {
-  constructor(private inner: AIProvider, private providerName: string, private url: string) {}
-  isAvailable(): Promise<boolean> { return this.inner.isAvailable(); }
+  constructor(
+    private inner: AIProvider,
+    private providerName: string,
+    private url: string,
+  ) {}
+  isAvailable(): Promise<boolean> {
+    return this.inner.isAvailable();
+  }
   embedding(): EmbeddingService {
     const svc = this.inner.embedding();
     return new TrackedEmbeddingService(svc, this.providerName, '(embedding)', this.url);
@@ -190,7 +237,9 @@ class GatedAIProvider implements AIProvider {
     private inner: AIProvider,
     private features: { embedding: boolean; inference: boolean; fast_inference: boolean },
   ) {}
-  isAvailable(): Promise<boolean> { return this.inner.isAvailable(); }
+  isAvailable(): Promise<boolean> {
+    return this.inner.isAvailable();
+  }
   embedding(): EmbeddingService {
     return this.features.embedding ? this.inner.embedding() : this.fallback.embedding();
   }
@@ -198,7 +247,9 @@ class GatedAIProvider implements AIProvider {
     return this.features.inference ? this.inner.inference() : this.fallback.inference();
   }
   fastInference(): InferenceService {
-    return this.features.fast_inference ? this.inner.fastInference() : this.fallback.fastInference();
+    return this.features.fast_inference
+      ? this.inner.fastInference()
+      : this.fallback.fastInference();
   }
 }
 
@@ -216,21 +267,35 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
   const provider = config.ai.provider;
 
   if (provider === 'onnx') {
-    return new GatedAIProvider(wrapWithTracking(new OnnxProvider({
-      model: config.ai.embedding_model,
-      dimensions: config.ai.embedding_dimensions,
-    }), 'onnx', 'local'), features);
+    return new GatedAIProvider(
+      wrapWithTracking(
+        new OnnxProvider({
+          model: config.ai.embedding_model,
+          dimensions: config.ai.embedding_dimensions,
+        }),
+        'onnx',
+        'local',
+      ),
+      features,
+    );
   }
 
   if (provider === 'ollama') {
     const url = pick(config.ai.base_url, 'http://localhost:11434');
-    return new GatedAIProvider(wrapWithTracking(new OllamaProvider({
-      baseUrl: url,
-      embeddingModel: pick(config.ai.embedding_model, 'nomic-embed-text'),
-      inferenceModel: pick(config.ai.inference_model, 'llama3.2'),
-      fastModel: pick(config.ai.fast_model, 'llama3.2'),
-      embeddingDimensions: config.ai.embedding_dimensions,
-    }), 'ollama', url), features);
+    return new GatedAIProvider(
+      wrapWithTracking(
+        new OllamaProvider({
+          baseUrl: url,
+          embeddingModel: pick(config.ai.embedding_model, 'nomic-embed-text'),
+          inferenceModel: pick(config.ai.inference_model, 'llama3.2'),
+          fastModel: pick(config.ai.fast_model, 'llama3.2'),
+          embeddingDimensions: config.ai.embedding_dimensions,
+        }),
+        'ollama',
+        url,
+      ),
+      features,
+    );
   }
 
   if (provider === 'gemini') {
@@ -239,13 +304,20 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       logger.warn('Gemini provider selected but no api_key configured — falling back');
       return new FallbackProvider();
     }
-    return new GatedAIProvider(wrapWithTracking(new GeminiProvider({
-      apiKey,
-      embeddingModel: pick(config.ai.embedding_model, 'text-embedding-004'),
-      embeddingDimensions: config.ai.embedding_dimensions ?? 768,
-      inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-flash'),
-      fastModel: pick(config.ai.fast_model, 'gemini-2.5-flash'),
-    }), 'gemini', 'https://generativelanguage.googleapis.com'), features);
+    return new GatedAIProvider(
+      wrapWithTracking(
+        new GeminiProvider({
+          apiKey,
+          embeddingModel: pick(config.ai.embedding_model, 'text-embedding-004'),
+          embeddingDimensions: config.ai.embedding_dimensions ?? 768,
+          inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-flash'),
+          fastModel: pick(config.ai.fast_model, 'gemini-2.5-flash'),
+        }),
+        'gemini',
+        'https://generativelanguage.googleapis.com',
+      ),
+      features,
+    );
   }
 
   if (provider === 'anthropic') {
@@ -254,11 +326,18 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       logger.warn('Anthropic provider selected but no api_key configured — falling back');
       return new FallbackProvider();
     }
-    return new GatedAIProvider(wrapWithTracking(new AnthropicProvider({
-      apiKey,
-      inferenceModel: pick(config.ai.inference_model, 'claude-sonnet-4-6'),
-      fastModel: pick(config.ai.fast_model, 'claude-haiku-4-5-20251001'),
-    }), 'anthropic', 'https://api.anthropic.com'), features);
+    return new GatedAIProvider(
+      wrapWithTracking(
+        new AnthropicProvider({
+          apiKey,
+          inferenceModel: pick(config.ai.inference_model, 'claude-sonnet-4-6'),
+          fastModel: pick(config.ai.fast_model, 'claude-haiku-4-5-20251001'),
+        }),
+        'anthropic',
+        'https://api.anthropic.com',
+      ),
+      features,
+    );
   }
 
   if (provider === 'voyage') {
@@ -268,12 +347,19 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       return new FallbackProvider();
     }
     const url = pick(config.ai.base_url, 'https://api.voyageai.com/v1');
-    return new GatedAIProvider(wrapWithTracking(new VoyageProvider({
-      apiKey,
-      baseUrl: url,
-      embeddingModel: pick(config.ai.embedding_model, 'voyage-code-3'),
-      embeddingDimensions: config.ai.embedding_dimensions ?? 1024,
-    }), 'voyage', url), features);
+    return new GatedAIProvider(
+      wrapWithTracking(
+        new VoyageProvider({
+          apiKey,
+          baseUrl: url,
+          embeddingModel: pick(config.ai.embedding_model, 'voyage-code-3'),
+          embeddingDimensions: config.ai.embedding_dimensions ?? 1024,
+        }),
+        'voyage',
+        url,
+      ),
+      features,
+    );
   }
 
   if (provider === 'vertex') {
@@ -282,20 +368,32 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
     // standard api_key slot so users don't need a new field name.
     const accessToken = config.ai.api_key ?? process.env.GOOGLE_ACCESS_TOKEN ?? '';
     const project = config.ai.vertex_project ?? process.env.GOOGLE_CLOUD_PROJECT ?? '';
-    const location = pick(config.ai.vertex_location, process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1');
+    const location = pick(
+      config.ai.vertex_location,
+      process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1',
+    );
     if (!accessToken || !project) {
-      logger.warn('Vertex AI provider selected but api_key (access token) or vertex_project missing — falling back');
+      logger.warn(
+        'Vertex AI provider selected but api_key (access token) or vertex_project missing — falling back',
+      );
       return new FallbackProvider();
     }
-    return new GatedAIProvider(wrapWithTracking(new VertexAIProvider({
-      accessToken,
-      project,
-      location,
-      embeddingModel: pick(config.ai.embedding_model, 'text-embedding-005'),
-      embeddingDimensions: config.ai.embedding_dimensions ?? 768,
-      inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-flash'),
-      fastModel: pick(config.ai.fast_model, 'gemini-2.5-flash'),
-    }), 'vertex', `https://${location}-aiplatform.googleapis.com`), features);
+    return new GatedAIProvider(
+      wrapWithTracking(
+        new VertexAIProvider({
+          accessToken,
+          project,
+          location,
+          embeddingModel: pick(config.ai.embedding_model, 'text-embedding-005'),
+          embeddingDimensions: config.ai.embedding_dimensions ?? 768,
+          inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-flash'),
+          fastModel: pick(config.ai.fast_model, 'gemini-2.5-flash'),
+        }),
+        'vertex',
+        `https://${location}-aiplatform.googleapis.com`,
+      ),
+      features,
+    );
   }
 
   // All OpenAI-compatible providers
@@ -308,37 +406,56 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       return new FallbackProvider();
     }
     const url = pick(config.ai.base_url, defaults.baseUrl);
-    return new GatedAIProvider(wrapWithTracking(new OpenAIProvider({
-      apiKey,
-      baseUrl: url,
-      embeddingModel: pick(config.ai.embedding_model, defaults.embeddingModel),
-      embeddingDimensions: config.ai.embedding_dimensions ?? defaults.embeddingDimensions,
-      inferenceModel: pick(config.ai.inference_model, defaults.inferenceModel),
-      fastModel: pick(config.ai.fast_model, defaults.fastModel),
-    }), provider, url), features);
+    return new GatedAIProvider(
+      wrapWithTracking(
+        new OpenAIProvider({
+          apiKey,
+          baseUrl: url,
+          embeddingModel: pick(config.ai.embedding_model, defaults.embeddingModel),
+          embeddingDimensions: config.ai.embedding_dimensions ?? defaults.embeddingDimensions,
+          inferenceModel: pick(config.ai.inference_model, defaults.inferenceModel),
+          fastModel: pick(config.ai.fast_model, defaults.fastModel),
+        }),
+        provider,
+        url,
+      ),
+      features,
+    );
   }
 
   return new FallbackProvider();
 }
 
-export type { AIProvider, ChatMessage, EmbeddingService, InferenceService, VectorStore, RerankerService } from './interfaces.js';
-export { FallbackProvider } from './fallback.js';
-export { OllamaProvider } from './ollama.js';
-export { OpenAIProvider } from './openai.js';
-export { OnnxProvider, isOnnxAvailable } from './onnx.js';
-export { GeminiProvider } from './gemini.js';
 export { AnthropicProvider } from './anthropic.js';
-export { BlobVectorStore } from './vector-store.js';
-export { hybridSearch } from './search.js';
-export { EmbeddingPipeline } from './embedding-pipeline.js';
-export { InferenceCache } from './inference-cache.js';
+export type { LLMProvider } from './ask-shared.js';
+export {
+  buildSystemPrompt,
+  gatherContext,
+  resolveProvider,
+  stripContextFromMessage,
+} from './ask-shared.js';
 export { CachedInferenceService } from './cached-inference.js';
-export { SummarizationPipeline } from './summarization-pipeline.js';
+export { EmbeddingPipeline } from './embedding-pipeline.js';
+export { FallbackProvider } from './fallback.js';
+export { GeminiProvider } from './gemini.js';
+export { InferenceCache } from './inference-cache.js';
+export type {
+  AIProvider,
+  ChatMessage,
+  EmbeddingService,
+  InferenceService,
+  RerankerService,
+  VectorStore,
+} from './interfaces.js';
+export { OllamaProvider } from './ollama.js';
+export { isOnnxAvailable, OnnxProvider } from './onnx.js';
+export { OpenAIProvider } from './openai.js';
+export type { PromptTemplate } from './prompts.js';
 export { PROMPTS } from './prompts.js';
 export { LLMReranker } from './reranker.js';
-export { parseOpenAIStream, parseAnthropicStream, parseOllamaChatStream } from './sse.js';
-export { resolveProvider, gatherContext, buildSystemPrompt, stripContextFromMessage } from './ask-shared.js';
-export type { LLMProvider } from './ask-shared.js';
-export type { PromptTemplate } from './prompts.js';
+export { hybridSearch } from './search.js';
+export { parseAnthropicStream, parseOllamaChatStream, parseOpenAIStream } from './sse.js';
+export { SummarizationPipeline } from './summarization-pipeline.js';
+export type { AIActivityStats, AIRequestEntry } from './tracker.js';
 export { aiTracker } from './tracker.js';
-export type { AIRequestEntry, AIActivityStats } from './tracker.js';
+export { BlobVectorStore } from './vector-store.js';

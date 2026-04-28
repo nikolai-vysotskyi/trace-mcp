@@ -14,22 +14,22 @@
  *   - fuzzy search fallback
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { search, getSymbol, getFileOutline } from '../../src/tools/navigation/navigation.js';
-import { enableFts5Triggers } from '../../src/db/schema.js';
-import { indexTrigramsBatch } from '../../src/db/fuzzy.js';
-import path from 'node:path';
-import os from 'node:os';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { indexTrigramsBatch } from '../../src/db/fuzzy.js';
+import { enableFts5Triggers } from '../../src/db/schema.js';
+import type { Store } from '../../src/db/store.js';
+import { getFileOutline, getSymbol, search } from '../../src/tools/navigation/navigation.js';
+import { createTestStore } from '../test-utils.js';
 
 // ── Store seeding helpers ─────────────────────────────────────────────────────
 
 type Meta = Record<string, unknown>;
 
 function seedFile(store: Store, filePath: string, language = 'typescript'): number {
-  return store.insertFile(filePath, language, 'hash:' + filePath, 100);
+  return store.insertFile(filePath, language, `hash:${filePath}`, 100);
 }
 
 function seedSymbol(
@@ -322,12 +322,10 @@ describe('search() — fuzzy auto-fallback', () => {
   it('finds symbols with explicit fuzzy=true for typo variants', async () => {
     // "calculateTotall" has edit distance 1 from "calculateTotal" (extra 'l').
     // Trigram similarity is high (shares most 3-grams with the target).
-    const r = await search(
-      store, 'calculateTotall',
-      undefined, 20, 0,
-      undefined,
-      { fuzzy: true, maxEditDistance: 2 },
-    );
+    const r = await search(store, 'calculateTotall', undefined, 20, 0, undefined, {
+      fuzzy: true,
+      maxEditDistance: 2,
+    });
     // fuzzy should find calculateTotal even with the typo
     expect(r.items.length).toBeGreaterThan(0);
     expect(r.items.some((i) => i.symbol.name === 'calculateTotal')).toBe(true);
@@ -338,8 +336,11 @@ describe('search() — fuzzy auto-fallback', () => {
     const r = await search(store, 'calculatTotal');
     // auto-fallback: search_mode should indicate fuzzy was used
     if (r.items.length > 0) {
-      expect(['fuzzy', 'fts_fuzzy_fallback', 'symbol_miss_text_fallback'].some(m => r.search_mode?.includes(m)
-        || r.search_mode === m)).toBe(true);
+      expect(
+        ['fuzzy', 'fts_fuzzy_fallback', 'symbol_miss_text_fallback'].some(
+          (m) => r.search_mode?.includes(m) || r.search_mode === m,
+        ),
+      ).toBe(true);
     }
   });
 });

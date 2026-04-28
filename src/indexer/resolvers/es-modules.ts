@@ -8,8 +8,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ResolverFactory } from 'oxc-resolver';
 import type { NapiResolveOptions, TsconfigOptions } from 'oxc-resolver';
+import { ResolverFactory } from 'oxc-resolver';
 import { logger } from '../../logger.js';
 
 /** Detect the Nuxt `srcDir` for a given project root (defaults to `app/` or `.`). */
@@ -46,15 +46,15 @@ function findTsconfig(startDir: string, stopDir: string): string | undefined {
         if (raw.extends) {
           const extendsPath = path.resolve(path.dirname(candidate), raw.extends);
           if (!fs.existsSync(extendsPath)) {
-            logger.debug({ tsconfig: candidate, extends: raw.extends }, 'Skipping tsconfig with missing extends');
+            logger.debug(
+              { tsconfig: candidate, extends: raw.extends },
+              'Skipping tsconfig with missing extends',
+            );
             continue;
           }
         }
         return candidate;
-      } catch {
-        // JSON parse error — skip this tsconfig
-        continue;
-      }
+      } catch {}
     }
     const parent = path.dirname(dir);
     if (parent === dir) break; // filesystem root
@@ -118,7 +118,6 @@ export interface WorkspaceResolver {
 
 export class EsModuleResolver {
   private resolvers: Map<string, ResolverFactory> = new Map();
-  private rootPath: string;
   private rootResolver: ResolverFactory;
   /** Workspace paths sorted longest-first for prefix matching. */
   private sortedWorkspacePaths: string[] = [];
@@ -137,7 +136,10 @@ export class EsModuleResolver {
         try {
           this.resolvers.set(absWsPath, buildResolver(absWsPath, rootPath));
         } catch (e) {
-          logger.warn({ workspace: absWsPath, error: e }, 'Failed to create resolver for workspace');
+          logger.warn(
+            { workspace: absWsPath, error: e },
+            'Failed to create resolver for workspace',
+          );
         }
       }
     }
@@ -158,7 +160,7 @@ export class EsModuleResolver {
   /** Get the resolver for the workspace containing `absFilePath`. */
   private getResolver(absFilePath: string): ResolverFactory {
     for (const wsPath of this.sortedWorkspacePaths) {
-      if (absFilePath.startsWith(wsPath + '/') || absFilePath === wsPath) {
+      if (absFilePath.startsWith(`${wsPath}/`) || absFilePath === wsPath) {
         const resolver = this.resolvers.get(wsPath);
         if (resolver) return resolver;
       }

@@ -1,5 +1,5 @@
 import type { Store } from '../../db/store.js';
-import type { SymbolRow, FileRow } from '../../db/types.js';
+import type { FileRow, SymbolRow } from '../../db/types.js';
 
 export interface ResolvedSymbol {
   symbol: SymbolRow;

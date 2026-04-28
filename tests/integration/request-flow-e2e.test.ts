@@ -3,19 +3,20 @@
  * Runs the full pipeline on laravel-10, then calls getRequestFlow
  * and verifies the COMPLETE chain: route → middleware → controller → FormRequest → events
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { InertiaPlugin } from '../../src/indexer/plugins/integration/view/inertia/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { InertiaPlugin } from '../../src/indexer/plugins/integration/view/inertia/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { getRequestFlow } from '../../src/tools/framework/flow.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('get_request_flow end-to-end (laravel-10)', () => {
   let store: Store;

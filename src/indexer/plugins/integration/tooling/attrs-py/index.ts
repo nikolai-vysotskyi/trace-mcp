@@ -4,10 +4,10 @@
  */
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -41,7 +41,11 @@ export class AttrsPyPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'attrs_class', category: 'dataclass', description: '@attr.s / @attrs.define decorated class' },
+        {
+          name: 'attrs_class',
+          category: 'dataclass',
+          description: '@attr.s / @attrs.define decorated class',
+        },
       ],
     };
   }

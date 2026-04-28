@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DecisionStore } from '../../src/memory/decision-store.js';
-import { decisionsForImpact, decisionsForTask, decisionsForResume } from '../../src/memory/enrichment.js';
+import {
+  decisionsForImpact,
+  decisionsForResume,
+  decisionsForTask,
+} from '../../src/memory/enrichment.js';
 
 describe('Decision Enrichment', () => {
   let store: DecisionStore;
@@ -74,17 +78,27 @@ describe('Decision Enrichment', () => {
     });
 
     it('finds decisions from affected files', () => {
-      const results = decisionsForImpact(store, '/projects/myapp', {
-        filePath: 'src/some-unlinked-file.ts',
-      }, ['src/api/schema.ts', 'src/auth/provider.ts']);
+      const results = decisionsForImpact(
+        store,
+        '/projects/myapp',
+        {
+          filePath: 'src/some-unlinked-file.ts',
+        },
+        ['src/api/schema.ts', 'src/auth/provider.ts'],
+      );
       expect(results.length).toBe(2);
     });
 
     it('deduplicates results', () => {
-      const results = decisionsForImpact(store, '/projects/myapp', {
-        symbolId: 'src/auth/provider.ts::AuthProvider#class',
-        filePath: 'src/auth/provider.ts',
-      }, ['src/auth/provider.ts']);
+      const results = decisionsForImpact(
+        store,
+        '/projects/myapp',
+        {
+          symbolId: 'src/auth/provider.ts::AuthProvider#class',
+          filePath: 'src/auth/provider.ts',
+        },
+        ['src/auth/provider.ts'],
+      );
       expect(results.length).toBe(1); // same decision, not repeated
     });
 
@@ -98,16 +112,22 @@ describe('Decision Enrichment', () => {
 
   describe('decisionsForTask', () => {
     it('finds decisions by task description FTS', () => {
-      const results = decisionsForTask(store, '/projects/myapp', 'migrate auth endpoints to GraphQL');
+      const results = decisionsForTask(
+        store,
+        '/projects/myapp',
+        'migrate auth endpoints to GraphQL',
+      );
       expect(results.length).toBeGreaterThanOrEqual(1);
       // Should find GraphQL migration and/or auth decisions
-      const titles = results.map(r => r.title);
-      expect(titles.some(t => t.includes('GraphQL') || t.includes('auth'))).toBe(true);
+      const titles = results.map((r) => r.title);
+      expect(titles.some((t) => t.includes('GraphQL') || t.includes('auth'))).toBe(true);
     });
 
     it('finds decisions from target files', () => {
-      const results = decisionsForTask(store, '/projects/myapp', 'refactor database layer', ['src/db/connection.ts']);
-      expect(results.some(r => r.title === 'PostgreSQL for users DB')).toBe(true);
+      const results = decisionsForTask(store, '/projects/myapp', 'refactor database layer', [
+        'src/db/connection.ts',
+      ]);
+      expect(results.some((r) => r.title === 'PostgreSQL for users DB')).toBe(true);
     });
 
     it('returns empty for unrelated task', () => {

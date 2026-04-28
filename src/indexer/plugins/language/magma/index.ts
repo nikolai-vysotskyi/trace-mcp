@@ -4,8 +4,9 @@
  * Magma is a computer algebra system for algebra, number theory, and geometry.
  * Extracts: functions, procedures, intrinsics, types, records, and import edges.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'magma',

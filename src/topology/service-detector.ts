@@ -103,7 +103,10 @@ function detectFromWorkspaceStructure(root: string): DetectedService[] {
   }
 
   if (flatServices.length >= 2) {
-    logger.debug({ count: flatServices.length, root }, 'Detected services from flat workspace structure');
+    logger.debug(
+      { count: flatServices.length, root },
+      'Detected services from flat workspace structure',
+    );
     return flatServices;
   }
 
@@ -137,7 +140,10 @@ function detectFromWorkspaceStructure(root: string): DetectedService[] {
 
   if (groupedServices.length >= 2) {
     const groupsFound = new Set(groupedServices.map((s) => s.projectGroup)).size;
-    logger.debug({ count: groupedServices.length, groups: groupsFound, root }, 'Detected services from grouped workspace structure');
+    logger.debug(
+      { count: groupedServices.length, groups: groupsFound, root },
+      'Detected services from grouped workspace structure',
+    );
     return groupedServices;
   }
 
@@ -215,7 +221,10 @@ function detectFromDockerCompose(root: string): DetectedService[] {
     }
 
     if (services.length > 0) {
-      logger.debug({ count: services.length, composePath }, 'Detected services from docker-compose');
+      logger.debug(
+        { count: services.length, composePath },
+        'Detected services from docker-compose',
+      );
     }
 
     return services;

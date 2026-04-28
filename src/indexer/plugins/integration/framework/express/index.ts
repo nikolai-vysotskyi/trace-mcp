@@ -6,19 +6,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
 const ROUTE_RE =
   /(?:app|router)\s*\.\s*(get|post|put|delete|patch|head|options)\s*\(\s*['"`]([^'"`]+)['"`]/g;
-const MIDDLEWARE_RE =
-  /(?:app|router)\s*\.\s*use\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const MIDDLEWARE_RE = /(?:app|router)\s*\.\s*use\s*\(\s*['"`]([^'"`]+)['"`]/g;
 const GLOBAL_MIDDLEWARE_RE =
   /(?:app|router)\s*\.\s*use\s*\(\s*([A-Za-z][\w.]*(?:\s*\(\s*[^)]*\))?)\s*[,)]/g;
 
@@ -73,13 +71,15 @@ export function extractExpressMiddleware(source: string): ExpressMiddleware[] {
 function extractErrorHandlers(source: string): { path: string }[] {
   const handlers: { path: string }[] = [];
   // function form
-  const funcRe = /(?:app|router)\s*\.\s*use\s*\([^;]*?function\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)/g;
+  const funcRe =
+    /(?:app|router)\s*\.\s*use\s*\([^;]*?function\s*\(\s*\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)/g;
   let m: RegExpExecArray | null;
   while ((m = funcRe.exec(source)) !== null) {
     handlers.push({ path: '/' });
   }
   // arrow form with err/error as first param
-  const arrowRe = /(?:app|router)\s*\.\s*use\s*\([^;]*?\(\s*(?:err|error)\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)\s*=>/g;
+  const arrowRe =
+    /(?:app|router)\s*\.\s*use\s*\([^;]*?\(\s*(?:err|error)\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*\)\s*=>/g;
   while ((m = arrowRe.exec(source)) !== null) {
     handlers.push({ path: '/' });
   }
@@ -135,8 +135,16 @@ export class ExpressPlugin implements FrameworkPlugin {
         { name: 'express_route', category: 'express', description: 'Express route handler' },
         { name: 'express_middleware', category: 'express', description: 'Express middleware' },
         { name: 'express_mounts', category: 'express', description: 'Router mount via app.use' },
-        { name: 'express_error_handler', category: 'express', description: '4-arg error handling middleware' },
-        { name: 'express_param_handler', category: 'express', description: 'app.param() route parameter handler' },
+        {
+          name: 'express_error_handler',
+          category: 'express',
+          description: '4-arg error handling middleware',
+        },
+        {
+          name: 'express_param_handler',
+          category: 'express',
+          description: 'app.param() route parameter handler',
+        },
       ],
     };
   }

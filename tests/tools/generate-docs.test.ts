@@ -1,22 +1,63 @@
-import { describe, it, expect } from 'vitest';
-import { generateDocs } from '../../src/tools/project/generate-docs.js';
+import { describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import type { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { generateDocs } from '../../src/tools/project/generate-docs.js';
 
-function createMockStore(files: { id: number; path: string; language: string | null }[] = []): Store {
+function createMockStore(
+  files: { id: number; path: string; language: string | null }[] = [],
+): Store {
   const symbolsByFile = new Map<number, any[]>();
   for (const f of files) {
     const syms: any[] = [];
     if (f.path.includes('model') || f.path.includes('Model')) {
       syms.push(
-        { name: f.path.split('/').pop()?.replace(/\.\w+$/, '') ?? 'Model', kind: 'class', fqn: 'Model', signature: 'class Model', line_start: 1, line_end: 50 },
-        { name: 'id', kind: 'property', fqn: 'Model.id', signature: 'id: number', line_start: 2, line_end: 2 },
-        { name: 'name', kind: 'property', fqn: 'Model.name', signature: 'name: string', line_start: 3, line_end: 3 },
+        {
+          name:
+            f.path
+              .split('/')
+              .pop()
+              ?.replace(/\.\w+$/, '') ?? 'Model',
+          kind: 'class',
+          fqn: 'Model',
+          signature: 'class Model',
+          line_start: 1,
+          line_end: 50,
+        },
+        {
+          name: 'id',
+          kind: 'property',
+          fqn: 'Model.id',
+          signature: 'id: number',
+          line_start: 2,
+          line_end: 2,
+        },
+        {
+          name: 'name',
+          kind: 'property',
+          fqn: 'Model.name',
+          signature: 'name: string',
+          line_start: 3,
+          line_end: 3,
+        },
       );
     } else {
       syms.push(
-        { name: 'TestClass', kind: 'class', fqn: 'TestClass', signature: 'class TestClass', line_start: 1, line_end: 20 },
-        { name: 'testMethod', kind: 'method', fqn: 'TestClass.testMethod', signature: 'testMethod(): void', line_start: 5, line_end: 10 },
+        {
+          name: 'TestClass',
+          kind: 'class',
+          fqn: 'TestClass',
+          signature: 'class TestClass',
+          line_start: 1,
+          line_end: 20,
+        },
+        {
+          name: 'testMethod',
+          kind: 'method',
+          fqn: 'TestClass.testMethod',
+          signature: 'testMethod(): void',
+          line_start: 5,
+          line_end: 10,
+        },
       );
     }
     symbolsByFile.set(f.id, syms);
@@ -26,9 +67,27 @@ function createMockStore(files: { id: number; path: string; language: string | n
     getAllFiles: () => files,
     getSymbolsByFile: (id: number) => symbolsByFile.get(id) ?? [],
     getAllRoutes: () => [
-      { method: 'GET', uri: '/api/users', handler: 'UserController.index', file_id: 1, metadata: null },
-      { method: 'POST', uri: '/api/users', handler: 'UserController.store', file_id: 1, metadata: null },
-      { method: 'EVENT', uri: 'user.created', handler: 'SendWelcomeEmail', file_id: 2, metadata: null },
+      {
+        method: 'GET',
+        uri: '/api/users',
+        handler: 'UserController.index',
+        file_id: 1,
+        metadata: null,
+      },
+      {
+        method: 'POST',
+        uri: '/api/users',
+        handler: 'UserController.store',
+        file_id: 1,
+        metadata: null,
+      },
+      {
+        method: 'EVENT',
+        uri: 'user.created',
+        handler: 'SendWelcomeEmail',
+        file_id: 2,
+        metadata: null,
+      },
     ],
     searchSymbols: () => ({ items: [], total: 0 }),
     db: { prepare: () => ({ all: () => [], get: () => null }) },
@@ -53,7 +112,10 @@ const defaultFiles = [
 describe('generateDocs', () => {
   it('generates overview section', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'project', format: 'markdown', sections: ['overview'], projectRoot: '/tmp/test',
+      scope: 'project',
+      format: 'markdown',
+      sections: ['overview'],
+      projectRoot: '/tmp/test',
     });
     expect(result.sections_generated).toContain('overview');
     expect(result.content).toContain('## Overview');
@@ -63,7 +125,10 @@ describe('generateDocs', () => {
 
   it('generates architecture section with modules', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'project', format: 'markdown', sections: ['architecture'], projectRoot: '/tmp/test',
+      scope: 'project',
+      format: 'markdown',
+      sections: ['architecture'],
+      projectRoot: '/tmp/test',
     });
     expect(result.sections_generated).toContain('architecture');
     expect(result.content).toContain('## Architecture');
@@ -73,7 +138,10 @@ describe('generateDocs', () => {
 
   it('generates api_surface from routes', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'project', format: 'markdown', sections: ['api_surface'], projectRoot: '/tmp/test',
+      scope: 'project',
+      format: 'markdown',
+      sections: ['api_surface'],
+      projectRoot: '/tmp/test',
     });
     expect(result.sections_generated).toContain('api_surface');
     expect(result.content).toContain('/api/users');
@@ -83,7 +151,10 @@ describe('generateDocs', () => {
 
   it('generates data_model for model files', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'project', format: 'markdown', sections: ['data_model'], projectRoot: '/tmp/test',
+      scope: 'project',
+      format: 'markdown',
+      sections: ['data_model'],
+      projectRoot: '/tmp/test',
     });
     expect(result.sections_generated).toContain('data_model');
     expect(result.content).toContain('User');
@@ -92,7 +163,10 @@ describe('generateDocs', () => {
 
   it('generates components section', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'project', format: 'markdown', sections: ['components'], projectRoot: '/tmp/test',
+      scope: 'project',
+      format: 'markdown',
+      sections: ['components'],
+      projectRoot: '/tmp/test',
     });
     expect(result.sections_generated).toContain('components');
     expect(result.content).toContain('UserCard');
@@ -100,7 +174,10 @@ describe('generateDocs', () => {
 
   it('generates events section', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'project', format: 'markdown', sections: ['events'], projectRoot: '/tmp/test',
+      scope: 'project',
+      format: 'markdown',
+      sections: ['events'],
+      projectRoot: '/tmp/test',
     });
     expect(result.sections_generated).toContain('events');
     expect(result.content).toContain('user.created');
@@ -108,8 +185,17 @@ describe('generateDocs', () => {
 
   it('generates all sections at once', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'project', format: 'markdown',
-      sections: ['overview', 'architecture', 'api_surface', 'data_model', 'components', 'events', 'dependencies'],
+      scope: 'project',
+      format: 'markdown',
+      sections: [
+        'overview',
+        'architecture',
+        'api_surface',
+        'data_model',
+        'components',
+        'events',
+        'dependencies',
+      ],
       projectRoot: '/tmp/test',
     });
     expect(result.sections_generated.length).toBeGreaterThanOrEqual(5);
@@ -118,7 +204,10 @@ describe('generateDocs', () => {
 
   it('produces HTML format', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'project', format: 'html', sections: ['overview', 'api_surface'], projectRoot: '/tmp/test',
+      scope: 'project',
+      format: 'html',
+      sections: ['overview', 'api_surface'],
+      projectRoot: '/tmp/test',
     });
     expect(result.format).toBe('html');
     expect(result.content).toContain('<h1>');
@@ -127,14 +216,19 @@ describe('generateDocs', () => {
 
   it('filters by module scope', () => {
     const result = generateDocs(createMockStore(defaultFiles), createMockRegistry(), {
-      scope: 'module', path: 'src/models', format: 'markdown', sections: ['overview'], projectRoot: '/tmp/test',
+      scope: 'module',
+      path: 'src/models',
+      format: 'markdown',
+      sections: ['overview'],
+      projectRoot: '/tmp/test',
     });
     expect(result.content).toContain('1'); // Only 1 file in src/models
   });
 
   it('handles empty store', () => {
     const result = generateDocs(createMockStore([]), createMockRegistry(), {
-      scope: 'project', format: 'markdown',
+      scope: 'project',
+      format: 'markdown',
       sections: ['overview', 'architecture', 'api_surface'],
       projectRoot: '/tmp/test',
     });
@@ -145,10 +239,15 @@ describe('generateDocs', () => {
   describe('no N+1', () => {
     it('handles 500 files without per-file queries outside file loop', () => {
       const manyFiles = Array.from({ length: 500 }, (_, i) => ({
-        id: i + 1, path: `src/generated/File${i}.ts`, language: 'typescript' as string | null,
+        id: i + 1,
+        path: `src/generated/File${i}.ts`,
+        language: 'typescript' as string | null,
       }));
       const result = generateDocs(createMockStore(manyFiles), createMockRegistry(), {
-        scope: 'project', format: 'markdown', sections: ['overview', 'architecture'], projectRoot: '/tmp/test',
+        scope: 'project',
+        format: 'markdown',
+        sections: ['overview', 'architecture'],
+        projectRoot: '/tmp/test',
       });
       // Should complete without hanging
       expect(result.stats.modules).toBeGreaterThan(0);

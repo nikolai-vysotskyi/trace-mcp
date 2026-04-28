@@ -3,8 +3,8 @@
  * Falls back to FTS5-only when AI is unavailable.
  */
 import type Database from 'better-sqlite3';
-import { searchFts, type FtsResult } from '../db/fts.js';
-import type { VectorStore, EmbeddingService, RerankerService } from './interfaces.js';
+import { type FtsResult, searchFts } from '../db/fts.js';
+import type { EmbeddingService, RerankerService, VectorStore } from './interfaces.js';
 
 interface HybridSearchResult {
   symbolId: number;
@@ -109,9 +109,18 @@ export async function hybridSearch(
       });
     } else {
       // Symbol only in vector results — look up from DB
-      const row = db.prepare(
-        'SELECT id, name, fqn, kind, file_id, symbol_id FROM symbols WHERE id = ?',
-      ).get(id) as { id: number; name: string; fqn: string | null; kind: string; file_id: number; symbol_id: string } | undefined;
+      const row = db
+        .prepare('SELECT id, name, fqn, kind, file_id, symbol_id FROM symbols WHERE id = ?')
+        .get(id) as
+        | {
+            id: number;
+            name: string;
+            fqn: string | null;
+            kind: string;
+            file_id: number;
+            symbol_id: string;
+          }
+        | undefined;
 
       if (row) {
         fused.push({
@@ -139,7 +148,7 @@ export async function hybridSearch(
         text: [c.kind, c.fqn ?? c.name, c.name].join(' '),
       }));
       const reranked = await reranker.rerank(query, docs, limit);
-      const rerankedIds = new Map(reranked.map((r) => [r.id, r.score]));
+      const _rerankedIds = new Map(reranked.map((r) => [r.id, r.score]));
       const result: HybridSearchResult[] = [];
       for (const r of reranked) {
         const original = candidates.find((c) => c.symbolId === r.id);

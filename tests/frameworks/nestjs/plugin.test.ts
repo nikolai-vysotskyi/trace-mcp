@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  NestJSPlugin,
+  extractConstructorDeps,
   extractControllerRoutes,
   extractModuleInfo,
-  extractConstructorDeps,
+  NestJSPlugin,
 } from '../../../src/indexer/plugins/integration/framework/nestjs/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -72,7 +72,7 @@ describe('NestJSPlugin', () => {
         path.join(FIXTURE_DIR, 'src/users/users.controller.ts'),
         'utf-8',
       );
-      const { basePath, routes, guards } = extractControllerRoutes(source, 'users.controller.ts');
+      const { basePath, routes } = extractControllerRoutes(source, 'users.controller.ts');
       expect(basePath).toBe('users');
       expect(routes).toHaveLength(3);
 
@@ -97,10 +97,7 @@ describe('NestJSPlugin', () => {
 
   describe('extractModuleInfo()', () => {
     it('extracts module imports and providers', () => {
-      const source = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/users/users.module.ts'),
-        'utf-8',
-      );
+      const source = fs.readFileSync(path.join(FIXTURE_DIR, 'src/users/users.module.ts'), 'utf-8');
       const info = extractModuleInfo(source);
       expect(info).not.toBeNull();
       expect(info!.controllers).toContain('UsersController');
@@ -108,10 +105,7 @@ describe('NestJSPlugin', () => {
     });
 
     it('extracts root module imports', () => {
-      const source = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/app.module.ts'),
-        'utf-8',
-      );
+      const source = fs.readFileSync(path.join(FIXTURE_DIR, 'src/app.module.ts'), 'utf-8');
       const info = extractModuleInfo(source);
       expect(info).not.toBeNull();
       expect(info!.imports).toContain('UsersModule');
@@ -131,9 +125,7 @@ describe('NestJSPlugin', () => {
 
   describe('extractNodes()', () => {
     it('detects controller role and routes', () => {
-      const content = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/users/users.controller.ts'),
-      );
+      const content = fs.readFileSync(path.join(FIXTURE_DIR, 'src/users/users.controller.ts'));
       const result = plugin.extractNodes('users.controller.ts', content, 'typescript');
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
@@ -142,9 +134,7 @@ describe('NestJSPlugin', () => {
     });
 
     it('detects injectable role', () => {
-      const content = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/users/users.service.ts'),
-      );
+      const content = fs.readFileSync(path.join(FIXTURE_DIR, 'src/users/users.service.ts'));
       const result = plugin.extractNodes('users.service.ts', content, 'typescript');
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
@@ -152,9 +142,7 @@ describe('NestJSPlugin', () => {
     });
 
     it('detects module role', () => {
-      const content = fs.readFileSync(
-        path.join(FIXTURE_DIR, 'src/app.module.ts'),
-      );
+      const content = fs.readFileSync(path.join(FIXTURE_DIR, 'src/app.module.ts'));
       const result = plugin.extractNodes('app.module.ts', content, 'typescript');
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();

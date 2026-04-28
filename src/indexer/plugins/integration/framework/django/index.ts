@@ -14,21 +14,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
-  EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-import { extractDjangoModels } from './models.js';
-import { extractUrlPatterns } from './urls.js';
-import { extractSignalConnections } from './signals.js';
 import { extractAdminRegistrations } from './admin.js';
+import { extractDjangoModels } from './models.js';
+import { extractSignalConnections } from './signals.js';
+import { extractUrlPatterns } from './urls.js';
 
 export class DjangoPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -91,13 +91,37 @@ export class DjangoPlugin implements FrameworkPlugin {
 
   registerSchema() {
     const edgeTypes: EdgeTypeDeclaration[] = [
-      { name: 'django_url_routes_to', category: 'django', description: 'URL pattern routes to view' },
-      { name: 'django_includes_urls', category: 'django', description: 'URL config includes another URL module' },
-      { name: 'django_view_uses_model', category: 'django', description: 'View references a model' },
+      {
+        name: 'django_url_routes_to',
+        category: 'django',
+        description: 'URL pattern routes to view',
+      },
+      {
+        name: 'django_includes_urls',
+        category: 'django',
+        description: 'URL config includes another URL module',
+      },
+      {
+        name: 'django_view_uses_model',
+        category: 'django',
+        description: 'View references a model',
+      },
       { name: 'django_view_template', category: 'django', description: 'View renders a template' },
-      { name: 'django_signal_receiver', category: 'django', description: 'Signal receiver connected to signal+sender' },
-      { name: 'django_admin_registers', category: 'django', description: 'Admin class registers a model' },
-      { name: 'django_form_meta_model', category: 'django', description: 'ModelForm Meta.model reference' },
+      {
+        name: 'django_signal_receiver',
+        category: 'django',
+        description: 'Signal receiver connected to signal+sender',
+      },
+      {
+        name: 'django_admin_registers',
+        category: 'django',
+        description: 'Admin class registers a model',
+      },
+      {
+        name: 'django_form_meta_model',
+        category: 'django',
+        description: 'ModelForm Meta.model reference',
+      },
     ];
     return { edgeTypes };
   }
@@ -177,10 +201,7 @@ export class DjangoPlugin implements FrameworkPlugin {
 
       let source: string;
       try {
-        source = fs.readFileSync(
-          path.resolve(ctx.rootPath, file.path),
-          'utf-8',
-        );
+        source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
       } catch {
         continue;
       }
@@ -212,18 +233,27 @@ export class DjangoPlugin implements FrameworkPlugin {
    * Extract class-based view information.
    * Detects model, template_name, queryset from CBV subclasses.
    */
-  private extractViewEdges(
-    source: string,
-    filePath: string,
-    result: FileParseResult,
-  ): void {
+  private extractViewEdges(source: string, filePath: string, result: FileParseResult): void {
     const cbvBases = [
-      'ListView', 'DetailView', 'CreateView', 'UpdateView', 'DeleteView',
-      'FormView', 'TemplateView', 'RedirectView',
-      'GenericAPIView', 'ModelViewSet', 'ReadOnlyModelViewSet',
-      'ListAPIView', 'RetrieveAPIView', 'CreateAPIView',
-      'UpdateAPIView', 'DestroyAPIView', 'ListCreateAPIView',
-      'RetrieveUpdateAPIView', 'RetrieveDestroyAPIView',
+      'ListView',
+      'DetailView',
+      'CreateView',
+      'UpdateView',
+      'DeleteView',
+      'FormView',
+      'TemplateView',
+      'RedirectView',
+      'GenericAPIView',
+      'ModelViewSet',
+      'ReadOnlyModelViewSet',
+      'ListAPIView',
+      'RetrieveAPIView',
+      'CreateAPIView',
+      'UpdateAPIView',
+      'DestroyAPIView',
+      'ListCreateAPIView',
+      'RetrieveUpdateAPIView',
+      'RetrieveDestroyAPIView',
       'RetrieveUpdateDestroyAPIView',
     ];
 
@@ -305,11 +335,7 @@ export class DjangoPlugin implements FrameworkPlugin {
   /**
    * Extract ModelForm Meta.model references.
    */
-  private extractFormEdges(
-    source: string,
-    filePath: string,
-    result: FileParseResult,
-  ): void {
+  private extractFormEdges(source: string, filePath: string, result: FileParseResult): void {
     // Match class SomethingForm(ModelForm): or class SomethingForm(forms.ModelForm):
     const formRegex = /class\s+(\w+)\s*\(\s*(?:forms\.)?ModelForm\s*\)\s*:/g;
     let formMatch: RegExpExecArray | null;
@@ -353,9 +379,7 @@ export class DjangoPlugin implements FrameworkPlugin {
     const symbols = ctx.getSymbolsByFile(file.id);
 
     for (const mr of modelResults) {
-      const sourceClass = symbols.find(
-        (s) => s.kind === 'class' && s.name === mr.model.name,
-      );
+      const sourceClass = symbols.find((s) => s.kind === 'class' && s.name === mr.model.name);
       if (!sourceClass) continue;
 
       for (const assoc of mr.associations) {
@@ -430,9 +454,7 @@ export class DjangoPlugin implements FrameworkPlugin {
       if (!senderSymbol) continue;
 
       const handler = edge.metadata?.handler as string;
-      const handlerSymbol = symbols.find(
-        (s) => s.kind === 'function' && s.name === handler,
-      );
+      const handlerSymbol = symbols.find((s) => s.kind === 'function' && s.name === handler);
 
       edges.push({
         sourceNodeType: handlerSymbol ? 'symbol' : 'file',
@@ -468,9 +490,7 @@ export class DjangoPlugin implements FrameworkPlugin {
 
       const modelName = metaMatch[1];
       const symbols = ctx.getSymbolsByFile(file.id);
-      const formSymbol = symbols.find(
-        (s) => s.kind === 'class' && s.name === formClass,
-      );
+      const formSymbol = symbols.find((s) => s.kind === 'class' && s.name === formClass);
       const modelSymbol = this.findModelSymbol(ctx, modelName);
 
       if (formSymbol && modelSymbol) {
@@ -492,8 +512,15 @@ export class DjangoPlugin implements FrameworkPlugin {
     edges: RawEdge[],
   ): void {
     const cbvBases = [
-      'ListView', 'DetailView', 'CreateView', 'UpdateView', 'DeleteView',
-      'FormView', 'TemplateView', 'ModelViewSet', 'ReadOnlyModelViewSet',
+      'ListView',
+      'DetailView',
+      'CreateView',
+      'UpdateView',
+      'DeleteView',
+      'FormView',
+      'TemplateView',
+      'ModelViewSet',
+      'ReadOnlyModelViewSet',
     ];
     const basesPattern = cbvBases.map(escapeRegExp).join('|');
     const classRegex = new RegExp(
@@ -509,9 +536,7 @@ export class DjangoPlugin implements FrameworkPlugin {
       if (!body) continue;
 
       const symbols = ctx.getSymbolsByFile(file.id);
-      const viewSymbol = symbols.find(
-        (s) => s.kind === 'class' && s.name === className,
-      );
+      const viewSymbol = symbols.find((s) => s.kind === 'class' && s.name === className);
       if (!viewSymbol) continue;
 
       // model = X
@@ -610,9 +635,7 @@ export class DjangoPlugin implements FrameworkPlugin {
     for (const file of files) {
       if (file.language !== 'python') continue;
       const symbols = ctx.getSymbolsByFile(file.id);
-      const match = symbols.find(
-        (s) => s.kind === 'class' && s.name === modelName,
-      );
+      const match = symbols.find((s) => s.kind === 'class' && s.name === modelName);
       if (match) return match;
     }
 

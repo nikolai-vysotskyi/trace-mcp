@@ -5,8 +5,9 @@
  *           S4 classes (setClass), generics (setGeneric), methods (setMethod).
  * Imports: library(), require(), source().
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'r',

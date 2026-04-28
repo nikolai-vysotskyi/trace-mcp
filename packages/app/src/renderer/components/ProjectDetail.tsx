@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StatusDot } from './StatusDot';
 
 interface ProgressSnapshot {
@@ -58,15 +58,17 @@ export function ProjectDetail({ root, status, progress, onBack, onReindex }: Pro
     }
   }, [root]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: status is an intentional trigger — refetches stats after the project transitions out of 'indexing' so the panel reflects the new totals.
   useEffect(() => {
     fetchStats();
-  }, [fetchStats, status]); // refetch when status changes (e.g. after reindex)
+  }, [fetchStats, status]);
 
   return (
     <div className="space-y-3">
       {/* Header with back button */}
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={onBack}
           className="text-xs px-1.5 py-0.5 rounded"
           style={{ color: 'var(--accent)' }}
@@ -89,24 +91,33 @@ export function ProjectDetail({ root, status, progress, onBack, onReindex }: Pro
       </div>
 
       {/* Status */}
-      <div
-        className="px-3 py-2 rounded-md"
-        style={{ background: 'var(--bg-secondary)' }}
-      >
+      <div className="px-3 py-2 rounded-md" style={{ background: 'var(--bg-secondary)' }}>
         <div className="flex items-center justify-between">
-          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Status</span>
+          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            Status
+          </span>
           <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-            {status === 'indexing' ? 'Indexing…' : status === 'ready' ? 'Ready' : status || 'Unknown'}
+            {status === 'indexing'
+              ? 'Indexing…'
+              : status === 'ready'
+                ? 'Ready'
+                : status || 'Unknown'}
           </span>
         </div>
 
         {status === 'indexing' && progress?.percent != null && (
           <div className="mt-2">
-            <div className="flex justify-between text-[10px] mb-1" style={{ color: 'var(--text-tertiary)' }}>
+            <div
+              className="flex justify-between text-[10px] mb-1"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
               <span>{progress.phase}</span>
               <span>{progress.percent}%</span>
             </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+            <div
+              className="h-1.5 rounded-full overflow-hidden"
+              style={{ background: 'var(--border)' }}
+            >
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{ width: `${progress.percent}%`, background: 'var(--accent)' }}
@@ -134,6 +145,7 @@ export function ProjectDetail({ root, status, progress, onBack, onReindex }: Pro
       {/* Actions */}
       <div className="space-y-1.5">
         <button
+          type="button"
           onClick={onReindex}
           disabled={status === 'indexing'}
           className="w-full text-xs px-3 py-2 rounded-md font-medium transition-colors disabled:opacity-40"
@@ -149,8 +161,12 @@ export function ProjectDetail({ root, status, progress, onBack, onReindex }: Pro
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-      <span className="text-[11px] font-medium" style={{ color: 'var(--text-primary)' }}>{value}</span>
+      <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+        {label}
+      </span>
+      <span className="text-[11px] font-medium" style={{ color: 'var(--text-primary)' }}>
+        {value}
+      </span>
     </div>
   );
 }

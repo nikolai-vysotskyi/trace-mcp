@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
-import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { getDataflow } from '../../src/tools/analysis/dataflow.js';
+import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 
 describe('getDataflow', () => {
   let store: Store;
@@ -60,16 +60,16 @@ describe('getDataflow', () => {
     expect(data.parameters).toHaveLength(2);
 
     // Check 'order' param
-    const orderParam = data.parameters.find(p => p.name === 'order')!;
+    const orderParam = data.parameters.find((p) => p.name === 'order')!;
     expect(orderParam).toBeDefined();
-    expect(orderParam.flows_to.some(f => f.target === 'validateOrder')).toBe(true);
-    expect(orderParam.flows_to.some(f => f.target === 'calculateTotal')).toBe(true);
+    expect(orderParam.flows_to.some((f) => f.target === 'validateOrder')).toBe(true);
+    expect(orderParam.flows_to.some((f) => f.target === 'calculateTotal')).toBe(true);
 
     // Check 'user' param
-    const userParam = data.parameters.find(p => p.name === 'user')!;
+    const userParam = data.parameters.find((p) => p.name === 'user')!;
     expect(userParam).toBeDefined();
-    expect(userParam.flows_to.some(f => f.target === 'checkPermission')).toBe(true);
-    expect(userParam.flows_to.some(f => f.target === 'createInvoice')).toBe(true);
+    expect(userParam.flows_to.some((f) => f.target === 'checkPermission')).toBe(true);
+    expect(userParam.flows_to.some((f) => f.target === 'createInvoice')).toBe(true);
   });
 
   it('detects mutations (property assignments)', () => {
@@ -168,7 +168,7 @@ describe('getDataflow', () => {
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
     expect(data.localAssignments.length).toBeGreaterThan(0);
-    expect(data.localAssignments.some(a => a.name === 'subtotal')).toBe(true);
+    expect(data.localAssignments.some((a) => a.name === 'subtotal')).toBe(true);
   });
 
   it('parses TypeScript typed parameters', () => {
@@ -286,18 +286,14 @@ describe('getDataflow', () => {
     const reqParam = data.parameters[0];
 
     // parseBody should be resolved with its symbolId
-    const parseBodyFlow = reqParam.flows_to.find(f => f.target === 'parseBody');
+    const parseBodyFlow = reqParam.flows_to.find((f) => f.target === 'parseBody');
     expect(parseBodyFlow).toBeDefined();
     expect(parseBodyFlow!.symbolId).toBe('src/parser.ts::parseBody#function');
     expect(parseBodyFlow!.file).toBe('src/parser.ts');
   });
 
   it('handles function with no params gracefully', () => {
-    const content = [
-      'export function getTime() {',
-      '  return Date.now();',
-      '}',
-    ].join('\n');
+    const content = ['export function getTime() {', '  return Date.now();', '}'].join('\n');
     setupFile('src/time.ts', content);
 
     const fileId = store.insertFile('src/time.ts', 'typescript', 'h1', 50);

@@ -9,8 +9,8 @@
  * insists; the default `scope: 'project'` writes next to the current project.
  */
 import path from 'node:path';
-import type { InitStepResult } from './types.js';
 import { upsertTraceMcpBlock } from './md-block.js';
+import type { InitStepResult } from './types.js';
 
 export function updateAgentsMd(
   projectRoot: string,

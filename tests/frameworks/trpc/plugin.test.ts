@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  TrpcPlugin,
   extractTrpcProcedures,
+  TrpcPlugin,
 } from '../../../src/indexer/plugins/integration/api/trpc/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

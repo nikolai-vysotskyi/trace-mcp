@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * postinstall hook for `npm install -g trace-mcp`.
  * If the Electron menu bar app is already installed in ~/Applications/,
@@ -20,13 +21,13 @@
  * Runs silently — never fails the install (all errors are swallowed).
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
-import https from 'node:https';
-import http from 'node:http';
-import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import os from 'node:os';
+import path from 'node:path';
 
 const APP_NAME = 'trace-mcp.app';
 const INSTALL_DIR = path.join(os.homedir(), 'Applications');
@@ -63,9 +64,15 @@ function stopRunningDaemon() {
     if (process.platform === 'win32') {
       execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
     } else {
-      try { process.kill(pid, 'SIGTERM'); } catch { /* already dead */ }
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        /* already dead */
+      }
     }
-  } catch { /* swallow — postinstall must never fail the install */ }
+  } catch {
+    /* swallow — postinstall must never fail the install */
+  }
 }
 
 stopRunningDaemon();
@@ -76,7 +83,9 @@ if (process.platform !== 'darwin' || !fs.existsSync(APP_PATH)) process.exit(0);
 function appIsRunning() {
   try {
     // pgrep -f matches the full command line; the main binary path is unique enough.
-    const out = execFileSync('/usr/bin/pgrep', ['-f', `${APP_NAME}/Contents/MacOS/`], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const out = execFileSync('/usr/bin/pgrep', ['-f', `${APP_NAME}/Contents/MacOS/`], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
     return out.toString().trim().length > 0;
   } catch {
     return false; // pgrep exits 1 when no match
@@ -86,18 +95,39 @@ function appIsRunning() {
 function httpGet(url, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const doGet = (target, redirects = 0) => {
-      if (redirects > 5) { reject(new Error('Too many redirects')); return; }
+      if (redirects > 5) {
+        reject(new Error('Too many redirects'));
+        return;
+      }
       const mod = target.startsWith('https') ? https : http;
-      mod.get(target, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' } }, (res) => {
-        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-          doGet(res.headers.location, redirects + 1);
-          return;
-        }
-        if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
-        let body = '';
-        res.on('data', (chunk) => { body += chunk; });
-        res.on('end', () => resolve(body));
-      }).on('error', reject).on('timeout', function () { this.destroy(); reject(new Error('timeout')); });
+      mod
+        .get(
+          target,
+          {
+            timeout: timeoutMs,
+            headers: { 'User-Agent': 'trace-mcp', Accept: 'application/vnd.github.v3+json' },
+          },
+          (res) => {
+            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+              doGet(res.headers.location, redirects + 1);
+              return;
+            }
+            if (res.statusCode !== 200) {
+              reject(new Error(`HTTP ${res.statusCode}`));
+              return;
+            }
+            let body = '';
+            res.on('data', (chunk) => {
+              body += chunk;
+            });
+            res.on('end', () => resolve(body));
+          },
+        )
+        .on('error', reject)
+        .on('timeout', function () {
+          this.destroy();
+          reject(new Error('timeout'));
+        });
     };
     doGet(url);
   });
@@ -108,18 +138,32 @@ function downloadFile(url, dest, timeoutMs = 60000) {
     const file = fs.createWriteStream(dest);
     const hash = crypto.createHash('sha256');
     const doGet = (target, redirects = 0) => {
-      if (redirects > 5) { reject(new Error('Too many redirects')); return; }
+      if (redirects > 5) {
+        reject(new Error('Too many redirects'));
+        return;
+      }
       const mod = target.startsWith('https') ? https : http;
-      mod.get(target, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp' } }, (res) => {
-        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-          doGet(res.headers.location, redirects + 1);
-          return;
-        }
-        if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
-        res.on('data', (chunk) => hash.update(chunk));
-        res.pipe(file);
-        file.on('finish', () => { file.close(); resolve(hash.digest('hex')); });
-      }).on('error', (err) => { fs.unlink(dest, () => {}); reject(err); });
+      mod
+        .get(target, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp' } }, (res) => {
+          if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+            doGet(res.headers.location, redirects + 1);
+            return;
+          }
+          if (res.statusCode !== 200) {
+            reject(new Error(`HTTP ${res.statusCode}`));
+            return;
+          }
+          res.on('data', (chunk) => hash.update(chunk));
+          res.pipe(file);
+          file.on('finish', () => {
+            file.close();
+            resolve(hash.digest('hex'));
+          });
+        })
+        .on('error', (err) => {
+          fs.unlink(dest, () => {});
+          reject(err);
+        });
     };
     doGet(url);
   });
@@ -127,7 +171,10 @@ function downloadFile(url, dest, timeoutMs = 60000) {
 
 function parseSha256Manifest(text, assetName) {
   // Accept either a bare digest or `<digest>  <filename>` lines (sha256sum format).
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   for (const line of lines) {
     const bare = line.match(/^([a-f0-9]{64})$/i);
     if (bare) return bare[1].toLowerCase();
@@ -191,7 +238,11 @@ async function main() {
   if (!checksumAsset) return;
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-update-'));
-  const cleanup = () => { try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {} };
+  const cleanup = () => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
+  };
 
   try {
     const zipPath = path.join(tmpDir, asset.name);
@@ -199,8 +250,14 @@ async function main() {
 
     const manifestText = await httpGet(checksumAsset.browser_download_url);
     const expectedDigest = parseSha256Manifest(manifestText, asset.name);
-    if (!expectedDigest) { cleanup(); return; }
-    if (expectedDigest !== actualDigest) { cleanup(); return; }
+    if (!expectedDigest) {
+      cleanup();
+      return;
+    }
+    if (expectedDigest !== actualDigest) {
+      cleanup();
+      return;
+    }
 
     // If the app is running, do NOT touch the bundle — replacing a running .app
     // can crash lazily-spawned helper processes and break the on-disk code
@@ -228,15 +285,23 @@ async function main() {
     execFileSync('/usr/bin/unzip', ['-q', '-o', zipPath, '-d', stagingDir], { stdio: 'pipe' });
 
     const stagedApp = path.join(stagingDir, APP_NAME);
-    if (!fs.existsSync(stagedApp)) { cleanup(); return; }
-    if (!trustNotDowngraded(stagedApp, APP_PATH)) { cleanup(); return; }
+    if (!fs.existsSync(stagedApp)) {
+      cleanup();
+      return;
+    }
+    if (!trustNotDowngraded(stagedApp, APP_PATH)) {
+      cleanup();
+      return;
+    }
 
     const backupPath = `${APP_PATH}.bak-${process.pid}`;
     fs.renameSync(APP_PATH, backupPath);
     try {
       fs.renameSync(stagedApp, APP_PATH);
     } catch (err) {
-      try { fs.renameSync(backupPath, APP_PATH); } catch {}
+      try {
+        fs.renameSync(backupPath, APP_PATH);
+      } catch {}
       throw err;
     }
     fs.rmSync(backupPath, { recursive: true, force: true });
@@ -244,7 +309,9 @@ async function main() {
 
     // Clear any stale pending markers from a previous deferred update.
     for (const p of [PENDING_ZIP, PENDING_CHECKSUM, PENDING_VERSION]) {
-      try { fs.unlinkSync(p); } catch {}
+      try {
+        fs.unlinkSync(p);
+      } catch {}
     }
 
     console.log(`  trace-mcp app updated to ${release.tag_name}`);

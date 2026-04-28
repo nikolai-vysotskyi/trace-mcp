@@ -42,7 +42,13 @@ class AIRequestTracker {
   private byType: Record<string, { count: number; errors: number; total_ms: number }> = {};
 
   /** Start tracking a request. Returns the entry (mutated in-place on finish). */
-  start(type: AIRequestType, provider: string, model: string, url: string, inputSize: number): AIRequestEntry {
+  start(
+    type: AIRequestType,
+    provider: string,
+    model: string,
+    url: string,
+    inputSize: number,
+  ): AIRequestEntry {
     const entry: AIRequestEntry = {
       id: this.nextId++,
       type,
@@ -65,7 +71,13 @@ class AIRequestTracker {
   }
 
   /** Mark a tracked request as finished. */
-  finish(entry: AIRequestEntry, status: 'ok' | 'error', durationMs: number, outputSize: number, error?: string): void {
+  finish(
+    entry: AIRequestEntry,
+    status: 'ok' | 'error',
+    durationMs: number,
+    outputSize: number,
+    error?: string,
+  ): void {
     entry.status = status;
     entry.duration_ms = durationMs;
     entry.output_size = outputSize;

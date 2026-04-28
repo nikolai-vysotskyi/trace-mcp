@@ -4,14 +4,14 @@
  * For multi-root projects, can also exclude a single child.
  */
 
-import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as p from '@clack/prompts';
-import { findProjectRoot } from '../project-root.js';
-import { getProject, unregisterProject, listProjects, findParentProject } from '../registry.js';
+import { Command } from 'commander';
 import { removeProjectConfig } from '../config.js';
-import { getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
+import { TOPOLOGY_DB_PATH } from '../global.js';
+import { findProjectRoot } from '../project-root.js';
+import { findParentProject, getProject, unregisterProject } from '../registry.js';
 import { TopologyStore } from '../topology/topology-db.js';
 
 export const removeCommand = new Command('remove')
@@ -68,9 +68,10 @@ export const removeCommand = new Command('remove')
     // Confirm
     if (!opts.force && isInteractive) {
       const confirm = await p.confirm({
-        message: entry.type === 'multi-root'
-          ? `Remove multi-root project "${entry.name}" and its unified index?`
-          : `Remove project "${entry.name}" and delete its index?`,
+        message:
+          entry.type === 'multi-root'
+            ? `Remove multi-root project "${entry.name}" and its unified index?`
+            : `Remove project "${entry.name}" and delete its index?`,
         initialValue: false,
       });
       if (p.isCancel(confirm) || !confirm) {
@@ -97,13 +98,19 @@ export const removeCommand = new Command('remove')
 
     // Report
     if (opts.json) {
-      console.log(JSON.stringify({
-        status: 'removed',
-        project: entry.name,
-        root: entry.root,
-        dbDeleted,
-        topologyCleaned: topoCleaned.subprojects > 0 || topoCleaned.services > 0,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            status: 'removed',
+            project: entry.name,
+            root: entry.root,
+            dbDeleted,
+            topologyCleaned: topoCleaned.subprojects > 0 || topoCleaned.services > 0,
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       const lines: string[] = [];
       lines.push(`Project: ${entry.name}`);
@@ -113,7 +120,9 @@ export const removeCommand = new Command('remove')
         lines.push(`Database kept: ${shortPath(entry.dbPath)}`);
       }
       if (topoCleaned.subprojects > 0 || topoCleaned.services > 0) {
-        lines.push(`Topology cleaned: ${topoCleaned.services} service(s), ${topoCleaned.subprojects} subproject(s)`);
+        lines.push(
+          `Topology cleaned: ${topoCleaned.services} service(s), ${topoCleaned.subprojects} subproject(s)`,
+        );
       }
       lines.push('Config removed');
       p.note(lines.join('\n'), 'Removed');
@@ -140,8 +149,8 @@ async function handleRemoveFromMultiRoot(
     p.intro('trace-mcp remove (from multi-root)');
     p.note(
       `This project is part of multi-root index: ${parent.name}\n` +
-      `Parent root: ${parent.root}\n` +
-      `Child to exclude: ${path.basename(childRoot)}`,
+        `Parent root: ${parent.root}\n` +
+        `Child to exclude: ${path.basename(childRoot)}`,
       'Multi-root',
     );
   }
@@ -171,11 +180,17 @@ async function handleRemoveFromMultiRoot(
     unregisterProject(parent.root);
 
     if (opts.json) {
-      console.log(JSON.stringify({
-        status: 'removed_multi_root',
-        reason: 'no children remaining',
-        parent: parent.name,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            status: 'removed_multi_root',
+            reason: 'no children remaining',
+            parent: parent.name,
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       p.note('No children remaining — entire multi-root project removed.', 'Removed');
       p.outro('Multi-root project unregistered.');
@@ -196,17 +211,23 @@ async function handleRemoveFromMultiRoot(
     unregisterProject(parent.root);
 
     if (opts.json) {
-      console.log(JSON.stringify({
-        status: 'excluded_from_multi_root',
-        excluded: path.basename(childRoot),
-        remaining: path.basename(remainingChild),
-        hint: `Run \`trace-mcp add ${remainingChild}\` to re-register the remaining project individually.`,
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            status: 'excluded_from_multi_root',
+            excluded: path.basename(childRoot),
+            remaining: path.basename(remainingChild),
+            hint: `Run \`trace-mcp add ${remainingChild}\` to re-register the remaining project individually.`,
+          },
+          null,
+          2,
+        ),
+      );
     } else {
       p.note(
         `Excluded: ${path.basename(childRoot)}\n` +
-        `Only one child remaining: ${path.basename(remainingChild)}\n` +
-        `Multi-root removed. Run \`trace-mcp add ${remainingChild}\` to re-register individually.`,
+          `Only one child remaining: ${path.basename(remainingChild)}\n` +
+          `Multi-root removed. Run \`trace-mcp add ${remainingChild}\` to re-register individually.`,
         'Converted',
       );
       p.outro('Child excluded from multi-root.');
@@ -225,17 +246,23 @@ async function handleRemoveFromMultiRoot(
   unregisterProject(parent.root);
 
   if (opts.json) {
-    console.log(JSON.stringify({
-      status: 'excluded_from_multi_root',
-      excluded: path.basename(childRoot),
-      remaining: newChildren.map((c) => path.basename(c)),
-      hint: `Run \`trace-mcp add ${parent.root}\` to re-register with ${newChildren.length} children.`,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          status: 'excluded_from_multi_root',
+          excluded: path.basename(childRoot),
+          remaining: newChildren.map((c) => path.basename(c)),
+          hint: `Run \`trace-mcp add ${parent.root}\` to re-register with ${newChildren.length} children.`,
+        },
+        null,
+        2,
+      ),
+    );
   } else {
     p.note(
       `Excluded: ${path.basename(childRoot)}\n` +
-      `Remaining children: ${newChildren.map((c) => path.basename(c)).join(', ')}\n` +
-      `Run \`trace-mcp add ${parent.root}\` to re-register the multi-root.`,
+        `Remaining children: ${newChildren.map((c) => path.basename(c)).join(', ')}\n` +
+        `Run \`trace-mcp add ${parent.root}\` to re-register the multi-root.`,
       'Excluded',
     );
     p.outro('Child excluded. Re-add the parent to rebuild the index.');
@@ -256,6 +283,6 @@ function cleanTopology(repoRoot: string): { subprojects: number; services: numbe
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   return p;
 }

@@ -12,10 +12,10 @@
  */
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -31,16 +31,16 @@ const WORKERS_RE = /^\s*workers\s*=\s*(\d+)/m;
 const WORKER_CLASS_RE = /^\s*worker_class\s*=\s*(?:(?:f|r|b)?["']([^"']+)["'])/m;
 
 // Custom application subclass: class X(gunicorn.app.base.BaseApplication)
-const CUSTOM_APP_RE =
-  /class\s+\w+\s*\([^)]*\bgunicorn\.app\.base\.BaseApplication\b[^)]*\)/;
-const GUNICORN_IMPORT_RE =
-  /^\s*(?:import\s+gunicorn|from\s+gunicorn(?:\.\w+)?\s+import)\b/m;
+const CUSTOM_APP_RE = /class\s+\w+\s*\([^)]*\bgunicorn\.app\.base\.BaseApplication\b[^)]*\)/;
+const GUNICORN_IMPORT_RE = /^\s*(?:import\s+gunicorn|from\s+gunicorn(?:\.\w+)?\s+import)\b/m;
 
 function isGunicornConfig(filePath: string): boolean {
   const lower = filePath.toLowerCase();
-  return lower.endsWith('/gunicorn.conf.py')
-    || lower.endsWith('\\gunicorn.conf.py')
-    || lower === 'gunicorn.conf.py';
+  return (
+    lower.endsWith('/gunicorn.conf.py') ||
+    lower.endsWith('\\gunicorn.conf.py') ||
+    lower === 'gunicorn.conf.py'
+  );
 }
 
 export class GunicornPlugin implements FrameworkPlugin {
@@ -59,7 +59,11 @@ export class GunicornPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'wsgi_server_runs', category: 'python-server', description: 'gunicorn config/custom app → WSGI app reference' },
+        {
+          name: 'wsgi_server_runs',
+          category: 'python-server',
+          description: 'gunicorn config/custom app → WSGI app reference',
+        },
       ],
     };
   }

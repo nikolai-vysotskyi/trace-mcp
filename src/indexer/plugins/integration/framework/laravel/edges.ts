@@ -4,8 +4,8 @@
  */
 import type { RawEdge, ResolveContext } from '../../../../../plugin-api/types.js';
 import { extractEloquentModel } from './eloquent.js';
+import { detectEventDispatches, extractEventListeners } from './events.js';
 import { detectFormRequestUsage } from './requests.js';
-import { extractEventListeners, detectEventDispatches } from './events.js';
 
 export function resolveEloquentEdges(
   source: string,
@@ -51,9 +51,7 @@ export function resolveFormRequestEdges(
   if (!controllerClass) return;
 
   for (const usage of usages) {
-    const methodSymbol = symbols.find(
-      (s) => s.kind === 'method' && s.name === usage.methodName,
-    );
+    const methodSymbol = symbols.find((s) => s.kind === 'method' && s.name === usage.methodName);
     if (!methodSymbol) continue;
 
     const requestSymbol = ctx.getSymbolByFqn(usage.requestClass);
@@ -152,11 +150,12 @@ export function resolveComposerLaravelProviders(
   if (!extra) return;
 
   const providers = Array.isArray(extra.providers) ? (extra.providers as string[]) : [];
-  const aliases = extra.aliases && typeof extra.aliases === 'object'
-    ? Object.values(extra.aliases as Record<string, unknown>).filter(
-        (v): v is string => typeof v === 'string',
-      )
-    : [];
+  const aliases =
+    extra.aliases && typeof extra.aliases === 'object'
+      ? Object.values(extra.aliases as Record<string, unknown>).filter(
+          (v): v is string => typeof v === 'string',
+        )
+      : [];
 
   const registrations: Array<{ fqn: string; kind: 'provider' | 'alias' }> = [
     ...providers.map((fqn) => ({ fqn, kind: 'provider' as const })),
@@ -175,7 +174,7 @@ export function resolveComposerLaravelProviders(
 
     // Disambiguate between forks: prefer a symbol whose file sits inside the
     // same composer package directory. Fall back to any FQN match.
-    let targetSymbol = findSymbolByFqnScoped(ctx, normalizedFqn, packagePrefix);
+    const targetSymbol = findSymbolByFqnScoped(ctx, normalizedFqn, packagePrefix);
     if (!targetSymbol) continue;
 
     edges.push({
@@ -210,12 +209,25 @@ function findSymbolByFqnScoped(
     if (!f.path.startsWith(preferredPrefix)) continue;
     const syms = ctx.getSymbolsByFile(f.id);
     const hit = syms.find((s) => s.fqn === fqn);
-    if (hit) return { id: hit.id, symbolId: hit.symbolId, name: hit.name, kind: hit.kind, filePath: f.path };
+    if (hit)
+      return {
+        id: hit.id,
+        symbolId: hit.symbolId,
+        name: hit.name,
+        kind: hit.kind,
+        filePath: f.path,
+      };
   }
   // Fallback: first match anywhere
   const generic = ctx.getSymbolByFqn(fqn);
   if (generic) {
-    return { id: generic.id, symbolId: generic.symbolId, name: generic.name, kind: generic.kind, filePath: '' };
+    return {
+      id: generic.id,
+      symbolId: generic.symbolId,
+      name: generic.name,
+      kind: generic.kind,
+      filePath: '',
+    };
   }
   return null;
 }

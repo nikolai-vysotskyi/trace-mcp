@@ -3,14 +3,16 @@
  * Supports both project-scoped and global installation.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 import YAML from 'yaml';
 import { applyEdits, modify, parse as parseJsonc, type FormattingOptions } from 'jsonc-parser';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 import { getLauncherPath } from './launcher.js';
+import type { DetectedMcpClient, InitStepResult } from './types.js';
 
 const HOME = os.homedir();
 
@@ -418,7 +420,7 @@ function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 
   }
   (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
 
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
   return isNew ? 'created' : 'updated';
 }
 
@@ -608,13 +610,13 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
       section.push(`${k} = "${v}"`);
     }
   }
-  const block = section.join('\n') + '\n';
+  const block = `${section.join('\n')}\n`;
 
   let isNew = true;
   if (fs.existsSync(configPath)) {
     const existing = fs.readFileSync(configPath, 'utf-8');
     isNew = false;
-    fs.writeFileSync(configPath, existing.trimEnd() + '\n' + block);
+    fs.writeFileSync(configPath, `${existing.trimEnd()}\n${block}`);
   } else {
     fs.writeFileSync(configPath, block.trimStart());
   }

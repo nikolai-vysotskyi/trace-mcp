@@ -5,27 +5,31 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { resolve, extname } from 'node:path';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { logger } from '../logger.js';
 import type { Store } from '../db/store.js';
-import type { SymbolRow, FileRow } from '../db/types.js';
-import type { LspServerManager } from './lifecycle.js';
-import {
-  symbolToLspPosition,
-  findSymbolAtPosition,
-  getLanguageId,
-} from './mappers.js';
-import { fileLanguageToLspLanguage } from './config.js';
-import type { CallHierarchyOutgoingCall } from './protocol.js';
+import type { FileRow, SymbolRow } from '../db/types.js';
+import { logger } from '../logger.js';
 import type { LspClient } from './client.js';
+import { fileLanguageToLspLanguage } from './config.js';
+import type { LspServerManager } from './lifecycle.js';
+import { findSymbolAtPosition, getLanguageId, symbolToLspPosition } from './mappers.js';
+import type { CallHierarchyOutgoingCall } from './protocol.js';
 
 /** Edge types that represent call semantics — eligible for LSP enrichment */
 const CALL_EDGE_TYPES = new Set([
-  'calls', 'references', 'dispatches', 'routes_to',
-  'validates_with', 'nest_injects', 'graphql_resolves',
-  'esm_imports', 'imports', 'uses',
-  'renders_component', 'uses_composable',
+  'calls',
+  'references',
+  'dispatches',
+  'routes_to',
+  'validates_with',
+  'nest_injects',
+  'graphql_resolves',
+  'esm_imports',
+  'imports',
+  'uses',
+  'renders_component',
+  'uses_composable',
 ]);
 
 export interface EnrichmentResult {
@@ -104,8 +108,12 @@ export class LspEnrichmentPass {
    */
   private collectCallableSymbols(): Map<string, SymbolWithFile[]> {
     const callableKinds = new Set([
-      'function', 'method', 'constructor', 'arrow_function',
-      'generator', 'async_function',
+      'function',
+      'method',
+      'constructor',
+      'arrow_function',
+      'generator',
+      'async_function',
     ]);
 
     const byLanguage = new Map<string, SymbolWithFile[]>();
@@ -253,7 +261,13 @@ export class LspEnrichmentPass {
     } else {
       // New edge discovered by LSP
       const edgeResult = this.store.insertEdge(
-        sourceNodeId, targetNodeId, 'calls', true, undefined, false, 'lsp_resolved',
+        sourceNodeId,
+        targetNodeId,
+        'calls',
+        true,
+        undefined,
+        false,
+        'lsp_resolved',
       );
       if (edgeResult.isOk()) {
         result.edgesAdded++;
@@ -265,8 +279,10 @@ export class LspEnrichmentPass {
    * Upgrade an existing edge's resolution_tier to 'lsp_resolved'.
    */
   private upgradeEdge(edgeId: number): void {
-    this.store.db.prepare(
-      `UPDATE edges SET resolution_tier = 'lsp_resolved' WHERE id = ? AND resolution_tier != 'lsp_resolved'`,
-    ).run(edgeId);
+    this.store.db
+      .prepare(
+        `UPDATE edges SET resolution_tier = 'lsp_resolved' WHERE id = ? AND resolution_tier != 'lsp_resolved'`,
+      )
+      .run(edgeId);
   }
 }

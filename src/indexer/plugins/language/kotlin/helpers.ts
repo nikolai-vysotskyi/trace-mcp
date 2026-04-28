@@ -2,9 +2,10 @@
  * Helper utilities for the Kotlin language plugin.
  * Extracts AST-walking logic to keep the main plugin concise.
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
+
 import type { TSNode } from '../../../../parser/tree-sitter.js';
 
 // ---------------------------------------------------------------------------
@@ -164,12 +165,16 @@ export function extractAnnotations(node: TSNode): string[] {
   for (const child of modifiers.namedChildren) {
     if (child.type === 'annotation') {
       // annotation contains user_type or constructor_invocation
-      const userType = findChildByType(child, 'user_type') ?? findChildByType(child, 'constructor_invocation');
+      const userType =
+        findChildByType(child, 'user_type') ?? findChildByType(child, 'constructor_invocation');
       if (userType) {
         annotations.push(userType.text.replace(/\(.*\)$/, '').trim());
       } else {
         // Fallback: strip @ prefix
-        const text = child.text.replace(/^@/, '').replace(/\(.*\)$/, '').trim();
+        const text = child.text
+          .replace(/^@/, '')
+          .replace(/\(.*\)$/, '')
+          .trim();
         if (text) annotations.push(text);
       }
     }
@@ -283,7 +288,9 @@ export function extractClassMethods(
       if (modifiers.includes('open')) meta.open = true;
       if (modifiers.includes('inline')) meta.inline = true;
 
-      const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+      const visibility = modifiers.find((m) =>
+        ['public', 'private', 'protected', 'internal'].includes(m),
+      );
       if (visibility) meta.visibility = visibility;
 
       symbols.push({
@@ -303,7 +310,9 @@ export function extractClassMethods(
       const modifiers = extractModifiers(child);
       const meta: Record<string, unknown> = { isConstructor: true };
 
-      const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+      const visibility = modifiers.find((m) =>
+        ['public', 'private', 'protected', 'internal'].includes(m),
+      );
       if (visibility) meta.visibility = visibility;
 
       symbols.push({
@@ -351,7 +360,9 @@ export function extractClassProperties(
       if (modifiers.includes('lateinit')) meta.lateinit = true;
       if (modifiers.includes('lazy')) meta.lazy = true;
 
-      const visibility = modifiers.find((m) => ['public', 'private', 'protected', 'internal'].includes(m));
+      const visibility = modifiers.find((m) =>
+        ['public', 'private', 'protected', 'internal'].includes(m),
+      );
       if (visibility) meta.visibility = visibility;
 
       symbols.push({
@@ -406,7 +417,9 @@ export function extractEnumEntries(
 // Property info extraction
 // ---------------------------------------------------------------------------
 
-function extractPropertyInfo(node: TSNode): { name: string; type?: string; isConst: boolean; isVal: boolean } | undefined {
+function extractPropertyInfo(
+  node: TSNode,
+): { name: string; type?: string; isConst: boolean; isVal: boolean } | undefined {
   const modifiers = extractModifiers(node);
   const isConst = modifiers.includes('const');
 
@@ -426,7 +439,8 @@ function extractPropertyInfo(node: TSNode): { name: string; type?: string; isCon
     const name = getNodeName(varDecl);
     if (!name) return undefined;
     // Type annotation is a sibling or child
-    const typeNode = findChildByType(varDecl, 'user_type') ?? findChildByType(varDecl, 'nullable_type');
+    const typeNode =
+      findChildByType(varDecl, 'user_type') ?? findChildByType(varDecl, 'nullable_type');
     return { name, type: typeNode?.text, isConst: isConst || (isVal && isAllCaps(name)), isVal };
   }
 
@@ -463,7 +477,9 @@ export function extractCompanionObject(
         symbolId: companionId,
         name: companionName,
         kind: 'class',
-        fqn: makeFqn(packageName ? [packageName, className, companionName] : [className, companionName]),
+        fqn: makeFqn(
+          packageName ? [packageName, className, companionName] : [className, companionName],
+        ),
         parentSymbolId: classSymbolId,
         signature: extractSignature(child),
         byteStart: child.startIndex,
@@ -476,8 +492,24 @@ export function extractCompanionObject(
       // Extract members of companion object
       const companionBody = findChildByType(child, 'class_body');
       if (companionBody) {
-        symbols.push(...extractClassMethods(companionBody, filePath, companionName, companionId, packageName ? `${packageName}.${className}` : className));
-        symbols.push(...extractClassProperties(companionBody, filePath, companionName, companionId, packageName ? `${packageName}.${className}` : className));
+        symbols.push(
+          ...extractClassMethods(
+            companionBody,
+            filePath,
+            companionName,
+            companionId,
+            packageName ? `${packageName}.${className}` : className,
+          ),
+        );
+        symbols.push(
+          ...extractClassProperties(
+            companionBody,
+            filePath,
+            companionName,
+            companionId,
+            packageName ? `${packageName}.${className}` : className,
+          ),
+        );
       }
     }
   }

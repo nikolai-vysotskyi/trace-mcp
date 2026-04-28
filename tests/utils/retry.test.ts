@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { withRetry, isTransientError } from '../../src/utils/retry.js';
+import { describe, expect, it, vi } from 'vitest';
+import { isTransientError, withRetry } from '../../src/utils/retry.js';
 
 describe('retry utility', () => {
   describe('isTransientError', () => {
@@ -52,9 +52,7 @@ describe('retry utility', () => {
 
     it('retries on transient failure then succeeds', async () => {
       const err = new Error('fetch failed');
-      const fn = vi.fn()
-        .mockRejectedValueOnce(err)
-        .mockResolvedValue('ok');
+      const fn = vi.fn().mockRejectedValueOnce(err).mockResolvedValue('ok');
 
       const result = await withRetry(fn, {
         maxAttempts: 3,
@@ -87,9 +85,7 @@ describe('retry utility', () => {
 
     it('respects custom isRetryable predicate', async () => {
       const err = new Error('custom error');
-      const fn = vi.fn()
-        .mockRejectedValueOnce(err)
-        .mockResolvedValue('ok');
+      const fn = vi.fn().mockRejectedValueOnce(err).mockResolvedValue('ok');
 
       const result = await withRetry(fn, {
         maxAttempts: 3,
@@ -103,9 +99,9 @@ describe('retry utility', () => {
 
     it('works with maxAttempts: 1 (no retry)', async () => {
       const fn = vi.fn().mockRejectedValue(new Error('fetch failed'));
-      await expect(
-        withRetry(fn, { maxAttempts: 1, label: 'test' }),
-      ).rejects.toThrow('fetch failed');
+      await expect(withRetry(fn, { maxAttempts: 1, label: 'test' })).rejects.toThrow(
+        'fetch failed',
+      );
       expect(fn).toHaveBeenCalledTimes(1);
     });
   });

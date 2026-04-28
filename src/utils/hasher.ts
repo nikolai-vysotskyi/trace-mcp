@@ -7,7 +7,7 @@ export function hashContent(content: Buffer): string {
 }
 
 /** Convenience: read file and hash in one call. */
-function hashFile(filePath: string): string {
+function _hashFile(filePath: string): string {
   const content = fs.readFileSync(filePath);
   return hashContent(content);
 }

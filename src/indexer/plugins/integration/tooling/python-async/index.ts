@@ -7,10 +7,10 @@
  */
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -18,7 +18,8 @@ import { hasAnyPythonDep } from '../../_shared/python-deps.js';
 
 const PACKAGES = ['anyio', 'aiofiles'] as const;
 
-const IMPORT_RE = /^\s*(?:from\s+(?:anyio|aiofiles)(?:\.\w+)*\s+import|import\s+(?:anyio|aiofiles))\b/m;
+const IMPORT_RE =
+  /^\s*(?:from\s+(?:anyio|aiofiles)(?:\.\w+)*\s+import|import\s+(?:anyio|aiofiles))\b/m;
 
 // aiofiles.open('path', 'mode') — captures path + mode
 const AIOFILES_OPEN_RE =
@@ -44,8 +45,16 @@ export class PythonAsyncPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'async_file_io', category: 'async', description: 'Async file open (aiofiles.open)' },
-        { name: 'async_primitive', category: 'async', description: 'anyio primitive usage (task group, to_thread, lock, etc.)' },
+        {
+          name: 'async_file_io',
+          category: 'async',
+          description: 'Async file open (aiofiles.open)',
+        },
+        {
+          name: 'async_primitive',
+          category: 'async',
+          description: 'anyio primitive usage (task group, to_thread, lock, etc.)',
+        },
       ],
     };
   }

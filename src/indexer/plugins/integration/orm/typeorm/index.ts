@@ -1,28 +1,15 @@
-/**
- * TypeORMPlugin — Framework plugin for TypeORM.
- *
- * Extracts:
- * - @Entity() decorated classes → RawOrmModel
- * - @Column() / @PrimaryGeneratedColumn() fields
- * - @OneToMany / @ManyToOne / @OneToOne / @ManyToMany relations → RawOrmAssociation
- * - @Index / @Unique block attributes
- *
- * Supports TypeORM 0.2.x and 0.3.x.
- */
-import fs from 'node:fs';
-import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawOrmModel,
   RawOrmAssociation,
+  RawOrmModel,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 export class TypeORMPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -92,12 +79,10 @@ interface TypeORMEntityResult {
   associations: RawOrmAssociation[];
 }
 
-export function extractTypeORMEntity(
-  source: string,
-  filePath: string,
-): TypeORMEntityResult | null {
+export function extractTypeORMEntity(source: string, filePath: string): TypeORMEntityResult | null {
   // Match @Entity() ... class ClassName
-  const entityRegex = /@Entity\s*\(\s*(?:['"]([^'"]+)['"]|\{[^}]*tableName\s*:\s*['"]([^'"]+)['"][^}]*\})?\s*\)[\s\S]*?class\s+(\w+)/;
+  const entityRegex =
+    /@Entity\s*\(\s*(?:['"]([^'"]+)['"]|\{[^}]*tableName\s*:\s*['"]([^'"]+)['"][^}]*\})?\s*\)[\s\S]*?class\s+(\w+)/;
   const entityMatch = source.match(entityRegex);
   if (!entityMatch) return null;
 
@@ -109,7 +94,8 @@ export function extractTypeORMEntity(
   const indices: string[] = [];
 
   // Extract @Column, @PrimaryGeneratedColumn, @PrimaryColumn fields
-  const columnRegex = /@(PrimaryGeneratedColumn|PrimaryColumn|Column|CreateDateColumn|UpdateDateColumn|DeleteDateColumn)\s*(?:\([^)]*\))?\s*(?:\w+\s*[?!]?\s*:\s*[\w|]+\s*)*\s*(\w+)\s*[?!]?\s*:\s*([\w|[\]<>]+)/g;
+  const columnRegex =
+    /@(PrimaryGeneratedColumn|PrimaryColumn|Column|CreateDateColumn|UpdateDateColumn|DeleteDateColumn)\s*(?:\([^)]*\))?\s*(?:\w+\s*[?!]?\s*:\s*[\w|]+\s*)*\s*(\w+)\s*[?!]?\s*:\s*([\w|[\]<>]+)/g;
   let colMatch: RegExpExecArray | null;
   while ((colMatch = columnRegex.exec(source)) !== null) {
     const decorator = colMatch[1];
@@ -126,7 +112,7 @@ export function extractTypeORMEntity(
   }
 
   // Extract relation decorators
-  const RELATION_MAP: Record<string, string> = {
+  const _RELATION_MAP: Record<string, string> = {
     OneToMany: 'typeorm_one_to_many',
     ManyToOne: 'typeorm_many_to_one',
     OneToOne: 'typeorm_one_to_one',

@@ -9,10 +9,10 @@
  * Markers are ephemeral (tmpdir) and scoped per project.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { projectHash } from '../global.js';
 
 function fileHash(filePath: string): string {
@@ -29,7 +29,9 @@ function markConsulted(projectRoot: string, relPath: string): void {
     const dir = markerDir(projectRoot);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, fileHash(relPath)), '', { flag: 'w' });
-  } catch { /* best-effort — never block tool execution */ }
+  } catch {
+    /* best-effort — never block tool execution */
+  }
 }
 
 /** Extract file paths from tool params that indicate file consultation. */
@@ -53,7 +55,7 @@ function extractConsultedFiles(toolName: string, params: Record<string, unknown>
     case 'get_type_hierarchy': {
       // symbol_id format: "src/foo.ts::SymbolName#kind"
       const sid = (params.symbol_id ?? params.fqn) as string | undefined;
-      if (sid && sid.includes('::')) {
+      if (sid?.includes('::')) {
         files.push(sid.split('::')[0]);
       }
       break;
@@ -61,7 +63,7 @@ function extractConsultedFiles(toolName: string, params: Record<string, unknown>
 
     case 'get_context_bundle': {
       const sid = params.symbol_id as string | undefined;
-      if (sid && sid.includes('::')) files.push(sid.split('::')[0]);
+      if (sid?.includes('::')) files.push(sid.split('::')[0]);
       const sids = params.symbol_ids as string[] | undefined;
       if (Array.isArray(sids)) {
         for (const s of sids) {

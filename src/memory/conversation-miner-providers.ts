@@ -12,11 +12,12 @@
  *     projectRoot is given, this helper is a no-op and the existing mining
  *     result is returned unchanged.
  */
-import type { DecisionStore, DecisionInput } from './decision-store.js';
-import { extractDecisions, type ConversationTurn } from './conversation-miner.js';
+
+import { logger } from '../logger.js';
 import { getSessionProviderRegistry } from '../session/providers/registry.js';
 import type { RawMessage, SessionHandle } from '../session/providers/types.js';
-import { logger } from '../logger.js';
+import { type ConversationTurn, extractDecisions } from './conversation-miner.js';
+import type { DecisionInput, DecisionStore } from './decision-store.js';
 
 export interface ProviderMineCounters {
   scanned: number;

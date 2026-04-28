@@ -1,11 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Indexes } from './tabs/Indexes';
-import { Clients } from './tabs/Clients';
-import { Settings } from './tabs/Settings';
-import { ProjectOverview } from './tabs/ProjectOverview';
-import { AskTab } from './tabs/AskTab';
-import { GraphExplorerGPU, GraphExplorerGPUHandle, GraphGPUSettings, DEFAULT_GRAPH_GPU_SETTINGS } from './tabs/GraphExplorerGPU';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { WindowTabBar } from './components/WindowTabBar';
+import { AskTab } from './tabs/AskTab';
+import { Clients } from './tabs/Clients';
+import {
+  DEFAULT_GRAPH_GPU_SETTINGS,
+  GraphExplorerGPU,
+  type GraphExplorerGPUHandle,
+  type GraphGPUSettings,
+} from './tabs/GraphExplorerGPU';
+import { Indexes } from './tabs/Indexes';
+import { ProjectOverview } from './tabs/ProjectOverview';
+import { Settings } from './tabs/Settings';
 
 // ── URL params determine window type ──────────────────────────
 // ?view=menu&tab=projects  → Menu window (sidebar + Projects/Clients/Settings)
@@ -84,12 +89,15 @@ function RecentProjects() {
 
   const openProject = (root: string) => {
     addRecentProject(root);
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     api?.openProjectTab(root);
   };
 
   return (
-    <div className="flex flex-col gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+    <div
+      className="flex flex-col gap-0.5"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+    >
       <div
         className="px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
         style={{ color: 'var(--text-tertiary)' }}
@@ -102,6 +110,7 @@ function RecentProjects() {
           className="group flex items-center rounded-md transition-colors hover:bg-[var(--bg-active)]"
         >
           <button
+            type="button"
             onClick={() => openProject(root)}
             className="text-left flex-1 min-w-0 px-2.5 py-1 text-[11px] truncate"
             style={{ color: 'var(--text-secondary)' }}
@@ -110,6 +119,7 @@ function RecentProjects() {
             {root.split(/[/\\]/).filter(Boolean).pop()}
           </button>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               removeRecentProject(root);
@@ -119,7 +129,15 @@ function RecentProjects() {
             style={{ color: 'var(--text-tertiary)' }}
             title="Remove from recent"
           >
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              width="8"
+              height="8"
+              viewBox="0 0 8 8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               <path d="M1 1l6 6M7 1l-6 6" />
             </svg>
           </button>
@@ -146,7 +164,15 @@ interface FileEntry {
   edges: number;
 }
 
-function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope?: string; onFileClick: (filePath: string) => void }) {
+function ProjectFileExplorer({
+  root,
+  scope,
+  onFileClick,
+}: {
+  root: string;
+  scope?: string;
+  onFileClick: (filePath: string) => void;
+}) {
   const [sort, setSort] = useState<FileSort>('symbols');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,11 +197,19 @@ function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope
       params.set('scope', effectiveScope);
     }
     fetch(`${BASE}/api/projects/files?${params}`)
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => { if (!cancelled) setFiles(data.files ?? []); })
-      .catch(() => { if (!cancelled) setFiles([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => {
+        if (!cancelled) setFiles(data.files ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setFiles([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [root, sort, debouncedScope]);
 
   // Short display path: strip project root prefix
@@ -192,7 +226,13 @@ function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope
       {/* Sort picker */}
       <div className="px-1.5 mb-0.5 relative">
         <svg
-          width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+          width="10"
+          height="10"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
           className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
           style={{ color: 'var(--text-tertiary)' }}
         >
@@ -210,31 +250,45 @@ function ProjectFileExplorer({ root, scope, onFileClick }: { root: string; scope
           }}
         >
           {FILE_SORT_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>{o.label}</option>
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
           ))}
         </select>
       </div>
 
       {/* File list */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div
+        className="flex-1 overflow-y-auto overflow-x-hidden"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
         {loading ? (
-          <div className="px-2.5 py-2 text-[10px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+          <div
+            className="px-2.5 py-2 text-[10px] text-center"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
             Loading…
           </div>
         ) : files.length === 0 ? (
-          <div className="px-2.5 py-2 text-[10px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+          <div
+            className="px-2.5 py-2 text-[10px] text-center"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
             No files
           </div>
         ) : (
           files.map((f) => (
             <button
+              type="button"
               key={f.path}
               onClick={() => onFileClick(f.path)}
               className="w-full text-left px-2.5 py-1 text-[10px] truncate rounded-md transition-colors hover:bg-[var(--bg-active)] flex items-center gap-1"
               style={{ color: 'var(--text-secondary)' }}
               title={`${shortPath(f.path)} — ${f.symbols} symbols, ${f.edges} edges`}
             >
-              <span className="truncate flex-1" style={{ direction: 'rtl', textAlign: 'left' }}>{shortPath(f.path)}</span>
+              <span className="truncate flex-1" style={{ direction: 'rtl', textAlign: 'left' }}>
+                {shortPath(f.path)}
+              </span>
               <span
                 className="shrink-0 text-[9px] tabular-nums"
                 style={{ color: 'var(--text-tertiary)' }}
@@ -262,7 +316,9 @@ function readStoredTheme(): Theme | null {
   try {
     const v = localStorage.getItem(THEME_KEY);
     return v === 'light' || v === 'dark' ? v : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function systemTheme(): Theme {
@@ -301,7 +357,9 @@ function useTheme() {
   const effective: Theme = override ?? system;
   const toggle = useCallback(() => {
     const next: Theme = effective === 'dark' ? 'light' : 'dark';
-    try { localStorage.setItem(THEME_KEY, next); } catch {}
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {}
     setOverride(next);
   }, [effective]);
 
@@ -315,13 +373,7 @@ function ThemeToggle() {
   const goingTo: Theme = theme === 'dark' ? 'light' : 'dark';
   const label = goingTo === 'dark' ? 'Switch to dark mode' : 'Switch to light mode';
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      className="icon-button"
-      aria-label={label}
-      title={label}
-    >
+    <button type="button" onClick={toggle} className="icon-button" aria-label={label} title={label}>
       {goingTo === 'dark' ? (
         // Moon (crescent) — currently light, click to go dark.
         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -367,7 +419,7 @@ function SidebarFooter({
     if (onOpenSettingsInPlace) {
       onOpenSettingsInPlace();
     } else {
-      const api = (window as any).electronAPI;
+      const api = window.electronAPI;
       api?.openSettings?.();
     }
   };
@@ -416,13 +468,15 @@ function UpdateBanner() {
   const cancelledRef = useRef(false);
 
   const runCheck = async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.checkForUpdate) return;
     setChecking(true);
     try {
       const [upd, pend] = await Promise.all([
         api.checkForUpdate(),
-        api.checkPendingUpdate ? api.checkPendingUpdate() : Promise.resolve({ pending: false }),
+        api.checkPendingUpdate
+          ? api.checkPendingUpdate()
+          : Promise.resolve<{ pending: boolean; version?: string }>({ pending: false }),
       ]);
       if (cancelledRef.current) return;
       if (upd) setState(upd);
@@ -435,17 +489,21 @@ function UpdateBanner() {
     }
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runCheck is intentionally captured once on mount; adding it would tear down the polling interval on every state update inside runCheck (setState calls), defeating the 10-min cadence. The cancelledRef guards against state updates after unmount.
   useEffect(() => {
     cancelledRef.current = false;
     runCheck();
     const poll = setInterval(runCheck, 600_000);
     const tick = setInterval(() => setNow(Date.now()), 15_000);
-    return () => { cancelledRef.current = true; clearInterval(poll); clearInterval(tick); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(poll);
+      clearInterval(tick);
+    };
   }, []);
 
   const handleUpdate = async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api) return;
     setUpdating(true);
     setState((s) => ({ ...s, error: undefined }));
@@ -462,7 +520,7 @@ function UpdateBanner() {
   };
 
   const handleRestart = () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     api?.restartApp();
   };
 
@@ -473,13 +531,19 @@ function UpdateBanner() {
         <div className="title">
           <span className="ready-icon" aria-hidden="true">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2.5 6.2l2.4 2.4 4.6-4.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M2.5 6.2l2.4 2.4 4.6-4.6"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </span>
           v{pendingVersion} ready
         </div>
         <div className="subtitle">Restart to install · v{state.current}</div>
-        <button className="btn-prominent success" onClick={handleRestart}>
+        <button type="button" className="btn-prominent success" onClick={handleRestart}>
           Restart to install
         </button>
       </div>
@@ -496,9 +560,27 @@ function UpdateBanner() {
       aria-label="Check for updates"
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path d="M10 2.5v2.6H7.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M2 9.5V6.9h2.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M9.3 5.1A3.7 3.7 0 003 4.6M2.7 6.9a3.7 3.7 0 006.3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M10 2.5v2.6H7.4"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M2 9.5V6.9h2.6"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9.3 5.1A3.7 3.7 0 003 4.6M2.7 6.9a3.7 3.7 0 006.3.5"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </button>
   );
@@ -514,9 +596,11 @@ function UpdateBanner() {
           Currently v{state.current} · checked {formatAgo(state.lastChecked, now)}
         </div>
         {state.error && (
-          <div className="subtitle error" title={state.error}>{state.error}</div>
+          <div className="subtitle error" title={state.error}>
+            {state.error}
+          </div>
         )}
-        <button className="btn-prominent" onClick={handleUpdate} disabled={updating}>
+        <button type="button" className="btn-prominent" onClick={handleUpdate} disabled={updating}>
           {updating ? 'Updating…' : 'Update'}
         </button>
       </div>
@@ -526,12 +610,13 @@ function UpdateBanner() {
   // Idle: minimal status row. No card chrome — stays out of the way.
   const isError = !!state.error;
   return (
-    <div className={`update-idle${isError ? ' error' : ''}`} style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+    <div
+      className={`update-idle${isError ? ' error' : ''}`}
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+    >
       <span className="dot" aria-hidden="true" />
       <span className="label" title={isError ? state.error : undefined}>
-        {isError
-          ? state.error
-          : `Up to date · v${state.current ?? '—'}`}
+        {isError ? state.error : `Up to date · v${state.current ?? '—'}`}
       </span>
       {refreshButton}
     </div>
@@ -542,7 +627,7 @@ function UpdateBanner() {
 function MenuContent({ tab }: { tab: GlobalTab }) {
   const openProject = (root: string) => {
     addRecentProject(root);
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     api?.openProjectTab(root);
   };
 
@@ -556,7 +641,14 @@ function MenuContent({ tab }: { tab: GlobalTab }) {
 }
 
 // ── Project content ───────────────────────────────────────────
-function ProjectContent({ root, tab, graphRef, graphGpuSettings, onGraphGpuSettingsChange, onNavigateToService }: {
+function ProjectContent({
+  root,
+  tab,
+  graphRef,
+  graphGpuSettings,
+  onGraphGpuSettingsChange,
+  onNavigateToService,
+}: {
   root: string;
   tab: ProjectTab;
   graphRef: React.RefObject<GraphExplorerGPUHandle | null>;
@@ -567,13 +659,20 @@ function ProjectContent({ root, tab, graphRef, graphGpuSettings, onGraphGpuSetti
   return (
     <>
       {/* Overview — mount/unmount normally */}
-      {tab === 'overview' && <ProjectOverview root={root} onNavigateToService={onNavigateToService} />}
+      {tab === 'overview' && (
+        <ProjectOverview root={root} onNavigateToService={onNavigateToService} />
+      )}
       {/* Ask — chat interface, needs flex layout */}
       {tab === 'ask' && <AskTab root={root} />}
       {/* Graph — GPU-accelerated (cosmos.gl), edge-to-edge */}
       {tab === 'graph' && (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <GraphExplorerGPU ref={graphRef} root={root} settings={graphGpuSettings} onSettingsChange={onGraphGpuSettingsChange} />
+          <GraphExplorerGPU
+            ref={graphRef}
+            root={root}
+            settings={graphGpuSettings}
+            onSettingsChange={onGraphGpuSettingsChange}
+          />
         </div>
       )}
     </>
@@ -586,14 +685,16 @@ export function App() {
   const isProject = view === 'project' && root !== null;
 
   const [globalTab, setGlobalTab] = useState<GlobalTab>(
-    (tab === 'projects' || tab === 'clients' || tab === 'settings') ? tab : 'projects'
+    tab === 'projects' || tab === 'clients' || tab === 'settings' ? tab : 'projects',
   );
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [_isFullscreen, setIsFullscreen] = useState(false);
   const dragging = useRef(false);
   const graphRef = useRef<GraphExplorerGPUHandle | null>(null);
-  const [graphGpuSettings, setGraphGpuSettings] = useState<GraphGPUSettings>(DEFAULT_GRAPH_GPU_SETTINGS);
+  const [graphGpuSettings, setGraphGpuSettings] = useState<GraphGPUSettings>(
+    DEFAULT_GRAPH_GPU_SETTINGS,
+  );
 
   const onGraphGpuSettingsChange = useCallback((patch: Partial<GraphGPUSettings>) => {
     setGraphGpuSettings((prev) => ({ ...prev, ...patch }));
@@ -601,17 +702,23 @@ export function App() {
 
   // Focus a file/symbol in the graph (invoked from the file explorer / project overview).
   // Switches to the Graph tab and asks GraphExplorerGPU to zoom to that node.
-  const openFileInGraph = useCallback((filePath: string) => {
-    if (projectTab !== 'graph') setProjectTab('graph');
-    // Defer until the GPU graph has mounted (one tick is enough).
-    setTimeout(() => graphRef.current?.focusNode(filePath), 0);
-  }, [projectTab]);
+  const openFileInGraph = useCallback(
+    (filePath: string) => {
+      if (projectTab !== 'graph') setProjectTab('graph');
+      // Defer until the GPU graph has mounted (one tick is enough).
+      setTimeout(() => graphRef.current?.focusNode(filePath), 0);
+    },
+    [projectTab],
+  );
 
   // Navigate to graph tab scoped to a service.
-  const navigateToService = useCallback((serviceName: string) => {
-    onGraphGpuSettingsChange({ scope: `subproject:${serviceName}` });
-    setProjectTab('graph');
-  }, [onGraphGpuSettingsChange]);
+  const navigateToService = useCallback(
+    (serviceName: string) => {
+      onGraphGpuSettingsChange({ scope: `subproject:${serviceName}` });
+      setProjectTab('graph');
+    },
+    [onGraphGpuSettingsChange],
+  );
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -626,7 +733,7 @@ export function App() {
       const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX));
       setSidebarWidth(newWidth);
       // Sync to other tabs
-      const api = (window as any).electronAPI;
+      const api = window.electronAPI;
       api?.syncSidebarWidth(newWidth);
     };
     const onMouseUp = () => {
@@ -645,7 +752,7 @@ export function App() {
 
   // Receive sidebar width from other tabs
   useEffect(() => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (api?.onSidebarWidthChanged) {
       return api.onSidebarWidthChanged((w: number) => setSidebarWidth(w));
     }
@@ -653,12 +760,11 @@ export function App() {
 
   // Track fullscreen state
   useEffect(() => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (api?.onFullscreenChanged) {
       return api.onFullscreenChanged((fs: boolean) => setIsFullscreen(fs));
     }
   }, []);
-
 
   const isGraph = isProject && projectTab === 'graph';
   const needsFlexLayout = isProject && (projectTab === 'graph' || projectTab === 'ask');
@@ -670,108 +776,143 @@ export function App() {
       <WindowTabBar />
 
       <div className="flex flex-1 min-h-0" style={{ padding: 8, gap: 0 }}>
-      {/* Left sidebar */}
-      <div
-        className="shrink-0 relative"
-        style={{
-          width: sidebarWidth,
-          WebkitAppRegion: 'drag',
-        } as React.CSSProperties}
-      >
-        <aside
-          className="flex flex-col pt-3 pb-3 px-1.5 gap-0.5 h-full"
-          style={{
-            border: '1px solid var(--sidebar-border)',
-            borderRadius: 12,
-            background: 'var(--sidebar-bg)',
-            WebkitAppRegion: 'no-drag',
-          } as React.CSSProperties}
+        {/* Left sidebar */}
+        <div
+          className="shrink-0 relative"
+          style={
+            {
+              width: sidebarWidth,
+              WebkitAppRegion: 'drag',
+            } as React.CSSProperties
+          }
         >
-          {isProject ? (
-            <>
-              {PROJECT_TABS.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setProjectTab(t.id)}
-                  className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
-                  style={{
-                    color: projectTab === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    background: projectTab === t.id ? 'var(--bg-active)' : 'transparent',
-                    WebkitAppRegion: 'no-drag',
-                  } as React.CSSProperties}
-                >
-                  {t.label}
-                </button>
-              ))}
+          <aside
+            className="flex flex-col pt-3 pb-3 px-1.5 gap-0.5 h-full"
+            style={
+              {
+                border: '1px solid var(--sidebar-border)',
+                borderRadius: 12,
+                background: 'var(--sidebar-bg)',
+                WebkitAppRegion: 'no-drag',
+              } as React.CSSProperties
+            }
+          >
+            {isProject ? (
+              <>
+                {PROJECT_TABS.map((t) => (
+                  <button
+                    type="button"
+                    key={t.id}
+                    onClick={() => setProjectTab(t.id)}
+                    className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
+                    style={
+                      {
+                        color:
+                          projectTab === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        background: projectTab === t.id ? 'var(--bg-active)' : 'transparent',
+                        WebkitAppRegion: 'no-drag',
+                      } as React.CSSProperties
+                    }
+                  >
+                    {t.label}
+                  </button>
+                ))}
 
-              {/* Divider + File explorer */}
-              <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
-              <ProjectFileExplorer root={root!} scope={graphGpuSettings.scope} onFileClick={openFileInGraph} />
-            </>
-          ) : (
-            <>
-              {GLOBAL_TABS.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setGlobalTab(t.id)}
-                  className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
-                  style={{
-                    color: globalTab === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    background: globalTab === t.id ? 'var(--bg-active)' : 'transparent',
-                    WebkitAppRegion: 'no-drag',
-                  } as React.CSSProperties}
-                >
-                  {t.label}
-                </button>
-              ))}
+                {/* Divider + File explorer */}
+                <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
+                <ProjectFileExplorer
+                  root={root!}
+                  scope={graphGpuSettings.scope}
+                  onFileClick={openFileInGraph}
+                />
+              </>
+            ) : (
+              <>
+                {GLOBAL_TABS.map((t) => (
+                  <button
+                    type="button"
+                    key={t.id}
+                    onClick={() => setGlobalTab(t.id)}
+                    className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
+                    style={
+                      {
+                        color: globalTab === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        background: globalTab === t.id ? 'var(--bg-active)' : 'transparent',
+                        WebkitAppRegion: 'no-drag',
+                      } as React.CSSProperties
+                    }
+                  >
+                    {t.label}
+                  </button>
+                ))}
 
-              {/* Divider + Recent projects */}
-              <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
-              <RecentProjects />
-            </>
-          )}
+                {/* Divider + Recent projects */}
+                <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
+                <RecentProjects />
+              </>
+            )}
 
-          {/* Spacer to push footer to bottom */}
-          <div style={{ flex: 1 }} />
-          <UpdateBanner />
-          <SidebarFooter
-            active={!isProject && globalTab === 'settings'}
-            onOpenSettingsInPlace={isProject ? undefined : () => setGlobalTab('settings')}
+            {/* Spacer to push footer to bottom */}
+            <div style={{ flex: 1 }} />
+            <UpdateBanner />
+            <SidebarFooter
+              active={!isProject && globalTab === 'settings'}
+              onOpenSettingsInPlace={isProject ? undefined : () => setGlobalTab('settings')}
+            />
+          </aside>
+
+          {/* Resize handle */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+            aria-valuenow={sidebarWidth}
+            aria-valuemin={SIDEBAR_MIN}
+            aria-valuemax={SIDEBAR_MAX}
+            tabIndex={-1}
+            onMouseDown={onMouseDown}
+            style={
+              {
+                position: 'absolute',
+                top: 0,
+                right: -3,
+                width: 6,
+                height: '100%',
+                cursor: 'col-resize',
+                zIndex: 50,
+                WebkitAppRegion: 'no-drag',
+              } as React.CSSProperties
+            }
           />
-        </aside>
-
-        {/* Resize handle */}
-        <div
-          onMouseDown={onMouseDown}
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: -3,
-            width: 6,
-            height: '100%',
-            cursor: 'col-resize',
-            zIndex: 50,
-            WebkitAppRegion: 'no-drag',
-          } as React.CSSProperties}
-        />
-      </div>
-
-      {/* Main content */}
-      <main
-        className={`flex-1 flex flex-col min-h-0 ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        <div
-          className={needsFlexLayout ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : 'flex-1 flex flex-col min-h-0'}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          {isProject ? (
-            <ProjectContent root={root!} tab={projectTab} graphRef={graphRef} graphGpuSettings={graphGpuSettings} onGraphGpuSettingsChange={onGraphGpuSettingsChange} onNavigateToService={navigateToService} />
-          ) : (
-            <MenuContent tab={globalTab} />
-          )}
         </div>
-      </main>
+
+        {/* Main content */}
+        <main
+          className={`flex-1 flex flex-col min-h-0 ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        >
+          <div
+            className={
+              needsFlexLayout
+                ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+                : 'flex-1 flex flex-col min-h-0'
+            }
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            {isProject ? (
+              <ProjectContent
+                root={root!}
+                tab={projectTab}
+                graphRef={graphRef}
+                graphGpuSettings={graphGpuSettings}
+                onGraphGpuSettingsChange={onGraphGpuSettingsChange}
+                onNavigateToService={navigateToService}
+              />
+            ) : (
+              <MenuContent tab={globalTab} />
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );

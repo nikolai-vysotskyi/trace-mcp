@@ -3,8 +3,9 @@
  *
  * Extracts: FROM stages, ARG/ENV declarations, EXPOSE ports, LABEL entries, COPY/ADD sources.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'dockerfile',

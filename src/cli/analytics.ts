@@ -3,19 +3,22 @@
  * Subcommands: sync, report, optimize, benchmark, coverage
  */
 
-import path from 'node:path';
 import { Command } from 'commander';
 import { AnalyticsStore } from '../analytics/analytics-store.js';
-import { syncAnalytics } from '../analytics/sync.js';
-import { getSessionAnalytics, getOptimizationReport } from '../analytics/session-analytics.js';
-import { runBenchmark, formatBenchmarkMarkdown } from '../analytics/benchmark.js';
-import { detectCoverage, detectCoverageRecursive } from '../analytics/tech-detector.js';
+import {
+  formatBenchmarkMarkdown,
+  formatBenchmarkShareReport,
+  runBenchmark,
+} from '../analytics/benchmark.js';
 import { analyzeRealSavings } from '../analytics/real-savings.js';
+import { getOptimizationReport, getSessionAnalytics } from '../analytics/session-analytics.js';
+import { syncAnalytics } from '../analytics/sync.js';
+import { detectCoverage, detectCoverageRecursive } from '../analytics/tech-detector.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { getProject } from '../registry.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
 import { findProjectRoot } from '../project-root.js';
+import { getProject } from '../registry.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);
@@ -28,12 +31,14 @@ function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
   const pct = coverage.coverage_pct;
   const pctIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️ ' : '❌';
 
-  console.log(`\n📦 Technology Coverage  ${pctIcon} ${coverage.covered}/${coverage.total_significant} significant deps (${pct}%)`);
+  console.log(
+    `\n📦 Technology Coverage  ${pctIcon} ${coverage.covered}/${coverage.total_significant} significant deps (${pct}%)`,
+  );
   console.log(`   Manifests: ${result.manifests_analyzed.join(', ')}\n`);
 
   // Covered — compact, just names
   if (covered.length > 0) {
-    const names = covered.map(d => d.name).join('  ');
+    const names = covered.map((d) => d.name).join('  ');
     console.log(`✅ Covered (${covered.length}): ${names}`);
   }
 
@@ -55,15 +60,17 @@ function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
 
   // Unknown — summary line, then only "likely" verbose
   if (unknown.length > 0) {
-    const likely = unknown.filter(u => u.needs_plugin === 'likely');
-    const maybe  = unknown.filter(u => u.needs_plugin === 'maybe');
-    const no     = unknown.filter(u => u.needs_plugin === 'no');
+    const likely = unknown.filter((u) => u.needs_plugin === 'likely');
+    const maybe = unknown.filter((u) => u.needs_plugin === 'maybe');
+    const no = unknown.filter((u) => u.needs_plugin === 'no');
 
     const parts = [
       likely.length ? `🔴 needs plugin: ${likely.length}` : '',
-      maybe.length  ? `🟡 review: ${maybe.length}` : '',
-      no.length     ? `🟢 ok: ${no.length}` : '',
-    ].filter(Boolean).join('  ·  ');
+      maybe.length ? `🟡 review: ${maybe.length}` : '',
+      no.length ? `🟢 ok: ${no.length}` : '',
+    ]
+      .filter(Boolean)
+      .join('  ·  ');
 
     console.log(`\n📋 Not in catalog (${unknown.length})  ${parts}`);
 
@@ -74,7 +81,7 @@ function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
       }
     }
     if (maybe.length > 0) {
-      const names = maybe.map(u => u.name).join('  ');
+      const names = maybe.map((u) => u.name).join('  ');
       console.log(`   — review: ${names}`);
     }
   }
@@ -82,8 +89,9 @@ function printSingleReport(result: ReturnType<typeof detectCoverage>): void {
   console.log('');
 }
 
-export const analyticsCommand = new Command('analytics')
-  .description('AI agent session analytics: sync logs, view reports, find optimizations');
+export const analyticsCommand = new Command('analytics').description(
+  'AI agent session analytics: sync logs, view reports, find optimizations',
+);
 
 // --- sync ---
 analyticsCommand
@@ -96,7 +104,9 @@ analyticsCommand
     const analyticsStore = new AnalyticsStore();
     try {
       const result = syncAnalytics(analyticsStore, { full: opts.full });
-      console.log(`Scanned: ${result.files_scanned}, Parsed: ${result.files_parsed}, Skipped: ${result.files_skipped}, Errors: ${result.errors}`);
+      console.log(
+        `Scanned: ${result.files_scanned}, Parsed: ${result.files_parsed}, Skipped: ${result.files_skipped}, Errors: ${result.errors}`,
+      );
     } finally {
       analyticsStore.close();
     }
@@ -134,7 +144,9 @@ analyticsCommand
       if (result.topTools.length > 0) {
         console.log(`\nTop tools:`);
         for (const t of result.topTools.slice(0, 10)) {
-          console.log(`  ${t.name}: ${t.calls} calls (~${t.outputTokensEst.toLocaleString()} tokens)`);
+          console.log(
+            `  ${t.name}: ${t.calls} calls (~${t.outputTokensEst.toLocaleString()} tokens)`,
+          );
         }
       }
 
@@ -171,7 +183,9 @@ analyticsCommand
       }
 
       console.log(`\n🔍 Optimization Report (${result.period})\n`);
-      console.log(`Current usage: ${result.currentUsage.totalTokens.toLocaleString()} tokens (~$${result.currentUsage.estimatedCostUsd.toFixed(2)})`);
+      console.log(
+        `Current usage: ${result.currentUsage.totalTokens.toLocaleString()} tokens (~$${result.currentUsage.estimatedCostUsd.toFixed(2)})`,
+      );
 
       if (result.optimizations.length === 0) {
         console.log('\nNo optimization opportunities found.');
@@ -180,11 +194,15 @@ analyticsCommand
           const saved = opt.currentTokens - opt.potentialTokens;
           const pct = opt.currentTokens > 0 ? Math.round((saved / opt.currentTokens) * 100) : 0;
           console.log(`\n[${opt.severity}] ${opt.rule}: ${opt.occurrences} occurrences`);
-          console.log(`  Current: ${opt.currentTokens.toLocaleString()} tokens → Potential: ${opt.potentialTokens.toLocaleString()} tokens`);
+          console.log(
+            `  Current: ${opt.currentTokens.toLocaleString()} tokens → Potential: ${opt.potentialTokens.toLocaleString()} tokens`,
+          );
           console.log(`  Savings: ${saved.toLocaleString()} tokens (${pct}%)`);
           console.log(`  ${opt.recommendation}`);
         }
-        console.log(`\nTotal potential savings: ${result.totalPotentialSavings.tokens.toLocaleString()} tokens (~$${result.totalPotentialSavings.costUsd.toFixed(2)}, ${result.totalPotentialSavings.pct}%)`);
+        console.log(
+          `\nTotal potential savings: ${result.totalPotentialSavings.tokens.toLocaleString()} tokens (~$${result.totalPotentialSavings.costUsd.toFixed(2)}, ${result.totalPotentialSavings.pct}%)`,
+        );
       }
     } finally {
       analyticsStore.close();
@@ -192,50 +210,86 @@ analyticsCommand
   });
 
 // --- benchmark ---
+export async function runBenchmarkAction(opts: {
+  queries: string;
+  seed: string;
+  format: string;
+}): Promise<void> {
+  let projectRoot: string;
+  try {
+    projectRoot = findProjectRoot(process.cwd());
+  } catch {
+    projectRoot = process.cwd();
+  }
+
+  const dbPath = resolveDbPath(projectRoot);
+  const db = initializeDatabase(dbPath);
+  const store = new Store(db);
+  try {
+    const result = runBenchmark(store, {
+      queries: parseInt(opts.queries, 10),
+      seed: parseInt(opts.seed, 10),
+      projectName: projectRoot,
+    });
+
+    if (opts.format === 'json') {
+      console.log(JSON.stringify(result, null, 2));
+    } else if (opts.format === 'markdown') {
+      console.log(formatBenchmarkMarkdown(result));
+    } else if (opts.format === 'share') {
+      console.log(formatBenchmarkShareReport(result));
+    } else {
+      const wasted = result.totals.baseline_tokens - result.totals.trace_mcp_tokens;
+      console.log(`\n⚡ Recomputation leak in this codebase\n`);
+      console.log(
+        `   ${result.totals.reduction_pct}% recomputed work · ${wasted.toLocaleString()} tokens that don't need to be paid for`,
+      );
+      console.log(
+        `   ${result.index_stats.files.toLocaleString()} files / ${result.index_stats.symbols.toLocaleString()} symbols indexed\n`,
+      );
+
+      for (const s of result.scenarios) {
+        const reduction = s.reduction_pct.toFixed(1);
+        console.log(
+          `   ${s.name.padEnd(22)} ${s.baseline_tokens.toLocaleString().padStart(10)} → ${s.trace_mcp_tokens.toLocaleString().padStart(8)} tokens   (${reduction}% saved)`,
+        );
+      }
+
+      console.log(
+        `\n   ${'TOTAL'.padEnd(22)} ${result.totals.baseline_tokens.toLocaleString().padStart(10)} → ${result.totals.trace_mcp_tokens.toLocaleString().padStart(8)} tokens   (${result.totals.reduction_pct}% saved)`,
+      );
+      console.log(`\n👉 Share this result: trace-mcp benchmark . --format share`);
+      console.log(`   Wire it into your agent: npx trace-mcp init`);
+    }
+  } finally {
+    db.close();
+  }
+}
+
 analyticsCommand
   .command('benchmark')
   .description('Run synthetic token efficiency benchmark')
   .option('--queries <n>', 'Queries per scenario', '10')
   .option('--seed <n>', 'Random seed', '42')
-  .option('--format <fmt>', 'Output: json | markdown | text', 'text')
-  .action(async (opts: { queries: string; seed: string; format: string }) => {
-    let projectRoot: string;
-    try {
-      projectRoot = findProjectRoot(process.cwd());
-    } catch {
-      projectRoot = process.cwd();
-    }
+  .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
+  .action(runBenchmarkAction);
 
-    const dbPath = resolveDbPath(projectRoot);
-    const db = initializeDatabase(dbPath);
-    const store = new Store(db);
-    try {
-      const result = runBenchmark(store, {
-        queries: parseInt(opts.queries, 10),
-        seed: parseInt(opts.seed, 10),
-        projectName: projectRoot,
-      });
-
-      if (opts.format === 'json') {
-        console.log(JSON.stringify(result, null, 2));
-      } else if (opts.format === 'markdown') {
-        console.log(formatBenchmarkMarkdown(result));
-      } else {
-        console.log(`\n⚡ Token Efficiency Benchmark\n`);
-        console.log(`Project: ${result.project}`);
-        console.log(`Index: ${result.index_stats.files} files, ${result.index_stats.symbols} symbols\n`);
-
-        for (const s of result.scenarios) {
-          const reduction = s.reduction_pct.toFixed(1);
-          console.log(`${s.name}: ${s.baseline_tokens.toLocaleString()} → ${s.trace_mcp_tokens.toLocaleString()} tokens (${reduction}% reduction)`);
-        }
-
-        console.log(`\nTotal: ${result.totals.baseline_tokens.toLocaleString()} → ${result.totals.trace_mcp_tokens.toLocaleString()} (${result.totals.reduction_pct}% reduction)`);
+export const benchmarkCommand = new Command('benchmark')
+  .description(
+    'Show where this project recomputes work — token-waste benchmark across structured tasks',
+  )
+  .argument('[path]', 'Project path (defaults to current directory)')
+  .option('--queries <n>', 'Queries per scenario', '10')
+  .option('--seed <n>', 'Random seed', '42')
+  .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
+  .action(
+    async (path: string | undefined, opts: { queries: string; seed: string; format: string }) => {
+      if (path && path !== '.') {
+        process.chdir(path);
       }
-    } finally {
-      db.close();
-    }
-  });
+      await runBenchmarkAction(opts);
+    },
+  );
 
 // --- coverage ---
 analyticsCommand
@@ -286,13 +340,18 @@ analyticsCommand
     }
 
     // Multi-project summary — aggregate only, no per-project listing
-    const { covered: covCount, total_significant: totalSig, coverage_pct: pct, total_projects } = aggregate;
+    const {
+      covered: covCount,
+      total_significant: totalSig,
+      coverage_pct: pct,
+      total_projects,
+    } = aggregate;
     const pctIcon = pct >= 80 ? '✅' : pct >= 50 ? '⚠️ ' : '❌';
 
     // Deduplicate gaps, unknowns, and deprecated across all projects
-    const allGaps = new Map<string, (typeof projects[0]['gaps'][0])>();
-    const allUnknown = new Map<string, (typeof projects[0]['unknown'][0])>();
-    const allDeprecated = new Map<string, (typeof projects[0]['deprecated'][0])>();
+    const allGaps = new Map<string, (typeof projects)[0]['gaps'][0]>();
+    const allUnknown = new Map<string, (typeof projects)[0]['unknown'][0]>();
+    const allDeprecated = new Map<string, (typeof projects)[0]['deprecated'][0]>();
     for (const proj of projects) {
       for (const g of proj.gaps) if (!allGaps.has(g.name)) allGaps.set(g.name, g);
       for (const u of proj.unknown) if (!allUnknown.has(u.name)) allUnknown.set(u.name, u);
@@ -300,14 +359,18 @@ analyticsCommand
     }
     const gaps = [...allGaps.values()].sort((a, b) => {
       const prio = { high: 0, medium: 1, low: 2 };
-      return (prio[a.priority as keyof typeof prio] ?? 3) - (prio[b.priority as keyof typeof prio] ?? 3);
+      return (
+        (prio[a.priority as keyof typeof prio] ?? 3) - (prio[b.priority as keyof typeof prio] ?? 3)
+      );
     });
     const unknown = [...allUnknown.values()];
-    const likely  = unknown.filter(u => u.needs_plugin === 'likely');
-    const maybe   = unknown.filter(u => u.needs_plugin === 'maybe');
+    const likely = unknown.filter((u) => u.needs_plugin === 'likely');
+    const maybe = unknown.filter((u) => u.needs_plugin === 'maybe');
     const deprecated = [...allDeprecated.values()];
 
-    console.log(`\n📦 Technology Coverage  ${pctIcon} ${covCount}/${totalSig} significant deps (${pct}%)  ·  ${total_projects} projects\n`);
+    console.log(
+      `\n📦 Technology Coverage  ${pctIcon} ${covCount}/${totalSig} significant deps (${pct}%)  ·  ${total_projects} projects\n`,
+    );
 
     if (gaps.length > 0) {
       console.log(`⚠️  Gaps — no plugin (${gaps.length}):`);
@@ -326,16 +389,20 @@ analyticsCommand
     if (unknown.length > 0) {
       const parts = [
         likely.length ? `🔴 needs plugin: ${likely.length}` : '',
-        maybe.length  ? `🟡 review: ${maybe.length}` : '',
-        (unknown.length - likely.length - maybe.length) ? `🟢 ok: ${unknown.length - likely.length - maybe.length}` : '',
-      ].filter(Boolean).join('  ·  ');
+        maybe.length ? `🟡 review: ${maybe.length}` : '',
+        unknown.length - likely.length - maybe.length
+          ? `🟢 ok: ${unknown.length - likely.length - maybe.length}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('  ·  ');
       console.log(`\n📋 Not in catalog (${unknown.length})  ${parts}`);
       if (likely.length > 0) {
         console.log(`   — should add to catalog:`);
         for (const u of likely) console.log(`   ${u.name} [${u.ecosystem}] — ${u.reason}`);
       }
       if (maybe.length > 0) {
-        console.log(`   — review: ${maybe.map(u => u.name).join('  ')}`);
+        console.log(`   — review: ${maybe.map((u) => u.name).join('  ')}`);
       }
     }
 
@@ -363,7 +430,12 @@ analyticsCommand
     const store = new Store(db);
     try {
       syncAnalytics(analyticsStore);
-      const toolCalls = analyticsStore.getToolCallsForOptimization({ projectPath: projectRoot, period: opts.period as any });
+      const toolCalls = analyticsStore.getToolCallsForOptimization({
+        projectPath: projectRoot,
+        period: opts.period as Parameters<
+          typeof analyticsStore.getToolCallsForOptimization
+        >[0]['period'],
+      });
       const result = analyzeRealSavings(store, toolCalls, opts.period);
 
       if (opts.format === 'json') {
@@ -373,10 +445,16 @@ analyticsCommand
 
       console.log(`\n💰 Real Savings Analysis (${result.period})\n`);
       console.log(`Sessions analyzed: ${result.sessionsAnalyzed}`);
-      console.log(`File reads: ${result.fileReadsAnalyzed} (${result.filesInIndex} in index, ${result.filesNotIndexed} not indexed)`);
+      console.log(
+        `File reads: ${result.fileReadsAnalyzed} (${result.filesInIndex} in index, ${result.filesNotIndexed} not indexed)`,
+      );
       console.log(`\nTotal read tokens: ${result.summary.totalReadTokens.toLocaleString()}`);
-      console.log(`Achievable with trace-mcp: ${result.summary.achievableWithTraceMcp.toLocaleString()}`);
-      console.log(`Potential savings: ${result.summary.potentialSavingsTokens.toLocaleString()} tokens (${result.summary.potentialSavingsPct}%)`);
+      console.log(
+        `Achievable with trace-mcp: ${result.summary.achievableWithTraceMcp.toLocaleString()}`,
+      );
+      console.log(
+        `Potential savings: ${result.summary.potentialSavingsTokens.toLocaleString()} tokens (${result.summary.potentialSavingsPct}%)`,
+      );
 
       const costs = Object.entries(result.summary.potentialCostSavings);
       if (costs.length > 0) {
@@ -387,16 +465,24 @@ analyticsCommand
         console.log(`\nTop files by savings:`);
         for (const f of result.byFile.slice(0, 10)) {
           const saved = f.totalReadTokens - f.alternativeTokens;
-          console.log(`  ${f.file}: ${f.reads} reads, ${saved.toLocaleString()} tokens saveable (${f.savingsPct}%)`);
+          console.log(
+            `  ${f.file}: ${f.reads} reads, ${saved.toLocaleString()} tokens saveable (${f.savingsPct}%)`,
+          );
         }
       }
 
       if (result.abComparison) {
         const ab = result.abComparison;
         console.log(`\nA/B Comparison:`);
-        console.log(`  With trace-mcp (${ab.sessionsWithTraceMcp.count} sessions): ${ab.sessionsWithTraceMcp.avgTokensPerSession.toLocaleString()} avg tokens, ${ab.sessionsWithTraceMcp.avgToolCalls} avg calls`);
-        console.log(`  Without (${ab.sessionsWithoutTraceMcp.count} sessions): ${ab.sessionsWithoutTraceMcp.avgTokensPerSession.toLocaleString()} avg tokens, ${ab.sessionsWithoutTraceMcp.avgToolCalls} avg calls`);
-        console.log(`  Difference: ${ab.difference.tokensSavedPct}% fewer tokens, ${ab.difference.fewerToolCallsPct}% fewer calls`);
+        console.log(
+          `  With trace-mcp (${ab.sessionsWithTraceMcp.count} sessions): ${ab.sessionsWithTraceMcp.avgTokensPerSession.toLocaleString()} avg tokens, ${ab.sessionsWithTraceMcp.avgToolCalls} avg calls`,
+        );
+        console.log(
+          `  Without (${ab.sessionsWithoutTraceMcp.count} sessions): ${ab.sessionsWithoutTraceMcp.avgTokensPerSession.toLocaleString()} avg tokens, ${ab.sessionsWithoutTraceMcp.avgToolCalls} avg calls`,
+        );
+        console.log(
+          `  Difference: ${ab.difference.tokensSavedPct}% fewer tokens, ${ab.difference.fewerToolCallsPct}% fewer calls`,
+        );
       }
     } finally {
       db.close();
@@ -435,14 +521,19 @@ analyticsCommand
         console.log(`${date} ${sessions}  ${tokens}  ${cost}  ${calls}`);
       }
 
-      const total = trends.reduce((s, d) => ({
-        sessions: s.sessions + d.sessions,
-        tokens: s.tokens + (d.tokens ?? 0),
-        cost: s.cost + (d.cost_usd ?? 0),
-        calls: s.calls + (d.tool_calls ?? 0),
-      }), { sessions: 0, tokens: 0, cost: 0, calls: 0 });
+      const total = trends.reduce(
+        (s, d) => ({
+          sessions: s.sessions + d.sessions,
+          tokens: s.tokens + (d.tokens ?? 0),
+          cost: s.cost + (d.cost_usd ?? 0),
+          calls: s.calls + (d.tool_calls ?? 0),
+        }),
+        { sessions: 0, tokens: 0, cost: 0, calls: 0 },
+      );
       console.log('─'.repeat(60));
-      console.log(`Total        ${String(total.sessions).padStart(4)}  ${total.tokens.toLocaleString().padStart(12)}  $${total.cost.toFixed(2).padStart(7)}  ${String(total.calls).padStart(10)}`);
+      console.log(
+        `Total        ${String(total.sessions).padStart(4)}  ${total.tokens.toLocaleString().padStart(12)}  $${total.cost.toFixed(2).padStart(7)}  ${String(total.calls).padStart(10)}`,
+      );
     } finally {
       analyticsStore.close();
     }

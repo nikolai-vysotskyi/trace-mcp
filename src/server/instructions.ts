@@ -29,7 +29,7 @@ export function buildInstructions(
     'Navigation & search:',
     '- Finding a function/class/method → `search` (understands symbol kinds, FQNs, language filters; use `implements`/`extends` to filter by interface). Set `fusion=true` for best ranking — Signal Fusion combines BM25, PageRank, embeddings, and identity match via Weighted Reciprocal Rank fusion.',
     '- Understanding a file before editing → `get_outline` (signatures only — cheaper than Read)',
-    '- Reading one symbol\'s source → `get_symbol` (returns only the symbol, not the whole file)',
+    "- Reading one symbol's source → `get_symbol` (returns only the symbol, not the whole file)",
     '- Quick keyword context → `get_feature_context` (NL query → relevant symbols + source)',
     '- Starting work on a task → `get_task_context` (NL task → full execution context with tests)',
     '',
@@ -60,7 +60,7 @@ export function buildInstructions(
     'Token optimization (IMPORTANT — saves 40-85% tokens):',
     '- **Batch multiple queries** → `batch` combines up to 10 tool calls into 1 MCP request. Use whenever you need 2+ independent queries:',
     '  `batch({ calls: [{ tool: "get_outline", args: { path: "a.ts" } }, { tool: "get_outline", args: { path: "b.ts" } }] })`',
-    '- **Bundle symbol + imports** → `get_context_bundle` returns a symbol\'s source + its import dependencies in one call (supports batch via `symbol_ids[]`)',
+    "- **Bundle symbol + imports** → `get_context_bundle` returns a symbol's source + its import dependencies in one call (supports batch via `symbol_ids[]`)",
     '- **Avoid repeated file reads** → use `get_outline` once to understand structure, then `get_symbol` for specific symbols. NEVER read the same file multiple times.',
     '- **Use `get_task_context` instead of Agent subagents** → it returns focused context within a token budget, replacing manual search chains',
     '- Check token waste → `get_optimization_report` detects repeated reads, Bash grep, and unused trace-mcp tools',
@@ -113,12 +113,12 @@ function buildBehaviorBlock(level: 'strict' | 'minimal' | 'off'): string {
   return [
     'Agent Behavior (applies to all tasks, not just code exploration):',
     '- No flattery, no filler. Skip openers like "Great question", "You\'re absolutely right", "Excellent idea", "I\'d be happy to". Start with the answer or the action.',
-    '- Disagree when the user\'s premise is wrong. Agreeing to be polite produces worse outcomes than pushback — say so before doing the work.',
+    "- Disagree when the user's premise is wrong. Agreeing to be polite produces worse outcomes than pushback — say so before doing the work.",
     '- Never fabricate paths, symbols, APIs, signatures, or test output. Call `search` / `get_symbol` / run the command. "I don\'t know, let me check" beats a plausible guess.',
-    '- When a task has two plausible interpretations that materially change the diff — ask, don\'t pick silently. For trivial/reversible tasks (typo, local rename), proceed.',
+    "- When a task has two plausible interpretations that materially change the diff — ask, don't pick silently. For trivial/reversible tasks (typo, local rename), proceed.",
     '- Rewrite vague asks into verifiable goals before coding: "Fix the bug" → write a failing test reproducing the symptom, then fix. "Make it faster" → benchmark first, identify bottleneck, show benchmark improved.',
     '- Never report "done" based on a plausible-looking diff. Run the test/build/typecheck. Plausibility is not correctness.',
     '- After two failed attempts at the same issue, stop. Summarize what was tried and suggest a fresh session — polluted context + third attempt is worse than fresh context + sharper prompt.',
-    '- Touch only what the request requires. No drive-by refactors, reformatting, or cleanups of unrelated code while you\'re in the file.',
+    "- Touch only what the request requires. No drive-by refactors, reformatting, or cleanups of unrelated code while you're in the file.",
   ].join('\n');
 }

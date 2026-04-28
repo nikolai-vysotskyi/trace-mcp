@@ -5,11 +5,18 @@
  * methods (full selector), @property, C functions, #define, typedef, NS_ENUM/NS_OPTIONS,
  * and import edges (#import, @import, #include).
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 function makeSymbolId(filePath: string, name: string, kind: string, parentName?: string): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;
@@ -65,7 +72,7 @@ function extractMethodSelector(node: TSNode): string | null {
 
   if (hasParams) {
     // Each identifier corresponds to a selector keyword followed by ':'
-    return selectorParts.map(p => p + ':').join('');
+    return selectorParts.map((p) => `${p}:`).join('');
   }
   // Unary selector (no parameters)
   return selectorParts[0];
@@ -91,7 +98,10 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.m', '.mm'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('objc');
       const sourceCode = content.toString('utf-8');
@@ -154,7 +164,13 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
     filePath: string,
     symbols: RawSymbol[],
     edges: RawEdge[],
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parentName?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parentName?: string,
+    ) => void,
   ): void {
     for (const node of nodes) {
       switch (node.type) {
@@ -167,7 +183,7 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
             if (superRef) meta.extends = superRef.text;
             const protocols = node.descendantsOfType('protocol_identifier');
             if (protocols.length > 0) {
-              meta.implements = protocols.map(p => p.text);
+              meta.implements = protocols.map((p) => p.text);
             }
             addSymbol(name, 'class', node, meta);
             this.extractClassBody(node, filePath, name, symbols, edges, addSymbol);
@@ -199,7 +215,11 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
             const catNode = node.childForFieldName('category');
             const catName = catNode?.text;
             const displayName = catName ? `${name}(${catName})` : name;
-            addSymbol(displayName, 'class', node, { objcKind: 'category_interface', className: name, category: catName });
+            addSymbol(displayName, 'class', node, {
+              objcKind: 'category_interface',
+              className: name,
+              category: catName,
+            });
             this.extractClassBody(node, filePath, name, symbols, edges, addSymbol);
           }
           break;
@@ -211,7 +231,11 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
             const catNode = node.childForFieldName('category');
             const catName = catNode?.text;
             const displayName = catName ? `${name}(${catName})` : name;
-            addSymbol(displayName, 'class', node, { objcKind: 'category_implementation', className: name, category: catName });
+            addSymbol(displayName, 'class', node, {
+              objcKind: 'category_implementation',
+              className: name,
+              category: catName,
+            });
             this.extractClassBody(node, filePath, name, symbols, edges, addSymbol);
           }
           break;
@@ -269,7 +293,7 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
             edges.push({ edgeType: 'imports', metadata: { module: pathNode.text } });
           } else {
             // Fallback: search named children
-            const modName = node.namedChildren.find(c => c.type === 'identifier');
+            const modName = node.namedChildren.find((c) => c.type === 'identifier');
             if (modName) {
               edges.push({ edgeType: 'imports', metadata: { module: modName.text } });
             } else {
@@ -299,7 +323,13 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
     className: string,
     symbols: RawSymbol[],
     edges: RawEdge[],
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parentName?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parentName?: string,
+    ) => void,
   ): void {
     for (const child of classNode.namedChildren) {
       switch (child.type) {
@@ -332,10 +362,12 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
 
         default: {
           // Recurse into sub-containers (e.g., instance_variables blocks, interface_declaration_list)
-          if (child.namedChildCount > 0
-            && child.type !== 'identifier'
-            && child.type !== 'type_identifier'
-            && child.type !== 'protocol_reference_list') {
+          if (
+            child.namedChildCount > 0 &&
+            child.type !== 'identifier' &&
+            child.type !== 'type_identifier' &&
+            child.type !== 'protocol_reference_list'
+          ) {
             this.extractClassBody(child, filePath, className, symbols, edges, addSymbol);
           }
           break;
@@ -347,7 +379,13 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
   /** Extract a method declaration or definition */
   private extractMethod(
     node: TSNode,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parentName?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parentName?: string,
+    ) => void,
     parentName?: string,
   ): void {
     const selector = extractMethodSelector(node);
@@ -357,13 +395,25 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
     const meta: Record<string, unknown> = {};
     if (isStatic) meta.static = true;
 
-    addSymbol(selector, 'method', node, Object.keys(meta).length > 0 ? meta : undefined, parentName);
+    addSymbol(
+      selector,
+      'method',
+      node,
+      Object.keys(meta).length > 0 ? meta : undefined,
+      parentName,
+    );
   }
 
   /** Extract @property declarations */
   private extractProperty(
     node: TSNode,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parentName?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parentName?: string,
+    ) => void,
     parentName?: string,
   ): void {
     // In tree-sitter-objc, property_declaration contains:
@@ -411,7 +461,13 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
   /** Extract C function definition or declaration */
   private extractFunction(
     node: TSNode,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parentName?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parentName?: string,
+    ) => void,
   ): void {
     const declarator = node.childForFieldName('declarator');
     if (declarator) {
@@ -426,7 +482,11 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
   /** Recursively extract function name from a declarator */
   private extractFunctionName(node: TSNode): string | null {
     if (node.type === 'identifier') return node.text;
-    if (node.type === 'function_declarator' || node.type === 'pointer_declarator' || node.type === 'parenthesized_declarator') {
+    if (
+      node.type === 'function_declarator' ||
+      node.type === 'pointer_declarator' ||
+      node.type === 'parenthesized_declarator'
+    ) {
       const decl = node.childForFieldName('declarator');
       if (decl) return this.extractFunctionName(decl);
     }
@@ -440,7 +500,13 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
   /** Extract typedef — checks for NS_ENUM/NS_OPTIONS pattern too */
   private extractTypedef(
     node: TSNode,
-    addSymbol: (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>, parentName?: string) => void,
+    addSymbol: (
+      name: string,
+      kind: SymbolKind,
+      node: TSNode,
+      meta?: Record<string, unknown>,
+      parentName?: string,
+    ) => void,
   ): void {
     const text = node.text;
 
@@ -454,9 +520,8 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
     // Regular typedef
     const declarator = node.childForFieldName('declarator');
     if (declarator) {
-      const typeName = declarator.type === 'identifier'
-        ? declarator.text
-        : this.extractFunctionName(declarator);
+      const typeName =
+        declarator.type === 'identifier' ? declarator.text : this.extractFunctionName(declarator);
       if (typeName) {
         addSymbol(typeName, 'type', node);
         return;

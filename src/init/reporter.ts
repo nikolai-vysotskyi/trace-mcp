@@ -2,7 +2,7 @@
  * Format init/upgrade results for human-readable and JSON output.
  */
 
-import type { DetectionResult, InitStepResult, InitReport } from './types.js';
+import type { InitReport } from './types.js';
 
 export function formatReport(report: InitReport, json: boolean): string {
   if (json) return JSON.stringify(report, null, 2);
@@ -28,9 +28,15 @@ function formatHuman(report: InitReport): string {
     fwByCategory.get(cat)!.push(label);
   }
   const categoryLabels: Record<string, string> = {
-    framework: 'Frameworks', orm: 'ORMs', view: 'UI/View',
-    api: 'API', validation: 'Validation', state: 'State mgmt',
-    realtime: 'Realtime', testing: 'Testing', tooling: 'Tooling',
+    framework: 'Frameworks',
+    orm: 'ORMs',
+    view: 'UI/View',
+    api: 'API',
+    validation: 'Validation',
+    state: 'State mgmt',
+    realtime: 'Realtime',
+    testing: 'Testing',
+    tooling: 'Tooling',
   };
   for (const [cat, items] of fwByCategory) {
     const label = (categoryLabels[cat] ?? cat).padEnd(12);
@@ -65,7 +71,8 @@ function formatHuman(report: InitReport): string {
   if (alreadyOk.length > 0) {
     lines.push('');
     lines.push('  Already configured:');
-    for (const s of alreadyOk) lines.push(`    ${shortPath(s.target).padEnd(24)} ${s.detail ?? ''}`);
+    for (const s of alreadyOk)
+      lines.push(`    ${shortPath(s.target).padEnd(24)} ${s.detail ?? ''}`);
   }
   if (skipped.length > 0) {
     lines.push('');
@@ -79,7 +86,7 @@ function formatHuman(report: InitReport): string {
 
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
   const cwd = process.cwd();
   if (p.startsWith(cwd)) return p.slice(cwd.length + 1) || '.';
   return p;

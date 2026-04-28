@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ReactPlugin } from '../../../src/indexer/plugins/integration/view/react/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -95,7 +95,11 @@ describe('ReactPlugin', () => {
           );
         }
       `;
-      const result = await plugin.extractNodes!('Dashboard.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'Dashboard.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const renderEdges = parsed.edges!.filter((e) => e.edgeType === 'react_renders');
@@ -143,7 +147,11 @@ describe('ReactPlugin', () => {
           return <button style={{ color: theme.primary }}>Click</button>;
         }
       `;
-      const result = await plugin.extractNodes!('ThemedButton.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'ThemedButton.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const contextEdges = parsed.edges!.filter((e) => e.edgeType === 'react_context_consumes');
@@ -160,7 +168,11 @@ describe('ReactPlugin', () => {
           return <button>Click</button>;
         }
       `;
-      const result = await plugin.extractNodes!('ThemedButton.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'ThemedButton.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const contextEdges = parsed.edges!.filter((e) => e.edgeType === 'react_context_consumes');
@@ -185,7 +197,11 @@ describe('ReactPlugin', () => {
           );
         }
       `;
-      const result = await plugin.extractNodes!('ThemeProvider.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'ThemeProvider.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const providerEdges = parsed.edges!.filter((e) => e.edgeType === 'react_context_provides');
@@ -209,7 +225,11 @@ describe('ReactPlugin', () => {
           return <button onClick={() => setCount(count + 1)}>{count}</button>;
         }
       `;
-      const result = await plugin.extractNodes!('Counter.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'Counter.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       expect(parsed.frameworkRole).toBe('client-component');
@@ -232,7 +252,7 @@ describe('ReactPlugin', () => {
       expect(serverEdges).toHaveLength(1);
     });
 
-    it("detects directive after leading comments", async () => {
+    it('detects directive after leading comments', async () => {
       const source = `// Copyright 2024
 /* license block */
 'use client';
@@ -241,7 +261,11 @@ describe('ReactPlugin', () => {
           return <div />;
         }
       `;
-      const result = await plugin.extractNodes!('Widget.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'Widget.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       expect(parsed.frameworkRole).toBe('client-component');
@@ -281,7 +305,11 @@ describe('ReactPlugin', () => {
 
         const Settings = lazy(() => import('./Settings'));
       `;
-      const result = await plugin.extractNodes!('routes.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'routes.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const lazyEdges = parsed.edges!.filter((e) => e.edgeType === 'react_lazy_loads');
@@ -306,7 +334,11 @@ describe('ReactPlugin', () => {
           return <div style={{ color: theme.fg }}>{auth.user.name}</div>;
         }
       `;
-      const result = await plugin.extractNodes!('Profile.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'Profile.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const hookEdges = parsed.edges!.filter((e) => e.edgeType === 'react_custom_hook_uses');
@@ -328,7 +360,11 @@ describe('ReactPlugin', () => {
           return <div ref={ref}>{doubled}</div>;
         }
       `;
-      const result = await plugin.extractNodes!('Counter.tsx', Buffer.from(source), 'typescriptreact');
+      const result = await plugin.extractNodes!(
+        'Counter.tsx',
+        Buffer.from(source),
+        'typescriptreact',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const hookEdges = parsed.edges!.filter((e) => e.edgeType === 'react_custom_hook_uses');
@@ -347,7 +383,11 @@ describe('ReactPlugin', () => {
 
         export const ThemeContext = createContext({ primary: '#000' });
       `;
-      const result = await plugin.extractNodes!('ThemeContext.ts', Buffer.from(source), 'typescript');
+      const result = await plugin.extractNodes!(
+        'ThemeContext.ts',
+        Buffer.from(source),
+        'typescript',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       const contexts = parsed.components!.filter((c) => c.kind === 'context');

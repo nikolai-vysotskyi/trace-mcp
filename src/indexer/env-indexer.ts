@@ -5,13 +5,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import fg from 'fast-glob';
-import type { Store } from '../db/store.js';
 import type { TraceMcpConfig } from '../config.js';
+import type { Store } from '../db/store.js';
+import { logger } from '../logger.js';
+import { parseEnvFile } from '../utils/env-parser.js';
 import { hashContent } from '../utils/hasher.js';
 import { validatePath } from '../utils/security.js';
-import { parseEnvFile } from '../utils/env-parser.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
-import { logger } from '../logger.js';
 
 const ENV_GLOB = ['.env', '.env.*', '.env.local', '**/.env', '**/.env.*'];
 const ENV_FILE_BASENAME = /^\.env(\.[^/]*)?$/;

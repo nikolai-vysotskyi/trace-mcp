@@ -1,19 +1,19 @@
-import { describe, test, expect, beforeEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import path from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
+import path from 'node:path';
+import { beforeEach, describe, expect, test } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { scanSecurity } from '../../src/tools/quality/security-scan.js';
+import { createTestStore } from '../test-utils.js';
 
 // Temp dir for test files
-const TEST_DIR = path.join(tmpdir(), 'trace-mcp-security-test-' + process.pid);
+const TEST_DIR = path.join(tmpdir(), `trace-mcp-security-test-${process.pid}`);
 
 function writeFile(store: Store, relPath: string, content: string, language: string): void {
   const absPath = path.join(TEST_DIR, relPath);
   mkdirSync(path.dirname(absPath), { recursive: true });
   writeFileSync(absPath, content);
-  store.insertFile(relPath, language, 'hash-' + relPath, content.length);
+  store.insertFile(relPath, language, `hash-${relPath}`, content.length);
 }
 
 describe('Security Scanning', () => {
@@ -30,11 +30,16 @@ describe('Security Scanning', () => {
   // -------------------------------------------------------------------
 
   test('detects SQL injection via template literal in JS/TS', () => {
-    writeFile(store, 'src/search.ts', `
+    writeFile(
+      store,
+      'src/search.ts',
+      `
 const search = (query: string) => {
   db.query(\`SELECT * FROM products WHERE name LIKE '%\${query}%'\`);
 };
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['sql_injection'] });
     expect(result.isOk()).toBe(true);
@@ -46,12 +51,17 @@ const search = (query: string) => {
   });
 
   test('does not flag parameterized queries', () => {
-    writeFile(store, 'src/safe-search.ts', `
+    writeFile(
+      store,
+      'src/safe-search.ts',
+      `
 const search = (query: string) => {
   // parameterized query
   db.query('SELECT * FROM products WHERE name LIKE ?', [query]);
 };
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['sql_injection'] });
     expect(result.isOk()).toBe(true);
@@ -59,10 +69,15 @@ const search = (query: string) => {
   });
 
   test('detects Python f-string SQL injection', () => {
-    writeFile(store, 'src/db.py', `
+    writeFile(
+      store,
+      'src/db.py',
+      `
 def search(query):
     cursor.execute(f"SELECT * FROM users WHERE name = '{query}'")
-`, 'python');
+`,
+      'python',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['sql_injection'] });
     expect(result.isOk()).toBe(true);
@@ -72,9 +87,14 @@ def search(query):
   });
 
   test('detects PHP SQL injection', () => {
-    writeFile(store, 'src/UserRepo.php', `<?php
+    writeFile(
+      store,
+      'src/UserRepo.php',
+      `<?php
 $result = $db->query("SELECT * FROM users WHERE id = " . $id);
-`, 'php');
+`,
+      'php',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['sql_injection'] });
     expect(result.isOk()).toBe(true);
@@ -88,11 +108,16 @@ $result = $db->query("SELECT * FROM users WHERE id = " . $id);
   // -------------------------------------------------------------------
 
   test('detects dangerouslySetInnerHTML', () => {
-    writeFile(store, 'src/Comment.tsx', `
+    writeFile(
+      store,
+      'src/Comment.tsx',
+      `
 export const Comment = ({ body }: { body: string }) => (
   <div dangerouslySetInnerHTML={{ __html: body }} />
 );
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['xss'] });
     expect(result.isOk()).toBe(true);
@@ -102,11 +127,16 @@ export const Comment = ({ body }: { body: string }) => (
   });
 
   test('detects Vue v-html', () => {
-    writeFile(store, 'src/Comment.vue', `
+    writeFile(
+      store,
+      'src/Comment.vue',
+      `
 <template>
   <div v-html="comment.body" />
 </template>
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['xss'] });
     expect(result.isOk()).toBe(true);
@@ -114,9 +144,14 @@ export const Comment = ({ body }: { body: string }) => (
   });
 
   test('detects PHP Blade unescaped output', () => {
-    writeFile(store, 'src/view.blade.php', `
+    writeFile(
+      store,
+      'src/view.blade.php',
+      `
 <div>{!! $user->bio !!}</div>
-`, 'php');
+`,
+      'php',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['xss'] });
     expect(result.isOk()).toBe(true);
@@ -128,12 +163,17 @@ export const Comment = ({ body }: { body: string }) => (
   // -------------------------------------------------------------------
 
   test('detects exec with template literal', () => {
-    writeFile(store, 'src/git.ts', `
+    writeFile(
+      store,
+      'src/git.ts',
+      `
 import { exec } from 'child_process';
 const getLog = (author: string) => {
   exec(\`git log --author="\${author}"\`);
 };
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
     expect(result.isOk()).toBe(true);
@@ -144,11 +184,16 @@ const getLog = (author: string) => {
   });
 
   test('detects Python subprocess with shell=True', () => {
-    writeFile(store, 'src/run.py', `
+    writeFile(
+      store,
+      'src/run.py',
+      `
 import subprocess
 def run(cmd):
     subprocess.call(cmd, shell=True)
-`, 'python');
+`,
+      'python',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
     expect(result.isOk()).toBe(true);
@@ -160,9 +205,14 @@ def run(cmd):
   // -------------------------------------------------------------------
 
   test('detects hardcoded API key', () => {
-    writeFile(store, 'src/config.ts', `
+    writeFile(
+      store,
+      'src/config.ts',
+      `
 const API_KEY = 'sk_live_abcdef1234567890abcdef';
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['hardcoded_secrets'] });
     expect(result.isOk()).toBe(true);
@@ -172,9 +222,14 @@ const API_KEY = 'sk_live_abcdef1234567890abcdef';
   });
 
   test('detects AWS access key', () => {
-    writeFile(store, 'src/aws.ts', `
+    writeFile(
+      store,
+      'src/aws.ts',
+      `
 const KEY = 'AKIAIOSFODNN7ABCDEFG';
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['hardcoded_secrets'] });
     expect(result.isOk()).toBe(true);
@@ -182,10 +237,15 @@ const KEY = 'AKIAIOSFODNN7ABCDEFG';
   });
 
   test('does not flag process.env references', () => {
-    writeFile(store, 'src/safe-config.ts', `
+    writeFile(
+      store,
+      'src/safe-config.ts',
+      `
 const API_KEY = process.env.API_KEY;
 const secret = process.env.SECRET_TOKEN;
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['hardcoded_secrets'] });
     expect(result.isOk()).toBe(true);
@@ -193,9 +253,14 @@ const secret = process.env.SECRET_TOKEN;
   });
 
   test('does not flag placeholder values', () => {
-    writeFile(store, 'src/example.ts', `
+    writeFile(
+      store,
+      'src/example.ts',
+      `
 const api_key = 'your-key-here-changeme-placeholder';
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['hardcoded_secrets'] });
     expect(result.isOk()).toBe(true);
@@ -207,10 +272,15 @@ const api_key = 'your-key-here-changeme-placeholder';
   // -------------------------------------------------------------------
 
   test('detects MD5 usage', () => {
-    writeFile(store, 'src/hash.ts', `
+    writeFile(
+      store,
+      'src/hash.ts',
+      `
 import crypto from 'crypto';
 const hash = crypto.createHash('md5').update(data).digest('hex');
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['insecure_crypto'] });
     expect(result.isOk()).toBe(true);
@@ -218,10 +288,15 @@ const hash = crypto.createHash('md5').update(data).digest('hex');
   });
 
   test('does not flag MD5 for checksums', () => {
-    writeFile(store, 'src/checksum.ts', `
+    writeFile(
+      store,
+      'src/checksum.ts',
+      `
 // checksum for cache invalidation
 const hash = crypto.createHash('md5').update(content).digest('hex');
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['insecure_crypto'] });
     expect(result.isOk()).toBe(true);
@@ -233,12 +308,17 @@ const hash = crypto.createHash('md5').update(content).digest('hex');
   // -------------------------------------------------------------------
 
   test('detects path.join with user input', () => {
-    writeFile(store, 'src/files.ts', `
+    writeFile(
+      store,
+      'src/files.ts',
+      `
 app.get('/download', (req, res) => {
   const file = path.join('/uploads', req.params.filename);
   res.sendFile(file);
 });
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['path_traversal'] });
     expect(result.isOk()).toBe(true);
@@ -250,12 +330,17 @@ app.get('/download', (req, res) => {
   // -------------------------------------------------------------------
 
   test('detects fetch with user input', () => {
-    writeFile(store, 'src/proxy.ts', `
+    writeFile(
+      store,
+      'src/proxy.ts',
+      `
 app.get('/proxy', async (req, res) => {
   const data = await fetch(req.query.url);
   res.json(await data.json());
 });
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['ssrf'] });
     expect(result.isOk()).toBe(true);
@@ -267,11 +352,16 @@ app.get('/proxy', async (req, res) => {
   // -------------------------------------------------------------------
 
   test('detects redirect with user input', () => {
-    writeFile(store, 'src/auth.ts', `
+    writeFile(
+      store,
+      'src/auth.ts',
+      `
 app.get('/login', (req, res) => {
   res.redirect(req.query.returnUrl);
 });
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['open_redirect'] });
     expect(result.isOk()).toBe(true);
@@ -283,9 +373,14 @@ app.get('/login', (req, res) => {
   // -------------------------------------------------------------------
 
   test('skips test files', () => {
-    writeFile(store, 'src/search.test.ts', `
+    writeFile(
+      store,
+      'src/search.test.ts',
+      `
 db.query(\`SELECT * FROM products WHERE name LIKE '%\${query}%'\`);
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['sql_injection'] });
     expect(result.isOk()).toBe(true);
@@ -293,10 +388,15 @@ db.query(\`SELECT * FROM products WHERE name LIKE '%\${query}%'\`);
   });
 
   test('respects severity threshold', () => {
-    writeFile(store, 'src/app.ts', `
+    writeFile(
+      store,
+      'src/app.ts',
+      `
 const hash = crypto.createHash('md5').update(data).digest('hex');
 db.query(\`SELECT * FROM x WHERE id = \${id}\`);
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, {
       rules: ['all'],
@@ -322,11 +422,16 @@ db.query(\`SELECT * FROM x WHERE id = \${id}\`);
   });
 
   test('scans all rules with "all"', () => {
-    writeFile(store, 'src/bad.ts', `
+    writeFile(
+      store,
+      'src/bad.ts',
+      `
 const key = 'AKIAIOSFODNN7EXAMPLE';
 exec(\`rm -rf \${path}\`);
 db.query(\`SELECT * FROM x WHERE id = \${id}\`);
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['all'] });
     expect(result.isOk()).toBe(true);
@@ -336,16 +441,22 @@ db.query(\`SELECT * FROM x WHERE id = \${id}\`);
   });
 
   test('returns correct summary counts', () => {
-    writeFile(store, 'src/vuln.ts', `
+    writeFile(
+      store,
+      'src/vuln.ts',
+      `
 db.query(\`SELECT * FROM x WHERE id = \${id}\`);
 exec(\`rm -rf \${path}\`);
 const key = 'sk_live_abcdef1234567890abcdef';
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['all'] });
     expect(result.isOk()).toBe(true);
     const data = result._unsafeUnwrap();
-    const total = data.summary.critical + data.summary.high + data.summary.medium + data.summary.low;
+    const total =
+      data.summary.critical + data.summary.high + data.summary.medium + data.summary.low;
     expect(total).toBe(data.findings.length);
   });
 
@@ -355,11 +466,16 @@ const key = 'sk_live_abcdef1234567890abcdef';
   });
 
   test('findings are sorted by severity (critical first)', () => {
-    writeFile(store, 'src/mixed.ts', `
+    writeFile(
+      store,
+      'src/mixed.ts',
+      `
 const hash = crypto.createHash('md5').update(data).digest('hex');
 db.query(\`SELECT * FROM x WHERE id = \${id}\`);
 const key = 'sk_live_abcdef1234567890abcdef';
-`, 'typescript');
+`,
+      'typescript',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['all'] });
     expect(result.isOk()).toBe(true);
@@ -367,8 +483,9 @@ const key = 'sk_live_abcdef1234567890abcdef';
     if (data.findings.length >= 2) {
       const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
       for (let i = 1; i < data.findings.length; i++) {
-        expect(severityOrder[data.findings[i - 1].severity])
-          .toBeGreaterThanOrEqual(severityOrder[data.findings[i].severity]);
+        expect(severityOrder[data.findings[i - 1].severity]).toBeGreaterThanOrEqual(
+          severityOrder[data.findings[i].severity],
+        );
       }
     }
   });
@@ -396,9 +513,14 @@ const key = 'sk_live_abcdef1234567890abcdef';
   test('no memory leak: can scan many files', () => {
     // Create 50 files
     for (let i = 0; i < 50; i++) {
-      writeFile(store, `src/file${i}.ts`, `
+      writeFile(
+        store,
+        `src/file${i}.ts`,
+        `
 const search${i} = () => db.query(\`SELECT * FROM t WHERE id = \${id}\`);
-`, 'typescript');
+`,
+        'typescript',
+      );
     }
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['sql_injection'] });
@@ -408,17 +530,22 @@ const search${i} = () => db.query(\`SELECT * FROM t WHERE id = \${id}\`);
   });
 
   test('language filtering works — does not apply JS rules to Python', () => {
-    writeFile(store, 'src/app.py', `
+    writeFile(
+      store,
+      'src/app.py',
+      `
 # This is Python, not JS
 element.innerHTML = "hello"
-`, 'python');
+`,
+      'python',
+    );
 
     const result = scanSecurity(store, TEST_DIR, { rules: ['xss'] });
     expect(result.isOk()).toBe(true);
     // innerHTML is a JS/TS pattern, should not match Python
-    const jsFindings = result._unsafeUnwrap().findings.filter(
-      (f) => f.rule_id === 'CWE-79' && f.file.endsWith('.py'),
-    );
+    const jsFindings = result
+      ._unsafeUnwrap()
+      .findings.filter((f) => f.rule_id === 'CWE-79' && f.file.endsWith('.py'));
     expect(jsFindings).toHaveLength(0);
   });
 });

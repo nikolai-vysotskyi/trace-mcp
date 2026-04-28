@@ -133,13 +133,13 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
 
 import { restartDaemon } from './daemon-lifecycle';
 import {
-  getStatus as ollamaStatus,
+  deleteModel as ollamaDelete,
   listInstalled as ollamaListInstalled,
   listRunning as ollamaListRunning,
-  unloadModel as ollamaUnload,
-  deleteModel as ollamaDelete,
   startDaemon as ollamaStart,
+  getStatus as ollamaStatus,
   stopDaemon as ollamaStop,
+  unloadModel as ollamaUnload,
 } from './ollama-control';
 
 // IPC: restart daemon (kill old, create plist if needed, start new via launchd)
@@ -348,11 +348,11 @@ function cmpSemver(a: string, b: string): number {
 
 function fetchLatestFromNpm(): Promise<{ status: number; version?: string }> {
   return new Promise((resolve, reject) => {
-    const https = require('https');
+    const https = require('node:https') as typeof import('node:https');
     const req = https.get(
       'https://registry.npmjs.org/trace-mcp/latest',
       { timeout: 10000, headers: { 'User-Agent': 'trace-mcp', Accept: 'application/json' } },
-      (res: any) => {
+      (res) => {
         let data = '';
         res.on('data', (chunk: string) => {
           data += chunk;
@@ -403,7 +403,7 @@ function fetchLatestRelease(): Promise<{
   resetAt?: number;
 }> {
   return new Promise((resolve, reject) => {
-    const https = require('https');
+    const https = require('node:https');
     const headers: Record<string, string> = {
       'User-Agent': 'trace-mcp',
       Accept: 'application/vnd.github.v3+json',
@@ -413,11 +413,11 @@ function fetchLatestRelease(): Promise<{
     const req = https.get(
       'https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest',
       { timeout: 10000, headers },
-      (res: any) => {
+      (res) => {
         if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
           // Follow once.
           https
-            .get(res.headers.location, { timeout: 10000, headers }, (res2: any) => {
+            .get(res.headers.location, { timeout: 10000, headers }, (res2) => {
               let d = '';
               res2.on('data', (c: string) => {
                 d += c;
@@ -603,6 +603,78 @@ async function resolveNpmRoot(): Promise<string | null> {
     execFile(
       npmBin,
       ['root', '-g'],
+      { encoding: 'utf-8', timeout: 30_000 },
+      (err, stdout) => {
+        if (err) {
+          resolve(null);
+          return;
+        }
+        const line = (stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
+        resolve(line || null);
+      },
+    );
+  });
+}
+
+let cachedNpmBin: string | null | undefined;
+async function resolveNpmBin(): Promise<string | null> {
+  if (cachedNpmBin !== undefined) return cachedNpmBin;
+  const sh = process.env.SHELL;
+  const candidates: Array<() => Promise<string | null>> = [];
+  if (sh) {
+    // Interactive login first — sources .zshrc/.bashrc where nvm/Herd lives.
+    candidates.push(() => execCapture(`${sh} -ilc 'command -v npm'`));
+    candidates.push(() => execCapture(`${sh} -lc 'command -v npm'`));
+  }
+  candidates.push(() =>
+    execCapture(`/usr/bin/env npm --version >/dev/null 2>&1 && /usr/bin/env which npm`),
+  );
+  for (const probe of candidates) {
+    const found = await probe();
+    if (found && fs.existsSync(found)) {
+      cachedNpmBin = found;
+      appendUpdateLog({ event: 'resolve-npm:found', npmBin: found });
+      return found;
+    }
+  }
+  // Filesystem scan — common nvm / Herd / Homebrew layouts.
+  const home = os.homedir();
+  const guesses = [
+    '/opt/homebrew/bin/npm',
+    '/usr/local/bin/npm',
+    path.join(home, '.nvm/current/bin/npm'),
+  ];
+  // Scan latest Herd/nvm versions if present.
+  for (const baseRel of [
+    'Library/Application Support/Herd/config/nvm/versions/node',
+    '.nvm/versions/node',
+  ]) {
+    const base = path.join(home, baseRel);
+    try {
+      const versions = fs.readdirSync(base).sort().reverse();
+      for (const v of versions) guesses.push(path.join(base, v, 'bin', 'npm'));
+    } catch {
+      /* dir absent — skip */
+    }
+  }
+  for (const g of guesses) {
+    if (fs.existsSync(g)) {
+      cachedNpmBin = g;
+      appendUpdateLog({ event: 'resolve-npm:scan-found', npmBin: g });
+      return g;
+    }
+  }
+  appendUpdateLog({ event: 'resolve-npm:not-found', shell: sh ?? null, scanned: guesses });
+  cachedNpmBin = null;
+  return null;
+}
+
+async function resolveNpmRoot(): Promise<string | null> {
+  const npmBin = await resolveNpmBin();
+  if (!npmBin) return null;
+  return new Promise((resolve) => {
+    exec(
+      `${JSON.stringify(npmBin)} root -g`,
       { encoding: 'utf-8', timeout: 30_000 },
       (err, stdout) => {
         if (err) {

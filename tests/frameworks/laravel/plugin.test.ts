@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { LaravelPlugin } from '../../../src/indexer/plugins/integration/framework/laravel/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -79,9 +79,19 @@ describe('LaravelPlugin', () => {
 
     it('all edge types have a recognised Laravel ecosystem category', () => {
       const ALLOWED = new Set([
-        'laravel', 'livewire', 'filament', 'nova', 'blade',
-        'pennant', 'broadcasting', 'laravel-data',
-        'horizon', 'cashier', 'scout', 'socialite', 'medialibrary',
+        'laravel',
+        'livewire',
+        'filament',
+        'nova',
+        'blade',
+        'pennant',
+        'broadcasting',
+        'laravel-data',
+        'horizon',
+        'cashier',
+        'scout',
+        'socialite',
+        'medialibrary',
       ]);
       const schema = plugin.registerSchema();
       for (const et of schema.edgeTypes!) {

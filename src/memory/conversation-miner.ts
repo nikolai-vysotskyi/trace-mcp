@@ -11,8 +11,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { listAllSessions } from '../analytics/log-parser.js';
 import { logger } from '../logger.js';
-import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
 import { mineProviderSessions } from './conversation-miner-providers.js';
+import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -65,16 +65,18 @@ interface DecisionPattern {
 const DECISION_PATTERNS: DecisionPattern[] = [
   // Architecture decisions: "decided to", "we'll use", "going with", "chose X over Y"
   {
-    pattern: /(?:decided|choose|chose|going with|we(?:'ll| will) use|opting for|switching to|migrating to)\s+(.{10,120}?)(?:\.|$|\n)/gi,
+    pattern:
+      /(?:decided|choose|chose|going with|we(?:'ll| will) use|opting for|switching to|migrating to)\s+(.{10,120}?)(?:\.|$|\n)/gi,
     type: 'architecture_decision',
     confidence: 0.85,
     titleExtractor: (m) => truncateTitle(m[1].trim()),
   },
   // Tech choices: "using X because", "X instead of Y", "picked X for"
   {
-    pattern: /(?:using|picked|selected|adopted)\s+(\S+(?:\s+\S+){0,4})\s+(?:because|since|for|due to|as it)\s+(.{10,120}?)(?:\.|$|\n)/gi,
+    pattern:
+      /(?:using|picked|selected|adopted)\s+(\S+(?:\s+\S+){0,4})\s+(?:because|since|for|due to|as it)\s+(.{10,120}?)(?:\.|$|\n)/gi,
     type: 'tech_choice',
-    confidence: 0.80,
+    confidence: 0.8,
     titleExtractor: (m) => truncateTitle(`Use ${m[1].trim()}: ${m[2].trim()}`),
   },
   // "X instead of Y" / "X over Y"
@@ -86,16 +88,18 @@ const DECISION_PATTERNS: DecisionPattern[] = [
   },
   // Bug root causes: "the bug was", "root cause", "the issue was", "caused by"
   {
-    pattern: /(?:the (?:bug|issue|problem|error) (?:was|is)|root cause|caused by|the fix (?:was|is))\s+(.{10,150}?)(?:\.|$|\n)/gi,
+    pattern:
+      /(?:the (?:bug|issue|problem|error) (?:was|is)|root cause|caused by|the fix (?:was|is))\s+(.{10,150}?)(?:\.|$|\n)/gi,
     type: 'bug_root_cause',
     confidence: 0.85,
     titleExtractor: (m) => truncateTitle(m[1].trim()),
   },
   // Preferences: "prefer", "always use", "never use", "should always", "convention is"
   {
-    pattern: /(?:(?:I |we |you should )prefer|always (?:use|do)|never (?:use|do)|convention is|standard is)\s+(.{10,120}?)(?:\.|$|\n)/gi,
+    pattern:
+      /(?:(?:I |we |you should )prefer|always (?:use|do)|never (?:use|do)|convention is|standard is)\s+(.{10,120}?)(?:\.|$|\n)/gi,
     type: 'preference',
-    confidence: 0.70,
+    confidence: 0.7,
     titleExtractor: (m) => truncateTitle(m[1].trim()),
   },
   // Tradeoffs: "tradeoff", "trade-off", "downside is", "the cost of"
@@ -107,16 +111,18 @@ const DECISION_PATTERNS: DecisionPattern[] = [
   },
   // Discoveries: "discovered that", "found out that", "turns out", "TIL"
   {
-    pattern: /(?:discovered that|found out (?:that)?|turns out|TIL|it appears that|realized that)\s+(.{10,150}?)(?:\.|$|\n)/gi,
+    pattern:
+      /(?:discovered that|found out (?:that)?|turns out|TIL|it appears that|realized that)\s+(.{10,150}?)(?:\.|$|\n)/gi,
     type: 'discovery',
-    confidence: 0.80,
+    confidence: 0.8,
     titleExtractor: (m) => truncateTitle(m[1].trim()),
   },
   // Conventions: "from now on", "going forward", "the rule is", "naming convention"
   {
-    pattern: /(?:from now on|going forward|the rule is|naming convention|our convention)\s+(.{10,120}?)(?:\.|$|\n)/gi,
+    pattern:
+      /(?:from now on|going forward|the rule is|naming convention|our convention)\s+(.{10,120}?)(?:\.|$|\n)/gi,
     type: 'convention',
-    confidence: 0.80,
+    confidence: 0.8,
     titleExtractor: (m) => truncateTitle(m[1].trim()),
   },
 ];
@@ -135,7 +141,7 @@ const CONTEXT_BOOSTERS = [
 function truncateTitle(s: string): string {
   const clean = s.replace(/\s+/g, ' ').trim();
   if (clean.length <= 80) return clean;
-  return clean.slice(0, 77) + '...';
+  return `${clean.slice(0, 77)}...`;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -144,11 +150,15 @@ function truncateTitle(s: string): string {
 
 function parseConversationTurns(filePath: string): ConversationTurn[] {
   const content = fs.readFileSync(filePath, 'utf-8');
-  const lines = content.split('\n').filter(l => l.trim());
+  const lines = content.split('\n').filter((l) => l.trim());
   const turns: ConversationTurn[] = [];
 
   for (const line of lines) {
-    let record: any;
+    let record: {
+      type?: string;
+      timestamp?: string;
+      message?: ConversationMessage;
+    };
     try {
       record = JSON.parse(line);
     } catch {
@@ -179,8 +189,20 @@ function parseConversationTurns(filePath: string): ConversationTurn[] {
   return turns;
 }
 
+interface ConversationContentItem {
+  type?: string;
+  text?: string;
+  input?: unknown;
+  name?: string;
+}
+
+interface ConversationMessage {
+  role?: string;
+  content?: string | ConversationContentItem[];
+}
+
 function extractTurnContent(
-  msg: any,
+  msg: ConversationMessage,
   role: 'user' | 'assistant',
   timestamp: string,
 ): ConversationTurn | null {
@@ -213,7 +235,13 @@ function extractTurnContent(
   const text = textParts.join('\n');
   if (!text) return null;
 
-  return { role, text, timestamp, referenced_files: referencedFiles, referenced_symbols: referencedSymbols };
+  return {
+    role,
+    text,
+    timestamp,
+    referenced_files: referencedFiles,
+    referenced_symbols: referencedSymbols,
+  };
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -229,13 +257,12 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
     if (turn.role !== 'assistant') continue;
 
     // Build context window: previous user message + current assistant message
-    const contextText = i > 0 && turns[i - 1].role === 'user'
-      ? `${turns[i - 1].text}\n---\n${turn.text}`
-      : turn.text;
+    const contextText =
+      i > 0 && turns[i - 1].role === 'user' ? `${turns[i - 1].text}\n---\n${turn.text}` : turn.text;
 
     // Check for context boosters
-    const boosterCount = CONTEXT_BOOSTERS.filter(p => p.test(contextText)).length;
-    const boosterMultiplier = 1 + (boosterCount * 0.05);
+    const boosterCount = CONTEXT_BOOSTERS.filter((p) => p.test(contextText)).length;
+    const boosterMultiplier = 1 + boosterCount * 0.05;
 
     // Collect file/symbol references from nearby turns
     const nearbyFiles = new Set<string>();
@@ -282,7 +309,7 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
   }
 
   // Filter low-confidence and deduplicate
-  return decisions.filter(d => d.confidence >= 0.5);
+  return decisions.filter((d) => d.confidence >= 0.5);
 }
 
 const TAG_PATTERNS: Array<{ pattern: RegExp; tag: string }> = [
@@ -329,7 +356,11 @@ export async function mineSessions(
   const sessions = listAllSessions();
   const minConfidence = opts.minConfidence ?? 0.6;
 
-  let scanned = 0, skipped = 0, mined = 0, extracted = 0, errors = 0;
+  let scanned = 0;
+  let skipped = 0;
+  let mined = 0;
+  let extracted = 0;
+  let errors = 0;
 
   for (const session of sessions) {
     scanned++;
@@ -354,11 +385,10 @@ export async function mineSessions(
         continue;
       }
 
-      const decisions = extractDecisions(turns)
-        .filter(d => d.confidence >= minConfidence);
+      const decisions = extractDecisions(turns).filter((d) => d.confidence >= minConfidence);
 
       if (decisions.length > 0) {
-        const inputs: DecisionInput[] = decisions.map(d => ({
+        const inputs: DecisionInput[] = decisions.map((d) => ({
           title: d.title,
           content: d.content,
           type: d.type,

@@ -3,21 +3,21 @@
  * Implements Content-Length message framing and request/response tracking.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import { logger } from '../logger.js';
 import type {
-  JsonRpcRequest,
-  JsonRpcResponse,
-  JsonRpcNotification,
+  CallHierarchyIncomingCall,
+  CallHierarchyItem,
+  CallHierarchyOutgoingCall,
+  DidCloseTextDocumentParams,
+  DidOpenTextDocumentParams,
   InitializeParams,
   InitializeResult,
-  CallHierarchyItem,
-  CallHierarchyIncomingCall,
-  CallHierarchyOutgoingCall,
-  DidOpenTextDocumentParams,
-  DidCloseTextDocumentParams,
-  TextDocumentItem,
+  JsonRpcNotification,
+  JsonRpcRequest,
+  JsonRpcResponse,
   Location,
+  TextDocumentItem,
 } from './protocol.js';
 
 interface PendingRequest {
@@ -48,13 +48,18 @@ export class LspClient {
   }
 
   get supportsCallHierarchy(): boolean {
-    return this.serverCapabilities?.callHierarchyProvider != null
-      && this.serverCapabilities.callHierarchyProvider !== false;
+    return (
+      this.serverCapabilities?.callHierarchyProvider != null &&
+      this.serverCapabilities.callHierarchyProvider !== false
+    );
   }
 
   // ── Lifecycle ───────────────────────────────────────────────
 
-  async initialize(rootUri: string, initOptions?: Record<string, unknown>): Promise<InitializeResult> {
+  async initialize(
+    rootUri: string,
+    initOptions?: Record<string, unknown>,
+  ): Promise<InitializeResult> {
     this.proc = spawn(this.command, this.args, {
       cwd: this.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -138,7 +143,11 @@ export class LspClient {
 
   // ── LSP Methods ─────────────────────────────────────────────
 
-  async prepareCallHierarchy(uri: string, line: number, character: number): Promise<CallHierarchyItem[]> {
+  async prepareCallHierarchy(
+    uri: string,
+    line: number,
+    character: number,
+  ): Promise<CallHierarchyItem[]> {
     const result = await this.request<CallHierarchyItem[] | null>(
       'textDocument/prepareCallHierarchy',
       { textDocument: { uri }, position: { line, character } },
@@ -163,10 +172,10 @@ export class LspClient {
   }
 
   async getDefinition(uri: string, line: number, character: number): Promise<Location[]> {
-    const result = await this.request<Location | Location[] | null>(
-      'textDocument/definition',
-      { textDocument: { uri }, position: { line, character } },
-    );
+    const result = await this.request<Location | Location[] | null>('textDocument/definition', {
+      textDocument: { uri },
+      position: { line, character },
+    });
     if (!result) return [];
     return Array.isArray(result) ? result : [result];
   }
@@ -262,7 +271,10 @@ export class LspClient {
         const msg = JSON.parse(body);
         this.onMessage(msg);
       } catch (e) {
-        logger.debug({ lsp: this.command, error: (e as Error).message }, 'Failed to parse LSP message');
+        logger.debug(
+          { lsp: this.command, error: (e as Error).message },
+          'Failed to parse LSP message',
+        );
       }
     }
   }

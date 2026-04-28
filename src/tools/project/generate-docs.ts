@@ -6,10 +6,14 @@
  */
 
 import type { Store } from '../../db/store.js';
-import type { PluginRegistry } from '../../plugin-api/registry.js';
-import { getPageRank, getCouplingMetrics, getDependencyCycles } from '../analysis/graph-analysis.js';
-import { getProjectMap } from './project.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
+import type { PluginRegistry } from '../../plugin-api/registry.js';
+import {
+  getCouplingMetrics,
+  getDependencyCycles,
+  getPageRank,
+} from '../analysis/graph-analysis.js';
+import { getProjectMap } from './project.js';
 
 type DocSection =
   | 'overview'
@@ -52,9 +56,10 @@ export function generateDocs(
   const stats: GenerateDocsResult['stats'] = { total_lines: 0 };
 
   const allFiles = store.getAllFiles() as { id: number; path: string; language: string | null }[];
-  const scopeFiles = scope === 'project'
-    ? allFiles
-    : allFiles.filter((f) => scopePath && f.path.startsWith(scopePath));
+  const scopeFiles =
+    scope === 'project'
+      ? allFiles
+      : allFiles.filter((f) => scopePath && f.path.startsWith(scopePath));
 
   // --- Overview ---
   if (sections.includes('overview')) {
@@ -87,10 +92,18 @@ export function generateDocs(
       }
     }
     const totalSymbols = [...symbolCounts.values()].reduce((a, b) => a + b, 0);
-    parts.push(`- **Symbols**: ${totalSymbols} (${[...symbolCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `${v} ${k}s`).join(', ')})`);
+    parts.push(
+      `- **Symbols**: ${totalSymbols} (${[...symbolCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([k, v]) => `${v} ${k}s`)
+        .join(', ')})`,
+    );
 
     if (map) {
-      parts.push(`- **Frameworks**: ${JSON.stringify((map as any).frameworks ?? [])}`);
+      parts.push(
+        `- **Frameworks**: ${JSON.stringify((map as { frameworks?: unknown }).frameworks ?? [])}`,
+      );
     }
     parts.push('');
     generated.push('overview');
@@ -129,7 +142,9 @@ export function generateDocs(
     // Coupling summary
     const coupling = safe(() => getCouplingMetrics(store), []);
     if (coupling.length > 0) {
-      const unstable = coupling.filter((c: any) => c.assessment === 'unstable').length;
+      const unstable = coupling.filter(
+        (c: { assessment?: string }) => c.assessment === 'unstable',
+      ).length;
       parts.push(`### Stability\n- ${coupling.length} files analyzed, ${unstable} unstable\n`);
     }
 
@@ -152,8 +167,12 @@ export function generateDocs(
       const topFiles = ranks.slice(0, 10);
       const seen = new Set<string>();
       for (const r of topFiles) {
-        const file = (r as any).file ?? '';
-        const shortName = file.split('/').pop()?.replace(/\.\w+$/, '') ?? file;
+        const file = (r as { file?: string }).file ?? '';
+        const shortName =
+          file
+            .split('/')
+            .pop()
+            ?.replace(/\.\w+$/, '') ?? file;
         if (!seen.has(shortName)) {
           seen.add(shortName);
           parts.push(`  ${shortName}`);
@@ -167,8 +186,9 @@ export function generateDocs(
 
   // --- API Surface ---
   if (sections.includes('api_surface')) {
-    const routes = store.getAllRoutes()
-      .filter((r: any) => !['STORE', 'SLICE', 'DISPATCH'].includes(r.method));
+    const routes = store
+      .getAllRoutes()
+      .filter((r) => !['STORE', 'SLICE', 'DISPATCH'].includes(r.method));
 
     if (routes.length > 0) {
       parts.push('## API Surface\n');
@@ -189,9 +209,7 @@ export function generateDocs(
   // --- Data Model ---
   if (sections.includes('data_model')) {
     // Find model/entity classes
-    const modelFiles = scopeFiles.filter((f) =>
-      /model|entity|schema|migration/i.test(f.path),
-    );
+    const modelFiles = scopeFiles.filter((f) => /model|entity|schema|migration/i.test(f.path));
 
     const models: { name: string; file: string; fields: string[] }[] = [];
     for (const f of modelFiles) {
@@ -199,12 +217,15 @@ export function generateDocs(
       for (const s of syms) {
         if (['class', 'interface'].includes(s.kind)) {
           const children = syms.filter(
-            (c: any) => c.kind === 'property' && c.line_start > s.line_start && c.line_start < (s.line_end ?? Infinity),
+            (c) =>
+              c.kind === 'property' &&
+              (c.line_start ?? 0) > (s.line_start ?? 0) &&
+              (c.line_start ?? 0) < (s.line_end ?? Number.POSITIVE_INFINITY),
           );
           models.push({
             name: s.name,
             file: f.path,
-            fields: children.map((c: any) => c.name),
+            fields: children.map((c) => c.name),
           });
         }
       }
@@ -227,15 +248,15 @@ export function generateDocs(
 
   // --- Components ---
   if (sections.includes('components')) {
-    const componentFiles = scopeFiles.filter((f) =>
-      /\.(vue|tsx|jsx)$/.test(f.path) || f.path.includes('component'),
+    const componentFiles = scopeFiles.filter(
+      (f) => /\.(vue|tsx|jsx)$/.test(f.path) || f.path.includes('component'),
     );
 
     if (componentFiles.length > 0) {
       parts.push('## Components\n');
       for (const f of componentFiles.slice(0, 50)) {
         const syms = store.getSymbolsByFile(f.id);
-        const main = syms.find((s: any) => ['component', 'class', 'function'].includes(s.kind));
+        const main = syms.find((s) => ['component', 'class', 'function'].includes(s.kind));
         parts.push(`- **${main?.name ?? f.path.split('/').pop()}** — ${f.path}`);
       }
       if (componentFiles.length > 50) {
@@ -250,9 +271,7 @@ export function generateDocs(
   // --- Events ---
   if (sections.includes('events')) {
     const routes = store.getAllRoutes();
-    const events = routes.filter((r: any) =>
-      ['EVENT', 'LISTENER', 'SIGNAL', 'TASK'].includes(r.method),
-    );
+    const events = routes.filter((r) => ['EVENT', 'LISTENER', 'SIGNAL', 'TASK'].includes(r.method));
 
     if (events.length > 0) {
       parts.push('## Events\n');
@@ -272,7 +291,8 @@ export function generateDocs(
     if (ranks.length > 0) {
       parts.push('## Key Dependencies (by importance)\n');
       for (const r of ranks.slice(0, 20)) {
-        parts.push(`- ${(r as any).file} (score: ${(r as any).score?.toFixed(3) ?? 'N/A'})`);
+        const row = r as { file?: string; score?: number };
+        parts.push(`- ${row.file} (score: ${row.score?.toFixed(3) ?? 'N/A'})`);
       }
       parts.push('');
       generated.push('dependencies');
@@ -294,13 +314,19 @@ export function generateDocs(
 }
 
 function safe<T>(fn: () => T, fallback: T): T {
-  try { return fn(); } catch { return fallback; }
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
 }
 
 /** Minimal markdown → HTML conversion (headings, tables, lists, code blocks) */
 function markdownToBasicHtml(md: string): string {
   const lines = md.split('\n');
-  const html: string[] = ['<!DOCTYPE html><html><head><meta charset="utf-8"><title>Documentation</title></head><body>'];
+  const html: string[] = [
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Documentation</title></head><body>',
+  ];
   let inCode = false;
   let inTable = false;
 
@@ -325,7 +351,10 @@ function markdownToBasicHtml(md: string): string {
         inTable = true;
       }
       if (line.includes('---')) continue; // separator row
-      const cells = line.split('|').filter(Boolean).map((c) => c.trim());
+      const cells = line
+        .split('|')
+        .filter(Boolean)
+        .map((c) => c.trim());
       html.push(`<tr>${cells.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`);
       continue;
     }

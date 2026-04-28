@@ -31,13 +31,14 @@ interface CustomSocialiteProvider {
 // ─── Detection ───────────────────────────────────────────────
 
 const NAMESPACE_RE = /namespace\s+([\w\\]+)\s*;/;
-const CLASS_NAME_RE = /class\s+(\w+)/;
+const _CLASS_NAME_RE = /class\s+(\w+)/;
 
 // Socialite::driver('github')->redirect() or Socialite::driver('github')->user()
 const SOCIALITE_DRIVER_RE = /Socialite::driver\(\s*['"](\w+)['"]\s*\)\s*->\s*(\w+)/g;
 
 // Custom provider: class MyProvider extends AbstractProvider
-const CUSTOM_PROVIDER_RE = /class\s+(\w+)\s+extends\s+(?:[\w\\]*\\)?(?:AbstractProvider|AbstractUser)/;
+const CUSTOM_PROVIDER_RE =
+  /class\s+(\w+)\s+extends\s+(?:[\w\\]*\\)?(?:AbstractProvider|AbstractUser)/;
 
 // ─── Extraction ──────────────────────────────────────────────
 

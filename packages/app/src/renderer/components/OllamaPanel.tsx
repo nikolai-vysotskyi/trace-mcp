@@ -14,7 +14,10 @@ function fmtBytes(n: number | undefined): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let v = n;
   let i = 0;
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
   return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
@@ -79,18 +82,21 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
     }
   };
 
-  const onStart = () => withBusy('daemon:start', async () => {
-    const r = await api!.start(baseUrl);
-    if (!r.ok) setNotice(`Start failed: ${r.error ?? 'unknown'}`);
-  });
-  const onStop = () => withBusy('daemon:stop', async () => {
-    const r = await api!.stop(baseUrl);
-    if (!r.ok) setNotice(`Stop failed: ${r.error ?? 'unknown'}`);
-  });
-  const onUnload = (name: string) => withBusy(`unload:${name}`, async () => {
-    const r = await api!.unload(name, baseUrl);
-    if (!r.ok) setNotice(`Unload failed: ${r.error ?? 'unknown'}`);
-  });
+  const onStart = () =>
+    withBusy('daemon:start', async () => {
+      const r = await api!.start(baseUrl);
+      if (!r.ok) setNotice(`Start failed: ${r.error ?? 'unknown'}`);
+    });
+  const onStop = () =>
+    withBusy('daemon:stop', async () => {
+      const r = await api!.stop(baseUrl);
+      if (!r.ok) setNotice(`Stop failed: ${r.error ?? 'unknown'}`);
+    });
+  const onUnload = (name: string) =>
+    withBusy(`unload:${name}`, async () => {
+      const r = await api!.unload(name, baseUrl);
+      if (!r.ok) setNotice(`Unload failed: ${r.error ?? 'unknown'}`);
+    });
   const onDelete = (name: string) => {
     if (!confirm(`Delete model "${name}"? This removes it from disk.`)) return;
     return withBusy(`delete:${name}`, async () => {
@@ -111,35 +117,65 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
 
   return (
     <div style={{ marginTop: 20 }}>
-      <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)', marginBottom: 8 }}>
+      <div
+        className="text-[10px] font-semibold uppercase tracking-wider"
+        style={{ color: 'var(--text-tertiary)', marginBottom: 8 }}
+      >
         Ollama
       </div>
 
       {/* Status + daemon controls */}
-      <div style={{
-        background: 'var(--bg-grouped)', borderRadius: 10,
-        boxShadow: 'var(--shadow-grouped)', padding: '10px 12px',
-        display: 'flex', alignItems: 'center', gap: 10,
-      }}>
+      <div
+        style={{
+          background: 'var(--bg-grouped)',
+          borderRadius: 10,
+          boxShadow: 'var(--shadow-grouped)',
+          padding: '10px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
         <span style={{ width: 8, height: 8, borderRadius: 4, background: dot, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
             {status?.running ? `Running · ${status.version ?? 'unknown version'}` : 'Not running'}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: 'var(--text-tertiary)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {status?.baseUrl ?? baseUrl ?? 'http://localhost:11434'}
             {!status?.running && status?.error ? ` · ${status.error}` : ''}
           </div>
         </div>
         {status?.running ? (
-          <Btn onClick={onStop} busy={busy === 'daemon:stop'} variant="destructive">Stop</Btn>
+          <Btn onClick={onStop} busy={busy === 'daemon:stop'} variant="destructive">
+            Stop
+          </Btn>
         ) : (
-          <Btn onClick={onStart} busy={busy === 'daemon:start'} variant="primary">Start</Btn>
+          <Btn onClick={onStart} busy={busy === 'daemon:start'} variant="primary">
+            Start
+          </Btn>
         )}
       </div>
 
       {notice && (
-        <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11, background: 'var(--fill-control)', color: 'var(--destructive)' }}>
+        <div
+          style={{
+            marginTop: 8,
+            padding: '6px 10px',
+            borderRadius: 6,
+            fontSize: 11,
+            background: 'var(--fill-control)',
+            color: 'var(--destructive)',
+          }}
+        >
           {notice}
         </div>
       )}
@@ -147,52 +183,86 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
       {/* Running models */}
       {status?.running && (
         <>
-          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)', marginTop: 16, marginBottom: 8 }}>
+          <div
+            className="text-[10px] font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--text-tertiary)', marginTop: 16, marginBottom: 8 }}
+          >
             Loaded in memory ({running.length})
           </div>
           {running.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '8px 12px', background: 'var(--bg-grouped)', borderRadius: 10 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                padding: '8px 12px',
+                background: 'var(--bg-grouped)',
+                borderRadius: 10,
+              }}
+            >
               No models currently loaded.
             </div>
           ) : (
             <ModelList>
               {running.map((m, i) => (
-                <Row key={m.name + i} last={i === running.length - 1}>
+                <Row key={m.name} last={i === running.length - 1}>
                   <RowInfo
                     title={m.name}
                     subtitle={[
-                      fmtBytes(m.size_vram) + ' VRAM',
-                      m.size > m.size_vram ? fmtBytes(m.size - m.size_vram) + ' RAM' : null,
-                      fmtExpires(m.expires_at) ? 'unload in ' + fmtExpires(m.expires_at) : null,
-                    ].filter(Boolean).join(' · ')}
+                      `${fmtBytes(m.size_vram)} VRAM`,
+                      m.size > m.size_vram ? `${fmtBytes(m.size - m.size_vram)} RAM` : null,
+                      fmtExpires(m.expires_at) ? `unload in ${fmtExpires(m.expires_at)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   />
-                  <Btn onClick={() => onUnload(m.name)} busy={busy === `unload:${m.name}`}>Unload</Btn>
+                  <Btn onClick={() => onUnload(m.name)} busy={busy === `unload:${m.name}`}>
+                    Unload
+                  </Btn>
                 </Row>
               ))}
             </ModelList>
           )}
 
           {/* Installed models */}
-          <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)', marginTop: 16, marginBottom: 8 }}>
+          <div
+            className="text-[10px] font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--text-tertiary)', marginTop: 16, marginBottom: 8 }}
+          >
             Installed on disk ({installed.length})
           </div>
           {installed.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '8px 12px', background: 'var(--bg-grouped)', borderRadius: 10 }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                padding: '8px 12px',
+                background: 'var(--bg-grouped)',
+                borderRadius: 10,
+              }}
+            >
               No models installed. Run <code>ollama pull &lt;name&gt;</code> in a terminal.
             </div>
           ) : (
             <ModelList>
               {installed.map((m, i) => (
-                <Row key={m.name + i} last={i === installed.length - 1}>
+                <Row key={m.name} last={i === installed.length - 1}>
                   <RowInfo
                     title={m.name}
                     subtitle={[
                       fmtBytes(m.size),
                       m.details?.parameter_size,
                       m.details?.quantization_level,
-                    ].filter(Boolean).join(' · ')}
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   />
-                  <Btn onClick={() => onDelete(m.name)} busy={busy === `delete:${m.name}`} variant="destructive">Delete</Btn>
+                  <Btn
+                    onClick={() => onDelete(m.name)}
+                    busy={busy === `delete:${m.name}`}
+                    variant="destructive"
+                  >
+                    Delete
+                  </Btn>
                 </Row>
               ))}
             </ModelList>
@@ -207,7 +277,14 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
 
 function ModelList({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--bg-grouped)', borderRadius: 10, boxShadow: 'var(--shadow-grouped)', overflow: 'hidden' }}>
+    <div
+      style={{
+        background: 'var(--bg-grouped)',
+        borderRadius: 10,
+        boxShadow: 'var(--shadow-grouped)',
+        overflow: 'hidden',
+      }}
+    >
       {children}
     </div>
   );
@@ -215,10 +292,16 @@ function ModelList({ children }: { children: React.ReactNode }) {
 
 function Row({ children, last }: { children: React.ReactNode; last: boolean }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', minHeight: 36,
-      borderBottom: last ? 'none' : '1px solid var(--border-row)',
-    }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 12px',
+        minHeight: 36,
+        borderBottom: last ? 'none' : '1px solid var(--border-row)',
+      }}
+    >
       {children}
     </div>
   );
@@ -227,32 +310,70 @@ function Row({ children, last }: { children: React.ReactNode; last: boolean }) {
 function RowInfo({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+      <div
+        style={{
+          fontSize: 13,
+          color: 'var(--text-primary)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {title}
+      </div>
       {subtitle && (
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div>
+        <div
+          style={{
+            fontSize: 11,
+            color: 'var(--text-tertiary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {subtitle}
+        </div>
       )}
     </div>
   );
 }
 
-function Btn({ children, onClick, busy, variant }: {
+function Btn({
+  children,
+  onClick,
+  busy,
+  variant,
+}: {
   children: React.ReactNode;
   onClick: () => void;
   busy?: boolean;
   variant?: 'primary' | 'destructive';
 }) {
-  const color = variant === 'destructive' ? 'var(--destructive)'
-    : variant === 'primary' ? '#fff'
-    : 'var(--text-primary)';
+  const color =
+    variant === 'destructive'
+      ? 'var(--destructive)'
+      : variant === 'primary'
+        ? '#fff'
+        : 'var(--text-primary)';
   const bg = variant === 'primary' ? 'var(--accent)' : 'var(--fill-control)';
   return (
-    <button type="button" onClick={onClick} disabled={busy}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
       style={{
-        fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 6,
-        background: bg, color, border: '0.5px solid var(--border)',
-        cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1,
+        fontSize: 11,
+        fontWeight: 500,
+        padding: '4px 10px',
+        borderRadius: 6,
+        background: bg,
+        color,
+        border: '0.5px solid var(--border)',
+        cursor: busy ? 'default' : 'pointer',
+        opacity: busy ? 0.5 : 1,
         flexShrink: 0,
-      }}>
+      }}
+    >
       {busy ? '…' : children}
     </button>
   );

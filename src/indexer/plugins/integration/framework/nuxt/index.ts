@@ -6,12 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -50,7 +49,7 @@ export function filePathToRoute(filePath: string, srcDir: string = '.'): string 
     return seg;
   });
 
-  return '/' + routeSegments.join('/');
+  return `/${routeSegments.join('/')}`;
 }
 
 /**
@@ -76,7 +75,7 @@ export function serverApiToRoute(filePath: string): { method: string; uri: strin
   // Handle index files
   route = route.replace(/\/index$/, '');
 
-  return { method, uri: '/' + route };
+  return { method, uri: `/${route}` };
 }
 
 /**
@@ -100,7 +99,7 @@ export function serverRoutesToRoute(filePath: string): { method: string; uri: st
   route = route.replace(/\/index$/, '');
   if (route === 'index') route = '';
 
-  return { method, uri: '/' + route };
+  return { method, uri: `/${route}` };
 }
 
 /** Detect useFetch / useAsyncData calls and extract the API URL. */
@@ -139,7 +138,7 @@ export class NuxtPlugin implements FrameworkPlugin {
         ...(ctx.packageJson.dependencies as Record<string, string> | undefined),
         ...(ctx.packageJson.devDependencies as Record<string, string> | undefined),
       };
-      const nuxtVersion = deps['nuxt'];
+      const nuxtVersion = deps.nuxt;
       if (nuxtVersion && (/\^4/.test(nuxtVersion) || />=\s*4\.0\.0/.test(nuxtVersion))) {
         return true;
       }
@@ -152,14 +151,18 @@ export class NuxtPlugin implements FrameworkPlugin {
       if (/compatibilityVersion\s*:\s*4/.test(configContent)) {
         return true;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Structural heuristic: check if app/pages/ exists
     try {
       const appPagesDir = path.join(ctx.rootPath, 'app', 'pages');
       fs.accessSync(appPagesDir);
       return true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     return false;
   }
@@ -189,7 +192,9 @@ export class NuxtPlugin implements FrameworkPlugin {
       this.nuxt4 = this.isNuxt4(ctx);
       this.srcDir = this.nuxt4 ? 'app' : '.';
       return true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Fallback: read package.json from disk
     try {
@@ -205,7 +210,9 @@ export class NuxtPlugin implements FrameworkPlugin {
         this.srcDir = this.nuxt4 ? 'app' : '.';
         return true;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     return false;
   }
@@ -215,13 +222,41 @@ export class NuxtPlugin implements FrameworkPlugin {
       edgeTypes: [
         { name: 'nuxt_auto_imports', category: 'nuxt', description: 'Auto-imported composable' },
         { name: 'api_calls', category: 'nuxt', description: 'fetch/useFetch API call' },
-        { name: 'nuxt_shared_import', category: 'nuxt', description: 'Auto-imported shared utility or type' },
-        { name: 'renders_component', category: 'nuxt', description: 'Vue template renders component' },
-        { name: 'nuxt_uses_middleware', category: 'nuxt', description: 'Page declares middleware via definePageMeta' },
-        { name: 'nuxt_uses_layout', category: 'nuxt', description: 'Page declares layout via definePageMeta' },
-        { name: 'nuxt_global_middleware', category: 'nuxt', description: '.global.ts middleware auto-applied to every page' },
-        { name: 'nuxt_plugin_registered', category: 'nuxt', description: 'Nuxt plugin auto-loaded at boot' },
-        { name: 'nuxt_server_route', category: 'nuxt', description: 'Server route auto-registered by Nuxt' },
+        {
+          name: 'nuxt_shared_import',
+          category: 'nuxt',
+          description: 'Auto-imported shared utility or type',
+        },
+        {
+          name: 'renders_component',
+          category: 'nuxt',
+          description: 'Vue template renders component',
+        },
+        {
+          name: 'nuxt_uses_middleware',
+          category: 'nuxt',
+          description: 'Page declares middleware via definePageMeta',
+        },
+        {
+          name: 'nuxt_uses_layout',
+          category: 'nuxt',
+          description: 'Page declares layout via definePageMeta',
+        },
+        {
+          name: 'nuxt_global_middleware',
+          category: 'nuxt',
+          description: '.global.ts middleware auto-applied to every page',
+        },
+        {
+          name: 'nuxt_plugin_registered',
+          category: 'nuxt',
+          description: 'Nuxt plugin auto-loaded at boot',
+        },
+        {
+          name: 'nuxt_server_route',
+          category: 'nuxt',
+          description: 'Server route auto-registered by Nuxt',
+        },
       ],
     };
   }
@@ -246,7 +281,10 @@ export class NuxtPlugin implements FrameworkPlugin {
       result.routes!.push({
         method: 'GET',
         uri,
-        name: filePath.replace(new RegExp(`^${pagesPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '').replace(/\.vue$/, '').replace(/\//g, '-'),
+        name: filePath
+          .replace(new RegExp(`^${pagesPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '')
+          .replace(/\.vue$/, '')
+          .replace(/\//g, '-'),
       });
       result.frameworkRole = 'nuxt_page';
     }
@@ -332,7 +370,12 @@ export class NuxtPlugin implements FrameworkPlugin {
     for (const file of sharedFiles) {
       const symbols = ctx.getSymbolsByFile(file.id);
       for (const sym of symbols) {
-        if (sym.kind === 'function' || sym.kind === 'interface' || sym.kind === 'type' || sym.kind === 'variable') {
+        if (
+          sym.kind === 'function' ||
+          sym.kind === 'interface' ||
+          sym.kind === 'type' ||
+          sym.kind === 'variable'
+        ) {
           sharedMap.set(sym.name, { id: sym.id, symbolId: sym.symbolId });
         }
       }
@@ -398,7 +441,9 @@ export class NuxtPlugin implements FrameworkPlugin {
         let source: string | undefined;
         try {
           source = ctx.readFile(file.path);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         if (!source) continue;
 
         // Check for composable usage
@@ -478,9 +523,10 @@ export class NuxtPlugin implements FrameworkPlugin {
     // Nuxt plugins + server routes — collected for entry-point marking.
     // Nuxt 3 places `server/` at the project root, but Nuxt 4 with a custom
     // srcDir (e.g. `app/`) may put it under `{srcDir}/server/`. Accept both.
-    const serverPrefixes = srcDir === '.'
-      ? ['server/api/', 'server/routes/']
-      : ['server/api/', 'server/routes/', `${srcDir}/server/api/`, `${srcDir}/server/routes/`];
+    const serverPrefixes =
+      srcDir === '.'
+        ? ['server/api/', 'server/routes/']
+        : ['server/api/', 'server/routes/', `${srcDir}/server/api/`, `${srcDir}/server/routes/`];
     const pluginFiles: { id: number }[] = [];
     const serverRouteFiles: { id: number; path: string }[] = [];
     for (const f of allFiles) {
@@ -503,11 +549,16 @@ export class NuxtPlugin implements FrameworkPlugin {
     // Parse each page's definePageMeta for middleware/layout references.
     // Regex-based — full AST parsing would be overkill for a tiny string
     // table that's strictly enclosed in a definePageMeta() call.
-    const MIDDLEWARE_BLOCK_RE = /definePageMeta\s*\(\s*\{[\s\S]*?\bmiddleware\s*:\s*(\[[^\]]*\]|['"][^'"]+['"])/;
+    const MIDDLEWARE_BLOCK_RE =
+      /definePageMeta\s*\(\s*\{[\s\S]*?\bmiddleware\s*:\s*(\[[^\]]*\]|['"][^'"]+['"])/;
     const LAYOUT_BLOCK_RE = /definePageMeta\s*\(\s*\{[\s\S]*?\blayout\s*:\s*(['"][^'"]+['"]|false)/;
     for (const page of pageFiles) {
       let source: string | undefined;
-      try { source = ctx.readFile(page.path); } catch { /* ignore */ }
+      try {
+        source = ctx.readFile(page.path);
+      } catch {
+        /* ignore */
+      }
       if (!source) continue;
 
       const mw = MIDDLEWARE_BLOCK_RE.exec(source);
@@ -564,7 +615,11 @@ export class NuxtPlugin implements FrameworkPlugin {
     if (defaultLayout) {
       for (const page of pageFiles) {
         let source: string | undefined;
-        try { source = ctx.readFile(page.path); } catch { /* ignore */ }
+        try {
+          source = ctx.readFile(page.path);
+        } catch {
+          /* ignore */
+        }
         if (source && LAYOUT_BLOCK_RE.test(source)) continue; // explicit layout already linked
         edges.push({
           sourceNodeType: 'file',
@@ -629,9 +684,10 @@ export class NuxtPlugin implements FrameworkPlugin {
       for (const srf of serverRouteFiles) {
         let uri: string | null = null;
         // Strip srcDir prefix before URI derivation
-        const stripped = srcDir !== '.' && srf.path.startsWith(`${srcDir}/`)
-          ? srf.path.slice(srcDir.length + 1)
-          : srf.path;
+        const stripped =
+          srcDir !== '.' && srf.path.startsWith(`${srcDir}/`)
+            ? srf.path.slice(srcDir.length + 1)
+            : srf.path;
         if (stripped.startsWith('server/api/')) {
           uri = serverApiToRoute(stripped).uri;
         } else if (stripped.startsWith('server/routes/')) {
@@ -646,12 +702,17 @@ export class NuxtPlugin implements FrameworkPlugin {
       const hitServerRoutes = new Set<number>();
 
       // Stage 1: scan client files for fetch-like calls
-      const FETCH_CALL_RE = /\b(?:\$fetch|useFetch|useLazyFetch|useAsyncData|\$api)\s*[<(]?\s*[^,)]*?['"`]([^'"`]+)['"`]/g;
+      const FETCH_CALL_RE =
+        /\b(?:\$fetch|useFetch|useLazyFetch|useAsyncData|\$api)\s*[<(]?\s*[^,)]*?['"`]([^'"`]+)['"`]/g;
       for (const file of allFiles) {
         if (!/\.(ts|tsx|js|jsx|vue)$/.test(file.path)) continue;
         if (file.path.includes('/server/')) continue;
         let src: string | undefined;
-        try { src = ctx.readFile(file.path); } catch { /* ignore */ }
+        try {
+          src = ctx.readFile(file.path);
+        } catch {
+          /* ignore */
+        }
         if (!src) continue;
         let m: RegExpExecArray | null;
         FETCH_CALL_RE.lastIndex = 0;
@@ -663,8 +724,11 @@ export class NuxtPlugin implements FrameworkPlugin {
           if (!target) {
             for (const [rutUri, rutTarget] of routeByUri) {
               if (!rutUri.includes('[')) continue;
-              const pattern = '^' + rutUri.replace(/\[[^\]]+\]/g, '[^/]+').replace(/\//g, '\\/') + '$';
-              if (new RegExp(pattern).test(cleanUri)) { target = rutTarget; break; }
+              const pattern = `^${rutUri.replace(/\[[^\]]+\]/g, '[^/]+').replace(/\//g, '\\/')}$`;
+              if (new RegExp(pattern).test(cleanUri)) {
+                target = rutTarget;
+                break;
+              }
             }
           }
           if (!target) continue;

@@ -1,27 +1,27 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import path from 'node:path';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
+import type { Store } from '../../src/db/store.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
+import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { LaravelPlugin } from '../../src/indexer/plugins/integration/framework/laravel/index.js';
-import { VueFrameworkPlugin } from '../../src/indexer/plugins/integration/view/vue/index.js';
-import { getTaskContext, classifyIntent, type TaskIntent, type TaskContextResult } from '../../src/tools/navigation/task-context.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import {
+  classifyIntent,
+  getTaskContext,
+  type TaskIntent,
+} from '../../src/tools/navigation/task-context.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
 
 function makeConfig(): TraceMcpConfig {
   return {
     root: FIXTURE_DIR,
-    include: [
-      'app/**/*.php',
-      'routes/**/*.php',
-      'database/migrations/**/*.php',
-    ],
+    include: ['app/**/*.php', 'routes/**/*.php', 'database/migrations/**/*.php'],
     exclude: ['vendor/**', 'node_modules/**'],
     db: { path: ':memory:' },
     plugins: [],
@@ -200,7 +200,7 @@ describe('getTaskContext', () => {
     const result = await getTaskContext(store, FIXTURE_DIR, {
       task: 'user controller',
     });
-    for (const [sectionName, items] of Object.entries(result.sections)) {
+    for (const [_sectionName, items] of Object.entries(result.sections)) {
       for (const item of items) {
         expect(['full', 'no_source', 'signature_only']).toContain(item.detail);
         expect(item.tokens).toBeGreaterThan(0);
@@ -244,23 +244,38 @@ describe('getTaskContext', () => {
   // ─── AI fallback ───
 
   it('works without AI (explicit null)', async () => {
-    const result = await getTaskContext(store, FIXTURE_DIR, {
-      task: 'user authentication',
-    }, null);
+    const result = await getTaskContext(
+      store,
+      FIXTURE_DIR,
+      {
+        task: 'user authentication',
+      },
+      null,
+    );
     expect(result.sections.primary.length).toBeGreaterThan(0);
   });
 
   it('works without AI (undefined)', async () => {
-    const result = await getTaskContext(store, FIXTURE_DIR, {
-      task: 'user authentication',
-    }, undefined);
+    const result = await getTaskContext(
+      store,
+      FIXTURE_DIR,
+      {
+        task: 'user authentication',
+      },
+      undefined,
+    );
     expect(result.sections.primary.length).toBeGreaterThan(0);
   });
 
   it('works with empty vectorStore/embeddingService', async () => {
-    const result = await getTaskContext(store, FIXTURE_DIR, {
-      task: 'user authentication',
-    }, { vectorStore: null, embeddingService: null });
+    const result = await getTaskContext(
+      store,
+      FIXTURE_DIR,
+      {
+        task: 'user authentication',
+      },
+      { vectorStore: null, embeddingService: null },
+    );
     expect(result.sections.primary.length).toBeGreaterThan(0);
   });
 
@@ -358,7 +373,9 @@ describe('getTaskContext', () => {
       tokenBudget: 20000,
     });
 
-    const allIds = Object.values(result.sections).flat().map((i) => i.symbolId);
+    const allIds = Object.values(result.sections)
+      .flat()
+      .map((i) => i.symbolId);
     const uniqueIds = new Set(allIds);
     expect(allIds.length).toBe(uniqueIds.size);
   });

@@ -16,11 +16,18 @@
  *   - composer.json
  *   - Generic JSON (first-level keys as constants)
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -33,16 +40,20 @@ function stripJsonComments(source: string): string {
   let result = '';
   let i = 0;
   let inString = false;
-  let escape = false;
+  let inEscape = false;
 
   while (i < source.length) {
     const ch = source[i];
 
     if (inString) {
       result += ch;
-      if (escape) { escape = false; }
-      else if (ch === '\\') { escape = true; }
-      else if (ch === '"') { inString = false; }
+      if (inEscape) {
+        inEscape = false;
+      } else if (ch === '\\') {
+        inEscape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
       i++;
       continue;
     }
@@ -99,14 +110,17 @@ function getStringText(node: TSNode | null): string | undefined {
 }
 
 /** Get all pairs from an object node as a Map<key, valueNode> */
-function getObjectEntries(obj: TSNode): Map<string, { keyNode: TSNode; valueNode: TSNode; pairNode: TSNode }> {
+function getObjectEntries(
+  obj: TSNode,
+): Map<string, { keyNode: TSNode; valueNode: TSNode; pairNode: TSNode }> {
   const entries = new Map<string, { keyNode: TSNode; valueNode: TSNode; pairNode: TSNode }>();
   for (const child of obj.namedChildren) {
     if (child.type === 'pair') {
       const keyNode = child.childForFieldName('key');
       const keyText = getStringText(keyNode);
       const valueNode = child.childForFieldName('value');
-      if (keyText && valueNode && keyNode) entries.set(keyText, { keyNode, valueNode, pairNode: child });
+      if (keyText && valueNode && keyNode)
+        entries.set(keyText, { keyNode, valueNode, pairNode: child });
     }
   }
   return entries;
@@ -188,7 +202,9 @@ function extractPackageJson(root: TSNode, add: AddFn, edges: RawEdge[]): void {
   // Name
   const nameEntry = entries.get('name');
   if (nameEntry && nameEntry.valueNode.type === 'string') {
-    add(getStringText(nameEntry.valueNode)!, 'constant', nameEntry.pairNode, { jsonKind: 'packageName' });
+    add(getStringText(nameEntry.valueNode)!, 'constant', nameEntry.pairNode, {
+      jsonKind: 'packageName',
+    });
   }
 
   // Scripts
@@ -203,7 +219,12 @@ function extractPackageJson(root: TSNode, add: AddFn, edges: RawEdge[]): void {
   }
 
   // Dependencies → import edges
-  for (const depKey of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+  for (const depKey of [
+    'dependencies',
+    'devDependencies',
+    'peerDependencies',
+    'optionalDependencies',
+  ]) {
     const depEntry = entries.get(depKey);
     if (depEntry && depEntry.valueNode.type === 'object') {
       const isDev = depKey !== 'dependencies';
@@ -214,7 +235,13 @@ function extractPackageJson(root: TSNode, add: AddFn, edges: RawEdge[]): void {
           if (pkg) {
             edges.push({
               edgeType: 'imports',
-              metadata: { module: pkg, version: ver, depType: depKey, dev: isDev, dialect: 'package-json' },
+              metadata: {
+                module: pkg,
+                version: ver,
+                depType: depKey,
+                dev: isDev,
+                dialect: 'package-json',
+              },
             });
           }
         }
@@ -399,7 +426,8 @@ function extractAngular(root: TSNode, add: AddFn): void {
           for (const child of architectEntry.valueNode.namedChildren) {
             if (child.type === 'pair') {
               const target = getStringText(child.childForFieldName('key'));
-              if (target) add(target, 'function', child, { jsonKind: 'angularTarget', project: projName });
+              if (target)
+                add(target, 'function', child, { jsonKind: 'angularTarget', project: projName });
             }
           }
         }
@@ -414,7 +442,9 @@ function extractComposer(root: TSNode, add: AddFn, edges: RawEdge[]): void {
   // Name
   const nameEntry = entries.get('name');
   if (nameEntry && nameEntry.valueNode.type === 'string') {
-    add(getStringText(nameEntry.valueNode)!, 'constant', nameEntry.pairNode, { jsonKind: 'composerName' });
+    add(getStringText(nameEntry.valueNode)!, 'constant', nameEntry.pairNode, {
+      jsonKind: 'composerName',
+    });
   }
 
   // require / require-dev → import edges
@@ -429,7 +459,13 @@ function extractComposer(root: TSNode, add: AddFn, edges: RawEdge[]): void {
           if (pkg) {
             edges.push({
               edgeType: 'imports',
-              metadata: { module: pkg, version: ver, depType: depKey, dev: isDev, dialect: 'composer' },
+              metadata: {
+                module: pkg,
+                version: ver,
+                depType: depKey,
+                dev: isDev,
+                dialect: 'composer',
+              },
             });
           }
         }
@@ -494,11 +530,16 @@ function extractOpenApiJson(root: TSNode, add: AddFn, edges: RawEdge[]): void {
 
         const opEntries = getObjectEntries(opValue);
         const opIdNode = opEntries.get('operationId');
-        const operationId = opIdNode?.valueNode.type === 'string' ? getStringText(opIdNode.valueNode) : undefined;
+        const operationId =
+          opIdNode?.valueNode.type === 'string' ? getStringText(opIdNode.valueNode) : undefined;
         const summaryNode = opEntries.get('summary');
-        const summary = summaryNode?.valueNode.type === 'string' ? getStringText(summaryNode.valueNode) : undefined;
+        const summary =
+          summaryNode?.valueNode.type === 'string'
+            ? getStringText(summaryNode.valueNode)
+            : undefined;
         const tagsNode = opEntries.get('tags');
-        const tags = tagsNode?.valueNode.type === 'array' ? getArrayStrings(tagsNode.valueNode) : [];
+        const tags =
+          tagsNode?.valueNode.type === 'array' ? getArrayStrings(tagsNode.valueNode) : [];
 
         const meta: Record<string, unknown> = {
           jsonKind: 'endpoint',
@@ -606,7 +647,10 @@ export class JsonLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.json', '.jsonc', '.json5'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const source = content.toString('utf-8');
       const symbols: RawSymbol[] = [];
@@ -640,7 +684,12 @@ export class JsonLanguagePlugin implements LanguagePlugin {
         return ok({ language: 'json', status: hasError ? 'partial' : 'ok', symbols: [] });
       }
 
-      const add: AddFn = (name: string, kind: SymbolKind, node: TSNode, meta?: Record<string, unknown>) => {
+      const add: AddFn = (
+        name: string,
+        kind: SymbolKind,
+        node: TSNode,
+        meta?: Record<string, unknown>,
+      ) => {
         if (!name) return;
         const id = symId(filePath, name, kind);
         if (seen.has(id)) return;
@@ -702,7 +751,6 @@ export class JsonLanguagePlugin implements LanguagePlugin {
         case 'openapi':
           extractOpenApiJson(rootObject, add, edges);
           break;
-        case 'generic':
         default:
           extractGenericJson(rootObject, add);
           break;

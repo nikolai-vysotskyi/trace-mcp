@@ -8,9 +8,9 @@
 
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
+import { logger } from '../../logger.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { computeCyclomatic, computeMaxNesting, computeParamCount } from './complexity.js';
-import { logger } from '../../logger.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -70,7 +70,10 @@ function sampleFileCommits(
   count: number,
 ): Array<{ hash: string; date: string }> {
   const args = [
-    'log', '--pretty=format:%H|%aI', '--follow', '--no-merges',
+    'log',
+    '--pretty=format:%H|%aI',
+    '--follow',
+    '--no-merges',
     `--max-count=${count * 3}`,
   ];
   if (sinceDays !== undefined) {
@@ -81,16 +84,21 @@ function sampleFileCommits(
   let output: string;
   try {
     output = execFileSync('git', args, {
-      cwd, stdio: 'pipe', timeout: 10_000,
+      cwd,
+      stdio: 'pipe',
+      timeout: 10_000,
     }).toString('utf-8');
   } catch {
     return [];
   }
 
-  const all = output.split('\n').filter(Boolean).map((line) => {
-    const [hash, date] = line.split('|');
-    return { hash, date: date.split('T')[0] };
-  });
+  const all = output
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [hash, date] = line.split('|');
+      return { hash, date: date.split('T')[0] };
+    });
 
   if (all.length <= count) return all;
 
@@ -110,7 +118,10 @@ function sampleFileCommits(
 function getFileAtCommit(cwd: string, filePath: string, commitHash: string): string | null {
   try {
     return execFileSync('git', ['show', `${commitHash}:${filePath}`], {
-      cwd, stdio: 'pipe', timeout: 10_000, maxBuffer: 5 * 1024 * 1024,
+      cwd,
+      stdio: 'pipe',
+      timeout: 10_000,
+      maxBuffer: 5 * 1024 * 1024,
     }).toString('utf-8');
   } catch {
     return null;
@@ -127,15 +138,29 @@ export function countImports(content: string): number {
   for (const line of content.split('\n')) {
     const t = line.trim();
     // ESM: import ... from '...'  or  import '...'
-    if (/^import\s+/.test(t) && /['"]/.test(t)) { count++; continue; }
+    if (/^import\s+/.test(t) && /['"]/.test(t)) {
+      count++;
+      continue;
+    }
     // CJS: require('...')
-    if (/\brequire\s*\(\s*['"]/.test(t)) { count++; continue; }
+    if (/\brequire\s*\(\s*['"]/.test(t)) {
+      count++;
+      continue;
+    }
     // Python: from X import ... / import X
-    if (/^(?:from\s+\S+\s+import|import\s+\S+)/.test(t)) { count++; continue; }
+    if (/^(?:from\s+\S+\s+import|import\s+\S+)/.test(t)) {
+      count++;
+      continue;
+    }
     // Go: import "..."
-    if (/^import\s+"/.test(t)) { count++; continue; }
+    if (/^import\s+"/.test(t)) {
+      count++;
+      continue;
+    }
     // PHP: use Namespace\...
-    if (/^use\s+[A-Z\\]/.test(t)) { count++; continue; }
+    if (/^use\s+[A-Z\\]/.test(t)) {
+      count++;
+    }
   }
   return count;
 }
@@ -145,27 +170,26 @@ export function countImports(content: string): number {
  * Only uses the directory-qualified base name to avoid false positives
  * from overly short patterns like "utils" or "config".
  */
-function countImportersAtCommit(
-  cwd: string,
-  filePath: string,
-  commitHash: string,
-): number {
+function countImportersAtCommit(cwd: string, filePath: string, commitHash: string): number {
   // Derive searchable module name: strip extension and /index suffix.
   // e.g. "src/tools/history.ts" → "src/tools/history"
   //      "src/tools/index.ts"   → "src/tools"
-  const searchPattern = filePath
-    .replace(/\.[^.]+$/, '')
-    .replace(/\/index$/, '');
+  const searchPattern = filePath.replace(/\.[^.]+$/, '').replace(/\/index$/, '');
 
   // Skip patterns that are too short / ambiguous (< 8 chars → too many false positives)
   if (searchPattern.length < 8) return 0;
 
   try {
-    const output = execFileSync('git', [
-      'grep', '-l', '--fixed-strings', searchPattern, commitHash, '--',
-    ], {
-      cwd, stdio: 'pipe', timeout: 15_000, maxBuffer: 2 * 1024 * 1024,
-    }).toString('utf-8');
+    const output = execFileSync(
+      'git',
+      ['grep', '-l', '--fixed-strings', searchPattern, commitHash, '--'],
+      {
+        cwd,
+        stdio: 'pipe',
+        timeout: 15_000,
+        maxBuffer: 2 * 1024 * 1024,
+      },
+    ).toString('utf-8');
 
     let count = 0;
     for (const line of output.split('\n')) {
@@ -235,7 +259,7 @@ export function getCouplingTrend(
   if (historical.length > 0) {
     const oldest = historical[historical.length - 1];
     instabilityDelta = Math.round((currentSnapshot.instability - oldest.instability) * 1000) / 1000;
-    couplingDelta = (currentSnapshot.ca + currentSnapshot.ce) - (oldest.ca + oldest.ce);
+    couplingDelta = currentSnapshot.ca + currentSnapshot.ce - (oldest.ca + oldest.ce);
 
     if (instabilityDelta > 0.1) trend = 'destabilizing';
     else if (instabilityDelta < -0.1) trend = 'stabilizing';
@@ -257,7 +281,8 @@ function getCurrentCoupling(
   fileId: number,
 ): { ca: number; ce: number; instability: number } {
   // Use a CTE to resolve file IDs once, then count Ca/Ce in one pass.
-  const row = store.db.prepare(`
+  const row = store.db
+    .prepare(`
     WITH file_edges AS (
       SELECT
         CASE WHEN n1.node_type = 'file' THEN n1.ref_id ELSE s1.file_id END AS src_file,
@@ -278,7 +303,8 @@ function getCurrentCoupling(
       COUNT(DISTINCT CASE WHEN src_file = ? AND tgt_file != ? THEN tgt_file END) AS ce,
       COUNT(DISTINCT CASE WHEN tgt_file = ? AND src_file != ? THEN src_file END) AS ca
     FROM file_edges
-  `).get(fileId, fileId, fileId, fileId, fileId, fileId) as { ca: number; ce: number } | undefined;
+  `)
+    .get(fileId, fileId, fileId, fileId, fileId, fileId) as { ca: number; ce: number } | undefined;
 
   const ca = row?.ca ?? 0;
   const ce = row?.ce ?? 0;
@@ -319,7 +345,9 @@ export function extractSymbolSource(
     patterns.push(
       new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${escaped}\\s*[(<]`),
       new RegExp(`(?:public|private|protected)\\s+(?:async\\s+)?(?:static\\s+)?${escaped}\\s*\\(`),
-      new RegExp(`(?:export\\s+)?(?:const|let|var)\\s+${escaped}\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|\\w+)\\s*=>`),
+      new RegExp(
+        `(?:export\\s+)?(?:const|let|var)\\s+${escaped}\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|\\w+)\\s*=>`,
+      ),
       new RegExp(`\\b${escaped}\\s*:\\s*(?:async\\s+)?function`),
       new RegExp(`\\bdef\\s+${escaped}\\s*\\(`),
       new RegExp(`\\bfunc\\s+${escaped}\\s*\\(`),
@@ -351,8 +379,12 @@ export function extractSymbolSource(
 
   for (let i = startLine; i < cleanLines.length; i++) {
     for (const ch of cleanLines[i]) {
-      if (ch === '{') { depth++; foundOpenBrace = true; }
-      else if (ch === '}') { depth--; }
+      if (ch === '{') {
+        depth++;
+        foundOpenBrace = true;
+      } else if (ch === '}') {
+        depth--;
+      }
     }
     endLine = i;
     if (foundOpenBrace && depth <= 0) break;
@@ -386,7 +418,8 @@ export function getSymbolComplexityTrend(
   if (!isGitRepo(cwd)) return null;
 
   // Look up the symbol in the index
-  const sym = store.db.prepare(`
+  const sym = store.db
+    .prepare(`
     SELECT s.symbol_id, s.name, s.kind, s.fqn, s.signature,
            s.cyclomatic, s.max_nesting, s.param_count,
            s.line_start, s.line_end,
@@ -394,19 +427,27 @@ export function getSymbolComplexityTrend(
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.symbol_id = ?
-  `).get(symbolId) as {
-    symbol_id: string; name: string; kind: string; fqn: string | null;
-    signature: string | null; cyclomatic: number | null; max_nesting: number | null;
-    param_count: number | null; line_start: number | null; line_end: number | null;
-    path: string;
-  } | undefined;
+  `)
+    .get(symbolId) as
+    | {
+        symbol_id: string;
+        name: string;
+        kind: string;
+        fqn: string | null;
+        signature: string | null;
+        cyclomatic: number | null;
+        max_nesting: number | null;
+        param_count: number | null;
+        line_start: number | null;
+        line_end: number | null;
+        path: string;
+      }
+    | undefined;
 
   if (!sym) return null;
 
   // Current snapshot from indexed data
-  const currentLines = (sym.line_end && sym.line_start)
-    ? sym.line_end - sym.line_start + 1
-    : 0;
+  const currentLines = sym.line_end && sym.line_start ? sym.line_end - sym.line_start + 1 : 0;
 
   const currentSnapshot: SymbolComplexitySnapshot = {
     date: new Date().toISOString().split('T')[0],
@@ -443,7 +484,10 @@ export function getSymbolComplexityTrend(
         lines: lineCount,
       });
     } catch (e) {
-      logger.debug({ symbol: symbolId, commit: hash, error: e }, 'Symbol complexity snapshot failed');
+      logger.debug(
+        { symbol: symbolId, commit: hash, error: e },
+        'Symbol complexity snapshot failed',
+      );
     }
   }
 
@@ -485,15 +529,23 @@ export function captureGraphSnapshots(store: Store, cwd: string): void {
   let commitHash: string | undefined;
   try {
     commitHash = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
-      cwd, stdio: 'pipe', timeout: 5000,
-    }).toString('utf-8').trim();
-  } catch { /* not a git repo — snapshots still useful without commit hash */ }
+      cwd,
+      stdio: 'pipe',
+      timeout: 5000,
+    })
+      .toString('utf-8')
+      .trim();
+  } catch {
+    /* not a git repo — snapshots still useful without commit hash */
+  }
 
   // Dedup: skip if we already captured for this commit
   if (commitHash) {
-    const existing = store.db.prepare(
-      "SELECT id FROM graph_snapshots WHERE commit_hash = ? AND snapshot_type = 'coupling_summary' LIMIT 1",
-    ).get(commitHash) as { id: number } | undefined;
+    const existing = store.db
+      .prepare(
+        "SELECT id FROM graph_snapshots WHERE commit_hash = ? AND snapshot_type = 'coupling_summary' LIMIT 1",
+      )
+      .get(commitHash) as { id: number } | undefined;
     if (existing) return;
   }
 
@@ -513,15 +565,15 @@ export function captureGraphSnapshots(store: Store, cwd: string): void {
   }
 
   // Resolve imports edge type — single query
-  const importsTypeRow = store.db.prepare(
-    "SELECT id FROM edge_types WHERE name = 'imports'",
-  ).get() as { id: number } | undefined;
+  const importsTypeRow = store.db
+    .prepare("SELECT id FROM edge_types WHERE name = 'imports'")
+    .get() as { id: number } | undefined;
   if (!importsTypeRow) return;
 
   // Load ALL import edges in a single query (no N+1)
-  const allImportEdges = store.db.prepare(
-    'SELECT source_node_id, target_node_id FROM edges WHERE edge_type_id = ?',
-  ).all(importsTypeRow.id) as Array<{ source_node_id: number; target_node_id: number }>;
+  const allImportEdges = store.db
+    .prepare('SELECT source_node_id, target_node_id FROM edges WHERE edge_type_id = ?')
+    .all(importsTypeRow.id) as Array<{ source_node_id: number; target_node_id: number }>;
 
   // Build nodeId→fileId reverse map — O(files) memory
   const nodeToFileId = new Map<number, number>();
@@ -558,7 +610,12 @@ export function captureGraphSnapshots(store: Store, cwd: string): void {
       const filePath = fileIdToPath.get(fileId);
       if (!filePath) continue;
 
-      insertStmt.run(commitHash ?? null, 'coupling', filePath, JSON.stringify({ ca, ce, instability }));
+      insertStmt.run(
+        commitHash ?? null,
+        'coupling',
+        filePath,
+        JSON.stringify({ ca, ce, instability }),
+      );
       count++;
     }
 
@@ -572,7 +629,9 @@ export function captureGraphSnapshots(store: Store, cwd: string): void {
       }, 0);
 
       insertStmt.run(
-        commitHash ?? null, 'coupling_summary', null,
+        commitHash ?? null,
+        'coupling_summary',
+        null,
         JSON.stringify({
           total_files: allFiles.length,
           files_with_edges: count,

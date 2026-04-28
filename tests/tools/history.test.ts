@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import {
-  getCouplingTrend,
-  getSymbolComplexityTrend,
   countImports,
   extractSymbolSource,
+  getCouplingTrend,
+  getSymbolComplexityTrend,
 } from '../../src/tools/analysis/history.js';
+import { createTestStore } from '../test-utils.js';
 
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock('node:child_process', () => ({
 const mockExecFileSync = vi.mocked(execFileSync);
 
 function insertFile(store: Store, filePath: string, lang = 'typescript'): number {
-  return store.insertFile(filePath, lang, 'hash_' + filePath, 100);
+  return store.insertFile(filePath, lang, `hash_${filePath}`, 100);
 }
 
 function insertSymbol(
@@ -77,19 +77,14 @@ describe('countImports', () => {
   });
 
   it('counts Go imports', () => {
-    const content = [
-      'import "fmt"',
-      'func main() {}',
-    ].join('\n');
+    const content = ['import "fmt"', 'func main() {}'].join('\n');
     expect(countImports(content)).toBe(1);
   });
 
   it('counts PHP use statements', () => {
-    const content = [
-      'use App\\Models\\User;',
-      'use Illuminate\\Http\\Request;',
-      '$x = 1;',
-    ].join('\n');
+    const content = ['use App\\Models\\User;', 'use Illuminate\\Http\\Request;', '$x = 1;'].join(
+      '\n',
+    );
     expect(countImports(content)).toBe(2);
   });
 
@@ -429,7 +424,9 @@ describe('getSymbolComplexityTrend', () => {
     const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fId, 'foo', 'function', {
-      cyclomatic: 8, max_nesting: 3, param_count: 2,
+      cyclomatic: 8,
+      max_nesting: 3,
+      param_count: 2,
     });
 
     const result = getSymbolComplexityTrend(store, '/project', 'sym:foo');
@@ -460,7 +457,9 @@ describe('getSymbolComplexityTrend', () => {
     const fId = insertFile(store, 'src/a.ts');
     // Current: high complexity
     insertSymbol(store, fId, 'foo', 'function', {
-      cyclomatic: 6, max_nesting: 5, param_count: 2,
+      cyclomatic: 6,
+      max_nesting: 5,
+      param_count: 2,
     });
 
     const result = getSymbolComplexityTrend(store, '/project', 'sym:foo');
@@ -496,7 +495,9 @@ describe('getSymbolComplexityTrend', () => {
     const fId = insertFile(store, 'src/a.ts');
     // Current: simple
     insertSymbol(store, fId, 'foo', 'function', {
-      cyclomatic: 1, max_nesting: 0, param_count: 0,
+      cyclomatic: 1,
+      max_nesting: 0,
+      param_count: 0,
     });
 
     const result = getSymbolComplexityTrend(store, '/project', 'sym:foo');
@@ -571,7 +572,8 @@ describe('getSymbolComplexityTrend', () => {
   it('tracks multiple historical snapshots', () => {
     const v1 = 'function foo() {\n  return 1;\n}\n';
     const v2 = 'function foo(x) {\n  if (x) {\n    return x;\n  }\n  return 0;\n}\n';
-    const v3 = 'function foo(x, y) {\n  if (x && y) {\n    for (const i of arr) {\n      process(i);\n    }\n  }\n  return 0;\n}\n';
+    const v3 =
+      'function foo(x, y) {\n  if (x && y) {\n    for (const i of arr) {\n      process(i);\n    }\n  }\n  return 0;\n}\n';
 
     mockExecFileSync.mockImplementation((_cmd: string, args: readonly string[] | undefined) => {
       const argList = args as string[];
@@ -592,7 +594,9 @@ describe('getSymbolComplexityTrend', () => {
     const store = createTestStore();
     const fId = insertFile(store, 'src/a.ts');
     insertSymbol(store, fId, 'foo', 'function', {
-      cyclomatic: 5, max_nesting: 3, param_count: 2,
+      cyclomatic: 5,
+      max_nesting: 3,
+      param_count: 2,
     });
 
     const result = getSymbolComplexityTrend(store, '/project', 'sym:foo');

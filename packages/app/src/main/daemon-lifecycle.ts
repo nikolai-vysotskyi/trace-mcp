@@ -7,7 +7,7 @@
  * this file duplicated the launchd/spawn logic and drifted over time.
  */
 
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync, execSync } from 'node:child_process';
 
 const isWin = process.platform === 'win32';
 
@@ -22,7 +22,10 @@ function resolveTraceMcpBinary(): string {
   }
 }
 
-function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): { ok: boolean; error?: string } {
+function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
+  ok: boolean;
+  error?: string;
+} {
   try {
     const bin = resolveTraceMcpBinary();
     // execFileSync avoids shell-injection concerns around the resolved path.

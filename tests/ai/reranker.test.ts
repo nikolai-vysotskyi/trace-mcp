@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { InferenceService } from '../../src/ai/interfaces.js';
 import { LLMReranker } from '../../src/ai/reranker.js';
 
@@ -45,7 +45,9 @@ describe('LLMReranker', () => {
 
   it('returns original order on inference error', async () => {
     const inference: InferenceService = {
-      generate: vi.fn(async () => { throw new Error('network error'); }),
+      generate: vi.fn(async () => {
+        throw new Error('network error');
+      }),
     };
     const reranker = new LLMReranker(inference);
 

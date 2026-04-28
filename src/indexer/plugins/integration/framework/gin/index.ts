@@ -8,30 +8,25 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawRoute,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
 // r.GET("/path", handler), r.POST(...), etc.
-const ROUTE_RE =
-  /\b(\w+)\s*\.\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|Any)\s*\(\s*"([^"]+)"/g;
+const ROUTE_RE = /\b(\w+)\s*\.\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|Any)\s*\(\s*"([^"]+)"/g;
 
 // r.Group("/api") or v1 := r.Group("/v1")
-const GROUP_RE =
-  /\b(\w+)\s*\.\s*Group\s*\(\s*"([^"]+)"/g;
+const GROUP_RE = /\b(\w+)\s*\.\s*Group\s*\(\s*"([^"]+)"/g;
 
 // r.Use(middleware) or group.Use(middleware)
-const MIDDLEWARE_RE =
-  /\b(\w+)\s*\.\s*Use\s*\(\s*(\w[\w.]*)/g;
+const MIDDLEWARE_RE = /\b(\w+)\s*\.\s*Use\s*\(\s*(\w[\w.]*)/g;
 
 // r.Static("/assets", "./public")
-const STATIC_RE =
-  /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
+const STATIC_RE = /\b(\w+)\s*\.\s*Static\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
 
 interface GinRoute {
   method: string;
@@ -177,7 +172,7 @@ export class GinPlugin implements FrameworkPlugin {
     const middlewares = extractGinMiddleware(source);
     if (middlewares.length > 0) {
       result.frameworkRole = result.frameworkRole ?? 'gin_middleware';
-      for (const mw of middlewares) {
+      for (const _mw of middlewares) {
         result.routes!.push({
           method: 'USE',
           uri: '/',

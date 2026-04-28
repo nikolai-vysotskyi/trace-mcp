@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { describe, expect, it } from 'vitest';
 
 /**
  * Regression test for the daemon's per-session transport.onclose wiring.

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import { logger } from '../logger.js';
 
 // --- Interfaces ---
@@ -17,12 +17,12 @@ export interface ToolCallEvent {
   sessionId: string;
   timestamp: string;
   model: string;
-  toolName: string;        // full name: "Read", "mcp__jcodemunch__search"
-  toolServer: string;      // "builtin", "jcodemunch", "phpstorm", etc.
-  toolShortName: string;   // "Read", "search", "search_symbol"
+  toolName: string; // full name: "Read", "mcp__jcodemunch__search"
+  toolServer: string; // "builtin", "jcodemunch", "phpstorm", etc.
+  toolShortName: string; // "Read", "search", "search_symbol"
   inputParams: Record<string, unknown>;
   inputSizeChars: number;
-  targetFile?: string;     // extracted from input params
+  targetFile?: string; // extracted from input params
 }
 
 export interface ToolResultEvent {
@@ -64,13 +64,18 @@ export function parseToolName(fullName: string): { server: string; shortName: st
 }
 
 /** Extract target file from tool input params */
-export function extractTargetFile(toolName: string, input: Record<string, unknown>): string | undefined {
+export function extractTargetFile(
+  toolName: string,
+  input: Record<string, unknown>,
+): string | undefined {
   // Built-in tools
   if (input.file_path && typeof input.file_path === 'string') return input.file_path;
   if (input.path && typeof input.path === 'string') return input.path;
   // Bash commands with cat/head/tail
   if (toolName === 'Bash' && typeof input.command === 'string') {
-    const m = input.command.match(/(?:cat|head|tail|less|more)\s+(?:-[a-zA-Z0-9]+\s+)*["']?([^\s"'|;>-][^\s"'|;>]*)/);
+    const m = input.command.match(
+      /(?:cat|head|tail|less|more)\s+(?:-[a-zA-Z0-9]+\s+)*["']?([^\s"'|;>-][^\s"'|;>]*)/,
+    );
     if (m) return m[1];
   }
   return undefined;
@@ -81,16 +86,49 @@ export function extractTargetFile(toolName: string, input: Record<string, unknow
 /** Parse tool_use input — Claw Code stores it as a JSON string, Claude Code as an object */
 function parseToolInput(input: unknown): Record<string, unknown> {
   if (typeof input === 'string') {
-    try { return JSON.parse(input); } catch { return {}; }
+    try {
+      return JSON.parse(input);
+    } catch {
+      return {};
+    }
   }
   if (input && typeof input === 'object') return input as Record<string, unknown>;
   return {};
 }
 
+interface AssistantUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
+interface AssistantContentItem {
+  type?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+  content?: string | unknown;
+  output?: string | unknown;
+  tool_use_id?: string;
+  is_error?: boolean;
+}
+
+interface AssistantMessage {
+  model?: string;
+  usage?: AssistantUsage;
+  content?: AssistantContentItem[] | string;
+  role?: string;
+}
+
 /** Process an assistant message (shared between Claude Code and Claw Code) */
 function processAssistantMessage(
-  msg: any, timestamp: string, sessionId: string, model: string,
-  usage: TokenUsage, toolCalls: ToolCallEvent[],
+  msg: AssistantMessage,
+  timestamp: string,
+  sessionId: string,
+  model: string,
+  usage: TokenUsage,
+  toolCalls: ToolCallEvent[],
 ): { model: string; toolCallCount: number } {
   let currentModel = model;
   let toolCallCount = 0;
@@ -134,12 +172,21 @@ function processAssistantMessage(
   return { model: currentModel, toolCallCount };
 }
 
+interface ToolResultContentItem {
+  content?: string | unknown;
+  output?: string | unknown;
+  tool_use_id?: string;
+  is_error?: boolean;
+}
+
 /** Process a tool result (shared between Claude Code and Claw Code) */
-function processToolResult(item: any, toolResults: Map<string, ToolResultEvent>): void {
+function processToolResult(
+  item: ToolResultContentItem,
+  toolResults: Map<string, ToolResultEvent>,
+): void {
   const resultContent = item.content || item.output || '';
-  const outputSize = typeof resultContent === 'string'
-    ? resultContent.length
-    : JSON.stringify(resultContent).length;
+  const outputSize =
+    typeof resultContent === 'string' ? resultContent.length : JSON.stringify(resultContent).length;
   const toolId = item.tool_use_id || '';
   toolResults.set(toolId, {
     toolId,
@@ -152,7 +199,7 @@ function processToolResult(item: any, toolResults: Map<string, ToolResultEvent>)
 export function parseSessionFile(filePath: string, projectPath: string): ParsedSession | null {
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n').filter(l => l.trim());
+    const lines = content.split('\n').filter((l) => l.trim());
 
     const sessionId = path.basename(filePath, '.jsonl');
     const toolCalls: ToolCallEvent[] = [];
@@ -160,11 +207,21 @@ export function parseSessionFile(filePath: string, projectPath: string): ParsedS
     let model = '';
     let startedAt = '';
     let endedAt = '';
-    const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreateTokens: 0 };
+    const usage: TokenUsage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreateTokens: 0,
+    };
     let toolCallCount = 0;
 
     for (const line of lines) {
-      let record: any;
+      let record: {
+        timestamp?: string;
+        type?: string;
+        message?: AssistantMessage;
+        toolUseResult?: ToolResultContentItem;
+      } & Record<string, unknown>;
       try {
         record = JSON.parse(line);
       } catch {
@@ -202,7 +259,14 @@ export function parseSessionFile(filePath: string, projectPath: string): ParsedS
         if (!msg) continue;
 
         if (msg.role === 'assistant') {
-          const result = processAssistantMessage(msg, timestamp, sessionId, model, usage, toolCalls);
+          const result = processAssistantMessage(
+            msg,
+            timestamp,
+            sessionId,
+            model,
+            usage,
+            toolCalls,
+          );
           model = result.model;
           toolCallCount += result.toolCallCount;
         }
@@ -223,8 +287,9 @@ export function parseSessionFile(filePath: string, projectPath: string): ParsedS
       if (record.type === 'session_meta') {
         if (record.session_id && !startedAt) {
           // Use created_at_ms if available
-          if (record.created_at_ms) {
-            startedAt = new Date(record.created_at_ms).toISOString();
+          const createdAtMs = record.created_at_ms;
+          if (typeof createdAtMs === 'number' || typeof createdAtMs === 'string') {
+            startedAt = new Date(createdAtMs).toISOString();
           }
         }
       }
@@ -275,7 +340,7 @@ function decodeDirName(dirName: string): string {
   for (let i = 1; i < parts.length; i++) {
     const seg = parts[i];
     // Try: base + "/" + (tail ? tail + "-" + seg : seg) — is this a directory?
-    const candidate = base + '/' + (tail ? tail + '-' + seg : seg);
+    const candidate = `${base}/${tail ? `${tail}-${seg}` : seg}`;
     try {
       if (fs.statSync(candidate).isDirectory()) {
         // It's a real directory → commit as new base
@@ -283,11 +348,13 @@ function decodeDirName(dirName: string): string {
         tail = '';
         continue;
       }
-    } catch { /* not a dir */ }
+    } catch {
+      /* not a dir */
+    }
 
     // Also try: base + "/" + seg (ignoring tail) — maybe tail should have been a dir?
     if (tail) {
-      const slashCandidate = base + '/' + tail;
+      const slashCandidate = `${base}/${tail}`;
       try {
         if (fs.statSync(slashCandidate).isDirectory()) {
           // tail was actually a directory name, commit it
@@ -295,22 +362,24 @@ function decodeDirName(dirName: string): string {
           tail = seg;
           continue;
         }
-      } catch { /* not a dir */ }
+      } catch {
+        /* not a dir */
+      }
     }
 
     // Accumulate into tail (literal dash in name)
-    tail = tail ? tail + '-' + seg : seg;
+    tail = tail ? `${tail}-${seg}` : seg;
   }
 
-  return tail ? base + '/' + tail : base;
+  return tail ? `${base}/${tail}` : base;
 }
 
 function listProjectDirs(): { dirName: string; projectPath: string }[] {
   if (!fs.existsSync(CLAUDE_PROJECTS_DIR)) return [];
   const entries = fs.readdirSync(CLAUDE_PROJECTS_DIR, { withFileTypes: true });
   return entries
-    .filter(e => e.isDirectory())
-    .map(e => ({
+    .filter((e) => e.isDirectory())
+    .map((e) => ({
       dirName: e.name,
       projectPath: decodeDirName(e.name),
     }));
@@ -322,8 +391,8 @@ function listSessionFiles(projectDirName: string): { filePath: string; mtime: nu
   if (!fs.existsSync(dir)) return [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   return entries
-    .filter(e => e.isFile() && e.name.endsWith('.jsonl'))
-    .map(e => {
+    .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+    .map((e) => {
       const filePath = path.join(dir, e.name);
       const stat = fs.statSync(filePath);
       return { filePath, mtime: stat.mtimeMs };
@@ -331,8 +400,14 @@ function listSessionFiles(projectDirName: string): { filePath: string; mtime: nu
 }
 
 /** List all session files across all projects (Claude Code) */
-export function listAllSessions(): { filePath: string; projectPath: string; client: ClientType; mtime: number }[] {
-  const results: { filePath: string; projectPath: string; client: ClientType; mtime: number }[] = [];
+export function listAllSessions(): {
+  filePath: string;
+  projectPath: string;
+  client: ClientType;
+  mtime: number;
+}[] {
+  const results: { filePath: string; projectPath: string; client: ClientType; mtime: number }[] =
+    [];
 
   // Claude Code: ~/.claude/projects/<encoded-path>/<session-id>.jsonl
   for (const { dirName, projectPath } of listProjectDirs()) {
@@ -355,9 +430,13 @@ export function listAllSessions(): { filePath: string; projectPath: string; clie
         try {
           const stat = fs.statSync(filePath);
           results.push({ filePath, projectPath, client: 'claw-code', mtime: stat.mtimeMs });
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
 
   return results;
@@ -382,7 +461,16 @@ function discoverClawProjects(): string[] {
 
   // 3. Scan home directory for .claw/sessions in common project locations
   const home = os.homedir();
-  const commonRoots = ['Projects', 'projects', 'dev', 'workspace', 'code', 'PhpstormProjects', 'WebstormProjects', 'src'];
+  const commonRoots = [
+    'Projects',
+    'projects',
+    'dev',
+    'workspace',
+    'code',
+    'PhpstormProjects',
+    'WebstormProjects',
+    'src',
+  ];
   for (const root of commonRoots) {
     const rootDir = path.join(home, root);
     if (!fs.existsSync(rootDir)) continue;
@@ -395,7 +483,9 @@ function discoverClawProjects(): string[] {
           paths.add(projectDir);
         }
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
 
   return [...paths];

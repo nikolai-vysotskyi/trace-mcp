@@ -11,17 +11,21 @@
  * No CLI concerns, no git — pure data in, report out.
  */
 import type { Store } from '../db/store.js';
-import { getChangeImpact, type ChangeImpactResult } from '../tools/analysis/impact.js';
-import { getDeadExports } from '../tools/analysis/introspect.js';
-import { getUntestedExports } from '../tools/analysis/introspect.js';
-import { getCouplingMetrics, type CouplingResult } from '../tools/analysis/graph-analysis.js';
-import { getLayerViolations, detectLayerPreset, type LayerDefinition, type LayerViolation } from '../tools/analysis/layer-violations.js';
-import { getChurnRate } from '../tools/git/git-analysis.js';
+import { TOPOLOGY_DB_PATH } from '../global.js';
 import { DomainStore } from '../intent/domain-store.js';
+import { logger } from '../logger.js';
+import { type CouplingResult, getCouplingMetrics } from '../tools/analysis/graph-analysis.js';
+import { getChangeImpact } from '../tools/analysis/impact.js';
+import { getDeadExports, getUntestedExports } from '../tools/analysis/introspect.js';
+import {
+  detectLayerPreset,
+  getLayerViolations,
+  type LayerDefinition,
+  type LayerViolation,
+} from '../tools/analysis/layer-violations.js';
+import { getChurnRate } from '../tools/git/git-analysis.js';
 import { getFileOwnership } from '../tools/git/git-ownership.js';
 import { TopologyStore } from '../topology/topology-db.js';
-import { TOPOLOGY_DB_PATH } from '../global.js';
-import { logger } from '../logger.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -160,13 +164,19 @@ export function generateReport(input: CIReportInput): CIReport {
   let deploymentImpact: DeploymentImpact | undefined;
 
   if (input.enableProjectAware !== false) {
-    try { domainAnalysis = computeDomainAnalysis(store, changedFiles, blastRadius.entries); } catch (e) {
+    try {
+      domainAnalysis = computeDomainAnalysis(store, changedFiles, blastRadius.entries);
+    } catch (e) {
       logger.debug({ error: e }, 'CI report: domain analysis skipped');
     }
-    try { ownershipAnalysis = computeOwnershipAnalysis(rootPath, changedFiles); } catch (e) {
+    try {
+      ownershipAnalysis = computeOwnershipAnalysis(rootPath, changedFiles);
+    } catch (e) {
       logger.debug({ error: e }, 'CI report: ownership analysis skipped');
     }
-    try { deploymentImpact = computeDeploymentImpact(changedFiles, rootPath); } catch (e) {
+    try {
+      deploymentImpact = computeDeploymentImpact(changedFiles, rootPath);
+    } catch (e) {
       logger.debug({ error: e }, 'CI report: deployment impact skipped');
     }
   }
@@ -218,24 +228,26 @@ function resolveChangedFiles(store: Store, changedFiles: string[]): ChangedFileI
         try {
           const meta = JSON.parse(s.metadata) as Record<string, unknown>;
           return typeof meta.cyclomatic === 'number' ? meta.cyclomatic : 0;
-        } catch { return 0; }
+        } catch {
+          return 0;
+        }
       })
       .filter((c) => c > 0);
 
-    const avg = cyclomatics.length > 0
-      ? cyclomatics.reduce((a, b) => a + b, 0) / cyclomatics.length
-      : 0;
+    const avg =
+      cyclomatics.length > 0 ? cyclomatics.reduce((a, b) => a + b, 0) / cyclomatics.length : 0;
 
-    infos.push({ path: filePath, symbolCount: symbols.length, avgCyclomatic: Math.round(avg * 100) / 100 });
+    infos.push({
+      path: filePath,
+      symbolCount: symbols.length,
+      avgCyclomatic: Math.round(avg * 100) / 100,
+    });
   }
 
   return infos;
 }
 
-function computeBlastRadius(
-  store: Store,
-  changedFiles: string[],
-): CIReport['blastRadius'] {
+function computeBlastRadius(store: Store, changedFiles: string[]): CIReport['blastRadius'] {
   const allEntries: BlastRadiusEntry[] = [];
   const seenPaths = new Set(changedFiles);
   let truncated = false;
@@ -287,10 +299,7 @@ function computeTestCoverageGaps(
   const untestedResult = getUntestedExports(store);
 
   // Build set of affected files (changed + blast radius)
-  const affectedFiles = new Set([
-    ...changedFiles,
-    ...blastEntries.map((e) => e.path),
-  ]);
+  const affectedFiles = new Set([...changedFiles, ...blastEntries.map((e) => e.path)]);
 
   // Filter to only affected files
   const gaps = untestedResult.untested
@@ -360,7 +369,7 @@ function computeRiskScores(
     const couplingNorm = coupling ? coupling.instability : 0;
     const blastNorm = Math.min(fileBlast / totalFiles, 1);
 
-    const score = 0.30 * complexityNorm + 0.25 * churnNorm + 0.25 * couplingNorm + 0.20 * blastNorm;
+    const score = 0.3 * complexityNorm + 0.25 * churnNorm + 0.25 * couplingNorm + 0.2 * blastNorm;
 
     files.push({
       file: info.path,
@@ -374,9 +383,8 @@ function computeRiskScores(
 
   files.sort((a, b) => b.score - a.score);
 
-  const overallScore = files.length > 0
-    ? files.reduce((sum, f) => sum + f.score, 0) / files.length
-    : 0;
+  const overallScore =
+    files.length > 0 ? files.reduce((sum, f) => sum + f.score, 0) / files.length : 0;
 
   return {
     files,
@@ -416,10 +424,7 @@ function computeArchViolations(
   };
 }
 
-function computeDeadCode(
-  store: Store,
-  changedFiles: string[],
-): CIReport['deadCode'] {
+function computeDeadCode(store: Store, changedFiles: string[]): CIReport['deadCode'] {
   const result = getDeadExports(store);
   const changedSet = new Set(changedFiles);
 
@@ -441,7 +446,7 @@ function computeDeadCode(
 
 function scoreToLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
   if (score >= 0.75) return 'critical';
-  if (score >= 0.50) return 'high';
+  if (score >= 0.5) return 'high';
   if (score >= 0.25) return 'medium';
   return 'low';
 }
@@ -490,19 +495,20 @@ function computeDomainAnalysis(
 
   const domainsAffected = [...domainCounts.entries()]
     .map(([name, counts]) => ({ name, ...counts }))
-    .sort((a, b) => (b.filesChanged + b.filesImpacted) - (a.filesChanged + a.filesImpacted));
+    .sort((a, b) => b.filesChanged + b.filesImpacted - (a.filesChanged + a.filesImpacted));
 
   // Cross-domain dependencies
   const crossDomainDeps = domainStore.getCrossDomainDependencies();
   const affectedDomainNames = new Set(domainsAffected.map((d) => d.name));
   const crossDomainChanges = crossDomainDeps
-    .filter((dep) => affectedDomainNames.has(dep.source_domain) || affectedDomainNames.has(dep.target_domain))
+    .filter(
+      (dep) =>
+        affectedDomainNames.has(dep.source_domain) || affectedDomainNames.has(dep.target_domain),
+    )
     .map((dep) => ({ from: dep.source_domain, to: dep.target_domain, edgeCount: dep.edge_count }));
 
   // Review teams = domains with directly changed files
-  const reviewTeams = domainsAffected
-    .filter((d) => d.filesChanged > 0)
-    .map((d) => d.name);
+  const reviewTeams = domainsAffected.filter((d) => d.filesChanged > 0).map((d) => d.name);
 
   return { domainsAffected, crossDomainChanges, reviewTeams };
 }
@@ -560,12 +566,19 @@ function computeDeploymentImpact(
     // Map changed files to services by repo_root
     const serviceCounts = new Map<string, { name: string; type: string; count: number }>();
 
-    for (const filePath of changedFiles) {
+    for (const _filePath of changedFiles) {
       for (const svc of services) {
         // Check if file belongs to this service's repo
-        if (svc.repo_root && (rootPath === svc.repo_root || rootPath.startsWith(svc.repo_root + '/'))) {
+        if (
+          svc.repo_root &&
+          (rootPath === svc.repo_root || rootPath.startsWith(`${svc.repo_root}/`))
+        ) {
           const key = svc.name;
-          const existing = serviceCounts.get(key) ?? { name: svc.name, type: svc.service_type ?? 'unknown', count: 0 };
+          const existing = serviceCounts.get(key) ?? {
+            name: svc.name,
+            type: svc.service_type ?? 'unknown',
+            count: 0,
+          };
           existing.count++;
           serviceCounts.set(key, existing);
           break;

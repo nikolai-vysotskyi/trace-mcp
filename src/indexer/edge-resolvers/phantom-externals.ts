@@ -78,7 +78,10 @@ export class PhantomSymbolFactory {
   private cache = new Map<string, PhantomSymbol>();
   private filesByKey = new Map<string, number>();
 
-  constructor(private state: PipelineState, private language: string) {}
+  constructor(
+    private state: PipelineState,
+    private language: string,
+  ) {}
 
   /**
    * Cache key: workspace-scoped so two workspaces referencing the same class
@@ -116,10 +119,11 @@ export class PhantomSymbolFactory {
     }
 
     // Short name = last segment of FQN (strip namespace/package prefix)
-    const shortName =
-      fqn.includes('\\') ? fqn.slice(fqn.lastIndexOf('\\') + 1)
-        : fqn.includes('.') ? fqn.slice(fqn.lastIndexOf('.') + 1)
-          : fqn;
+    const shortName = fqn.includes('\\')
+      ? fqn.slice(fqn.lastIndexOf('\\') + 1)
+      : fqn.includes('.')
+        ? fqn.slice(fqn.lastIndexOf('.') + 1)
+        : fqn;
 
     // Workspace-scoped symbol id: two workspaces referencing the same external
     // class (e.g. both Laravel apps extending `Model`) must have distinct
@@ -130,9 +134,9 @@ export class PhantomSymbolFactory {
     const symbolIdStr = `${PHANTOM_FILE_PATH_PREFIX}/${wsPart}::${fqn}#${kind}`;
 
     // Check if phantom already persisted (e.g. from a prior indexing run)
-    const existing = store.db.prepare(
-      'SELECT id FROM symbols WHERE symbol_id = ?',
-    ).get(symbolIdStr) as { id: number } | undefined;
+    const existing = store.db
+      .prepare('SELECT id FROM symbols WHERE symbol_id = ?')
+      .get(symbolIdStr) as { id: number } | undefined;
 
     let symbolId: number;
     if (existing) {
@@ -189,7 +193,10 @@ export interface PhantomPackageFile {
 export class PhantomPackageFactory {
   private cache = new Map<string, PhantomPackageFile>();
 
-  constructor(private state: PipelineState, private language: string) {}
+  constructor(
+    private state: PipelineState,
+    private language: string,
+  ) {}
 
   private key(bucket: string, workspace: string | null): string {
     return `${workspace ?? '_root'}::${bucket}`;

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { EsModuleResolver } from '../../src/indexer/resolvers/es-modules.js';
 
 const fixtureRoot = path.resolve(import.meta.dirname, '../fixtures/ts-project');

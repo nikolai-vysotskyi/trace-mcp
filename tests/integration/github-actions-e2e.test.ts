@@ -2,15 +2,16 @@
  * GitHub Actions E2E integration test.
  * Indexes the github-actions-app fixture and verifies workflow/job extraction.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { GithubActionsPlugin } from '../../src/indexer/plugins/integration/tooling/github-actions/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { YamlLanguagePlugin } from '../../src/indexer/plugins/language/yaml-lang/index.js';
-import { GithubActionsPlugin } from '../../src/indexer/plugins/integration/tooling/github-actions/index.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/github-actions-app');
 

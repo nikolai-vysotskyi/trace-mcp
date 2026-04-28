@@ -7,14 +7,12 @@
  * - get_contract_drift: spec vs implementation mismatches
  */
 
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound, validationError } from '../../errors.js';
-import { TopologyStore, type ServiceRow, type EndpointRow, type CrossServiceEdgeRow } from '../../topology/topology-db.js';
-import { detectServices } from '../../topology/service-detector.js';
-import { parseContracts } from '../../topology/contract-parser.js';
-import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 import { getDbPath } from '../../global.js';
-import path from 'node:path';
+import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
+import { parseContracts } from '../../topology/contract-parser.js';
+import { detectServices } from '../../topology/service-detector.js';
+import type { TopologyStore } from '../../topology/topology-db.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -34,7 +32,13 @@ interface ServiceMapResult {
     edge_type: string;
     confidence: number;
   }>;
-  stats: { services: number; contracts: number; endpoints: number; events: number; crossEdges: number };
+  stats: {
+    services: number;
+    contracts: number;
+    endpoints: number;
+    events: number;
+    crossEdges: number;
+  };
 }
 
 interface CrossServiceImpactResult {
@@ -111,7 +115,9 @@ function ensureTopologyBuilt(
         parsedSpec: JSON.stringify({ endpoints: contract.endpoints, events: contract.events }),
       });
 
-      topoStore.insertEndpoints(contractId, serviceId,
+      topoStore.insertEndpoints(
+        contractId,
+        serviceId,
         contract.endpoints.map((e) => ({
           method: e.method ?? undefined,
           path: e.path,
@@ -120,7 +126,9 @@ function ensureTopologyBuilt(
       );
 
       if (contract.events.length > 0) {
-        topoStore.insertEventChannels(contractId, serviceId,
+        topoStore.insertEventChannels(
+          contractId,
+          serviceId,
           contract.events.map((e) => ({
             channelName: e.channelName,
             direction: e.direction,
@@ -144,12 +152,21 @@ export function getServiceMap(
   ensureTopologyBuilt(topoStore, projectRoot, additionalRepos);
 
   // Single query for service counts instead of N+1 per service
-  const serviceCounts = topoStore.db.prepare(`
+  const serviceCounts = topoStore.db
+    .prepare(`
     SELECT s.id, s.name, s.service_type, s.detection_source,
       (SELECT COUNT(*) FROM api_endpoints WHERE service_id = s.id) as endpoint_count,
       (SELECT COUNT(*) FROM event_channels WHERE service_id = s.id) as event_count
     FROM services s ORDER BY s.name
-  `).all() as Array<{ id: number; name: string; service_type: string | null; detection_source: string | null; endpoint_count: number; event_count: number }>;
+  `)
+    .all() as Array<{
+    id: number;
+    name: string;
+    service_type: string | null;
+    detection_source: string | null;
+    endpoint_count: number;
+    event_count: number;
+  }>;
 
   const edges = topoStore.getAllCrossServiceEdges();
   const stats = topoStore.getTopologyStats();
@@ -186,16 +203,21 @@ export function getCrossServiceImpact(
 
   const svc = topoStore.getService(opts.service);
   if (!svc) {
-    return err(notFound(opts.service, topoStore.getAllServices().map((s) => s.name)));
+    return err(
+      notFound(
+        opts.service,
+        topoStore.getAllServices().map((s) => s.name),
+      ),
+    );
   }
 
   const affected: CrossServiceImpactResult['affected_services'] = [];
 
   if (opts.endpoint) {
     // Find services that consume this endpoint
-    const edges = topoStore.getAllCrossServiceEdges().filter(
-      (e) => e.target_service_id === svc.id && e.target_ref?.includes(opts.endpoint!),
-    );
+    const edges = topoStore
+      .getAllCrossServiceEdges()
+      .filter((e) => e.target_service_id === svc.id && e.target_ref?.includes(opts.endpoint!));
     for (const e of edges) {
       affected.push({
         name: e.source_name,
@@ -260,7 +282,12 @@ export function getApiContract(
 
   const svc = topoStore.getService(opts.service);
   if (!svc) {
-    return err(notFound(opts.service, topoStore.getAllServices().map((s) => s.name)));
+    return err(
+      notFound(
+        opts.service,
+        topoStore.getAllServices().map((s) => s.name),
+      ),
+    );
   }
 
   let contracts = topoStore.getContractsByService(svc.id);
@@ -305,7 +332,12 @@ export function getServiceDependencies(
 
   const svc = topoStore.getService(opts.service);
   if (!svc) {
-    return err(notFound(opts.service, topoStore.getAllServices().map((s) => s.name)));
+    return err(
+      notFound(
+        opts.service,
+        topoStore.getAllServices().map((s) => s.name),
+      ),
+    );
   }
 
   const direction = opts.direction ?? 'both';
@@ -317,10 +349,17 @@ export function getServiceDependencies(
     const grouped = new Map<string, { target: string; edgeType: string; count: number }>();
     for (const e of edges) {
       const key = `${e.target_name}|${e.edge_type}`;
-      if (!grouped.has(key)) grouped.set(key, { target: e.target_name, edgeType: e.edge_type, count: 0 });
+      if (!grouped.has(key))
+        grouped.set(key, { target: e.target_name, edgeType: e.edge_type, count: 0 });
       grouped.get(key)!.count++;
     }
-    outgoing.push(...[...grouped.values()].map((g) => ({ target: g.target, edge_type: g.edgeType, count: g.count })));
+    outgoing.push(
+      ...[...grouped.values()].map((g) => ({
+        target: g.target,
+        edge_type: g.edgeType,
+        count: g.count,
+      })),
+    );
   }
 
   if (direction === 'incoming' || direction === 'both') {
@@ -328,10 +367,17 @@ export function getServiceDependencies(
     const grouped = new Map<string, { source: string; edgeType: string; count: number }>();
     for (const e of edges) {
       const key = `${e.source_name}|${e.edge_type}`;
-      if (!grouped.has(key)) grouped.set(key, { source: e.source_name, edgeType: e.edge_type, count: 0 });
+      if (!grouped.has(key))
+        grouped.set(key, { source: e.source_name, edgeType: e.edge_type, count: 0 });
       grouped.get(key)!.count++;
     }
-    incoming.push(...[...grouped.values()].map((g) => ({ source: g.source, edge_type: g.edgeType, count: g.count })));
+    incoming.push(
+      ...[...grouped.values()].map((g) => ({
+        source: g.source,
+        edge_type: g.edgeType,
+        count: g.count,
+      })),
+    );
   }
 
   return ok({ service: svc.name, outgoing, incoming });
@@ -352,7 +398,12 @@ export function getContractDrift(
 
   const svc = topoStore.getService(opts.service);
   if (!svc) {
-    return err(notFound(opts.service, topoStore.getAllServices().map((s) => s.name)));
+    return err(
+      notFound(
+        opts.service,
+        topoStore.getAllServices().map((s) => s.name),
+      ),
+    );
   }
 
   const specEndpoints = topoStore.getEndpointsByService(svc.id);
@@ -361,8 +412,8 @@ export function getContractDrift(
 
   // Check: spec endpoints missing from implementation
   for (const ep of specEndpoints) {
-    const found = implRoutes.some((r) =>
-      r.uri === ep.path && (!ep.method || r.method === ep.method),
+    const found = implRoutes.some(
+      (r) => r.uri === ep.path && (!ep.method || r.method === ep.method),
     );
     if (!found) {
       drifts.push({
@@ -375,8 +426,8 @@ export function getContractDrift(
   // Check: implementation routes not in spec
   if (specEndpoints.length > 0) {
     for (const route of implRoutes) {
-      const found = specEndpoints.some((ep) =>
-        ep.path === route.uri && (!ep.method || ep.method === route.method),
+      const found = specEndpoints.some(
+        (ep) => ep.path === route.uri && (!ep.method || ep.method === route.method),
       );
       if (!found) {
         drifts.push({
@@ -396,11 +447,30 @@ export function getContractDrift(
     if (!latestSnapshot) continue;
 
     // Parse snapshot endpoints
-    let oldEndpoints: Array<{ method: string | null; path: string; requestSchema?: string; responseSchema?: string }> = [];
+    let oldEndpoints: Array<{
+      method: string | null;
+      path: string;
+      requestSchema?: string;
+      responseSchema?: string;
+    }> = [];
     try {
-      const parsed = JSON.parse(latestSnapshot.endpoints_json) as { endpoints?: Array<{ method?: string; path: string; requestSchema?: string; responseSchema?: string }> };
-      oldEndpoints = (parsed.endpoints ?? []).map((e) => ({ method: e.method ?? null, path: e.path, requestSchema: e.requestSchema, responseSchema: e.responseSchema }));
-    } catch { continue; }
+      const parsed = JSON.parse(latestSnapshot.endpoints_json) as {
+        endpoints?: Array<{
+          method?: string;
+          path: string;
+          requestSchema?: string;
+          responseSchema?: string;
+        }>;
+      };
+      oldEndpoints = (parsed.endpoints ?? []).map((e) => ({
+        method: e.method ?? null,
+        path: e.path,
+        requestSchema: e.requestSchema,
+        responseSchema: e.responseSchema,
+      }));
+    } catch {
+      continue;
+    }
 
     // Current endpoints with schemas
     const currentEndpoints = specEndpoints.map((ep) => ({
@@ -415,7 +485,9 @@ export function getContractDrift(
       schemaChanges = (schemaChanges ?? []).concat(epDiffs);
       for (const epDiff of epDiffs) {
         if (epDiff.breaking) {
-          const allChanges = [...epDiff.requestChanges, ...epDiff.responseChanges].filter((c) => c.breaking);
+          const allChanges = [...epDiff.requestChanges, ...epDiff.responseChanges].filter(
+            (c) => c.breaking,
+          );
           for (const change of allChanges) {
             drifts.push({
               type: 'schema_breaking_change',

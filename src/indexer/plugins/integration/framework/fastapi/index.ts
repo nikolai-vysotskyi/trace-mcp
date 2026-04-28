@@ -11,19 +11,19 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
+import { parseError } from '../../../../../errors.js';
+import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawRoute,
-  EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
-import { parseError } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-import { getParser } from '../../../../../parser/tree-sitter.js';
 
 /** HTTP methods recognized on FastAPI route decorators. */
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch', 'options', 'head']);
@@ -51,14 +51,18 @@ function hasPythonDep(ctx: ProjectContext, pkg: string): boolean {
     const content = fs.readFileSync(pyprojectPath, 'utf-8');
     const re = new RegExp(`["']${escapeRegExp(pkg)}[>=<\\[!~\\s"']`, 'i');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   try {
     const reqPath = path.join(ctx.rootPath, 'requirements.txt');
     const content = fs.readFileSync(reqPath, 'utf-8');
     const re = new RegExp(`^${escapeRegExp(pkg)}\\b`, 'im');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return false;
 }
@@ -79,11 +83,31 @@ export class FastAPIPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'fastapi_route', category: 'fastapi', description: 'FastAPI route decorator → handler function' },
-        { name: 'fastapi_depends', category: 'fastapi', description: 'FastAPI Depends() dependency injection' },
-        { name: 'fastapi_request_model', category: 'fastapi', description: 'Route handler → Pydantic request model' },
-        { name: 'fastapi_response_model', category: 'fastapi', description: 'Route decorator → Pydantic response model' },
-        { name: 'fastapi_router_mounts', category: 'fastapi', description: 'app.include_router() mount' },
+        {
+          name: 'fastapi_route',
+          category: 'fastapi',
+          description: 'FastAPI route decorator → handler function',
+        },
+        {
+          name: 'fastapi_depends',
+          category: 'fastapi',
+          description: 'FastAPI Depends() dependency injection',
+        },
+        {
+          name: 'fastapi_request_model',
+          category: 'fastapi',
+          description: 'Route handler → Pydantic request model',
+        },
+        {
+          name: 'fastapi_response_model',
+          category: 'fastapi',
+          description: 'Route decorator → Pydantic response model',
+        },
+        {
+          name: 'fastapi_router_mounts',
+          category: 'fastapi',
+          description: 'app.include_router() mount',
+        },
       ] satisfies EdgeTypeDeclaration[],
     };
   }
@@ -125,7 +149,9 @@ export class FastAPIPlugin implements FrameworkPlugin {
       this.extractRoutes(root, source, filePath, result);
       this.extractRouterMounts(root, source, filePath, result);
     } catch (e: unknown) {
-      return err(parseError(filePath, `FastAPI parse error: ${e instanceof Error ? e.message : String(e)}`));
+      return err(
+        parseError(filePath, `FastAPI parse error: ${e instanceof Error ? e.message : String(e)}`),
+      );
     }
 
     if (result.routes!.length > 0 || result.edges!.length > 0) {
@@ -144,7 +170,7 @@ export class FastAPIPlugin implements FrameworkPlugin {
    *   @router.put("/path")
    */
   private extractRoutes(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -153,9 +179,7 @@ export class FastAPIPlugin implements FrameworkPlugin {
 
     for (const decoratedDef of decoratedDefs) {
       // The function_definition is a child of the decorated_definition
-      const funcDef = decoratedDef.children.find(
-        (c: any) => c.type === 'function_definition',
-      );
+      const funcDef = decoratedDef.children.find((c: TSNode) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -166,12 +190,12 @@ export class FastAPIPlugin implements FrameworkPlugin {
         if (child.type !== 'decorator') continue;
 
         const decoratorExpr = child.children.find(
-          (c: any) => c.type === 'call' || c.type === 'attribute',
+          (c: TSNode) => c.type === 'call' || c.type === 'attribute',
         );
         if (!decoratorExpr) continue;
 
         // Resolve the call expression: @app.get("/path") or @router.post("/path", ...)
-        let callNode: any = null;
+        let callNode: TSNode | null = null;
         if (decoratorExpr.type === 'call') {
           callNode = decoratorExpr;
         }
@@ -245,7 +269,7 @@ export class FastAPIPlugin implements FrameworkPlugin {
    * In the AST: default_parameter → default value is call with function named "Depends"
    */
   private extractDepends(
-    parameters: any,
+    parameters: TSNode,
     funcName: string,
     filePath: string,
     result: FileParseResult,
@@ -254,8 +278,8 @@ export class FastAPIPlugin implements FrameworkPlugin {
       if (param.type !== 'default_parameter' && param.type !== 'typed_default_parameter') continue;
 
       // Find the default value (the last significant child)
-      const defaultValue = param.childForFieldName('value') ??
-        param.children[param.children.length - 1];
+      const defaultValue =
+        param.childForFieldName('value') ?? param.children[param.children.length - 1];
       if (!defaultValue || defaultValue.type !== 'call') continue;
 
       const callFunc = defaultValue.childForFieldName('function');
@@ -291,15 +315,30 @@ export class FastAPIPlugin implements FrameworkPlugin {
    * (likely a Pydantic model). We skip basic types like str, int, float, bool, etc.
    */
   private extractRequestModels(
-    parameters: any,
+    parameters: TSNode,
     funcName: string,
     filePath: string,
     result: FileParseResult,
   ): void {
     const builtinTypes = new Set([
-      'str', 'int', 'float', 'bool', 'bytes', 'list', 'dict', 'tuple',
-      'set', 'frozenset', 'None', 'Any', 'Optional', 'List', 'Dict',
-      'Request', 'Response', 'HTTPException',
+      'str',
+      'int',
+      'float',
+      'bool',
+      'bytes',
+      'list',
+      'dict',
+      'tuple',
+      'set',
+      'frozenset',
+      'None',
+      'Any',
+      'Optional',
+      'List',
+      'Dict',
+      'Request',
+      'Response',
+      'HTTPException',
     ]);
 
     for (const param of parameters.children) {
@@ -329,7 +368,7 @@ export class FastAPIPlugin implements FrameworkPlugin {
    * Extract app.include_router(router, prefix='/api/v1') calls.
    */
   private extractRouterMounts(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -368,8 +407,8 @@ export class FastAPIPlugin implements FrameworkPlugin {
   // ─── Tree-sitter helpers ───────────────────────────────────────────
 
   /** Recursively find all nodes of a given type. */
-  private findAllByType(node: any, type: string): any[] {
-    const results: any[] = [];
+  private findAllByType(node: TSNode, type: string): TSNode[] {
+    const results: TSNode[] = [];
     if (node.type === type) results.push(node);
     for (const child of node.children ?? []) {
       results.push(...this.findAllByType(child, type));
@@ -378,7 +417,7 @@ export class FastAPIPlugin implements FrameworkPlugin {
   }
 
   /** Get the text of the first positional string argument in an argument_list. */
-  private extractFirstStringArg(args: any): string | null {
+  private extractFirstStringArg(args: TSNode): string | null {
     for (const child of args.children ?? []) {
       if (child.type === 'string') {
         return this.unquote(child.text);
@@ -392,16 +431,22 @@ export class FastAPIPlugin implements FrameworkPlugin {
   }
 
   /** Get the text of the first positional (non-keyword) argument. */
-  private getFirstArgText(args: any): string | null {
+  private getFirstArgText(args: TSNode): string | null {
     for (const child of args.children ?? []) {
-      if (child.type === 'keyword_argument' || child.type === '(' || child.type === ')' || child.type === ',') continue;
+      if (
+        child.type === 'keyword_argument' ||
+        child.type === '(' ||
+        child.type === ')' ||
+        child.type === ','
+      )
+        continue;
       return child.text;
     }
     return null;
   }
 
   /** Extract a keyword argument value as text. */
-  private extractKeywordArg(args: any, name: string): string | null {
+  private extractKeywordArg(args: TSNode, name: string): string | null {
     for (const child of args.children ?? []) {
       if (child.type !== 'keyword_argument') continue;
       const key = child.childForFieldName('name')?.text;

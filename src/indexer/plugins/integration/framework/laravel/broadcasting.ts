@@ -41,8 +41,7 @@ const NAMESPACE_RE = /namespace\s+([\w\\]+)\s*;/;
 const CLASS_NAME_RE = /class\s+(\w+)/;
 const USE_STMT_RE = /use\s+([\w\\]+?)(?:\s+as\s+(\w+))?;/g;
 
-const IMPLEMENTS_BROADCAST_RE =
-  /class\s+\w+[^{]*implements[^{]*ShouldBroadcast(?:Now)?\b/;
+const IMPLEMENTS_BROADCAST_RE = /class\s+\w+[^{]*implements[^{]*ShouldBroadcast(?:Now)?\b/;
 
 // ─── Event extraction ─────────────────────────────────────────
 
@@ -69,9 +68,7 @@ export function extractBroadcastingEvent(
 
 // ─── Channel authorization extraction (routes/channels.php) ──
 
-export function extractChannelAuthorizations(
-  source: string,
-): ChannelAuthMapping[] {
+export function extractChannelAuthorizations(source: string): ChannelAuthMapping[] {
   const results: ChannelAuthMapping[] = [];
   const useMap = buildUseMap(source);
 
@@ -100,7 +97,7 @@ export function extractChannelAuthorizations(
 
 // ─── Edge builders ────────────────────────────────────────────
 
-function buildBroadcastingEdges(event: BroadcastingEventInfo): RawEdge[] {
+function _buildBroadcastingEdges(event: BroadcastingEventInfo): RawEdge[] {
   const edges: RawEdge[] = [];
 
   for (const channel of event.channels) {
@@ -119,7 +116,7 @@ function buildBroadcastingEdges(event: BroadcastingEventInfo): RawEdge[] {
   return edges;
 }
 
-function buildChannelAuthEdges(mappings: ChannelAuthMapping[]): RawEdge[] {
+function _buildChannelAuthEdges(mappings: ChannelAuthMapping[]): RawEdge[] {
   return mappings.map((m) => ({
     edgeType: 'broadcast_authorized_by',
     metadata: { channelPattern: m.pattern, authClass: m.authClass },
@@ -146,16 +143,11 @@ function resolveClass(ref: string, useMap: Map<string, string>): string {
   return useMap.get(clean) ?? clean;
 }
 
-function extractChannels(
-  source: string,
-  _useMap: Map<string, string>,
-): BroadcastChannel[] {
+function extractChannels(source: string, _useMap: Map<string, string>): BroadcastChannel[] {
   const channels: BroadcastChannel[] = [];
 
   // Find broadcastOn() method body
-  const methodMatch = source.match(
-    /function\s+broadcastOn\s*\([^)]*\)[^{]*\{([\s\S]*?)\n\s*\}/,
-  );
+  const methodMatch = source.match(/function\s+broadcastOn\s*\([^)]*\)[^{]*\{([\s\S]*?)\n\s*\}/);
   if (!methodMatch) return channels;
 
   const body = methodMatch[1];
@@ -167,9 +159,7 @@ function extractChannels(
     const qualifier = match[1];
     const name = match[2];
     const type: BroadcastChannel['type'] =
-      qualifier === 'Private' ? 'private'
-        : qualifier === 'Presence' ? 'presence'
-          : 'public';
+      qualifier === 'Private' ? 'private' : qualifier === 'Presence' ? 'presence' : 'public';
     channels.push({ name, type });
   }
 
@@ -178,11 +168,9 @@ function extractChannels(
   const concatRe = /new\s+(Private|Presence)?Channel\(\s*['"]([^'"]+)['"]\s*\./g;
   while ((match = concatRe.exec(body)) !== null) {
     const qualifier = match[1];
-    const baseName = match[2] + '{id}'; // simplified pattern
+    const baseName = `${match[2]}{id}`; // simplified pattern
     const type: BroadcastChannel['type'] =
-      qualifier === 'Private' ? 'private'
-        : qualifier === 'Presence' ? 'presence'
-          : 'public';
+      qualifier === 'Private' ? 'private' : qualifier === 'Presence' ? 'presence' : 'public';
     // Only add if not already captured
     if (!channels.some((c) => c.name.startsWith(match![2]))) {
       channels.push({ name: baseName, type });
@@ -203,9 +191,7 @@ function extractPayloadFields(source: string): string[] {
   const fields: string[] = [];
 
   // broadcastWith() return ['field1' => ..., 'field2' => ...]
-  const methodMatch = source.match(
-    /function\s+broadcastWith\s*\([^)]*\)[^{]*\{([\s\S]*?)\n\s*\}/,
-  );
+  const methodMatch = source.match(/function\s+broadcastWith\s*\([^)]*\)[^{]*\{([\s\S]*?)\n\s*\}/);
   if (!methodMatch) return fields;
 
   const body = methodMatch[1];

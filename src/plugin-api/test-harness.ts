@@ -1,8 +1,8 @@
 import { initializeDatabase } from '../db/schema.js';
-import { Store, type SymbolRow, type EdgeRow } from '../db/store.js';
+import { type EdgeRow, Store, type SymbolRow } from '../db/store.js';
+import { executeFrameworkExtractNodes, executeLanguagePlugin } from './executor.js';
 import { PluginRegistry } from './registry.js';
-import type { LanguagePlugin, FrameworkPlugin, FileParseResult } from './types.js';
-import { executeLanguagePlugin, executeFrameworkExtractNodes } from './executor.js';
+import type { FileParseResult, FrameworkPlugin, LanguagePlugin } from './types.js';
 
 interface PluginTestHarness {
   store: Store;
@@ -17,9 +17,7 @@ interface PluginTestHarness {
  * Create an in-memory test harness for testing plugins in isolation.
  * Provides a Store, Registry, and helpers for indexing files and inspecting results.
  */
-export function createTestHarness(
-  plugin: LanguagePlugin | FrameworkPlugin,
-): PluginTestHarness {
+export function createTestHarness(plugin: LanguagePlugin | FrameworkPlugin): PluginTestHarness {
   const db = initializeDatabase(':memory:');
   const store = new Store(db);
   const registry = new PluginRegistry();

@@ -3,15 +3,16 @@
  * Asserts strict file → framework_role mapping for jose + jsonwebtoken (qualified + destructured),
  * and verifies that resolveEdges emits JWKS/issuer edges at symbol granularity.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { JosePlugin } from '../../src/indexer/plugins/integration/tooling/jose/index.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
 import type { Store } from '../../src/db/store.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { JosePlugin } from '../../src/indexer/plugins/integration/tooling/jose/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/jose-app');
 
@@ -47,9 +48,9 @@ function loadEdges(store: Store, edgeType: string): EdgeWithMeta[] {
       .get(e.source_node_id) as { node_type: string; ref_id: number } | undefined;
     let srcSymbolId: string | null = null;
     if (node?.node_type === 'symbol') {
-      const s = store.db
-        .prepare('SELECT symbol_id FROM symbols WHERE id = ?')
-        .get(node.ref_id) as { symbol_id: string } | undefined;
+      const s = store.db.prepare('SELECT symbol_id FROM symbols WHERE id = ?').get(node.ref_id) as
+        | { symbol_id: string }
+        | undefined;
       if (s) srcSymbolId = s.symbol_id;
     }
     return { meta, srcSymbolId };
@@ -82,14 +83,11 @@ describe('jose E2E', () => {
       }
     });
 
-    it.each(Object.entries(EXPECTED_ROLES))(
-      'tags %s with role %s',
-      (rel, expectedRole) => {
-        const file = fileByRel.get(rel);
-        expect(file, `missing ${rel}`).toBeDefined();
-        expect(file!.framework_role).toBe(expectedRole);
-      },
-    );
+    it.each(Object.entries(EXPECTED_ROLES))('tags %s with role %s', (rel, expectedRole) => {
+      const file = fileByRel.get(rel);
+      expect(file, `missing ${rel}`).toBeDefined();
+      expect(file!.framework_role).toBe(expectedRole);
+    });
 
     it('catches jsonwebtoken destructured imports (unqualified sign/verify)', () => {
       expect(fileByRel.get('src/legacy.ts')!.framework_role).toBe('jwt_auth');

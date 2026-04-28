@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  InertiaPlugin,
   extractInertiaRenders,
+  InertiaPlugin,
   resolvePagePath,
 } from '../../../src/indexer/plugins/integration/view/inertia/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';

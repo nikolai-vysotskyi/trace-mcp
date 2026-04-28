@@ -1,21 +1,21 @@
 /**
  * Tests for version-features detection across all languages.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { detectCssVersions } from '../../src/indexer/plugins/language/css/version-features.js';
+import { detectMinGoVersionFromSource } from '../../src/indexer/plugins/language/go/version-features.js';
+import { detectMinJavaVersionFromSource } from '../../src/indexer/plugins/language/java/version-features.js';
+import { detectMinKotlinVersion } from '../../src/indexer/plugins/language/kotlin/version-features.js';
+import { detectMinPhpVersion } from '../../src/indexer/plugins/language/php/version-features.js';
+import { detectMinPythonVersion } from '../../src/indexer/plugins/language/python/version-features.js';
+import { detectMinRubyVersionFromSource } from '../../src/indexer/plugins/language/ruby/version-features.js';
 import {
+  detectMinEsVersion,
   detectMinNodeVersion,
   detectMinNodeVersionFromAPIs,
   detectMinTsVersion,
   detectMinTsVersionFromSource,
-  detectMinEsVersion,
 } from '../../src/indexer/plugins/language/typescript/version-features.js';
-import { detectMinPythonVersion } from '../../src/indexer/plugins/language/python/version-features.js';
-import { detectMinPhpVersion } from '../../src/indexer/plugins/language/php/version-features.js';
-import { detectMinGoVersionFromSource } from '../../src/indexer/plugins/language/go/version-features.js';
-import { detectMinJavaVersionFromSource } from '../../src/indexer/plugins/language/java/version-features.js';
-import { detectMinKotlinVersion } from '../../src/indexer/plugins/language/kotlin/version-features.js';
-import { detectMinRubyVersionFromSource } from '../../src/indexer/plugins/language/ruby/version-features.js';
-import { detectCssVersions } from '../../src/indexer/plugins/language/css/version-features.js';
 
 // ==============================
 // Node.js
@@ -111,7 +111,9 @@ describe('ECMAScript version detection', () => {
   });
 
   it('picks highest ES version', () => {
-    expect(detectMinEsVersion(['arrow_function', 'optional_chaining', 'class_static_block'])).toBe('ES2022');
+    expect(detectMinEsVersion(['arrow_function', 'optional_chaining', 'class_static_block'])).toBe(
+      'ES2022',
+    );
   });
 });
 
@@ -215,7 +217,9 @@ describe('Java version detection', () => {
   });
 
   it('detects sealed classes → Java 17', () => {
-    expect(detectMinJavaVersionFromSource('sealed class Shape permits Circle, Square {}')).toBe('17');
+    expect(detectMinJavaVersionFromSource('sealed class Shape permits Circle, Square {}')).toBe(
+      '17',
+    );
   });
 });
 

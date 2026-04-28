@@ -3,13 +3,13 @@
  * Shows indexing progress for the current project by reading from the SQLite database.
  */
 
-import { Command } from 'commander';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import { Command } from 'commander';
 import { getDbPath } from '../global.js';
-import { getProject } from '../registry.js';
+import { isServerRunning, type PipelineProgressSnapshot, readProgressFromDb } from '../progress.js';
 import { findProjectRoot } from '../project-root.js';
-import { readProgressFromDb, isServerRunning, type PipelineProgressSnapshot } from '../progress.js';
+import { getProject } from '../registry.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);
@@ -75,12 +75,14 @@ export const statusCommand = new Command('status')
       const progress = readProgressFromDb(db);
 
       // Basic stats
-      const stats = db.prepare(`
+      const stats = db
+        .prepare(`
         SELECT
           (SELECT COUNT(*) FROM files) as files,
           (SELECT COUNT(*) FROM symbols) as symbols,
           (SELECT COUNT(*) FROM edges) as edges
-      `).get() as { files: number; symbols: number; edges: number };
+      `)
+        .get() as { files: number; symbols: number; edges: number };
 
       const serverRunning = isServerRunning(db);
 
@@ -102,10 +104,14 @@ export const statusCommand = new Command('status')
       } else if (serverRunning) {
         console.log('  Server is running, waiting for initial indexing...');
       } else {
-        console.log('  Index is empty. Run `trace-mcp serve` or `trace-mcp index` to index the project.');
+        console.log(
+          '  Index is empty. Run `trace-mcp serve` or `trace-mcp index` to index the project.',
+        );
       }
 
-      console.log(`\n  Stats: ${stats.files} files · ${stats.symbols} symbols · ${stats.edges} edges\n`);
+      console.log(
+        `\n  Stats: ${stats.files} files · ${stats.symbols} symbols · ${stats.edges} edges\n`,
+      );
     } finally {
       db.close();
     }

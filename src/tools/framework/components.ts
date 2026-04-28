@@ -1,6 +1,5 @@
-import type { Store, ComponentRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import type { ComponentRow, Store } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 import { estimateTokens } from '../../utils/token-counter.js';
 
 interface ComponentTreeNode {
@@ -74,24 +73,30 @@ function buildNode(
       const parsed = JSON.parse(comp.props) as Record<string, unknown>;
       node.props = Object.keys(parsed);
     }
-  } catch { /* corrupted JSON */ }
+  } catch {
+    /* corrupted JSON */
+  }
   try {
     if (comp.emits) node.emits = JSON.parse(comp.emits) as string[];
-  } catch { /* corrupted JSON */ }
+  } catch {
+    /* corrupted JSON */
+  }
   try {
     if (comp.slots) node.slots = JSON.parse(comp.slots) as string[];
-  } catch { /* corrupted JSON */ }
+  } catch {
+    /* corrupted JSON */
+  }
   try {
     if (comp.composables) node.composables = JSON.parse(comp.composables) as string[];
-  } catch { /* corrupted JSON */ }
+  } catch {
+    /* corrupted JSON */
+  }
 
   budget.remaining -= estimateTokens(JSON.stringify(node));
   if (budget.remaining <= 0 || remainingDepth <= 0) return node;
 
   // Find child components via renders_component edges
-  const symbols = store.getSymbolsByFile(
-    store.getFile(filePath)?.id ?? -1,
-  );
+  const symbols = store.getSymbolsByFile(store.getFile(filePath)?.id ?? -1);
   const classSymbol = symbols.find((s) => s.kind === 'class');
   if (!classSymbol) return node;
 
@@ -127,7 +132,14 @@ function buildNode(
     const targetComp = store.getComponentByFileId(targetFile.id);
     if (!targetComp) continue;
 
-    const childNode = buildNode(store, targetComp, targetFile.path, remainingDepth - 1, visited, budget);
+    const childNode = buildNode(
+      store,
+      targetComp,
+      targetFile.path,
+      remainingDepth - 1,
+      visited,
+      budget,
+    );
     node.children.push(childNode);
   }
 

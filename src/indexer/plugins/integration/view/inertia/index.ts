@@ -6,10 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -89,7 +89,9 @@ export class InertiaPlugin implements FrameworkPlugin {
       const json = JSON.parse(content);
       const req = json.require as Record<string, string> | undefined;
       if (req?.['inertiajs/inertia-laravel']) return true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     try {
       const pkgPath = path.join(ctx.rootPath, 'package.json');
@@ -100,7 +102,9 @@ export class InertiaPlugin implements FrameworkPlugin {
         ...(pkg.devDependencies as Record<string, string> | undefined),
       };
       if ('@inertiajs/vue3' in deps || '@inertiajs/react' in deps) return true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     return false;
   }
@@ -108,8 +112,16 @@ export class InertiaPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'inertia_renders', category: 'inertia', description: 'Controller renders Vue page via Inertia' },
-        { name: 'passes_props', category: 'inertia', description: 'Controller passes props to Vue page' },
+        {
+          name: 'inertia_renders',
+          category: 'inertia',
+          description: 'Controller renders Vue page via Inertia',
+        },
+        {
+          name: 'passes_props',
+          category: 'inertia',
+          description: 'Controller passes props to Vue page',
+        },
       ],
     };
   }
@@ -148,7 +160,9 @@ export class InertiaPlugin implements FrameworkPlugin {
       let source: string;
       try {
         source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
-      } catch { continue; }
+      } catch {
+        continue;
+      }
 
       const renders = extractInertiaRenders(source);
       if (renders.length === 0) continue;
@@ -168,8 +182,10 @@ export class InertiaPlugin implements FrameworkPlugin {
 
         // Find the method that contains this render call by line range
         const method = symbols.find(
-          (s) => s.kind === 'method' &&
-            s.lineStart != null && s.lineEnd != null &&
+          (s) =>
+            s.kind === 'method' &&
+            s.lineStart != null &&
+            s.lineEnd != null &&
             render.line >= s.lineStart &&
             render.line <= s.lineEnd,
         );

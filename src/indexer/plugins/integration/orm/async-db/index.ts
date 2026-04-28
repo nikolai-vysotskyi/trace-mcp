@@ -18,14 +18,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawSymbol,
   ResolveContext,
-  EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
 
 // ============================================================
@@ -34,9 +33,16 @@ import type {
 
 /** Async DB packages for Python. */
 const ASYNC_DB_PACKAGES = [
-  'asyncpg', 'databases', 'aiosqlite', 'psycopg',
-  'tortoise-orm', 'piccolo', 'asyncpgsa', 'aiopg',
-  'aiomysql', 'motor',  // async mongo
+  'asyncpg',
+  'databases',
+  'aiosqlite',
+  'psycopg',
+  'tortoise-orm',
+  'piccolo',
+  'asyncpgsa',
+  'aiopg',
+  'aiomysql',
+  'motor', // async mongo
 ];
 
 function escapeRegExp(s: string): string {
@@ -52,10 +58,16 @@ function hasPythonDep(ctx: ProjectContext, packages: string[]): string | null {
       if (deps?.includes(lowerPkg)) return pkg;
     }
 
-    if (ctx.requirementsTxt?.some((line) => {
-      const pkgName = line.split(/[=<>!\[]/)[0].trim().toLowerCase();
-      return pkgName === lowerPkg;
-    })) return pkg;
+    if (
+      ctx.requirementsTxt?.some((line) => {
+        const pkgName = line
+          .split(/[=<>![]/)[0]
+          .trim()
+          .toLowerCase();
+        return pkgName === lowerPkg;
+      })
+    )
+      return pkg;
   }
 
   // Fallback: read from disk
@@ -66,7 +78,9 @@ function hasPythonDep(ctx: ProjectContext, packages: string[]): string | null {
         const re = new RegExp(`${escapeRegExp(pkg)}`, 'i');
         if (re.test(content)) return pkg;
       }
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
 
   return null;
@@ -105,8 +119,7 @@ const POOL_CREATE_RE =
 // Transaction patterns:
 // async with conn.transaction():
 // async with database.transaction():
-const TRANSACTION_RE =
-  /async\s+with\s+\w+\.transaction\s*\(/g;
+const TRANSACTION_RE = /async\s+with\s+\w+\.transaction\s*\(/g;
 
 // Tortoise ORM patterns (async ORM built on asyncpg/aiosqlite):
 // await Model.filter(name='...').first()
@@ -139,11 +152,7 @@ function extractAsyncDbStatements(source: string): AsyncDbStatement[] {
   const statements: AsyncDbStatement[] = [];
   const seen = new Set<string>();
 
-  function addSqlStatement(
-    sql: string,
-    line: number,
-    driver: string,
-  ): void {
+  function addSqlStatement(sql: string, line: number, driver: string): void {
     const upper = sql.trim().toUpperCase();
     const key = `${driver}:${line}:${upper.slice(0, 50)}`;
     if (seen.has(key)) return;
@@ -237,16 +246,76 @@ function extractTortoiseModels(source: string): TortoiseModelRef[] {
 
 /** SQL keywords that are NOT table names. */
 const SQL_KEYWORDS = new Set([
-  'select', 'from', 'where', 'and', 'or', 'not', 'in', 'is', 'null',
-  'true', 'false', 'as', 'on', 'set', 'values', 'into', 'table',
-  'index', 'if', 'exists', 'then', 'else', 'end', 'case', 'when',
-  'order', 'by', 'group', 'having', 'limit', 'offset', 'union', 'all',
-  'join', 'left', 'right', 'inner', 'outer', 'cross', 'natural',
-  'returning', 'conflict', 'nothing', 'do', 'update', 'delete',
-  'insert', 'create', 'alter', 'drop', 'truncate', 'begin', 'commit',
-  'rollback', 'with', 'recursive', 'temporary', 'temp', 'cascade',
-  'restrict', 'constraint', 'primary', 'foreign', 'key', 'references',
-  'unique', 'check', 'default', 'not', 'null',
+  'select',
+  'from',
+  'where',
+  'and',
+  'or',
+  'not',
+  'in',
+  'is',
+  'null',
+  'true',
+  'false',
+  'as',
+  'on',
+  'set',
+  'values',
+  'into',
+  'table',
+  'index',
+  'if',
+  'exists',
+  'then',
+  'else',
+  'end',
+  'case',
+  'when',
+  'order',
+  'by',
+  'group',
+  'having',
+  'limit',
+  'offset',
+  'union',
+  'all',
+  'join',
+  'left',
+  'right',
+  'inner',
+  'outer',
+  'cross',
+  'natural',
+  'returning',
+  'conflict',
+  'nothing',
+  'do',
+  'update',
+  'delete',
+  'insert',
+  'create',
+  'alter',
+  'drop',
+  'truncate',
+  'begin',
+  'commit',
+  'rollback',
+  'with',
+  'recursive',
+  'temporary',
+  'temp',
+  'cascade',
+  'restrict',
+  'constraint',
+  'primary',
+  'foreign',
+  'key',
+  'references',
+  'unique',
+  'check',
+  'default',
+  'not',
+  'null',
 ]);
 
 // ============================================================
@@ -269,11 +338,27 @@ export class AsyncDbPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'async_db_query', category: 'async-db', description: 'Async DB query (SELECT/fetch)' },
-        { name: 'async_db_mutation', category: 'async-db', description: 'Async DB mutation (INSERT/UPDATE/DELETE)' },
-        { name: 'async_db_schema', category: 'async-db', description: 'Async DB schema operation (CREATE/ALTER/DROP)' },
+        {
+          name: 'async_db_query',
+          category: 'async-db',
+          description: 'Async DB query (SELECT/fetch)',
+        },
+        {
+          name: 'async_db_mutation',
+          category: 'async-db',
+          description: 'Async DB mutation (INSERT/UPDATE/DELETE)',
+        },
+        {
+          name: 'async_db_schema',
+          category: 'async-db',
+          description: 'Async DB schema operation (CREATE/ALTER/DROP)',
+        },
         { name: 'async_db_pool', category: 'async-db', description: 'Connection pool creation' },
-        { name: 'tortoise_model_op', category: 'async-db', description: 'Tortoise ORM model operation' },
+        {
+          name: 'tortoise_model_op',
+          category: 'async-db',
+          description: 'Tortoise ORM model operation',
+        },
       ] satisfies EdgeTypeDeclaration[],
     };
   }
@@ -289,7 +374,10 @@ export class AsyncDbPlugin implements FrameworkPlugin {
     const result: FileParseResult = { status: 'ok', symbols: [], edges: [] };
 
     // Check for async DB imports
-    const hasAsyncDbImport = /(?:import\s+asyncpg|from\s+asyncpg|from\s+databases|import\s+aiosqlite|from\s+aiosqlite|from\s+psycopg|from\s+tortoise|from\s+piccolo)/.test(source);
+    const hasAsyncDbImport =
+      /(?:import\s+asyncpg|from\s+asyncpg|from\s+databases|import\s+aiosqlite|from\s+aiosqlite|from\s+psycopg|from\s+tortoise|from\s+piccolo)/.test(
+        source,
+      );
     if (!hasAsyncDbImport) return ok(result);
 
     const statements = extractAsyncDbStatements(source);
@@ -316,11 +404,20 @@ export class AsyncDbPlugin implements FrameworkPlugin {
 
       let edgeType: string;
       switch (stmt.kind) {
-        case 'query': edgeType = 'async_db_query'; break;
-        case 'mutation': edgeType = 'async_db_mutation'; break;
-        case 'ddl': edgeType = 'async_db_schema'; break;
-        case 'pool': edgeType = 'async_db_pool'; break;
-        default: continue;
+        case 'query':
+          edgeType = 'async_db_query';
+          break;
+        case 'mutation':
+          edgeType = 'async_db_mutation';
+          break;
+        case 'ddl':
+          edgeType = 'async_db_schema';
+          break;
+        case 'pool':
+          edgeType = 'async_db_pool';
+          break;
+        default:
+          continue;
       }
 
       result.edges!.push({

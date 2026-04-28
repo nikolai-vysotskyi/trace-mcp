@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { detectGitWorktree, findProjectRoot } from '../../src/project-root.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { detectGitWorktree } from '../../src/project-root.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,8 +55,8 @@ function makeLinkedWorktree(mainRoot: string, base: string, name: string): strin
 
   // Admin dir: commondir points to main .git (relative)
   const relCommondir = path.relative(adminDir, path.join(mainRoot, '.git'));
-  write(path.join(adminDir, 'commondir'), relCommondir + '\n');
-  write(path.join(adminDir, 'gitdir'), path.join(wtRoot, '.git') + '\n');
+  write(path.join(adminDir, 'commondir'), `${relCommondir}\n`);
+  write(path.join(adminDir, 'gitdir'), `${path.join(wtRoot, '.git')}\n`);
 
   return wtRoot;
 }
@@ -119,7 +119,7 @@ describe('detectGitWorktree', () => {
     write(path.join(wtRoot, 'package.json'), '{"name":"wt"}');
 
     // Use absolute path in commondir
-    write(path.join(adminDir, 'commondir'), path.join(mainRoot, '.git') + '\n');
+    write(path.join(adminDir, 'commondir'), `${path.join(mainRoot, '.git')}\n`);
 
     const info = detectGitWorktree(wtRoot);
     expect(info).not.toBeNull();

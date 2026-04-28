@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  NuxtPlugin,
+  extractFetchCalls,
   filePathToRoute,
+  NuxtPlugin,
   serverApiToRoute,
   serverRoutesToRoute,
-  extractFetchCalls,
 } from '../../../src/indexer/plugins/integration/framework/nuxt/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -129,8 +129,9 @@ describe('NuxtPlugin', () => {
     });
 
     it('handles nested dynamic routes', () => {
-      expect(filePathToRoute('pages/posts/[postId]/comments/[id].vue'))
-        .toBe('/posts/:postId/comments/:id');
+      expect(filePathToRoute('pages/posts/[postId]/comments/[id].vue')).toBe(
+        '/posts/:postId/comments/:id',
+      );
     });
 
     it('converts app/pages/index.vue to / with srcDir=app', () => {

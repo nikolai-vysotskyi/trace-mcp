@@ -6,21 +6,21 @@
 /** Minimum Python version required for specific AST constructs. */
 const PYTHON_MIN_VERSION: Record<string, string> = {
   // Python 3.0
-  'nonlocal_statement': '3.0',
+  nonlocal_statement: '3.0',
   // Python 3.3
-  'yield_from': '3.3',
+  yield_from: '3.3',
   // Python 3.5
-  'await_expression': '3.5',
-  'async_function_definition': '3.5',
+  await_expression: '3.5',
+  async_function_definition: '3.5',
   // Python 3.6
-  'format_string': '3.6',   // f-strings
+  format_string: '3.6', // f-strings
   // Python 3.8
-  'named_expression': '3.8', // walrus operator :=
+  named_expression: '3.8', // walrus operator :=
   // Python 3.10
-  'match_statement': '3.10',
+  match_statement: '3.10',
   // Python 3.12
-  'type_alias_statement': '3.12',
-  'type_parameter': '3.12',
+  type_alias_statement: '3.12',
+  type_parameter: '3.12',
 };
 
 /**

@@ -6,16 +6,17 @@
  */
 
 import path from 'node:path';
-import type { InitStepResult } from './types.js';
 import { upsertTraceMcpBlock } from './md-block.js';
+import type { InitStepResult } from './types.js';
 
 export function updateClaudeMd(
   projectRoot: string,
   opts: { dryRun?: boolean; scope?: 'global' | 'project' },
 ): InitStepResult {
-  const filePath = opts.scope === 'global'
-    ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.claude', '[internal record]')
-    : path.join(projectRoot, '[internal record]');
+  const filePath =
+    opts.scope === 'global'
+      ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.claude', '[internal record]')
+      : path.join(projectRoot, '[internal record]');
 
   return upsertTraceMcpBlock(filePath, { dryRun: opts.dryRun });
 }

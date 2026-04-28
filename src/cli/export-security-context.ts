@@ -6,18 +6,18 @@
  * for cross-file annotation verification and data flow analysis.
  */
 
-import { Command } from 'commander';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import { Command } from 'commander';
+import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { loadConfig } from '../config.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { getProject } from '../registry.js';
-import { findProjectRoot } from '../project-root.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
 import { logger } from '../logger.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
+import { findProjectRoot } from '../project-root.js';
+import { getProject } from '../registry.js';
 import { exportSecurityContext } from '../tools/quality/security-context-export.js';
 
 function resolveDbPath(projectRoot: string): string {
@@ -32,12 +32,7 @@ export const exportSecurityContextCommand = new Command('export-security-context
   .option('--scope <path>', 'Limit analysis to directory (relative to project root)')
   .option('--depth <n>', 'Call graph traversal depth (default: 3, max: 5)', '3')
   .option('--index', 'Re-index project before export', false)
-  .action(async (opts: {
-    output: string;
-    scope?: string;
-    depth: string;
-    index?: boolean;
-  }) => {
+  .action(async (opts: { output: string; scope?: string; depth: string; index?: boolean }) => {
     let projectRoot: string;
     try {
       projectRoot = findProjectRoot(process.cwd());
@@ -55,15 +50,17 @@ export const exportSecurityContextCommand = new Command('export-security-context
       // Optional re-index
       if (opts.index) {
         const configResult = await loadConfig(projectRoot);
-        const config = configResult.isOk() ? configResult.value : {
-          root: projectRoot,
-          include: ['**/*'],
-          exclude: ['vendor/**', 'node_modules/**', '.git/**'],
-          db: { path: '' },
-          plugins: [] as string[],
-          ignore: { directories: [] as string[], patterns: [] as string[] },
-          watch: { enabled: false, debounceMs: 2000 },
-        };
+        const config = configResult.isOk()
+          ? configResult.value
+          : {
+              root: projectRoot,
+              include: ['**/*'],
+              exclude: ['vendor/**', 'node_modules/**', '.git/**'],
+              db: { path: '' },
+              plugins: [] as string[],
+              ignore: { directories: [] as string[], patterns: [] as string[] },
+              watch: { enabled: false, debounceMs: 2000 },
+            };
 
         const registry = PluginRegistry.createWithDefaults();
 
@@ -76,7 +73,9 @@ export const exportSecurityContextCommand = new Command('export-security-context
       // Check that the project has been indexed
       const stats = store.getStats();
       if (stats.totalFiles === 0) {
-        console.error('Error: No files indexed. Run `trace-mcp reindex` first or use --index flag.');
+        console.error(
+          'Error: No files indexed. Run `trace-mcp reindex` first or use --index flag.',
+        );
         process.exit(2);
       }
 
@@ -95,13 +94,15 @@ export const exportSecurityContextCommand = new Command('export-security-context
       const json = JSON.stringify(result.value, null, 2);
 
       if (opts.output === '-') {
-        process.stdout.write(json + '\n');
+        process.stdout.write(`${json}\n`);
       } else {
         const outputPath = path.resolve(opts.output);
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
         fs.writeFileSync(outputPath, json, 'utf-8');
         logger.info({ path: outputPath }, 'Security context exported');
-        console.error(`Exported to ${outputPath} (${result.value.tool_registrations.length} tool registrations)`);
+        console.error(
+          `Exported to ${outputPath} (${result.value.tool_registrations.length} tool registrations)`,
+        );
       }
     } finally {
       db.close();

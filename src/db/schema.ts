@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 23;
 
 const DDL = `
 -- ============================================================
@@ -358,21 +358,56 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 `;
 
-const SEED_NODE_TYPES = ['symbol', 'file', 'route', 'component', 'migration', 'orm_model', 'rn_screen', 'service'];
+const SEED_NODE_TYPES = [
+  'symbol',
+  'file',
+  'route',
+  'component',
+  'migration',
+  'orm_model',
+  'rn_screen',
+  'service',
+];
 
 const SEED_EDGE_TYPES = [
   // Core edges (added in v2 migration, must also be in seed for fresh DBs)
   { name: 'calls', category: 'core', description: 'Direct function/method call' },
   { name: 'instantiates', category: 'core', description: 'Class instantiation via `new`' },
   { name: 'accesses_property', category: 'core', description: 'Property read/write' },
-  { name: 'accesses_constant', category: 'core', description: 'Class constant or enum case access' },
-  { name: 'member_of', category: 'core', description: 'Symbol is a member of a container (method/property of class, case of enum)' },
+  {
+    name: 'accesses_constant',
+    category: 'core',
+    description: 'Class constant or enum case access',
+  },
+  {
+    name: 'member_of',
+    category: 'core',
+    description: 'Symbol is a member of a container (method/property of class, case of enum)',
+  },
   { name: 'references', category: 'core', description: 'Symbol reference (read/write)' },
+  {
+    name: 'embeds',
+    category: 'markdown',
+    description: 'Markdown embed (![[X]]) — note transcludes another note',
+  },
+  {
+    name: 'tagged',
+    category: 'markdown',
+    description: 'Note is tagged with a #tag (frontmatter or inline)',
+  },
   { name: 'unresolved', category: 'core', description: 'Phantom edge for unresolved targets' },
   { name: 'test_covers', category: 'core', description: 'Test file covers a symbol or file' },
   { name: 'esm_imports', category: 'core', description: 'ESM import (file→file)' },
-  { name: 'graphql_resolves', category: 'graphql', description: 'Resolver implements a GraphQL field' },
-  { name: 'graphql_references_type', category: 'graphql', description: 'Resolver/field references a GraphQL type' },
+  {
+    name: 'graphql_resolves',
+    category: 'graphql',
+    description: 'Resolver implements a GraphQL field',
+  },
+  {
+    name: 'graphql_references_type',
+    category: 'graphql',
+    description: 'Resolver/field references a GraphQL type',
+  },
   // PHP language edges
   { name: 'imports', category: 'php', description: 'PHP use/import statement' },
   { name: 'extends', category: 'php', description: 'Class/interface extends' },
@@ -380,7 +415,11 @@ const SEED_EDGE_TYPES = [
   { name: 'uses_trait', category: 'php', description: 'Class uses trait' },
   // TypeScript language edges
   { name: 'ts_extends', category: 'typescript', description: 'TypeScript class/interface extends' },
-  { name: 'ts_implements', category: 'typescript', description: 'TypeScript class implements interface' },
+  {
+    name: 'ts_implements',
+    category: 'typescript',
+    description: 'TypeScript class implements interface',
+  },
   // Laravel framework edges
   { name: 'routes_to', category: 'laravel', description: 'Route -> Controller' },
   { name: 'has_many', category: 'laravel', description: 'Eloquent hasMany' },
@@ -394,40 +433,80 @@ const SEED_EDGE_TYPES = [
   { name: 'middleware_guards', category: 'laravel', description: 'Route -> Middleware' },
   { name: 'migrates', category: 'laravel', description: 'Migration -> table' },
   // Vue framework edges
-  { name: 'renders_component', category: 'vue', description: 'Parent component renders child in template' },
-  { name: 'uses_composable', category: 'vue', description: 'Component calls a composable function' },
+  {
+    name: 'renders_component',
+    category: 'vue',
+    description: 'Parent component renders child in template',
+  },
+  {
+    name: 'uses_composable',
+    category: 'vue',
+    description: 'Component calls a composable function',
+  },
   { name: 'provides_slot', category: 'vue', description: 'Component provides a named slot' },
   // Inertia edges
-  { name: 'inertia_renders', category: 'inertia', description: 'Controller renders Vue page via Inertia' },
+  {
+    name: 'inertia_renders',
+    category: 'inertia',
+    description: 'Controller renders Vue page via Inertia',
+  },
   { name: 'passes_props', category: 'inertia', description: 'Controller passes props to Vue page' },
   // Nuxt edges
   { name: 'nuxt_auto_imports', category: 'nuxt', description: 'Auto-imported composable' },
   { name: 'api_calls', category: 'nuxt', description: 'fetch/useFetch API call' },
-  { name: 'nuxt_shared_import', category: 'nuxt', description: 'Auto-imported shared utility or type' },
+  {
+    name: 'nuxt_shared_import',
+    category: 'nuxt',
+    description: 'Auto-imported shared utility or type',
+  },
   // Blade edges
   { name: 'blade_extends', category: 'blade', description: '@extends directive' },
   { name: 'blade_includes', category: 'blade', description: '@include directive' },
   { name: 'blade_component', category: 'blade', description: '<x-component> or @component' },
-  { name: 'uses_asset', category: 'blade', description: '<script src> / <link href> asset reference' },
+  {
+    name: 'uses_asset',
+    category: 'blade',
+    description: '<script src> / <link href> asset reference',
+  },
   // Nova edges
   { name: 'nova_resource_for', category: 'nova', description: 'Nova Resource → Eloquent Model' },
-  { name: 'nova_field_relationship', category: 'nova', description: 'Nova Resource → related Nova Resource via field' },
+  {
+    name: 'nova_field_relationship',
+    category: 'nova',
+    description: 'Nova Resource → related Nova Resource via field',
+  },
   { name: 'nova_action_on', category: 'nova', description: 'Action → Resource' },
   { name: 'nova_filter_on', category: 'nova', description: 'Filter → Resource' },
   { name: 'nova_lens_on', category: 'nova', description: 'Lens → Resource' },
   { name: 'nova_metric_queries', category: 'nova', description: 'Metric → Eloquent Model' },
   // Filament edges
   { name: 'filament_resource_for', category: 'filament', description: 'Resource → Eloquent Model' },
-  { name: 'filament_relation_manager', category: 'filament', description: 'Resource → RelationManager' },
-  { name: 'filament_form_relationship', category: 'filament', description: 'Form field →relationship() → Model' },
+  {
+    name: 'filament_relation_manager',
+    category: 'filament',
+    description: 'Resource → RelationManager',
+  },
+  {
+    name: 'filament_form_relationship',
+    category: 'filament',
+    description: 'Form field →relationship() → Model',
+  },
   { name: 'filament_page_for', category: 'filament', description: 'Page registered on Resource' },
-  { name: 'filament_panel_registers', category: 'filament', description: 'PanelProvider → Resource/Page/Widget' },
+  {
+    name: 'filament_panel_registers',
+    category: 'filament',
+    description: 'PanelProvider → Resource/Page/Widget',
+  },
   { name: 'filament_widget_queries', category: 'filament', description: 'Widget → Eloquent Model' },
   // Livewire edges
   { name: 'livewire_renders', category: 'livewire', description: 'Component class → Blade view' },
   { name: 'livewire_dispatches', category: 'livewire', description: 'Component dispatches event' },
   { name: 'livewire_listens', category: 'livewire', description: 'Component listens for event' },
-  { name: 'livewire_child_of', category: 'livewire', description: 'Blade <livewire:child/> → Component' },
+  {
+    name: 'livewire_child_of',
+    category: 'livewire',
+    description: 'Blade <livewire:child/> → Component',
+  },
   { name: 'livewire_uses_model', category: 'livewire', description: 'Component → Eloquent Model' },
   { name: 'livewire_form', category: 'livewire', description: 'Component → Form class (v3)' },
   { name: 'livewire_action', category: 'livewire', description: 'wire:click → Component method' },
@@ -437,30 +516,79 @@ const SEED_EDGE_TYPES = [
   { name: 'nest_injects', category: 'nestjs', description: 'Constructor dependency injection' },
   { name: 'nest_guards', category: 'nestjs', description: 'UseGuards on controller/method' },
   { name: 'nest_pipes', category: 'nestjs', description: 'UsePipes on controller/method' },
-  { name: 'nest_interceptors', category: 'nestjs', description: 'UseInterceptors on controller/method' },
-  { name: 'nest_gateway_event', category: 'nestjs', description: 'WebSocket gateway @SubscribeMessage handler' },
-  { name: 'nest_message_pattern', category: 'nestjs', description: 'Microservice @MessagePattern handler' },
-  { name: 'nest_event_pattern', category: 'nestjs', description: 'Microservice @EventPattern handler' },
+  {
+    name: 'nest_interceptors',
+    category: 'nestjs',
+    description: 'UseInterceptors on controller/method',
+  },
+  {
+    name: 'nest_gateway_event',
+    category: 'nestjs',
+    description: 'WebSocket gateway @SubscribeMessage handler',
+  },
+  {
+    name: 'nest_message_pattern',
+    category: 'nestjs',
+    description: 'Microservice @MessagePattern handler',
+  },
+  {
+    name: 'nest_event_pattern',
+    category: 'nestjs',
+    description: 'Microservice @EventPattern handler',
+  },
   // Next.js edges
-  { name: 'next_entry_point', category: 'nextjs', description: 'Next.js file-based auto-loaded entry point (page, layout, route, loading, error, metadata files, etc.)' },
+  {
+    name: 'next_entry_point',
+    category: 'nextjs',
+    description:
+      'Next.js file-based auto-loaded entry point (page, layout, route, loading, error, metadata files, etc.)',
+  },
   { name: 'next_renders_page', category: 'nextjs', description: 'Layout renders page' },
-  { name: 'next_renders_loading', category: 'nextjs', description: 'Layout renders loading boundary' },
+  {
+    name: 'next_renders_loading',
+    category: 'nextjs',
+    description: 'Layout renders loading boundary',
+  },
   { name: 'next_renders_error', category: 'nextjs', description: 'Layout renders error boundary' },
-  { name: 'next_renders_not_found', category: 'nextjs', description: 'Layout renders not-found boundary' },
+  {
+    name: 'next_renders_not_found',
+    category: 'nextjs',
+    description: 'Layout renders not-found boundary',
+  },
   { name: 'next_server_action', category: 'nextjs', description: 'Server action reference' },
   { name: 'next_middleware', category: 'nextjs', description: 'Middleware applies to routes' },
   { name: 'next_parallel_slot', category: 'nextjs', description: 'Parallel route slot' },
   { name: 'next_intercepting', category: 'nextjs', description: 'Intercepting route' },
-  { name: 'next_data_fetching', category: 'nextjs', description: 'Pages Router data fetching function' },
-  { name: 'next_template', category: 'nextjs', description: 'Template component for route segment' },
+  {
+    name: 'next_data_fetching',
+    category: 'nextjs',
+    description: 'Pages Router data fetching function',
+  },
+  {
+    name: 'next_template',
+    category: 'nextjs',
+    description: 'Template component for route segment',
+  },
   // Express edges
   { name: 'express_route', category: 'express', description: 'Express route handler' },
   { name: 'express_middleware', category: 'express', description: 'Express middleware' },
   { name: 'express_mounts', category: 'express', description: 'Router mount via app.use' },
-  { name: 'express_error_handler', category: 'express', description: '4-arg error handling middleware' },
-  { name: 'express_param_handler', category: 'express', description: 'app.param() route parameter handler' },
+  {
+    name: 'express_error_handler',
+    category: 'express',
+    description: '4-arg error handling middleware',
+  },
+  {
+    name: 'express_param_handler',
+    category: 'express',
+    description: 'app.param() route parameter handler',
+  },
   // Mongoose edges
-  { name: 'mongoose_references', category: 'mongoose', description: 'ObjectId ref to another model' },
+  {
+    name: 'mongoose_references',
+    category: 'mongoose',
+    description: 'ObjectId ref to another model',
+  },
   { name: 'mongoose_has_virtual', category: 'mongoose', description: 'Schema virtual field' },
   { name: 'mongoose_has_middleware', category: 'mongoose', description: 'Schema pre/post hook' },
   { name: 'mongoose_has_method', category: 'mongoose', description: 'Schema instance method' },
@@ -469,18 +597,50 @@ const SEED_EDGE_TYPES = [
   { name: 'mongoose_has_index', category: 'mongoose', description: 'Schema index' },
   { name: 'mongoose_uses_plugin', category: 'mongoose', description: 'Schema plugin' },
   // Sequelize edges
-  { name: 'sequelize_has_many', category: 'sequelize', description: 'Sequelize hasMany association' },
-  { name: 'sequelize_belongs_to', category: 'sequelize', description: 'Sequelize belongsTo association' },
-  { name: 'sequelize_belongs_to_many', category: 'sequelize', description: 'Sequelize belongsToMany association' },
+  {
+    name: 'sequelize_has_many',
+    category: 'sequelize',
+    description: 'Sequelize hasMany association',
+  },
+  {
+    name: 'sequelize_belongs_to',
+    category: 'sequelize',
+    description: 'Sequelize belongsTo association',
+  },
+  {
+    name: 'sequelize_belongs_to_many',
+    category: 'sequelize',
+    description: 'Sequelize belongsToMany association',
+  },
   { name: 'sequelize_has_one', category: 'sequelize', description: 'Sequelize hasOne association' },
   { name: 'sequelize_has_hook', category: 'sequelize', description: 'Sequelize lifecycle hook' },
   { name: 'sequelize_has_scope', category: 'sequelize', description: 'Sequelize named scope' },
-  { name: 'sequelize_migrates', category: 'sequelize', description: 'Migration changes table schema' },
+  {
+    name: 'sequelize_migrates',
+    category: 'sequelize',
+    description: 'Migration changes table schema',
+  },
   // React Native edges
-  { name: 'rn_navigates_to', category: 'react-native', description: 'navigation.navigate() to screen' },
-  { name: 'rn_screen_in_navigator', category: 'react-native', description: 'Screen registered in navigator' },
-  { name: 'rn_uses_native_module', category: 'react-native', description: 'Uses NativeModules/TurboModuleRegistry' },
-  { name: 'rn_platform_specific', category: 'react-native', description: 'Platform-specific file variant' },
+  {
+    name: 'rn_navigates_to',
+    category: 'react-native',
+    description: 'navigation.navigate() to screen',
+  },
+  {
+    name: 'rn_screen_in_navigator',
+    category: 'react-native',
+    description: 'Screen registered in navigator',
+  },
+  {
+    name: 'rn_uses_native_module',
+    category: 'react-native',
+    description: 'Uses NativeModules/TurboModuleRegistry',
+  },
+  {
+    name: 'rn_platform_specific',
+    category: 'react-native',
+    description: 'Platform-specific file variant',
+  },
   { name: 'rn_deep_links_to', category: 'react-native', description: 'Deep link maps to screen' },
   { name: 'expo_route', category: 'expo-router', description: 'Expo Router file-based route' },
   { name: 'expo_layout', category: 'expo-router', description: 'Expo Router layout file' },
@@ -492,8 +652,16 @@ const SEED_EDGE_TYPES = [
   { name: 'py_inherits', category: 'python', description: 'Class inheritance' },
   { name: 'py_uses_decorator', category: 'python', description: 'Function/class uses decorator' },
   // pytest edges
-  { name: 'pytest_fixture_used', category: 'pytest', description: 'Test function uses a pytest fixture' },
-  { name: 'pytest_parametrize', category: 'pytest', description: 'Test parametrized with @pytest.mark.parametrize' },
+  {
+    name: 'pytest_fixture_used',
+    category: 'pytest',
+    description: 'Test function uses a pytest fixture',
+  },
+  {
+    name: 'pytest_parametrize',
+    category: 'pytest',
+    description: 'Test parametrized with @pytest.mark.parametrize',
+  },
   // Django edges
   { name: 'django_url_routes_to', category: 'django', description: 'URL pattern routes to view' },
   { name: 'django_includes_urls', category: 'django', description: 'include() sub-URL config' },
@@ -506,7 +674,11 @@ const SEED_EDGE_TYPES = [
   // FastAPI edges
   { name: 'fastapi_route', category: 'fastapi', description: 'FastAPI route decorator' },
   { name: 'fastapi_depends', category: 'fastapi', description: 'Depends() dependency injection' },
-  { name: 'fastapi_request_model', category: 'fastapi', description: 'Request body Pydantic model' },
+  {
+    name: 'fastapi_request_model',
+    category: 'fastapi',
+    description: 'Request body Pydantic model',
+  },
   { name: 'fastapi_response_model', category: 'fastapi', description: 'response_model parameter' },
   { name: 'fastapi_router_mounts', category: 'fastapi', description: 'include_router() mount' },
   // Flask edges
@@ -524,35 +696,99 @@ const SEED_EDGE_TYPES = [
   { name: 'drf_router_registers', category: 'drf', description: 'router.register() ViewSet' },
   { name: 'drf_permission_guards', category: 'drf', description: 'permission_classes on ViewSet' },
   // Pydantic edges
-  { name: 'pydantic_field_type', category: 'pydantic', description: 'BaseModel field type reference' },
-  { name: 'pydantic_from_orm', category: 'pydantic', description: 'Model with from_attributes → ORM model' },
+  {
+    name: 'pydantic_field_type',
+    category: 'pydantic',
+    description: 'BaseModel field type reference',
+  },
+  {
+    name: 'pydantic_from_orm',
+    category: 'pydantic',
+    description: 'Model with from_attributes → ORM model',
+  },
   // Async DB edges (asyncpg, databases, aiosqlite, psycopg, tortoise-orm)
   { name: 'async_db_query', category: 'async-db', description: 'Async DB query (SELECT/fetch)' },
-  { name: 'async_db_mutation', category: 'async-db', description: 'Async DB mutation (INSERT/UPDATE/DELETE)' },
-  { name: 'async_db_schema', category: 'async-db', description: 'Async DB DDL (CREATE/ALTER/DROP)' },
+  {
+    name: 'async_db_mutation',
+    category: 'async-db',
+    description: 'Async DB mutation (INSERT/UPDATE/DELETE)',
+  },
+  {
+    name: 'async_db_schema',
+    category: 'async-db',
+    description: 'Async DB DDL (CREATE/ALTER/DROP)',
+  },
   { name: 'async_db_pool', category: 'async-db', description: 'Connection pool creation' },
   { name: 'tortoise_model_op', category: 'async-db', description: 'Tortoise ORM model operation' },
   // Celery edges
-  { name: 'celery_task_registered', category: 'celery', description: '@app.task / @shared_task registration' },
+  {
+    name: 'celery_task_registered',
+    category: 'celery',
+    description: '@app.task / @shared_task registration',
+  },
   { name: 'celery_beat_schedule', category: 'celery', description: 'Beat schedule task entry' },
-  { name: 'celery_dispatches', category: 'celery', description: '.delay() / .apply_async() dispatch' },
+  {
+    name: 'celery_dispatches',
+    category: 'celery',
+    description: '.delay() / .apply_async() dispatch',
+  },
   // Pennant (feature flags) edges
-  { name: 'feature_defined_in', category: 'pennant', description: 'Feature flag defined via Feature::define()' },
-  { name: 'feature_checked_by', category: 'pennant', description: 'Feature flag checked in PHP/Blade' },
-  { name: 'feature_gates_route', category: 'pennant', description: 'Route protected by features middleware' },
+  {
+    name: 'feature_defined_in',
+    category: 'pennant',
+    description: 'Feature flag defined via Feature::define()',
+  },
+  {
+    name: 'feature_checked_by',
+    category: 'pennant',
+    description: 'Feature flag checked in PHP/Blade',
+  },
+  {
+    name: 'feature_gates_route',
+    category: 'pennant',
+    description: 'Route protected by features middleware',
+  },
   // Broadcasting / Reverb edges
   { name: 'broadcasts_on', category: 'broadcasting', description: 'Event broadcasts on a channel' },
-  { name: 'channel_authorized_by', category: 'broadcasting', description: 'Channel authorization callback or class' },
+  {
+    name: 'channel_authorized_by',
+    category: 'broadcasting',
+    description: 'Channel authorization callback or class',
+  },
   { name: 'broadcast_as', category: 'broadcasting', description: 'Event broadcast name override' },
   // laravel-data edges
-  { name: 'data_wraps', category: 'laravel-data', description: 'Data class wraps an Eloquent model' },
-  { name: 'data_property_type', category: 'laravel-data', description: 'Data class property references another Data class' },
-  { name: 'data_collection', category: 'laravel-data', description: 'DataCollection<T> references a Data class' },
+  {
+    name: 'data_wraps',
+    category: 'laravel-data',
+    description: 'Data class wraps an Eloquent model',
+  },
+  {
+    name: 'data_property_type',
+    category: 'laravel-data',
+    description: 'Data class property references another Data class',
+  },
+  {
+    name: 'data_collection',
+    category: 'laravel-data',
+    description: 'DataCollection<T> references a Data class',
+  },
   // State management (Zustand / Redux Toolkit)
   { name: 'zustand_store', category: 'state-management', description: 'Zustand store definition' },
-  { name: 'redux_slice', category: 'state-management', description: 'Redux Toolkit slice definition' },
-  { name: 'dispatches_action', category: 'state-management', description: 'Component dispatches a Redux/Zustand action' },
-  { name: 'selects_state', category: 'state-management', description: 'Component selects state from store' },
+  {
+    name: 'redux_slice',
+    category: 'state-management',
+    description: 'Redux Toolkit slice definition',
+  },
+  {
+    name: 'dispatches_action',
+    category: 'state-management',
+    description: 'Component dispatches a Redux/Zustand action',
+  },
+  {
+    name: 'selects_state',
+    category: 'state-management',
+    description: 'Component selects state from store',
+  },
   // tRPC edges
   { name: 'trpc_procedure', category: 'trpc', description: 'Procedure defined in router' },
   // Fastify edges
@@ -563,35 +799,83 @@ const SEED_EDGE_TYPES = [
   { name: 'socketio_event', category: 'socketio', description: 'Event listener/emitter' },
   { name: 'socketio_namespace', category: 'socketio', description: 'Namespace definition' },
   // React (standalone) edges
-  { name: 'react_renders', category: 'react', description: 'Parent component renders child via JSX' },
+  {
+    name: 'react_renders',
+    category: 'react',
+    description: 'Parent component renders child via JSX',
+  },
   { name: 'react_context_provides', category: 'react', description: 'Context.Provider usage' },
   { name: 'react_context_consumes', category: 'react', description: 'useContext() or use() call' },
   { name: 'react_lazy_loads', category: 'react', description: 'React.lazy(() => import("./X"))' },
-  { name: 'react_custom_hook_uses', category: 'react', description: 'Component calls a custom hook' },
+  {
+    name: 'react_custom_hook_uses',
+    category: 'react',
+    description: 'Component calls a custom hook',
+  },
   { name: 'react_use_client', category: 'react', description: "'use client' directive (React 19)" },
   { name: 'react_use_server', category: 'react', description: "'use server' directive (React 19)" },
   // Hono edges
   { name: 'hono_route', category: 'hono', description: 'Hono route handler' },
   { name: 'hono_middleware', category: 'hono', description: 'Hono middleware usage' },
   // Data fetching (React Query / SWR) edges
-  { name: 'fetches_endpoint', category: 'data-fetching', description: 'useQuery/useSWR call referencing an API endpoint' },
+  {
+    name: 'fetches_endpoint',
+    category: 'data-fetching',
+    description: 'useQuery/useSWR call referencing an API endpoint',
+  },
   // Zod edges
   { name: 'zod_schema', category: 'zod', description: 'Zod schema definition' },
   // Testing framework edges
-  { name: 'test_covers_route', category: 'testing', description: 'Test file visits/requests an API route' },
-  { name: 'test_covers_component', category: 'testing', description: 'Test file mounts/renders a component' },
-  { name: 'test_imports_module', category: 'testing', description: 'Test file imports the module under test' },
+  {
+    name: 'test_covers_route',
+    category: 'testing',
+    description: 'Test file visits/requests an API route',
+  },
+  {
+    name: 'test_covers_component',
+    category: 'testing',
+    description: 'Test file mounts/renders a component',
+  },
+  {
+    name: 'test_imports_module',
+    category: 'testing',
+    description: 'Test file imports the module under test',
+  },
   // Workspace edges
   { name: 'workspace_import', category: 'workspace', description: 'Cross-workspace import' },
   { name: 'api_call', category: 'workspace', description: 'Cross-workspace API call' },
   { name: 'type_import', category: 'workspace', description: 'Cross-workspace type import' },
   // Runtime Intelligence edges (from OTel traces)
-  { name: 'runtime_calls', category: 'runtime', description: 'Observed runtime call between symbols' },
-  { name: 'runtime_routes_to', category: 'runtime', description: 'Observed HTTP request to route handler' },
-  { name: 'runtime_queries', category: 'runtime', description: 'Runtime DB query from code to database service' },
-  { name: 'runtime_calls_service', category: 'runtime', description: 'Runtime call to external service' },
-  { name: 'runtime_publishes', category: 'runtime', description: 'Runtime message publish to queue/topic' },
-  { name: 'runtime_consumes', category: 'runtime', description: 'Runtime message consumption from queue/topic' },
+  {
+    name: 'runtime_calls',
+    category: 'runtime',
+    description: 'Observed runtime call between symbols',
+  },
+  {
+    name: 'runtime_routes_to',
+    category: 'runtime',
+    description: 'Observed HTTP request to route handler',
+  },
+  {
+    name: 'runtime_queries',
+    category: 'runtime',
+    description: 'Runtime DB query from code to database service',
+  },
+  {
+    name: 'runtime_calls_service',
+    category: 'runtime',
+    description: 'Runtime call to external service',
+  },
+  {
+    name: 'runtime_publishes',
+    category: 'runtime',
+    description: 'Runtime message publish to queue/topic',
+  },
+  {
+    name: 'runtime_consumes',
+    category: 'runtime',
+    description: 'Runtime message consumption from queue/topic',
+  },
 ];
 
 /**
@@ -743,11 +1027,11 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     // v9: Workspace columns + indices for cross-workspace queries
     // Add columns first (they're in the DDL for new databases, but existing ones need ALTER)
     const filesCols = db.pragma('table_info(files)') as { name: string }[];
-    if (!filesCols.some(c => c.name === 'workspace')) {
+    if (!filesCols.some((c) => c.name === 'workspace')) {
       db.exec(`ALTER TABLE files ADD COLUMN workspace TEXT`);
     }
     const edgesCols = db.pragma('table_info(edges)') as { name: string }[];
-    if (!edgesCols.some(c => c.name === 'is_cross_ws')) {
+    if (!edgesCols.some((c) => c.name === 'is_cross_ws')) {
       db.exec(`ALTER TABLE edges ADD COLUMN is_cross_ws INTEGER NOT NULL DEFAULT 0`);
     }
     db.exec(`
@@ -1029,6 +1313,21 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       )
     `);
   },
+  22: (db) => {
+    // Markdown knowledge-graph: register the `embeds` edge type for ![[X]] transclusions.
+    db.exec(`
+      INSERT OR IGNORE INTO edge_types (name, category, directed, description)
+      VALUES ('embeds', 'markdown', 1, 'Markdown embed (![[X]]) — note transcludes another note');
+    `);
+  },
+  23: (db) => {
+    // Markdown knowledge-graph: `tagged` edge from note → canonical tag symbol.
+    // Enables `find_usages` on `tag:foo` to return every note carrying that tag.
+    db.exec(`
+      INSERT OR IGNORE INTO edge_types (name, category, directed, description)
+      VALUES ('tagged', 'markdown', 1, 'Note is tagged with a #tag (frontmatter or inline)');
+    `);
+  },
 };
 
 function runMigrations(db: Database.Database, fromVersion: number): void {
@@ -1040,7 +1339,7 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
   if (versions.length === 0) return;
 
   const insertMigration = db.prepare(
-    "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+    'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
   );
   const updateVersion = db.prepare(
     "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('schema_version', ?)",
@@ -1075,15 +1374,19 @@ export function initializeDatabase(dbPath: string): Database.Database {
   db.exec(DDL);
 
   // Check schema version and run any pending migrations
-  const versionRow = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
+  const versionRow = db
+    .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+    .get() as { value: string } | undefined;
 
   if (!versionRow) {
     // Fresh database — seed and stamp with current version
     seedDatabase(db);
-    db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
+    db.prepare("INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)").run(
+      String(SCHEMA_VERSION),
+    );
     // Mark all migrations as already applied (they're baked into seed/DDL)
     const insertMigration = db.prepare(
-      "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+      'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     );
     const now = new Date().toISOString();
     for (const v of Object.keys(MIGRATIONS).map(Number)) {
@@ -1166,15 +1469,19 @@ export function enableFts5Triggers(db: Database.Database): void {
 }
 
 export function getTableNames(db: Database.Database): string[] {
-  const rows = db.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-  ).all() as { name: string }[];
+  const rows = db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
+    .all() as { name: string }[];
   return rows.map((r) => r.name);
 }
 
-function getVirtualTableNames(db: Database.Database): string[] {
-  const rows = db.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE '%VIRTUAL%' ORDER BY name",
-  ).all() as { name: string }[];
+function _getVirtualTableNames(db: Database.Database): string[] {
+  const rows = db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE '%VIRTUAL%' ORDER BY name",
+    )
+    .all() as { name: string }[];
   return rows.map((r) => r.name);
 }

@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError } from '../../errors.js';
-import type { Store, FileRow } from '../../db/store.js';
-import { validatePath } from '../../utils/security.js';
 // @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
+import type { FileRow, Store } from '../../db/store.js';
+import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
+import { validatePath } from '../../utils/security.js';
 
 interface SearchTextMatch {
   file: string;
@@ -74,7 +73,9 @@ export function searchText(
   // Get file list from DB (single query, no N+1)
   let files: FileRow[];
   if (language) {
-    files = store.db.prepare('SELECT * FROM files WHERE language = ? AND status != ?').all(language, 'error') as FileRow[];
+    files = store.db
+      .prepare('SELECT * FROM files WHERE language = ? AND status != ?')
+      .all(language, 'error') as FileRow[];
   } else {
     files = store.db.prepare('SELECT * FROM files WHERE status != ?').all('error') as FileRow[];
   }

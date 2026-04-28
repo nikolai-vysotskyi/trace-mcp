@@ -2,9 +2,9 @@
  * Patch Electron for dev mode. On macOS, patches the .app bundle
  * with a custom icon and name. On other platforms this is a no-op.
  */
-import { execSync } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { execSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

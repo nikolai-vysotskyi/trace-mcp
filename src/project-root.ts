@@ -258,7 +258,7 @@ export function findProjectRoot(from?: string): string {
     if (parent === dir) {
       throw new Error(
         `Could not find project root from ${from ?? process.cwd()}. ` +
-        `Looked for: ${ROOT_MARKERS.join(', ')}`,
+          `Looked for: ${ROOT_MARKERS.join(', ')}`,
       );
     }
     dir = parent;

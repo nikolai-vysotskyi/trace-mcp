@@ -42,14 +42,6 @@ const COLUMN_TYPES: Record<string, string> = {
   uuidMorphs: 'morphs',
 };
 
-interface MigrationColumn {
-  name: string;
-  type: string;
-  nullable?: boolean;
-  unique?: boolean;
-  default?: string;
-}
-
 interface MigrationExtractionResult {
   migrations: RawMigration[];
   warnings: string[];
@@ -59,10 +51,7 @@ interface MigrationExtractionResult {
  * Extract migration data from a PHP migration file.
  * Only parses the up() method to avoid capturing down() operations.
  */
-export function extractMigrations(
-  source: string,
-  filePath: string,
-): MigrationExtractionResult {
+export function extractMigrations(source: string, filePath: string): MigrationExtractionResult {
   const migrations: RawMigration[] = [];
   const warnings: string[] = [];
   const timestamp = extractTimestamp(filePath);
@@ -114,7 +103,8 @@ function extractSchemaCreate(
   timestamp: string | undefined,
   migrations: RawMigration[],
 ): void {
-  const regex = /Schema::create\s*\(\s*['"]([^'"]+)['"]\s*,\s*function\s*\([^)]*\)\s*\{([\s\S]*?)\}\s*\)/g;
+  const regex =
+    /Schema::create\s*\(\s*['"]([^'"]+)['"]\s*,\s*function\s*\([^)]*\)\s*\{([\s\S]*?)\}\s*\)/g;
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(source)) !== null) {
@@ -137,7 +127,8 @@ function extractSchemaTable(
   timestamp: string | undefined,
   migrations: RawMigration[],
 ): void {
-  const regex = /Schema::table\s*\(\s*['"]([^'"]+)['"]\s*,\s*function\s*\([^)]*\)\s*\{([\s\S]*?)\}\s*\)/g;
+  const regex =
+    /Schema::table\s*\(\s*['"]([^'"]+)['"]\s*,\s*function\s*\([^)]*\)\s*\{([\s\S]*?)\}\s*\)/g;
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(source)) !== null) {

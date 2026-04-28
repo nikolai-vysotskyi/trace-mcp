@@ -4,8 +4,9 @@
  * Extracts: function definitions, module/block scoping, package declarations,
  * Set/SetDelayed assignments, and import edges (Get/Needs).
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'wolfram',

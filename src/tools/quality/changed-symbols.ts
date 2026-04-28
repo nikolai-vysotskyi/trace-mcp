@@ -5,9 +5,8 @@
  * Performance: Single `git diff` call, single batch SQL for symbol lookup per file.
  */
 import { execSync } from 'node:child_process';
-import type { Store, SymbolRow, FileRow } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { logger } from '../../logger.js';
+import type { Store } from '../../db/store.js';
+import { err, ok, type TraceMcpResult } from '../../errors.js';
 
 type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
 
@@ -49,17 +48,20 @@ interface DiffHunk {
  * Auto-detect the base branch and return merge-base with the target ref.
  * Priority: configured defaultBaseBranch → main → master → err.
  */
-function detectBaseBranch(rootPath: string, until: string, defaultBaseBranch?: string): TraceMcpResult<string> {
-  const candidates = defaultBaseBranch
-    ? [defaultBaseBranch]
-    : ['main', 'master'];
+function detectBaseBranch(
+  rootPath: string,
+  until: string,
+  defaultBaseBranch?: string,
+): TraceMcpResult<string> {
+  const candidates = defaultBaseBranch ? [defaultBaseBranch] : ['main', 'master'];
 
   for (const candidate of candidates) {
     try {
-      const mergeBase = execSync(
-        `git merge-base ${candidate} ${until}`,
-        { cwd: rootPath, encoding: 'utf-8', timeout: 10_000 },
-      ).trim();
+      const mergeBase = execSync(`git merge-base ${candidate} ${until}`, {
+        cwd: rootPath,
+        encoding: 'utf-8',
+        timeout: 10_000,
+      }).trim();
       return ok(mergeBase);
     } catch {
       // try next candidate
@@ -90,19 +92,24 @@ export function getChangedSymbols(
     since = opts.since;
   } else {
     const detected = detectBaseBranch(rootPath, until, opts.defaultBaseBranch);
-    if (detected.isErr()) return detected as any;
+    if (detected.isErr()) return detected as never;
     since = detected.value;
   }
 
   // Get list of changed files with their status
   let diffNameStatus: string;
   try {
-    diffNameStatus = execSync(
-      `git diff --name-status --diff-filter=AMRD ${since}..${until}`,
-      { cwd: rootPath, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, timeout: 15_000 },
-    ).trim();
+    diffNameStatus = execSync(`git diff --name-status --diff-filter=AMRD ${since}..${until}`, {
+      cwd: rootPath,
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 15_000,
+    }).trim();
   } catch (e) {
-    return err({ code: 'VALIDATION_ERROR', message: `git diff failed: ${e instanceof Error ? e.message : String(e)}` });
+    return err({
+      code: 'VALIDATION_ERROR',
+      message: `git diff failed: ${e instanceof Error ? e.message : String(e)}`,
+    });
   }
 
   if (!diffNameStatus) {
@@ -128,10 +135,12 @@ export function getChangedSymbols(
   // Get unified diff with line numbers for modified files
   let diffUnified = '';
   try {
-    diffUnified = execSync(
-      `git diff --unified=0 ${since}..${until}`,
-      { cwd: rootPath, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024, timeout: 30_000 },
-    );
+    diffUnified = execSync(`git diff --unified=0 ${since}..${until}`, {
+      cwd: rootPath,
+      encoding: 'utf-8',
+      maxBuffer: 50 * 1024 * 1024,
+      timeout: 30_000,
+    });
   } catch {
     // Non-fatal — we can still report file-level changes
   }
@@ -257,10 +266,14 @@ export function getChangedSymbols(
 
 function statusToChangeKind(status: string): ChangeKind {
   switch (status) {
-    case 'A': return 'added';
-    case 'D': return 'removed';
-    case 'R': return 'renamed';
-    default: return 'modified';
+    case 'A':
+      return 'added';
+    case 'D':
+      return 'removed';
+    case 'R':
+      return 'renamed';
+    default:
+      return 'modified';
   }
 }
 
@@ -301,16 +314,20 @@ export function compareBranches(
   if (opts.base) {
     base = opts.base;
     try {
-      mergeBase = execSync(
-        `git merge-base ${base} ${branch}`,
-        { cwd: rootPath, encoding: 'utf-8', timeout: 10_000 },
-      ).trim();
+      mergeBase = execSync(`git merge-base ${base} ${branch}`, {
+        cwd: rootPath,
+        encoding: 'utf-8',
+        timeout: 10_000,
+      }).trim();
     } catch (e) {
-      return err({ code: 'VALIDATION_ERROR', message: `Cannot find merge base between ${base} and ${branch}: ${e instanceof Error ? e.message : String(e)}` });
+      return err({
+        code: 'VALIDATION_ERROR',
+        message: `Cannot find merge base between ${base} and ${branch}: ${e instanceof Error ? e.message : String(e)}`,
+      });
     }
   } else {
     const detected = detectBaseBranch(rootPath, branch, opts.defaultBaseBranch);
-    if (detected.isErr()) return detected as any;
+    if (detected.isErr()) return detected as never;
     mergeBase = detected.value;
     base = opts.defaultBaseBranch ?? 'main';
   }
@@ -318,10 +335,11 @@ export function compareBranches(
   // Count commits in range
   let commitCount = 0;
   try {
-    const countOutput = execSync(
-      `git rev-list --count ${mergeBase}..${branch}`,
-      { cwd: rootPath, encoding: 'utf-8', timeout: 10_000 },
-    ).trim();
+    const countOutput = execSync(`git rev-list --count ${mergeBase}..${branch}`, {
+      cwd: rootPath,
+      encoding: 'utf-8',
+      timeout: 10_000,
+    }).trim();
     commitCount = parseInt(countOutput, 10) || 0;
   } catch {
     // Non-fatal
@@ -335,7 +353,7 @@ export function compareBranches(
     maxBlastDepth: opts.maxBlastDepth ?? 3,
   });
 
-  if (result.isErr()) return result as any;
+  if (result.isErr()) return result as never;
 
   const data = result.value;
   const groupBy = opts.groupBy ?? 'category';
@@ -353,7 +371,6 @@ export function compareBranches(
         key = br >= 10 ? 'high' : br >= 3 ? 'medium' : 'low';
         break;
       }
-      case 'category':
       default:
         key = sym.changeKind;
         break;

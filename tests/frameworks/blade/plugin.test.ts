@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   BladePlugin,
+  bladeNameToPath,
   extractBladeDirectives,
   extractBladeSections,
   extractBladeYields,
-  bladeNameToPath,
   xComponentToPath,
 } from '../../../src/indexer/plugins/integration/view/blade/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
@@ -121,20 +121,19 @@ describe('BladePlugin', () => {
 
   describe('bladeNameToPath()', () => {
     it('converts dot notation to file path', () => {
-      expect(bladeNameToPath('layouts.app'))
-        .toBe('resources/views/layouts/app.blade.php');
+      expect(bladeNameToPath('layouts.app')).toBe('resources/views/layouts/app.blade.php');
     });
 
     it('handles nested names', () => {
-      expect(bladeNameToPath('admin.users.index'))
-        .toBe('resources/views/admin/users/index.blade.php');
+      expect(bladeNameToPath('admin.users.index')).toBe(
+        'resources/views/admin/users/index.blade.php',
+      );
     });
   });
 
   describe('xComponentToPath()', () => {
     it('converts x-component name to path', () => {
-      expect(xComponentToPath('user-card'))
-        .toBe('resources/views/components/user-card.blade.php');
+      expect(xComponentToPath('user-card')).toBe('resources/views/components/user-card.blade.php');
     });
   });
 

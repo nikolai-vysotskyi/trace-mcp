@@ -14,14 +14,11 @@
  */
 import type { RawRoute } from '../../../../../plugin-api/types.js';
 
-const LFM_ROUTES_CALL_RE =
-  /\b(?:LaravelFilemanager|Lfm)\s*::\s*routes\s*\(\s*\)/;
+const LFM_ROUTES_CALL_RE = /\b(?:LaravelFilemanager|Lfm)\s*::\s*routes\s*\(\s*\)/;
 
-const LFM_CONFIG_PREFIX_RE =
-  /['"]prefix['"]\s*=>\s*['"]([^'"]+)['"]/;
+const LFM_CONFIG_PREFIX_RE = /['"]prefix['"]\s*=>\s*['"]([^'"]+)['"]/;
 
-const LFM_CONFIG_DISK_RE =
-  /['"]disk['"]\s*=>\s*['"]([^'"]+)['"]/;
+const LFM_CONFIG_DISK_RE = /['"]disk['"]\s*=>\s*['"]([^'"]+)['"]/;
 
 const LFM_ROUTE_PREFIX_RE =
   /Route\s*::\s*group\s*\(\s*\[[^\]]*['"]prefix['"]\s*=>\s*['"]([^'"]*lfm|laravel-filemanager|filemanager[^'"]*)['"]/i;
@@ -39,16 +36,16 @@ export interface LaravelFilemanagerRoutes {
  * the user-observable ones so coverage/reporting can find them.
  */
 const LFM_ENDPOINTS: Array<{ method: string; path: string; handler: string }> = [
-  { method: 'GET',  path: '',               handler: 'LfmController@show' },
-  { method: 'GET',  path: '/upload',        handler: 'UploadController@upload' },
-  { method: 'POST', path: '/upload',        handler: 'UploadController@upload' },
-  { method: 'GET',  path: '/download',      handler: 'DownloadController@getDownload' },
-  { method: 'GET',  path: '/jsonitems',     handler: 'ItemsController@getItems' },
-  { method: 'POST', path: '/newfolder',     handler: 'FolderController@getAddfolder' },
-  { method: 'POST', path: '/rename',        handler: 'RenameController@getRename' },
-  { method: 'POST', path: '/delete',        handler: 'DeleteController@getDelete' },
-  { method: 'POST', path: '/crop',          handler: 'CropController@getCrop' },
-  { method: 'POST', path: '/resize',        handler: 'ResizeController@performResize' },
+  { method: 'GET', path: '', handler: 'LfmController@show' },
+  { method: 'GET', path: '/upload', handler: 'UploadController@upload' },
+  { method: 'POST', path: '/upload', handler: 'UploadController@upload' },
+  { method: 'GET', path: '/download', handler: 'DownloadController@getDownload' },
+  { method: 'GET', path: '/jsonitems', handler: 'ItemsController@getItems' },
+  { method: 'POST', path: '/newfolder', handler: 'FolderController@getAddfolder' },
+  { method: 'POST', path: '/rename', handler: 'RenameController@getRename' },
+  { method: 'POST', path: '/delete', handler: 'DeleteController@getDelete' },
+  { method: 'POST', path: '/crop', handler: 'CropController@getCrop' },
+  { method: 'POST', path: '/resize', handler: 'ResizeController@performResize' },
 ];
 
 export function extractLaravelFilemanagerConfig(

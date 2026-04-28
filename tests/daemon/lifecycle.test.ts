@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the daemon client so we can control health responses without a real HTTP server.
 vi.mock('../../src/daemon/client.js', () => {
@@ -9,7 +9,7 @@ vi.mock('../../src/daemon/client.js', () => {
 });
 
 import * as daemonClient from '../../src/daemon/client.js';
-import { waitForDaemonUp, tryAutoSpawnDaemon } from '../../src/daemon/lifecycle.js';
+import { tryAutoSpawnDaemon, waitForDaemonUp } from '../../src/daemon/lifecycle.js';
 
 const mockIsRunning = vi.mocked(daemonClient.isDaemonRunning);
 const mockGetHealth = vi.mocked(daemonClient.getDaemonHealth);

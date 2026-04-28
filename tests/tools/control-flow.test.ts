@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { extractCFG, cfgToMermaid, cfgToAscii } from '../../src/indexer/cfg-extractor.js';
+import { describe, expect, it } from 'vitest';
+import { cfgToAscii, cfgToMermaid, extractCFG } from '../../src/indexer/cfg-extractor.js';
 
 describe('CFG Extractor', () => {
   describe('extractCFG', () => {
@@ -166,7 +166,7 @@ if (a) {
       const mermaid = cfgToMermaid(cfg);
       expect(mermaid).toContain('flowchart TD');
       expect(mermaid).toContain('N0'); // At least one node
-      expect(mermaid).toContain('-->');  // At least one edge
+      expect(mermaid).toContain('-->'); // At least one edge
     });
 
     it('uses diamond shape for decision nodes', () => {

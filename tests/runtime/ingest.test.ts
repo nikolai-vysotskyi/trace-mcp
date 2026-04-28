@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SpanIngester } from '../../src/runtime/ingest.js';
 import type { OtlpExportRequest } from '../../src/runtime/types.js';
 
@@ -49,38 +49,46 @@ function createDb(): Database.Database {
   return db;
 }
 
-function makeRequest(overrides?: Partial<{
-  traceId: string;
-  spanId: string;
-  parentSpanId: string;
-  serviceName: string;
-  spanName: string;
-  kind: number;
-  statusCode: number;
-}>): OtlpExportRequest {
+function makeRequest(
+  overrides?: Partial<{
+    traceId: string;
+    spanId: string;
+    parentSpanId: string;
+    serviceName: string;
+    spanName: string;
+    kind: number;
+    statusCode: number;
+  }>,
+): OtlpExportRequest {
   const o = overrides ?? {};
   return {
-    resourceSpans: [{
-      resource: {
-        attributes: [
-          { key: 'service.name', value: { stringValue: o.serviceName ?? 'test-service' } },
+    resourceSpans: [
+      {
+        resource: {
+          attributes: [
+            { key: 'service.name', value: { stringValue: o.serviceName ?? 'test-service' } },
+          ],
+        },
+        scopeSpans: [
+          {
+            scope: {},
+            spans: [
+              {
+                traceId: o.traceId ?? 'trace-001',
+                spanId: o.spanId ?? 'span-001',
+                parentSpanId: o.parentSpanId,
+                name: o.spanName ?? 'GET /api/test',
+                kind: o.kind ?? 2, // SERVER
+                startTimeUnixNano: '1700000000000000000',
+                endTimeUnixNano: '1700000000500000000',
+                status: { code: o.statusCode ?? 0 },
+                attributes: [{ key: 'http.method', value: { stringValue: 'GET' } }],
+              },
+            ],
+          },
         ],
       },
-      scopeSpans: [{
-        scope: {},
-        spans: [{
-          traceId: o.traceId ?? 'trace-001',
-          spanId: o.spanId ?? 'span-001',
-          parentSpanId: o.parentSpanId,
-          name: o.spanName ?? 'GET /api/test',
-          kind: o.kind ?? 2, // SERVER
-          startTimeUnixNano: '1700000000000000000',
-          endTimeUnixNano: '1700000000500000000',
-          status: { code: o.statusCode ?? 0 },
-          attributes: [{ key: 'http.method', value: { stringValue: 'GET' } }],
-        }],
-      }],
-    }],
+    ],
   };
 }
 
@@ -104,13 +112,21 @@ describe('SpanIngester', () => {
     expect(result.spans).toBe(1);
     expect(result.services).toBe(1);
 
-    const traces = db.prepare('SELECT * FROM runtime_traces').all() as { trace_id: string; root_service: string; status: string }[];
+    const traces = db.prepare('SELECT * FROM runtime_traces').all() as {
+      trace_id: string;
+      root_service: string;
+      status: string;
+    }[];
     expect(traces).toHaveLength(1);
     expect(traces[0].trace_id).toBe('trace-001');
     expect(traces[0].root_service).toBe('test-service');
     expect(traces[0].status).toBe('ok');
 
-    const spans = db.prepare('SELECT * FROM runtime_spans').all() as { span_id: string; kind: string; operation: string }[];
+    const spans = db.prepare('SELECT * FROM runtime_spans').all() as {
+      span_id: string;
+      kind: string;
+      operation: string;
+    }[];
     expect(spans).toHaveLength(1);
     expect(spans[0].span_id).toBe('span-001');
     expect(spans[0].kind).toBe('server');
@@ -119,7 +135,9 @@ describe('SpanIngester', () => {
 
   it('does not duplicate traces on second ingest of same traceId', () => {
     ingester.ingest(makeRequest({ traceId: 'trace-001', spanId: 'span-001' }));
-    ingester.ingest(makeRequest({ traceId: 'trace-001', spanId: 'span-002', parentSpanId: 'span-001' }));
+    ingester.ingest(
+      makeRequest({ traceId: 'trace-001', spanId: 'span-002', parentSpanId: 'span-001' }),
+    );
 
     const traces = db.prepare('SELECT * FROM runtime_traces').all();
     expect(traces).toHaveLength(1);
@@ -136,12 +154,14 @@ describe('SpanIngester', () => {
   });
 
   it('sets root_service/root_operation only for root spans', () => {
-    ingester.ingest(makeRequest({
-      traceId: 'trace-002',
-      spanId: 'child-span',
-      parentSpanId: 'parent-span',
-      spanName: 'child op',
-    }));
+    ingester.ingest(
+      makeRequest({
+        traceId: 'trace-002',
+        spanId: 'child-span',
+        parentSpanId: 'parent-span',
+        spanName: 'child op',
+      }),
+    );
 
     const trace = db.prepare('SELECT root_service, root_operation FROM runtime_traces').get() as {
       root_service: string | null;
@@ -154,29 +174,37 @@ describe('SpanIngester', () => {
   it('discovers service with correct kind based on attributes', () => {
     // Database service
     ingester.ingest({
-      resourceSpans: [{
-        resource: {
-          attributes: [
-            { key: 'service.name', value: { stringValue: 'pg-db' } },
-            { key: 'db.system', value: { stringValue: 'postgresql' } },
+      resourceSpans: [
+        {
+          resource: {
+            attributes: [
+              { key: 'service.name', value: { stringValue: 'pg-db' } },
+              { key: 'db.system', value: { stringValue: 'postgresql' } },
+            ],
+          },
+          scopeSpans: [
+            {
+              scope: {},
+              spans: [
+                {
+                  traceId: 'trace-db',
+                  spanId: 'span-db',
+                  name: 'SELECT',
+                  kind: 3,
+                  startTimeUnixNano: '1700000000000000000',
+                  endTimeUnixNano: '1700000000100000000',
+                  status: {},
+                },
+              ],
+            },
           ],
         },
-        scopeSpans: [{
-          scope: {},
-          spans: [{
-            traceId: 'trace-db',
-            spanId: 'span-db',
-            name: 'SELECT',
-            kind: 3,
-            startTimeUnixNano: '1700000000000000000',
-            endTimeUnixNano: '1700000000100000000',
-            status: {},
-          }],
-        }],
-      }],
+      ],
     });
 
-    const service = db.prepare("SELECT kind FROM runtime_services WHERE name = 'pg-db'").get() as { kind: string };
+    const service = db.prepare("SELECT kind FROM runtime_services WHERE name = 'pg-db'").get() as {
+      kind: string;
+    };
     expect(service.kind).toBe('database');
   });
 
@@ -204,34 +232,42 @@ describe('SpanIngester', () => {
       resourceSpans: [
         {
           resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc-a' } }] },
-          scopeSpans: [{
-            scope: {},
-            spans: [{
-              traceId: 'trace-multi',
-              spanId: 'span-a',
-              name: 'op-a',
-              kind: 2,
-              startTimeUnixNano: '1700000000000000000',
-              endTimeUnixNano: '1700000000100000000',
-              status: {},
-            }],
-          }],
+          scopeSpans: [
+            {
+              scope: {},
+              spans: [
+                {
+                  traceId: 'trace-multi',
+                  spanId: 'span-a',
+                  name: 'op-a',
+                  kind: 2,
+                  startTimeUnixNano: '1700000000000000000',
+                  endTimeUnixNano: '1700000000100000000',
+                  status: {},
+                },
+              ],
+            },
+          ],
         },
         {
           resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc-b' } }] },
-          scopeSpans: [{
-            scope: {},
-            spans: [{
-              traceId: 'trace-multi',
-              spanId: 'span-b',
-              parentSpanId: 'span-a',
-              name: 'op-b',
-              kind: 3,
-              startTimeUnixNano: '1700000000100000000',
-              endTimeUnixNano: '1700000000200000000',
-              status: {},
-            }],
-          }],
+          scopeSpans: [
+            {
+              scope: {},
+              spans: [
+                {
+                  traceId: 'trace-multi',
+                  spanId: 'span-b',
+                  parentSpanId: 'span-a',
+                  name: 'op-b',
+                  kind: 3,
+                  startTimeUnixNano: '1700000000100000000',
+                  endTimeUnixNano: '1700000000200000000',
+                  status: {},
+                },
+              ],
+            },
+          ],
         },
       ],
     };
@@ -241,7 +277,9 @@ describe('SpanIngester', () => {
     expect(result.services).toBe(2);
     expect(result.traces).toBe(1); // same trace
 
-    const services = db.prepare('SELECT name FROM runtime_services ORDER BY name').all() as { name: string }[];
+    const services = db.prepare('SELECT name FROM runtime_services ORDER BY name').all() as {
+      name: string;
+    }[];
     expect(services.map((s) => s.name)).toEqual(['svc-a', 'svc-b']);
   });
 
@@ -256,16 +294,27 @@ describe('SpanIngester', () => {
     const nowNanos = String(BigInt(Date.now()) * 1_000_000n);
     const endNanos = String(BigInt(Date.now()) * 1_000_000n + 500_000_000n);
     autoIngester.ingest({
-      resourceSpans: [{
-        resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
-        scopeSpans: [{
-          scope: {},
-          spans: [{
-            traceId: 't2', spanId: 's2', name: 'op', kind: 2,
-            startTimeUnixNano: nowNanos, endTimeUnixNano: endNanos, status: {},
-          }],
-        }],
-      }],
+      resourceSpans: [
+        {
+          resource: { attributes: [{ key: 'service.name', value: { stringValue: 'svc' } }] },
+          scopeSpans: [
+            {
+              scope: {},
+              spans: [
+                {
+                  traceId: 't2',
+                  spanId: 's2',
+                  name: 'op',
+                  kind: 2,
+                  startTimeUnixNano: nowNanos,
+                  endTimeUnixNano: endNanos,
+                  status: {},
+                },
+              ],
+            },
+          ],
+        },
+      ],
     });
 
     const spans = db.prepare('SELECT * FROM runtime_spans').all();

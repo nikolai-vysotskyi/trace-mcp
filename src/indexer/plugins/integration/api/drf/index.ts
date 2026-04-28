@@ -11,21 +11,21 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
+import { parseError } from '../../../../../errors.js';
+import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   RawRoute,
   ResolveContext,
-  EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
-import { parseError } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 
 // ============================================================
 // Python dependency detection
@@ -37,28 +37,36 @@ function hasPythonDep(rootPath: string, depName: string): boolean {
     try {
       const content = fs.readFileSync(path.join(rootPath, reqFile), 'utf-8');
       if (new RegExp(`^${escapeRegExp(depName)}\\b`, 'm').test(content)) return true;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
 
   // Check pyproject.toml
   try {
     const content = fs.readFileSync(path.join(rootPath, 'pyproject.toml'), 'utf-8');
     if (content.includes(depName)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   // Check setup.py / setup.cfg
   for (const f of ['setup.py', 'setup.cfg']) {
     try {
       const content = fs.readFileSync(path.join(rootPath, f), 'utf-8');
       if (content.includes(depName)) return true;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
 
   // Check Pipfile
   try {
     const content = fs.readFileSync(path.join(rootPath, 'Pipfile'), 'utf-8');
     if (content.includes(depName)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return false;
 }
@@ -74,7 +82,7 @@ function findClassDefinitions(root: TSNode): TSNode[] {
     if (child.type === 'class_definition') {
       classes.push(child);
     } else if (child.type === 'decorated_definition') {
-      const inner = child.namedChildren.find(c => c.type === 'class_definition');
+      const inner = child.namedChildren.find((c) => c.type === 'class_definition');
       if (inner) classes.push(inner);
     }
   }
@@ -139,14 +147,14 @@ function findNestedClass(body: TSNode, name: string): TSNode | null {
 function extractListItems(node: TSNode): string[] {
   if (node.type === 'list') {
     return node.namedChildren
-      .filter(c => c.type === 'identifier' || c.type === 'attribute')
-      .map(c => c.text);
+      .filter((c) => c.type === 'identifier' || c.type === 'attribute')
+      .map((c) => c.text);
   }
   // Might be a tuple: (Foo, Bar)
   if (node.type === 'tuple') {
     return node.namedChildren
-      .filter(c => c.type === 'identifier' || c.type === 'attribute')
-      .map(c => c.text);
+      .filter((c) => c.type === 'identifier' || c.type === 'attribute')
+      .map((c) => c.text);
   }
   // Single identifier
   if (node.type === 'identifier') return [node.text];
@@ -170,15 +178,17 @@ interface SerializerInfo {
 }
 
 const SERIALIZER_BASES = new Set([
-  'ModelSerializer', 'serializers.ModelSerializer',
-  'HyperlinkedModelSerializer', 'serializers.HyperlinkedModelSerializer',
+  'ModelSerializer',
+  'serializers.ModelSerializer',
+  'HyperlinkedModelSerializer',
+  'serializers.HyperlinkedModelSerializer',
 ]);
 
 function extractSerializers(root: TSNode): SerializerInfo[] {
   const result: SerializerInfo[] = [];
   for (const classDef of findClassDefinitions(root)) {
     const supers = getSuperclasses(classDef);
-    const isModelSerializer = supers.some(s => SERIALIZER_BASES.has(s));
+    const isModelSerializer = supers.some((s) => SERIALIZER_BASES.has(s));
     if (!isModelSerializer) continue;
 
     const className = getClassName(classDef);
@@ -218,22 +228,32 @@ interface ViewSetInfo {
 }
 
 const VIEWSET_BASES = new Set([
-  'ModelViewSet', 'viewsets.ModelViewSet',
-  'ReadOnlyModelViewSet', 'viewsets.ReadOnlyModelViewSet',
-  'ViewSet', 'viewsets.ViewSet',
-  'GenericViewSet', 'viewsets.GenericViewSet',
-  'APIView', 'GenericAPIView',
-  'ListAPIView', 'CreateAPIView', 'RetrieveAPIView',
-  'UpdateAPIView', 'DestroyAPIView',
-  'ListCreateAPIView', 'RetrieveUpdateAPIView',
-  'RetrieveDestroyAPIView', 'RetrieveUpdateDestroyAPIView',
+  'ModelViewSet',
+  'viewsets.ModelViewSet',
+  'ReadOnlyModelViewSet',
+  'viewsets.ReadOnlyModelViewSet',
+  'ViewSet',
+  'viewsets.ViewSet',
+  'GenericViewSet',
+  'viewsets.GenericViewSet',
+  'APIView',
+  'GenericAPIView',
+  'ListAPIView',
+  'CreateAPIView',
+  'RetrieveAPIView',
+  'UpdateAPIView',
+  'DestroyAPIView',
+  'ListCreateAPIView',
+  'RetrieveUpdateAPIView',
+  'RetrieveDestroyAPIView',
+  'RetrieveUpdateDestroyAPIView',
 ]);
 
 function extractViewSets(root: TSNode): ViewSetInfo[] {
   const result: ViewSetInfo[] = [];
   for (const classDef of findClassDefinitions(root)) {
     const supers = getSuperclasses(classDef);
-    const isViewSet = supers.some(s => VIEWSET_BASES.has(s));
+    const isViewSet = supers.some((s) => VIEWSET_BASES.has(s));
     if (!isViewSet) continue;
 
     const className = getClassName(classDef);
@@ -289,7 +309,7 @@ function extractRouterRegistrations(root: TSNode): RouterRegistration[] {
     if (!args) return;
 
     const positional = args.namedChildren.filter(
-      c => c.type !== 'keyword_argument' && c.type !== 'comment',
+      (c) => c.type !== 'keyword_argument' && c.type !== 'comment',
     );
     if (positional.length < 2) return;
 
@@ -368,10 +388,26 @@ export class DRFPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'drf_serializer_model', category: 'drf', description: 'ModelSerializer → Django Model' } as EdgeTypeDeclaration,
-        { name: 'drf_viewset_serializer', category: 'drf', description: 'ViewSet → Serializer' } as EdgeTypeDeclaration,
-        { name: 'drf_router_registers', category: 'drf', description: 'router.register() → ViewSet' } as EdgeTypeDeclaration,
-        { name: 'drf_permission_guards', category: 'drf', description: 'ViewSet → Permission class' } as EdgeTypeDeclaration,
+        {
+          name: 'drf_serializer_model',
+          category: 'drf',
+          description: 'ModelSerializer → Django Model',
+        } as EdgeTypeDeclaration,
+        {
+          name: 'drf_viewset_serializer',
+          category: 'drf',
+          description: 'ViewSet → Serializer',
+        } as EdgeTypeDeclaration,
+        {
+          name: 'drf_router_registers',
+          category: 'drf',
+          description: 'router.register() → ViewSet',
+        } as EdgeTypeDeclaration,
+        {
+          name: 'drf_permission_guards',
+          category: 'drf',
+          description: 'ViewSet → Permission class',
+        } as EdgeTypeDeclaration,
       ],
     };
   }

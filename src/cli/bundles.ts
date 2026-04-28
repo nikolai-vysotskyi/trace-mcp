@@ -4,10 +4,10 @@
  */
 
 import { Command } from 'commander';
-import { exportBundle, listBundles, removeBundle, ensureBundlesDir } from '../bundles.js';
-import { getDbPath, ensureGlobalDirs } from '../global.js';
-import { getProject } from '../registry.js';
+import { ensureBundlesDir, exportBundle, listBundles, removeBundle } from '../bundles.js';
+import { ensureGlobalDirs, getDbPath } from '../global.js';
 import { findProjectRoot } from '../project-root.js';
+import { getProject } from '../registry.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);
@@ -15,8 +15,9 @@ function resolveDbPath(projectRoot: string): string {
   return getDbPath(projectRoot);
 }
 
-export const bundlesCommand = new Command('bundles')
-  .description('Manage pre-indexed bundles for dependency libraries');
+export const bundlesCommand = new Command('bundles').description(
+  'Manage pre-indexed bundles for dependency libraries',
+);
 
 bundlesCommand
   .command('list')

@@ -13,17 +13,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawOrmModel,
   RawOrmAssociation,
+  RawOrmModel,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 export class SequelizePlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -55,13 +55,41 @@ export class SequelizePlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'sequelize_has_many', category: 'sequelize', description: 'Sequelize hasMany association' },
-        { name: 'sequelize_belongs_to', category: 'sequelize', description: 'Sequelize belongsTo association' },
-        { name: 'sequelize_belongs_to_many', category: 'sequelize', description: 'Sequelize belongsToMany association' },
-        { name: 'sequelize_has_one', category: 'sequelize', description: 'Sequelize hasOne association' },
-        { name: 'sequelize_has_hook', category: 'sequelize', description: 'Sequelize lifecycle hook' },
-        { name: 'sequelize_has_scope', category: 'sequelize', description: 'Sequelize named scope' },
-        { name: 'sequelize_migrates', category: 'sequelize', description: 'Migration changes table schema' },
+        {
+          name: 'sequelize_has_many',
+          category: 'sequelize',
+          description: 'Sequelize hasMany association',
+        },
+        {
+          name: 'sequelize_belongs_to',
+          category: 'sequelize',
+          description: 'Sequelize belongsTo association',
+        },
+        {
+          name: 'sequelize_belongs_to_many',
+          category: 'sequelize',
+          description: 'Sequelize belongsToMany association',
+        },
+        {
+          name: 'sequelize_has_one',
+          category: 'sequelize',
+          description: 'Sequelize hasOne association',
+        },
+        {
+          name: 'sequelize_has_hook',
+          category: 'sequelize',
+          description: 'Sequelize lifecycle hook',
+        },
+        {
+          name: 'sequelize_has_scope',
+          category: 'sequelize',
+          description: 'Sequelize named scope',
+        },
+        {
+          name: 'sequelize_migrates',
+          category: 'sequelize',
+          description: 'Migration changes table schema',
+        },
       ],
     };
   }
@@ -130,18 +158,17 @@ export function extractSequelizeModel(
   source: string,
   filePath: string,
 ): SequelizeModelResult | null {
-  return extractClassModel(source, filePath)
-    ?? extractDefineModel(source, filePath)
-    ?? extractDecoratorModel(source, filePath);
+  return (
+    extractClassModel(source, filePath) ??
+    extractDefineModel(source, filePath) ??
+    extractDecoratorModel(source, filePath)
+  );
 }
 
 /**
  * v6+ class-based: class User extends Model { } User.init({...}, {...})
  */
-function extractClassModel(
-  source: string,
-  filePath: string,
-): SequelizeModelResult | null {
+function extractClassModel(source: string, filePath: string): SequelizeModelResult | null {
   const classRegex = /class\s+(\w+)\s+extends\s+Model\s*\{/;
   const classMatch = source.match(classRegex);
   if (!classMatch) return null;
@@ -188,11 +215,9 @@ function extractClassModel(
 /**
  * v4-5 define: sequelize.define('User', {fields}, {options})
  */
-function extractDefineModel(
-  source: string,
-  filePath: string,
-): SequelizeModelResult | null {
-  const defineRegex = /sequelize\.define\s*\(\s*['"](\w+)['"]\s*,\s*\{([\s\S]*?)\}\s*(?:,\s*\{([\s\S]*?)\})?\s*\)/;
+function extractDefineModel(source: string, filePath: string): SequelizeModelResult | null {
+  const defineRegex =
+    /sequelize\.define\s*\(\s*['"](\w+)['"]\s*,\s*\{([\s\S]*?)\}\s*(?:,\s*\{([\s\S]*?)\})?\s*\)/;
   const match = source.match(defineRegex);
   if (!match) return null;
 
@@ -217,11 +242,9 @@ function extractDefineModel(
 /**
  * sequelize-typescript decorators: @Table class User extends Model { @Column name: string; }
  */
-function extractDecoratorModel(
-  source: string,
-  filePath: string,
-): SequelizeModelResult | null {
-  const classRegex = /@Table\s*(?:\(\s*\{([\s\S]*?)\}\s*\))?\s+export\s+class\s+(\w+)\s+extends\s+Model/;
+function extractDecoratorModel(source: string, filePath: string): SequelizeModelResult | null {
+  const classRegex =
+    /@Table\s*(?:\(\s*\{([\s\S]*?)\}\s*\))?\s+export\s+class\s+(\w+)\s+extends\s+Model/;
   const classMatch = source.match(classRegex);
   if (!classMatch) return null;
 
@@ -289,7 +312,8 @@ export function extractSequelizeMigration(
   }
 
   // Match queryInterface.addColumn('table', 'column', { ... })
-  const addColRegex = /queryInterface\.addColumn\s*\(\s*['"](\w+)['"]\s*,\s*['"](\w+)['"]\s*,\s*\{([\s\S]*?)\}\s*\)/g;
+  const addColRegex =
+    /queryInterface\.addColumn\s*\(\s*['"](\w+)['"]\s*,\s*['"](\w+)['"]\s*,\s*\{([\s\S]*?)\}\s*\)/g;
   while ((match = addColRegex.exec(source)) !== null) {
     models.push({
       name: match[1],
@@ -310,7 +334,8 @@ export function extractSequelizeMigration(
 function parseSequelizeFields(body: string): Record<string, unknown>[] {
   const fields: Record<string, unknown>[] = [];
   // Match: fieldName: { type: DataTypes.STRING, ... } or fieldName: DataTypes.STRING
-  const fieldRegex = /(\w+)\s*:\s*(?:\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}|DataTypes\.(\w+)|(Sequelize\.(\w+)))/g;
+  const fieldRegex =
+    /(\w+)\s*:\s*(?:\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}|DataTypes\.(\w+)|(Sequelize\.(\w+)))/g;
   let match: RegExpExecArray | null;
   while ((match = fieldRegex.exec(body)) !== null) {
     const name = match[1];
@@ -400,17 +425,14 @@ function parseColumnDef(name: string, body: string): Record<string, unknown> {
 // Association extraction
 // ============================================================
 
-const ASSOCIATION_MAP: Record<string, string> = {
+const _ASSOCIATION_MAP: Record<string, string> = {
   hasMany: 'sequelize_has_many',
   belongsTo: 'sequelize_belongs_to',
   belongsToMany: 'sequelize_belongs_to_many',
   hasOne: 'sequelize_has_one',
 };
 
-function extractAssociations(
-  source: string,
-  className: string,
-): RawOrmAssociation[] {
+function extractAssociations(source: string, className: string): RawOrmAssociation[] {
   const associations: RawOrmAssociation[] = [];
 
   // Match: ClassName.hasMany(models.Post, { ... }) or this.hasMany(Post, { ... })
@@ -444,10 +466,7 @@ function extractAssociations(
   return associations;
 }
 
-function extractDecoratorAssociations(
-  source: string,
-  className: string,
-): RawOrmAssociation[] {
+function extractDecoratorAssociations(source: string, className: string): RawOrmAssociation[] {
   const associations: RawOrmAssociation[] = [];
 
   // Match: @HasMany(() => Post), @BelongsTo(() => Role), etc.
@@ -486,10 +505,7 @@ function extractHooks(source: string, className: string): string[] {
   }
 
   // Also match addHook pattern
-  const hookRegex = new RegExp(
-    `${className}\\.addHook\\s*\\(\\s*['"]([^'"]+)['"]`,
-    'g',
-  );
+  const hookRegex = new RegExp(`${className}\\.addHook\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
   while ((m = hookRegex.exec(source)) !== null) {
     hooks.push(m[1]);
   }
@@ -511,10 +527,7 @@ function extractScopes(source: string, className: string): string[] {
   }
 
   // Also match addScope pattern
-  const addScopeRegex = new RegExp(
-    `${className}\\.addScope\\s*\\(\\s*['"]([^'"]+)['"]`,
-    'g',
-  );
+  const addScopeRegex = new RegExp(`${className}\\.addScope\\s*\\(\\s*['"]([^'"]+)['"]`, 'g');
   let m: RegExpExecArray | null;
   while ((m = addScopeRegex.exec(source)) !== null) {
     scopes.push(m[1]);

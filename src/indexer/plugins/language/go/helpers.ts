@@ -1,11 +1,16 @@
 /**
  * Helper utilities for the Go language plugin.
  */
-import type { RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
-export function makeSymbolId(filePath: string, name: string, kind: SymbolKind, parentName?: string): string {
+export function makeSymbolId(
+  filePath: string,
+  name: string,
+  kind: SymbolKind,
+  parentName?: string,
+): string {
   if (parentName) return `${filePath}::${parentName}::${name}#${kind}`;
   return `${filePath}::${name}#${kind}`;
 }
@@ -75,7 +80,12 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
   return edges;
 }
 
-export function extractStructFields(body: TSNode, filePath: string, structName: string, structSymbolId: string): { symbols: RawSymbol[]; embeds: string[] } {
+export function extractStructFields(
+  body: TSNode,
+  filePath: string,
+  structName: string,
+  structSymbolId: string,
+): { symbols: RawSymbol[]; embeds: string[] } {
   const symbols: RawSymbol[] = [];
   const embeds: string[] = [];
 
@@ -85,7 +95,9 @@ export function extractStructFields(body: TSNode, filePath: string, structName: 
       if (nameNode) {
         const name = nameNode.text;
         const typeNode = child.childForFieldName('type');
-        const tag = child.namedChildren.find((c) => c.type === 'raw_string_literal' || c.type === 'interpreted_string_literal');
+        const tag = child.namedChildren.find(
+          (c) => c.type === 'raw_string_literal' || c.type === 'interpreted_string_literal',
+        );
         const meta: Record<string, unknown> = {};
         if (typeNode) meta.type = typeNode.text;
         if (tag) meta.tag = tag.text.replace(/^`|`$/g, '');
@@ -117,7 +129,12 @@ export function extractStructFields(body: TSNode, filePath: string, structName: 
   return { symbols, embeds };
 }
 
-export function extractInterfaceMethods(body: TSNode, filePath: string, ifaceName: string, ifaceSymbolId: string): RawSymbol[] {
+export function extractInterfaceMethods(
+  body: TSNode,
+  filePath: string,
+  ifaceName: string,
+  ifaceSymbolId: string,
+): RawSymbol[] {
   const symbols: RawSymbol[] = [];
   for (const child of body.namedChildren) {
     if (child.type === 'method_spec') {

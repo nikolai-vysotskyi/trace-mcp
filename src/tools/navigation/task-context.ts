@@ -9,15 +9,15 @@
  *           → Test Coverage → Scoring → Structured Assembly
  */
 import path from 'node:path';
-import type { Store, SymbolRow, FileRow, EdgeRow } from '../../db/store.js';
-import { hybridScore, getTypeBonus, computeRecency } from '../../scoring/hybrid.js';
+import type { EmbeddingService, VectorStore } from '../../ai/interfaces.js';
+import { hybridSearch } from '../../ai/search.js';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
+import type { ContextItem } from '../../scoring/assembly.js';
+import { computeRecency, getTypeBonus, hybridScore } from '../../scoring/hybrid.js';
 import { computePageRank } from '../../scoring/pagerank.js';
 import { assembleStructuredContext } from '../../scoring/structured-assembly.js';
-import type { ContextItem } from '../../scoring/assembly.js';
 import { readByteRange } from '../../utils/source-reader.js';
 import { tokenizeDescription } from './context.js';
-import { hybridSearch } from '../../ai/search.js';
-import type { VectorStore, EmbeddingService } from '../../ai/interfaces.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -66,9 +66,18 @@ interface TaskContextItem {
 // ═══════════════════════════════════════════════════════════════════
 
 const INTENT_PATTERNS: [RegExp, TaskIntent][] = [
-  [/\b(fix|bug|error|crash(?:es|ed|ing)?|broken|issue|fail(?:ing|s|ed)?|wrong|regression|debug|patch|hotfix)\b/i, 'bugfix'],
-  [/\b(add|create|new|implement|build|introduce|feature|setup|integrate|wire|connect)\b/i, 'new_feature'],
-  [/\b(refactor|extract|move|rename|split|merge|clean|simplify|reorganize|decouple|inline|consolidate)\b/i, 'refactor'],
+  [
+    /\b(fix|bug|error|crash(?:es|ed|ing)?|broken|issue|fail(?:ing|s|ed)?|wrong|regression|debug|patch|hotfix)\b/i,
+    'bugfix',
+  ],
+  [
+    /\b(add|create|new|implement|build|introduce|feature|setup|integrate|wire|connect)\b/i,
+    'new_feature',
+  ],
+  [
+    /\b(refactor|extract|move|rename|split|merge|clean|simplify|reorganize|decouple|inline|consolidate)\b/i,
+    'refactor',
+  ],
 ];
 
 export function classifyIntent(task: string): TaskIntent {
@@ -90,7 +99,15 @@ interface IntentConfig {
   priorityEdges: Set<string>;
 }
 
-const IMPORT_EDGES = ['esm_imports', 'imports', 'py_imports', 'py_reexports', 'go_imports', 'java_imports', 'ruby_requires'];
+const IMPORT_EDGES = [
+  'esm_imports',
+  'imports',
+  'py_imports',
+  'py_reexports',
+  'go_imports',
+  'java_imports',
+  'ruby_requires',
+];
 const CALL_EDGES = ['calls', 'references', 'dispatches', 'renders', 'uses'];
 const TEST_EDGES = ['test_covers'];
 const TYPE_EDGES = ['extends', 'implements', 'type_references'];
@@ -99,33 +116,46 @@ const INTENT_CONFIGS: Record<TaskIntent, IntentConfig> = {
   bugfix: {
     graphDepth: 3,
     seedCount: { minimal: 5, broad: 10, deep: 15 },
-    budgetWeights: { primary: 0.25, dependencies: 0.20, callers: 0.25, typeContext: 0.10 },
+    budgetWeights: { primary: 0.25, dependencies: 0.2, callers: 0.25, typeContext: 0.1 },
     // remaining 0.20 for tests (handled separately)
     priorityEdges: new Set([...CALL_EDGES, ...IMPORT_EDGES, ...TEST_EDGES, ...TYPE_EDGES]),
   },
   new_feature: {
     graphDepth: 2,
     seedCount: { minimal: 5, broad: 15, deep: 20 },
-    budgetWeights: { primary: 0.35, dependencies: 0.30, callers: 0.10, typeContext: 0.10 },
-    priorityEdges: new Set([...IMPORT_EDGES, ...TYPE_EDGES, ...CALL_EDGES, 'routes_to', 'middleware_applied']),
+    budgetWeights: { primary: 0.35, dependencies: 0.3, callers: 0.1, typeContext: 0.1 },
+    priorityEdges: new Set([
+      ...IMPORT_EDGES,
+      ...TYPE_EDGES,
+      ...CALL_EDGES,
+      'routes_to',
+      'middleware_applied',
+    ]),
   },
   refactor: {
     graphDepth: 2,
     seedCount: { minimal: 5, broad: 10, deep: 15 },
-    budgetWeights: { primary: 0.30, dependencies: 0.25, callers: 0.25, typeContext: 0.10 },
+    budgetWeights: { primary: 0.3, dependencies: 0.25, callers: 0.25, typeContext: 0.1 },
     priorityEdges: new Set([...IMPORT_EDGES, ...CALL_EDGES, ...TYPE_EDGES]),
   },
   understand: {
     graphDepth: 1,
     seedCount: { minimal: 5, broad: 15, deep: 20 },
-    budgetWeights: { primary: 0.40, dependencies: 0.25, callers: 0.15, typeContext: 0.10 },
+    budgetWeights: { primary: 0.4, dependencies: 0.25, callers: 0.15, typeContext: 0.1 },
     priorityEdges: new Set([...IMPORT_EDGES, ...CALL_EDGES, ...TYPE_EDGES]),
   },
 };
 
 // Test budget is the remainder after other weights (always sums to ~0.20 for bugfix, ~0.15 for others)
 function getTestBudgetRatio(cfg: IntentConfig): number {
-  return Math.max(0, 1 - cfg.budgetWeights.primary - cfg.budgetWeights.dependencies - cfg.budgetWeights.callers - cfg.budgetWeights.typeContext);
+  return Math.max(
+    0,
+    1 -
+      cfg.budgetWeights.primary -
+      cfg.budgetWeights.dependencies -
+      cfg.budgetWeights.callers -
+      cfg.budgetWeights.typeContext,
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -166,7 +196,8 @@ function walkGraph(
 
       const pivotId = edge.pivot_node_id;
       const otherId = pivotId === edge.source_node_id ? edge.target_node_id : edge.source_node_id;
-      const direction: 'outgoing' | 'incoming' = pivotId === edge.source_node_id ? 'outgoing' : 'incoming';
+      const direction: 'outgoing' | 'incoming' =
+        pivotId === edge.source_node_id ? 'outgoing' : 'incoming';
 
       if (visited.has(otherId)) continue;
 
@@ -239,7 +270,8 @@ export async function getTaskContext(
       return emptyResult(task, intent);
     }
     const ftsQuery = tokens.map((t) => `"${t}"`).join(' OR ');
-    const ftsRows = store.db.prepare(`
+    const ftsRows = store.db
+      .prepare(`
       SELECT s.id AS symbolId, s.symbol_id AS symbolIdStr, s.name, s.kind, s.fqn,
              s.file_id AS fileId, rank
       FROM symbols_fts fts
@@ -247,9 +279,15 @@ export async function getTaskContext(
       WHERE symbols_fts MATCH ?
       ORDER BY rank
       LIMIT ?
-    `).all(ftsQuery, seedLimit * 3) as Array<{
-      symbolId: number; symbolIdStr: string; name: string;
-      kind: string; fqn: string | null; fileId: number; rank: number;
+    `)
+      .all(ftsQuery, seedLimit * 3) as Array<{
+      symbolId: number;
+      symbolIdStr: string;
+      name: string;
+      kind: string;
+      fqn: string | null;
+      fileId: number;
+      rank: number;
     }>;
 
     if (ftsRows.length === 0) {
@@ -311,7 +349,7 @@ export async function getTaskContext(
 
   // ─── Step 6: Classify and score into sections ───
 
-  const seedNodeIdSet = new Set(seedNodeIds);
+  const _seedNodeIdSet = new Set(seedNodeIds);
   const testEdgeSet = new Set(TEST_EDGES);
   const typeEdgeSet = new Set(TYPE_EDGES);
 
@@ -360,7 +398,17 @@ export async function getTaskContext(
     let score = hybridScore({ relevance, pagerank: pr, recency, typeBonus });
 
     // Penalize non-code files (docs, config, yaml, markdown) — they waste tokens
-    const NON_CODE_LANGUAGES = new Set(['markdown', 'yaml', 'json', 'toml', 'xml', 'html', 'csv', 'text', 'ini']);
+    const NON_CODE_LANGUAGES = new Set([
+      'markdown',
+      'yaml',
+      'json',
+      'toml',
+      'xml',
+      'html',
+      'csv',
+      'text',
+      'ini',
+    ]);
     if (file.language && NON_CODE_LANGUAGES.has(file.language.toLowerCase())) {
       score *= 0.2;
     }
@@ -379,7 +427,11 @@ export async function getTaskContext(
     // Find test_covers edges for primary + dependency symbols
     const primaryAndDepNodeIds = entries
       .filter((e) => e.section === 'primary' || e.section === 'dependencies')
-      .map((e) => seedNodeMap.get(e.symbol.id) ?? store.getNodeIdsBatch('symbol', [e.symbol.id]).get(e.symbol.id))
+      .map(
+        (e) =>
+          seedNodeMap.get(e.symbol.id) ??
+          store.getNodeIdsBatch('symbol', [e.symbol.id]).get(e.symbol.id),
+      )
       .filter((id): id is number => id != null);
 
     if (primaryAndDepNodeIds.length > 0) {
@@ -409,7 +461,8 @@ export async function getTaskContext(
 
           const pr = 0;
           const recency = computeRecency(file.indexed_at, now);
-          const score = hybridScore({ relevance: 0.2, pagerank: pr, recency, typeBonus: 0.5 }) * 0.8;
+          const score =
+            hybridScore({ relevance: 0.2, pagerank: pr, recency, typeBonus: 0.5 }) * 0.8;
 
           entries.push({ symbol: sym, file, score, section: 'tests' });
         }
@@ -433,8 +486,15 @@ export async function getTaskContext(
     let source: string | undefined;
     try {
       const absPath = path.resolve(rootPath, entry.file.path);
-      source = readByteRange(absPath, entry.symbol.byte_start, entry.symbol.byte_end, !!entry.file.gitignored);
-    } catch { /* source unavailable */ }
+      source = readByteRange(
+        absPath,
+        entry.symbol.byte_start,
+        entry.symbol.byte_end,
+        !!entry.file.gitignored,
+      );
+    } catch {
+      /* source unavailable */
+    }
 
     sectionItems[entry.section].push({
       id: entry.symbol.symbol_id,
@@ -473,7 +533,9 @@ export async function getTaskContext(
 
   // ─── Step 10: Build result ───
 
-  function mapItems(items: Array<{ id: string; score: number; detail: string; content: string; tokens: number }>): TaskContextItem[] {
+  function mapItems(
+    items: Array<{ id: string; score: number; detail: string; content: string; tokens: number }>,
+  ): TaskContextItem[] {
     return items.map((ai) => {
       const entry = entries.find((e) => e.symbol.symbol_id === ai.id);
       return {

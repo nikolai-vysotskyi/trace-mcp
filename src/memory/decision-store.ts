@@ -261,7 +261,9 @@ export class DecisionStore {
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='decisions'")
       .get();
     if (hasTable) {
-      const cols = (this.db.pragma('table_info(decisions)') as Array<{ name: string }>).map(c => c.name);
+      const cols = (this.db.pragma('table_info(decisions)') as Array<{ name: string }>).map(
+        (c) => c.name,
+      );
       if (!cols.includes('service_name')) {
         this.db.exec('ALTER TABLE decisions ADD COLUMN service_name TEXT');
         logger.info('Pre-migration: added service_name column to decisions table');
@@ -316,12 +318,16 @@ export class DecisionStore {
   }
 
   getDecision(id: number): DecisionRow | undefined {
-    return this.db.prepare('SELECT * FROM decisions WHERE id = ?').get(id) as DecisionRow | undefined;
+    return this.db.prepare('SELECT * FROM decisions WHERE id = ?').get(id) as
+      | DecisionRow
+      | undefined;
   }
 
   invalidateDecision(id: number, validUntil?: string): boolean {
     const until = validUntil ?? new Date().toISOString();
-    const info = this.db.prepare('UPDATE decisions SET valid_until = ? WHERE id = ? AND valid_until IS NULL').run(until, id);
+    const info = this.db
+      .prepare('UPDATE decisions SET valid_until = ? WHERE id = ? AND valid_until IS NULL')
+      .run(until, id);
     return info.changes > 0;
   }
 
@@ -436,14 +442,28 @@ export class DecisionStore {
     const filter = projectRoot ? ' WHERE project_root = ?' : '';
     const params = projectRoot ? [projectRoot] : [];
 
-    const total = (this.db.prepare(`SELECT COUNT(*) as c FROM decisions${filter}`).get(...params) as { c: number }).c;
-    const active = (this.db.prepare(`SELECT COUNT(*) as c FROM decisions${filter}${filter ? ' AND' : ' WHERE'} valid_until IS NULL`).get(...params) as { c: number }).c;
+    const total = (
+      this.db.prepare(`SELECT COUNT(*) as c FROM decisions${filter}`).get(...params) as {
+        c: number;
+      }
+    ).c;
+    const active = (
+      this.db
+        .prepare(
+          `SELECT COUNT(*) as c FROM decisions${filter}${filter ? ' AND' : ' WHERE'} valid_until IS NULL`,
+        )
+        .get(...params) as { c: number }
+    ).c;
 
-    const typeRows = this.db.prepare(`SELECT type, COUNT(*) as c FROM decisions${filter} GROUP BY type`).all(...params) as Array<{ type: string; c: number }>;
+    const typeRows = this.db
+      .prepare(`SELECT type, COUNT(*) as c FROM decisions${filter} GROUP BY type`)
+      .all(...params) as Array<{ type: string; c: number }>;
     const by_type: Record<string, number> = {};
     for (const r of typeRows) by_type[r.type] = r.c;
 
-    const sourceRows = this.db.prepare(`SELECT source, COUNT(*) as c FROM decisions${filter} GROUP BY source`).all(...params) as Array<{ source: string; c: number }>;
+    const sourceRows = this.db
+      .prepare(`SELECT source, COUNT(*) as c FROM decisions${filter} GROUP BY source`)
+      .all(...params) as Array<{ source: string; c: number }>;
     const by_source: Record<string, number> = {};
     for (const r of sourceRows) by_source[r.source] = r.c;
 
@@ -453,14 +473,18 @@ export class DecisionStore {
   // ── MINED SESSIONS ────────────────────────────────────────────────
 
   isSessionMined(sessionPath: string): boolean {
-    const row = this.db.prepare('SELECT 1 FROM mined_sessions WHERE session_path = ?').get(sessionPath);
+    const row = this.db
+      .prepare('SELECT 1 FROM mined_sessions WHERE session_path = ?')
+      .get(sessionPath);
     return !!row;
   }
 
   markSessionMined(sessionPath: string, decisionsFound: number): void {
-    this.db.prepare(
-      'INSERT OR REPLACE INTO mined_sessions (session_path, mined_at, decisions_found) VALUES (?, ?, ?)',
-    ).run(sessionPath, new Date().toISOString(), decisionsFound);
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO mined_sessions (session_path, mined_at, decisions_found) VALUES (?, ?, ?)',
+      )
+      .run(sessionPath, new Date().toISOString(), decisionsFound);
   }
 
   getMinedSessionCount(): number {
@@ -472,34 +496,54 @@ export class DecisionStore {
   /** Get all decisions linked to a specific symbol */
   getDecisionsForSymbol(symbolId: string, activeOnly = true): DecisionRow[] {
     const filter = activeOnly ? ' AND valid_until IS NULL' : '';
-    return this.db.prepare(`SELECT * FROM decisions WHERE symbol_id = ?${filter} ORDER BY valid_from DESC`).all(symbolId) as DecisionRow[];
+    return this.db
+      .prepare(`SELECT * FROM decisions WHERE symbol_id = ?${filter} ORDER BY valid_from DESC`)
+      .all(symbolId) as DecisionRow[];
   }
 
   /** Get all decisions linked to a specific file */
   getDecisionsForFile(filePath: string, activeOnly = true): DecisionRow[] {
     const filter = activeOnly ? ' AND valid_until IS NULL' : '';
-    return this.db.prepare(`SELECT * FROM decisions WHERE file_path = ?${filter} ORDER BY valid_from DESC`).all(filePath) as DecisionRow[];
+    return this.db
+      .prepare(`SELECT * FROM decisions WHERE file_path = ?${filter} ORDER BY valid_from DESC`)
+      .all(filePath) as DecisionRow[];
   }
 
   /** Get decisions linked to any file matching a pattern (e.g., 'src/auth/%') */
   getDecisionsForPath(pathPattern: string, activeOnly = true): DecisionRow[] {
     const filter = activeOnly ? ' AND valid_until IS NULL' : '';
-    return this.db.prepare(`SELECT * FROM decisions WHERE file_path LIKE ?${filter} ORDER BY valid_from DESC`).all(pathPattern) as DecisionRow[];
+    return this.db
+      .prepare(`SELECT * FROM decisions WHERE file_path LIKE ?${filter} ORDER BY valid_from DESC`)
+      .all(pathPattern) as DecisionRow[];
   }
 
   /** Get all decisions for a specific subproject within a project */
-  getDecisionsForService(serviceName: string, projectRoot?: string, activeOnly = true): DecisionRow[] {
+  getDecisionsForService(
+    serviceName: string,
+    projectRoot?: string,
+    activeOnly = true,
+  ): DecisionRow[] {
     const filter = activeOnly ? ' AND valid_until IS NULL' : '';
     if (projectRoot) {
-      return this.db.prepare(`SELECT * FROM decisions WHERE service_name = ? AND project_root = ?${filter} ORDER BY valid_from DESC`).all(serviceName, projectRoot) as DecisionRow[];
+      return this.db
+        .prepare(
+          `SELECT * FROM decisions WHERE service_name = ? AND project_root = ?${filter} ORDER BY valid_from DESC`,
+        )
+        .all(serviceName, projectRoot) as DecisionRow[];
     }
-    return this.db.prepare(`SELECT * FROM decisions WHERE service_name = ?${filter} ORDER BY valid_from DESC`).all(serviceName) as DecisionRow[];
+    return this.db
+      .prepare(`SELECT * FROM decisions WHERE service_name = ?${filter} ORDER BY valid_from DESC`)
+      .all(serviceName) as DecisionRow[];
   }
 
   /** Get all distinct service names in a project */
   getServiceNames(projectRoot: string): string[] {
-    const rows = this.db.prepare('SELECT DISTINCT service_name FROM decisions WHERE project_root = ? AND service_name IS NOT NULL').all(projectRoot) as Array<{ service_name: string }>;
-    return rows.map(r => r.service_name);
+    const rows = this.db
+      .prepare(
+        'SELECT DISTINCT service_name FROM decisions WHERE project_root = ? AND service_name IS NOT NULL',
+      )
+      .all(projectRoot) as Array<{ service_name: string }>;
+    return rows.map((r) => r.service_name);
   }
 
   // ── SESSION CHUNKS (cross-session content search) ─────────────────
@@ -529,17 +573,23 @@ export class DecisionStore {
   }
 
   isSessionIndexed(sessionId: string): boolean {
-    const row = this.db.prepare('SELECT 1 FROM session_chunks WHERE session_id = ? LIMIT 1').get(sessionId);
+    const row = this.db
+      .prepare('SELECT 1 FROM session_chunks WHERE session_id = ? LIMIT 1')
+      .get(sessionId);
     return !!row;
   }
 
-  searchSessions(query: string, opts: {
-    project_root?: string;
-    limit?: number;
-  } = {}): SessionSearchResult[] {
+  searchSessions(
+    query: string,
+    opts: {
+      project_root?: string;
+      limit?: number;
+    } = {},
+  ): SessionSearchResult[] {
     const limit = opts.limit ?? 20;
     if (opts.project_root) {
-      return this.db.prepare(`
+      return this.db
+        .prepare(`
         SELECT sc.id as chunk_id, sc.session_id, sc.role, sc.content, sc.timestamp,
                sc.referenced_files, rank
         FROM session_chunks_fts fts
@@ -548,9 +598,11 @@ export class DecisionStore {
           AND sc.project_root = ?
         ORDER BY rank
         LIMIT ?
-      `).all(query, opts.project_root, limit) as SessionSearchResult[];
+      `)
+        .all(query, opts.project_root, limit) as SessionSearchResult[];
     }
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT sc.id as chunk_id, sc.session_id, sc.role, sc.content, sc.timestamp,
              sc.referenced_files, rank
       FROM session_chunks_fts fts
@@ -558,12 +610,17 @@ export class DecisionStore {
       WHERE session_chunks_fts MATCH ?
       ORDER BY rank
       LIMIT ?
-    `).all(query, limit) as SessionSearchResult[];
+    `)
+      .all(query, limit) as SessionSearchResult[];
   }
 
   getSessionChunkCount(projectRoot?: string): number {
     if (projectRoot) {
-      return (this.db.prepare('SELECT COUNT(*) as c FROM session_chunks WHERE project_root = ?').get(projectRoot) as { c: number }).c;
+      return (
+        this.db
+          .prepare('SELECT COUNT(*) as c FROM session_chunks WHERE project_root = ?')
+          .get(projectRoot) as { c: number }
+      ).c;
     }
     return (this.db.prepare('SELECT COUNT(*) as c FROM session_chunks').get() as { c: number }).c;
   }
@@ -571,7 +628,9 @@ export class DecisionStore {
   getIndexedSessionIds(projectRoot?: string): string[] {
     const filter = projectRoot ? ' WHERE project_root = ?' : '';
     const params = projectRoot ? [projectRoot] : [];
-    const rows = this.db.prepare(`SELECT DISTINCT session_id FROM session_chunks${filter}`).all(...params) as Array<{ session_id: string }>;
-    return rows.map(r => r.session_id);
+    const rows = this.db
+      .prepare(`SELECT DISTINCT session_id FROM session_chunks${filter}`)
+      .all(...params) as Array<{ session_id: string }>;
+    return rows.map((r) => r.session_id);
   }
 }

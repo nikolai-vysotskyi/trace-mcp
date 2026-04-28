@@ -6,10 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -21,20 +21,16 @@ const LOGGER_CREATE_RE =
   /(?:pino|createLogger|getLogger|winston\.createLogger|bunyan\.createLogger)\s*\(/g;
 
 // logger.info(...), logger.warn(...), logger.error(...), logger.debug(...), logger.fatal(...)
-const LOG_CALL_RE =
-  /(?:logger|log)\s*\.\s*(trace|debug|info|warn|error|fatal)\s*\(/g;
+const LOG_CALL_RE = /(?:logger|log)\s*\.\s*(trace|debug|info|warn|error|fatal)\s*\(/g;
 
 // level: 'info', level: 'debug'
-const LOG_LEVEL_RE =
-  /level\s*:\s*['"](\w+)['"]/g;
+const _LOG_LEVEL_RE = /level\s*:\s*['"](\w+)['"]/g;
 
 // Pino child logger: logger.child({...})
-const CHILD_LOGGER_RE =
-  /\.child\s*\(\s*\{/g;
+const CHILD_LOGGER_RE = /\.child\s*\(\s*\{/g;
 
 // Import detection
-const LOGGING_IMPORT_RE =
-  /(?:import|require)\s*(?:\(|{)?\s*.*(?:pino|winston|bunyan|log4js)\b/;
+const LOGGING_IMPORT_RE = /(?:import|require)\s*(?:\(|{)?\s*.*(?:pino|winston|bunyan|log4js)\b/;
 
 export class PinoPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {

@@ -56,17 +56,6 @@ export const SPAN_KIND_MAP: Record<number, string> = {
   5: 'consumer',
 };
 
-interface RuntimeTraceRow {
-  id: number;
-  trace_id: string;
-  root_service: string | null;
-  root_operation: string | null;
-  started_at: string;
-  duration_us: number | null;
-  status: string;
-  ingested_at: string;
-}
-
 export interface RuntimeSpanRow {
   id: number;
   trace_id: number;
@@ -84,40 +73,10 @@ export interface RuntimeSpanRow {
   mapping_method: string | null;
 }
 
-interface RuntimeServiceRow {
-  id: number;
-  name: string;
-  kind: string | null;
-  first_seen_at: string;
-  last_seen_at: string;
-  metadata: string | null;
-}
-
-interface RuntimeAggregateRow {
-  id: number;
-  node_id: number;
-  bucket: string;
-  call_count: number;
-  error_count: number;
-  total_duration_us: number;
-  min_duration_us: number | null;
-  max_duration_us: number | null;
-  percentiles: string | null;
-}
-
 export interface IngestResult {
   traces: number;
   spans: number;
   services: number;
-}
-
-interface AggregateStats {
-  callCount: number;
-  errorCount: number;
-  totalDurationUs: number;
-  minDurationUs: number;
-  maxDurationUs: number;
-  percentiles?: Array<{ p: number; v: number }>;
 }
 
 // ════════════════════════════════════════════════════════════════════════

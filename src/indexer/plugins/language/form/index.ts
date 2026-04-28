@@ -4,8 +4,9 @@
  * FORM is a symbolic manipulation language for high-energy physics.
  * Extracts: symbols, indices, vectors, functions, tables, procedures, modules, and #include edges.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'form',

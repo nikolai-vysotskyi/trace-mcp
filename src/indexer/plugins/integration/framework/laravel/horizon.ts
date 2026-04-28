@@ -74,7 +74,8 @@ export function extractHorizonConfig(source: string): HorizonConfigInfo | null {
       for (const [supName, supBody] of supEntries) {
         const queues = extractArrayValues(supBody, 'queue');
         const balance = extractStringValue(supBody, 'balance');
-        const processes = extractIntValue(supBody, 'processes') ?? extractIntValue(supBody, 'maxProcesses');
+        const processes =
+          extractIntValue(supBody, 'processes') ?? extractIntValue(supBody, 'maxProcesses');
         const tries = extractIntValue(supBody, 'tries');
         const timeout = extractIntValue(supBody, 'timeout');
 
@@ -101,10 +102,7 @@ const CLASS_NAME_RE = /class\s+(\w+)/;
  * Extract Horizon-relevant job metadata from a job class.
  * Only returns info if the class implements ShouldQueue.
  */
-export function extractHorizonJob(
-  source: string,
-  _filePath: string,
-): HorizonJobInfo | null {
+export function extractHorizonJob(source: string, _filePath: string): HorizonJobInfo | null {
   if (!source.includes('ShouldQueue')) return null;
   if (!/class\s+\w+/.test(source)) return null;
 
@@ -121,8 +119,8 @@ export function extractHorizonJob(
   const tries = extractPropertyInt(source, 'tries');
   const timeout = extractPropertyInt(source, 'timeout');
   const uniqueFor = extractPropertyInt(source, 'uniqueFor');
-  const shouldBeEncrypted = /\$shouldBeEncrypted\s*=\s*true/.test(source)
-    || source.includes('ShouldBeEncrypted');
+  const shouldBeEncrypted =
+    /\$shouldBeEncrypted\s*=\s*true/.test(source) || source.includes('ShouldBeEncrypted');
 
   return { className, fqn, queue, connection, tries, timeout, uniqueFor, shouldBeEncrypted };
 }
@@ -266,7 +264,7 @@ function extractArrayValues(body: string, key: string): string[] {
   const arrayRe = new RegExp(`['"]${key}['"]\\s*=>\\s*\\[([^\\]]+)\\]`);
   const arrayMatch = body.match(arrayRe);
   if (arrayMatch) {
-    return arrayMatch[1].match(/['"]([^'"]+)['"]/g)?.map(s => s.replace(/['"]/g, '')) ?? [];
+    return arrayMatch[1].match(/['"]([^'"]+)['"]/g)?.map((s) => s.replace(/['"]/g, '')) ?? [];
   }
 
   const stringRe = new RegExp(`['"]${key}['"]\\s*=>\\s*['"]([^'"]+)['"]`);

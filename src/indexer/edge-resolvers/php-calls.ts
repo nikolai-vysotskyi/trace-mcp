@@ -12,9 +12,10 @@
  * same workspace as the source to prevent false connections between
  * independent projects sharing a common root.
  */
+
+import { logger } from '../../logger.js';
 import type { PipelineState } from '../pipeline-state.js';
 import type { PhpCallSite } from '../plugins/language/php/helpers.js';
-import { logger } from '../../logger.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
 
 interface PhpSymbol {
@@ -33,23 +34,51 @@ export function resolvePhpCallEdges(state: PipelineState): void {
   const { store } = state;
 
   // Resolve edge type IDs
-  const callsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as { id: number } | undefined;
-  const instType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('instantiates') as { id: number } | undefined;
-  const extendsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('extends') as { id: number } | undefined;
-  const implementsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('implements') as { id: number } | undefined;
-  const usesTraitType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('uses_trait') as { id: number } | undefined;
-  const propType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('accesses_property') as { id: number } | undefined;
-  const constType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('accesses_constant') as { id: number } | undefined;
-  const refType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('references') as { id: number } | undefined;
-  if (!callsType || !instType || !extendsType || !implementsType || !usesTraitType || !propType || !constType || !refType) return;
+  const callsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
+    | { id: number }
+    | undefined;
+  const instType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('instantiates') as { id: number } | undefined;
+  const extendsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('extends') as
+    | { id: number }
+    | undefined;
+  const implementsType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('implements') as { id: number } | undefined;
+  const usesTraitType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('uses_trait') as { id: number } | undefined;
+  const propType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('accesses_property') as { id: number } | undefined;
+  const constType = store.db
+    .prepare(`SELECT id FROM edge_types WHERE name = ?`)
+    .get('accesses_constant') as { id: number } | undefined;
+  const refType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('references') as
+    | { id: number }
+    | undefined;
+  if (
+    !callsType ||
+    !instType ||
+    !extendsType ||
+    !implementsType ||
+    !usesTraitType ||
+    !propType ||
+    !constType ||
+    !refType
+  )
+    return;
 
   // Load all PHP symbols once
-  const allSymbols = store.db.prepare(`
+  const allSymbols = store.db
+    .prepare(`
     SELECT s.id, s.symbol_id, s.name, s.kind, s.fqn, s.file_id, s.parent_id, f.workspace, s.metadata
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE f.language = 'php'
-  `).all() as PhpSymbol[];
+  `)
+    .all() as PhpSymbol[];
   if (allSymbols.length === 0) return;
 
   // Indexes
@@ -131,7 +160,13 @@ export function resolvePhpCallEdges(state: PipelineState): void {
       const tNode = symbolNodeMap.get(target.id);
       if (tNode == null || tNode === sourceNodeId) return;
       if (source.workspace !== target.workspace) return;
-      insertStmt.run(sourceNodeId, tNode, refType!.id, JSON.stringify({ ref: classRef, kind: refKind }), 0);
+      insertStmt.run(
+        sourceNodeId,
+        tNode,
+        refType!.id,
+        JSON.stringify({ ref: classRef, kind: refKind }),
+        0,
+      );
       typeRefs++;
       return;
     }
@@ -142,7 +177,13 @@ export function resolvePhpCallEdges(state: PipelineState): void {
     const phantom = phantoms.ensure(phantomFqn, source.workspace, 'class');
     if (!before) phantomNodesCreated++;
     if (phantom.node_id === sourceNodeId) return;
-    insertStmt.run(sourceNodeId, phantom.node_id, refType!.id, JSON.stringify({ ref: classRef, kind: refKind, external: true }), 0);
+    insertStmt.run(
+      sourceNodeId,
+      phantom.node_id,
+      refType!.id,
+      JSON.stringify({ ref: classRef, kind: refKind, external: true }),
+      0,
+    );
     typeRefs++;
   }
 
@@ -150,7 +191,11 @@ export function resolvePhpCallEdges(state: PipelineState): void {
     for (const sym of allSymbols) {
       if (!sym.metadata) continue;
       let meta: Record<string, unknown>;
-      try { meta = JSON.parse(sym.metadata); } catch { continue; }
+      try {
+        meta = JSON.parse(sym.metadata);
+      } catch {
+        continue;
+      }
 
       const sourceNodeId = symbolNodeMap.get(sym.id);
       if (sourceNodeId == null) continue;
@@ -164,7 +209,12 @@ export function resolvePhpCallEdges(state: PipelineState): void {
       // This is what clusters all N Laravel migrations into one community,
       // every Nova resource into another, and so on.
       if (sym.kind === 'class' || sym.kind === 'interface' || sym.kind === 'trait') {
-        const emitHeritage = (refs: string[] | undefined, edgeTypeId: number, phantomKind: 'class' | 'interface' | 'trait', counter: () => void): void => {
+        const emitHeritage = (
+          refs: string[] | undefined,
+          edgeTypeId: number,
+          phantomKind: 'class' | 'interface' | 'trait',
+          counter: () => void,
+        ): void => {
           if (!Array.isArray(refs)) return;
           for (const ref of refs) {
             const target = resolveClassRef(ref, sym, fileUseMap, fileNamespaceMap, byFqn, byName);
@@ -183,13 +233,30 @@ export function resolvePhpCallEdges(state: PipelineState): void {
             const phantom = phantoms.ensure(phantomFqn, sym.workspace, phantomKind);
             if (!before) phantomNodesCreated++;
             if (phantom.node_id === sourceNodeId) continue;
-            insertStmt.run(sourceNodeId, phantom.node_id, edgeTypeId, JSON.stringify({ ref, external: true }), 0);
+            insertStmt.run(
+              sourceNodeId,
+              phantom.node_id,
+              edgeTypeId,
+              JSON.stringify({ ref, external: true }),
+              0,
+            );
             counter();
           }
         };
-        emitHeritage(meta.extends as string[] | undefined, extendsType.id, 'class', () => { extendsEdges++; });
-        emitHeritage(meta.implements as string[] | undefined, implementsType.id, 'interface', () => { implementsEdges++; });
-        emitHeritage(meta.usesTraits as string[] | undefined, usesTraitType.id, 'trait', () => { usesTraitEdges++; });
+        emitHeritage(meta.extends as string[] | undefined, extendsType.id, 'class', () => {
+          extendsEdges++;
+        });
+        emitHeritage(
+          meta.implements as string[] | undefined,
+          implementsType.id,
+          'interface',
+          () => {
+            implementsEdges++;
+          },
+        );
+        emitHeritage(meta.usesTraits as string[] | undefined, usesTraitType.id, 'trait', () => {
+          usesTraitEdges++;
+        });
       }
 
       // Type reference edges — connect symbols to classes used as type hints.
@@ -215,7 +282,16 @@ export function resolvePhpCallEdges(state: PipelineState): void {
       if ((sym.kind === 'method' || sym.kind === 'function') && Array.isArray(meta.callSites)) {
         const callSites = meta.callSites as PhpCallSite[];
         for (const cs of callSites) {
-          const target = resolveCallSite(cs, sym, symbolById, symbolsByFile, fileUseMap, fileNamespaceMap, byFqn, byName);
+          const target = resolveCallSite(
+            cs,
+            sym,
+            symbolById,
+            symbolsByFile,
+            fileUseMap,
+            fileNamespaceMap,
+            byFqn,
+            byName,
+          );
           if (!target) continue;
           const tNode = symbolNodeMap.get(target.id);
           if (tNode == null || tNode === sourceNodeId) continue;
@@ -247,17 +323,40 @@ export function resolvePhpCallEdges(state: PipelineState): void {
               edgeTypeId = callsType.id;
               calls++;
           }
-          insertStmt.run(sourceNodeId, tNode, edgeTypeId,
-            JSON.stringify({ callee: cs.callee, line: cs.line, kind: cs.type }), 0);
+          insertStmt.run(
+            sourceNodeId,
+            tNode,
+            edgeTypeId,
+            JSON.stringify({ callee: cs.callee, line: cs.line, kind: cs.type }),
+            0,
+          );
         }
       }
     }
   })();
 
-  const total = calls + instantiations + extendsEdges + implementsEdges + usesTraitEdges + propAccesses + constAccesses + typeRefs;
+  const total =
+    calls +
+    instantiations +
+    extendsEdges +
+    implementsEdges +
+    usesTraitEdges +
+    propAccesses +
+    constAccesses +
+    typeRefs;
   if (total > 0) {
     logger.info(
-      { calls, instantiations, extendsEdges, implementsEdges, usesTraitEdges, propAccesses, constAccesses, typeRefs, phantomNodesCreated },
+      {
+        calls,
+        instantiations,
+        extendsEdges,
+        implementsEdges,
+        usesTraitEdges,
+        propAccesses,
+        constAccesses,
+        typeRefs,
+        phantomNodesCreated,
+      },
       'PHP call/heritage edges resolved',
     );
   }
@@ -374,7 +473,10 @@ function resolveClassRef(
  * When no same-workspace candidate exists, return null and let the caller
  * emit a phantom external symbol instead.
  */
-function pickClassLike(candidates: PhpSymbol[] | undefined, workspace: string | null): PhpSymbol | null {
+function pickClassLike(
+  candidates: PhpSymbol[] | undefined,
+  workspace: string | null,
+): PhpSymbol | null {
   if (!candidates || candidates.length === 0) return null;
   const classKinds = new Set(['class', 'interface', 'trait', 'enum']);
   const filtered = candidates.filter((c) => classKinds.has(c.kind));
@@ -400,42 +502,90 @@ function resolveCallSite(
   byName: Map<string, PhpSymbol[]>,
 ): PhpSymbol | null {
   // The parent symbol (class the method belongs to), if any
-  const parentClass = source.parent_id != null ? symbolById.get(source.parent_id) ?? null : null;
+  const parentClass = source.parent_id != null ? (symbolById.get(source.parent_id) ?? null) : null;
 
   switch (cs.type) {
     case 'this':
     case 'self': {
       // Look for method in the containing class (and its ancestors via extends)
       if (!parentClass) return null;
-      return findMethodInClassHierarchy(cs.callee, parentClass, byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap);
+      return findMethodInClassHierarchy(
+        cs.callee,
+        parentClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
+      );
     }
 
     case 'parent': {
       // Look in the parent class of the containing class
-      if (!parentClass || !parentClass.metadata) return null;
+      if (!parentClass?.metadata) return null;
       try {
         const parentMeta = JSON.parse(parentClass.metadata) as Record<string, unknown>;
         const ext = parentMeta.extends as string[] | undefined;
         if (!Array.isArray(ext) || ext.length === 0) return null;
-        const parentParentClass = resolveClassRef(ext[0], parentClass, fileUseMap, fileNamespaceMap, byFqn, byName);
+        const parentParentClass = resolveClassRef(
+          ext[0],
+          parentClass,
+          fileUseMap,
+          fileNamespaceMap,
+          byFqn,
+          byName,
+        );
         if (!parentParentClass) return null;
-        return findMethodInClassHierarchy(cs.callee, parentParentClass, byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap);
-      } catch { return null; }
+        return findMethodInClassHierarchy(
+          cs.callee,
+          parentParentClass,
+          byFqn,
+          byName,
+          symbolsByFile,
+          fileUseMap,
+          fileNamespaceMap,
+        );
+      } catch {
+        return null;
+      }
     }
 
     case 'static':
     case 'new': {
       if (!cs.classRef) return null;
-      const targetClass = resolveClassRef(cs.classRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+      const targetClass = resolveClassRef(
+        cs.classRef,
+        source,
+        fileUseMap,
+        fileNamespaceMap,
+        byFqn,
+        byName,
+      );
       if (!targetClass) return null;
       if (cs.type === 'new') {
         // Look for __construct; fall back to the class itself
-        const ctor = findMethodInClassHierarchy('__construct', targetClass, byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap);
+        const ctor = findMethodInClassHierarchy(
+          '__construct',
+          targetClass,
+          byFqn,
+          byName,
+          symbolsByFile,
+          fileUseMap,
+          fileNamespaceMap,
+        );
         return ctor ?? targetClass;
       }
       // Try to find the method; fall back to the class (e.g., inherited framework
       // methods like Model::find that live in vendor/ — we still record the class ref).
-      const method = findMethodInClassHierarchy(cs.callee, targetClass, byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap);
+      const method = findMethodInClassHierarchy(
+        cs.callee,
+        targetClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
+      );
       return method ?? targetClass;
     }
 
@@ -470,8 +620,14 @@ function resolveCallSite(
       // $this->prop — find property in containing class or ancestors
       if (!parentClass) return null;
       return findMemberInClassHierarchy(
-        cs.callee, 'property', parentClass,
-        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        cs.callee,
+        'property',
+        parentClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
       );
     }
 
@@ -479,19 +635,38 @@ function resolveCallSite(
       // self::$prop — static property in containing class or ancestors
       if (!parentClass) return null;
       return findMemberInClassHierarchy(
-        cs.callee, 'property', parentClass,
-        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        cs.callee,
+        'property',
+        parentClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
       );
     }
 
     case 'static_prop': {
       // Class::$prop — static property on a specific class
       if (!cs.classRef) return null;
-      const targetClass = resolveClassRef(cs.classRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+      const targetClass = resolveClassRef(
+        cs.classRef,
+        source,
+        fileUseMap,
+        fileNamespaceMap,
+        byFqn,
+        byName,
+      );
       if (!targetClass) return null;
       return findMemberInClassHierarchy(
-        cs.callee, 'property', targetClass,
-        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        cs.callee,
+        'property',
+        targetClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
       );
     }
 
@@ -499,19 +674,36 @@ function resolveCallSite(
       // self::FOO — constant or enum_case in containing class or ancestors
       if (!parentClass) return null;
       return findConstOrEnumCase(
-        cs.callee, parentClass,
-        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        cs.callee,
+        parentClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
       );
     }
 
     case 'class_const': {
       // Class::FOO — constant or enum case on a specific class/enum
       if (!cs.classRef) return null;
-      const targetClass = resolveClassRef(cs.classRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+      const targetClass = resolveClassRef(
+        cs.classRef,
+        source,
+        fileUseMap,
+        fileNamespaceMap,
+        byFqn,
+        byName,
+      );
       if (!targetClass) return null;
       return findConstOrEnumCase(
-        cs.callee, targetClass,
-        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        cs.callee,
+        targetClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
       );
     }
 
@@ -532,22 +724,43 @@ function resolveCallSite(
       for (const propName of cs.propChain) {
         if (!currentClass) return null;
         const prop = findMemberInClassHierarchy(
-          propName, 'property', currentClass,
-          byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+          propName,
+          'property',
+          currentClass,
+          byFqn,
+          byName,
+          symbolsByFile,
+          fileUseMap,
+          fileNamespaceMap,
         );
-        if (!prop || !prop.metadata) return null;
+        if (!prop?.metadata) return null;
         try {
           const propMeta = JSON.parse(prop.metadata) as Record<string, unknown>;
           const typeRef = propMeta.type as string | undefined;
           if (!typeRef) return null;
-          const classOwner = prop.parent_id != null ? symbolById.get(prop.parent_id) ?? null : null;
-          currentClass = resolveClassRef(typeRef, classOwner ?? prop, fileUseMap, fileNamespaceMap, byFqn, byName);
-        } catch { return null; }
+          const classOwner =
+            prop.parent_id != null ? (symbolById.get(prop.parent_id) ?? null) : null;
+          currentClass = resolveClassRef(
+            typeRef,
+            classOwner ?? prop,
+            fileUseMap,
+            fileNamespaceMap,
+            byFqn,
+            byName,
+          );
+        } catch {
+          return null;
+        }
       }
       if (!currentClass) return null;
       const method = findMethodInClassHierarchy(
-        cs.callee, currentClass,
-        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+        cs.callee,
+        currentClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
       );
       return method ?? currentClass;
     }
@@ -560,14 +773,28 @@ function resolveCallSite(
         if (!paramTypes) return null;
         const typeRef = paramTypes[cs.receiver];
         if (!typeRef) return null;
-        const targetClass = resolveClassRef(typeRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+        const targetClass = resolveClassRef(
+          typeRef,
+          source,
+          fileUseMap,
+          fileNamespaceMap,
+          byFqn,
+          byName,
+        );
         if (!targetClass) return null;
         const method = findMethodInClassHierarchy(
-          cs.callee, targetClass,
-          byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+          cs.callee,
+          targetClass,
+          byFqn,
+          byName,
+          symbolsByFile,
+          fileUseMap,
+          fileNamespaceMap,
         );
         return method ?? targetClass;
-      } catch { return null; }
+      } catch {
+        return null;
+      }
     }
 
     case 'local_call': {
@@ -578,14 +805,28 @@ function resolveCallSite(
         if (!localTypes) return null;
         const typeRef = localTypes[cs.receiver];
         if (!typeRef) return null;
-        const targetClass = resolveClassRef(typeRef, source, fileUseMap, fileNamespaceMap, byFqn, byName);
+        const targetClass = resolveClassRef(
+          typeRef,
+          source,
+          fileUseMap,
+          fileNamespaceMap,
+          byFqn,
+          byName,
+        );
         if (!targetClass) return null;
         const method = findMethodInClassHierarchy(
-          cs.callee, targetClass,
-          byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap,
+          cs.callee,
+          targetClass,
+          byFqn,
+          byName,
+          symbolsByFile,
+          fileUseMap,
+          fileNamespaceMap,
         );
         return method ?? targetClass;
-      } catch { return null; }
+      } catch {
+        return null;
+      }
     }
   }
 }
@@ -608,8 +849,8 @@ function findMemberInClassHierarchy(
   visited.add(classSymbol.id);
 
   const fileSymbols = symbolsByFile.get(classSymbol.file_id) ?? [];
-  const direct = fileSymbols.find((s) =>
-    s.kind === memberKind && s.name === memberName && s.parent_id === classSymbol.id,
+  const direct = fileSymbols.find(
+    (s) => s.kind === memberKind && s.name === memberName && s.parent_id === classSymbol.id,
   );
   if (direct) return direct;
 
@@ -621,15 +862,31 @@ function findMemberInClassHierarchy(
     if (Array.isArray(meta.usesTraits)) parents.push(...(meta.usesTraits as string[]));
 
     for (const ref of parents) {
-      const parentClass = resolveClassRef(ref, classSymbol, fileUseMap, fileNamespaceMap, byFqn, byName);
+      const parentClass = resolveClassRef(
+        ref,
+        classSymbol,
+        fileUseMap,
+        fileNamespaceMap,
+        byFqn,
+        byName,
+      );
       if (!parentClass) continue;
       const found = findMemberInClassHierarchy(
-        memberName, memberKind, parentClass,
-        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap, visited,
+        memberName,
+        memberKind,
+        parentClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
+        visited,
       );
       if (found) return found;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return null;
 }
@@ -654,15 +911,15 @@ function findConstOrEnumCase(
   const fileSymbols = symbolsByFile.get(classSymbol.file_id) ?? [];
   // Enum cases live inside enums
   if (classSymbol.kind === 'enum') {
-    const enumCase = fileSymbols.find((s) =>
-      s.kind === 'enum_case' && s.name === memberName && s.parent_id === classSymbol.id,
+    const enumCase = fileSymbols.find(
+      (s) => s.kind === 'enum_case' && s.name === memberName && s.parent_id === classSymbol.id,
     );
     if (enumCase) return enumCase;
   }
 
   // Regular class constant
-  const constant = fileSymbols.find((s) =>
-    s.kind === 'constant' && s.name === memberName && s.parent_id === classSymbol.id,
+  const constant = fileSymbols.find(
+    (s) => s.kind === 'constant' && s.name === memberName && s.parent_id === classSymbol.id,
   );
   if (constant) return constant;
 
@@ -676,15 +933,30 @@ function findConstOrEnumCase(
     if (Array.isArray(meta.usesTraits)) parents.push(...(meta.usesTraits as string[]));
 
     for (const ref of parents) {
-      const parentClass = resolveClassRef(ref, classSymbol, fileUseMap, fileNamespaceMap, byFqn, byName);
+      const parentClass = resolveClassRef(
+        ref,
+        classSymbol,
+        fileUseMap,
+        fileNamespaceMap,
+        byFqn,
+        byName,
+      );
       if (!parentClass) continue;
       const found = findConstOrEnumCase(
-        memberName, parentClass,
-        byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap, visited,
+        memberName,
+        parentClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
+        visited,
       );
       if (found) return found;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return null;
 }
@@ -724,8 +996,8 @@ function findMethodInClassHierarchy(
   // Look for method directly in this class
   const fileSymbols = symbolsByFile.get(classSymbol.file_id) ?? [];
   const methodFqn = classSymbol.fqn ? `${classSymbol.fqn}\\${methodName}` : null;
-  const direct = fileSymbols.find((s) =>
-    s.kind === 'method' && s.name === methodName && s.parent_id === classSymbol.id,
+  const direct = fileSymbols.find(
+    (s) => s.kind === 'method' && s.name === methodName && s.parent_id === classSymbol.id,
   );
   if (direct) return direct;
 
@@ -744,12 +1016,30 @@ function findMethodInClassHierarchy(
     if (Array.isArray(meta.usesTraits)) parents.push(...(meta.usesTraits as string[]));
 
     for (const ref of parents) {
-      const parentClass = resolveClassRef(ref, classSymbol, fileUseMap, fileNamespaceMap, byFqn, byName);
+      const parentClass = resolveClassRef(
+        ref,
+        classSymbol,
+        fileUseMap,
+        fileNamespaceMap,
+        byFqn,
+        byName,
+      );
       if (!parentClass) continue;
-      const found = findMethodInClassHierarchy(methodName, parentClass, byFqn, byName, symbolsByFile, fileUseMap, fileNamespaceMap, visited);
+      const found = findMethodInClassHierarchy(
+        methodName,
+        parentClass,
+        byFqn,
+        byName,
+        symbolsByFile,
+        fileUseMap,
+        fileNamespaceMap,
+        visited,
+      );
       if (found) return found;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return null;
 }
@@ -762,14 +1052,16 @@ function buildFileUseMap(state: PipelineState): Map<number, Map<string, string>>
   const result = new Map<number, Map<string, string>>();
 
   // Query from file-level import edges already resolved
-  const rows = state.store.db.prepare(`
+  const rows = state.store.db
+    .prepare(`
     SELECT n_src.ref_id as source_file_id, e.metadata
     FROM edges e
     JOIN edge_types et ON e.edge_type_id = et.id
     JOIN nodes n_src ON e.source_node_id = n_src.id
     JOIN files f ON n_src.ref_id = f.id AND n_src.node_type = 'file'
     WHERE et.name = 'imports' AND f.language = 'php' AND e.metadata IS NOT NULL
-  `).all() as Array<{ source_file_id: number; metadata: string | null }>;
+  `)
+    .all() as Array<{ source_file_id: number; metadata: string | null }>;
 
   for (const row of rows) {
     if (!row.metadata) continue;
@@ -784,7 +1076,9 @@ function buildFileUseMap(state: PipelineState): Map<number, Map<string, string>>
         result.set(row.source_file_id, fileMap);
       }
       fileMap.set(shortName, fqn);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return result;

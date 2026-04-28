@@ -11,12 +11,12 @@
  * They are designed to be small, portable, and shareable.
  */
 
-import Database from 'better-sqlite3';
-import path from 'node:path';
-import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { logger } from './logger.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import Database from 'better-sqlite3';
 import { TRACE_MCP_HOME } from './global.js';
+import { logger } from './logger.js';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -68,7 +68,7 @@ function loadManifest(): BundleManifest {
 
 function saveManifest(manifest: BundleManifest): void {
   ensureBundlesDir();
-  fs.writeFileSync(getManifestPath(), JSON.stringify(manifest, null, 2) + '\n');
+  fs.writeFileSync(getManifestPath(), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,21 +167,30 @@ export function exportBundle(
   dst.exec('BEGIN');
 
   // Files (minimal fields only)
-  const srcFiles = src.prepare('SELECT id, path, language, framework_role FROM files').all() as Array<{
-    id: number; path: string; language: string | null; framework_role: string | null;
+  const srcFiles = src
+    .prepare('SELECT id, path, language, framework_role FROM files')
+    .all() as Array<{
+    id: number;
+    path: string;
+    language: string | null;
+    framework_role: string | null;
   }>;
-  const insertFile = dst.prepare('INSERT INTO files (id, path, language, framework_role) VALUES (?, ?, ?, ?)');
+  const insertFile = dst.prepare(
+    'INSERT INTO files (id, path, language, framework_role) VALUES (?, ?, ?, ?)',
+  );
   for (const f of srcFiles) {
     insertFile.run(f.id, f.path, f.language, f.framework_role);
   }
 
   // Symbols
-  const srcSymbols = src.prepare(`
+  const srcSymbols = src
+    .prepare(`
     SELECT id, file_id, symbol_id, name, kind, fqn, signature,
            line_start, line_end, byte_start, byte_end, is_exported,
            cyclomatic, max_nesting, param_count, metadata
     FROM symbols
-  `).all() as Array<Record<string, unknown>>;
+  `)
+    .all() as Array<Record<string, unknown>>;
   const insertSymbol = dst.prepare(`
     INSERT INTO symbols (id, file_id, symbol_id, name, kind, fqn, signature,
       line_start, line_end, byte_start, byte_end, is_exported,
@@ -190,52 +199,95 @@ export function exportBundle(
   `);
   for (const s of srcSymbols) {
     insertSymbol.run(
-      s.id, s.file_id, s.symbol_id, s.name, s.kind, s.fqn, s.signature,
-      s.line_start, s.line_end, s.byte_start, s.byte_end, s.is_exported,
-      s.cyclomatic, s.max_nesting, s.param_count, s.metadata,
+      s.id,
+      s.file_id,
+      s.symbol_id,
+      s.name,
+      s.kind,
+      s.fqn,
+      s.signature,
+      s.line_start,
+      s.line_end,
+      s.byte_start,
+      s.byte_end,
+      s.is_exported,
+      s.cyclomatic,
+      s.max_nesting,
+      s.param_count,
+      s.metadata,
     );
   }
 
   // Node types
-  const srcNodeTypes = src.prepare('SELECT id, name FROM node_types').all() as Array<{ id: number; name: string }>;
+  const srcNodeTypes = src.prepare('SELECT id, name FROM node_types').all() as Array<{
+    id: number;
+    name: string;
+  }>;
   const insertNodeType = dst.prepare('INSERT INTO node_types (id, name) VALUES (?, ?)');
   for (const nt of srcNodeTypes) {
     insertNodeType.run(nt.id, nt.name);
   }
 
   // Edge types
-  const srcEdgeTypes = src.prepare('SELECT id, name, category, directed, description FROM edge_types').all() as Array<Record<string, unknown>>;
-  const insertEdgeType = dst.prepare('INSERT INTO edge_types (id, name, category, directed, description) VALUES (?, ?, ?, ?, ?)');
+  const srcEdgeTypes = src
+    .prepare('SELECT id, name, category, directed, description FROM edge_types')
+    .all() as Array<Record<string, unknown>>;
+  const insertEdgeType = dst.prepare(
+    'INSERT INTO edge_types (id, name, category, directed, description) VALUES (?, ?, ?, ?, ?)',
+  );
   for (const et of srcEdgeTypes) {
     insertEdgeType.run(et.id, et.name, et.category, et.directed, et.description);
   }
 
   // Nodes
-  const srcNodes = src.prepare('SELECT id, node_type, ref_id FROM nodes').all() as Array<{ id: number; node_type: string; ref_id: number }>;
+  const srcNodes = src.prepare('SELECT id, node_type, ref_id FROM nodes').all() as Array<{
+    id: number;
+    node_type: string;
+    ref_id: number;
+  }>;
   const insertNode = dst.prepare('INSERT INTO nodes (id, node_type, ref_id) VALUES (?, ?, ?)');
   for (const n of srcNodes) {
     insertNode.run(n.id, n.node_type, n.ref_id);
   }
 
   // Edges — handle source DBs that predate the resolution_tier column
-  const hasResolutionTier = src.prepare(
-    "SELECT COUNT(*) AS cnt FROM pragma_table_info('edges') WHERE name = 'resolution_tier'",
-  ).get() as { cnt: number };
-  const edgeSelect = hasResolutionTier.cnt > 0
-    ? 'SELECT id, source_node_id, target_node_id, edge_type_id, resolved, metadata, resolution_tier FROM edges'
-    : 'SELECT id, source_node_id, target_node_id, edge_type_id, resolved, metadata FROM edges';
+  const hasResolutionTier = src
+    .prepare(
+      "SELECT COUNT(*) AS cnt FROM pragma_table_info('edges') WHERE name = 'resolution_tier'",
+    )
+    .get() as { cnt: number };
+  const edgeSelect =
+    hasResolutionTier.cnt > 0
+      ? 'SELECT id, source_node_id, target_node_id, edge_type_id, resolved, metadata, resolution_tier FROM edges'
+      : 'SELECT id, source_node_id, target_node_id, edge_type_id, resolved, metadata FROM edges';
   const srcEdges = src.prepare(edgeSelect).all() as Array<Record<string, unknown>>;
-  const insertEdge = dst.prepare('INSERT INTO edges (id, source_node_id, target_node_id, edge_type_id, resolved, metadata, resolution_tier) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  const insertEdge = dst.prepare(
+    'INSERT INTO edges (id, source_node_id, target_node_id, edge_type_id, resolved, metadata, resolution_tier) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  );
   for (const e of srcEdges) {
-    insertEdge.run(e.id, e.source_node_id, e.target_node_id, e.edge_type_id, e.resolved, e.metadata, e.resolution_tier ?? 'ast_resolved');
+    insertEdge.run(
+      e.id,
+      e.source_node_id,
+      e.target_node_id,
+      e.edge_type_id,
+      e.resolved,
+      e.metadata,
+      e.resolution_tier ?? 'ast_resolved',
+    );
   }
 
   // Meta
   dst.prepare('INSERT INTO bundle_meta (key, value) VALUES (?, ?)').run('package', packageName);
   dst.prepare('INSERT INTO bundle_meta (key, value) VALUES (?, ?)').run('version', version);
-  dst.prepare('INSERT INTO bundle_meta (key, value) VALUES (?, ?)').run('created_at', new Date().toISOString());
-  dst.prepare('INSERT INTO bundle_meta (key, value) VALUES (?, ?)').run('symbols_count', String(srcSymbols.length));
-  dst.prepare('INSERT INTO bundle_meta (key, value) VALUES (?, ?)').run('edges_count', String(srcEdges.length));
+  dst
+    .prepare('INSERT INTO bundle_meta (key, value) VALUES (?, ?)')
+    .run('created_at', new Date().toISOString());
+  dst
+    .prepare('INSERT INTO bundle_meta (key, value) VALUES (?, ?)')
+    .run('symbols_count', String(srcSymbols.length));
+  dst
+    .prepare('INSERT INTO bundle_meta (key, value) VALUES (?, ?)')
+    .run('edges_count', String(srcEdges.length));
 
   dst.exec('COMMIT');
 
@@ -264,12 +316,21 @@ export function exportBundle(
 
   const manifest = loadManifest();
   manifest.bundles = manifest.bundles.filter(
-    b => !(b.package === packageName && b.version === version),
+    (b) => !(b.package === packageName && b.version === version),
   );
   manifest.bundles.push(entry);
   saveManifest(manifest);
 
-  logger.info({ package: packageName, version, symbols: srcSymbols.length, edges: srcEdges.length, sizeKB: Math.round(sizeBytes / 1024) }, 'Bundle exported');
+  logger.info(
+    {
+      package: packageName,
+      version,
+      symbols: srcSymbols.length,
+      edges: srcEdges.length,
+      sizeKB: Math.round(sizeBytes / 1024),
+    },
+    'Bundle exported',
+  );
 
   return entry;
 }
@@ -285,14 +346,14 @@ export function listBundles(): BundleManifestEntry[] {
 export function removeBundle(packageName: string, version?: string): number {
   const manifest = loadManifest();
   const toRemove = manifest.bundles.filter(
-    b => b.package === packageName && (!version || b.version === version),
+    (b) => b.package === packageName && (!version || b.version === version),
   );
   for (const entry of toRemove) {
     const fp = path.join(BUNDLES_DIR, entry.file);
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
   }
   manifest.bundles = manifest.bundles.filter(
-    b => !(b.package === packageName && (!version || b.version === version)),
+    (b) => !(b.package === packageName && (!version || b.version === version)),
   );
   saveManifest(manifest);
   return toRemove.length;
@@ -373,8 +434,13 @@ export function searchBundles(
       params.push(limit - results.length);
 
       const rows = bundle.db.prepare(sql).all(...params) as Array<{
-        symbol_id: string; name: string; kind: string; fqn: string | null;
-        signature: string | null; file: string; line: number | null;
+        symbol_id: string;
+        name: string;
+        kind: string;
+        fqn: string | null;
+        signature: string | null;
+        file: string;
+        line: number | null;
       }>;
 
       for (const row of rows) {

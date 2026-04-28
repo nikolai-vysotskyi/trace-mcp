@@ -14,11 +14,18 @@
  *                          defface, define-*-mode, cl-defstruct, require, provide)
  *                          — 1st named child is form keyword symbol, 2nd is name
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 function makeSymbolId(filePath: string, name: string, kind: string): string {
   return `${filePath}::${name}#${kind}`;
@@ -35,41 +42,41 @@ function extractSignature(node: TSNode): string {
 /** Forms handled as generic `list` nodes where 1st symbol child is the keyword. */
 const LIST_FORM_MAP: Record<string, { kind: SymbolKind; meta?: Record<string, unknown> }> = {
   // Variables
-  'defvar-local':                 { kind: 'variable' },
-  'defcustom':                    { kind: 'variable', meta: { custom: true } },
-  'defface':                      { kind: 'variable', meta: { face: true } },
-  'defvar-keymap':                { kind: 'variable', meta: { keymap: true } },
+  'defvar-local': { kind: 'variable' },
+  defcustom: { kind: 'variable', meta: { custom: true } },
+  defface: { kind: 'variable', meta: { face: true } },
+  'defvar-keymap': { kind: 'variable', meta: { keymap: true } },
   // Structures & Groups
-  'defgroup':                     { kind: 'class' },
-  'cl-defstruct':                 { kind: 'class', meta: { struct: true } },
-  'cl-deftype':                   { kind: 'type' },
+  defgroup: { kind: 'class' },
+  'cl-defstruct': { kind: 'class', meta: { struct: true } },
+  'cl-deftype': { kind: 'type' },
   // Modes
-  'define-minor-mode':            { kind: 'function', meta: { mode: true } },
-  'define-derived-mode':          { kind: 'function', meta: { mode: true } },
+  'define-minor-mode': { kind: 'function', meta: { mode: true } },
+  'define-derived-mode': { kind: 'function', meta: { mode: true } },
   'define-globalized-minor-mode': { kind: 'function', meta: { mode: true } },
-  'define-generic-mode':          { kind: 'function', meta: { mode: true } },
-  'define-compilation-mode':      { kind: 'function', meta: { mode: true } },
+  'define-generic-mode': { kind: 'function', meta: { mode: true } },
+  'define-compilation-mode': { kind: 'function', meta: { mode: true } },
   // EIEIO OOP
-  'defclass':                     { kind: 'class', meta: { eieio: true } },
-  'defgeneric':                   { kind: 'method', meta: { generic: true } },
-  'defmethod':                    { kind: 'method' },
-  'cl-defgeneric':                { kind: 'method', meta: { generic: true } },
-  'cl-defmethod':                 { kind: 'method' },
+  defclass: { kind: 'class', meta: { eieio: true } },
+  defgeneric: { kind: 'method', meta: { generic: true } },
+  defmethod: { kind: 'method' },
+  'cl-defgeneric': { kind: 'method', meta: { generic: true } },
+  'cl-defmethod': { kind: 'method' },
   // Advice
-  'defadvice':                    { kind: 'function', meta: { advice: true } },
-  'define-advice':                { kind: 'function', meta: { advice: true } },
+  defadvice: { kind: 'function', meta: { advice: true } },
+  'define-advice': { kind: 'function', meta: { advice: true } },
   // Inline functions & aliases
-  'defsubst-maybe':               { kind: 'function', meta: { inline: true } },
-  'defalias':                     { kind: 'function', meta: { alias: true } },
-  'cl-defun':                     { kind: 'function', meta: { clLib: true } },
-  'cl-defmacro':                  { kind: 'function', meta: { macro: true, clLib: true } },
-  'cl-defsubst':                  { kind: 'function', meta: { inline: true, clLib: true } },
+  'defsubst-maybe': { kind: 'function', meta: { inline: true } },
+  defalias: { kind: 'function', meta: { alias: true } },
+  'cl-defun': { kind: 'function', meta: { clLib: true } },
+  'cl-defmacro': { kind: 'function', meta: { macro: true, clLib: true } },
+  'cl-defsubst': { kind: 'function', meta: { inline: true, clLib: true } },
   // Package management
-  'use-package':                  { kind: 'variable', meta: { package: true } },
+  'use-package': { kind: 'variable', meta: { package: true } },
   // Error/condition types
-  'define-error':                 { kind: 'type', meta: { error: true } },
+  'define-error': { kind: 'type', meta: { error: true } },
   // Widget types
-  'define-widget':                { kind: 'type', meta: { widget: true } },
+  'define-widget': { kind: 'type', meta: { widget: true } },
 };
 
 /** Forms that produce import/provide edges instead of symbols. */
@@ -77,11 +84,23 @@ const EDGE_FORMS = new Set(['require', 'provide', 'require-macros']);
 
 /** Wrapper forms that may contain nested definitions. */
 const WRAPPER_FORMS = new Set([
-  'progn', 'eval-when-compile', 'eval-and-compile',
-  'when', 'unless', 'with-eval-after-load',
-  'condition-case', 'save-excursion',
-  'cl-eval-when', 'with-no-warnings', 'with-suppressed-warnings',
-  'if', 'let', 'let*', 'cl-flet', 'cl-labels', 'cl-letf',
+  'progn',
+  'eval-when-compile',
+  'eval-and-compile',
+  'when',
+  'unless',
+  'with-eval-after-load',
+  'condition-case',
+  'save-excursion',
+  'cl-eval-when',
+  'with-no-warnings',
+  'with-suppressed-warnings',
+  'if',
+  'let',
+  'let*',
+  'cl-flet',
+  'cl-labels',
+  'cl-letf',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -145,7 +164,10 @@ export class ElispLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.el', '.elc'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('elisp');
       const sourceCode = content.toString('utf-8');

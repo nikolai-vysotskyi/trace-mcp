@@ -36,10 +36,7 @@ interface AssembledContext {
  *   3. signature_only (just signature)
  * We pick the highest detail level that fits the remaining budget.
  */
-export function assembleContext(
-  items: ContextItem[],
-  tokenBudget: number,
-): AssembledContext {
+export function assembleContext(items: ContextItem[], tokenBudget: number): AssembledContext {
   const sorted = [...items].sort((a, b) => b.score - a.score);
   const result: AssembledItem[] = [];
   let totalTokens = 0;
@@ -87,7 +84,13 @@ function tryAssemble(item: ContextItem, remainingTokens: number): AssembledItem 
   if (item.signature) {
     const tokens = estimateTokens(item.signature);
     if (tokens <= remainingTokens) {
-      return { id: item.id, score: item.score, detail: 'signature_only', content: item.signature, tokens };
+      return {
+        id: item.id,
+        score: item.score,
+        detail: 'signature_only',
+        content: item.signature,
+        tokens,
+      };
     }
   }
 

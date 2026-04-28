@@ -3,17 +3,17 @@
  * extracts useQuery/useMutation/useSWR hooks that reference API endpoints.
  */
 import fs from 'node:fs';
-import { globalRe } from '../../../../../utils/regex.js';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
+import { globalRe } from '../../../../../utils/regex.js';
 
 /**
  * Match useQuery({ queryKey: [...], queryFn: () => fetch('...') })
@@ -33,18 +33,15 @@ const USE_MUTATION_RE =
  * Match useSWR('/api/...', fetcher)
  * Match useSWR(() => `/api/...`, fetcher)
  */
-const USE_SWR_STRING_RE =
-  /\buseSWR\s*\(\s*['"`](\/[^'"`$]*?)['"`]/g;
+const USE_SWR_STRING_RE = /\buseSWR\s*\(\s*['"`](\/[^'"`$]*?)['"`]/g;
 
-const USE_SWR_FUNCTION_RE =
-  /\buseSWR\s*\(\s*\(\s*\)\s*=>\s*[`'"](\/[^'"`$]*?)['"`]/g;
+const USE_SWR_FUNCTION_RE = /\buseSWR\s*\(\s*\(\s*\)\s*=>\s*[`'"](\/[^'"`$]*?)['"`]/g;
 
 /**
  * Template literal fetch patterns with interpolation.
  * e.g., fetch(`/api/users/${id}`) → '/api/users/:param'
  */
-const FETCH_TEMPLATE_RE =
-  /fetch\s*\(\s*`(\/[^`]*?)\$\{[^}]+\}([^`]*?)`/g;
+const FETCH_TEMPLATE_RE = /fetch\s*\(\s*`(\/[^`]*?)\$\{[^}]+\}([^`]*?)`/g;
 
 interface DataFetchingHook {
   hook: string;
@@ -105,7 +102,7 @@ export function extractDataFetchingHooks(source: string): DataFetchingHook[] {
   // Template literal fetch with interpolation (any useQuery/useSWR context)
   const templateRe = globalRe(FETCH_TEMPLATE_RE);
   while ((match = templateRe.exec(source)) !== null) {
-    const endpoint = normalizeEndpoint(match[1] + '${x}' + match[2]);
+    const endpoint = normalizeEndpoint(`${match[1]}\${x}${match[2]}`);
     // Determine context: is this inside useQuery, useMutation, or useSWR?
     const before = source.slice(Math.max(0, match.index - 200), match.index);
     let hook = 'fetch';
@@ -154,7 +151,11 @@ export class DataFetchingPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'fetches_endpoint', category: 'data-fetching', description: 'useQuery/useSWR call referencing an API endpoint' },
+        {
+          name: 'fetches_endpoint',
+          category: 'data-fetching',
+          description: 'useQuery/useSWR call referencing an API endpoint',
+        },
       ],
     };
   }

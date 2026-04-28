@@ -10,9 +10,16 @@
  *   - Embedding API shape: {instances:[{task_type,content}], parameters:{outputDimensionality}}
  *   - Inference API shape: same :generateContent as Gemini, just different host/auth.
  */
-import type { AIProvider, ChatMessage, EmbeddingService, EmbeddingTask, InferenceService } from './interfaces.js';
+
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import type {
+  AIProvider,
+  ChatMessage,
+  EmbeddingService,
+  EmbeddingTask,
+  InferenceService,
+} from './interfaces.js';
 
 interface VertexAIConfig {
   accessToken: string;
@@ -28,14 +35,16 @@ function vertexHost(location: string): string {
   return `https://${location}-aiplatform.googleapis.com`;
 }
 
-function modelUrl(cfg: Pick<VertexAIConfig, 'project' | 'location'>, model: string, verb: string): string {
+function modelUrl(
+  cfg: Pick<VertexAIConfig, 'project' | 'location'>,
+  model: string,
+  verb: string,
+): string {
   return `${vertexHost(cfg.location)}/v1/projects/${cfg.project}/locations/${cfg.location}/publishers/google/models/${model}:${verb}`;
 }
 
 class VertexAIEmbeddingService implements EmbeddingService {
-  constructor(
-    private cfg: VertexAIConfig,
-  ) {}
+  constructor(private cfg: VertexAIConfig) {}
 
   async embed(text: string, task?: EmbeddingTask): Promise<number[]> {
     const results = await this.embedBatch([text], task);
@@ -44,36 +53,39 @@ class VertexAIEmbeddingService implements EmbeddingService {
 
   async embedBatch(texts: string[], task: EmbeddingTask = 'document'): Promise<number[][]> {
     const taskType = task === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT';
-    return withRetry(async () => {
-      const resp = await fetch(
-        modelUrl(this.cfg, this.cfg.embeddingModel, 'predict'),
-        {
+    return withRetry(
+      async () => {
+        const resp = await fetch(modelUrl(this.cfg, this.cfg.embeddingModel, 'predict'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${this.cfg.accessToken}`,
           },
           body: JSON.stringify({
-            instances: texts.map(text => ({ task_type: taskType, content: text })),
-            parameters: this.cfg.embeddingDimensions > 0
-              ? { outputDimensionality: this.cfg.embeddingDimensions }
-              : {},
+            instances: texts.map((text) => ({ task_type: taskType, content: text })),
+            parameters:
+              this.cfg.embeddingDimensions > 0
+                ? { outputDimensionality: this.cfg.embeddingDimensions }
+                : {},
           }),
           signal: AbortSignal.timeout(30_000),
-        },
-      );
+        });
 
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '');
-        const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
-        throw new Error(`Vertex embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
-      }
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => '');
+          const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
+          throw new Error(
+            `Vertex embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`,
+          );
+        }
 
-      const data = (await resp.json()) as {
-        predictions: { embeddings: { values: number[] } }[];
-      };
-      return data.predictions.map(p => p.embeddings.values);
-    }, { label: 'Vertex embeddings' });
+        const data = (await resp.json()) as {
+          predictions: { embeddings: { values: number[] } }[];
+        };
+        return data.predictions.map((p) => p.embeddings.values);
+      },
+      { label: 'Vertex embeddings' },
+    );
   }
 
   dimensions(): number {
@@ -95,10 +107,9 @@ class VertexAIInferenceService implements InferenceService {
     prompt: string,
     options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
-    return withRetry(async () => {
-      const resp = await fetch(
-        modelUrl(this.cfg, this.model, 'generateContent'),
-        {
+    return withRetry(
+      async () => {
+        const resp = await fetch(modelUrl(this.cfg, this.model, 'generateContent'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -112,53 +123,53 @@ class VertexAIInferenceService implements InferenceService {
             },
           }),
           signal: AbortSignal.timeout(60_000),
-        },
-      );
+        });
 
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '');
-        const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
-        throw new Error(`Vertex generate failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
-      }
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => '');
+          const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
+          throw new Error(
+            `Vertex generate failed: ${resp.status} ${resp.statusText} — ${safeBody}`,
+          );
+        }
 
-      const data = (await resp.json()) as {
-        candidates: { content: { parts: { text: string }[] } }[];
-      };
-      return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    }, { label: 'Vertex generate' });
+        const data = (await resp.json()) as {
+          candidates: { content: { parts: { text: string }[] } }[];
+        };
+        return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      },
+      { label: 'Vertex generate' },
+    );
   }
 
   async *generateStream(
     messages: ChatMessage[],
     options?: { maxTokens?: number; temperature?: number },
   ): AsyncIterable<string> {
-    const contents = messages.map(m => ({
+    const contents = messages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }));
 
-    const resp = await fetch(
-      `${modelUrl(this.cfg, this.model, 'streamGenerateContent')}?alt=sse`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.cfg.accessToken}`,
-        },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            ...(options?.maxTokens ? { maxOutputTokens: options.maxTokens } : {}),
-            ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-          },
-        }),
-        signal: AbortSignal.timeout(120_000),
+    const resp = await fetch(`${modelUrl(this.cfg, this.model, 'streamGenerateContent')}?alt=sse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.cfg.accessToken}`,
       },
-    );
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          ...(options?.maxTokens ? { maxOutputTokens: options.maxTokens } : {}),
+          ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+        },
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
 
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
-      const safeBody = body.length > 200 ? body.slice(0, 200) + '…' : body;
+      const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
       throw new Error(`Vertex stream failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
     }
 
@@ -183,7 +194,9 @@ class VertexAIInferenceService implements InferenceService {
           };
           const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
           if (text) yield text;
-        } catch { /* skip unparseable */ }
+        } catch {
+          /* skip unparseable */
+        }
       }
     }
   }

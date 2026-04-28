@@ -14,10 +14,10 @@
  */
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -27,16 +27,14 @@ import { findEnclosingSymbol, lineOfIndex } from '../../_shared/regex-edges.js';
 const PACKAGES = ['redis'] as const;
 
 // `import redis` or `from redis import ...` (including `from redis.asyncio import Redis`).
-const REDIS_IMPORT_RE =
-  /^\s*(?:import\s+redis(?:\s+as\s+\w+)?|from\s+redis(?:\.\w+)?\s+import)\b/m;
+const REDIS_IMPORT_RE = /^\s*(?:import\s+redis(?:\s+as\s+\w+)?|from\s+redis(?:\.\w+)?\s+import)\b/m;
 // Named import of Redis-like classes (for bare-call detection).
 // Two forms: single-line `from redis import A, B` and parenthesized multi-line
 // `from redis import (\n    A,\n    B,\n)`.
 const FROM_REDIS_CLASS_RE =
   /\bfrom\s+redis(?:\.asyncio|\.cluster)?\s+import\s+(?:\(([^)]*)\)|([^#\n]*))/g;
 // `import redis as alias` — track alias for bare `alias.Redis()` detection.
-const IMPORT_REDIS_ALIAS_RE =
-  /\bimport\s+redis(?:\.(?:asyncio|cluster))?\s+as\s+(\w+)/g;
+const IMPORT_REDIS_ALIAS_RE = /\bimport\s+redis(?:\.(?:asyncio|cluster))?\s+as\s+(\w+)/g;
 
 // Connection creation — qualified forms.
 const QUALIFIED_CONNECTION_RE =
@@ -50,7 +48,8 @@ const PUBLISH_RE = /\.\s*publish\s*\(/;
 const SUBSCRIBE_RE = /\.\s*(?:p?subscribe|p?unsubscribe)\s*\(/;
 
 // Streams — uniquely redis.
-const STREAM_RE = /\.\s*(?:xadd|xread|xreadgroup|xrange|xrevrange|xgroup|xack|xlen|xpending|xclaim)\s*\(/i;
+const STREAM_RE =
+  /\.\s*(?:xadd|xread|xreadgroup|xrange|xrevrange|xgroup|xack|xlen|xpending|xclaim)\s*\(/i;
 
 // Pipelines / transactions
 const PIPELINE_RE = /\.\s*(?:pipeline|transaction)\s*\(/;
@@ -60,15 +59,13 @@ const TYPED_COMMAND_RE =
   /\.\s*(?:h(?:get|set|mset|mget|getall|del|incrby|exists|keys|vals|len)|l(?:push|pop|range|len|rem|trim|index|set)|r(?:push|pop|poplpush)|z(?:add|range|rem|score|rangebyscore|revrange|rank|incrby|card)|s(?:add|members|rem|ismember|inter|union|diff|card)|expire|pexpire|expireat|ttl|pttl|persist|incr|incrby|decr|decrby|setex|setnx|psetex|getset)\s*\(/gi;
 
 // Generic commands — only trust with an import to avoid FP on Map.get / requests.get / etc.
-const GENERIC_COMMAND_RE = /\.\s*(?:get|set|delete|keys|scan|eval|evalsha|ping|flushdb|flushall|exists|dbsize)\s*\(/g;
+const GENERIC_COMMAND_RE =
+  /\.\s*(?:get|set|delete|keys|scan|eval|evalsha|ping|flushdb|flushall|exists|dbsize)\s*\(/g;
 
 // Edge patterns
-const PUBLISH_NAME_RE =
-  /\.\s*publish\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["'])/g;
-const SUBSCRIBE_NAME_RE =
-  /\.\s*(?:p?subscribe)\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["'])/g;
-const XADD_NAME_RE =
-  /\.\s*xadd\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["'])/g;
+const PUBLISH_NAME_RE = /\.\s*publish\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["'])/g;
+const SUBSCRIBE_NAME_RE = /\.\s*(?:p?subscribe)\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["'])/g;
+const XADD_NAME_RE = /\.\s*xadd\s*\(\s*(?:(?:f|r|b)?["']([^"']+)["'])/g;
 
 function countMatches(re: RegExp, source: string): number {
   if (!re.global && !re.sticky) throw new Error('countMatches requires a global regex');
@@ -121,7 +118,11 @@ export class RedisPyPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'redis_connects', category: 'redis', description: 'Redis client connection creation' },
+        {
+          name: 'redis_connects',
+          category: 'redis',
+          description: 'Redis client connection creation',
+        },
         { name: 'redis_pubsub', category: 'redis', description: 'Redis pub/sub channel operation' },
         { name: 'redis_stream', category: 'redis', description: 'Redis Streams operation' },
       ],
@@ -159,7 +160,10 @@ export class RedisPyPlugin implements FrameworkPlugin {
         const re = new RegExp(
           `\\b${aliasEscaped}\\s*\\.\\s*(?:Redis|StrictRedis|RedisCluster|(?:Blocking)?ConnectionPool(?:\\s*\\.\\s*from_url)?)\\s*\\(`,
         );
-        if (re.test(source)) { hasConnection = true; break; }
+        if (re.test(source)) {
+          hasConnection = true;
+          break;
+        }
       }
     }
 
@@ -176,9 +180,9 @@ export class RedisPyPlugin implements FrameworkPlugin {
     } else if (hasStream) {
       result.frameworkRole = 'redis_stream';
     } else if (
-      (hasPublish && hasSubscribe)
-      || hasPubsubFn
-      || (hasImport && (hasPublish || hasSubscribe))
+      (hasPublish && hasSubscribe) ||
+      hasPubsubFn ||
+      (hasImport && (hasPublish || hasSubscribe))
     ) {
       result.frameworkRole = 'redis_pubsub';
     } else if (hasPipeline) {
@@ -203,12 +207,7 @@ export class RedisPyPlugin implements FrameworkPlugin {
       if (!source) continue;
       const symbols = ctx.getSymbolsByFile(file.id);
 
-      const emit = (
-        re: RegExp,
-        edgeType: string,
-        resourcePrefix: string,
-        op: string,
-      ) => {
+      const emit = (re: RegExp, edgeType: string, resourcePrefix: string, op: string) => {
         re.lastIndex = 0;
         let m: RegExpExecArray | null;
         while ((m = re.exec(source)) !== null) {
@@ -217,9 +216,11 @@ export class RedisPyPlugin implements FrameworkPlugin {
           if (!encl) continue;
           const name = m[1];
           const resourceKey =
-            resourcePrefix === 'redis-channel' ? 'channel'
-              : resourcePrefix === 'redis-stream' ? 'stream'
-              : 'resource';
+            resourcePrefix === 'redis-channel'
+              ? 'channel'
+              : resourcePrefix === 'redis-stream'
+                ? 'stream'
+                : 'resource';
           edges.push({
             edgeType,
             sourceNodeType: 'symbol',

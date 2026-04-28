@@ -8,7 +8,7 @@
  * - include('app.urls') → django_includes_urls edge
  * - Router-based DRF patterns: router.register('prefix', ViewSet)
  */
-import type { RawRoute, RawEdge } from '../../../../../plugin-api/types.js';
+import type { RawEdge, RawRoute } from '../../../../../plugin-api/types.js';
 
 interface UrlExtractionResult {
   routes: RawRoute[];
@@ -19,10 +19,7 @@ interface UrlExtractionResult {
 /**
  * Extract URL patterns from a Django urls.py source file.
  */
-export function extractUrlPatterns(
-  source: string,
-  filePath: string,
-): UrlExtractionResult {
+export function extractUrlPatterns(source: string, filePath: string): UrlExtractionResult {
   const routes: RawRoute[] = [];
   const edges: RawEdge[] = [];
   const warnings: string[] = [];
@@ -46,15 +43,12 @@ export function extractUrlPatterns(
  * Extract path('route/', view, name='name') patterns.
  * Also detects path('api/', include('app.urls')).
  */
-function extractPathCalls(
-  source: string,
-  routes: RawRoute[],
-  edges: RawEdge[],
-): void {
+function extractPathCalls(source: string, routes: RawRoute[], edges: RawEdge[]): void {
   // path('uri', view_function_or_class, name='...')
   // path('uri', include('module.urls'))
   // Handler may contain nested parens like .as_view(), so allow them
-  const pathRegex = /path\s*\(\s*['"]([^'"]*)['"]\s*,\s*([^,]+(?:\([^)]*\))?[^,]*)(?:\s*,\s*([^)]*))?\s*\)/g;
+  const pathRegex =
+    /path\s*\(\s*['"]([^'"]*)['"]\s*,\s*([^,]+(?:\([^)]*\))?[^,]*)(?:\s*,\s*([^)]*))?\s*\)/g;
   let match: RegExpExecArray | null;
 
   while ((match = pathRegex.exec(source)) !== null) {
@@ -77,7 +71,9 @@ function extractPathCalls(
     }
 
     // Check for include() with namespace
-    const includeNsMatch = handler.match(/include\s*\(\s*\(\s*['"]([^'"]+)['"].*?namespace\s*=\s*['"]([^'"]+)['"]/);
+    const includeNsMatch = handler.match(
+      /include\s*\(\s*\(\s*['"]([^'"]+)['"].*?namespace\s*=\s*['"]([^'"]+)['"]/,
+    );
     if (includeNsMatch) {
       edges.push({
         edgeType: 'django_includes_urls',
@@ -106,10 +102,7 @@ function extractPathCalls(
 /**
  * Extract re_path(r'^pattern/$', view) patterns.
  */
-function extractRePathCalls(
-  source: string,
-  routes: RawRoute[],
-): void {
+function extractRePathCalls(source: string, routes: RawRoute[]): void {
   const rePathRegex = /re_path\s*\(\s*r?['"]([^'"]+)['"]\s*,\s*([^,)]+)(?:\s*,\s*([^)]*))?\s*\)/g;
   let match: RegExpExecArray | null;
 
@@ -137,11 +130,7 @@ function extractRePathCalls(
 /**
  * Extract legacy url(r'^pattern/$', view) patterns (Django 1.x).
  */
-function extractLegacyUrlCalls(
-  source: string,
-  routes: RawRoute[],
-  edges: RawEdge[],
-): void {
+function extractLegacyUrlCalls(source: string, routes: RawRoute[], edges: RawEdge[]): void {
   const urlRegex = /\burl\s*\(\s*r?['"]([^'"]+)['"]\s*,\s*([^,)]+)(?:\s*,\s*([^)]*))?\s*\)/g;
   let match: RegExpExecArray | null;
 
@@ -180,11 +169,9 @@ function extractLegacyUrlCalls(
  * Extract DRF router registrations:
  * router.register(r'users', UserViewSet, basename='user')
  */
-function extractDrfRouterPatterns(
-  source: string,
-  routes: RawRoute[],
-): void {
-  const routerRegex = /(\w+)\.register\s*\(\s*r?['"]([^'"]+)['"]\s*,\s*(\w+)(?:\s*,\s*([^)]*))?\s*\)/g;
+function extractDrfRouterPatterns(source: string, routes: RawRoute[]): void {
+  const routerRegex =
+    /(\w+)\.register\s*\(\s*r?['"]([^'"]+)['"]\s*,\s*(\w+)(?:\s*,\s*([^)]*))?\s*\)/g;
   let match: RegExpExecArray | null;
 
   while ((match = routerRegex.exec(source)) !== null) {

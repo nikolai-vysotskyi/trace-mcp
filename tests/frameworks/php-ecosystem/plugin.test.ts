@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { PhpEcosystemPlugin } from '../../../src/indexer/plugins/integration/tooling/php-ecosystem/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -83,7 +83,9 @@ describe('PhpEcosystemPlugin', () => {
     });
 
     it('detects spatie/laravel-translation-loader', () => {
-      expect(plugin.detect(ctxWithRequire({ 'spatie/laravel-translation-loader': '^2.0' }))).toBe(true);
+      expect(plugin.detect(ctxWithRequire({ 'spatie/laravel-translation-loader': '^2.0' }))).toBe(
+        true,
+      );
     });
 
     it('detects titasgailius/search-relations', () => {
@@ -261,7 +263,11 @@ class ReportController {
     return Excel::export(new ReportExport, 'report.xlsx');
   }
 }`);
-      const result = plugin.extractNodes('app/Http/Controllers/ReportController.php', source, 'php');
+      const result = plugin.extractNodes(
+        'app/Http/Controllers/ReportController.php',
+        source,
+        'php',
+      );
       expect(result._unsafeUnwrap().frameworkRole).toBe('maatwebsite_excel_usage');
     });
 
@@ -305,7 +311,11 @@ $img = $manager->read('photo.jpg')->resize(800, 600)->save('out.jpg');`);
       const source = Buffer.from(`<?php
 use Intervention\\Image\\Laravel\\Facades\\Image;
 $img = Image::read($path)->resize(800, 600);`);
-      const result = plugin.extractNodes('app/Http/Controllers/UploadController.php', source, 'php');
+      const result = plugin.extractNodes(
+        'app/Http/Controllers/UploadController.php',
+        source,
+        'php',
+      );
       expect(result._unsafeUnwrap().frameworkRole).toBe('intervention_image_usage');
     });
 
@@ -380,7 +390,7 @@ LanguageLine::create(['group' => 'auth', 'key' => 'failed', 'text' => ['en' => '
 use Titasgailius\\SearchRelations\\SearchesRelations;
 class Order extends Resource {
   use SearchesRelations;
-  public static \$searchRelations = ['user' => ['name', 'email']];
+  public static $searchRelations = ['user' => ['name', 'email']];
 }`);
       const result = plugin.extractNodes('app/Nova/Order.php', source, 'php');
       expect(result._unsafeUnwrap().frameworkRole).toBe('search_relations_usage');

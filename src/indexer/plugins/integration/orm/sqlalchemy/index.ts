@@ -11,26 +11,28 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
+import { parseError } from '../../../../../errors.js';
+import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
-  RawOrmModel,
-  RawOrmAssociation,
-  EdgeTypeDeclaration,
   RawMigration,
+  RawOrmModel,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
-import { parseError } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-import { getParser } from '../../../../../parser/tree-sitter.js';
 
 /** Known base classes for SQLAlchemy declarative models. */
 const MODEL_BASES = new Set([
-  'Base', 'DeclarativeBase', 'DeclarativeBaseNoMeta',
-  'MappedAsDataclass', 'db.Model',
+  'Base',
+  'DeclarativeBase',
+  'DeclarativeBaseNoMeta',
+  'MappedAsDataclass',
+  'db.Model',
 ]);
 
 /**
@@ -51,14 +53,18 @@ function hasPythonDep(ctx: ProjectContext, pkg: string): boolean {
     const content = fs.readFileSync(pyprojectPath, 'utf-8');
     const re = new RegExp(`["']${escapeRegExp(pkg)}[>=<\\[!~\\s"']`, 'i');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   try {
     const reqPath = path.join(ctx.rootPath, 'requirements.txt');
     const content = fs.readFileSync(reqPath, 'utf-8');
     const re = new RegExp(`^${escapeRegExp(pkg)}\\b`, 'im');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return false;
 }
@@ -79,9 +85,21 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'sqla_relationship', category: 'sqlalchemy', description: 'SQLAlchemy relationship() between models' },
-        { name: 'sqla_fk', category: 'sqlalchemy', description: 'SQLAlchemy ForeignKey constraint' },
-        { name: 'sqla_migrates', category: 'sqlalchemy', description: 'Alembic migration operation on a table' },
+        {
+          name: 'sqla_relationship',
+          category: 'sqlalchemy',
+          description: 'SQLAlchemy relationship() between models',
+        },
+        {
+          name: 'sqla_fk',
+          category: 'sqlalchemy',
+          description: 'SQLAlchemy ForeignKey constraint',
+        },
+        {
+          name: 'sqla_migrates',
+          category: 'sqlalchemy',
+          description: 'Alembic migration operation on a table',
+        },
       ] satisfies EdgeTypeDeclaration[],
     };
   }
@@ -109,18 +127,26 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
 
     // Check if this is an Alembic migration file
     const isAlembicMigration =
-      filePath.includes('alembic/versions/') ||
-      filePath.includes('migrations/versions/');
+      filePath.includes('alembic/versions/') || filePath.includes('migrations/versions/');
 
     if (isAlembicMigration) {
       // Quick check for migration operations
-      if (source.includes('op.create_table') || source.includes('op.add_column') || source.includes('op.drop_table')) {
+      if (
+        source.includes('op.create_table') ||
+        source.includes('op.add_column') ||
+        source.includes('op.drop_table')
+      ) {
         try {
           const parser = await getParser('python');
           const tree = parser.parse(source);
           this.extractAlembicMigrations(tree.rootNode, source, filePath, result);
         } catch (e: unknown) {
-          return err(parseError(filePath, `SQLAlchemy migration parse error: ${e instanceof Error ? e.message : String(e)}`));
+          return err(
+            parseError(
+              filePath,
+              `SQLAlchemy migration parse error: ${e instanceof Error ? e.message : String(e)}`,
+            ),
+          );
         }
         result.frameworkRole = 'alembic_migration';
         return ok(result);
@@ -148,7 +174,12 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
 
       this.extractModels(root, source, filePath, result);
     } catch (e: unknown) {
-      return err(parseError(filePath, `SQLAlchemy parse error: ${e instanceof Error ? e.message : String(e)}`));
+      return err(
+        parseError(
+          filePath,
+          `SQLAlchemy parse error: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
     }
 
     return ok(result);
@@ -162,7 +193,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
    * 2. Have a __tablename__ assignment in their body
    */
   private extractModels(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -262,7 +293,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
    * - op.drop_table('name')
    */
   private extractAlembicMigrations(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -289,7 +320,8 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
 
       let operation: 'create' | 'alter' | 'drop' | null = null;
       if (method === 'create_table') operation = 'create';
-      else if (method === 'add_column' || method === 'alter_column' || method === 'drop_column') operation = 'alter';
+      else if (method === 'add_column' || method === 'alter_column' || method === 'drop_column')
+        operation = 'alter';
       else if (method === 'drop_table') operation = 'drop';
       else continue;
 
@@ -320,13 +352,13 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
   // ─── Model extraction helpers ──────────────────────────────────────
 
   /** Find all class_definition nodes (including inside decorated_definition). */
-  private findAllTopLevelClasses(root: any): any[] {
-    const classes: any[] = [];
+  private findAllTopLevelClasses(root: TSNode): TSNode[] {
+    const classes: TSNode[] = [];
     for (const child of root.children ?? []) {
       if (child.type === 'class_definition') {
         classes.push(child);
       } else if (child.type === 'decorated_definition') {
-        const innerClass = child.children.find((c: any) => c.type === 'class_definition');
+        const innerClass = child.children.find((c: TSNode) => c.type === 'class_definition');
         if (innerClass) classes.push(innerClass);
       }
     }
@@ -334,7 +366,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
   }
 
   /** Extract superclass names from an argument_list node. */
-  private extractSuperclassNames(superclasses: any): string[] {
+  private extractSuperclassNames(superclasses: TSNode): string[] {
     const names: string[] = [];
     for (const child of superclasses.children ?? []) {
       if (child.type === 'identifier') {
@@ -347,10 +379,10 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
   }
 
   /** Extract __tablename__ = 'table_name' from a class body. */
-  private extractTableName(body: any): string | null {
+  private extractTableName(body: TSNode): string | null {
     for (const stmt of body.children ?? []) {
       if (stmt.type !== 'expression_statement') continue;
-      const assignment = stmt.children.find((c: any) => c.type === 'assignment');
+      const assignment = stmt.children.find((c: TSNode) => c.type === 'assignment');
       if (!assignment) continue;
 
       const left = assignment.childForFieldName('left');
@@ -371,16 +403,14 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
    *   name: Mapped[str] = mapped_column(String(50))
    *   name = Column(String(50), nullable=False)
    */
-  private extractModelFields(body: any, source: string): Record<string, unknown>[] {
+  private extractModelFields(body: TSNode, source: string): Record<string, unknown>[] {
     const fields: Record<string, unknown>[] = [];
 
     for (const stmt of body.children ?? []) {
       if (stmt.type !== 'expression_statement') continue;
 
       // Handle both assignment and type_alias_statement
-      const assignment = stmt.children.find(
-        (c: any) => c.type === 'assignment',
-      );
+      const assignment = stmt.children.find((c: TSNode) => c.type === 'assignment');
       if (!assignment) continue;
 
       const left = assignment.childForFieldName('left');
@@ -394,9 +424,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
       if (!right) continue;
 
       // Check if it's a Column() or mapped_column() call
-      const callFunc = right.type === 'call'
-        ? right.childForFieldName('function')?.text
-        : null;
+      const callFunc = right.type === 'call' ? right.childForFieldName('function')?.text : null;
 
       if (callFunc === 'Column' || callFunc === 'mapped_column') {
         fields.push({
@@ -405,8 +433,6 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
           line: stmt.startPosition.row + 1,
         });
       } else if (callFunc === 'relationship') {
-        // Skip relationships — handled separately
-        continue;
       }
     }
 
@@ -432,7 +458,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
    *   user_id = Column(Integer, ForeignKey('users.id'))
    */
   private extractForeignKeys(
-    body: any,
+    body: TSNode,
     source: string,
     modelName: string,
     tableName: string,
@@ -481,7 +507,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
    *   items = relationship('Item', backref='order')
    */
   private extractRelationships(
-    body: any,
+    body: TSNode,
     source: string,
     modelName: string,
   ): Array<{
@@ -504,9 +530,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
     for (const stmt of body.children ?? []) {
       if (stmt.type !== 'expression_statement') continue;
 
-      const assignment = stmt.children.find(
-        (c: any) => c.type === 'assignment',
-      );
+      const assignment = stmt.children.find((c: TSNode) => c.type === 'assignment');
       if (!assignment) continue;
 
       const left = assignment.childForFieldName('left');
@@ -522,9 +546,8 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
       if (!args) continue;
 
       // First arg is the target model name (string)
-      const targetModel = this.extractFirstStringArg(args) ??
-        this.getFirstArgText(args) ??
-        'Unknown';
+      const targetModel =
+        this.extractFirstStringArg(args) ?? this.getFirstArgText(args) ?? 'Unknown';
 
       const backPopulates = this.extractKeywordArg(args, 'back_populates');
       const backRef = this.extractKeywordArg(args, 'backref');
@@ -547,11 +570,11 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
   /**
    * Walk up from a ForeignKey() call to find the parent column assignment name.
    */
-  private findParentColumnName(fkCall: any, body: any): string | null {
+  private findParentColumnName(fkCall: TSNode, body: TSNode): string | null {
     // Search through body statements to find which assignment contains this FK call
     for (const stmt of body.children ?? []) {
       if (stmt.type !== 'expression_statement') continue;
-      const assignment = stmt.children.find((c: any) => c.type === 'assignment');
+      const assignment = stmt.children.find((c: TSNode) => c.type === 'assignment');
       if (!assignment) continue;
 
       // Check if this assignment's right-hand side contains the FK call
@@ -567,7 +590,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
   }
 
   /** Check if a node contains a specific descendant (by identity). */
-  private nodeContains(parent: any, target: any): boolean {
+  private nodeContains(parent: TSNode, target: TSNode): boolean {
     if (parent.id === target.id) return true;
     for (const child of parent.children ?? []) {
       if (this.nodeContains(child, target)) return true;
@@ -577,8 +600,8 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
 
   // ─── Tree-sitter helpers ───────────────────────────────────────────
 
-  private findAllByType(node: any, type: string): any[] {
-    const results: any[] = [];
+  private findAllByType(node: TSNode, type: string): TSNode[] {
+    const results: TSNode[] = [];
     if (node.type === type) results.push(node);
     for (const child of node.children ?? []) {
       results.push(...this.findAllByType(child, type));
@@ -586,7 +609,7 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
     return results;
   }
 
-  private extractFirstStringArg(args: any): string | null {
+  private extractFirstStringArg(args: TSNode): string | null {
     for (const child of args.children ?? []) {
       if (child.type === 'string') {
         return this.unquote(child.text);
@@ -598,15 +621,21 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
     return null;
   }
 
-  private getFirstArgText(args: any): string | null {
+  private getFirstArgText(args: TSNode): string | null {
     for (const child of args.children ?? []) {
-      if (child.type === 'keyword_argument' || child.type === '(' || child.type === ')' || child.type === ',') continue;
+      if (
+        child.type === 'keyword_argument' ||
+        child.type === '(' ||
+        child.type === ')' ||
+        child.type === ','
+      )
+        continue;
       return child.text;
     }
     return null;
   }
 
-  private extractKeywordArg(args: any, name: string): string | null {
+  private extractKeywordArg(args: TSNode, name: string): string | null {
     for (const child of args.children ?? []) {
       if (child.type !== 'keyword_argument') continue;
       const key = child.childForFieldName('name')?.text;

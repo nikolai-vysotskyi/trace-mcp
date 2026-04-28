@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { SortablePlugin } from '../../../src/indexer/plugins/integration/view/sortable/index.js';
 import type { ProjectContext, ResolveContext } from '../../../src/plugin-api/types.js';
 
@@ -204,7 +204,9 @@ function foo() { return x; }
 
       const result = plugin.resolveEdges(ctx);
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap().filter((e) => e.edgeType === 'sortable_shared_group')).toHaveLength(0);
+      expect(
+        result._unsafeUnwrap().filter((e) => e.edgeType === 'sortable_shared_group'),
+      ).toHaveLength(0);
     });
   });
 });

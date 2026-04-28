@@ -2,14 +2,15 @@
  * Cosmiconfig E2E integration test.
  * Indexes the cosmiconfig-app fixture and verifies config loading detection.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
-import { CosmiconfigPlugin } from '../../src/indexer/plugins/integration/tooling/cosmiconfig/index.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { CosmiconfigPlugin } from '../../src/indexer/plugins/integration/tooling/cosmiconfig/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/cosmiconfig-app');
 

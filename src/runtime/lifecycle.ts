@@ -3,11 +3,11 @@
  */
 
 import type { Store } from '../db/store.js';
-import { OtlpReceiver } from './otlp-receiver.js';
+import { logger } from '../logger.js';
+import { RuntimeAggregator } from './aggregator.js';
 import { SpanIngester } from './ingest.js';
 import { SpanMapper } from './mapper.js';
-import { RuntimeAggregator } from './aggregator.js';
-import { logger } from '../logger.js';
+import { OtlpReceiver } from './otlp-receiver.js';
 
 interface RuntimeConfig {
   enabled: boolean;
@@ -34,7 +34,7 @@ export class RuntimeIntelligence {
   private aggregator: RuntimeAggregator;
 
   constructor(
-    private store: Store,
+    store: Store,
     private config: RuntimeConfig,
   ) {
     this.ingester = new SpanIngester(store.db, config.retention.prune_interval);

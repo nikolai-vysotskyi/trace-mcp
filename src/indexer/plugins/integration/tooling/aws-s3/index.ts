@@ -14,19 +14,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 import { findEnclosingSymbol, lineOfIndex } from '../../_shared/regex-edges.js';
 
 const S3_PACKAGES = [
-  'aws-sdk',                 // v2 (deprecated, still widespread)
-  '@aws-sdk/client-s3',      // v3 modular client
-  '@aws-sdk/lib-storage',    // v3 streaming Upload
+  'aws-sdk', // v2 (deprecated, still widespread)
+  '@aws-sdk/client-s3', // v3 modular client
+  '@aws-sdk/lib-storage', // v3 streaming Upload
 ];
 
 const S3_IMPORT_RE =
@@ -38,28 +38,42 @@ const V3_UPLOAD_RE = /\bnew\s+Upload\s*\(/;
 
 // v3 commands — union of supported operations. Keep in sync with OP_BY_COMMAND below.
 const V3_COMMAND_LIST = [
-  'GetObjectCommand', 'HeadObjectCommand', 'ListObjectsCommand', 'ListObjectsV2Command',
-  'ListBucketsCommand', 'PutObjectCommand', 'CopyObjectCommand', 'DeleteObjectCommand',
-  'DeleteObjectsCommand', 'CreateMultipartUploadCommand', 'CompleteMultipartUploadCommand',
-  'UploadPartCommand', 'AbortMultipartUploadCommand',
+  'GetObjectCommand',
+  'HeadObjectCommand',
+  'ListObjectsCommand',
+  'ListObjectsV2Command',
+  'ListBucketsCommand',
+  'PutObjectCommand',
+  'CopyObjectCommand',
+  'DeleteObjectCommand',
+  'DeleteObjectsCommand',
+  'CreateMultipartUploadCommand',
+  'CompleteMultipartUploadCommand',
+  'UploadPartCommand',
+  'AbortMultipartUploadCommand',
 ] as const;
 
-const V3_COMMAND_NAMED_RE = new RegExp(
-  `\\bnew\\s+(${V3_COMMAND_LIST.join('|')})\\s*\\(`,
-  'g',
-);
+const V3_COMMAND_NAMED_RE = new RegExp(`\\bnew\\s+(${V3_COMMAND_LIST.join('|')})\\s*\\(`, 'g');
 
 // v2 method calls on an S3 client instance (s3.getObject(...), client.upload(...), etc.)
 const V2_METHOD_LIST = [
-  'getObject', 'headObject', 'listObjects', 'listObjectsV2', 'listBuckets',
-  'putObject', 'copyObject', 'deleteObject', 'deleteObjects', 'upload',
-  'createMultipartUpload', 'completeMultipartUpload', 'uploadPart', 'abortMultipartUpload',
+  'getObject',
+  'headObject',
+  'listObjects',
+  'listObjectsV2',
+  'listBuckets',
+  'putObject',
+  'copyObject',
+  'deleteObject',
+  'deleteObjects',
+  'upload',
+  'createMultipartUpload',
+  'completeMultipartUpload',
+  'uploadPart',
+  'abortMultipartUpload',
 ] as const;
 
-const V2_METHOD_NAMED_RE = new RegExp(
-  `\\.(${V2_METHOD_LIST.join('|')})\\s*\\(`,
-  'g',
-);
+const V2_METHOD_NAMED_RE = new RegExp(`\\.(${V2_METHOD_LIST.join('|')})\\s*\\(`, 'g');
 
 const V3_UPLOAD_NAMED_RE = /\bnew\s+Upload\s*\(/g;
 
@@ -157,7 +171,11 @@ export class AwsS3Plugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 's3_access', category: 's3', description: 'Access to an S3 bucket (read/write/delete/list)' },
+        {
+          name: 's3_access',
+          category: 's3',
+          description: 'Access to an S3 bucket (read/write/delete/list)',
+        },
       ],
     };
   }
@@ -205,18 +223,13 @@ export class AwsS3Plugin implements FrameworkPlugin {
       if (!source) continue;
 
       const hasImport = S3_IMPORT_RE.test(source);
-      const hasV3Signal = V3_CLIENT_RE.test(source) || V3_ANY_COMMAND_RE.test(source) || V3_UPLOAD_RE.test(source);
+      const hasV3Signal =
+        V3_CLIENT_RE.test(source) || V3_ANY_COMMAND_RE.test(source) || V3_UPLOAD_RE.test(source);
       if (!hasImport && !hasV3Signal) continue;
 
       const symbols = ctx.getSymbolsByFile(file.id);
 
-      const emit = (
-        matchIdx: number,
-        bucket: string,
-        op: S3Op,
-        api: 'v2' | 'v3',
-        kind: string,
-      ) => {
+      const emit = (matchIdx: number, bucket: string, op: S3Op, api: 'v2' | 'v3', kind: string) => {
         const line = lineOfIndex(source, matchIdx);
         const encl = findEnclosingSymbol(symbols, line);
         if (!encl) return;

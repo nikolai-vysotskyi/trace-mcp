@@ -2,11 +2,12 @@
  * Tests for computePageRank — verifies score distribution, sink-node handling,
  * convergence on cycles, and edge cases (empty graph, all sinks, star topologies).
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import { computePageRank, invalidatePageRankCache } from '../../src/scoring/pagerank.js';
+
 import type Database from 'better-sqlite3';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
+import { computePageRank, invalidatePageRankCache } from '../../src/scoring/pagerank.js';
+import { createTestStore } from '../test-utils.js';
 
 function setup() {
   const store = createTestStore();
@@ -95,9 +96,9 @@ describe('computePageRank', () => {
   it('star topology: hub ranks higher than leaves', () => {
     // Hub ← leaf1, leaf2, leaf3 (three inbound edges)
     const hub = makeSymbolNode(store, 'hub');
-    const l1  = makeSymbolNode(store, 'leaf1');
-    const l2  = makeSymbolNode(store, 'leaf2');
-    const l3  = makeSymbolNode(store, 'leaf3');
+    const l1 = makeSymbolNode(store, 'leaf1');
+    const l2 = makeSymbolNode(store, 'leaf2');
+    const l3 = makeSymbolNode(store, 'leaf3');
     store.insertEdge(l1, hub, 'imports', true);
     store.insertEdge(l2, hub, 'imports', true);
     store.insertEdge(l3, hub, 'imports', true);

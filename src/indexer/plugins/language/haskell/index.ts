@@ -4,8 +4,9 @@
  * Extracts: modules, data types, newtypes, type aliases, type classes,
  * instances, top-level type signatures, and import edges.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'haskell',
@@ -29,7 +30,11 @@ const _plugin = createRegexLanguagePlugin({
     // top-level type signature: name :: type (must start at column 0, no leading whitespace)
     { kind: 'function', pattern: /^([a-z_]\w*)\s*::\s*.+/gm },
     // data constructors: data Foo = Bar | Baz (capture constructors after =)
-    { kind: 'enum_case', pattern: /^\s*data\s+\w+[^=]*=\s*([A-Z]\w*)/gm, meta: { constructor: true } },
+    {
+      kind: 'enum_case',
+      pattern: /^\s*data\s+\w+[^=]*=\s*([A-Z]\w*)/gm,
+      meta: { constructor: true },
+    },
   ],
   importPatterns: [
     // import [qualified] Module [as Alias] [hiding] [(items)]

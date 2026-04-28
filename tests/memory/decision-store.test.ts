@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
-import { DecisionStore } from '../../src/memory/decision-store.js';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DecisionInput } from '../../src/memory/decision-store.js';
+import { DecisionStore } from '../../src/memory/decision-store.js';
 
 describe('DecisionStore', () => {
   let store: DecisionStore;
@@ -22,7 +22,8 @@ describe('DecisionStore', () => {
 
   const baseInput: DecisionInput = {
     title: 'Use PostgreSQL for auth service',
-    content: 'Chose PostgreSQL over MySQL because we need JSONB support for flexible user metadata.',
+    content:
+      'Chose PostgreSQL over MySQL because we need JSONB support for flexible user metadata.',
     type: 'tech_choice',
     project_root: '/projects/myapp',
     tags: ['database', 'auth'],
@@ -115,8 +116,18 @@ describe('DecisionStore', () => {
   describe('queryDecisions', () => {
     beforeEach(() => {
       store.addDecision({ ...baseInput, title: 'Choice A', type: 'tech_choice' });
-      store.addDecision({ ...baseInput, title: 'Bug B', type: 'bug_root_cause', tags: ['performance'] });
-      store.addDecision({ ...baseInput, title: 'Arch C', type: 'architecture_decision', symbol_id: 'src/auth.ts::Auth#class' });
+      store.addDecision({
+        ...baseInput,
+        title: 'Bug B',
+        type: 'bug_root_cause',
+        tags: ['performance'],
+      });
+      store.addDecision({
+        ...baseInput,
+        title: 'Arch C',
+        type: 'architecture_decision',
+        symbol_id: 'src/auth.ts::Auth#class',
+      });
     });
 
     it('returns all decisions when no filter', () => {
@@ -125,13 +136,19 @@ describe('DecisionStore', () => {
     });
 
     it('filters by type', () => {
-      const results = store.queryDecisions({ project_root: '/projects/myapp', type: 'bug_root_cause' });
+      const results = store.queryDecisions({
+        project_root: '/projects/myapp',
+        type: 'bug_root_cause',
+      });
       expect(results.length).toBe(1);
       expect(results[0].title).toBe('Bug B');
     });
 
     it('filters by symbol_id', () => {
-      const results = store.queryDecisions({ project_root: '/projects/myapp', symbol_id: 'src/auth.ts::Auth#class' });
+      const results = store.queryDecisions({
+        project_root: '/projects/myapp',
+        symbol_id: 'src/auth.ts::Auth#class',
+      });
       expect(results.length).toBe(1);
       expect(results[0].title).toBe('Arch C');
     });
@@ -153,7 +170,10 @@ describe('DecisionStore', () => {
     it('includes invalidated when requested', () => {
       const all = store.queryDecisions({ project_root: '/projects/myapp' });
       store.invalidateDecision(all[0].id);
-      const withInvalidated = store.queryDecisions({ project_root: '/projects/myapp', include_invalidated: true });
+      const withInvalidated = store.queryDecisions({
+        project_root: '/projects/myapp',
+        include_invalidated: true,
+      });
       expect(withInvalidated.length).toBe(3);
     });
 
@@ -164,9 +184,12 @@ describe('DecisionStore', () => {
         content: 'We are migrating from REST to GraphQL for better developer experience.',
         project_root: '/projects/myapp',
       });
-      const results = store.queryDecisions({ project_root: '/projects/myapp', search: 'GraphQL migration' });
+      const results = store.queryDecisions({
+        project_root: '/projects/myapp',
+        search: 'GraphQL migration',
+      });
       expect(results.length).toBeGreaterThanOrEqual(1);
-      expect(results.some(r => r.title === 'GraphQL migration')).toBe(true);
+      expect(results.some((r) => r.title === 'GraphQL migration')).toBe(true);
     });
 
     it('respects limit', () => {
@@ -202,7 +225,12 @@ describe('DecisionStore', () => {
     it('returns correct breakdown', () => {
       store.addDecision({ ...baseInput, title: 'A', type: 'tech_choice', source: 'manual' });
       store.addDecision({ ...baseInput, title: 'B', type: 'bug_root_cause', source: 'mined' });
-      const d = store.addDecision({ ...baseInput, title: 'C', type: 'tech_choice', source: 'mined' });
+      const d = store.addDecision({
+        ...baseInput,
+        title: 'C',
+        type: 'tech_choice',
+        source: 'mined',
+      });
       store.invalidateDecision(d.id);
 
       const stats = store.getStats('/projects/myapp');
@@ -227,8 +255,18 @@ describe('DecisionStore', () => {
 
   describe('code-aware queries', () => {
     beforeEach(() => {
-      store.addDecision({ ...baseInput, title: 'Auth decision', symbol_id: 'src/auth.ts::Auth#class', file_path: 'src/auth.ts' });
-      store.addDecision({ ...baseInput, title: 'DB decision', symbol_id: 'src/db.ts::Pool#class', file_path: 'src/db.ts' });
+      store.addDecision({
+        ...baseInput,
+        title: 'Auth decision',
+        symbol_id: 'src/auth.ts::Auth#class',
+        file_path: 'src/auth.ts',
+      });
+      store.addDecision({
+        ...baseInput,
+        title: 'DB decision',
+        symbol_id: 'src/db.ts::Pool#class',
+        file_path: 'src/db.ts',
+      });
       store.addDecision({ ...baseInput, title: 'Auth config', file_path: 'src/auth/config.ts' });
     });
 
@@ -252,10 +290,17 @@ describe('DecisionStore', () => {
   describe('subproject support', () => {
     it('stores and queries by service_name', () => {
       store.addDecision({ ...baseInput, title: 'Auth uses JWT', service_name: 'auth-api' });
-      store.addDecision({ ...baseInput, title: 'Users DB is Postgres', service_name: 'user-service' });
+      store.addDecision({
+        ...baseInput,
+        title: 'Users DB is Postgres',
+        service_name: 'user-service',
+      });
       store.addDecision({ ...baseInput, title: 'Global rate limit' }); // no service
 
-      const authDecisions = store.queryDecisions({ project_root: '/projects/myapp', service_name: 'auth-api' });
+      const authDecisions = store.queryDecisions({
+        project_root: '/projects/myapp',
+        service_name: 'auth-api',
+      });
       expect(authDecisions.length).toBe(1);
       expect(authDecisions[0].title).toBe('Auth uses JWT');
     });
@@ -296,7 +341,8 @@ describe('DecisionStore', () => {
           project_root: '/projects/myapp',
           chunk_index: 1,
           role: 'assistant' as const,
-          content: 'We switched to PostgreSQL because MySQL lacked JSONB support needed for flexible user metadata storage. The decision was made in January after evaluating both options.',
+          content:
+            'We switched to PostgreSQL because MySQL lacked JSONB support needed for flexible user metadata storage. The decision was made in January after evaluating both options.',
           timestamp: '2025-06-01T10:00:05Z',
           referenced_files: ['src/auth/db.ts', 'src/auth/user-model.ts'],
         },
@@ -305,7 +351,8 @@ describe('DecisionStore', () => {
           project_root: '/projects/myapp',
           chunk_index: 0,
           role: 'assistant' as const,
-          content: 'The GraphQL migration is progressing well. We have moved all REST endpoints to GraphQL resolvers.',
+          content:
+            'The GraphQL migration is progressing well. We have moved all REST endpoints to GraphQL resolvers.',
           timestamp: '2025-06-02T14:00:00Z',
         },
       ];
@@ -316,10 +363,12 @@ describe('DecisionStore', () => {
       // Search for PostgreSQL discussion
       const results = store.searchSessions('PostgreSQL MySQL', { project_root: '/projects/myapp' });
       expect(results.length).toBeGreaterThanOrEqual(1);
-      expect(results.some(r => r.content.includes('PostgreSQL'))).toBe(true);
+      expect(results.some((r) => r.content.includes('PostgreSQL'))).toBe(true);
 
       // Search for GraphQL
-      const gqlResults = store.searchSessions('GraphQL migration', { project_root: '/projects/myapp' });
+      const gqlResults = store.searchSessions('GraphQL migration', {
+        project_root: '/projects/myapp',
+      });
       expect(gqlResults.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -340,14 +389,16 @@ describe('DecisionStore', () => {
     it('tracks indexed sessions', () => {
       expect(store.isSessionIndexed('sess-new')).toBe(false);
 
-      store.addSessionChunks([{
-        session_id: 'sess-new',
-        project_root: '/projects/myapp',
-        chunk_index: 0,
-        role: 'user' as const,
-        content: 'Some content for indexing test.',
-        timestamp: '2025-06-01T10:00:00Z',
-      }]);
+      store.addSessionChunks([
+        {
+          session_id: 'sess-new',
+          project_root: '/projects/myapp',
+          chunk_index: 0,
+          role: 'user' as const,
+          content: 'Some content for indexing test.',
+          timestamp: '2025-06-01T10:00:00Z',
+        },
+      ]);
 
       expect(store.isSessionIndexed('sess-new')).toBe(true);
       expect(store.getSessionChunkCount('/projects/myapp')).toBe(1);

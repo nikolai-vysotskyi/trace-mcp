@@ -1,5 +1,5 @@
-import path from 'path';
-import { Tray, nativeImage, Menu, BrowserWindow, app, shell, ipcMain, dialog, nativeTheme } from 'electron';
+import path from 'node:path';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from 'electron';
 import { DaemonClient } from './api-client';
 import { ensureDaemon, restartDaemon } from './daemon-lifecycle';
 
@@ -42,7 +42,7 @@ let consecutiveFailures = 0;
 const RESTART_ATTEMPT_TICKS = new Set<number>([1, 3, 6, 12, 24]);
 /** After the last explicit tick, retry every N ticks. */
 const RESTART_RETRY_EVERY = 24;
-let lastRestartAttempt = 0;
+let _lastRestartAttempt = 0;
 /**
  * Timestamp of the last daemon restart triggered by a version mismatch.
  * Used to back off so a stuck daemon (one that comes back up still reporting
@@ -64,7 +64,9 @@ function getTitleBarColor(): string {
   return nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#f6f6f6';
 }
 
-function createWindowOptions(extraOpts?: Partial<Electron.BrowserWindowConstructorOptions>): Electron.BrowserWindowConstructorOptions {
+function createWindowOptions(
+  extraOpts?: Partial<Electron.BrowserWindowConstructorOptions>,
+): Electron.BrowserWindowConstructorOptions {
   const opts: Electron.BrowserWindowConstructorOptions = {
     width: 960,
     height: 700,
@@ -111,7 +113,11 @@ function setupWindowEvents(win: BrowserWindow): void {
     if (!win.isDestroyed() && details.reason !== 'clean-exit') {
       setTimeout(() => {
         if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
-          try { win.webContents.reload(); } catch { /* destroyed mid-reload */ }
+          try {
+            win.webContents.reload();
+          } catch {
+            /* destroyed mid-reload */
+          }
         }
       }, 1000);
     }
@@ -121,7 +127,11 @@ function setupWindowEvents(win: BrowserWindow): void {
   win.on('unresponsive', () => {
     console.warn('[trace-mcp] window became unresponsive, reloading...');
     if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
-      try { win.webContents.reload(); } catch { /* destroyed mid-reload */ }
+      try {
+        win.webContents.reload();
+      } catch {
+        /* destroyed mid-reload */
+      }
     }
   });
 }
@@ -146,7 +156,7 @@ function broadcastTabBar(visible: boolean): void {
 // to every window so the renderer can draw its own tab strip.
 
 interface TabInfo {
-  id: string;       // 'menu' or project root path
+  id: string; // 'menu' or project root path
   title: string;
   type: 'menu' | 'project';
   active: boolean;
@@ -184,12 +194,11 @@ function broadcastTabList(): void {
   for (const win of allWindows) {
     if (!win || win.isDestroyed() || win.webContents.isDestroyed()) continue;
     // Send tab list with 'active' relative to each window
-    const tabsForWin = tabs.map(t => ({
+    const tabsForWin = tabs.map((t) => ({
       ...t,
-      active: win.webContents.id === (
-        t.id === 'menu' ? menuWindow?.webContents.id :
-        projectWindows.get(t.id)?.webContents.id
-      ),
+      active:
+        win.webContents.id ===
+        (t.id === 'menu' ? menuWindow?.webContents.id : projectWindows.get(t.id)?.webContents.id),
     }));
     safeSend(win, 'tab-list-changed', tabsForWin);
   }
@@ -248,7 +257,7 @@ export function showMenuWindow(tab?: string): void {
 
   // Attach to existing tab group if project windows are open (macOS only)
   if (isMac) {
-    const existingTab = [...projectWindows.values()].find(w => !w.isDestroyed());
+    const existingTab = [...projectWindows.values()].find((w) => !w.isDestroyed());
     if (existingTab) {
       existingTab.addTabbedWindow(menuWindow);
     }
@@ -364,9 +373,9 @@ function createDotIcon(hex: string, glow: boolean): Electron.NativeImage {
   const scale = 2;
   const r = 4 * scale;
   const glowR = glow ? 3 * scale : 0;
-  const w = (r + glowR) * 2;  // tight width — no extra left padding
-  const h = 16 * scale;       // full menu item height
-  const cx = r + glowR;       // circle flush to left edge
+  const w = (r + glowR) * 2; // tight width — no extra left padding
+  const h = 16 * scale; // full menu item height
+  const cx = r + glowR; // circle flush to left edge
   const cy = h / 2;
 
   const red = parseInt(hex.slice(1, 3), 16);
@@ -409,7 +418,13 @@ function buildContextMenu(): Menu {
     { label: 'MCP Clients', click: () => showWindow('clients') },
     { label: 'Settings', click: () => showWindow('settings') },
     { type: 'separator' },
-    { label: 'Quit trace-mcp', click: () => { cleanup(); app.quit(); } },
+    {
+      label: 'Quit trace-mcp',
+      click: () => {
+        cleanup();
+        app.quit();
+      },
+    },
   ]);
 }
 
@@ -438,7 +453,7 @@ async function checkHealth(): Promise<void> {
     }
     daemonReachable = true;
     consecutiveFailures = 0;
-    lastRestartAttempt = 0;
+    _lastRestartAttempt = 0;
     setTrayIcon(true);
 
     // Version mismatch — npm swapped the binary on disk but the running daemon
@@ -448,13 +463,15 @@ async function checkHealth(): Promise<void> {
     const daemonVersion = health.version?.replace(/^v/, '');
     const appVersion = app.getVersion().replace(/^v/, '');
     if (
-      daemonVersion
-      && daemonVersion !== '0.0.0-dev'
-      && daemonVersion !== appVersion
-      && Date.now() - lastVersionMismatchRestart > VERSION_MISMATCH_RESTART_COOLDOWN_MS
+      daemonVersion &&
+      daemonVersion !== '0.0.0-dev' &&
+      daemonVersion !== appVersion &&
+      Date.now() - lastVersionMismatchRestart > VERSION_MISMATCH_RESTART_COOLDOWN_MS
     ) {
       lastVersionMismatchRestart = Date.now();
-      console.log(`[trace-mcp] version mismatch — daemon=${daemonVersion} app=${appVersion}, restarting daemon`);
+      console.log(
+        `[trace-mcp] version mismatch — daemon=${daemonVersion} app=${appVersion}, restarting daemon`,
+      );
       try {
         const result = restartDaemon();
         if (!result.ok) {
@@ -477,7 +494,7 @@ async function checkHealth(): Promise<void> {
       }
       daemonReachable = true;
       consecutiveFailures = 0;
-      lastRestartAttempt = 0;
+      _lastRestartAttempt = 0;
       setTrayIcon(true);
       tray.setContextMenu(buildContextMenu());
       return;
@@ -492,8 +509,10 @@ async function checkHealth(): Promise<void> {
       // Later failures → force restart (kills any zombie then starts fresh).
       const useRestart = consecutiveFailures > 1;
       const action = useRestart ? 'restart' : 'ensure';
-      lastRestartAttempt = consecutiveFailures;
-      console.log(`[trace-mcp] daemon unreachable (fail #${consecutiveFailures}), attempting ${action}`);
+      _lastRestartAttempt = consecutiveFailures;
+      console.log(
+        `[trace-mcp] daemon unreachable (fail #${consecutiveFailures}), attempting ${action}`,
+      );
       try {
         const result = useRestart ? restartDaemon() : ensureDaemon();
         if (!result.ok) {

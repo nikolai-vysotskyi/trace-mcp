@@ -53,21 +53,33 @@ export class AnalyticsRepository {
 
   // --- Env vars ---
 
-  insertEnvVar(fileId: number, entry: {
-    key: string;
-    valueType: string;
-    valueFormat: string | null;
-    comment: string | null;
-    quoted: boolean;
-    line: number;
-  }): number {
-    return (this.db.prepare(
-      `INSERT INTO env_vars (file_id, key, value_type, value_format, comment, quoted, line)
+  insertEnvVar(
+    fileId: number,
+    entry: {
+      key: string;
+      valueType: string;
+      valueFormat: string | null;
+      comment: string | null;
+      quoted: boolean;
+      line: number;
+    },
+  ): number {
+    return (
+      this.db
+        .prepare(
+          `INSERT INTO env_vars (file_id, key, value_type, value_format, comment, quoted, line)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      fileId, entry.key, entry.valueType, entry.valueFormat,
-      entry.comment, entry.quoted ? 1 : 0, entry.line,
-    ) as { lastInsertRowid: number }).lastInsertRowid as number;
+        )
+        .run(
+          fileId,
+          entry.key,
+          entry.valueType,
+          entry.valueFormat,
+          entry.comment,
+          entry.quoted ? 1 : 0,
+          entry.line,
+        ) as { lastInsertRowid: number }
+    ).lastInsertRowid as number;
   }
 
   deleteEnvVarsByFile(fileId: number): void {
@@ -75,34 +87,39 @@ export class AnalyticsRepository {
   }
 
   getEnvVarsByFile(fileId: number): EnvVarRow[] {
-    return this.db.prepare(
-      'SELECT * FROM env_vars WHERE file_id = ? ORDER BY line',
-    ).all(fileId) as EnvVarRow[];
+    return this.db
+      .prepare('SELECT * FROM env_vars WHERE file_id = ? ORDER BY line')
+      .all(fileId) as EnvVarRow[];
   }
 
   getAllEnvVars(): (EnvVarRow & { file_path: string })[] {
-    return this.db.prepare(
-      `SELECT ev.*, f.path as file_path
+    return this.db
+      .prepare(
+        `SELECT ev.*, f.path as file_path
        FROM env_vars ev
        JOIN files f ON ev.file_id = f.id
        ORDER BY f.path, ev.line`,
-    ).all() as (EnvVarRow & { file_path: string })[];
+      )
+      .all() as (EnvVarRow & { file_path: string })[];
   }
 
   searchEnvVars(pattern: string): (EnvVarRow & { file_path: string })[] {
-    return this.db.prepare(
-      `SELECT ev.*, f.path as file_path
+    return this.db
+      .prepare(
+        `SELECT ev.*, f.path as file_path
        FROM env_vars ev
        JOIN files f ON ev.file_id = f.id
        WHERE ev.key LIKE ?
        ORDER BY f.path, ev.line`,
-    ).all(`%${pattern}%`) as (EnvVarRow & { file_path: string })[];
+      )
+      .all(`%${pattern}%`) as (EnvVarRow & { file_path: string })[];
   }
 
   // --- Workspace stats ---
 
   getWorkspaceStats(): WorkspaceStats[] {
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT
         f.workspace,
         COUNT(DISTINCT f.id) as file_count,
@@ -113,11 +130,13 @@ export class AnalyticsRepository {
       WHERE f.workspace IS NOT NULL
       GROUP BY f.workspace
       ORDER BY file_count DESC
-    `).all() as WorkspaceStats[];
+    `)
+      .all() as WorkspaceStats[];
   }
 
   getCrossWorkspaceEdges(): CrossWorkspaceEdge[] {
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT
         e.id,
         et.name as edge_type,
@@ -139,11 +158,13 @@ export class AnalyticsRepository {
       LEFT JOIN files tf ON (tn.node_type = 'file' AND tn.ref_id = tf.id) OR ts.file_id = tf.id
       WHERE e.is_cross_ws = 1
       ORDER BY sf.workspace, tf.workspace
-    `).all() as CrossWorkspaceEdge[];
+    `)
+      .all() as CrossWorkspaceEdge[];
   }
 
   getWorkspaceDependencyGraph(): WorkspaceDependency[] {
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT
         sf.workspace as from_workspace,
         tf.workspace as to_workspace,
@@ -163,11 +184,13 @@ export class AnalyticsRepository {
         AND sf.workspace != tf.workspace
       GROUP BY sf.workspace, tf.workspace
       ORDER BY edge_count DESC
-    `).all() as WorkspaceDependency[];
+    `)
+      .all() as WorkspaceDependency[];
   }
 
   getWorkspaceExports(workspace: string): SymbolWithFilePath[] {
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT DISTINCT s.*, f.path as file_path
       FROM symbols s
       JOIN files f ON s.file_id = f.id
@@ -175,22 +198,38 @@ export class AnalyticsRepository {
       JOIN edges e ON e.target_node_id = n.id AND e.is_cross_ws = 1
       WHERE f.workspace = ?
       ORDER BY s.kind, s.name
-    `).all(workspace) as SymbolWithFilePath[];
+    `)
+      .all(workspace) as SymbolWithFilePath[];
   }
 
   // --- Index stats ---
 
   getStats(): IndexStats {
     const fileCount = (this.db.prepare('SELECT COUNT(*) as c FROM files').get() as { c: number }).c;
-    const symbolCount = (this.db.prepare('SELECT COUNT(*) as c FROM symbols').get() as { c: number }).c;
+    const symbolCount = (
+      this.db.prepare('SELECT COUNT(*) as c FROM symbols').get() as { c: number }
+    ).c;
     const edgeCount = (this.db.prepare('SELECT COUNT(*) as c FROM edges').get() as { c: number }).c;
     const nodeCount = (this.db.prepare('SELECT COUNT(*) as c FROM nodes').get() as { c: number }).c;
-    const routeCount = (this.db.prepare('SELECT COUNT(*) as c FROM routes').get() as { c: number }).c;
-    const componentCount = (this.db.prepare('SELECT COUNT(*) as c FROM components').get() as { c: number }).c;
-    const migrationCount = (this.db.prepare('SELECT COUNT(*) as c FROM migrations').get() as { c: number }).c;
+    const routeCount = (this.db.prepare('SELECT COUNT(*) as c FROM routes').get() as { c: number })
+      .c;
+    const componentCount = (
+      this.db.prepare('SELECT COUNT(*) as c FROM components').get() as { c: number }
+    ).c;
+    const migrationCount = (
+      this.db.prepare('SELECT COUNT(*) as c FROM migrations').get() as { c: number }
+    ).c;
 
-    const partialFiles = (this.db.prepare("SELECT COUNT(*) as c FROM files WHERE status = 'partial'").get() as { c: number }).c;
-    const errorFiles = (this.db.prepare("SELECT COUNT(*) as c FROM files WHERE status = 'error'").get() as { c: number }).c;
+    const partialFiles = (
+      this.db.prepare("SELECT COUNT(*) as c FROM files WHERE status = 'partial'").get() as {
+        c: number;
+      }
+    ).c;
+    const errorFiles = (
+      this.db.prepare("SELECT COUNT(*) as c FROM files WHERE status = 'error'").get() as {
+        c: number;
+      }
+    ).c;
 
     return {
       totalFiles: fileCount,
@@ -213,10 +252,12 @@ export class AnalyticsRepository {
     commitHash?: string,
     filePath?: string,
   ): number {
-    const result = this.db.prepare(
-      `INSERT INTO graph_snapshots (commit_hash, snapshot_type, file_path, data)
+    const result = this.db
+      .prepare(
+        `INSERT INTO graph_snapshots (commit_hash, snapshot_type, file_path, data)
        VALUES (?, ?, ?, ?)`,
-    ).run(commitHash ?? null, snapshotType, filePath ?? null, JSON.stringify(data));
+      )
+      .run(commitHash ?? null, snapshotType, filePath ?? null, JSON.stringify(data));
     return Number(result.lastInsertRowid);
   }
 
@@ -235,18 +276,22 @@ export class AnalyticsRepository {
       params.push(options.since);
     }
     params.push(options.limit ?? 50);
-    return this.db.prepare(`
+    return this.db
+      .prepare(`
       SELECT * FROM graph_snapshots
       WHERE ${conditions.join(' AND ')}
       ORDER BY created_at DESC
       LIMIT ?
-    `).all(...params) as GraphSnapshotRow[];
+    `)
+      .all(...params) as GraphSnapshotRow[];
   }
 
   pruneGraphSnapshots(maxAge: number = 90): number {
-    const result = this.db.prepare(
-      `DELETE FROM graph_snapshots WHERE created_at < datetime('now', '-' || ? || ' days')`,
-    ).run(maxAge);
+    const result = this.db
+      .prepare(
+        `DELETE FROM graph_snapshots WHERE created_at < datetime('now', '-' || ? || ' days')`,
+      )
+      .run(maxAge);
     return result.changes;
   }
 }

@@ -25,8 +25,10 @@ function isMacSystemPolicyError(e: unknown): boolean {
   if (process.platform !== 'darwin') return false;
   const err = e as NodeJS.ErrnoException & { message?: string };
   if (err?.code !== 'ERR_DLOPEN_FAILED') return false;
-  return typeof err.message === 'string'
-    && err.message.includes('library load disallowed by system policy');
+  return (
+    typeof err.message === 'string' &&
+    err.message.includes('library load disallowed by system policy')
+  );
 }
 
 function extractDlopenPath(e: unknown): string | null {

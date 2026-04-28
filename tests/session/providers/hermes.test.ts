@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
 import { createRequire } from 'node:module';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { HermesSessionProvider } from '../../../src/session/providers/hermes.js';
 import {
@@ -57,15 +57,39 @@ function seedHermesHome(home: string): string {
     `INSERT INTO sessions (id, source, parent_session_id, created_at, updated_at, title)
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
-  insertSession.run('sess-alpha', 'cli', null, 1_714_000_000_000, 1_714_000_120_000, 'alpha session');
-  insertSession.run('sess-beta', 'telegram', null, 1_714_100_000_000, 1_714_100_090_000, 'beta session');
+  insertSession.run(
+    'sess-alpha',
+    'cli',
+    null,
+    1_714_000_000_000,
+    1_714_000_120_000,
+    'alpha session',
+  );
+  insertSession.run(
+    'sess-beta',
+    'telegram',
+    null,
+    1_714_100_000_000,
+    1_714_100_090_000,
+    'beta session',
+  );
 
   const insertMsg = db.prepare(
     `INSERT INTO messages
       (session_id, role, content, tool_name, tool_input, tool_result, created_at, input_tokens, output_tokens)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  insertMsg.run('sess-alpha', 'user', 'pls read src/main.ts', null, null, null, 1_714_000_000_000, null, null);
+  insertMsg.run(
+    'sess-alpha',
+    'user',
+    'pls read src/main.ts',
+    null,
+    null,
+    null,
+    1_714_000_000_000,
+    null,
+    null,
+  );
   insertMsg.run(
     'sess-alpha',
     'assistant',
@@ -77,7 +101,17 @@ function seedHermesHome(home: string): string {
     100,
     40,
   );
-  insertMsg.run('sess-alpha', 'tool', '// file content', null, null, 'const x = 1;', 1_714_000_061_000, null, null);
+  insertMsg.run(
+    'sess-alpha',
+    'tool',
+    '// file content',
+    null,
+    null,
+    'const x = 1;',
+    1_714_000_061_000,
+    null,
+    null,
+  );
   insertMsg.run('sess-beta', 'user', 'unrelated', null, null, null, 1_714_100_000_000, null, null);
 
   db.close();
@@ -202,8 +236,6 @@ describe('HermesSessionProvider', () => {
   it('registry singleton rejects duplicate provider registration', () => {
     const registry = getSessionProviderRegistry();
     registry.register(new HermesSessionProvider());
-    expect(() => registry.register(new HermesSessionProvider())).toThrowError(
-      /already registered/,
-    );
+    expect(() => registry.register(new HermesSessionProvider())).toThrowError(/already registered/);
   });
 });

@@ -36,10 +36,7 @@ interface OrmSchema {
   indexes?: Record<string, unknown>[];
 }
 
-export function getSchema(
-  store: Store,
-  tableName?: string,
-): TraceMcpResult<SchemaResult> {
+export function getSchema(store: Store, tableName?: string): TraceMcpResult<SchemaResult> {
   const tables: TableSchema[] = [];
   const ormSchemas: OrmSchema[] = [];
 
@@ -79,7 +76,13 @@ export function getSchema(
   });
 }
 
-function buildOrmSchema(model: { name: string; orm: string; collection_or_table: string | null; fields: string | null; metadata: string | null }): OrmSchema {
+function buildOrmSchema(model: {
+  name: string;
+  orm: string;
+  collection_or_table: string | null;
+  fields: string | null;
+  metadata: string | null;
+}): OrmSchema {
   const fields: Record<string, unknown>[] = model.fields ? JSON.parse(model.fields) : [];
   const meta: Record<string, unknown> = model.metadata ? JSON.parse(model.metadata) : {};
   return {
@@ -95,7 +98,7 @@ function reconstructTable(store: Store, tableName: string): TableSchema | null {
   const migrations = store.getMigrationsByTable(tableName);
   if (migrations.length === 0) return null;
 
-  const columns: TableColumn[] = [];
+  const _columns: TableColumn[] = [];
   const operations: { operation: string; timestamp?: string }[] = [];
   const columnMap = new Map<string, TableColumn>();
 

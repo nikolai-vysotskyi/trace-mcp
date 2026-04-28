@@ -2,12 +2,13 @@
  * Tests for Livewire v2 component extraction.
  * Covers: $listeners property, emit() calls, v2 namespace, convention view path.
  */
-import { describe, it, expect } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  extractLivewireComponent,
   extractLivewireBladeUsages,
+  extractLivewireComponent,
   extractWireDirectives,
 } from '../../../src/indexer/plugins/integration/framework/laravel/livewire.js';
 
@@ -41,24 +42,18 @@ describe('Livewire v2 — OrderList component', () => {
   });
 
   it('computes convention view path', () => {
-    expect(info!.conventionViewPath).toBe(
-      'resources/views/livewire/order-list.blade.php',
-    );
+    expect(info!.conventionViewPath).toBe('resources/views/livewire/order-list.blade.php');
   });
 
   it('extracts $listeners as listeners', () => {
     expect(info!.listeners.length).toBeGreaterThan(0);
-    const orderCreated = info!.listeners.find(
-      (l) => l.eventName === 'order-created',
-    );
+    const orderCreated = info!.listeners.find((l) => l.eventName === 'order-created');
     expect(orderCreated).toBeDefined();
     expect(orderCreated!.handlerMethod).toBe('refreshList');
   });
 
   it('extracts second listener entry', () => {
-    const cancelled = info!.listeners.find(
-      (l) => l.eventName === 'orderCancelled',
-    );
+    const cancelled = info!.listeners.find((l) => l.eventName === 'orderCancelled');
     expect(cancelled).toBeDefined();
     expect(cancelled!.handlerMethod).toBe('handleCancel');
   });
@@ -99,9 +94,7 @@ describe('Livewire v2 — SearchBar component', () => {
   });
 
   it('maps emit to its method', () => {
-    const searchExecuted = info!.dispatches.find(
-      (d) => d.eventName === 'search-executed',
-    );
+    const searchExecuted = info!.dispatches.find((d) => d.eventName === 'search-executed');
     expect(searchExecuted?.method).toBe('search');
   });
 

@@ -1,27 +1,15 @@
-/**
- * DrizzlePlugin — Framework plugin for Drizzle ORM.
- *
- * Extracts:
- * - pgTable / mysqlTable / sqliteTable calls → RawOrmModel with fields
- * - relations() blocks → RawOrmAssociation
- * - Column types (integer, text, varchar, boolean, timestamp, json, etc.)
- *
- * Supports drizzle-orm 0.27+.
- */
-import fs from 'node:fs';
-import path from 'node:path';
 import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
-  RawOrmModel,
   RawOrmAssociation,
+  RawOrmModel,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
 
 export class DrizzlePlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -71,7 +59,8 @@ export class DrizzlePlugin implements FrameworkPlugin {
     // export const users = pgTable('users', { ... })
     // export const usersTable = pgTable('users', { ... }, (table) => ({ ... }))
     // Use two-step approach: regex to find the declaration header, then brace-matching for body
-    const tableHeaderRegex = /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:pgTable|mysqlTable|mySqlTable|sqliteTable)\s*\(\s*['"]([^'"]+)['"]\s*,\s*/g;
+    const tableHeaderRegex =
+      /(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:pgTable|mysqlTable|mySqlTable|sqliteTable)\s*\(\s*['"]([^'"]+)['"]\s*,\s*/g;
     let tableMatch: RegExpExecArray | null;
     while ((tableMatch = tableHeaderRegex.exec(source)) !== null) {
       const varName = tableMatch[1];
@@ -93,7 +82,8 @@ export class DrizzlePlugin implements FrameworkPlugin {
 
     // Extract relations() calls:
     // export const usersRelations = relations(users, ({ one, many }) => ({ posts: many(posts) }))
-    const relationsRegex = /(?:export\s+)?(?:const|let)\s+(\w+Relations)\s*=\s*relations\s*\(\s*(\w+)\s*,/g;
+    const relationsRegex =
+      /(?:export\s+)?(?:const|let)\s+(\w+Relations)\s*=\s*relations\s*\(\s*(\w+)\s*,/g;
     let relMatch: RegExpExecArray | null;
     while ((relMatch = relationsRegex.exec(source)) !== null) {
       const sourceVar = relMatch[2];

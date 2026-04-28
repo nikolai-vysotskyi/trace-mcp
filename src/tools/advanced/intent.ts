@@ -6,12 +6,15 @@
  * - get_cross_domain_dependencies: which domains depend on which
  */
 
+import { searchFts } from '../../db/fts.js';
 import type { Store } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { validationError, notFound } from '../../errors.js';
-import { DomainStore, type DomainTreeNode, type CrossDomainDep } from '../../intent/domain-store.js';
-import { DomainBuilder, type IntentConfig } from '../../intent/domain-builder.js';
-import { searchFts, type FtsResult } from '../../db/fts.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
+import { DomainBuilder } from '../../intent/domain-builder.js';
+import {
+  type CrossDomainDep,
+  DomainStore,
+  type DomainTreeNode,
+} from '../../intent/domain-store.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -136,7 +139,7 @@ export async function getDomainMap(
   store: Store,
   options: { depth?: number; includeSymbols?: boolean; symbolsPerDomain?: number } = {},
 ): Promise<TraceMcpResult<DomainMapResult>> {
-  const { depth = 3, includeSymbols = true, symbolsPerDomain = 5 } = options;
+  const { depth = 3 } = options;
   const domainStore = new DomainStore(store.db);
 
   let tree = domainStore.getDomainTree();
@@ -170,7 +173,7 @@ export async function getDomainContext(
   domainName: string,
   options: { includeRelated?: boolean; tokenBudget?: number } = {},
 ): Promise<TraceMcpResult<DomainContextResult>> {
-  const { includeRelated = false, tokenBudget = 4000 } = options;
+  const { includeRelated = false } = options;
   const domainStore = new DomainStore(store.db);
 
   // Find domain (supports "parent/child" path notation)
@@ -186,7 +189,12 @@ export async function getDomainContext(
     await builder.buildAll();
     domain = domainStore.getDomainByName(parts[0]);
     if (!domain) {
-      return err(notFound(domainName, domainStore.getAllDomains().map((d) => d.name)));
+      return err(
+        notFound(
+          domainName,
+          domainStore.getAllDomains().map((d) => d.name),
+        ),
+      );
     }
   }
 
@@ -235,7 +243,12 @@ export async function getCrossDomainDependencies(
   if (options.domain) {
     const d = domainStore.getDomainByName(options.domain);
     if (!d) {
-      return err(notFound(options.domain, domainStore.getAllDomains().map((dd) => dd.name)));
+      return err(
+        notFound(
+          options.domain,
+          domainStore.getAllDomains().map((dd) => dd.name),
+        ),
+      );
     }
     focusDomainId = d.id;
   }

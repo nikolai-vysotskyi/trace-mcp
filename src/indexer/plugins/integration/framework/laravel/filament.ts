@@ -10,7 +10,7 @@
  * - Widget $model / getStats() model references
  * - getPages() → Page class array
  */
-import type { RawEdge, FileParseResult, ResolveContext } from '../../../../../plugin-api/types.js';
+import type { FileParseResult, RawEdge, ResolveContext } from '../../../../../plugin-api/types.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
 
 // ─── Interfaces ──────────────────────────────────────────────
@@ -21,13 +21,13 @@ interface FilamentResourceInfo {
   fqn: string;
   /** Eloquent model FQN from `protected static ?string $model = Model::class` */
   modelFqn: string | null;
-  relationManagers: string[];   // FQNs
+  relationManagers: string[]; // FQNs
   pages: FilamentPageRef[];
   formRelationships: FilamentRelRef[];
 }
 
 interface FilamentPageRef {
-  action: string;   // 'index' | 'create' | 'edit' | 'view'
+  action: string; // 'index' | 'create' | 'edit' | 'view'
   pageClass: string;
 }
 
@@ -49,7 +49,7 @@ interface FilamentPanelInfo {
   namespace: string;
   fqn: string;
   panelId: string | null;
-  resources: string[];  // FQNs
+  resources: string[]; // FQNs
   pages: string[];
   widgets: string[];
 }
@@ -73,7 +73,8 @@ const USE_STMT_RE = /use\s+([\w\\]+?)(?:\s+as\s+(\w+))?;/g;
 const EXTENDS_RESOURCE_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?Resource\b/;
 const EXTENDS_RELATION_MANAGER_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?RelationManager\b/;
 const EXTENDS_PANEL_PROVIDER_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?PanelProvider\b/;
-const EXTENDS_WIDGET_RE = /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?(?:StatsOverviewWidget|TableWidget|ChartWidget|Widget)\b/;
+const EXTENDS_WIDGET_RE =
+  /class\s+\w+\s+extends\s+(?:[\w\\]*\\)?(?:StatsOverviewWidget|TableWidget|ChartWidget|Widget)\b/;
 
 // ─── Resource extraction ──────────────────────────────────────
 
@@ -128,10 +129,7 @@ export function extractFilamentRelationManager(
 
 // ─── PanelProvider extraction ─────────────────────────────────
 
-export function extractFilamentPanel(
-  source: string,
-  _filePath: string,
-): FilamentPanelInfo | null {
+export function extractFilamentPanel(source: string, _filePath: string): FilamentPanelInfo | null {
   if (!EXTENDS_PANEL_PROVIDER_RE.test(source)) return null;
 
   const useMap = buildUseMap(source);
@@ -230,8 +228,10 @@ export function resolveFilamentEdges(
       const targetSymbol = ctx.getSymbolByFqn(resource.modelFqn);
       if (sourceSymbol && targetSymbol) {
         edges.push({
-          sourceNodeType: 'symbol', sourceRefId: sourceSymbol.id,
-          targetNodeType: 'symbol', targetRefId: targetSymbol.id,
+          sourceNodeType: 'symbol',
+          sourceRefId: sourceSymbol.id,
+          targetNodeType: 'symbol',
+          targetRefId: targetSymbol.id,
           edgeType: 'filament_resource_for',
         });
       }
@@ -243,8 +243,10 @@ export function resolveFilamentEdges(
         const rmSymbol = ctx.getSymbolByFqn(rmFqn);
         if (rmSymbol) {
           edges.push({
-            sourceNodeType: 'symbol', sourceRefId: resourceSymbol.id,
-            targetNodeType: 'symbol', targetRefId: rmSymbol.id,
+            sourceNodeType: 'symbol',
+            sourceRefId: resourceSymbol.id,
+            targetNodeType: 'symbol',
+            targetRefId: rmSymbol.id,
             edgeType: 'filament_relation_manager',
           });
         }
@@ -263,8 +265,10 @@ export function resolveFilamentEdges(
       const modelSymbol = ctx.getSymbolByFqn(modelFqn);
       if (!modelSymbol) continue;
       edges.push({
-        sourceNodeType: 'symbol', sourceRefId: widgetSymbol.id,
-        targetNodeType: 'symbol', targetRefId: modelSymbol.id,
+        sourceNodeType: 'symbol',
+        sourceRefId: widgetSymbol.id,
+        targetNodeType: 'symbol',
+        targetRefId: modelSymbol.id,
         edgeType: 'filament_widget_queries',
       });
     }
@@ -313,10 +317,7 @@ function buildFilamentPanelEdges(panel: FilamentPanelInfo): RawEdge[] {
 
 function buildFilamentWidgetEdges(widget: FilamentWidgetInfo): RawEdge[] {
   const edges: RawEdge[] = [];
-  const targets = [
-    ...(widget.modelFqn ? [widget.modelFqn] : []),
-    ...widget.queriedModels,
-  ];
+  const targets = [...(widget.modelFqn ? [widget.modelFqn] : []), ...widget.queriedModels];
   for (const modelFqn of [...new Set(targets)]) {
     edges.push({
       edgeType: 'filament_widget_queries',
@@ -347,9 +348,7 @@ function resolveClass(ref: string, useMap: Map<string, string>): string {
 
 /** Extract `protected static ?string $model = SomeModel::class` */
 function extractModelProperty(source: string, useMap: Map<string, string>): string | null {
-  const match = source.match(
-    /protected\s+static\s+(?:\?string\s+)?\$model\s*=\s*([\w\\]+)::class/,
-  );
+  const match = source.match(/protected\s+static\s+(?:\?string\s+)?\$model\s*=\s*([\w\\]+)::class/);
   if (!match) return null;
   return resolveClass(match[1], useMap);
 }
@@ -410,11 +409,7 @@ function extractFormRelationships(source: string): FilamentRelRef[] {
 }
 
 /** Extract array of class FQNs from ->resources([...]) / ->pages([...]) / ->widgets([...]) */
-function extractClassList(
-  source: string,
-  method: string,
-  useMap: Map<string, string>,
-): string[] {
+function extractClassList(source: string, method: string, useMap: Map<string, string>): string[] {
   const results: string[] = [];
   // ->resources([ ... ]) — allow multiline
   const methodRe = new RegExp(`->${escapeRegExp(method)}\\(\\s*\\[([\\s\\S]*?)\\]\\s*\\)`, 'g');

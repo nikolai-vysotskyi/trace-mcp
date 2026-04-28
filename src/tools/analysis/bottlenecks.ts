@@ -141,7 +141,11 @@ function pickRandomSources(nodes: number[], k: number): number[] {
   return arr.slice(0, k);
 }
 
-function accumulateBrandes(source: number, graph: FileGraph, betweenness: Map<string, number>): void {
+function accumulateBrandes(
+  source: number,
+  graph: FileGraph,
+  betweenness: Map<string, number>,
+): void {
   const stack: number[] = [];
   const predecessors = new Map<number, number[]>();
   const sigma = new Map<number, number>();
@@ -426,10 +430,16 @@ export function computeBottlenecksForVizGraph(
     const tn = strToNum.get(e.target);
     if (sn == null || tn == null || sn === tn) continue;
     let f = forward.get(sn);
-    if (!f) { f = new Set(); forward.set(sn, f); }
+    if (!f) {
+      f = new Set();
+      forward.set(sn, f);
+    }
     f.add(tn);
     let r = reverse.get(tn);
-    if (!r) { r = new Set(); reverse.set(tn, r); }
+    if (!r) {
+      r = new Set();
+      reverse.set(tn, r);
+    }
     r.add(sn);
   }
 
@@ -450,7 +460,10 @@ export function computeBottlenecksForVizGraph(
 
   const betweenness = computeEdgeBetweenness(synthetic, shouldSample ? sampleSize : null);
   const undirected = toUndirectedAdj(synthetic);
-  const { bridges: brNumKeys, articulations: artNums } = tarjanBridgesAndArticulations(undirected, allIds);
+  const { bridges: brNumKeys, articulations: artNums } = tarjanBridgesAndArticulations(
+    undirected,
+    allIds,
+  );
 
   // Translate caller's string-keyed co-change map (key = "src|tgt") into the
   // numeric edgeKey format used by Brandes output.

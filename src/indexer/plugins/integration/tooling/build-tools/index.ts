@@ -6,48 +6,57 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
 const BUILD_PACKAGES = [
-  'tsup', 'esbuild', 'rollup', 'webpack', '@rspack/core',
-  'vite', 'turbo', 'swc', '@swc/core', 'parcel',
+  'tsup',
+  'esbuild',
+  'rollup',
+  'webpack',
+  '@rspack/core',
+  'vite',
+  'turbo',
+  'swc',
+  '@swc/core',
+  'parcel',
 ];
 
 const BUILD_CONFIG_FILES = [
-  'tsup.config.ts', 'tsup.config.js',
-  'rollup.config.ts', 'rollup.config.js', 'rollup.config.mjs',
-  'webpack.config.ts', 'webpack.config.js',
-  'vite.config.ts', 'vite.config.js',
-  'esbuild.config.ts', 'esbuild.config.js',
+  'tsup.config.ts',
+  'tsup.config.js',
+  'rollup.config.ts',
+  'rollup.config.js',
+  'rollup.config.mjs',
+  'webpack.config.ts',
+  'webpack.config.js',
+  'vite.config.ts',
+  'vite.config.js',
+  'esbuild.config.ts',
+  'esbuild.config.js',
   'turbo.json',
   '.swcrc',
 ];
 
 // entry: ['src/index.ts'], entry: { main: 'src/index.ts' }
-const ENTRY_RE =
-  /entry\s*:\s*(?:\[([^\]]+)\]|\{([^}]+)\}|['"]([^'"]+)['"])/g;
+const ENTRY_RE = /entry\s*:\s*(?:\[([^\]]+)\]|\{([^}]+)\}|['"]([^'"]+)['"])/g;
 
 // format: ['esm', 'cjs']
-const FORMAT_RE =
-  /format\s*:\s*\[([^\]]+)\]/g;
+const FORMAT_RE = /format\s*:\s*\[([^\]]+)\]/g;
 
 // target: 'node20', target: ['node20']
-const TARGET_RE =
-  /target\s*:\s*(?:\[([^\]]+)\]|['"]([^'"]+)['"])/g;
+const TARGET_RE = /target\s*:\s*(?:\[([^\]]+)\]|['"]([^'"]+)['"])/g;
 
 // external: ['dep1', 'dep2']
-const EXTERNAL_RE =
-  /external\s*:\s*\[([^\]]+)\]/g;
+const EXTERNAL_RE = /external\s*:\s*\[([^\]]+)\]/g;
 
 // defineConfig or export default { ... }
-const CONFIG_EXPORT_RE =
-  /(?:defineConfig|export\s+default)\s*(?:\(\s*)?\{/;
+const CONFIG_EXPORT_RE = /(?:defineConfig|export\s+default)\s*(?:\(\s*)?\{/;
 
 interface BuildConfig {
   entries: string[];
@@ -155,7 +164,9 @@ export class BuildToolsPlugin implements FrameworkPlugin {
     const source = content.toString('utf-8');
     const result: FileParseResult = { status: 'ok', symbols: [], edges: [] };
 
-    const isConfigFile = BUILD_CONFIG_FILES.some((cf) => filePath.endsWith(cf.replace(/\.(ts|js|mjs)$/, '')));
+    const isConfigFile = BUILD_CONFIG_FILES.some((cf) =>
+      filePath.endsWith(cf.replace(/\.(ts|js|mjs)$/, '')),
+    );
     const hasConfigExport = CONFIG_EXPORT_RE.test(source);
 
     if (isConfigFile || hasConfigExport) {

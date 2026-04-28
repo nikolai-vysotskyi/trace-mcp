@@ -6,23 +6,28 @@
  * methods inside containers, comptime blocks, test declarations,
  * @import edges, @cImport edges, and usingnamespace edges.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol, RawEdge, SymbolKind } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawEdge,
+  RawSymbol,
+  SymbolKind,
+} from '../../../../plugin-api/types.js';
 
 function makeSymbolId(filePath: string, name: string, kind: string, parent?: string): string {
-  return parent
-    ? `${filePath}::${parent}.${name}#${kind}`
-    : `${filePath}::${name}#${kind}`;
+  return parent ? `${filePath}::${parent}.${name}#${kind}` : `${filePath}::${name}#${kind}`;
 }
 
 function extractSignature(node: TSNode): string {
   const firstLine = node.text.split('\n')[0].trim();
   const braceIdx = firstLine.indexOf('{');
   if (braceIdx > 0) return firstLine.substring(0, braceIdx).trim();
-  return firstLine.length > 120 ? firstLine.slice(0, 120) + '…' : firstLine;
+  return firstLine.length > 120 ? `${firstLine.slice(0, 120)}…` : firstLine;
 }
 
 function isPub(node: TSNode): boolean {
@@ -92,7 +97,10 @@ function extractEdges(root: TSNode): RawEdge[] {
           for (const arg of c.namedChildren) {
             if (arg.type === 'string') {
               for (const sc of arg.namedChildren) {
-                if (sc.type === 'string_content') { importPath = sc.text; break; }
+                if (sc.type === 'string_content') {
+                  importPath = sc.text;
+                  break;
+                }
               }
               if (!importPath) importPath = arg.text.replace(/^"|"$/g, '');
               break;
@@ -119,7 +127,10 @@ function extractEdges(root: TSNode): RawEdge[] {
           const key = `usingnamespace:${child.text}`;
           if (!seen.has(key)) {
             seen.add(key);
-            edges.push({ edgeType: 'imports', metadata: { module: child.text, usingnamespace: true } });
+            edges.push({
+              edgeType: 'imports',
+              metadata: { module: child.text, usingnamespace: true },
+            });
           }
         }
       }
@@ -143,7 +154,10 @@ export class ZigLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.zig', '.zon'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('zig');
       const sourceCode = content.toString('utf-8');
@@ -176,7 +190,12 @@ export class ZigLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private walkTopLevel(root: TSNode, filePath: string, symbols: RawSymbol[], seen: Set<string>): void {
+  private walkTopLevel(
+    root: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
     for (const child of root.namedChildren) {
       switch (child.type) {
         case 'function_declaration':
@@ -196,23 +215,39 @@ export class ZigLanguagePlugin implements LanguagePlugin {
   }
 
   private addSymbol(
-    symbols: RawSymbol[], seen: Set<string>,
-    sid: string, name: string, kind: SymbolKind, fqn: string,
-    node: TSNode, meta?: Record<string, unknown>, parentSid?: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+    sid: string,
+    name: string,
+    kind: SymbolKind,
+    fqn: string,
+    node: TSNode,
+    meta?: Record<string, unknown>,
+    parentSid?: string,
   ): void {
     if (seen.has(sid)) return;
     seen.add(sid);
     symbols.push({
-      symbolId: sid, name, kind, fqn,
+      symbolId: sid,
+      name,
+      kind,
+      fqn,
       parentSymbolId: parentSid,
       signature: extractSignature(node),
-      byteStart: node.startIndex, byteEnd: node.endIndex,
-      lineStart: node.startPosition.row + 1, lineEnd: node.endPosition.row + 1,
+      byteStart: node.startIndex,
+      byteEnd: node.endIndex,
+      lineStart: node.startPosition.row + 1,
+      lineEnd: node.endPosition.row + 1,
       metadata: meta && Object.keys(meta).length > 0 ? meta : undefined,
     });
   }
 
-  private extractFunction(node: TSNode, filePath: string, symbols: RawSymbol[], seen: Set<string>): void {
+  private extractFunction(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
     const name = getIdentifierName(node);
     if (!name) return;
 
@@ -227,11 +262,24 @@ export class ZigLanguagePlugin implements LanguagePlugin {
       }
     }
 
-    this.addSymbol(symbols, seen,
-      makeSymbolId(filePath, name, 'function'), name, 'function', name, node, meta);
+    this.addSymbol(
+      symbols,
+      seen,
+      makeSymbolId(filePath, name, 'function'),
+      name,
+      'function',
+      name,
+      node,
+      meta,
+    );
   }
 
-  private extractVariable(node: TSNode, filePath: string, symbols: RawSymbol[], seen: Set<string>): void {
+  private extractVariable(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
     const name = getIdentifierName(node);
     if (!name) return;
 
@@ -243,99 +291,188 @@ export class ZigLanguagePlugin implements LanguagePlugin {
       if (containerKind === 'error_set') {
         const meta: Record<string, unknown> = { zigKind: 'error_set' };
         if (pub) meta.exported = true;
-        this.addSymbol(symbols, seen,
-          makeSymbolId(filePath, name, 'enum'), name, 'enum', name, node, meta);
+        this.addSymbol(
+          symbols,
+          seen,
+          makeSymbolId(filePath, name, 'enum'),
+          name,
+          'enum',
+          name,
+          node,
+          meta,
+        );
       } else {
         const kind: SymbolKind = containerKind === 'enum' ? 'enum' : 'class';
         const meta: Record<string, unknown> = { zigKind: containerKind };
         if (pub) meta.exported = true;
-        this.addSymbol(symbols, seen,
-          makeSymbolId(filePath, name, kind), name, kind, name, node, meta);
+        this.addSymbol(
+          symbols,
+          seen,
+          makeSymbolId(filePath, name, kind),
+          name,
+          kind,
+          name,
+          node,
+          meta,
+        );
       }
       // Extract members (fields, methods, nested decls)
       this.extractContainerMembers(node, filePath, name, symbols, seen);
     } else if (constDecl) {
       const meta: Record<string, unknown> = {};
       if (pub) meta.exported = true;
-      this.addSymbol(symbols, seen,
-        makeSymbolId(filePath, name, 'constant'), name, 'constant', name, node, meta);
+      this.addSymbol(
+        symbols,
+        seen,
+        makeSymbolId(filePath, name, 'constant'),
+        name,
+        'constant',
+        name,
+        node,
+        meta,
+      );
     } else {
       const meta: Record<string, unknown> = {};
       if (pub) meta.exported = true;
-      this.addSymbol(symbols, seen,
-        makeSymbolId(filePath, name, 'variable'), name, 'variable', name, node, meta);
+      this.addSymbol(
+        symbols,
+        seen,
+        makeSymbolId(filePath, name, 'variable'),
+        name,
+        'variable',
+        name,
+        node,
+        meta,
+      );
     }
   }
 
   /** Extract members from struct/enum/union/error_set body. */
   private extractContainerMembers(
-    node: TSNode, filePath: string, parentName: string,
-    symbols: RawSymbol[], seen: Set<string>,
+    node: TSNode,
+    filePath: string,
+    parentName: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
   ): void {
     const stack: TSNode[] = [];
     for (const child of node.namedChildren) {
-      if (child.type === 'struct_declaration' || child.type === 'enum_declaration' ||
-          child.type === 'union_declaration' || child.type === 'error_set_declaration') {
+      if (
+        child.type === 'struct_declaration' ||
+        child.type === 'enum_declaration' ||
+        child.type === 'union_declaration' ||
+        child.type === 'error_set_declaration'
+      ) {
         for (const member of child.namedChildren) {
           stack.push(member);
         }
       }
     }
 
-    const parentKind = node.namedChildren.some(c => c.type === 'enum_declaration') ? 'enum' : 'class';
+    const parentKind = node.namedChildren.some((c) => c.type === 'enum_declaration')
+      ? 'enum'
+      : 'class';
 
     for (const member of stack) {
       if (member.type === 'field_declaration') {
         const fieldName = getIdentifierName(member);
         if (fieldName) {
-          this.addSymbol(symbols, seen,
+          this.addSymbol(
+            symbols,
+            seen,
             makeSymbolId(filePath, fieldName, 'property', parentName),
-            fieldName, 'property', `${parentName}.${fieldName}`, member,
-            undefined, makeSymbolId(filePath, parentName, parentKind));
+            fieldName,
+            'property',
+            `${parentName}.${fieldName}`,
+            member,
+            undefined,
+            makeSymbolId(filePath, parentName, parentKind),
+          );
         }
       } else if (member.type === 'enum_field') {
         const fieldName = getIdentifierName(member);
         if (fieldName) {
-          this.addSymbol(symbols, seen,
+          this.addSymbol(
+            symbols,
+            seen,
             makeSymbolId(filePath, fieldName, 'constant', parentName),
-            fieldName, 'constant', `${parentName}.${fieldName}`, member,
-            undefined, makeSymbolId(filePath, parentName, 'enum'));
+            fieldName,
+            'constant',
+            `${parentName}.${fieldName}`,
+            member,
+            undefined,
+            makeSymbolId(filePath, parentName, 'enum'),
+          );
         }
       } else if (member.type === 'function_declaration') {
         const funcName = getIdentifierName(member);
         if (funcName) {
           const meta: Record<string, unknown> = {};
           if (isPub(member)) meta.exported = true;
-          this.addSymbol(symbols, seen,
+          this.addSymbol(
+            symbols,
+            seen,
             makeSymbolId(filePath, funcName, 'method', parentName),
-            funcName, 'method', `${parentName}.${funcName}`, member,
-            meta, makeSymbolId(filePath, parentName, parentKind));
+            funcName,
+            'method',
+            `${parentName}.${funcName}`,
+            member,
+            meta,
+            makeSymbolId(filePath, parentName, parentKind),
+          );
         }
       } else if (member.type === 'variable_declaration') {
         const varName = getIdentifierName(member);
         if (varName) {
-          this.addSymbol(symbols, seen,
+          this.addSymbol(
+            symbols,
+            seen,
             makeSymbolId(filePath, varName, 'constant', parentName),
-            varName, 'constant', `${parentName}.${varName}`, member,
-            undefined, makeSymbolId(filePath, parentName, parentKind));
+            varName,
+            'constant',
+            `${parentName}.${varName}`,
+            member,
+            undefined,
+            makeSymbolId(filePath, parentName, parentKind),
+          );
         }
       }
     }
   }
 
-  private extractTest(node: TSNode, filePath: string, symbols: RawSymbol[], seen: Set<string>): void {
+  private extractTest(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
     const name = getTestName(node);
     if (!name) return;
-    this.addSymbol(symbols, seen,
-      makeSymbolId(filePath, name, 'function'), name, 'function', name, node, { test: true });
+    this.addSymbol(
+      symbols,
+      seen,
+      makeSymbolId(filePath, name, 'function'),
+      name,
+      'function',
+      name,
+      node,
+      { test: true },
+    );
   }
 
-  private extractComptime(node: TSNode, filePath: string, symbols: RawSymbol[], seen: Set<string>): void {
+  private extractComptime(
+    node: TSNode,
+    filePath: string,
+    symbols: RawSymbol[],
+    seen: Set<string>,
+  ): void {
     for (const child of node.namedChildren) {
       if (child.type === 'block') {
         for (const stmt of child.namedChildren) {
-          if (stmt.type === 'variable_declaration') this.extractVariable(stmt, filePath, symbols, seen);
-          else if (stmt.type === 'function_declaration') this.extractFunction(stmt, filePath, symbols, seen);
+          if (stmt.type === 'variable_declaration')
+            this.extractVariable(stmt, filePath, symbols, seen);
+          else if (stmt.type === 'function_declaration')
+            this.extractFunction(stmt, filePath, symbols, seen);
         }
       }
     }

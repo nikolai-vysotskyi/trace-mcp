@@ -7,18 +7,22 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import type { TraceMcpConfig } from '../config.js';
 import type { Store } from '../db/store.js';
+import { buildProjectContext } from '../indexer/project-context.js';
+import type { PluginRegistry } from '../plugin-api/registry.js';
+import {
+  getCouplingMetrics,
+  getDependencyCycles,
+  getRepoHealth,
+} from '../tools/analysis/graph-analysis.js';
 import { getChangeImpact } from '../tools/analysis/impact.js';
+import { getTechDebt, predictBugs } from '../tools/analysis/predictive-intelligence.js';
+import { getCallGraph } from '../tools/framework/call-graph.js';
+import { getHotspots } from '../tools/git/git-analysis.js';
 import { getFeatureContext } from '../tools/navigation/context.js';
 import { getProjectMap } from '../tools/project/project.js';
-import { buildProjectContext } from '../indexer/project-context.js';
-import { getCallGraph } from '../tools/framework/call-graph.js';
-import { getCouplingMetrics, getDependencyCycles, getRepoHealth } from '../tools/analysis/graph-analysis.js';
 import { getDeadCodeV2 } from '../tools/refactoring/dead-code.js';
-import { getHotspots } from '../tools/git/git-analysis.js';
-import { predictBugs, getTechDebt } from '../tools/analysis/predictive-intelligence.js';
-import type { PluginRegistry } from '../plugin-api/registry.js';
-import type { TraceMcpConfig } from '../config.js';
 
 interface PromptContext {
   store: Store;
@@ -29,7 +33,11 @@ interface PromptContext {
 
 /** Safe wrapper — prompts must never crash, just skip sections on error */
 function safe<T>(fn: () => T, fallback: T): T {
-  try { return fn(); } catch { return fallback; }
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
 }
 
 export function registerPrompts(server: McpServer, ctx: PromptContext): void {
@@ -95,7 +103,13 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       }
 
       // 3. Dead code check
-      const deadCode = safe(() => getDeadCodeV2(store, { threshold: 0.5, limit: 10 }), { dead_symbols: [], file_pattern: null, total_exports: 0, total_dead: 0, threshold: 0.5 });
+      const deadCode = safe(() => getDeadCodeV2(store, { threshold: 0.5, limit: 10 }), {
+        dead_symbols: [],
+        file_pattern: null,
+        total_exports: 0,
+        total_dead: 0,
+        threshold: 0.5,
+      });
       if (deadCode.dead_symbols && deadCode.dead_symbols.length > 0) {
         sections.push(`## Dead Code Candidates (${deadCode.dead_symbols.length})\n`);
         for (const d of deadCode.dead_symbols.slice(0, 5)) {
@@ -109,7 +123,9 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       if (hotspots.length > 0) {
         sections.push('## Risk Hotspots (high complexity + churn)\n');
         for (const h of hotspots) {
-          sections.push(`- ${h.file}: complexity=${h.max_cyclomatic}, commits=${h.commits}, score=${h.score.toFixed(2)}`);
+          sections.push(
+            `- ${h.file}: complexity=${h.max_cyclomatic}, commits=${h.commits}, score=${h.score.toFixed(2)}`,
+          );
         }
         sections.push('');
       }
@@ -117,10 +133,15 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       const report = sections.join('\n');
 
       return {
-        messages: [{
-          role: 'user' as const,
-          content: { type: 'text' as const, text: `Review the following changes:\n\n${report}\n\nProvide a thorough code review with risk assessment, suggested tests, and architecture concerns.` },
-        }],
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: `Review the following changes:\n\n${report}\n\nProvide a thorough code review with risk assessment, suggested tests, and architecture concerns.`,
+            },
+          },
+        ],
       };
     },
   );
@@ -151,7 +172,11 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       // Top important files
       sections.push('## Key Entry Points\n');
-      const context = safe(() => getFeatureContext(store, projectRoot, 'main entry point application startup', 4000), { symbols: [] } as any);
+      const context = safe(
+        () => getFeatureContext(store, projectRoot, 'main entry point application startup', 4000),
+        // biome-ignore lint/suspicious/noExplicitAny: getFeatureContext return shape predates this prompt's symbols/file/line accessor; legacy fallback object kept until the prompt is rewritten against the actual FeatureContextResult shape.
+        { symbols: [] } as any,
+      );
       if (context.symbols) {
         for (const s of context.symbols.slice(0, 10)) {
           sections.push(`- **${s.name}** (${s.kind}) in ${s.file}:${s.line}`);
@@ -161,10 +186,15 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       const report = sections.join('\n');
       return {
-        messages: [{
-          role: 'user' as const,
-          content: { type: 'text' as const, text: `${report}\n\nExplain this project's architecture, key modules, and how to get started as a new developer. Highlight the most important files to read first.` },
-        }],
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: `${report}\n\nExplain this project's architecture, key modules, and how to get started as a new developer. Highlight the most important files to read first.`,
+            },
+          },
+        ],
       };
     },
   );
@@ -182,7 +212,11 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       sections.push(`# Debug: ${description}\n`);
 
       // Feature context for the bug description
-      const context = safe(() => getFeatureContext(store, projectRoot, description, 6000), { symbols: [] } as any);
+      const context = safe(
+        () => getFeatureContext(store, projectRoot, description, 6000),
+        // biome-ignore lint/suspicious/noExplicitAny: same legacy shape as in /onboard above.
+        { symbols: [] } as any,
+      );
       if (context.symbols && context.symbols.length > 0) {
         sections.push('## Relevant Code\n');
         for (const s of context.symbols.slice(0, 10)) {
@@ -209,10 +243,15 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       const report = sections.join('\n');
       return {
-        messages: [{
-          role: 'user' as const,
-          content: { type: 'text' as const, text: `${report}\n\nAnalyze this bug. Identify the most likely failure point, suggest debugging steps, and recommend a fix.` },
-        }],
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: `${report}\n\nAnalyze this bug. Identify the most likely failure point, suggest debugging steps, and recommend a fix.`,
+            },
+          },
+        ],
       };
     },
   );
@@ -228,10 +267,12 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       // Coupling
       const coupling = safe(() => getCouplingMetrics(store), []);
-      const unstable = coupling.filter((c: any) => c.assessment === 'unstable');
+      const unstable = coupling.filter((c: { assessment?: string }) => c.assessment === 'unstable');
       sections.push(`## Coupling (${coupling.length} files)\n`);
       sections.push(`- Unstable: ${unstable.length}`);
-      sections.push(`- Stable: ${coupling.filter((c: any) => c.assessment === 'stable').length}`);
+      sections.push(
+        `- Stable: ${coupling.filter((c: { assessment?: string }) => c.assessment === 'stable').length}`,
+      );
       sections.push('');
 
       // Cycles
@@ -243,12 +284,16 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       sections.push('');
 
       // Tech debt
-      const debt = safe(() => getTechDebt(store, projectRoot, {
-        moduleDepth: config.predictive?.module_depth,
-        sinceDays: config.predictive?.git_since_days,
-        weights: config.predictive?.weights?.tech_debt,
-      }), null);
-      if (debt && debt.isOk()) {
+      const debt = safe(
+        () =>
+          getTechDebt(store, projectRoot, {
+            moduleDepth: config.predictive?.module_depth,
+            sinceDays: config.predictive?.git_since_days,
+            weights: config.predictive?.weights?.tech_debt,
+          }),
+        null,
+      );
+      if (debt?.isOk()) {
         sections.push('## Tech Debt\n');
         sections.push('```json');
         sections.push(JSON.stringify(debt.value, null, 2).slice(0, 3000));
@@ -267,7 +312,7 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       // Bug prediction
       const bugs = safe(() => predictBugs(store, projectRoot, { limit: 10 }), null);
-      if (bugs && bugs.isOk()) {
+      if (bugs?.isOk()) {
         sections.push('## Bug Prediction (top 10)\n');
         sections.push('```json');
         sections.push(JSON.stringify(bugs.value, null, 2).slice(0, 2000));
@@ -276,10 +321,15 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       const report = sections.join('\n');
       return {
-        messages: [{
-          role: 'user' as const,
-          content: { type: 'text' as const, text: `${report}\n\nAnalyze this project's architecture health. Identify the most critical issues and provide actionable recommendations.` },
-        }],
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: `${report}\n\nAnalyze this project's architecture health. Identify the most critical issues and provide actionable recommendations.`,
+            },
+          },
+        ],
       };
     },
   );
@@ -318,7 +368,9 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       for (const f of changedFiles.slice(0, 5)) {
         const impact = getChangeImpact(store, { filePath: f }, 2, 100);
         if (impact.isOk()) {
-          const depCount = Array.isArray(impact.value.dependents) ? impact.value.dependents.length : 0;
+          const depCount = Array.isArray(impact.value.dependents)
+            ? impact.value.dependents.length
+            : 0;
           if (depCount > 3) {
             riskFiles.push(`- ⚠ **${f}**: ${depCount} dependents`);
           }
@@ -331,7 +383,13 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       }
 
       // Dead code
-      const dead = safe(() => getDeadCodeV2(store, { threshold: 0.6, limit: 10 }), { dead_symbols: [], file_pattern: null, total_exports: 0, total_dead: 0, threshold: 0.6 });
+      const dead = safe(() => getDeadCodeV2(store, { threshold: 0.6, limit: 10 }), {
+        dead_symbols: [],
+        file_pattern: null,
+        total_exports: 0,
+        total_dead: 0,
+        threshold: 0.6,
+      });
       if (dead.dead_symbols && dead.dead_symbols.length > 0) {
         sections.push(`## Potential Dead Code: ${dead.dead_symbols.length}\n`);
         for (const d of dead.dead_symbols.slice(0, 5)) {
@@ -349,10 +407,15 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       const report = sections.join('\n');
       return {
-        messages: [{
-          role: 'user' as const,
-          content: { type: 'text' as const, text: `${report}\n\nReview this pre-merge checklist. Flag any risks and recommend whether it's safe to merge.` },
-        }],
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: `${report}\n\nReview this pre-merge checklist. Flag any risks and recommend whether it's safe to merge.`,
+            },
+          },
+        ],
       };
     },
   );

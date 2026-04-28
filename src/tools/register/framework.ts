@@ -1,24 +1,24 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { ServerContext } from '../../server/types.js';
-import { getComponentTree } from '../framework/components.js';
-import { getRequestFlow } from '../framework/flow.js';
-import { getMiddlewareChain } from '../framework/middleware-chain.js';
-import { getModuleGraph } from '../analysis/module-graph.js';
-import { getDITree } from '../framework/di-tree.js';
-import { getNavigationGraph } from '../framework/rn-navigation.js';
-import { getScreenContext } from '../framework/screen-context.js';
-import { getModelContext } from '../framework/model.js';
-import { getSchema } from '../framework/schema.js';
-import { getEventGraph } from '../framework/events.js';
-import { findReferences } from '../framework/references.js';
-import { getCallGraph } from '../framework/call-graph.js';
-import { CALL_GRAPH_METHODOLOGY } from '../shared/confidence.js';
-import { getLivewireContext } from '../framework/livewire.js';
-import { getNovaResource } from '../framework/nova.js';
-import { getTestsFor } from '../framework/tests.js';
-import { buildNegativeEvidence } from '../shared/evidence.js';
 import { formatToolError } from '../../errors.js';
+import type { ServerContext } from '../../server/types.js';
+import { getModuleGraph } from '../analysis/module-graph.js';
+import { getCallGraph } from '../framework/call-graph.js';
+import { getComponentTree } from '../framework/components.js';
+import { getDITree } from '../framework/di-tree.js';
+import { getEventGraph } from '../framework/events.js';
+import { getRequestFlow } from '../framework/flow.js';
+import { getLivewireContext } from '../framework/livewire.js';
+import { getMiddlewareChain } from '../framework/middleware-chain.js';
+import { getModelContext } from '../framework/model.js';
+import { getNovaResource } from '../framework/nova.js';
+import { findReferences } from '../framework/references.js';
+import { getNavigationGraph } from '../framework/rn-navigation.js';
+import { getSchema } from '../framework/schema.js';
+import { getScreenContext } from '../framework/screen-context.js';
+import { getTestsFor } from '../framework/tests.js';
+import { CALL_GRAPH_METHODOLOGY } from '../shared/confidence.js';
+import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerFrameworkTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j, jh, has } = ctx;
@@ -32,14 +32,23 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       {
         component_path: z.string().max(512).describe('Relative path to the root .vue file'),
         depth: z.number().int().min(1).max(20).optional().describe('Max tree depth (default 3)'),
-        token_budget: z.number().int().min(100).max(100000).optional().describe('Max tokens for the tree (default 8000)'),
+        token_budget: z
+          .number()
+          .int()
+          .min(100)
+          .max(100000)
+          .optional()
+          .describe('Max tokens for the tree (default 8000)'),
       },
       async ({ component_path, depth, token_budget }) => {
         const blocked = guardPath(component_path);
         if (blocked) return blocked;
         const result = getComponentTree(store, component_path, depth ?? 3, token_budget ?? 8000);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: jh('get_component_tree', result.value) }] };
       },
@@ -48,7 +57,21 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   // --- Level 3 Framework-Specific Tools ---
 
-  if (has('express', 'nestjs', 'laravel', 'fastapi', 'flask', 'drf', 'spring', 'rails', 'fastify', 'hono', 'trpc')) {
+  if (
+    has(
+      'express',
+      'nestjs',
+      'laravel',
+      'fastapi',
+      'flask',
+      'drf',
+      'spring',
+      'rails',
+      'fastify',
+      'hono',
+      'trpc',
+    )
+  ) {
     server.tool(
       'get_request_flow',
       'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS/Fastify/Hono/tRPC/FastAPI/Flask/DRF). Use to understand how a request is handled end-to-end. For middleware-only analysis use get_middleware_chain instead. Read-only. Returns JSON: { route, steps: [{ type, symbol_id, name, file }] }.',
@@ -59,7 +82,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       async ({ url, method }) => {
         const result = getRequestFlow(store, url, method ?? 'GET');
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: jh('get_request_flow', result.value) }] };
       },
@@ -76,7 +102,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       async ({ url }) => {
         const result = getMiddlewareChain(store, projectRoot, url);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
@@ -93,7 +122,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       async ({ module_name }) => {
         const result = getModuleGraph(store, projectRoot, module_name);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: jh('get_module_graph', result.value) }] };
       },
@@ -108,7 +140,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       async ({ service_name }) => {
         const result = getDITree(store, service_name);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: jh('get_di_tree', result.value) }] };
       },
@@ -123,7 +158,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       async () => {
         const result = getNavigationGraph(store);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
@@ -138,7 +176,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       async ({ screen_name }) => {
         const result = getScreenContext(store, screen_name);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
@@ -155,7 +196,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       async ({ model_name }) => {
         const result = getModelContext(store, model_name);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: jh('get_model_context', result.value) }] };
       },
@@ -165,12 +209,19 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       'get_schema',
       'Get database schema reconstructed from migrations or ORM model definitions. Use to understand table structure. For ORM-level context with relationships use get_model_context instead. Read-only. Returns JSON: { tables: [{ name, columns: [{ name, type, nullable, default }], indexes }] }.',
       {
-        table_name: z.string().max(256).optional().describe('Table/collection/model name (omit for all)'),
+        table_name: z
+          .string()
+          .max(256)
+          .optional()
+          .describe('Table/collection/model name (omit for all)'),
       },
       async ({ table_name }) => {
         const result = getSchema(store, table_name);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: jh('get_schema', result.value) }] };
       },
@@ -182,12 +233,19 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       'get_event_graph',
       'Get event/signal/task dispatch graph (Laravel events, Django signals, NestJS events, Celery tasks, Socket.io events). Use to understand event-driven architecture and trace event producers/consumers. Read-only. Returns JSON: { events: [{ name, dispatchers, listeners, file }] }.',
       {
-        event_name: z.string().max(256).optional().describe('Filter to a specific event class name'),
+        event_name: z
+          .string()
+          .max(256)
+          .optional()
+          .describe('Filter to a specific event class name'),
       },
       async ({ event_name }) => {
         const result = getEventGraph(store, event_name);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: jh('get_event_graph', result.value) }] };
       },
@@ -209,7 +267,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       }
       const result = findReferences(store, { symbolId: symbol_id, fqn, filePath: file_path });
       if (result.isErr()) {
-        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return {
+          content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+          isError: true,
+        };
       }
       if (result.value.total === 0) {
         const stats = store.getStats();
@@ -235,12 +296,21 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
     {
       symbol_id: z.string().max(512).optional().describe('Symbol ID to center the graph on'),
       fqn: z.string().max(512).optional().describe('Fully qualified name to center the graph on'),
-      depth: z.number().int().min(1).max(20).optional().describe('Traversal depth on each side (default 2)'),
+      depth: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .describe('Traversal depth on each side (default 2)'),
     },
     async ({ symbol_id, fqn, depth }) => {
       const result = getCallGraph(store, { symbolId: symbol_id, fqn }, depth ?? 2);
       if (result.isErr()) {
-        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return {
+          content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+          isError: true,
+        };
       }
       const root = result.value.root;
       const isolated = (root.calls?.length ?? 0) === 0 && (root.called_by?.length ?? 0) === 0;
@@ -278,7 +348,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       }
       const result = getTestsFor(store, { symbolId: symbol_id, fqn, filePath: file_path });
       if (result.isErr()) {
-        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+        return {
+          content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+          isError: true,
+        };
       }
       if (result.value.total === 0) {
         const stats = store.getStats();
@@ -303,12 +376,20 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       'get_livewire_context',
       'Get full context for a Livewire component: properties, actions, events, view, child components. Use to understand a specific Livewire component before modifying it. Read-only. Returns JSON: { component, properties, actions, events, view, children }.',
       {
-        component_name: z.string().max(256).describe('Livewire component class name or FQN (e.g. UserProfile or App\\Livewire\\UserProfile)'),
+        component_name: z
+          .string()
+          .max(256)
+          .describe(
+            'Livewire component class name or FQN (e.g. UserProfile or App\\Livewire\\UserProfile)',
+          ),
       },
       async ({ component_name }) => {
         const result = getLivewireContext(store, component_name);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: jh('get_livewire_context', result.value) }] };
       },
@@ -318,12 +399,18 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       'get_nova_resource',
       'Get full context for a Laravel Nova resource: model, fields, actions, filters, lenses, metrics. Use to understand a Nova admin resource before modifying it. Read-only. Returns JSON: { resource, model, fields, actions, filters, lenses, metrics }.',
       {
-        resource_name: z.string().max(256).describe('Nova resource class name or FQN (e.g. User or App\\Nova\\User)'),
+        resource_name: z
+          .string()
+          .max(256)
+          .describe('Nova resource class name or FQN (e.g. User or App\\Nova\\User)'),
       },
       async ({ resource_name }) => {
         const result = getNovaResource(store, resource_name);
         if (result.isErr()) {
-          return { content: [{ type: 'text', text: j(formatToolError(result.error)) }], isError: true };
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
         }
         return { content: [{ type: 'text', text: j(result.value) }] };
       },
@@ -340,23 +427,25 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
         const stores = routes.filter((r) => r.method === 'STORE' || r.method === 'SLICE');
         const dispatches = routes.filter((r) => r.method === 'DISPATCH');
         return {
-          content: [{
-            type: 'text',
-            text: j({
-              stores: stores.map((s) => ({
-                type: s.method === 'STORE' ? 'zustand' : 'redux',
-                name: s.uri.replace(/^(zustand|redux):/, ''),
-                handler: s.handler,
-                metadata: s.metadata ? JSON.parse(s.metadata) : null,
-              })),
-              dispatches: dispatches.map((d) => ({
-                action: d.uri.replace(/^action:/, ''),
-                file: d.file_id ? store.getFileById(d.file_id)?.path : null,
-              })),
-              totalStores: stores.length,
-              totalDispatches: dispatches.length,
-            }),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: j({
+                stores: stores.map((s) => ({
+                  type: s.method === 'STORE' ? 'zustand' : 'redux',
+                  name: s.uri.replace(/^(zustand|redux):/, ''),
+                  handler: s.handler,
+                  metadata: s.metadata ? JSON.parse(s.metadata) : null,
+                })),
+                dispatches: dispatches.map((d) => ({
+                  action: d.uri.replace(/^action:/, ''),
+                  file: d.file_id ? store.getFileById(d.file_id)?.path : null,
+                })),
+                totalStores: stores.length,
+                totalDispatches: dispatches.length,
+              }),
+            },
+          ],
         };
       },
     );

@@ -1,27 +1,32 @@
 /**
  * Java Language Plugin — tree-sitter based symbol extraction.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
-import { detectMinJavaVersionFromSource } from './version-features.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
+  extractAnnotations,
+  extractClassFields,
+  extractClassMethods,
+  extractEnumConstants,
+  extractImportEdges,
+  extractInterfaceExtends,
   extractPackageName,
   extractSignature,
-  extractAnnotations,
   extractSuperTypes,
-  extractInterfaceExtends,
-  extractImportEdges,
-  extractClassMethods,
-  extractClassFields,
-  extractEnumConstants,
   getNodeName,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
+import { detectMinJavaVersionFromSource } from './version-features.js';
 
 export class JavaLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
@@ -33,7 +38,10 @@ export class JavaLanguagePlugin implements LanguagePlugin {
   supportedExtensions = ['.java'];
   supportedVersions = ['8', '9', '10', '11', '14', '15', '16', '17', '21', '22', '23'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('java');
       const sourceCode = content.toString('utf-8');
@@ -71,7 +79,12 @@ export class JavaLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private walkTopLevel(root: TSNode, filePath: string, packageName: string | undefined, symbols: RawSymbol[]): void {
+  private walkTopLevel(
+    root: TSNode,
+    filePath: string,
+    packageName: string | undefined,
+    symbols: RawSymbol[],
+  ): void {
     for (const child of root.namedChildren) {
       switch (child.type) {
         case 'class_declaration':
@@ -90,7 +103,12 @@ export class JavaLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private extractClass(node: TSNode, filePath: string, packageName: string | undefined, symbols: RawSymbol[]): void {
+  private extractClass(
+    node: TSNode,
+    filePath: string,
+    packageName: string | undefined,
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) return;
 
@@ -134,7 +152,12 @@ export class JavaLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private extractInterface(node: TSNode, filePath: string, packageName: string | undefined, symbols: RawSymbol[]): void {
+  private extractInterface(
+    node: TSNode,
+    filePath: string,
+    packageName: string | undefined,
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) return;
 
@@ -166,7 +189,12 @@ export class JavaLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private extractEnum(node: TSNode, filePath: string, packageName: string | undefined, symbols: RawSymbol[]): void {
+  private extractEnum(
+    node: TSNode,
+    filePath: string,
+    packageName: string | undefined,
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) return;
 
@@ -192,7 +220,12 @@ export class JavaLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private extractAnnotationType(node: TSNode, filePath: string, packageName: string | undefined, symbols: RawSymbol[]): void {
+  private extractAnnotationType(
+    node: TSNode,
+    filePath: string,
+    packageName: string | undefined,
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) return;
 

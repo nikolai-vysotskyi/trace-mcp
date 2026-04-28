@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
-import { createTestStore } from '../test-utils.js';
+import { beforeEach, describe, expect, test } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { getArtifacts } from '../../src/tools/project/artifacts.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('Context Artifacts', () => {
   let store: Store;
@@ -18,11 +18,14 @@ describe('Context Artifacts', () => {
 
   test('collects ORM model artifacts', () => {
     const fileId = store.insertFile('src/models/User.ts', 'typescript', 'h1', 100);
-    store.insertOrmModel({
-      name: 'User',
-      orm: 'prisma',
-      collectionOrTable: 'users',
-    }, fileId);
+    store.insertOrmModel(
+      {
+        name: 'User',
+        orm: 'prisma',
+        collectionOrTable: 'users',
+      },
+      fileId,
+    );
 
     const result = getArtifacts(store, { category: 'database' });
     expect(result.artifacts.length).toBeGreaterThanOrEqual(1);
@@ -35,10 +38,13 @@ describe('Context Artifacts', () => {
 
   test('collects migration artifacts', () => {
     const fileId = store.insertFile('database/migrations/001.ts', 'typescript', 'h1', 100);
-    store.insertMigration({
-      tableName: 'users',
-      operation: 'create_table',
-    }, fileId);
+    store.insertMigration(
+      {
+        tableName: 'users',
+        operation: 'create_table',
+      },
+      fileId,
+    );
 
     const result = getArtifacts(store, { category: 'database' });
     const migration = result.artifacts.find((a) => a.kind === 'migration');
@@ -49,7 +55,7 @@ describe('Context Artifacts', () => {
   });
 
   test('collects route artifacts', () => {
-    const fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
+    const _fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
     store.insertRoute({
       uri: '/api/users',
       method: 'GET',
@@ -116,9 +122,19 @@ describe('Context Artifacts', () => {
   });
 
   test('text query filters artifacts', () => {
-    const fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
-    store.insertRoute({ uri: '/api/users', method: 'GET', handler: 'UserController@index', filePath: 'src/routes.ts' });
-    store.insertRoute({ uri: '/api/products', method: 'GET', handler: 'ProductController@index', filePath: 'src/routes.ts' });
+    const _fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
+    store.insertRoute({
+      uri: '/api/users',
+      method: 'GET',
+      handler: 'UserController@index',
+      filePath: 'src/routes.ts',
+    });
+    store.insertRoute({
+      uri: '/api/products',
+      method: 'GET',
+      handler: 'ProductController@index',
+      filePath: 'src/routes.ts',
+    });
 
     const result = getArtifacts(store, { category: 'api', query: 'users' });
     expect(result.artifacts.length).toBe(1);
@@ -126,9 +142,14 @@ describe('Context Artifacts', () => {
   });
 
   test('respects limit', () => {
-    const fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
+    const _fileId = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
     for (let i = 0; i < 10; i++) {
-      store.insertRoute({ uri: `/api/r${i}`, method: 'GET', handler: `C@a${i}`, filePath: 'src/routes.ts' });
+      store.insertRoute({
+        uri: `/api/r${i}`,
+        method: 'GET',
+        handler: `C@a${i}`,
+        filePath: 'src/routes.ts',
+      });
     }
 
     const result = getArtifacts(store, { category: 'api', limit: 3 });
@@ -136,15 +157,23 @@ describe('Context Artifacts', () => {
   });
 
   test('category=all collects from all categories', () => {
-    const f1 = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
-    store.insertRoute({ uri: '/api/users', method: 'GET', handler: 'X', filePath: 'src/routes.ts' });
+    const _f1 = store.insertFile('src/routes.ts', 'typescript', 'h1', 100);
+    store.insertRoute({
+      uri: '/api/users',
+      method: 'GET',
+      handler: 'X',
+      filePath: 'src/routes.ts',
+    });
 
     const f2 = store.insertFile('.github/workflows/ci.yml', 'yaml', 'h2', 100);
     store.insertSymbol(f2, {
       symbolId: 'ci.yml::build#function',
       name: 'build',
       kind: 'function',
-      byteStart: 0, byteEnd: 50, lineStart: 1, lineEnd: 5,
+      byteStart: 0,
+      byteEnd: 50,
+      lineStart: 1,
+      lineEnd: 5,
       metadata: { yamlKind: 'job' },
     } as any);
 
@@ -155,9 +184,19 @@ describe('Context Artifacts', () => {
   });
 
   test('does not include event/store routes as API artifacts', () => {
-    const fileId = store.insertFile('src/events.ts', 'typescript', 'h1', 100);
-    store.insertRoute({ uri: 'user.created', method: 'EVENT', handler: 'UserCreated', filePath: 'src/events.ts' });
-    store.insertRoute({ uri: '/api/users', method: 'GET', handler: 'X', filePath: 'src/events.ts' });
+    const _fileId = store.insertFile('src/events.ts', 'typescript', 'h1', 100);
+    store.insertRoute({
+      uri: 'user.created',
+      method: 'EVENT',
+      handler: 'UserCreated',
+      filePath: 'src/events.ts',
+    });
+    store.insertRoute({
+      uri: '/api/users',
+      method: 'GET',
+      handler: 'X',
+      filePath: 'src/events.ts',
+    });
 
     const result = getArtifacts(store, { category: 'api' });
     // Only the GET route, not the EVENT

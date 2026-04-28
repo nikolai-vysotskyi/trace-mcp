@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
+import {
+  detectLayerPreset,
+  getLayerViolations,
+  type LayerDefinition,
+} from '../../src/tools/analysis/layer-violations.js';
 import { createTestStore } from '../test-utils.js';
-import { getLayerViolations, detectLayerPreset, type LayerDefinition } from '../../src/tools/analysis/layer-violations.js';
 
 function insertFile(store: Store, filePath: string): number {
-  return store.insertFile(filePath, 'typescript', 'hash_' + filePath, 100);
+  return store.insertFile(filePath, 'typescript', `hash_${filePath}`, 100);
 }
 
 function insertEdge(store: Store, srcNodeId: number, tgtNodeId: number, edgeType: string): void {
@@ -12,7 +16,11 @@ function insertEdge(store: Store, srcNodeId: number, tgtNodeId: number, edgeType
 }
 
 const LAYERS: LayerDefinition[] = [
-  { name: 'domain', path_prefixes: ['src/domain/'], may_not_import: ['infrastructure', 'presentation'] },
+  {
+    name: 'domain',
+    path_prefixes: ['src/domain/'],
+    may_not_import: ['infrastructure', 'presentation'],
+  },
   { name: 'application', path_prefixes: ['src/application/'], may_not_import: ['infrastructure'] },
   { name: 'infrastructure', path_prefixes: ['src/infrastructure/'], may_not_import: [] },
   { name: 'presentation', path_prefixes: ['src/presentation/'], may_not_import: [] },

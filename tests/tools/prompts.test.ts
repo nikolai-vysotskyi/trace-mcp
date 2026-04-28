@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerPrompts } from '../../src/prompts/index.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
 import type { Store } from '../../src/db/store.js';
 import type { PluginRegistry } from '../../src/plugin-api/registry.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { registerPrompts } from '../../src/prompts/index.js';
 
 // Minimal mock store
 function createMockStore(): Store {
@@ -15,9 +15,15 @@ function createMockStore(): Store {
     getSymbolById: () => null,
     getSymbolByName: () => null,
     getStats: () => ({
-      totalFiles: 0, totalSymbols: 0, totalEdges: 0, totalNodes: 0,
-      totalRoutes: 0, totalComponents: 0, totalMigrations: 0,
-      partialFiles: 0, errorFiles: 0,
+      totalFiles: 0,
+      totalSymbols: 0,
+      totalEdges: 0,
+      totalNodes: 0,
+      totalRoutes: 0,
+      totalComponents: 0,
+      totalMigrations: 0,
+      partialFiles: 0,
+      errorFiles: 0,
     }),
     getAllRoutes: () => [],
     searchSymbols: () => ({ items: [], total: 0 }),
@@ -60,7 +66,7 @@ describe('MCP Prompts', () => {
     server.prompt = ((...args: unknown[]) => {
       const name = args[0] as string;
       registeredPrompts.set(name, args);
-      return origPrompt(...args as Parameters<typeof origPrompt>);
+      return origPrompt(...(args as Parameters<typeof origPrompt>));
     }) as typeof server.prompt;
 
     const store = createMockStore();
@@ -108,7 +114,9 @@ describe('MCP Prompts', () => {
       // The review prompt callback should not analyze more than 5 files
       // We verify by checking the source code — this is a structural test
       const args = registeredPrompts.get('review') as unknown[];
-      const callback = args[3] as Function;
+      const callback = args[3] as (
+        params: unknown,
+      ) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
       // Call with a branch — git will likely fail in test env, which is fine
       const result = await callback({ branch: 'test-branch', base: 'main' });
       expect(result).toHaveProperty('messages');
@@ -119,7 +127,9 @@ describe('MCP Prompts', () => {
 
     it('pre-merge prompt limits blast radius to 5 files', async () => {
       const args = registeredPrompts.get('pre-merge') as unknown[];
-      const callback = args[3] as Function;
+      const callback = args[3] as (
+        params: unknown,
+      ) => Promise<{ messages: { role: string; content: { text: string } }[] }>;
       const result = await callback({ branch: 'test-branch', base: 'main' });
       expect(result).toHaveProperty('messages');
       expect(result.messages[0].content.text).toContain('Pre-Merge Checklist');

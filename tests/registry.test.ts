@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-
-import { resolveRegisteredAncestor, registerProject } from '../src/registry.js';
-import { REGISTRY_PATH, ensureGlobalDirs } from '../src/global.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ensureGlobalDirs, REGISTRY_PATH } from '../src/global.js';
+import { registerProject, resolveRegisteredAncestor } from '../src/registry.js';
 
 let savedRegistry: string | null = null;
 

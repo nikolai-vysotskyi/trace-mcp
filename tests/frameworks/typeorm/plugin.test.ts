@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  TypeORMPlugin,
   extractTypeORMEntity,
+  TypeORMPlugin,
 } from '../../../src/indexer/plugins/integration/orm/typeorm/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -348,7 +348,11 @@ export class UserService {
     });
 
     it('skips non-TypeScript/JavaScript files', () => {
-      const result = plugin.extractNodes('schema.prisma', Buffer.from('model User { id Int }'), 'prisma');
+      const result = plugin.extractNodes(
+        'schema.prisma',
+        Buffer.from('model User { id Int }'),
+        'prisma',
+      );
       expect(result.isOk()).toBe(true);
       const parsed = result._unsafeUnwrap();
       expect(parsed.symbols).toHaveLength(0);

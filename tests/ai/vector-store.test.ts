@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import { BlobVectorStore } from '../../src/ai/vector-store.js';
 import type Database from 'better-sqlite3';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { BlobVectorStore } from '../../src/ai/vector-store.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('BlobVectorStore', () => {
   let db: Database.Database;

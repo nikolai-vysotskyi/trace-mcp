@@ -16,10 +16,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -27,13 +27,12 @@ import { findEnclosingSymbol, lineOfIndex } from '../../_shared/regex-edges.js';
 
 const SUPABASE_PACKAGES = [
   '@supabase/supabase-js',
-  '@supabase/ssr',          // SSR helpers — re-export createClient
+  '@supabase/ssr', // SSR helpers — re-export createClient
   '@supabase/auth-helpers-nextjs',
   '@supabase/auth-helpers-react',
 ];
 
-const SUPABASE_IMPORT_RE =
-  /(?:import|require)\s*(?:\(|{)?\s*.*['"]@supabase\/[\w-]+['"]/;
+const SUPABASE_IMPORT_RE = /(?:import|require)\s*(?:\(|{)?\s*.*['"]@supabase\/[\w-]+['"]/;
 
 const CREATE_CLIENT_RE =
   /\bcreateClient(?:Component(?:Client)?|ServerComponentClient|BrowserClient|ServerClient|RouteHandlerClient)?\s*\(/;
@@ -41,21 +40,16 @@ const CREATE_CLIENT_RE =
 const AUTH_CALL_RE =
   /\.auth\s*\.\s*(?:signUp|signIn(?:WithPassword|WithOAuth|WithOtp|WithIdToken|Anonymously)?|signOut|getUser|getSession|onAuthStateChange|resetPasswordForEmail|updateUser|verifyOtp|refreshSession|setSession|exchangeCodeForSession)\s*\(/;
 
-const FROM_TABLE_RE =
-  /\.from\s*\(\s*['"`]([A-Za-z_][\w.]*)['"`]\s*\)/g;
+const FROM_TABLE_RE = /\.from\s*\(\s*['"`]([A-Za-z_][\w.]*)['"`]\s*\)/g;
 
-const RPC_RE =
-  /\.rpc\s*\(\s*['"`]([A-Za-z_][\w]*)['"`]/g;
+const RPC_RE = /\.rpc\s*\(\s*['"`]([A-Za-z_][\w]*)['"`]/g;
 
-const STORAGE_FROM_RE =
-  /\.storage\s*\.\s*from\s*\(\s*['"`]([A-Za-z_][\w-]*)['"`]\s*\)/g;
+const STORAGE_FROM_RE = /\.storage\s*\.\s*from\s*\(\s*['"`]([A-Za-z_][\w-]*)['"`]\s*\)/g;
 
-const CHANNEL_RE =
-  /\.channel\s*\(\s*['"`]([^'"`]+)['"`]/g;
+const CHANNEL_RE = /\.channel\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
 // Query op methods that can follow `.from('table')` in a chain.
-const QUERY_OP_RE =
-  /\.(select|insert|update|upsert|delete)\s*\(/;
+const QUERY_OP_RE = /\.(select|insert|update|upsert|delete)\s*\(/;
 
 // Storage op methods that can follow `.storage.from('bucket')`.
 const STORAGE_OP_RE =
@@ -66,9 +60,17 @@ const CHAIN_LOOKAHEAD = 400;
 
 type QueryOp = 'select' | 'insert' | 'update' | 'upsert' | 'delete';
 type StorageOp =
-  | 'upload' | 'uploadToSignedUrl' | 'download' | 'remove' | 'list'
-  | 'move' | 'copy' | 'createSignedUrl' | 'createSignedUrls'
-  | 'createSignedUploadUrl' | 'getPublicUrl';
+  | 'upload'
+  | 'uploadToSignedUrl'
+  | 'download'
+  | 'remove'
+  | 'list'
+  | 'move'
+  | 'copy'
+  | 'createSignedUrl'
+  | 'createSignedUrls'
+  | 'createSignedUploadUrl'
+  | 'getPublicUrl';
 
 function findChainedOp<T extends string>(
   source: string,
@@ -124,10 +126,26 @@ export class SupabasePlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'supabase_query', category: 'supabase', description: 'Supabase table query (select/insert/update/delete/upsert)' },
-        { name: 'supabase_rpc', category: 'supabase', description: 'Supabase stored-procedure call' },
-        { name: 'supabase_storage', category: 'supabase', description: 'Supabase storage bucket operation' },
-        { name: 'supabase_realtime', category: 'supabase', description: 'Supabase realtime channel subscription' },
+        {
+          name: 'supabase_query',
+          category: 'supabase',
+          description: 'Supabase table query (select/insert/update/delete/upsert)',
+        },
+        {
+          name: 'supabase_rpc',
+          category: 'supabase',
+          description: 'Supabase stored-procedure call',
+        },
+        {
+          name: 'supabase_storage',
+          category: 'supabase',
+          description: 'Supabase storage bucket operation',
+        },
+        {
+          name: 'supabase_realtime',
+          category: 'supabase',
+          description: 'Supabase realtime channel subscription',
+        },
       ],
     };
   }

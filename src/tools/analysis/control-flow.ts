@@ -5,11 +5,16 @@
  * Returns JSON, Mermaid, or ASCII representation.
  */
 
-import type { Store } from '../../db/store.js';
-import { extractCFG, cfgToMermaid, cfgToAscii, type CFGResult } from '../../indexer/cfg-extractor.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err, notFound, validationError, type TraceMcpResult } from '../../errors.js';
+import type { Store } from '../../db/store.js';
+import { err, notFound, ok, type TraceMcpResult, validationError } from '../../errors.js';
+import {
+  type CFGResult,
+  cfgToAscii,
+  cfgToMermaid,
+  extractCFG,
+} from '../../indexer/cfg-extractor.js';
 
 interface ControlFlowOptions {
   symbolId?: string;
@@ -36,35 +41,45 @@ export function getControlFlow(
   const { symbolId, fqn, format, simplify } = options;
 
   // Find the symbol
-  let symbol: any = null;
-  let file: any = null;
+  type SymbolRow = {
+    id: number;
+    file_id: number;
+    line_start?: number;
+    line_end?: number;
+    fqn?: string | null;
+    name?: string;
+  };
+  type FileRow = { id: number; path: string };
+
+  let symbol: SymbolRow | null = null;
+  let file: FileRow | null = null;
 
   if (symbolId) {
-    symbol = store.getSymbolById?.(symbolId) ?? store.db.prepare(
-      'SELECT * FROM symbols WHERE symbol_id = ?',
-    ).get(symbolId);
+    symbol =
+      (store.getSymbolById?.(Number(symbolId)) as SymbolRow | null) ??
+      (store.db
+        .prepare('SELECT * FROM symbols WHERE symbol_id = ?')
+        .get(symbolId) as SymbolRow | null);
   } else if (fqn) {
-    symbol = store.db.prepare(
-      'SELECT * FROM symbols WHERE fqn = ? OR name = ? LIMIT 1',
-    ).get(fqn, fqn);
+    symbol = store.db
+      .prepare('SELECT * FROM symbols WHERE fqn = ? OR name = ? LIMIT 1')
+      .get(fqn, fqn) as SymbolRow | null;
   }
 
   if (!symbol) {
     return err(notFound(`symbol:${symbolId ?? fqn}`));
   }
 
-  file = store.getFileById?.(symbol.file_id) ?? store.db.prepare(
-    'SELECT * FROM files WHERE id = ?',
-  ).get(symbol.file_id);
+  file =
+    (store.getFileById?.(symbol.file_id) as FileRow | null) ??
+    (store.db.prepare('SELECT * FROM files WHERE id = ?').get(symbol.file_id) as FileRow | null);
 
   if (!file) {
     return err(notFound(`file for symbol`));
   }
 
   // Read the source
-  const absPath = path.isAbsolute(file.path)
-    ? file.path
-    : path.join(projectRoot, file.path);
+  const absPath = path.isAbsolute(file.path) ? file.path : path.join(projectRoot, file.path);
 
   if (!fs.existsSync(absPath)) {
     return err(validationError(`File not on disk: ${file.path}`));
@@ -99,7 +114,7 @@ export function getControlFlow(
   }
 
   return ok({
-    symbol: symbol.fqn ?? symbol.name,
+    symbol: symbol.fqn ?? symbol.name ?? '',
     file: file.path,
     format,
     cfg: output,

@@ -1,4 +1,4 @@
-import http from 'http';
+import http from 'node:http';
 
 const DEFAULT_BASE = 'http://127.0.0.1:3741';
 
@@ -46,7 +46,13 @@ export interface SettingsResponse {
 // ── SSE event types ─────────────────────────────────────────────────
 
 export type SSEEvent =
-  | { type: 'project_status'; project: string; status: string; error?: string; progress?: ProgressSnapshot }
+  | {
+      type: 'project_status';
+      project: string;
+      status: string;
+      error?: string;
+      progress?: ProgressSnapshot;
+    }
   | { type: 'indexing_progress'; project: string; phase: string; current: number; total: number }
   | { type: 'indexing_done'; project: string }
   | { type: 'client_connect'; clientId: string; transport: string; project?: string; name?: string }
@@ -87,12 +93,16 @@ export class DaemonClient {
 
   // DELETE /api/projects?project=<root>
   async removeProject(root: string): Promise<{ status: string; project: string }> {
-    return this.delete<{ status: string; project: string }>(`/api/projects?project=${encodeURIComponent(root)}`);
+    return this.delete<{ status: string; project: string }>(
+      `/api/projects?project=${encodeURIComponent(root)}`,
+    );
   }
 
   // POST /api/projects/reindex?project=<root>
   async reindexProject(root: string): Promise<{ status: string; project: string }> {
-    return this.post<{ status: string; project: string }>(`/api/projects/reindex?project=${encodeURIComponent(root)}`);
+    return this.post<{ status: string; project: string }>(
+      `/api/projects/reindex?project=${encodeURIComponent(root)}`,
+    );
   }
 
   // GET /api/clients
@@ -107,8 +117,13 @@ export class DaemonClient {
   }
 
   // PUT /api/settings
-  async updateSettings(settings: Record<string, unknown>): Promise<{ status: string; settings: Record<string, unknown> }> {
-    return this.put<{ status: string; settings: Record<string, unknown> }>('/api/settings', settings);
+  async updateSettings(
+    settings: Record<string, unknown>,
+  ): Promise<{ status: string; settings: Record<string, unknown> }> {
+    return this.put<{ status: string; settings: Record<string, unknown> }>(
+      '/api/settings',
+      settings,
+    );
   }
 
   // GET /api/events — SSE stream
@@ -128,7 +143,9 @@ export class DaemonClient {
           try {
             const event = JSON.parse(dataLine.slice(6)) as SSEEvent;
             onEvent(event);
-          } catch { /* ignore malformed */ }
+          } catch {
+            /* ignore malformed */
+          }
         }
       });
       res.on('error', (err) => onError?.(err));
@@ -137,7 +154,9 @@ export class DaemonClient {
     req.on('error', (err) => onError?.(err));
 
     // Return unsubscribe function
-    return () => { req.destroy(); };
+    return () => {
+      req.destroy();
+    };
   }
 
   // ── HTTP helpers ────────────────────────────────────────────────────
@@ -163,31 +182,42 @@ export class DaemonClient {
       const url = new URL(path, this.base);
       const payload = body ? JSON.stringify(body) : undefined;
 
-      const req = http.request(url, {
-        method,
-        headers: {
-          ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
+      const req = http.request(
+        url,
+        {
+          method,
+          headers: {
+            ...(payload
+              ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+              : {}),
+          },
+          timeout: 5000,
         },
-        timeout: 5000,
-      }, (res) => {
-        let data = '';
-        res.setEncoding('utf-8');
-        res.on('data', (chunk) => { data += chunk; });
-        res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 400) {
-            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-            return;
-          }
-          try {
-            resolve(JSON.parse(data) as T);
-          } catch {
-            reject(new Error(`Invalid JSON: ${data}`));
-          }
-        });
-      });
+        (res) => {
+          let data = '';
+          res.setEncoding('utf-8');
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+          res.on('end', () => {
+            if (res.statusCode && res.statusCode >= 400) {
+              reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+              return;
+            }
+            try {
+              resolve(JSON.parse(data) as T);
+            } catch {
+              reject(new Error(`Invalid JSON: ${data}`));
+            }
+          });
+        },
+      );
 
       req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
 
       if (payload) req.write(payload);
       req.end();

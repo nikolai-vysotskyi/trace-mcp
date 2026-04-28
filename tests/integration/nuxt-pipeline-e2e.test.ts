@@ -3,15 +3,16 @@
  * Verifies that pages/ files generate routes and server/api/ files
  * generate API routes with correct HTTP methods.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { NuxtPlugin } from '../../src/indexer/plugins/integration/framework/nuxt/index.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
-import { NuxtPlugin } from '../../src/indexer/plugins/integration/framework/nuxt/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('Nuxt file-based routing e2e', () => {
   let store: Store;

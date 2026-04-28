@@ -4,8 +4,9 @@
  * Extracts: labels, procedures, macros, equates, sections, defines.
  * Covers NASM, MASM, GAS, and common assembler dialects.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'assembly',
@@ -26,13 +27,13 @@ const _plugin = createRegexLanguagePlugin({
     // MASM procedure: name PROC
     {
       kind: 'function',
-      pattern: /^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+PROC\b/gmi,
+      pattern: /^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+PROC\b/gim,
       meta: { procedure: true },
     },
     // MASM macro: name MACRO
     {
       kind: 'function',
-      pattern: /^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+MACRO\b/gmi,
+      pattern: /^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+MACRO\b/gim,
       meta: { macro: true },
     },
     // Equate: name EQU value
@@ -43,7 +44,7 @@ const _plugin = createRegexLanguagePlugin({
     // SECTION / .section directive
     {
       kind: 'namespace',
-      pattern: /^\s*(?:SECTION|\.section)\s+\.?(\w+)/gmi,
+      pattern: /^\s*(?:SECTION|\.section)\s+\.?(\w+)/gim,
     },
     // NASM %define
     {

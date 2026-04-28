@@ -1,24 +1,29 @@
 /**
  * C++ Language Plugin — tree-sitter based symbol extraction.
  */
-import { ok, err } from 'neverthrow';
-import type { LanguagePlugin, PluginManifest, FileParseResult, RawSymbol } from '../../../../plugin-api/types.js';
+import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
 import { getParser } from '../../../../parser/tree-sitter.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
 import {
-  type TSNode,
-  makeSymbolId,
-  makeFqn,
-  extractSignature,
-  extractDeclaratorName,
-  extractTemplateParams,
-  extractImportEdges,
   extractClassFields,
+  extractDeclaratorName,
   extractEnumCases,
+  extractImportEdges,
+  extractSignature,
+  extractTemplateParams,
   getNodeName,
   isPureVirtual,
   isVirtual,
+  makeFqn,
+  makeSymbolId,
+  type TSNode,
 } from './helpers.js';
 
 export class CppLanguagePlugin implements LanguagePlugin {
@@ -30,7 +35,10 @@ export class CppLanguagePlugin implements LanguagePlugin {
 
   supportedExtensions = ['.cpp', '.cxx', '.cc', '.hpp', '.hxx', '.hh', '.h++', '.ino', '.pde'];
 
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const parser = await getParser('cpp');
       const sourceCode = content.toString('utf-8');
@@ -66,7 +74,12 @@ export class CppLanguagePlugin implements LanguagePlugin {
    * Recursively walk AST nodes, extracting symbols.
    * namespaceParts tracks the current namespace scope for FQN construction.
    */
-  private walkNodes(nodes: TSNode[], filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private walkNodes(
+    nodes: TSNode[],
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     for (const child of nodes) {
       switch (child.type) {
         case 'namespace_definition':
@@ -107,7 +120,12 @@ export class CppLanguagePlugin implements LanguagePlugin {
     }
   }
 
-  private extractNamespace(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private extractNamespace(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) {
       // Anonymous namespace — still recurse into body
@@ -163,7 +181,11 @@ export class CppLanguagePlugin implements LanguagePlugin {
       if (child.type === 'base_class_clause') {
         for (const baseSpec of child.namedChildren) {
           // base_class_clause contains type_identifier or qualified_identifier children
-          if (baseSpec.type === 'type_identifier' || baseSpec.type === 'qualified_identifier' || baseSpec.type === 'template_type') {
+          if (
+            baseSpec.type === 'type_identifier' ||
+            baseSpec.type === 'qualified_identifier' ||
+            baseSpec.type === 'template_type'
+          ) {
             bases.push(baseSpec.text);
           }
           // Also handle access-specified bases like `public Base`
@@ -210,7 +232,7 @@ export class CppLanguagePlugin implements LanguagePlugin {
     symbols: RawSymbol[],
   ): void {
     let currentAccess: string | undefined;
-    const className = fqnParts[fqnParts.length - 1];
+    const _className = fqnParts[fqnParts.length - 1];
 
     for (const child of body.namedChildren) {
       if (child.type === 'access_specifier') {
@@ -219,18 +241,50 @@ export class CppLanguagePlugin implements LanguagePlugin {
       }
 
       if (child.type === 'function_definition') {
-        this.extractMethodFromBody(child, filePath, fqnParts, parentSymbolId, currentAccess, false, symbols);
+        this.extractMethodFromBody(
+          child,
+          filePath,
+          fqnParts,
+          parentSymbolId,
+          currentAccess,
+          false,
+          symbols,
+        );
       } else if (child.type === 'declaration') {
         // Method declarations (without body) inside class
-        this.extractMethodDeclaration(child, filePath, fqnParts, parentSymbolId, currentAccess, symbols);
+        this.extractMethodDeclaration(
+          child,
+          filePath,
+          fqnParts,
+          parentSymbolId,
+          currentAccess,
+          symbols,
+        );
       } else if (child.type === 'template_declaration') {
         // Template methods inside class
         const inner = this.getTemplateInner(child);
         const tParams = extractTemplateParams(child);
         if (inner?.type === 'function_definition') {
-          this.extractMethodFromBody(inner, filePath, fqnParts, parentSymbolId, currentAccess, false, symbols, tParams);
+          this.extractMethodFromBody(
+            inner,
+            filePath,
+            fqnParts,
+            parentSymbolId,
+            currentAccess,
+            false,
+            symbols,
+            tParams,
+          );
         } else if (inner?.type === 'declaration') {
-          this.extractMethodDeclaration(inner, filePath, fqnParts, parentSymbolId, currentAccess, symbols, tParams);
+          this.extractMethodDeclaration(
+            inner,
+            filePath,
+            fqnParts,
+            parentSymbolId,
+            currentAccess,
+            symbols,
+            tParams,
+          );
         }
       } else if (child.type === 'class_specifier') {
         this.extractClassLike(child, filePath, fqnParts, 'class', undefined, symbols);
@@ -375,14 +429,27 @@ export class CppLanguagePlugin implements LanguagePlugin {
     });
   }
 
-  private extractTemplate(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private extractTemplate(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     const tParams = extractTemplateParams(node);
     const inner = this.getTemplateInner(node);
     if (!inner) return;
 
     switch (inner.type) {
       case 'class_specifier':
-        this.extractClassLike(inner, filePath, namespaceParts, 'class', undefined, symbols, tParams);
+        this.extractClassLike(
+          inner,
+          filePath,
+          namespaceParts,
+          'class',
+          undefined,
+          symbols,
+          tParams,
+        );
         break;
       case 'struct_specifier':
         this.extractClassLike(inner, filePath, namespaceParts, 'class', 'struct', symbols, tParams);
@@ -497,7 +564,12 @@ export class CppLanguagePlugin implements LanguagePlugin {
     });
   }
 
-  private extractTypedef(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private extractTypedef(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     // typedef ... name;
     const info = extractDeclaratorName(node);
     if (!info) return;
@@ -517,7 +589,12 @@ export class CppLanguagePlugin implements LanguagePlugin {
     });
   }
 
-  private extractMacro(node: TSNode, filePath: string, namespaceParts: string[], symbols: RawSymbol[]): void {
+  private extractMacro(
+    node: TSNode,
+    filePath: string,
+    namespaceParts: string[],
+    symbols: RawSymbol[],
+  ): void {
     const name = getNodeName(node);
     if (!name) return;
 

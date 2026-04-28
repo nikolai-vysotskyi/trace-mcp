@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { getIndexHealth, getProjectMap } from '../../src/tools/project/project.js';
-import { search, getFileOutline } from '../../src/tools/navigation/navigation.js';
-import type { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
+import type { Store } from '../../src/db/store.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { getFileOutline, search } from '../../src/tools/navigation/navigation.js';
+import { getIndexHealth, getProjectMap } from '../../src/tools/project/project.js';
+import { createTestStore } from '../test-utils.js';
 
 function makeConfig(): TraceMcpConfig {
   return {

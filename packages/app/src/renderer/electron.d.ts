@@ -9,14 +9,23 @@ declare global {
       openInIde: (bundlePath: string, filePath: string) => Promise<{ ok: boolean; error?: string }>;
       restartDaemon: () => Promise<{ ok: boolean }>;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
-      configureMcpClient: (clientName: string, level: string) => Promise<{ ok: boolean; error?: string }>;
+      configureMcpClient: (
+        clientName: string,
+        level: string,
+      ) => Promise<{ ok: boolean; error?: string }>;
       openProjectTab: (root: string) => Promise<{ ok: boolean }>;
       closeCurrentTab: () => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
       onTabBarChanged: (callback: (visible: boolean) => void) => () => void;
       syncSidebarWidth: (width: number) => void;
       onSidebarWidthChanged: (callback: (width: number) => void) => () => void;
-      checkForUpdate: () => Promise<{ available: boolean; current?: string; latest?: string; lastChecked?: number; error?: string }>;
+      checkForUpdate: () => Promise<{
+        available: boolean;
+        current?: string;
+        latest?: string;
+        lastChecked?: number;
+        error?: string;
+      }>;
       checkPendingUpdate: () => Promise<{ pending: boolean; version?: string }>;
       applyUpdate: () => Promise<{ ok: boolean; pending?: boolean; error?: string }>;
       restartApp: () => Promise<void>;
@@ -24,9 +33,13 @@ declare global {
       // Tab management (Windows custom tab bar)
       getPlatform: () => Promise<string>;
       focusTab: (tabId: string) => Promise<{ ok: boolean }>;
-      onTabListChanged: (callback: (tabs: { id: string; title: string; type: string; active: boolean }[]) => void) => () => void;
+      onTabListChanged: (
+        callback: (tabs: { id: string; title: string; type: string; active: boolean }[]) => void,
+      ) => () => void;
       ollama: {
-        status: (baseUrl?: string) => Promise<{ running: boolean; version?: string; baseUrl: string; error?: string }>;
+        status: (
+          baseUrl?: string,
+        ) => Promise<{ running: boolean; version?: string; baseUrl: string; error?: string }>;
         listInstalled: (baseUrl?: string) => Promise<{ models: OllamaInstalledModel[] }>;
         listRunning: (baseUrl?: string) => Promise<{ models: OllamaRunningModel[] }>;
         unload: (name: string, baseUrl?: string) => Promise<{ ok: boolean; error?: string }>;

@@ -3,8 +3,9 @@
  *
  * Extracts: functions, commands, autocommands, variables, mappings, and source edges.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'vimscript',
@@ -14,7 +15,11 @@ const _plugin = createRegexLanguagePlugin({
     // function[!] Name(...) or function[!] s:name(...)
     { kind: 'function', pattern: /^\s*fun(?:ction)?!?\s+([\w:#]+)\s*\(/gm },
     // command[!] [-flags] Name
-    { kind: 'function', pattern: /^\s*com(?:mand)?!?\s+(?:-\w+\s+)*(\w+)/gm, meta: { command: true } },
+    {
+      kind: 'function',
+      pattern: /^\s*com(?:mand)?!?\s+(?:-\w+\s+)*(\w+)/gm,
+      meta: { command: true },
+    },
     // let g:name / let s:name / let b:name / let name
     { kind: 'variable', pattern: /^\s*let\s+([gsbwtl]:\w+|\w+)\s*=/gm },
     // augroup Name

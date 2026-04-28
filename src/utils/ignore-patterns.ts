@@ -46,12 +46,11 @@ export function parseIgnorePattern(line: string): IgnoreRule | null {
           regex += '(?:.+/)?';
           i += 3;
           continue;
-        } else {
-          // ** at end — match everything
-          regex += '.*';
-          i += 2;
-          continue;
         }
+        // ** at end — match everything
+        regex += '.*';
+        i += 2;
+        continue;
       }
       // single * — match anything except /
       regex += '[^/]*';
@@ -68,11 +67,11 @@ export function parseIgnorePattern(line: string): IgnoreRule | null {
 
   // If pattern has no slash, it can match at any depth
   if (!anchored) {
-    regex = '(?:^|.*/)' + regex;
+    regex = `(?:^|.*/)${regex}`;
   } else {
     // Remove leading slash if present (already anchored)
     regex = regex.replace(/^\//, '');
-    regex = '^' + regex;
+    regex = `^${regex}`;
   }
 
   // Match the path itself or anything under it (directory semantics)

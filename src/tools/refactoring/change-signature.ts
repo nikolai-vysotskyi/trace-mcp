@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import type { FileEdit, RefactorResult } from './shared.js';
-import { readLines, writeLines, detectLanguage } from './shared.js';
+import { detectLanguage, readLines, writeLines } from './shared.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -126,7 +126,9 @@ export function changeSignature(
     if (change.remove_param) {
       const idx = newParams.findIndex((p) => p.name === change.remove_param!.name);
       if (idx === -1) {
-        result.warnings.push(`Parameter "${change.remove_param.name}" not found in signature — skipped`);
+        result.warnings.push(
+          `Parameter "${change.remove_param.name}" not found in signature — skipped`,
+        );
       } else {
         newParams.splice(idx, 1);
       }
@@ -135,7 +137,9 @@ export function changeSignature(
     if (change.rename_param) {
       const param = newParams.find((p) => p.name === change.rename_param!.old_name);
       if (!param) {
-        result.warnings.push(`Parameter "${change.rename_param.old_name}" not found in signature — skipped`);
+        result.warnings.push(
+          `Parameter "${change.rename_param.old_name}" not found in signature — skipped`,
+        );
       } else {
         param.name = change.rename_param.new_name;
         param.raw = buildParamText(param.name, param.type, param.default_value, lang);
@@ -164,10 +168,11 @@ export function changeSignature(
 
   // 6. Build new parameter list text
   const newParamText = newParams.map((p) => p.raw).join(', ');
-  const oldParamText = parenResult.content;
+  const _oldParamText = parenResult.content;
 
   // Build the new definition region
-  const newDefRegion = defRegion.slice(0, parenResult.openOffset + 1) +
+  const newDefRegion =
+    defRegion.slice(0, parenResult.openOffset + 1) +
     newParamText +
     defRegion.slice(parenResult.closeOffset);
 
@@ -176,7 +181,10 @@ export function changeSignature(
   result.edits.push({
     file: symbolFile.path,
     original_line: symbol.line_start,
-    original_text: defRegion.split('\n').map((l) => l.trimStart()).join('\n'),
+    original_text: defRegion
+      .split('\n')
+      .map((l) => l.trimStart())
+      .join('\n'),
     new_text: newDefLines.map((l) => l.trimStart()).join('\n'),
   });
 
@@ -219,7 +227,9 @@ export function changeSignature(
  * Extract content between matched parentheses, handling nesting.
  * Returns the content and offsets.
  */
-function extractParenContent(text: string): { content: string; openOffset: number; closeOffset: number } | null {
+function extractParenContent(
+  text: string,
+): { content: string; openOffset: number; closeOffset: number } | null {
   const openIdx = text.indexOf('(');
   if (openIdx === -1) return null;
 
@@ -377,7 +387,12 @@ function findTopLevelChar(text: string, ch: string): number {
   return -1;
 }
 
-function buildParamText(name: string, type?: string, default_value?: string, lang?: string): string {
+function buildParamText(
+  name: string,
+  type?: string,
+  default_value?: string,
+  lang?: string,
+): string {
   if (lang === 'python') {
     let text = name;
     if (type) text += `: ${type}`;
@@ -455,7 +470,8 @@ function updateCallSites(
 
     for (let i = 0; i < lines.length; i++) {
       // Skip the definition line itself
-      if (fileId === symbol.file_id && i === (symbol as any).line_start - 1) continue;
+      if (fileId === symbol.file_id && i === (symbol as { line_start: number }).line_start - 1)
+        continue;
 
       callPattern.lastIndex = 0;
       const match = callPattern.exec(lines[i]);
@@ -485,7 +501,7 @@ function updateCallSites(
         const oldLine = lines[i];
         const before = oldLine.slice(0, callStartCol + 1);
         const after = oldLine.slice(endCol); // endCol points past ')'
-        const newLine = before + newArgText + ')' + after;
+        const newLine = `${before + newArgText})${after}`;
 
         result.edits.push({
           file: file.path,
@@ -498,11 +514,14 @@ function updateCallSites(
       } else {
         // Multi-line: replace from start to end
         const firstLine = lines[i];
-        const newFirstLine = firstLine.slice(0, callStartCol + 1) + newArgText + ')';
+        const newFirstLine = `${firstLine.slice(0, callStartCol + 1) + newArgText})`;
         result.edits.push({
           file: file.path,
           original_line: i + 1,
-          original_text: lines.slice(i, endLine + 1).map((l) => l.trimStart()).join('\n'),
+          original_text: lines
+            .slice(i, endLine + 1)
+            .map((l) => l.trimStart())
+            .join('\n'),
           new_text: newFirstLine.trimStart(),
         });
         // Replace multi-line with single line
@@ -642,7 +661,7 @@ function extractCallArgs(
 
   for (let i = startLine; i < lines.length; i++) {
     const line = lines[i];
-    const startJ = (i === startLine) ? startCol : 0;
+    const startJ = i === startLine ? startCol : 0;
 
     for (let j = startJ; j < line.length; j++) {
       const ch = line[j];

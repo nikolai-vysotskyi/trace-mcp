@@ -25,18 +25,15 @@ export function hybridScore(params: HybridScoreParams): number {
   const id = params.identity ?? 0;
   if (id > 0) {
     return (
-      0.40 * id +
-      0.30 * params.relevance +
+      0.4 * id +
+      0.3 * params.relevance +
       0.15 * params.pagerank +
-      0.10 * params.recency +
+      0.1 * params.recency +
       0.05 * params.typeBonus
     );
   }
   return (
-    0.50 * params.relevance +
-    0.25 * params.pagerank +
-    0.15 * params.recency +
-    0.10 * params.typeBonus
+    0.5 * params.relevance + 0.25 * params.pagerank + 0.15 * params.recency + 0.1 * params.typeBonus
   );
 }
 
@@ -64,11 +61,7 @@ export function getTypeBonus(kind: string): number {
  * Convert an indexed_at timestamp to a 0-1 recency score.
  * Score decays over `maxAgeDays` (default 30).
  */
-export function computeRecency(
-  indexedAt: string,
-  now?: Date,
-  maxAgeDays = 30,
-): number {
+export function computeRecency(indexedAt: string, now?: Date, maxAgeDays = 30): number {
   const d = new Date(indexedAt);
   const ref = now ?? new Date();
   const ageMs = ref.getTime() - d.getTime();

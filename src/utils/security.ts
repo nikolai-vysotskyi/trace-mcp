@@ -1,6 +1,5 @@
 import path from 'node:path';
-import { ok, err, type TraceMcpResult } from '../errors.js';
-import { securityViolation } from '../errors.js';
+import { err, ok, securityViolation, type TraceMcpResult } from '../errors.js';
 
 const DEFAULT_SECRET_PATTERNS = [
   /password/i,
@@ -17,18 +16,37 @@ const DEFAULT_SECRET_PATTERNS = [
 
 const SENSITIVE_FILE_PATTERNS = [
   // Env files (handled specially by env-parser, but still blocked from raw indexing)
-  '.env', '.env.*', '*.env',
+  '.env',
+  '.env.*',
+  '*.env',
   // Certificates & keys
-  '*.pem', '*.key', '*.p12', '*.pfx', '*.crt', '*.cer',
+  '*.pem',
+  '*.key',
+  '*.p12',
+  '*.pfx',
+  '*.crt',
+  '*.cer',
   // Keystores
-  '*.keystore', '*.jks',
+  '*.keystore',
+  '*.jks',
   // Credential files
-  '*.credentials', '*.token', '*.secrets',
-  'credentials.json', 'service-account*.json',
+  '*.credentials',
+  '*.token',
+  '*.secrets',
+  'credentials.json',
+  'service-account*.json',
   // SSH keys
-  'id_rsa', 'id_rsa.*', 'id_ed25519', 'id_ed25519.*', 'id_dsa', 'id_ecdsa',
+  'id_rsa',
+  'id_rsa.*',
+  'id_ed25519',
+  'id_ed25519.*',
+  'id_dsa',
+  'id_ecdsa',
   // Auth / config files with secrets
-  '.htpasswd', '.netrc', '.npmrc', '.pypirc',
+  '.htpasswd',
+  '.netrc',
+  '.npmrc',
+  '.pypirc',
   // Broad wildcard (with doc exemption below)
   '*secret*',
 ];
@@ -36,8 +54,17 @@ const SENSITIVE_FILE_PATTERNS = [
 // Documentation extensions where the broad *secret* glob produces false positives
 // (e.g. docs/secrets-handling.md is documentation, not a credential file).
 const DOC_SAFE_EXTENSIONS = new Set([
-  '.md', '.markdown', '.mdx', '.rst', '.txt',
-  '.adoc', '.asciidoc', '.asc', '.html', '.htm', '.ipynb',
+  '.md',
+  '.markdown',
+  '.mdx',
+  '.rst',
+  '.txt',
+  '.adoc',
+  '.asciidoc',
+  '.asc',
+  '.html',
+  '.htm',
+  '.ipynb',
 ]);
 
 // Patterns exempt from doc-extension files
@@ -72,7 +99,7 @@ function matchGlob(name: string, pattern: string): boolean {
   // id_rsa.* → matches id_rsa.pub, etc.
   if (pattern.endsWith('.*') && !pattern.startsWith('*')) {
     const prefix = pattern.slice(0, -2);
-    if (name === prefix || (name.startsWith(prefix + '.') && name.length > prefix.length + 1)) {
+    if (name === prefix || (name.startsWith(`${prefix}.`) && name.length > prefix.length + 1)) {
       return true;
     }
   }
@@ -104,12 +131,6 @@ const DEFAULT_MAX_FILE_SIZE = 1_048_576; // 1 MB
 
 const ARTISAN_WHITELIST = new Set(['route:list', 'model:show', 'event:list']);
 
-interface SecurityConfig {
-  secretPatterns?: string[];
-  maxFileSizeBytes?: number;
-  rootPath: string;
-}
-
 export function validatePath(filePath: string, rootPath: string): TraceMcpResult<string> {
   const resolved = path.resolve(rootPath, filePath);
   const normalizedRoot = path.resolve(rootPath);
@@ -128,7 +149,11 @@ export function detectSecrets(
   const regexes: RegExp[] = [];
   if (patterns?.length) {
     for (const p of patterns) {
-      try { regexes.push(new RegExp(p, 'i')); } catch { /* skip invalid regex */ }
+      try {
+        regexes.push(new RegExp(p, 'i'));
+      } catch {
+        /* skip invalid regex */
+      }
     }
   } else {
     regexes.push(...DEFAULT_SECRET_PATTERNS);
@@ -144,15 +169,10 @@ export function detectSecrets(
   return { found: matches.length > 0, matches };
 }
 
-export function validateFileSize(
-  sizeBytes: number,
-  maxBytes?: number,
-): TraceMcpResult<void> {
+export function validateFileSize(sizeBytes: number, maxBytes?: number): TraceMcpResult<void> {
   const limit = maxBytes ?? DEFAULT_MAX_FILE_SIZE;
   if (sizeBytes > limit) {
-    return err(
-      securityViolation(`File size ${sizeBytes} exceeds limit ${limit}`),
-    );
+    return err(securityViolation(`File size ${sizeBytes} exceeds limit ${limit}`));
   }
   return ok(undefined);
 }

@@ -110,7 +110,7 @@ export function installWindsurfRules(
   }
 
   if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, WINDSURF_BLOCK + '\n');
+    fs.writeFileSync(filePath, `${WINDSURF_BLOCK}\n`);
     return { target: filePath, action: 'created' };
   }
 
@@ -128,7 +128,7 @@ export function installWindsurfRules(
 
   // Append
   const separator = content.endsWith('\n') ? '\n' : '\n\n';
-  fs.writeFileSync(filePath, content + separator + WINDSURF_BLOCK + '\n');
+  fs.writeFileSync(filePath, `${content + separator + WINDSURF_BLOCK}\n`);
   return { target: filePath, action: 'updated', detail: 'Appended trace-mcp block' };
 }
 

@@ -2,8 +2,8 @@
  * Tests for get_screen_context tool.
  * Uses in-memory store populated via insertRnScreen to avoid full pipeline.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { getScreenContext } from '../../src/tools/framework/screen-context.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -96,7 +96,12 @@ describe('get_screen_context', () => {
   });
 
   it('computes navigatesTo from metadata.navigationCalls', () => {
-    const settingsFileId = store.insertFile('src/screens/SettingsScreen.tsx', 'typescript', 'h3', 100);
+    const settingsFileId = store.insertFile(
+      'src/screens/SettingsScreen.tsx',
+      'typescript',
+      'h3',
+      100,
+    );
 
     store.insertRnScreen(
       { name: 'Settings', componentPath: 'SettingsScreen', navigatorType: 'stack' },
@@ -162,10 +167,7 @@ describe('get_screen_context', () => {
   });
 
   it('returns empty arrays when no navigation data', () => {
-    store.insertRnScreen(
-      { name: 'Profile', componentPath: 'ProfileScreen' },
-      fileId,
-    );
+    store.insertRnScreen({ name: 'Profile', componentPath: 'ProfileScreen' }, fileId);
 
     const result = getScreenContext(store, 'Profile');
     expect(result.isOk()).toBe(true);

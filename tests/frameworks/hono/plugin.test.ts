@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  HonoPlugin,
-  extractHonoRoutes,
   extractHonoMiddleware,
+  extractHonoRoutes,
+  HonoPlugin,
 } from '../../../src/indexer/plugins/integration/framework/hono/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 

@@ -9,7 +9,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, type Stats, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import { TraceignoreMatcher } from '../../utils/traceignore.js';
@@ -56,19 +56,22 @@ interface FallbackSymbol {
 /** Check if the index is usable: has files and was updated recently */
 export function isIndexStale(store: Store, maxAgeMinutes = 60): { stale: boolean; reason: string } {
   try {
-    const row = store.db.prepare(
-      "SELECT COUNT(*) as cnt, MAX(indexed_at) as latest FROM files",
-    ).get() as { cnt: number; latest: string | null };
+    const row = store.db
+      .prepare('SELECT COUNT(*) as cnt, MAX(indexed_at) as latest FROM files')
+      .get() as { cnt: number; latest: string | null };
 
     if (row.cnt === 0) {
       return { stale: true, reason: 'Index is empty — no files have been indexed yet' };
     }
 
     if (row.latest) {
-      const latestDate = new Date(row.latest + 'Z');
+      const latestDate = new Date(`${row.latest}Z`);
       const ageMinutes = (Date.now() - latestDate.getTime()) / 60_000;
       if (ageMinutes > maxAgeMinutes) {
-        return { stale: true, reason: `Index is ${Math.round(ageMinutes)} minutes old (threshold: ${maxAgeMinutes}m)` };
+        return {
+          stale: true,
+          reason: `Index is ${Math.round(ageMinutes)} minutes old (threshold: ${maxAgeMinutes}m)`,
+        };
       }
     }
 
@@ -83,9 +86,15 @@ export function isIndexStale(store: Store, maxAgeMinutes = 60): { stale: boolean
 // ---------------------------------------------------------------------------
 
 const RG_ARGS_BASE = [
-  '--json', '--max-count=200', '--max-filesize=512K',
-  '--glob=!node_modules', '--glob=!vendor', '--glob=!.git',
-  '--glob=!dist', '--glob=!build', '--glob=!*.min.*',
+  '--json',
+  '--max-count=200',
+  '--max-filesize=512K',
+  '--glob=!node_modules',
+  '--glob=!vendor',
+  '--glob=!.git',
+  '--glob=!dist',
+  '--glob=!build',
+  '--glob=!*.min.*',
 ];
 
 function searchWithRipgrep(
@@ -122,9 +131,7 @@ function searchWithRipgrep(
           text: data.lines.text.trimEnd(),
         });
         if (matches.length >= limit) break;
-      } catch {
-        continue;
-      }
+      } catch {}
     }
 
     return matches;
@@ -163,7 +170,7 @@ function manualSearch(
       if (traceignore.isSkippedDir(entry)) continue;
 
       const full = path.join(dir, entry);
-      let stat;
+      let stat: Stats;
       try {
         stat = statSync(full);
       } catch {
@@ -191,9 +198,7 @@ function manualSearch(
               if (matches.length >= limit) return;
             }
           }
-        } catch {
-          continue;
-        }
+        } catch {}
       }
     }
   }
@@ -249,9 +254,15 @@ const SYMBOL_PATTERNS: Record<string, SymbolPattern[]> = {
     { kind: 'trait', pattern: /^\s*(?:pub\s+)?trait\s+(\w+)/gm },
   ],
   java: [
-    { kind: 'class', pattern: /^\s*(?:public|private|protected)?\s*(?:abstract\s+)?class\s+(\w+)/gm },
+    {
+      kind: 'class',
+      pattern: /^\s*(?:public|private|protected)?\s*(?:abstract\s+)?class\s+(\w+)/gm,
+    },
     { kind: 'interface', pattern: /^\s*(?:public\s+)?interface\s+(\w+)/gm },
-    { kind: 'method', pattern: /^\s*(?:public|private|protected)\s+(?:static\s+)?(?:\w+\s+)+(\w+)\s*\(/gm },
+    {
+      kind: 'method',
+      pattern: /^\s*(?:public|private|protected)\s+(?:static\s+)?(?:\w+\s+)+(\w+)\s*\(/gm,
+    },
   ],
   ruby: [
     { kind: 'class', pattern: /^\s*class\s+(\w+)/gm },
@@ -260,16 +271,24 @@ const SYMBOL_PATTERNS: Record<string, SymbolPattern[]> = {
 };
 
 // Alias groups
-SYMBOL_PATTERNS['tsx'] = SYMBOL_PATTERNS['typescript'];
-SYMBOL_PATTERNS['jsx'] = SYMBOL_PATTERNS['javascript'];
-SYMBOL_PATTERNS['kotlin'] = SYMBOL_PATTERNS['java'];
+SYMBOL_PATTERNS.tsx = SYMBOL_PATTERNS.typescript;
+SYMBOL_PATTERNS.jsx = SYMBOL_PATTERNS.javascript;
+SYMBOL_PATTERNS.kotlin = SYMBOL_PATTERNS.java;
 
 function detectLanguage(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   const map: Record<string, string> = {
-    '.ts': 'typescript', '.tsx': 'typescript', '.js': 'javascript', '.jsx': 'javascript',
-    '.py': 'python', '.php': 'php', '.go': 'go', '.rs': 'rust',
-    '.java': 'java', '.kt': 'kotlin', '.rb': 'ruby',
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
+    '.js': 'javascript',
+    '.jsx': 'javascript',
+    '.py': 'python',
+    '.php': 'php',
+    '.go': 'go',
+    '.rs': 'rust',
+    '.java': 'java',
+    '.kt': 'kotlin',
+    '.rb': 'ruby',
   };
   return map[ext] ?? 'typescript';
 }
@@ -338,10 +357,7 @@ export function fallbackSearch(
 /**
  * Fallback outline — extracts symbols from a single file without indexing.
  */
-export function fallbackOutline(
-  projectRoot: string,
-  filePath: string,
-): FallbackOutlineResult {
+export function fallbackOutline(projectRoot: string, filePath: string): FallbackOutlineResult {
   const absPath = path.resolve(projectRoot, filePath);
   const content = readFileSync(absPath, 'utf-8');
   const language = detectLanguage(filePath);

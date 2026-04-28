@@ -11,8 +11,8 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
 
@@ -23,20 +23,23 @@ const IS_WINDOWS = process.platform === 'win32';
 // .cmd shim is what MCP clients spawn, but the actual logic lives in a
 // sibling .ps1 so we can parse JSON/config without bat-script pain.
 interface LauncherArtifact {
-  src: string;   // basename inside hooks/
-  dest: string;  // basename inside $TRACE_MCP_HOME/bin/
+  src: string; // basename inside hooks/
+  dest: string; // basename inside $TRACE_MCP_HOME/bin/
   mode: number;
-  isPrimaryShim: boolean;  // the file MCP clients invoke
+  isPrimaryShim: boolean; // the file MCP clients invoke
 }
 
 const ARTIFACTS: LauncherArtifact[] = IS_WINDOWS
   ? [
-      { src: 'trace-mcp-launcher.cmd', dest: 'trace-mcp.cmd',             mode: 0o755, isPrimaryShim: true  },
-      { src: 'trace-mcp-launcher.ps1', dest: 'trace-mcp-launcher.ps1',    mode: 0o755, isPrimaryShim: false },
+      { src: 'trace-mcp-launcher.cmd', dest: 'trace-mcp.cmd', mode: 0o755, isPrimaryShim: true },
+      {
+        src: 'trace-mcp-launcher.ps1',
+        dest: 'trace-mcp-launcher.ps1',
+        mode: 0o755,
+        isPrimaryShim: false,
+      },
     ]
-  : [
-      { src: 'trace-mcp-launcher.sh',  dest: 'trace-mcp',                  mode: 0o755, isPrimaryShim: true  },
-    ];
+  : [{ src: 'trace-mcp-launcher.sh', dest: 'trace-mcp', mode: 0o755, isPrimaryShim: true }];
 
 export function getLauncherDir(): string {
   const envDir = process.env.TRACE_MCP_HOME?.trim();
@@ -57,8 +60,8 @@ export function getLauncherConfigPath(): string {
 function findLauncherSource(basename: string): string {
   const base = import.meta.dirname ?? '.';
   const candidates = [
-    path.resolve(base, '..', '..', 'hooks', basename),  // dev: src/init → ../../hooks
-    path.resolve(base, '..', 'hooks', basename),         // bundled: dist/ → ../hooks
+    path.resolve(base, '..', '..', 'hooks', basename), // dev: src/init → ../../hooks
+    path.resolve(base, '..', 'hooks', basename), // bundled: dist/ → ../hooks
     path.resolve(process.cwd(), 'hooks', basename),
   ];
   for (const c of candidates) {
@@ -78,7 +81,7 @@ export function readInstalledLauncherVersion(): string | null {
   const versions: string[] = [];
   for (const a of ARTIFACTS) {
     const p = path.join(dir, a.dest);
-    if (!fs.existsSync(p)) return null;  // any missing artifact = "not installed"
+    if (!fs.existsSync(p)) return null; // any missing artifact = "not installed"
     try {
       const fd = fs.openSync(p, 'r');
       try {
@@ -120,7 +123,7 @@ function atomicWrite(filePath: string, content: string, mode: number): void {
  */
 function quoteEnvValue(v: string): string {
   if (v.includes('"')) {
-    throw new Error(`launcher config value contains unsupported character \": ${v}`);
+    throw new Error(`launcher config value contains unsupported character ": ${v}`);
   }
   return `"${v}"`;
 }
@@ -254,7 +257,9 @@ export function resolveCurrentCliPath(): string {
 /**
  * Convenience: install shim + write config in one call. Used by `trace-mcp init`.
  */
-export function setupLauncher(opts: InstallLauncherOpts & { pkgVersion: string }): InitStepResult[] {
+export function setupLauncher(
+  opts: InstallLauncherOpts & { pkgVersion: string },
+): InitStepResult[] {
   const steps: InitStepResult[] = [];
   steps.push(installLauncher(opts));
 

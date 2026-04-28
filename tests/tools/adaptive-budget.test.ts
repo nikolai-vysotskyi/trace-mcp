@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { computeAdaptiveBudget } from '../../src/scoring/adaptive-budget.js';
 
 describe('Adaptive Token Budget', () => {
@@ -40,10 +40,14 @@ describe('Adaptive Token Budget', () => {
   });
 
   it('respects user-specified budget', () => {
-    const result = computeAdaptiveBudget('get_task_context', {
-      totalCalls: 60,
-      totalRawTokens: 250_000,
-    }, 15000);
+    const result = computeAdaptiveBudget(
+      'get_task_context',
+      {
+        totalCalls: 60,
+        totalRawTokens: 250_000,
+      },
+      15000,
+    );
     expect(result.budget).toBe(15000);
     expect(result.reduced).toBe(false);
     expect(result.reason).toContain('User-specified');

@@ -26,10 +26,7 @@ export function lineOfIndex(source: string, idx: number): number {
  * Find the innermost (smallest line-range) symbol that contains `line`.
  * Useful to attribute a regex match to its enclosing function/variable.
  */
-export function findEnclosingSymbol(
-  symbols: FileSymbol[],
-  line: number,
-): FileSymbol | undefined {
+export function findEnclosingSymbol(symbols: FileSymbol[], line: number): FileSymbol | undefined {
   let best: FileSymbol | undefined;
   let bestSize = Number.POSITIVE_INFINITY;
   for (const s of symbols) {

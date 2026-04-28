@@ -3,11 +3,10 @@
  * machine. Hermes conversations are global (no per-project binding), so the
  * result set is NOT filtered by the current project.
  */
-import { ok, err, type Result } from 'neverthrow';
-
+import { err, ok, type Result } from 'neverthrow';
+import { dbError, type TraceMcpError } from '../../errors.js';
 import { HermesSessionProvider } from '../../session/providers/hermes.js';
 import { getSessionProviderRegistry } from '../../session/providers/registry.js';
-import { dbError, type TraceMcpError } from '../../errors.js';
 
 export interface DiscoveredHermesSession {
   sessionId: string;

@@ -42,15 +42,45 @@ interface LayerViolationResult {
 /** Common layered architecture presets that can be auto-detected. */
 const PRESETS: Record<string, LayerDefinition[]> = {
   'clean-architecture': [
-    { name: 'domain', path_prefixes: ['src/domain/', 'src/entities/', 'app/Domain/'], may_not_import: ['infrastructure', 'presentation', 'application'] },
-    { name: 'application', path_prefixes: ['src/application/', 'src/use-cases/', 'app/Application/', 'src/services/'], may_not_import: ['infrastructure', 'presentation'] },
-    { name: 'infrastructure', path_prefixes: ['src/infrastructure/', 'src/infra/', 'app/Infrastructure/'], may_not_import: ['presentation'] },
-    { name: 'presentation', path_prefixes: ['src/presentation/', 'src/controllers/', 'src/routes/', 'app/Http/', 'src/pages/'], may_not_import: [] },
+    {
+      name: 'domain',
+      path_prefixes: ['src/domain/', 'src/entities/', 'app/Domain/'],
+      may_not_import: ['infrastructure', 'presentation', 'application'],
+    },
+    {
+      name: 'application',
+      path_prefixes: ['src/application/', 'src/use-cases/', 'app/Application/', 'src/services/'],
+      may_not_import: ['infrastructure', 'presentation'],
+    },
+    {
+      name: 'infrastructure',
+      path_prefixes: ['src/infrastructure/', 'src/infra/', 'app/Infrastructure/'],
+      may_not_import: ['presentation'],
+    },
+    {
+      name: 'presentation',
+      path_prefixes: [
+        'src/presentation/',
+        'src/controllers/',
+        'src/routes/',
+        'app/Http/',
+        'src/pages/',
+      ],
+      may_not_import: [],
+    },
   ],
-  'hexagonal': [
-    { name: 'domain', path_prefixes: ['src/domain/', 'src/core/'], may_not_import: ['adapters', 'ports'] },
+  hexagonal: [
+    {
+      name: 'domain',
+      path_prefixes: ['src/domain/', 'src/core/'],
+      may_not_import: ['adapters', 'ports'],
+    },
     { name: 'ports', path_prefixes: ['src/ports/'], may_not_import: ['adapters'] },
-    { name: 'adapters', path_prefixes: ['src/adapters/', 'src/infrastructure/'], may_not_import: [] },
+    {
+      name: 'adapters',
+      path_prefixes: ['src/adapters/', 'src/infrastructure/'],
+      may_not_import: [],
+    },
   ],
 };
 
@@ -71,10 +101,7 @@ function resolveLayer(filePath: string, layers: LayerDefinition[]): string | nul
 // MAIN
 // ════════════════════════════════════════════════════════════════════════
 
-export function getLayerViolations(
-  store: Store,
-  layers: LayerDefinition[],
-): LayerViolationResult {
+export function getLayerViolations(store: Store, layers: LayerDefinition[]): LayerViolationResult {
   const graph = buildFileGraph(store);
   const violations: LayerViolation[] = [];
 
@@ -123,7 +150,9 @@ export function getLayerViolations(
  * Try to detect which preset matches the project structure.
  * Returns the matching preset layers or null.
  */
-export function detectLayerPreset(store: Store): { preset: string; layers: LayerDefinition[] } | null {
+export function detectLayerPreset(
+  store: Store,
+): { preset: string; layers: LayerDefinition[] } | null {
   const allFiles = store.getAllFiles();
   const paths = allFiles.map((f) => f.path);
 

@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { ok } from '../../src/errors.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import type { LanguagePlugin, FrameworkPlugin, ProjectContext, FileParseResult, ResolveContext, RawEdge } from '../../src/plugin-api/types.js';
-import { ok, type TraceMcpResult } from '../../src/errors.js';
+import type {
+  FileParseResult,
+  FrameworkPlugin,
+  LanguagePlugin,
+  ProjectContext,
+} from '../../src/plugin-api/types.js';
 
 function makeLanguagePlugin(name: string, priority: number, extensions: string[]): LanguagePlugin {
   return {
@@ -52,7 +57,9 @@ describe('plugin registry', () => {
 
   it('topological sorts framework plugins by dependencies', () => {
     const registry = new PluginRegistry();
-    registry.registerFrameworkPlugin(makeFrameworkPlugin('inertia', 20, ['laravel', 'vue-framework']));
+    registry.registerFrameworkPlugin(
+      makeFrameworkPlugin('inertia', 20, ['laravel', 'vue-framework']),
+    );
     registry.registerFrameworkPlugin(makeFrameworkPlugin('vue-framework', 10));
     registry.registerFrameworkPlugin(makeFrameworkPlugin('laravel', 0));
 

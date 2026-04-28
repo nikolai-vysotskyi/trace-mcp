@@ -12,19 +12,19 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ok, err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../../errors.js';
+import { parseError } from '../../../../../errors.js';
+import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 import type {
+  EdgeTypeDeclaration,
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawRoute,
-  EdgeTypeDeclaration,
 } from '../../../../../plugin-api/types.js';
-import type { TraceMcpResult } from '../../../../../errors.js';
-import { parseError } from '../../../../../errors.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
-import { getParser } from '../../../../../parser/tree-sitter.js';
 
 /** Default HTTP method when none specified in @app.route(). */
 const DEFAULT_METHODS = ['GET'];
@@ -47,14 +47,18 @@ function hasPythonDep(ctx: ProjectContext, pkg: string): boolean {
     const content = fs.readFileSync(pyprojectPath, 'utf-8');
     const re = new RegExp(`["']${escapeRegExp(pkg)}[>=<\\[!~\\s"']`, 'i');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   try {
     const reqPath = path.join(ctx.rootPath, 'requirements.txt');
     const content = fs.readFileSync(reqPath, 'utf-8');
     const re = new RegExp(`^${escapeRegExp(pkg)}\\b`, 'im');
     if (re.test(content)) return true;
-  } catch { /* not found */ }
+  } catch {
+    /* not found */
+  }
 
   return false;
 }
@@ -75,10 +79,26 @@ export class FlaskPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'flask_route', category: 'flask', description: 'Flask route decorator → handler function' },
-        { name: 'flask_blueprint_mounts', category: 'flask', description: 'app.register_blueprint() mount' },
-        { name: 'flask_before_request', category: 'flask', description: '@app.before_request hook' },
-        { name: 'flask_error_handler', category: 'flask', description: '@app.errorhandler() registration' },
+        {
+          name: 'flask_route',
+          category: 'flask',
+          description: 'Flask route decorator → handler function',
+        },
+        {
+          name: 'flask_blueprint_mounts',
+          category: 'flask',
+          description: 'app.register_blueprint() mount',
+        },
+        {
+          name: 'flask_before_request',
+          category: 'flask',
+          description: '@app.before_request hook',
+        },
+        {
+          name: 'flask_error_handler',
+          category: 'flask',
+          description: '@app.errorhandler() registration',
+        },
       ] satisfies EdgeTypeDeclaration[],
     };
   }
@@ -123,7 +143,9 @@ export class FlaskPlugin implements FrameworkPlugin {
       this.extractBeforeRequestHooks(root, source, filePath, result);
       this.extractErrorHandlers(root, source, filePath, result);
     } catch (e: unknown) {
-      return err(parseError(filePath, `Flask parse error: ${e instanceof Error ? e.message : String(e)}`));
+      return err(
+        parseError(filePath, `Flask parse error: ${e instanceof Error ? e.message : String(e)}`),
+      );
     }
 
     if (result.routes!.length > 0 || result.edges!.length > 0) {
@@ -142,7 +164,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    *   @bp.route('/path')                           → GET
    */
   private extractRoutes(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -150,9 +172,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find(
-        (c: any) => c.type === 'function_definition',
-      );
+      const funcDef = decoratedDef.children.find((c: TSNode) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -160,7 +180,7 @@ export class FlaskPlugin implements FrameworkPlugin {
       for (const child of decoratedDef.children) {
         if (child.type !== 'decorator') continue;
 
-        const callNode = child.children.find((c: any) => c.type === 'call');
+        const callNode = child.children.find((c: TSNode) => c.type === 'call');
         if (!callNode) continue;
 
         const funcRef = callNode.childForFieldName('function');
@@ -208,7 +228,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    * Extract app.register_blueprint(bp, url_prefix='/api') calls.
    */
   private extractBlueprintMounts(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -246,7 +266,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    * Extract @app.before_request / @bp.before_request hooks.
    */
   private extractBeforeRequestHooks(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -254,9 +274,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find(
-        (c: any) => c.type === 'function_definition',
-      );
+      const funcDef = decoratedDef.children.find((c: TSNode) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -265,7 +283,7 @@ export class FlaskPlugin implements FrameworkPlugin {
         if (child.type !== 'decorator') continue;
 
         // @app.before_request is an attribute access, not a call
-        const attrNode = child.children.find((c: any) => c.type === 'attribute');
+        const attrNode = child.children.find((c: TSNode) => c.type === 'attribute');
         if (!attrNode) continue;
 
         const attrName = attrNode.childForFieldName('attribute')?.text;
@@ -288,7 +306,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    * Extract @app.errorhandler(404) / @app.errorhandler(Exception) decorators.
    */
   private extractErrorHandlers(
-    root: any,
+    root: TSNode,
     source: string,
     filePath: string,
     result: FileParseResult,
@@ -296,9 +314,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
     for (const decoratedDef of decoratedDefs) {
-      const funcDef = decoratedDef.children.find(
-        (c: any) => c.type === 'function_definition',
-      );
+      const funcDef = decoratedDef.children.find((c: TSNode) => c.type === 'function_definition');
       if (!funcDef) continue;
 
       const funcName = funcDef.childForFieldName('name')?.text ?? 'unknown';
@@ -306,7 +322,7 @@ export class FlaskPlugin implements FrameworkPlugin {
       for (const child of decoratedDef.children) {
         if (child.type !== 'decorator') continue;
 
-        const callNode = child.children.find((c: any) => c.type === 'call');
+        const callNode = child.children.find((c: TSNode) => c.type === 'call');
         if (!callNode) continue;
 
         const funcRef = callNode.childForFieldName('function');
@@ -333,8 +349,8 @@ export class FlaskPlugin implements FrameworkPlugin {
 
   // ─── Tree-sitter helpers ───────────────────────────────────────────
 
-  private findAllByType(node: any, type: string): any[] {
-    const results: any[] = [];
+  private findAllByType(node: TSNode, type: string): TSNode[] {
+    const results: TSNode[] = [];
     if (node.type === type) results.push(node);
     for (const child of node.children ?? []) {
       results.push(...this.findAllByType(child, type));
@@ -342,7 +358,7 @@ export class FlaskPlugin implements FrameworkPlugin {
     return results;
   }
 
-  private extractFirstStringArg(args: any): string | null {
+  private extractFirstStringArg(args: TSNode): string | null {
     for (const child of args.children ?? []) {
       if (child.type === 'string') {
         return this.unquote(child.text);
@@ -354,15 +370,21 @@ export class FlaskPlugin implements FrameworkPlugin {
     return null;
   }
 
-  private getFirstArgText(args: any): string | null {
+  private getFirstArgText(args: TSNode): string | null {
     for (const child of args.children ?? []) {
-      if (child.type === 'keyword_argument' || child.type === '(' || child.type === ')' || child.type === ',') continue;
+      if (
+        child.type === 'keyword_argument' ||
+        child.type === '(' ||
+        child.type === ')' ||
+        child.type === ','
+      )
+        continue;
       return child.text;
     }
     return null;
   }
 
-  private extractKeywordArg(args: any, name: string): string | null {
+  private extractKeywordArg(args: TSNode, name: string): string | null {
     for (const child of args.children ?? []) {
       if (child.type !== 'keyword_argument') continue;
       const key = child.childForFieldName('name')?.text;
@@ -379,7 +401,7 @@ export class FlaskPlugin implements FrameworkPlugin {
    * Extract methods=['GET', 'POST'] keyword argument.
    * Returns an array of method strings, or null if not found.
    */
-  private extractMethodsArg(args: any): string[] | null {
+  private extractMethodsArg(args: TSNode): string[] | null {
     for (const child of args.children ?? []) {
       if (child.type !== 'keyword_argument') continue;
       const key = child.childForFieldName('name')?.text;

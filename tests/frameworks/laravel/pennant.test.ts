@@ -3,15 +3,16 @@
  * Covers: Feature::define(), Feature::active/when/value/for(),
  * #[FeatureGate] attribute, @feature Blade directive, route middleware.
  */
-import { describe, it, expect } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  extractFeatureDefinitions,
-  extractFeatureUsages,
-  extractFeatureBladeUsages,
-  extractFeatureMiddlewareUsages,
   buildPennantEdges,
+  extractFeatureBladeUsages,
+  extractFeatureDefinitions,
+  extractFeatureMiddlewareUsages,
+  extractFeatureUsages,
 } from '../../../src/indexer/plugins/integration/framework/laravel/pennant.js';
 
 const FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');

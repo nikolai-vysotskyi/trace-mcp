@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  GraphQLPlugin,
   GraphQLLanguagePlugin,
+  GraphQLPlugin,
 } from '../../../src/indexer/plugins/integration/api/graphql/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
@@ -224,9 +224,7 @@ const resolvers = {
       const result = plugin.extractNodes('resolvers.ts', Buffer.from(source), 'typescript');
       const data = result._unsafeUnwrap();
 
-      const usersResolver = data.symbols.find(
-        (s) => s.name === 'users' && s.kind === 'function',
-      );
+      const usersResolver = data.symbols.find((s) => s.name === 'users' && s.kind === 'function');
       expect(usersResolver).toBeDefined();
       expect(usersResolver!.fqn).toBe('Query.users');
     });
@@ -235,9 +233,7 @@ const resolvers = {
       const result = plugin.extractNodes('resolvers.ts', Buffer.from(source), 'typescript');
       const data = result._unsafeUnwrap();
 
-      const usersResolver = data.symbols.find(
-        (s) => s.name === 'users' && s.kind === 'function',
-      );
+      const usersResolver = data.symbols.find((s) => s.name === 'users' && s.kind === 'function');
       expect(usersResolver).toBeDefined();
       expect((usersResolver!.metadata as any).resolverType).toBe('Query');
       expect((usersResolver!.metadata as any).resolverField).toBe('users');

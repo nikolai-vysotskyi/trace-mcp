@@ -2,16 +2,17 @@
  * Integration: Mongoose and Sequelize ORM plugins through full pipeline.
  * Verifies model extraction, association storage, and graph edge creation.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
-import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { MongoosePlugin } from '../../src/indexer/plugins/integration/orm/mongoose/index.js';
 import { SequelizePlugin } from '../../src/indexer/plugins/integration/orm/sequelize/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { getSchema } from '../../src/tools/framework/schema.js';
+import { createTestStore } from '../test-utils.js';
 
 describe('Mongoose ORM e2e', () => {
   let store: Store;

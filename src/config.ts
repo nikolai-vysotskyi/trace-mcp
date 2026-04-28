@@ -1,147 +1,221 @@
+import fs from 'node:fs';
 import { cosmiconfig } from 'cosmiconfig';
 import { z } from 'zod';
-import fs from 'node:fs';
-import { ok, err, type TraceMcpResult } from './errors.js';
-import { configError } from './errors.js';
-import { logger } from './logger.js';
+import { configError, err, ok, type TraceMcpResult } from './errors.js';
 import { GLOBAL_CONFIG_PATH, stripJsonComments } from './global.js';
+import { logger } from './logger.js';
 
-const SecurityConfigSchema = z.object({
-  secret_patterns: z.array(z.string()).optional(),
-  max_file_size_bytes: z.number().positive().optional(),
-  max_files: z.number().positive().optional(),
-}).optional();
+const SecurityConfigSchema = z
+  .object({
+    secret_patterns: z.array(z.string()).optional(),
+    max_file_size_bytes: z.number().positive().optional(),
+    max_files: z.number().positive().optional(),
+  })
+  .optional();
 
-const ArtisanConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  timeout: z.number().positive().default(10000),
-}).optional();
+const ArtisanConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    timeout: z.number().positive().default(10000),
+  })
+  .optional();
 
-const FrameworkConfigSchema = z.object({
-  laravel: z.object({
-    artisan: ArtisanConfigSchema,
-    graceful_degradation: z.boolean().default(true),
-  }).optional(),
-}).optional();
+const FrameworkConfigSchema = z
+  .object({
+    laravel: z
+      .object({
+        artisan: ArtisanConfigSchema,
+        graceful_degradation: z.boolean().default(true),
+      })
+      .optional(),
+  })
+  .optional();
 
-const AiConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  provider: z.enum(['onnx', 'ollama', 'openai', 'anthropic', 'lmstudio', 'gemini', 'vertex', 'voyage', 'mistral', 'deepseek', 'groq', 'together', 'xai']).default('onnx'),
-  /** Per-capability enable flags. Lets users disable inference while keeping embeddings (or vice versa)
-   *  without switching provider. Disabled capabilities return fallback services (empty results). */
-  features: z.object({
-    embedding: z.boolean().default(true),
-    inference: z.boolean().default(true),
-    fast_inference: z.boolean().default(true),
-  }).prefault({}),
-  base_url: z.string().optional(),
-  api_key: z.string().optional(),
-  inference_model: z.string().optional(),
-  fast_model: z.string().optional(),
-  embedding_model: z.string().optional(),
-  embedding_dimensions: z.number().optional(),
-  summarize_on_index: z.boolean().default(false),
-  summarize_batch_size: z.number().positive().default(20),
-  summarize_kinds: z.array(z.string()).default([
-    'class', 'function', 'method', 'interface', 'trait', 'enum', 'type',
-  ]),
-  /** Max parallel requests to the AI provider (embedding + inference).
-   *  Ollama-side: set OLLAMA_NUM_PARALLEL env var to match this value.
-   *  On macOS desktop app: `launchctl setenv OLLAMA_NUM_PARALLEL <N>` + restart app.
-   *  Or run from terminal: `OLLAMA_NUM_PARALLEL=<N> ollama serve`. */
-  concurrency: z.number().int().min(1).max(32).default(1),
-  reranker_model: z.string().optional(),
-  /** Vertex AI: GCP project ID hosting the models. */
-  vertex_project: z.string().optional(),
-  /** Vertex AI: GCP region routing requests (e.g. us-central1, europe-west4). */
-  vertex_location: z.string().optional(),
-}).optional();
+const AiConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    provider: z
+      .enum([
+        'onnx',
+        'ollama',
+        'openai',
+        'anthropic',
+        'lmstudio',
+        'gemini',
+        'vertex',
+        'voyage',
+        'mistral',
+        'deepseek',
+        'groq',
+        'together',
+        'xai',
+      ])
+      .default('onnx'),
+    /** Per-capability enable flags. Lets users disable inference while keeping embeddings (or vice versa)
+     *  without switching provider. Disabled capabilities return fallback services (empty results). */
+    features: z
+      .object({
+        embedding: z.boolean().default(true),
+        inference: z.boolean().default(true),
+        fast_inference: z.boolean().default(true),
+      })
+      .prefault({}),
+    base_url: z.string().optional(),
+    api_key: z.string().optional(),
+    inference_model: z.string().optional(),
+    fast_model: z.string().optional(),
+    embedding_model: z.string().optional(),
+    embedding_dimensions: z.number().optional(),
+    summarize_on_index: z.boolean().default(false),
+    summarize_batch_size: z.number().positive().default(20),
+    summarize_kinds: z
+      .array(z.string())
+      .default(['class', 'function', 'method', 'interface', 'trait', 'enum', 'type']),
+    /** Max parallel requests to the AI provider (embedding + inference).
+     *  Ollama-side: set OLLAMA_NUM_PARALLEL env var to match this value.
+     *  On macOS desktop app: `launchctl setenv OLLAMA_NUM_PARALLEL <N>` + restart app.
+     *  Or run from terminal: `OLLAMA_NUM_PARALLEL=<N> ollama serve`. */
+    concurrency: z.number().int().min(1).max(32).default(1),
+    reranker_model: z.string().optional(),
+    /** Vertex AI: GCP project ID hosting the models. */
+    vertex_project: z.string().optional(),
+    /** Vertex AI: GCP region routing requests (e.g. us-central1, europe-west4). */
+    vertex_location: z.string().optional(),
+  })
+  .optional();
 
-const PredictiveConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  weights: z.object({
-    bug: z.object({
-      churn: z.number().default(0.20),
-      fix_ratio: z.number().default(0.20),
-      complexity: z.number().default(0.20),
-      coupling: z.number().default(0.15),
-      pagerank: z.number().default(0.10),
-      authors: z.number().default(0.15),
-    }).prefault({}),
-    tech_debt: z.object({
-      complexity: z.number().default(0.30),
-      coupling: z.number().default(0.25),
-      test_gap: z.number().default(0.25),
-      churn: z.number().default(0.20),
-    }).prefault({}),
-    change_risk: z.object({
-      blast_radius: z.number().default(0.25),
-      complexity: z.number().default(0.20),
-      churn: z.number().default(0.20),
-      test_gap: z.number().default(0.20),
-      coupling: z.number().default(0.15),
-    }).prefault({}),
-  }).prefault({}),
-  cache_ttl_minutes: z.number().default(60),
-  git_since_days: z.number().default(180),
-  module_depth: z.number().default(2),
-}).optional();
+const PredictiveConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    weights: z
+      .object({
+        bug: z
+          .object({
+            churn: z.number().default(0.2),
+            fix_ratio: z.number().default(0.2),
+            complexity: z.number().default(0.2),
+            coupling: z.number().default(0.15),
+            pagerank: z.number().default(0.1),
+            authors: z.number().default(0.15),
+          })
+          .prefault({}),
+        tech_debt: z
+          .object({
+            complexity: z.number().default(0.3),
+            coupling: z.number().default(0.25),
+            test_gap: z.number().default(0.25),
+            churn: z.number().default(0.2),
+          })
+          .prefault({}),
+        change_risk: z
+          .object({
+            blast_radius: z.number().default(0.25),
+            complexity: z.number().default(0.2),
+            churn: z.number().default(0.2),
+            test_gap: z.number().default(0.2),
+            coupling: z.number().default(0.15),
+          })
+          .prefault({}),
+      })
+      .prefault({}),
+    cache_ttl_minutes: z.number().default(60),
+    git_since_days: z.number().default(180),
+    module_depth: z.number().default(2),
+  })
+  .optional();
 
-const IntentConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  domain_hints: z.record(z.string(), z.array(z.string())).optional(),
-  custom_domains: z.array(z.object({
-    name: z.string(),
-    parent: z.string().optional(),
-    description: z.string().optional(),
-    path_patterns: z.array(z.string()),
-  })).optional(),
-  auto_classify_on_index: z.boolean().default(true),
-  classify_batch_size: z.number().positive().default(100),
-}).optional();
+const IntentConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    domain_hints: z.record(z.string(), z.array(z.string())).optional(),
+    custom_domains: z
+      .array(
+        z.object({
+          name: z.string(),
+          parent: z.string().optional(),
+          description: z.string().optional(),
+          path_patterns: z.array(z.string()),
+        }),
+      )
+      .optional(),
+    auto_classify_on_index: z.boolean().default(true),
+    classify_batch_size: z.number().positive().default(100),
+  })
+  .optional();
 
-const RuntimeConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  otlp: z.object({
-    port: z.number().int().min(0).max(65535).default(4318),
-    host: z.string().default('127.0.0.1'),
-    max_body_bytes: z.number().positive().default(4 * 1024 * 1024),
-  }).prefault({}),
-  retention: z.object({
-    max_span_age_days: z.number().positive().default(7),
-    max_aggregate_age_days: z.number().positive().default(90),
-    prune_interval: z.number().int().min(0).default(100),
-  }).prefault({}),
-  mapping: z.object({
-    fqn_attributes: z.array(z.string()).default(['code.function', 'code.namespace', 'code.filepath']),
-    route_patterns: z.array(z.string()).default(['^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\s+(.+)$']),
-  }).prefault({}),
-}).optional();
+const RuntimeConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    otlp: z
+      .object({
+        port: z.number().int().min(0).max(65535).default(4318),
+        host: z.string().default('127.0.0.1'),
+        max_body_bytes: z
+          .number()
+          .positive()
+          .default(4 * 1024 * 1024),
+      })
+      .prefault({}),
+    retention: z
+      .object({
+        max_span_age_days: z.number().positive().default(7),
+        max_aggregate_age_days: z.number().positive().default(90),
+        prune_interval: z.number().int().min(0).default(100),
+      })
+      .prefault({}),
+    mapping: z
+      .object({
+        fqn_attributes: z
+          .array(z.string())
+          .default(['code.function', 'code.namespace', 'code.filepath']),
+        route_patterns: z
+          .array(z.string())
+          .default(['^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\s+(.+)$']),
+      })
+      .prefault({}),
+  })
+  .optional();
 
 const ToolDescriptionOverrideSchema = z.union([
-  z.string(),                                // flat: replace entire tool description
-  z.record(z.string(), z.string()),          // nested: _description + per-parameter overrides
+  z.string(), // flat: replace entire tool description
+  z.record(z.string(), z.string()), // nested: _description + per-parameter overrides
 ]);
 
-const ToolsConfigSchema = z.object({
-  preset: z.string().default('full'),
-  include: z.array(z.string()).optional(),
-  exclude: z.array(z.string()).optional(),
-  descriptions: z.record(z.string(), ToolDescriptionOverrideSchema).optional(),
-  /** Global description verbosity: full (default), minimal (first sentence only), none (empty) */
-  description_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
-  /** Server instructions verbosity: full (default ~2K tokens), minimal (~200 tokens), none (empty) */
-  instructions_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
-  /** Agent behavior rules appended to server instructions. strict = full discipline rules (anti-sycophancy, goal-driven execution, 2-strike rule), minimal = anti-fabrication only, off = no behavior rules. Auto-set to "strict" by Max-tier init. */
-  agent_behavior: z.enum(['strict', 'minimal', 'off']).default('off'),
-  /** Control which meta fields appear in responses. true = all (default), false = none, or list specific fields to include */
-  meta_fields: z.union([
-    z.boolean(),
-    z.array(z.enum(['_hints', '_budget_warning', '_budget_level', '_duplicate_warning', '_dedup', '_optimization_hint', '_meta', '_duplication_warnings', '_methodology'])),
-  ]).default(true),
-  /** Strip advanced/optional parameters from tool schemas to reduce token overhead (~40-60% schema size reduction). Only core parameters are exposed; advanced options still work if passed. */
-  compact_schemas: z.boolean().default(false),
-}).optional();
+const ToolsConfigSchema = z
+  .object({
+    preset: z.string().default('full'),
+    include: z.array(z.string()).optional(),
+    exclude: z.array(z.string()).optional(),
+    descriptions: z.record(z.string(), ToolDescriptionOverrideSchema).optional(),
+    /** Global description verbosity: full (default), minimal (first sentence only), none (empty) */
+    description_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
+    /** Server instructions verbosity: full (default ~2K tokens), minimal (~200 tokens), none (empty) */
+    instructions_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
+    /** Agent behavior rules appended to server instructions. strict = full discipline rules (anti-sycophancy, goal-driven execution, 2-strike rule), minimal = anti-fabrication only, off = no behavior rules. Auto-set to "strict" by Max-tier init. */
+    agent_behavior: z.enum(['strict', 'minimal', 'off']).default('off'),
+    /** Control which meta fields appear in responses. true = all (default), false = none, or list specific fields to include */
+    meta_fields: z
+      .union([
+        z.boolean(),
+        z.array(
+          z.enum([
+            '_hints',
+            '_budget_warning',
+            '_budget_level',
+            '_duplicate_warning',
+            '_dedup',
+            '_optimization_hint',
+            '_meta',
+            '_duplication_warnings',
+            '_methodology',
+          ]),
+        ),
+      ])
+      .default(true),
+    /** Strip advanced/optional parameters from tool schemas to reduce token overhead (~40-60% schema size reduction). Only core parameters are exposed; advanced options still work if passed. */
+    compact_schemas: z.boolean().default(false),
+  })
+  .optional();
 
 const QualityGatesRuleSchema = z.object({
   threshold: z.union([z.number(), z.string()]),
@@ -150,27 +224,33 @@ const QualityGatesRuleSchema = z.object({
   message: z.string().optional(),
 });
 
-const QualityGatesConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  fail_on: z.enum(['error', 'warning', 'none']).default('error'),
-  rules: z.object({
-    max_cyclomatic_complexity: QualityGatesRuleSchema.optional(),
-    max_coupling_instability: QualityGatesRuleSchema.optional(),
-    max_circular_import_chains: QualityGatesRuleSchema.optional(),
-    max_dead_exports_percent: QualityGatesRuleSchema.optional(),
-    max_tech_debt_grade: QualityGatesRuleSchema.optional(),
-    max_security_critical_findings: QualityGatesRuleSchema.optional(),
-    max_antipattern_count: QualityGatesRuleSchema.optional(),
-    max_code_smell_count: QualityGatesRuleSchema.optional(),
-  }).prefault({}),
-}).optional();
+const QualityGatesConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    fail_on: z.enum(['error', 'warning', 'none']).default('error'),
+    rules: z
+      .object({
+        max_cyclomatic_complexity: QualityGatesRuleSchema.optional(),
+        max_coupling_instability: QualityGatesRuleSchema.optional(),
+        max_circular_import_chains: QualityGatesRuleSchema.optional(),
+        max_dead_exports_percent: QualityGatesRuleSchema.optional(),
+        max_tech_debt_grade: QualityGatesRuleSchema.optional(),
+        max_security_critical_findings: QualityGatesRuleSchema.optional(),
+        max_antipattern_count: QualityGatesRuleSchema.optional(),
+        max_code_smell_count: QualityGatesRuleSchema.optional(),
+      })
+      .prefault({}),
+  })
+  .optional();
 
-const IgnoreConfigSchema = z.object({
-  /** Extra directory names to skip during indexing (added to built-in list). */
-  directories: z.array(z.string()).default([]),
-  /** Extra gitignore-style patterns to exclude from indexing. */
-  patterns: z.array(z.string()).default([]),
-}).prefault({});
+const IgnoreConfigSchema = z
+  .object({
+    /** Extra directory names to skip during indexing (added to built-in list). */
+    directories: z.array(z.string()).default([]),
+    /** Extra gitignore-style patterns to exclude from indexing. */
+    patterns: z.array(z.string()).default([]),
+  })
+  .prefault({});
 
 const LspServerConfigSchema = z.object({
   command: z.string(),
@@ -180,28 +260,56 @@ const LspServerConfigSchema = z.object({
   timeout_ms: z.number().int().min(1000).max(120000).default(30000),
 });
 
-const LspConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  servers: z.record(z.string(), LspServerConfigSchema).prefault({}),
-  auto_detect: z.boolean().default(true),
-  max_concurrent_servers: z.number().int().min(1).max(4).default(2),
-  enrichment_timeout_ms: z.number().int().min(5000).max(600000).default(120000),
-  batch_size: z.number().int().min(10).max(1000).default(100),
-}).optional();
+const LspConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    servers: z.record(z.string(), LspServerConfigSchema).prefault({}),
+    auto_detect: z.boolean().default(true),
+    max_concurrent_servers: z.number().int().min(1).max(4).default(2),
+    enrichment_timeout_ms: z.number().int().min(5000).max(600000).default(120000),
+    batch_size: z.number().int().min(10).max(1000).default(100),
+  })
+  .optional();
 
-const TopologyConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  repos: z.array(z.string()).default([]),
-  auto_detect: z.boolean().default(true),
-  auto_discover: z.boolean().default(true),
-  contract_globs: z.array(z.string()).optional(),
-}).optional();
+const TopologyConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    repos: z.array(z.string()).default([]),
+    auto_detect: z.boolean().default(true),
+    auto_discover: z.boolean().default(true),
+    contract_globs: z.array(z.string()).optional(),
+  })
+  .optional();
+
+const VaultConfigSchema = z
+  .object({
+    /**
+     * Treat the project (or specific roots) as a markdown knowledge vault
+     * (Obsidian / Logseq / plain MD). Enables wikilink resolution and the
+     * `note` / `section` / `tag` symbol kinds in indexing output.
+     */
+    enabled: z.boolean().default(true),
+    /**
+     * Subdirectories that contain the vault. Defaults to the project root.
+     * Use this when notes live alongside code (e.g. ['docs/vault']).
+     */
+    roots: z.array(z.string()).default([]),
+    /**
+     * Glob patterns the vault scanner picks up beyond the regular `include`
+     * list. Useful when you keep the rest of the include narrow but still
+     * want every `.md` under `roots` indexed.
+     */
+    extra_globs: z.array(z.string()).default(['**/*.md', '**/*.mdx', '**/*.markdown']),
+  })
+  .prefault({});
 
 export const TraceMcpConfigSchema = z.object({
   root: z.string().default('.'),
-  db: z.object({
-    path: z.string().default('.trace-mcp/index.db'),
-  }).prefault({}),
+  db: z
+    .object({
+      path: z.string().default('.trace-mcp/index.db'),
+    })
+    .prefault({}),
   include: z.array(z.string()).default([
     'src/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php,vue,svelte}',
     'lib/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php}',
@@ -224,13 +332,25 @@ export const TraceMcpConfigSchema = z.object({
     'components/**/*.{vue,ts,tsx,js,jsx}',
     'composables/**/*.{ts,tsx,js,jsx}',
     'server/**/*.{ts,tsx,js,jsx}',
+    // Markdown knowledge graph — Obsidian/Logseq/plain MD vaults
+    '**/*.{md,mdx,markdown}',
   ]),
-  exclude: z.array(z.string()).default([
-    '**/vendor/**', '**/node_modules/**', '**/.git/**',
-    '**/dist/**', '**/build/**', '**/out/**',
-    '**/storage/**', '**/bootstrap/cache/**', '**/.nuxt/**', '**/.next/**',
-    '**/.env', '**/.env.*',
-  ]),
+  exclude: z
+    .array(z.string())
+    .default([
+      '**/vendor/**',
+      '**/node_modules/**',
+      '**/.git/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/out/**',
+      '**/storage/**',
+      '**/bootstrap/cache/**',
+      '**/.nuxt/**',
+      '**/.next/**',
+      '**/.env',
+      '**/.env.*',
+    ]),
   ignore: IgnoreConfigSchema,
   frameworks: FrameworkConfigSchema,
   ai: AiConfigSchema,
@@ -241,21 +361,34 @@ export const TraceMcpConfigSchema = z.object({
   runtime: RuntimeConfigSchema,
   lsp: LspConfigSchema,
   topology: TopologyConfigSchema,
+  vault: VaultConfigSchema,
   quality_gates: QualityGatesConfigSchema,
   tools: ToolsConfigSchema,
-  watch: z.object({
-    enabled: z.boolean().default(true),
-    debounceMs: z.number().int().min(500).max(30000).default(2000),
-  }).prefault({}),
-  logging: z.object({
-    file: z.boolean().default(false),
-    path: z.string().default('~/.trace-mcp/run.log'),
-    level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
-    max_size_mb: z.number().positive().max(500).default(10),
-  }).prefault({}),
-  git: z.object({
-    defaultBaseBranch: z.string().max(256).optional().describe('Default base branch for diff tools (e.g. "develop"). Auto-detects main/master if omitted.'),
-  }).prefault({}),
+  watch: z
+    .object({
+      enabled: z.boolean().default(true),
+      debounceMs: z.number().int().min(500).max(30000).default(2000),
+    })
+    .prefault({}),
+  logging: z
+    .object({
+      file: z.boolean().default(false),
+      path: z.string().default('~/.trace-mcp/run.log'),
+      level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+      max_size_mb: z.number().positive().max(500).default(10),
+    })
+    .prefault({}),
+  git: z
+    .object({
+      defaultBaseBranch: z
+        .string()
+        .max(256)
+        .optional()
+        .describe(
+          'Default base branch for diff tools (e.g. "develop"). Auto-detects main/master if omitted.',
+        ),
+    })
+    .prefault({}),
   /**
    * Minutes of stdin silence before the stdio process releases full-mode
    * resources (DB, indexer, watcher). The process itself stays alive and
@@ -303,11 +436,13 @@ export const TraceMcpConfigSchema = z.object({
    * Hermes sessions are global (no per-project binding); mining is gated
    * on the caller supplying a `project_root` — see mineSessions semantics.
    */
-  hermes: z.object({
-    enabled: z.union([z.literal('auto'), z.boolean()]).default('auto'),
-    home_override: z.string().optional(),
-    profile: z.string().optional(),
-  }).prefault({}),
+  hermes: z
+    .object({
+      enabled: z.union([z.literal('auto'), z.boolean()]).default('auto'),
+      home_override: z.string().optional(),
+      profile: z.string().optional(),
+    })
+    .prefault({}),
   children: z.array(z.string()).optional(),
 });
 
@@ -408,7 +543,10 @@ async function loadProjectConfigRaw(searchFrom: string): Promise<Record<string, 
 }
 
 /** Shallow-merge two raw configs: project overrides global per top-level key. */
-function mergeConfigs(global: Record<string, unknown>, project: Record<string, unknown>): Record<string, unknown> {
+function mergeConfigs(
+  global: Record<string, unknown>,
+  project: Record<string, unknown>,
+): Record<string, unknown> {
   const merged = { ...global };
   for (const [key, value] of Object.entries(project)) {
     if (value !== undefined) merged[key] = value;
@@ -429,7 +567,7 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
     let projectSection: Record<string, unknown> = {};
     if (searchFrom) {
       const projects = globalRaw.projects as Record<string, unknown> | undefined;
-      if (projects && projects[searchFrom]) {
+      if (projects?.[searchFrom]) {
         projectSection = projects[searchFrom] as Record<string, unknown>;
       }
     }
@@ -461,7 +599,18 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
 
     // Normalize exclude patterns and ensure essential directories are always excluded.
     const essentialExcludes = ['**/vendor/**', '**/node_modules/**', '**/.git/**'];
-    const deepExcludeDirs = ['vendor', 'node_modules', '.git', 'dist', 'build', 'out', 'storage', 'bootstrap/cache', '.nuxt', '.next'];
+    const deepExcludeDirs = [
+      'vendor',
+      'node_modules',
+      '.git',
+      'dist',
+      'build',
+      'out',
+      'storage',
+      'bootstrap/cache',
+      '.nuxt',
+      '.next',
+    ];
     parsed.data.exclude = parsed.data.exclude.map((pattern) => {
       for (const dir of deepExcludeDirs) {
         if (pattern === `${dir}/**` || pattern === `${dir}`) {
@@ -485,7 +634,8 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
 }
 
 /** Save per-project config section in the global config file (JSONC-safe). */
-export { saveProjectConfigJsonc as saveProjectConfig } from './config-jsonc.js';
-
 /** Remove a per-project config section from the global config file (JSONC-safe). */
-export { removeProjectConfigJsonc as removeProjectConfig } from './config-jsonc.js';
+export {
+  removeProjectConfigJsonc as removeProjectConfig,
+  saveProjectConfigJsonc as saveProjectConfig,
+} from './config-jsonc.js';

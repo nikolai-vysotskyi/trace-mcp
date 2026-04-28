@@ -13,8 +13,9 @@
  * Plugins do far more walking than parsing, so native produced a net
  * regression on this workload (~+30% extract time). Keeping pure WASM.
  */
-import Parser from 'web-tree-sitter';
+
 import { createRequire } from 'node:module';
+import Parser from 'web-tree-sitter';
 
 let initPromise: Promise<void> | null = null;
 const languageCache = new Map<string, Parser.Language>();

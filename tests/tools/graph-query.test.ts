@@ -2,8 +2,8 @@
  * Tests for graphQuery — NL graph queries with intent classification,
  * BFS path finding, subgraph extraction, and Mermaid generation.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Store } from '../../src/db/store.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Store } from '../../src/db/store.js';
 import { graphQuery } from '../../src/tools/analysis/graph-query.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -16,7 +16,7 @@ function addSymbol(
     fqn?: string;
   },
 ): { fileId: number; symbolDbId: number; nodeId: number } {
-  let file = store.getFile(opts.filePath);
+  const file = store.getFile(opts.filePath);
   let fileId: number;
   if (!file) {
     fileId = store.insertFile(opts.filePath, 'typescript', null, null);
@@ -146,8 +146,16 @@ describe('graphQuery: dependents', () => {
 
   it('finds direct dependents via incoming edges', () => {
     const model = addSymbol(store, { filePath: 'src/user.ts', name: 'UserModel', kind: 'class' });
-    const svc = addSymbol(store, { filePath: 'src/user-svc.ts', name: 'UserService', kind: 'class' });
-    const ctrl = addSymbol(store, { filePath: 'src/user-ctrl.ts', name: 'UserController', kind: 'class' });
+    const svc = addSymbol(store, {
+      filePath: 'src/user-svc.ts',
+      name: 'UserService',
+      kind: 'class',
+    });
+    const ctrl = addSymbol(store, {
+      filePath: 'src/user-ctrl.ts',
+      name: 'UserController',
+      kind: 'class',
+    });
 
     store.insertEdge(svc.nodeId, model.nodeId, 'calls');
     store.insertEdge(ctrl.nodeId, model.nodeId, 'calls');
@@ -169,9 +177,21 @@ describe('graphQuery: dependents', () => {
 
   it('follows transitive dependents with depth > 1', () => {
     const model = addSymbol(store, { filePath: 'src/user.ts', name: 'UserModel', kind: 'class' });
-    const svc = addSymbol(store, { filePath: 'src/user-svc.ts', name: 'UserService', kind: 'class' });
-    const ctrl = addSymbol(store, { filePath: 'src/user-ctrl.ts', name: 'UserController', kind: 'class' });
-    const route = addSymbol(store, { filePath: 'src/routes.ts', name: 'UserRoute', kind: 'function' });
+    const svc = addSymbol(store, {
+      filePath: 'src/user-svc.ts',
+      name: 'UserService',
+      kind: 'class',
+    });
+    const ctrl = addSymbol(store, {
+      filePath: 'src/user-ctrl.ts',
+      name: 'UserController',
+      kind: 'class',
+    });
+    const route = addSymbol(store, {
+      filePath: 'src/routes.ts',
+      name: 'UserRoute',
+      kind: 'function',
+    });
 
     store.insertEdge(svc.nodeId, model.nodeId, 'calls');
     store.insertEdge(ctrl.nodeId, svc.nodeId, 'calls');
@@ -209,9 +229,17 @@ describe('graphQuery: dependencies', () => {
   });
 
   it('finds outgoing dependencies', () => {
-    const ctrl = addSymbol(store, { filePath: 'src/ctrl.ts', name: 'UserController', kind: 'class' });
+    const ctrl = addSymbol(store, {
+      filePath: 'src/ctrl.ts',
+      name: 'UserController',
+      kind: 'class',
+    });
     const svc = addSymbol(store, { filePath: 'src/svc.ts', name: 'UserService', kind: 'class' });
-    const repo = addSymbol(store, { filePath: 'src/repo.ts', name: 'UserRepository', kind: 'class' });
+    const repo = addSymbol(store, {
+      filePath: 'src/repo.ts',
+      name: 'UserRepository',
+      kind: 'class',
+    });
 
     store.insertEdge(ctrl.nodeId, svc.nodeId, 'calls');
     store.insertEdge(ctrl.nodeId, repo.nodeId, 'imports');
@@ -238,7 +266,11 @@ describe('graphQuery: path finding', () => {
   });
 
   it('finds shortest path between two connected symbols', () => {
-    const login = addSymbol(store, { filePath: 'src/login.ts', name: 'LoginHandler', kind: 'function' });
+    const login = addSymbol(store, {
+      filePath: 'src/login.ts',
+      name: 'LoginHandler',
+      kind: 'function',
+    });
     const auth = addSymbol(store, { filePath: 'src/auth.ts', name: 'AuthService', kind: 'class' });
     const db = addSymbol(store, { filePath: 'src/db.ts', name: 'Database', kind: 'class' });
 
@@ -307,8 +339,16 @@ describe('graphQuery: flow', () => {
   });
 
   it('collects both callers and callees', () => {
-    const caller = addSymbol(store, { filePath: 'src/caller.ts', name: 'CallerFn', kind: 'function' });
-    const target = addSymbol(store, { filePath: 'src/target.ts', name: 'TargetService', kind: 'class' });
+    const caller = addSymbol(store, {
+      filePath: 'src/caller.ts',
+      name: 'CallerFn',
+      kind: 'function',
+    });
+    const target = addSymbol(store, {
+      filePath: 'src/target.ts',
+      name: 'TargetService',
+      kind: 'class',
+    });
     const dep = addSymbol(store, { filePath: 'src/dep.ts', name: 'DepRepo', kind: 'class' });
 
     store.insertEdge(caller.nodeId, target.nodeId, 'calls');
@@ -397,7 +437,11 @@ describe('graphQuery: depth and node limits', () => {
     // Create a wide graph: root → 10 children
     const root = addSymbol(store, { filePath: 'src/root.ts', name: 'BigRoot', kind: 'class' });
     for (let i = 0; i < 10; i++) {
-      const child = addSymbol(store, { filePath: `src/child${i}.ts`, name: `Child${i}`, kind: 'class' });
+      const child = addSymbol(store, {
+        filePath: `src/child${i}.ts`,
+        name: `Child${i}`,
+        kind: 'class',
+      });
       store.insertEdge(root.nodeId, child.nodeId, 'calls');
     }
 
@@ -475,7 +519,11 @@ describe('graphQuery: symbol resolution', () => {
   });
 
   it('resolves symbols by name via FTS fallback', () => {
-    const sym = addSymbol(store, { filePath: 'src/auth.ts', name: 'AuthenticationService', kind: 'class' });
+    const sym = addSymbol(store, {
+      filePath: 'src/auth.ts',
+      name: 'AuthenticationService',
+      kind: 'class',
+    });
     const dep = addSymbol(store, { filePath: 'src/token.ts', name: 'TokenManager', kind: 'class' });
     store.insertEdge(sym.nodeId, dep.nodeId, 'calls');
 
@@ -556,7 +604,11 @@ describe('graphQuery: no N+1 queries', () => {
   it('handles star graph (one node, many edges) efficiently', () => {
     const hub = addSymbol(store, { filePath: 'src/hub.ts', name: 'Hub', kind: 'class' });
     for (let i = 0; i < 100; i++) {
-      const spoke = addSymbol(store, { filePath: `src/spoke${i}.ts`, name: `Spoke${i}`, kind: 'class' });
+      const spoke = addSymbol(store, {
+        filePath: `src/spoke${i}.ts`,
+        name: `Spoke${i}`,
+        kind: 'class',
+      });
       store.insertEdge(hub.nodeId, spoke.nodeId, 'calls');
     }
 

@@ -4,8 +4,9 @@
  * Extracts: functions, classes, class_name, enums, signals, constants, variables, @export vars.
  * Imports: preload() and load() calls.
  */
-import { createRegexLanguagePlugin } from '../regex-base.js';
+
 import type { LanguagePlugin } from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'gdscript',

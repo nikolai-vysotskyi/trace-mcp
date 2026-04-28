@@ -1,9 +1,9 @@
-import { Command } from 'commander';
-import fs from 'node:fs';
 import { execSync, spawn } from 'node:child_process';
-import { DEFAULT_DAEMON_PORT, DAEMON_LOG_PATH, LAUNCHD_PLIST_PATH } from '../global.js';
+import fs from 'node:fs';
+import { Command } from 'commander';
 import { getDaemonHealth } from '../daemon/client.js';
-import { ensureDaemon, stopDaemon, restartDaemon, waitForDaemonUp } from '../daemon/lifecycle.js';
+import { ensureDaemon, restartDaemon, stopDaemon, waitForDaemonUp } from '../daemon/lifecycle.js';
+import { DAEMON_LOG_PATH, DEFAULT_DAEMON_PORT, LAUNCHD_PLIST_PATH } from '../global.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 
@@ -26,8 +26,9 @@ export async function ensureDaemonRunning(port = DEFAULT_DAEMON_PORT): Promise<b
   return result.ok;
 }
 
-export const daemonCommand = new Command('daemon')
-  .description('Manage the trace-mcp background daemon');
+export const daemonCommand = new Command('daemon').description(
+  'Manage the trace-mcp background daemon',
+);
 
 daemonCommand
   .command('start')
@@ -84,7 +85,9 @@ daemonCommand
     // reachable, not just that launchd accepted the kickstart.
     const up = await waitForDaemonUp(port, 10_000);
     if (!up) {
-      console.error(`Daemon restart issued but /health did not respond on port ${port} within 10s.`);
+      console.error(
+        `Daemon restart issued but /health did not respond on port ${port} within 10s.`,
+      );
       console.error(`Check logs: trace-mcp daemon logs`);
       process.exit(1);
     }

@@ -7,16 +7,17 @@
  * - Route groups (tabs) are stripped from paths
  * - _layout files get expo_layout role, not expo_route
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+
 import path from 'node:path';
-import { createTestStore } from '../test-utils.js';
-import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../src/config.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
-import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { ReactNativePlugin } from '../../src/indexer/plugins/integration/view/react-native/index.js';
+import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { getNavigationGraph } from '../../src/tools/framework/rn-navigation.js';
 import { getScreenContext } from '../../src/tools/framework/screen-context.js';
-import type { TraceMcpConfig } from '../../src/config.js';
+import { createTestStore } from '../test-utils.js';
 
 const FIXTURE = path.resolve(__dirname, '../fixtures/expo-router-3');
 

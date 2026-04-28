@@ -3,12 +3,13 @@
  * Covers: component detection, view resolution, events (dispatch/#[On]),
  * Form objects, wire: directives, and Blade usages.
  */
-import { describe, it, expect } from 'vitest';
+
 import fs from 'node:fs';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
-  extractLivewireComponent,
   extractLivewireBladeUsages,
+  extractLivewireComponent,
   extractWireDirectives,
   isLivewireForm,
   resolveComponentName,
@@ -45,9 +46,7 @@ describe('Livewire v3 — Counter component', () => {
   });
 
   it('computes convention view path', () => {
-    expect(info!.conventionViewPath).toBe(
-      'resources/views/livewire/counter.blade.php',
-    );
+    expect(info!.conventionViewPath).toBe('resources/views/livewire/counter.blade.php');
   });
 
   it('extracts public properties', () => {
@@ -100,9 +99,7 @@ describe('Livewire v3 — OrderForm component', () => {
   });
 
   it('maps dispatch to its method', () => {
-    const orderCreated = info!.dispatches.find(
-      (d) => d.eventName === 'order-created',
-    );
+    const orderCreated = info!.dispatches.find((d) => d.eventName === 'order-created');
     expect(orderCreated?.method).toBe('submit');
   });
 
@@ -119,9 +116,7 @@ describe('Livewire v3 — OrderForm component', () => {
   });
 
   it('extracts Order model property', () => {
-    const modelProps = info!.properties.filter(
-      (p) => p.type && /Models/.test(p.type),
-    );
+    const modelProps = info!.properties.filter((p) => p.type && /Models/.test(p.type));
     expect(modelProps.length).toBeGreaterThan(0);
     const orderProp = modelProps.find((p) => p.name === 'order');
     expect(orderProp).toBeDefined();
@@ -202,17 +197,11 @@ describe('resolveComponentName', () => {
   });
 
   it('resolves v2 kebab-case to App\\Http\\Livewire\\', () => {
-    expect(resolveComponentName('order-list', 2)).toBe(
-      'App\\Http\\Livewire\\OrderList',
-    );
-    expect(resolveComponentName('search-bar', 2)).toBe(
-      'App\\Http\\Livewire\\SearchBar',
-    );
+    expect(resolveComponentName('order-list', 2)).toBe('App\\Http\\Livewire\\OrderList');
+    expect(resolveComponentName('search-bar', 2)).toBe('App\\Http\\Livewire\\SearchBar');
   });
 
   it('handles dot-separated names', () => {
-    expect(resolveComponentName('admin.user-list', 3)).toBe(
-      'App\\Livewire\\AdminUserList',
-    );
+    expect(resolveComponentName('admin.user-list', 3)).toBe('App\\Livewire\\AdminUserList');
   });
 });

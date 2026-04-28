@@ -4,10 +4,10 @@
  */
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
@@ -29,8 +29,10 @@ const CV2_VIDEO_RE = /\bcv2\s*\.\s*VideoCapture\s*\(\s*(?:f|r|b)?["']([^"']+)["'
 const CV2_DNN_RE = /\bcv2\s*\.\s*dnn\s*\.\s*readNet\w*\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
 
 // imageio: imageio.imread('path'), imageio.imwrite('path', img), imageio.mimread(...)
-const IMAGEIO_READ_RE = /\bimageio\s*\.\s*(?:imread|mimread|volread|mvolread)\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
-const IMAGEIO_WRITE_RE = /\bimageio\s*\.\s*(?:imwrite|mimwrite|volwrite|mvolwrite)\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
+const IMAGEIO_READ_RE =
+  /\bimageio\s*\.\s*(?:imread|mimread|volread|mvolread)\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
+const IMAGEIO_WRITE_RE =
+  /\bimageio\s*\.\s*(?:imwrite|mimwrite|volwrite|mvolwrite)\s*\(\s*(?:f|r|b)?["']([^"']+)["']/g;
 
 export class PythonImagingPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
@@ -48,7 +50,11 @@ export class PythonImagingPlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'image_io', category: 'imaging', description: 'Image / video read or write (PIL, OpenCV, imageio)' },
+        {
+          name: 'image_io',
+          category: 'imaging',
+          description: 'Image / video read or write (PIL, OpenCV, imageio)',
+        },
       ],
     };
   }
@@ -64,14 +70,25 @@ export class PythonImagingPlugin implements FrameworkPlugin {
 
     const source = content.toString('utf-8');
     const hasImport = IMPORT_RE.test(source);
-    if (!hasImport && !source.includes('Image.open') && !source.includes('cv2.') && !source.includes('imageio.')) {
+    if (
+      !hasImport &&
+      !source.includes('Image.open') &&
+      !source.includes('cv2.') &&
+      !source.includes('imageio.')
+    ) {
       return ok({ status: 'ok', symbols: [] });
     }
 
     const result: FileParseResult = { status: 'ok', symbols: [], edges: [] };
     const findLine = (idx: number) => source.slice(0, idx).split('\n').length;
 
-    const push = (library: string, direction: 'read' | 'write', target: string, idx: number, extra: Record<string, unknown> = {}) => {
+    const push = (
+      library: string,
+      direction: 'read' | 'write',
+      target: string,
+      idx: number,
+      extra: Record<string, unknown> = {},
+    ) => {
       result.edges!.push({
         edgeType: 'image_io',
         metadata: { library, direction, target, filePath, line: findLine(idx), ...extra },
@@ -86,8 +103,10 @@ export class PythonImagingPlugin implements FrameworkPlugin {
 
     for (const m of source.matchAll(CV2_IMREAD_RE)) push('opencv', 'read', m[1], m.index ?? 0);
     for (const m of source.matchAll(CV2_IMWRITE_RE)) push('opencv', 'write', m[1], m.index ?? 0);
-    for (const m of source.matchAll(CV2_VIDEO_RE)) push('opencv', 'read', m[1], m.index ?? 0, { kind: 'video' });
-    for (const m of source.matchAll(CV2_DNN_RE)) push('opencv', 'read', m[1], m.index ?? 0, { kind: 'dnn_model' });
+    for (const m of source.matchAll(CV2_VIDEO_RE))
+      push('opencv', 'read', m[1], m.index ?? 0, { kind: 'video' });
+    for (const m of source.matchAll(CV2_DNN_RE))
+      push('opencv', 'read', m[1], m.index ?? 0, { kind: 'dnn_model' });
 
     for (const m of source.matchAll(IMAGEIO_READ_RE)) push('imageio', 'read', m[1], m.index ?? 0);
     for (const m of source.matchAll(IMAGEIO_WRITE_RE)) push('imageio', 'write', m[1], m.index ?? 0);

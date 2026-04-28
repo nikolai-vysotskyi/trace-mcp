@@ -36,9 +36,7 @@ export function indexTrigramsBatch(
 ): void {
   if (symbols.length === 0) return;
 
-  const insert = db.prepare(
-    'INSERT INTO symbol_trigrams (symbol_id, trigram) VALUES (?, ?)',
-  );
+  const insert = db.prepare('INSERT INTO symbol_trigrams (symbol_id, trigram) VALUES (?, ?)');
 
   db.transaction(() => {
     for (const sym of symbols) {
@@ -101,14 +99,7 @@ export function fuzzySearch(
     filePattern?: string;
   } = {},
 ): FuzzyMatch[] {
-  const {
-    threshold = 0.3,
-    maxEditDistance = 3,
-    limit = 20,
-    kind,
-    language,
-    filePattern,
-  } = options;
+  const { threshold = 0.3, maxEditDistance = 3, limit = 20, kind, language, filePattern } = options;
 
   const queryTrigrams = generateTrigrams(query);
   if (queryTrigrams.length === 0) return [];
@@ -140,9 +131,7 @@ export function fuzzySearch(
     }
   }
 
-  const whereExtra = filterConditions.length > 0
-    ? 'AND ' + filterConditions.join(' AND ')
-    : '';
+  const whereExtra = filterConditions.length > 0 ? `AND ${filterConditions.join(' AND ')}` : '';
 
   // Fetch candidates with shared trigram count — limits to top 200 by shared count
   const candidateSql = `

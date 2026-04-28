@@ -6,8 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
-import { ok, err, type TraceMcpResult } from '../../errors.js';
-import { notFound } from '../../errors.js';
+import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 import { extractModuleInfo } from '../../indexer/plugins/integration/framework/nestjs/index.js';
 
 interface ModuleGraphNode {
@@ -46,7 +45,9 @@ export function getModuleGraph(
     let source: string;
     try {
       source = fs.readFileSync(path.resolve(rootPath, file.path), 'utf-8');
-    } catch { continue; }
+    } catch {
+      continue;
+    }
 
     const info = extractModuleInfo(source);
     if (!info) continue;
@@ -69,9 +70,14 @@ export function getModuleGraph(
   const rootModule = moduleMap.get(moduleName);
   if (!rootModule) {
     const available = [...moduleMap.keys()];
-    return err(notFound(moduleName, available.length > 0
-      ? [`Available modules: ${available.join(', ')}`]
-      : ['No NestJS modules found']));
+    return err(
+      notFound(
+        moduleName,
+        available.length > 0
+          ? [`Available modules: ${available.join(', ')}`]
+          : ['No NestJS modules found'],
+      ),
+    );
   }
 
   // BFS to collect reachable modules

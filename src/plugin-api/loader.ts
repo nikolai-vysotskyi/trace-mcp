@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { logger } from '../logger.js';
-import type { LanguagePlugin, FrameworkPlugin } from './types.js';
+import type { FrameworkPlugin, LanguagePlugin } from './types.js';
 
 type ExternalPlugin = LanguagePlugin | FrameworkPlugin;
 
@@ -18,9 +18,7 @@ export async function loadExternalPlugins(
 
   for (const pluginPath of pluginPaths) {
     try {
-      const resolved = isRelativePath(pluginPath)
-        ? path.resolve(rootPath, pluginPath)
-        : pluginPath;
+      const resolved = isRelativePath(pluginPath) ? path.resolve(rootPath, pluginPath) : pluginPath;
 
       const mod = await import(resolved);
       const exported = mod.default;
@@ -30,12 +28,13 @@ export async function loadExternalPlugins(
         continue;
       }
 
-      const plugin: ExternalPlugin = typeof exported === 'function'
-        ? exported()
-        : exported;
+      const plugin: ExternalPlugin = typeof exported === 'function' ? exported() : exported;
 
       if (!isValidPlugin(plugin)) {
-        logger.warn({ pluginPath }, 'Plugin does not conform to LanguagePlugin or FrameworkPlugin interface');
+        logger.warn(
+          { pluginPath },
+          'Plugin does not conform to LanguagePlugin or FrameworkPlugin interface',
+        );
         continue;
       }
 

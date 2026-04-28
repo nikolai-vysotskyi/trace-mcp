@@ -6,13 +6,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
 import type {
+  FileParseResult,
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
-  FileParseResult,
-  RawEdge,
-  RawRoute,
   RawComponent,
+  RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
@@ -28,17 +27,16 @@ const SLOT_RE = /<slot(?:\s+name\s*=\s*['"]([^'"]+)['"])?\s*\/?>/g;
 const DISPATCH_RE = /dispatch\s*\(\s*['"]([^'"]+)['"]/g;
 
 // createEventDispatcher usage
-const CREATE_DISPATCHER_RE = /createEventDispatcher\s*(?:<[^>]*>)?\s*\(\s*\)/;
+const _CREATE_DISPATCHER_RE = /createEventDispatcher\s*(?:<[^>]*>)?\s*\(\s*\)/;
 
 // Store subscriptions: $storeName
 const STORE_SUB_RE = /\$(\w+)/g;
 
 // Store creation: writable(...), readable(...), derived(...)
-const STORE_CREATE_RE = /(?:writable|readable|derived)\s*\(/g;
+const _STORE_CREATE_RE = /(?:writable|readable|derived)\s*\(/g;
 
 // Svelte component imports: import Foo from './Foo.svelte'
-const SVELTE_IMPORT_RE =
-  /import\s+(\w+)\s+from\s+['"]([^'"]*\.svelte)['"]/g;
+const SVELTE_IMPORT_RE = /import\s+(\w+)\s+from\s+['"]([^'"]*\.svelte)['"]/g;
 
 // Component usage in template: <ComponentName or <ComponentName>
 const COMPONENT_USAGE_RE = /<([A-Z]\w+)[\s/>]/g;
@@ -48,8 +46,7 @@ const EXPORTED_FN_RE =
   /export\s+(?:const|function|async\s+function)\s+(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|load|actions)\b/g;
 
 // SvelteKit actions: named actions inside export const actions = { default, login, ... }
-const ACTIONS_BLOCK_RE =
-  /export\s+const\s+actions\s*(?::\s*\w+)?\s*=\s*\{([^}]*)\}/;
+const ACTIONS_BLOCK_RE = /export\s+const\s+actions\s*(?::\s*\w+)?\s*=\s*\{([^}]*)\}/;
 const ACTION_NAME_RE = /(\w+)\s*(?::|,|\})/g;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -99,7 +96,9 @@ function componentNameFromPath(filePath: string): string {
 
 // Built-in Svelte store-like globals that should not be treated as user stores
 const BUILTIN_STORE_NAMES = new Set([
-  'page', 'navigating', 'updated', // SvelteKit app stores
+  'page',
+  'navigating',
+  'updated', // SvelteKit app stores
 ]);
 
 // ── Plugin ──────────────────────────────────────────────────────────────────
@@ -139,11 +138,27 @@ export class SveltePlugin implements FrameworkPlugin {
   registerSchema() {
     return {
       edgeTypes: [
-        { name: 'svelte_renders', category: 'svelte', description: 'Parent component renders child component' },
-        { name: 'svelte_dispatches', category: 'svelte', description: 'Component dispatches a custom event' },
-        { name: 'svelte_uses_store', category: 'svelte', description: 'Component subscribes to a Svelte store' },
+        {
+          name: 'svelte_renders',
+          category: 'svelte',
+          description: 'Parent component renders child component',
+        },
+        {
+          name: 'svelte_dispatches',
+          category: 'svelte',
+          description: 'Component dispatches a custom event',
+        },
+        {
+          name: 'svelte_uses_store',
+          category: 'svelte',
+          description: 'Component subscribes to a Svelte store',
+        },
         { name: 'sveltekit_route', category: 'svelte', description: 'SvelteKit route definition' },
-        { name: 'sveltekit_loads', category: 'svelte', description: 'SvelteKit load function data dependency' },
+        {
+          name: 'sveltekit_loads',
+          category: 'svelte',
+          description: 'SvelteKit load function data dependency',
+        },
       ],
     };
   }
@@ -154,7 +169,13 @@ export class SveltePlugin implements FrameworkPlugin {
     language: string,
   ): TraceMcpResult<FileParseResult> {
     const source = content.toString('utf-8');
-    const result: FileParseResult = { status: 'ok', symbols: [], routes: [], components: [], edges: [] };
+    const result: FileParseResult = {
+      status: 'ok',
+      symbols: [],
+      routes: [],
+      components: [],
+      edges: [],
+    };
 
     if (filePath.endsWith('.svelte')) {
       this.extractSvelteComponent(filePath, source, result);
@@ -211,11 +232,7 @@ export class SveltePlugin implements FrameworkPlugin {
 
   // ── Private extraction methods ──────────────────────────────────────────
 
-  private extractSvelteComponent(
-    filePath: string,
-    source: string,
-    result: FileParseResult,
-  ): void {
+  private extractSvelteComponent(filePath: string, source: string, result: FileParseResult): void {
     const scriptContent = extractScriptBlock(source);
     const template = extractTemplate(source);
     const name = componentNameFromPath(filePath);
@@ -256,7 +273,7 @@ export class SveltePlugin implements FrameworkPlugin {
     const composables: string[] = [];
     const storeSeen = new Set<string>();
     const storeRe = new RegExp(STORE_SUB_RE.source, 'g');
-    const combined = scriptContent + '\n' + template;
+    const combined = `${scriptContent}\n${template}`;
     while ((match = storeRe.exec(combined)) !== null) {
       const storeName = match[1];
       // Filter out common non-store $ prefixed items and built-ins
