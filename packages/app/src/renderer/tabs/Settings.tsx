@@ -2394,7 +2394,7 @@ export function Settings() {
         <button
           type="button"
           onClick={() => {
-            const api = (window as any).electronAPI;
+            const api = window.electronAPI;
             if (api?.openInEditor) api.openInEditor(settings.path);
           }}
           style={{

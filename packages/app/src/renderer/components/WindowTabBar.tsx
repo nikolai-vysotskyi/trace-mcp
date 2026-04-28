@@ -20,13 +20,13 @@ export function WindowTabBar() {
   const [platform, setPlatform] = useState<string>('');
 
   useEffect(() => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.getPlatform) return;
     api.getPlatform().then((p: string) => setPlatform(p));
   }, []);
 
   useEffect(() => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.onTabListChanged) return;
     return api.onTabListChanged((newTabs: TabInfo[]) => setTabs(newTabs));
   }, []);
@@ -35,7 +35,7 @@ export function WindowTabBar() {
   if (platform === 'darwin' || tabs.length <= 1) return null;
 
   const handleTabClick = (tabId: string) => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     api?.focusTab(tabId);
   };
 
@@ -44,7 +44,7 @@ export function WindowTabBar() {
     // Closing a non-active tab: just tell main to close that window
     // For simplicity, we only allow closing project tabs (not the menu tab)
     if (tabId === 'menu') return;
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     // Focus the tab first, then close it
     api?.focusTab(tabId).then(() => {
       api?.closeCurrentTab();

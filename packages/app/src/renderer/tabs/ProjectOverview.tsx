@@ -203,7 +203,7 @@ export function ProjectOverview({
   }, [fetchStats, fetchCoverage, fetchServices, fetchSmells, smellsCategory, status]);
 
   const handleAddService = async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.selectFolder) return;
     setAddingService(true);
     try {
@@ -638,7 +638,7 @@ export function ProjectOverview({
                   // biome-ignore lint/suspicious/noArrayIndexKey: composite key (file+line) may collide for multiple smells in the same line; index disambiguates within a stable, sliced 25-item list.
                   key={`${f.file}:${f.line}:${i}`}
                   onClick={() => {
-                    const api = (window as any).electronAPI;
+                    const api = window.electronAPI;
                     if (api?.openInEditor) api.openInEditor(`${root}/${f.file}:${f.line}`);
                   }}
                   className="flex items-start justify-between gap-2 px-3 py-2 w-full text-left hover:brightness-110"

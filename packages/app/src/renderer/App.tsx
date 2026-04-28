@@ -89,7 +89,7 @@ function RecentProjects() {
 
   const openProject = (root: string) => {
     addRecentProject(root);
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     api?.openProjectTab(root);
   };
 
@@ -419,7 +419,7 @@ function SidebarFooter({
     if (onOpenSettingsInPlace) {
       onOpenSettingsInPlace();
     } else {
-      const api = (window as any).electronAPI;
+      const api = window.electronAPI;
       api?.openSettings?.();
     }
   };
@@ -468,13 +468,15 @@ function UpdateBanner() {
   const cancelledRef = useRef(false);
 
   const runCheck = async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.checkForUpdate) return;
     setChecking(true);
     try {
       const [upd, pend] = await Promise.all([
         api.checkForUpdate(),
-        api.checkPendingUpdate ? api.checkPendingUpdate() : Promise.resolve({ pending: false }),
+        api.checkPendingUpdate
+          ? api.checkPendingUpdate()
+          : Promise.resolve<{ pending: boolean; version?: string }>({ pending: false }),
       ]);
       if (cancelledRef.current) return;
       if (upd) setState(upd);
@@ -501,7 +503,7 @@ function UpdateBanner() {
   }, []);
 
   const handleUpdate = async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api) return;
     setUpdating(true);
     setState((s) => ({ ...s, error: undefined }));
@@ -518,7 +520,7 @@ function UpdateBanner() {
   };
 
   const handleRestart = () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     api?.restartApp();
   };
 
@@ -625,7 +627,7 @@ function UpdateBanner() {
 function MenuContent({ tab }: { tab: GlobalTab }) {
   const openProject = (root: string) => {
     addRecentProject(root);
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     api?.openProjectTab(root);
   };
 
@@ -731,7 +733,7 @@ export function App() {
       const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX));
       setSidebarWidth(newWidth);
       // Sync to other tabs
-      const api = (window as any).electronAPI;
+      const api = window.electronAPI;
       api?.syncSidebarWidth(newWidth);
     };
     const onMouseUp = () => {
@@ -750,7 +752,7 @@ export function App() {
 
   // Receive sidebar width from other tabs
   useEffect(() => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (api?.onSidebarWidthChanged) {
       return api.onSidebarWidthChanged((w: number) => setSidebarWidth(w));
     }
@@ -758,7 +760,7 @@ export function App() {
 
   // Track fullscreen state
   useEffect(() => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (api?.onFullscreenChanged) {
       return api.onFullscreenChanged((fs: boolean) => setIsFullscreen(fs));
     }

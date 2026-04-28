@@ -262,7 +262,7 @@ export function useDaemon() {
   const [restarting, setRestarting] = useState(false);
 
   const restartDaemon = useCallback(async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.restartDaemon) return;
 
     setRestarting(true);

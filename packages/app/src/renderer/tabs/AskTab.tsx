@@ -182,7 +182,7 @@ export function AskTab({ root }: { root: string }) {
   }, []);
 
   const openSettings = useCallback(() => {
-    (window as any).electronAPI?.openSettings?.('ai');
+    window.electronAPI?.openSettings?.('ai');
   }, []);
 
   // ── No provider → setup CTA ─────────────────────────────────────

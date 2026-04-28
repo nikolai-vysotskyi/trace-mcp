@@ -47,14 +47,19 @@ When promoting a new rule:
 
 ### Remaining warning burndown
 
-`npm run biome:ci` currently has **0 errors** and a backlog of warnings. Each is left at warn intentionally:
+`npm run biome:ci` exits clean (**0 errors**). The remaining warnings are the
+`noExplicitAny` backlog (~170, scoped to `src/` and `packages/app/` — tests are
+overridden to `off` because mocks and AST fixtures intentionally use `any`).
 
-- **`suspicious/noExplicitAny`** (~917) — incremental typing work. Fix when touching a module; do not block PRs.
-- **`correctness/noUnusedVariables`** (~26) — most are destructured signature placeholders. Prefix with `_` (Biome ignores `_*`) or remove. Promote to error once cleared.
-- **`correctness/useExhaustiveDependencies`** (~17, scoped to renderer) — every fix needs to verify the hook isn't intentionally capturing a stale value. Biome's `--unsafe` autofix removes deps; **do not run it blindly.**
-- **`a11y/useKeyWithClickEvents`, `a11y/noStaticElementInteractions`, `suspicious/noArrayIndexKey`, `a11y/noAutofocus`** (~20 total, scoped to renderer) — UX/accessibility refactors, e.g. converting clickable `<div>` to `<button>` or adding `onKeyDown` for keyboard parity.
+These should be fixed incrementally as files are touched, and require real
+domain types — not blanket replacement with `unknown`:
 
-The current set of error-level rules can be inspected in [biome.jsonc](../biome.jsonc).
+- **Python parsers** (`src/indexer/plugins/integration/{framework/fastapi,framework/flask,orm/sqlalchemy}/index.ts`) — tree-sitter `TSNode` shape varies per language; the existing `any` casts should become discriminated unions over node `type`.
+- **CLI surface** (`src/cli.ts`) — Commander.js untyped `opts` objects; should be replaced with per-command `interface CliOpts`.
+- **Analytics store** (`src/analytics/`) — `better-sqlite3` row callbacks; `Row` types should be defined per query.
+- **Doc/refactoring tools** (`src/tools/{project,refactoring,framework,analysis,quality}/*`) — generic graph visitor patterns; need per-visitor type unions.
+
+Promote `suspicious/noExplicitAny` from warn to error once the backlog is gone.
 
 ## Tests
 
