@@ -20,7 +20,7 @@
     "format:check": "biome format",
     "biome:ci": "biome ci",
     "serve": "tsx src/cli.ts serve",
-    "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && simple-git-hooks",
+    "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs",
     "prepublishOnly": "npm run build",
     "prepare": "simple-git-hooks"
   },
