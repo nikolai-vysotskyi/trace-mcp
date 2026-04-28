@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.32.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.3...v1.32.4) (2026-04-28)
+
+
+### Bug Fixes
+
+* **cli:** import detectGuardHook + detectProject + missing types in init ([e293a78](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e293a780624362909d643029a1448acf49a1353f))
+
 ## [1.32.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.2...v1.32.3) (2026-04-28)
 
 
