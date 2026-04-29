@@ -116,6 +116,38 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
   ],
 };
 
+/**
+ * Tools that should bypass Claude Code's ToolSearch deferral and stay
+ * eagerly loaded even when the rest of trace-mcp's surface is hidden
+ * behind a search step. These get `_meta: { 'anthropic/alwaysLoad': true }`
+ * stamped on them in the tool-gate, per
+ * https://code.claude.com/docs/en/mcp.
+ *
+ * Picked to cover the "first-five-minutes" workflow on a fresh task:
+ * orient (project map / health), find a thing (search), inspect it
+ * (outline, symbol, usages), understand the blast radius (change impact,
+ * call graph), and pull context for the broader task (feature/task
+ * context, context bundle). `batch` is here because it's how an agent
+ * collapses a sequence of these into one round-trip.
+ */
+export const ALWAYS_LOAD_TOOLS: ReadonlySet<string> = new Set([
+  'search',
+  'search_text',
+  'get_outline',
+  'get_symbol',
+  'find_usages',
+  'get_call_graph',
+  'get_change_impact',
+  'get_project_map',
+  'get_index_health',
+  'get_feature_context',
+  'get_task_context',
+  'get_context_bundle',
+  'suggest_queries',
+  'register_edit',
+  'batch',
+]);
+
 /** Resolve a preset by name, returning the tool set or null if unknown. */
 export function resolvePreset(name: string): Set<string> | 'all' | null {
   const preset = TOOL_PRESETS[name];
