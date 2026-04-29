@@ -269,6 +269,42 @@ ipcMain.handle('detect-mcp-clients', async () => {
   return clients;
 });
 
+// IPC: report the per-client config status (missing | up_to_date | stale | ...)
+// produced by the CLI's `clients status --json` command. The renderer uses
+// this to swap "Install" → "Update" when a managed field on disk drifts
+// from what `trace-mcp init` would write today (e.g. an old entry is missing
+// the `alwaysLoad` flag we now write for Claude Code).
+ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global') => {
+  return new Promise<{
+    ok: boolean;
+    error?: string;
+    statuses?: Array<{
+      client: string;
+      configPath: string | null;
+      status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+      staleReason?: string;
+    }>;
+  }>((resolve) => {
+    execFile(
+      'trace-mcp',
+      ['clients', 'status', '--json', '--scope', scope === 'project' ? 'project' : 'global'],
+      { timeout: 15_000, maxBuffer: 1024 * 1024 },
+      (error, stdout) => {
+        if (error) {
+          resolve({ ok: false, error: error.message });
+          return;
+        }
+        try {
+          const parsed = JSON.parse(stdout);
+          resolve({ ok: true, statuses: parsed.statuses ?? [] });
+        } catch (e) {
+          resolve({ ok: false, error: `Failed to parse CLI output: ${(e as Error).message}` });
+        }
+      },
+    );
+  });
+});
+
 // IPC: configure trace-mcp for a specific MCP client
 // level: 'base' (CLAUDE.md only), 'standard' (+ hooks), 'max' (+ hooks + tweakcc)
 ipcMain.handle(
