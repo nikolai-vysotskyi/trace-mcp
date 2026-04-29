@@ -515,7 +515,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         .array(
           z.object({
             tool: z.string().describe('Tool name (e.g., "get_outline", "get_symbol", "search")'),
-            args: z.record(z.unknown()).describe('Tool arguments'),
+            args: z.record(z.string(), z.unknown()).describe('Tool arguments'),
           }),
         )
         .min(1)
