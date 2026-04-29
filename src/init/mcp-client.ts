@@ -61,7 +61,23 @@ interface McpServerEntry {
   args: string[];
   cwd?: string;
   env?: Record<string, string>;
+  /**
+   * Claude Code (and Claw) only: tells the host to skip ToolSearch deferral
+   * and load every tool from this server into context at session start. We
+   * set it during `trace-mcp init` because trace-mcp's value is in being
+   * available from turn one — if our 128-tool surface lands behind a search
+   * step, agents reach for native Bash/Grep before discovering the cheaper
+   * trace-mcp equivalent. Documented at https://code.claude.com/docs/en/mcp
+   * (mcpServers["..."].alwaysLoad).
+   */
+  alwaysLoad?: boolean;
 }
+
+/** Hosts that recognize the `alwaysLoad` flag in mcpServers entries. */
+const ALWAYS_LOAD_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
+  'claude-code',
+  'claw-code',
+]);
 
 /**
  * Build the MCP command entry. All clients use the stable launcher shim at
@@ -325,6 +341,10 @@ export function configureMcpClients(
       entry.cwd = projectRoot;
     }
 
+    if (ALWAYS_LOAD_CLIENTS.has(name)) {
+      entry.alwaysLoad = true;
+    }
+
     // Refresh-in-place: if an existing entry matches what we'd write, report
     // already_configured; otherwise overwrite. This keeps the entry current
     // when node/bin paths change across trace-mcp upgrades without requiring
@@ -392,6 +412,9 @@ function entryMatches(configPath: string, expected: McpServerEntry): boolean {
     if (expected.env || current.env) {
       if (JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})) return false;
     }
+    // alwaysLoad must match — when we expect it set, an older entry without
+    // it is stale and should be refreshed in place (no --force needed).
+    if ((current.alwaysLoad ?? false) !== (expected.alwaysLoad ?? false)) return false;
     return true;
   } catch {
     return false;

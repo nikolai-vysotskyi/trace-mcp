@@ -6,6 +6,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { TraceMcpConfig } from '../config.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
+import { ALWAYS_LOAD_TOOLS } from '../tools/project/presets.js';
 import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
 import { COMPACT_CORE_PARAMS } from './compact-params.js';
 import { markToolConsultation } from './consultation-markers.js';
@@ -282,11 +283,25 @@ export function installToolGate(
       args.splice(lastIdx, 0, annotations);
     }
 
-    return (_originalTool as (...args: unknown[]) => unknown)(...args);
+    const registered = (_originalTool as (...args: unknown[]) => unknown)(...args);
+
+    // Stamp `_meta: { 'anthropic/alwaysLoad': true }` on the small set of
+    // first-five-minutes tools so Claude Code keeps them in the eager
+    // schema even when the user's mcpServers entry doesn't set the
+    // server-wide alwaysLoad flag (e.g. they registered trace-mcp by
+    // hand or via an older `trace-mcp init`).
+    if (ALWAYS_LOAD_TOOLS.has(name) && registered && typeof registered === 'object') {
+      const r = registered as { _meta?: Record<string, unknown> };
+      r._meta = { ...(r._meta ?? {}), 'anthropic/alwaysLoad': true };
+    }
+
+    return registered as ReturnType<typeof server.tool>;
   }) as typeof server.tool;
 
   // Wrap _originalTool so tools registered outside the gate (session meta-tools)
-  // also get annotations injected automatically.
+  // also get annotations injected automatically — and the always-load _meta
+  // stamp, so meta-tools like `batch` (registered through this path) inherit
+  // the same eager-load behaviour as gated tools.
   const annotatedOriginalTool = ((...oArgs: unknown[]) => {
     const oName = oArgs[0] as string;
     const ann = getToolAnnotations(oName);
@@ -294,7 +309,12 @@ export function installToolGate(
     if (typeof oArgs[oLastIdx] === 'function') {
       oArgs.splice(oLastIdx, 0, ann);
     }
-    return (_originalTool as (...args: unknown[]) => unknown)(...oArgs);
+    const registered = (_originalTool as (...args: unknown[]) => unknown)(...oArgs);
+    if (ALWAYS_LOAD_TOOLS.has(oName) && registered && typeof registered === 'object') {
+      const r = registered as { _meta?: Record<string, unknown> };
+      r._meta = { ...(r._meta ?? {}), 'anthropic/alwaysLoad': true };
+    }
+    return registered;
   }) as typeof _originalTool;
 
   return { _originalTool: annotatedOriginalTool, registeredToolNames, toolHandlers };
