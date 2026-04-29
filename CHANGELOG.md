@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.32.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.6...v1.32.7) (2026-04-29)
+
+
+### Features
+
+* **app:** MCP Clients screen — show "Update" when on-disk entry drifted ([eab5423](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eab5423bc932c5b88f3334ef936dd715dae45bec))
+* **init:** generic per-client config status + `trace-mcp clients status` ([ecee7e7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ecee7e7987cf832f5d2a24e502c2622dd29becc2))
+
+
+### Bug Fixes
+
+* **daemon:** keep registered projects on graceful shutdown ([fb40795](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fb40795e9ef15ff016a03847f8ec18d91e61b36c))
+* **landing:** tighten hero, lift red CTA above the fold, move metrics to proof strip ([6255652](https://github.com/nikolai-vysotskyi/trace-mcp/commit/62556521a4a34cbfff6831c376fef7bdaaea8816))
+* **mcp:** keep trace-mcp tools eager in Claude Code via alwaysLoad ([1e739ce](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1e739ce555c94fe51ffb46eabe5909c4e4603fb1))
+
+
+### Chores
+
+* release 1.32.7 ([128a6cc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/128a6cc08d82309a3d533fb8012fd24beca7d494))
+
 ## [1.32.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.5...v1.32.6) (2026-04-29)
 
 
