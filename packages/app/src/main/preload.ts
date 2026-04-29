@@ -10,6 +10,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restartDaemon: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('restart-daemon'),
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),
+  getMcpClientStatuses: (
+    scope?: 'global' | 'project',
+  ): Promise<{
+    ok: boolean;
+    error?: string;
+    statuses?: Array<{
+      client: string;
+      configPath: string | null;
+      status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+      staleReason?: string;
+    }>;
+  }> => ipcRenderer.invoke('get-mcp-client-statuses', scope ?? 'global'),
   configureMcpClient: (
     clientName: string,
     level: string,

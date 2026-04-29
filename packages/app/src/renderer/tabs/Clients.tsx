@@ -49,6 +49,15 @@ interface DetectedClient {
   hasTraceMcp: boolean;
 }
 
+type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+
+interface RichClientStatus {
+  client: string;
+  configPath: string | null;
+  status: ClientConfigStatus;
+  staleReason?: string;
+}
+
 // ── Enforcement level popover ─────────────────────────────────────
 type EnforcementLevel = 'base' | 'standard' | 'max';
 
@@ -178,16 +187,26 @@ function ConnectedClientRow({ client }: { client: ClientInfo }) {
 function SupportedClientRow({
   name,
   label,
-  configured,
+  status,
   configPath,
+  staleReason,
   configuring,
   onConnect,
   onConnectWithLevel,
 }: {
   name: ClientName;
   label: string;
-  configured: boolean;
-  configPath?: string;
+  /**
+   * Drives the right-hand control:
+   *   missing       → "Connect" / level popover
+   *   up_to_date    → "Configured"
+   *   stale         → "Update" (rewrites the entry to current expectations)
+   *   unmanageable  → "Manual"
+   *   unknown       → "Configured" (presence-only — Codex TOML, can't compare safely)
+   */
+  status: ClientConfigStatus;
+  configPath?: string | null;
+  staleReason?: string;
   configuring: boolean;
   onConnect: () => void;
   onConnectWithLevel: (level: EnforcementLevel) => void;
@@ -204,52 +223,80 @@ function SupportedClientRow({
     }
   };
 
+  const isPresent = status === 'up_to_date' || status === 'unknown';
+  const dotColor =
+    status === 'up_to_date' || status === 'unknown'
+      ? '#34c759' // green: integration is healthy
+      : status === 'stale'
+        ? '#ff9500' // amber: present but drifted — update available
+        : 'var(--text-tertiary)'; // gray: missing or unmanageable
+
   return (
     <div
       className="flex items-center gap-2 px-2 py-1.5 rounded-md relative"
       style={{ background: 'var(--bg-secondary)' }}
     >
-      {/* Green dot = configured, gray = not */}
       <div
         className="w-1.5 h-1.5 rounded-full shrink-0"
         style={{
-          background: configured ? '#34c759' : 'var(--text-tertiary)',
-          opacity: configured ? 1 : 0.4,
+          background: dotColor,
+          opacity: isPresent || status === 'stale' ? 1 : 0.4,
         }}
       />
       <div className="flex-1 min-w-0">
         <span
           className="text-xs font-medium"
-          style={{ color: configured ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+          style={{
+            color: isPresent || status === 'stale' ? 'var(--text-primary)' : 'var(--text-secondary)',
+          }}
         >
           {label}
         </span>
-        {configured && configPath && (
+        {(isPresent || status === 'stale') && configPath && (
           <div className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>
             {configPath.replace(/^\/Users\/[^/]+/, '~')}
+            {status === 'stale' && staleReason && (
+              <span style={{ color: '#ff9500' }}> · drift: {staleReason}</span>
+            )}
           </div>
         )}
-        {!configured && isManual && MANUAL_HINTS[name] && (
+        {status === 'missing' && isManual && MANUAL_HINTS[name] && (
           <div className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>
             {MANUAL_HINTS[name]}
           </div>
         )}
       </div>
-      {configured ? (
+      {status === 'up_to_date' || status === 'unknown' ? (
         <span className="text-[10px] shrink-0 font-medium" style={{ color: '#34c759' }}>
           Configured
         </span>
-      ) : isManual ? (
+      ) : status === 'unmanageable' || isManual ? (
         <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
           Manual
         </span>
+      ) : status === 'stale' ? (
+        <button
+          type="button"
+          onClick={handleConnect}
+          disabled={configuring}
+          title={staleReason ? `Drifted field: ${staleReason}` : 'Refresh trace-mcp config'}
+          className="text-[10px] px-2 py-0.5 rounded font-medium transition-colors shrink-0"
+          style={{
+            background: '#ff9500',
+            color: '#fff',
+            opacity: configuring ? 0.6 : 1,
+            cursor: configuring ? 'default' : 'pointer',
+          }}
+        >
+          {configuring ? 'Updating…' : 'Update'}
+        </button>
       ) : (
         <>
           <button
             type="button"
             onClick={handleConnect}
             disabled={configuring}
-            className="text-[10px] px-2 py-0.5 rounded font-medium transition-colors"
+            className="text-[10px] px-2 py-0.5 rounded font-medium transition-colors shrink-0"
             style={{
               background: 'var(--accent)',
               color: '#fff',
@@ -278,16 +325,38 @@ function SupportedClientRow({
 export function Clients() {
   const { clients, loading, connected, restarting, restartDaemon, fetchClients } = useDaemon();
   const [detected, setDetected] = useState<DetectedClient[]>([]);
+  const [statuses, setStatuses] = useState<RichClientStatus[]>([]);
   const [detecting, setDetecting] = useState(true);
   const [configuringClient, setConfiguringClient] = useState<string | null>(null);
 
   const detectClients = useCallback(async () => {
     setDetecting(true);
     try {
-      const result = await window.electronAPI?.detectMcpClients();
-      setDetected(result ?? []);
+      // Prefer the rich CLI-backed status report when available — it knows
+      // whether an existing entry is up_to_date or stale (e.g. missing
+      // alwaysLoad). Fall back to detect-mcp-clients on older daemons that
+      // don't ship `clients status` yet.
+      const richResult = await window.electronAPI?.getMcpClientStatuses?.('global');
+      if (richResult?.ok && richResult.statuses) {
+        setStatuses(richResult.statuses);
+        // Synthesize the legacy "detected" shape so we don't have to
+        // refactor every consumer in this file at once.
+        const synth: DetectedClient[] = richResult.statuses
+          .filter((s) => s.status === 'up_to_date' || s.status === 'stale' || s.status === 'unknown')
+          .map((s) => ({
+            name: s.client,
+            configPath: s.configPath ?? '',
+            hasTraceMcp: true,
+          }));
+        setDetected(synth);
+      } else {
+        const fallback = await window.electronAPI?.detectMcpClients();
+        setDetected(fallback ?? []);
+        setStatuses([]);
+      }
     } catch {
       setDetected([]);
+      setStatuses([]);
     } finally {
       setDetecting(false);
     }
@@ -346,13 +415,49 @@ export function Clients() {
       }
     }
   }
+  const statusMap = new Map<string, RichClientStatus>();
+  for (const s of statuses) {
+    statusMap.set(s.client, s);
+  }
 
-  // Sort: configured first, then preserve original order
+  /**
+   * Resolve the per-row status. When the rich CLI-backed map is present
+   * we trust it; otherwise synthesize from the legacy `detected` set so
+   * the UI stays functional on older trace-mcp daemons.
+   */
+  const resolveStatus = (clientName: ClientName): RichClientStatus => {
+    const rich = statusMap.get(clientName);
+    if (rich) return rich;
+    if (MANUAL_CLIENTS.has(clientName)) {
+      return { client: clientName, configPath: null, status: 'unmanageable' };
+    }
+    const legacy = configuredMap.get(clientName);
+    return {
+      client: clientName,
+      configPath: legacy?.configPath ?? null,
+      status: legacy ? 'up_to_date' : 'missing',
+    };
+  };
+
+  // Sort: actionable rows first (stale → update available), then configured,
+  // then missing/manual. Inside each bucket preserve declaration order.
+  const sortRank = (s: ClientConfigStatus): number => {
+    switch (s) {
+      case 'stale':
+        return 0;
+      case 'up_to_date':
+      case 'unknown':
+        return 1;
+      case 'missing':
+        return 2;
+      case 'unmanageable':
+        return 3;
+    }
+  };
   const sortedClients = [...ALL_CLIENTS].sort((a, b) => {
-    const aConfigured = configuredMap.has(a.name) ? 0 : 1;
-    const bConfigured = configuredMap.has(b.name) ? 0 : 1;
-    if (aConfigured !== bConfigured) return aConfigured - bConfigured;
-    return 0;
+    const ra = sortRank(resolveStatus(a.name).status);
+    const rb = sortRank(resolveStatus(b.name).status);
+    return ra - rb;
   });
 
   return (
@@ -395,14 +500,15 @@ export function Clients() {
         ) : (
           <div className="space-y-1">
             {sortedClients.map((c) => {
-              const entry = configuredMap.get(c.name);
+              const s = resolveStatus(c.name);
               return (
                 <SupportedClientRow
                   key={c.name}
                   name={c.name}
                   label={c.label}
-                  configured={!!entry}
-                  configPath={entry?.configPath}
+                  status={s.status}
+                  configPath={s.configPath}
+                  staleReason={s.staleReason}
                   configuring={configuringClient === c.name}
                   onConnect={() => handleConnect(c.name)}
                   onConnectWithLevel={(level) => handleConnect(c.name, level)}
