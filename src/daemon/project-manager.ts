@@ -202,17 +202,25 @@ export class ProjectManager {
     return managed;
   }
 
-  /** Stop watcher and close DB for a project. */
-  async removeProject(root: string): Promise<void> {
+  /**
+   * Tear down in-memory state for a project (watcher, server, DB) without
+   * touching the on-disk registry. Used by both `shutdown()` (graceful
+   * daemon restart) and `removeProject()` (explicit user removal).
+   */
+  private async stopProject(root: string): Promise<void> {
     const managed = this.projects.get(root);
-    if (managed) {
-      await managed.watcher.stop();
-      clearServerPid(managed.db);
-      managed.serverHandle.dispose();
-      await managed.server.close();
-      managed.db.close();
-      this.projects.delete(root);
-    }
+    if (!managed) return;
+    await managed.watcher.stop();
+    clearServerPid(managed.db);
+    managed.serverHandle.dispose();
+    await managed.server.close();
+    managed.db.close();
+    this.projects.delete(root);
+  }
+
+  /** Stop a project AND drop it from the persistent registry. */
+  async removeProject(root: string): Promise<void> {
+    await this.stopProject(root);
     unregisterProject(root);
     logger.info({ projectRoot: root }, 'Project removed from daemon');
   }
@@ -227,10 +235,14 @@ export class ProjectManager {
     return Array.from(this.projects.values());
   }
 
-  /** Shut down all projects. */
+  /**
+   * Shut down all projects in-memory. Does NOT unregister from the on-disk
+   * registry — the daemon may be restarting (e.g. version-mismatch respawn,
+   * supervisor relaunch) and must not lose the user's project list.
+   */
   async shutdown(): Promise<void> {
     const roots = Array.from(this.projects.keys());
-    await Promise.all(roots.map((root) => this.removeProject(root)));
+    await Promise.all(roots.map((root) => this.stopProject(root)));
     logger.info('ProjectManager shutdown complete');
   }
 
