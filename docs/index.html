@@ -392,12 +392,6 @@
       margin-bottom: 56px;
     }
     .hero-meta .divider { flex: 1; height: 1px; background: var(--border-visible); }
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 96px;
-      align-items: end;
-    }
     .hero-headline {
       font-family: var(--font-body);
       font-size: clamp(36px, 6vw, 72px);
@@ -409,70 +403,6 @@
       overflow-wrap: break-word;
     }
     .hero-headline .em { font-weight: 700; }
-    .hero-side {
-      display: flex; flex-direction: column; align-items: flex-end;
-      gap: 16px;
-      min-width: 260px;
-    }
-    .hero-massive {
-      font-family: var(--font-display);
-      font-size: clamp(120px, 17vw, 200px);
-      font-weight: 700;
-      line-height: 0.85;
-      letter-spacing: -0.04em;
-      color: var(--text-display);
-      text-align: right;
-    }
-    .hero-massive .pct {
-      font-family: var(--font-mono);
-      font-size: 0.4em;
-      vertical-align: top;
-      color: var(--text-secondary);
-    }
-    .hero-side-label {
-      max-width: 220px;
-      text-align: right;
-      line-height: 1.4;
-    }
-    .hero-metrics {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 18px;
-      text-align: right;
-    }
-    .hero-metric { display: flex; flex-direction: column; gap: 4px; }
-    .hero-metric-value {
-      font-family: var(--font-display);
-      font-size: clamp(38px, 5.4vw, 64px);
-      font-weight: 700;
-      line-height: 0.95;
-      letter-spacing: -0.03em;
-      color: var(--text-display);
-    }
-    .hero-metric-value .unit {
-      font-family: var(--font-mono);
-      font-size: 0.45em;
-      color: var(--text-secondary);
-      vertical-align: middle;
-      margin-left: 2px;
-    }
-    .hero-metric-label {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-    }
-    .hero-metrics-foot {
-      max-width: 260px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.05em;
-      color: var(--text-disabled);
-      line-height: 1.5;
-      margin-top: 4px;
-    }
     .hero-desc {
       margin-top: 48px;
       max-width: 720px;
@@ -506,91 +436,78 @@
       text-transform: uppercase;
       color: var(--text-disabled);
     }
-    @media (max-width: 900px) {
-      .hero-grid { grid-template-columns: 1fr; gap: 32px; }
-      .hero-side { align-items: flex-start; min-width: 0; }
-      .hero-massive { text-align: left; }
-      .hero-side-label { text-align: left; }
-    }
     @media (max-width: 700px) {
-      .hero { padding: 88px 0 56px; }
+      .hero { padding: 88px 0 40px; }
       .hero-meta { margin-bottom: 28px; }
       .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
-      .hero-grid {
-        grid-template-columns: 1fr;
-        gap: 32px;
-        align-items: start;
-      }
-      .hero-side {
-        align-items: flex-start;
-        min-width: 0;
-        gap: 12px;
-        text-align: left;
-      }
-      .hero-side-label { text-align: left; max-width: 100%; }
-      .hero-massive {
-        font-size: clamp(72px, 18vw, 96px);
-        line-height: 0.9;
-        text-align: left;
-        white-space: nowrap;
-      }
-      .hero-massive .pct { font-size: 0.45em; }
-      .hero-metrics { align-items: stretch; text-align: left; gap: 28px; }
-      .hero-metrics-foot { text-align: left; max-width: 100%; order: 99; }
-      .hero-metric--hero { order: -1; gap: 16px; }
-      .hero-metric--hero .hero-metric-value {
-        font-family: var(--font-display);
-        font-size: clamp(80px, 24vw, 112px);
-        line-height: 0.85;
-        letter-spacing: -0.04em;
-        white-space: nowrap;
-        display: block;
-      }
-      .hero-metric--hero .hero-metric-value .unit {
-        font-family: var(--font-mono);
-        font-size: 0.32em;
-        vertical-align: top;
-        margin-left: 6px;
-        color: var(--text-secondary);
-      }
-      .hero-metric--hero .hero-metric-label {
-        font-family: var(--font-body);
-        font-size: clamp(20px, 5.4vw, 24px);
-        font-weight: 500;
-        letter-spacing: -0.015em;
-        line-height: 1.25;
-        color: var(--text-display);
-        text-transform: none;
-        margin-top: 4px;
-      }
-      .hero-metric:not(.hero-metric--hero) {
-        flex-direction: row;
-        align-items: baseline;
-        gap: 12px;
-        padding: 12px 0;
-        border-top: 1px solid var(--border);
-      }
-      .hero-metric:not(.hero-metric--hero) .hero-metric-value {
-        font-family: var(--font-mono);
-        font-size: 22px;
-        font-weight: 500;
-        letter-spacing: -0.01em;
-        line-height: 1;
-        flex-shrink: 0;
-      }
-      .hero-metric:not(.hero-metric--hero) .hero-metric-value .unit {
-        font-size: 0.7em;
-        margin-left: 1px;
-        color: var(--text-secondary);
-      }
-      .hero-metric:not(.hero-metric--hero) .hero-metric-label {
-        margin: 0;
-      }
-      .hero-side .label { display: none; }
       .hero-desc { margin-top: 24px; font-size: 16px; }
       .hero-cta { margin-top: 24px; gap: 8px; }
       .hero-cta .btn { padding: 12px 22px; font-size: 11px; }
       .hero-install { display: none; }
+    }
+
+    /* ── Metrics strip (proof row under hero) ── */
+    .metrics-strip {
+      padding: 40px 0;
+      border-top: none;
+    }
+    .metrics-strip-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .metrics-strip-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 24px 32px;
+      border-left: 1px solid var(--border);
+    }
+    .metrics-strip-item:first-child { border-left: none; }
+    .metrics-strip-value {
+      font-family: var(--font-mono);
+      font-size: clamp(22px, 2.6vw, 28px);
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--text-display);
+      line-height: 1;
+    }
+    .metrics-strip-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .metrics-strip-foot {
+      margin-top: 16px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--text-disabled);
+      line-height: 1.5;
+    }
+    @media (max-width: 700px) {
+      .metrics-strip { padding: 24px 0 32px; }
+      .metrics-strip-grid {
+        grid-template-columns: 1fr;
+        border-top: none;
+        border-bottom: none;
+      }
+      .metrics-strip-item {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 14px;
+        padding: 14px 0;
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+      .metrics-strip-item:first-child { border-top: none; }
+      .metrics-strip-value { flex-shrink: 0; font-size: 18px; }
+      .metrics-strip-label { font-size: 10px; }
+      .metrics-strip-foot { margin-top: 18px; font-size: 10px; }
     }
 
     /* ── Sections ── */
@@ -1927,34 +1844,12 @@
         <span class="label label-disabled">v<span data-version>&hellip;</span> / mit license</span>
       </div>
 
-      <div class="hero-grid">
-        <div>
-          <h1 class="hero-headline">
-            AI agents recompute the same work. We make them <span class="em">reuse instead.</span>
-          </h1>
-        </div>
-        <div class="hero-side">
-          <span class="label">/ Measured On Real Workflows</span>
-          <div class="hero-metrics">
-            <div class="hero-metric hero-metric--hero">
-              <span class="hero-metric-value">40&ndash;50<span class="unit">%</span></span>
-              <span class="hero-metric-label">Cut AI costs by 40&ndash;50% on average.</span>
-            </div>
-            <div class="hero-metric">
-              <span class="hero-metric-value">up to 99<span class="unit">%</span></span>
-              <span class="hero-metric-label">Less redundant processing</span>
-            </div>
-            <div class="hero-metric">
-              <span class="hero-metric-value">up to 2<span class="unit">&times;</span></span>
-              <span class="hero-metric-label">Effective capacity</span>
-            </div>
-            <span class="hero-metrics-foot">Based on early benchmarks across agent workflows with repeated context and dependency traversal.</span>
-          </div>
-        </div>
-      </div>
+      <h1 class="hero-headline">
+        Give AI agents a map of your <span class="em">codebase.</span>
+      </h1>
 
       <p class="hero-desc">
-        AI systems don't scale because they recompute instead of reuse &mdash; re-reading the same files, re-traversing the same dependencies, re-inflating context every turn. trace-mcp builds a framework-aware graph of your codebase once, then serves it through MCP so agents <span class="accent-text">reason from a precomputed structure instead of brute-reading the repo</span>. Less wasted work means lower cost, lower latency, and fewer hallucinations in production.
+        trace-mcp builds a framework-aware graph of your codebase once, then serves it through MCP so agents <span class="accent-text">reason from a precomputed structure instead of brute-reading the repo</span> &mdash; lower cost, lower latency, fewer hallucinations.
       </p>
 
       <div class="hero-cta">
@@ -1970,6 +1865,27 @@
         </span>
       </div>
 
+    </div>
+  </section>
+
+  <!-- ── METRICS STRIP ── -->
+  <section class="metrics-strip">
+    <div class="container">
+      <div class="metrics-strip-grid">
+        <div class="metrics-strip-item">
+          <span class="metrics-strip-value">40&ndash;50%</span>
+          <span class="metrics-strip-label">Average token reduction</span>
+        </div>
+        <div class="metrics-strip-item">
+          <span class="metrics-strip-value">up to 99%</span>
+          <span class="metrics-strip-label">Less redundant processing</span>
+        </div>
+        <div class="metrics-strip-item">
+          <span class="metrics-strip-value">up to 2X</span>
+          <span class="metrics-strip-label">Effective capacity</span>
+        </div>
+      </div>
+      <p class="metrics-strip-foot">Based on early benchmarks across agent workflows with repeated context and dependency traversal.</p>
     </div>
   </section>
 
