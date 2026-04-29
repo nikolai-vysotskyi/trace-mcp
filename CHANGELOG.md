@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.32.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.5...v1.32.6) (2026-04-29)
+
+
+### Bug Fixes
+
+* **app:** augment PATH + prefer existing node version for in-app updates ([5452d11](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5452d11d4f872316feb19749894918149e189957))
+
 ## [1.32.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.4...v1.32.5) (2026-04-28)
 
 
