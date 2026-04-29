@@ -333,17 +333,7 @@ export function configureMcpClients(
     // All clients point at the stable launcher shim. The shim handles all
     // node/cli-path resolution at runtime, so the registration stays valid
     // across node upgrades, nvm switches, and trace-mcp reinstalls.
-    const entry: McpServerEntry = { ...buildMcpEntry(), args: ['serve'] };
-
-    // Global scope always needs cwd since server starts from anywhere.
-    // Project scope for claude-code doesn't need cwd (.mcp.json is in project root).
-    if (opts.scope === 'global' || (name !== 'claude-code' && name !== 'claw-code')) {
-      entry.cwd = projectRoot;
-    }
-
-    if (ALWAYS_LOAD_CLIENTS.has(name)) {
-      entry.alwaysLoad = true;
-    }
+    const entry: McpServerEntry = buildExpectedEntry(name, projectRoot, opts.scope);
 
     // Refresh-in-place: if an existing entry matches what we'd write, report
     // already_configured; otherwise overwrite. This keeps the entry current
@@ -650,6 +640,217 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
 // ---------------------------------------------------------------------------
 
 /** Get config file path for a client, given scope. */
+// ---------------------------------------------------------------------------
+// Status detection — used by `trace-mcp clients status` and the desktop app's
+// MCP Clients screen. Tells you, for each client we know how to configure,
+// whether the config file currently on disk has a trace-mcp entry that
+// matches what `trace-mcp init` would write right now. The desktop app uses
+// this to swap "Install" → "Update" when a flag we now write (e.g.
+// alwaysLoad) is missing from a previously-installed entry.
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-client config status:
+ * - `missing`      — config file or trace-mcp entry not present.
+ * - `up_to_date`   — entry on disk equals what we'd write now.
+ * - `stale`        — entry exists but a field we manage drifts (command path,
+ *                    args, cwd, env, alwaysLoad). UI should show "Update".
+ * - `unmanageable` — client doesn't expose a writable file (Warp,
+ *                    JetBrains AI Assistant — IDE/cloud-managed config).
+ * - `unknown`      — config exists but format is too lax to compare safely
+ *                    (e.g. Codex TOML — we detect presence but not drift).
+ */
+export type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+
+export interface McpClientStatus {
+  client: DetectedMcpClient['name'];
+  configPath: string | null;
+  status: ClientConfigStatus;
+  /** Short machine-friendly reason when `status === 'stale'` (e.g. "alwaysLoad"). */
+  staleReason?: string;
+}
+
+/** Every client we know how to surface in `clients status`. */
+const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
+  'claude-code',
+  'claw-code',
+  'claude-desktop',
+  'cursor',
+  'windsurf',
+  'continue',
+  'junie',
+  'codex',
+  'amp',
+  'factory-droid',
+  'hermes',
+  'jetbrains-ai',
+  'warp',
+];
+
+/**
+ * Build the entry we'd write for `name` right now. Single source of truth
+ * shared by configureMcpClients() and getMcpClientStatuses() so drift
+ * detection can never disagree with what init actually writes.
+ */
+function buildExpectedEntry(
+  name: DetectedMcpClient['name'],
+  projectRoot: string,
+  scope: McpScope,
+): McpServerEntry & { type?: 'stdio' } {
+  const base: McpServerEntry = { ...buildMcpEntry(), args: ['serve'] };
+  if (scope === 'global' || (name !== 'claude-code' && name !== 'claw-code')) {
+    base.cwd = projectRoot;
+  }
+  if (ALWAYS_LOAD_CLIENTS.has(name)) {
+    base.alwaysLoad = true;
+  }
+  if (name === 'factory-droid') {
+    return { type: 'stdio', ...base };
+  }
+  return base;
+}
+
+/**
+ * Decide whether the on-disk entry for one client matches what we'd write.
+ * Reuses the per-format matchers above (entryMatches / hermesEntryMatches /
+ * ampEntryMatches / factoryEntryMatches) to avoid duplicating the
+ * format-specific compare logic.
+ */
+function detectClientStatus(
+  name: DetectedMcpClient['name'],
+  projectRoot: string,
+  scope: McpScope,
+): McpClientStatus {
+  if (name === 'jetbrains-ai' || name === 'warp') {
+    return { client: name, configPath: null, status: 'unmanageable' };
+  }
+  const configPath = getConfigPath(name, projectRoot, scope);
+  if (!configPath) {
+    return { client: name, configPath: null, status: 'unmanageable' };
+  }
+  if (!fs.existsSync(configPath)) {
+    return { client: name, configPath, status: 'missing' };
+  }
+  const expected = buildExpectedEntry(name, projectRoot, scope);
+
+  switch (name) {
+    case 'hermes': {
+      const hermesEntry = expected as HermesYamlEntry;
+      const present = (() => {
+        try {
+          const text = fs.readFileSync(configPath, 'utf-8');
+          return /(^|\n)\s*trace-mcp\s*:/.test(text);
+        } catch {
+          return false;
+        }
+      })();
+      if (!present) return { client: name, configPath, status: 'missing' };
+      return hermesEntryMatches(configPath, hermesEntry)
+        ? { client: name, configPath, status: 'up_to_date' }
+        : { client: name, configPath, status: 'stale', staleReason: 'fields' };
+    }
+    case 'amp': {
+      const present = (() => {
+        try {
+          const text = fs.readFileSync(configPath, 'utf-8');
+          return /["']trace-mcp["']\s*:/.test(text);
+        } catch {
+          return false;
+        }
+      })();
+      if (!present) return { client: name, configPath, status: 'missing' };
+      return ampEntryMatches(configPath, expected as McpServerEntry)
+        ? { client: name, configPath, status: 'up_to_date' }
+        : { client: name, configPath, status: 'stale', staleReason: 'fields' };
+    }
+    case 'factory-droid': {
+      const factoryEntry = expected as McpServerEntry & { type: 'stdio' };
+      const present = (() => {
+        try {
+          const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+          return Boolean(content?.mcpServers?.['trace-mcp']);
+        } catch {
+          return false;
+        }
+      })();
+      if (!present) return { client: name, configPath, status: 'missing' };
+      return factoryEntryMatches(configPath, factoryEntry)
+        ? { client: name, configPath, status: 'up_to_date' }
+        : { client: name, configPath, status: 'stale', staleReason: 'fields' };
+    }
+    case 'codex': {
+      // TOML — we only do presence detection, not drift, because writing the
+      // section is append-based and we don't parse arbitrary TOML.
+      try {
+        const content = fs.readFileSync(configPath, 'utf-8');
+        const present = /\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content);
+        return {
+          client: name,
+          configPath,
+          status: present ? 'unknown' : 'missing',
+        };
+      } catch {
+        return { client: name, configPath, status: 'missing' };
+      }
+    }
+    default: {
+      // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie
+      // all use the standard mcpServers JSON shape compared by entryMatches().
+      const present = (() => {
+        try {
+          const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+          return Boolean(content?.mcpServers?.['trace-mcp']);
+        } catch {
+          return false;
+        }
+      })();
+      if (!present) return { client: name, configPath, status: 'missing' };
+      if (entryMatches(configPath, expected as McpServerEntry)) {
+        return { client: name, configPath, status: 'up_to_date' };
+      }
+      // Pinpoint the field that diverged so the UI can be specific.
+      const reason = pinpointEntryDrift(configPath, expected as McpServerEntry);
+      return { client: name, configPath, status: 'stale', staleReason: reason };
+    }
+  }
+}
+
+function pinpointEntryDrift(configPath: string, expected: McpServerEntry): string {
+  try {
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const current = content?.mcpServers?.['trace-mcp'];
+    if (!current || typeof current !== 'object') return 'entry-missing';
+    if (current.command !== expected.command) return 'command';
+    if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return 'args';
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return 'cwd';
+    if (
+      (expected.env || current.env) &&
+      JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})
+    ) {
+      return 'env';
+    }
+    if ((current.alwaysLoad ?? false) !== (expected.alwaysLoad ?? false)) return 'alwaysLoad';
+    return 'fields';
+  } catch {
+    return 'parse-error';
+  }
+}
+
+/**
+ * Generic per-client status report. Pass `clientNames` to limit the scan,
+ * otherwise checks every client we know how to configure. Stable order
+ * matches `ALL_MCP_CLIENT_NAMES` so the desktop app can render rows
+ * deterministically.
+ */
+export function getMcpClientStatuses(
+  projectRoot: string,
+  scope: McpScope,
+  clientNames?: DetectedMcpClient['name'][],
+): McpClientStatus[] {
+  const targets = clientNames ?? ALL_MCP_CLIENT_NAMES;
+  return targets.map((name) => detectClientStatus(name, projectRoot, scope));
+}
+
 function getConfigPath(
   name: DetectedMcpClient['name'],
   projectRoot: string,
