@@ -591,16 +591,46 @@ async function resolveNpmBin(): Promise<string | null> {
       /* dir absent — skip */
     }
   }
+  // Prefer a node version that already has `trace-mcp` installed: when nvm
+  // hosts multiple versions (e.g. v22 and v24) and only v22 has the global
+  // package, picking the latest version's npm would install into a sibling
+  // tree the user's PATH never resolves to — making the "successful" update
+  // invisible. Sort npm candidates so any whose sibling `lib/node_modules/
+  // trace-mcp` exists comes first.
+  const hasTraceMcp = (npm: string): boolean => {
+    try {
+      // bin/npm → ../lib/node_modules/trace-mcp
+      const root = path.resolve(path.dirname(npm), '..', 'lib', 'node_modules', 'trace-mcp');
+      return fs.existsSync(root);
+    } catch {
+      return false;
+    }
+  };
+  guesses.sort((a, b) => Number(hasTraceMcp(b)) - Number(hasTraceMcp(a)));
   for (const g of guesses) {
     if (fs.existsSync(g)) {
       cachedNpmBin = g;
-      appendUpdateLog({ event: 'resolve-npm:scan-found', npmBin: g });
+      appendUpdateLog({ event: 'resolve-npm:scan-found', npmBin: g, hasTraceMcp: hasTraceMcp(g) });
       return g;
     }
   }
   appendUpdateLog({ event: 'resolve-npm:not-found', scanned: guesses });
   cachedNpmBin = null;
   return null;
+}
+
+// PATH that lets `env node` (used by npm postinstall shebangs) succeed: the
+// dir containing the resolved npm binary always also contains `node`, so we
+// prepend it. Without this, GUI-launched Electron's PATH is essentially just
+// `/usr/bin:/bin` and shebanged scripts fail with `env: node: No such file
+// or directory` even when npm itself runs.
+function buildSpawnEnv(npmBin: string): NodeJS.ProcessEnv {
+  const binDir = path.dirname(npmBin);
+  const existingPath = process.env.PATH ?? '';
+  return {
+    ...process.env,
+    PATH: existingPath ? `${binDir}${path.delimiter}${existingPath}` : binDir,
+  };
 }
 
 async function resolveNpmRoot(): Promise<string | null> {
@@ -612,7 +642,7 @@ async function resolveNpmRoot(): Promise<string | null> {
     execFile(
       npmBin,
       ['root', '-g'],
-      { encoding: 'utf-8', timeout: 30_000 },
+      { encoding: 'utf-8', timeout: 30_000, env: buildSpawnEnv(npmBin) },
       (err, stdout) => {
         if (err) {
           resolve(null);
@@ -694,13 +724,14 @@ ipcMain.handle('apply-update', async () => {
   const npmRoot = await resolveNpmRoot();
   if (npmRoot) cleanStaleScratchDirs(npmRoot);
 
+  const spawnEnv = buildSpawnEnv(npmBin);
   const runOnce = () =>
     new Promise<{ err?: Error; stderr: string; stdout: string; code?: number; signal?: string }>(
       (resolve) => {
         const child = execFile(
           npmBin,
           npmArgs,
-          { encoding: 'utf-8', timeout: 600_000, maxBuffer: 16 * 1024 * 1024 },
+          { encoding: 'utf-8', timeout: 600_000, maxBuffer: 16 * 1024 * 1024, env: spawnEnv },
           (err, stdout, stderr) => {
             resolve({
               err: err ?? undefined,
