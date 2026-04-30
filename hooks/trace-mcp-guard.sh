@@ -1,25 +1,45 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.6.0
+# trace-mcp-guard v0.7.0
 # trace-mcp PreToolUse guard
-# Blocks Read/Grep/Glob/Bash on source code files → redirects to trace-mcp tools.
-# Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
+# Routes Read/Grep/Glob/Bash/Agent on source code files through trace-mcp.
 #
-# Consultation markers: trace-mcp server writes markers when tools access files
-# (get_outline, get_symbol, etc.). If a marker exists for a file, Read is allowed
-# immediately — the agent already consulted trace-mcp for this file.
+# Design (v0.7 — closes the retry-bypass loophole from v0.6):
 #
-# Repeat-read dedup (v0.6.0): tracks per-session allowed reads of each code file.
-# After 2 allowed reads of an unchanged file, subsequent reads are denied with a
-# redirect to get_symbol/get_outline. Edits (mtime change) reset the counter.
+#   1. Consultation markers are the ONLY way to unlock Read on a code file.
+#      Calling get_outline / get_symbol / find_usages / etc. on a file makes
+#      the trace-mcp server write a marker; the hook reads it and allows
+#      subsequent Read. There is no longer a "retry once and you're in" path.
+#
+#   2. Heartbeat sentinel handles the legitimate fallback case. The trace-mcp
+#      server periodically touches $TMPDIR/trace-mcp-alive-{projectHash}. If
+#      the file is missing or older than $STALE_THRESHOLD_SEC, the server is
+#      considered unavailable and Read is allowed with a warning. This covers
+#      crashed servers, "session not found", and not-yet-started servers
+#      without giving the agent a knob to bypass a healthy server.
+#
+#   3. Repeat-deny escalation. When the agent retries Read on a file without
+#      consulting trace-mcp first, the deny message escalates from advisory
+#      to a hard imperative on the second attempt and beyond. The escalation
+#      counter resets when a consultation marker appears.
+#
+#   4. Manual user override: TRACE_MCP_GUARD_OFF=1 fully bypasses the guard.
+#      Intended for direct user shell sessions, not the agent.
 #
 # Install: add to ~/.claude/settings.json or .claude/settings.local.json
 # See README.md for setup instructions.
 
 set -euo pipefail
 
+# ─── Manual user override ──────────────────────────────────────────
+# Allow direct shell users to opt out without editing settings.json.
+if [[ "${TRACE_MCP_GUARD_OFF:-0}" == "1" ]]; then
+  exit 0
+fi
+
 INPUT=$(cat)
 TOOL_NAME="${CLAUDE_TOOL_NAME:-$(echo "$INPUT" | jq -r '.tool_name // empty')}"
 
+# ─── File-extension classifiers ────────────────────────────────────
 # Code file extensions to guard
 CODE_EXT_RE='\.(ts|tsx|js|jsx|mjs|cjs|py|pyi|go|rs|java|kt|kts|rb|php|cs|cpp|c|h|hpp|swift|scala|vue|svelte|astro|blade\.php)$'
 
@@ -29,11 +49,9 @@ NONCODE_EXT_RE='\.(md|json|jsonc|yaml|yml|toml|ini|cfg|txt|html|xml|csv|svg|lock
 # .env files — always route through trace-mcp to prevent secret leakage
 ENV_FILE_RE='\.env(\.[a-zA-Z0-9._-]+)?$'
 
-# Example/template env files — committed to git, contain placeholders (no real secrets).
-# Exempt from the env-file block: these are documentation, safe to read/edit directly.
+# Example/template env files — committed to git, contain placeholders.
 ENV_EXAMPLE_RE='\.env\.(example|examples|sample|samples|template|templates|dist|defaults?|docs?)$'
 
-# Returns 0 (true) if the given path is a sensitive env file that should be blocked.
 is_sensitive_env_file() {
   local p="$1"
   echo "$p" | grep -qiE "$ENV_FILE_RE" || return 1
@@ -41,12 +59,17 @@ is_sensitive_env_file() {
   return 0
 }
 
-# Safe bash command prefixes — never block
-SAFE_BASH_RE='^(git |npm |npx |pnpm |yarn |bun |node |deno |cargo |go |make |mvn |gradle |docker |kubectl |helm |terraform |pip |poetry |uv |pytest |vitest |jest |phpunit |composer |artisan |rails |bundle |mix |dotnet |cmake |ninja |meson )'
+# Safe Bash command prefixes (full prefix or env-prefixed: `LC_ALL=C cmd`).
+SAFE_BASH_RE='^((([A-Z_][A-Z0-9_]*=[^ ]*) +)*)(git|npm|npx|pnpm|yarn|bun|node|deno|cargo|go|make|mvn|gradle|docker|kubectl|helm|terraform|pip|poetry|uv|pytest|vitest|jest|phpunit|composer|artisan|rails|bundle|mix|dotnet|cmake|ninja|meson)( |$)'
 
-# Cross-platform sha256 hash (Linux: sha256sum, macOS: shasum)
+# Cross-platform sha256 hash
 file_sha256() {
   echo -n "$1" | sha256sum 2>/dev/null | cut -d' ' -f1 || echo -n "$1" | shasum -a 256 2>/dev/null | cut -d' ' -f1
+}
+
+# Portable mtime (Linux: stat -c %Y; macOS/BSD: stat -f %m).
+file_mtime() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
 }
 
 deny() {
@@ -65,11 +88,21 @@ EOF
   exit 0
 }
 
-SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "default"')
+allow_with_context() {
+  local context="$1"
+  cat <<EOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "additionalContext": "$context"
+  }
+}
+EOF
+  exit 0
+}
 
-# Consultation markers: trace-mcp server writes these when get_outline/get_symbol/etc. are called.
-# If a file was already consulted via trace-mcp, allow Read immediately (agent needs full content for Edit).
-# Dir format: $TMPDIR/trace-mcp-consulted-{sha256(projectRoot)[:12]}/{sha256(relPath)}
+# ─── Project + session paths ───────────────────────────────────────
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "default"')
 PROJECT_ROOT="$(pwd)"
 if command -v sha256sum >/dev/null 2>&1; then
   PROJECT_HASH=$(echo -n "$PROJECT_ROOT" | sha256sum | cut -c1-12)
@@ -79,29 +112,41 @@ else
   PROJECT_HASH=""
 fi
 CONSULTED_DIR="${TMPDIR:-/tmp}/trace-mcp-consulted-${PROJECT_HASH}"
-
-# Repeat-read tracker dir (v0.6.0): per-session state of allowed reads per file.
-# Format: one file per read target, contents = "count:mtime"
+HEARTBEAT_FILE="${TMPDIR:-/tmp}/trace-mcp-alive-${PROJECT_HASH}"
 READS_DIR="${TMPDIR:-/tmp}/trace-mcp-reads-${SESSION_ID}"
 mkdir -p "$READS_DIR" 2>/dev/null || true
 
-# Max allowed reads of an unchanged code file before forcing get_symbol/get_outline.
-REPEAT_READ_LIMIT=2
+# Tunables
+REPEAT_READ_LIMIT=${TRACE_MCP_GUARD_REPEAT_LIMIT:-3}
+STALE_THRESHOLD_SEC=${TRACE_MCP_GUARD_STALE_SEC:-30}
 
-# Portable mtime (Linux: stat -c %Y; macOS/BSD: stat -f %m).
-# Linux order first: on Linux, `stat -f %m file` misparses %m as a second file
-# argument, outputting filesystem info to stdout before failing — which pollutes
-# the captured value when used in $(file_mtime).  Trying -c %Y first avoids that.
-file_mtime() {
-  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
-}
+# ─── Heartbeat liveness check ──────────────────────────────────────
+# HEARTBEAT_DEAD=1 → fallback mode: allow Read with warning instead of
+# hard-blocking. Triggered by missing sentinel or stale mtime.
+HEARTBEAT_DEAD=0
+HEARTBEAT_REASON=""
+if [[ -z "$PROJECT_HASH" ]]; then
+  HEARTBEAT_DEAD=1
+  HEARTBEAT_REASON="hash unavailable"
+elif [[ ! -f "$HEARTBEAT_FILE" ]]; then
+  HEARTBEAT_DEAD=1
+  HEARTBEAT_REASON="trace-mcp server not running (no heartbeat sentinel)"
+else
+  HB_MTIME=$(file_mtime "$HEARTBEAT_FILE")
+  NOW=$(date +%s)
+  AGE=$((NOW - HB_MTIME))
+  if (( AGE > STALE_THRESHOLD_SEC )); then
+    HEARTBEAT_DEAD=1
+    HEARTBEAT_REASON="trace-mcp heartbeat stale (${AGE}s old, threshold ${STALE_THRESHOLD_SEC}s)"
+  fi
+fi
 
-# --- Read ---
+# ─── Read ──────────────────────────────────────────────────────────
 if [[ "$TOOL_NAME" == "Read" ]]; then
   FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
-  # Block .env files — prevent secret leakage to AI model context.
-  # Example/template variants (.env.example, .env.sample, ...) are exempt — placeholders only.
+  # .env files — always block, even when heartbeat is dead.
+  # Secret leakage risk is independent of trace-mcp availability.
   if is_sensitive_env_file "$FILE_PATH"; then
     REL_PATH=$(echo "$FILE_PATH" | sed "s|^$(pwd)/||")
     deny \
@@ -109,85 +154,96 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
       "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
   fi
 
-  # Allow non-code files
+  # Non-code files — always allow.
   if echo "$FILE_PATH" | grep -qiE "$NONCODE_EXT_RE"; then
     exit 0
   fi
 
-  # Allow files outside source dirs (configs in root, etc.)
+  # Files outside source dirs (e.g. configs without standard extensions).
   BASENAME=$(basename "$FILE_PATH")
   if [[ "$BASENAME" != *.* ]] || echo "$FILE_PATH" | grep -qE '(node_modules|vendor|dist|build|\.git)/'; then
     exit 0
   fi
 
-  # Block code file reads → redirect to trace-mcp
+  # Code files: route through consultation marker / heartbeat.
   if echo "$FILE_PATH" | grep -qiE "$CODE_EXT_RE"; then
-    # --- Repeat-read dedup (v0.6.0) ---
-    # Track allowed reads per file per session. Reset on mtime change (post-Edit).
+    REL_PATH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
+
+    # Heartbeat fallback — server is unavailable, allow Read with warning.
+    # This is the legitimate fallback path; agents do not control it.
+    if (( HEARTBEAT_DEAD == 1 )); then
+      allow_with_context \
+        "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Read as fallback — restart trace-mcp or run \\\"trace-mcp serve\\\" to re-enable strict routing."
+    fi
+
     FILE_HASH=$(file_sha256 "$FILE_PATH")
     READ_STATE="$READS_DIR/$FILE_HASH"
+    DENY_STATE="$READS_DIR/$FILE_HASH.deny"
     PREV_COUNT=0
     PREV_MTIME=""
-    HAD_STATE=0
     if [[ -f "$READ_STATE" ]]; then
       IFS=':' read -r PREV_COUNT PREV_MTIME < "$READ_STATE" || true
       PREV_COUNT="${PREV_COUNT:-0}"
-      HAD_STATE=1
     fi
     CUR_MTIME=$(file_mtime "$FILE_PATH")
-    # Reset count if file was modified since last allowed read (Edit/Write happened).
-    # HAD_STATE stays 1 so we skip the first-time deny-marker friction below.
     if [[ "$CUR_MTIME" != "$PREV_MTIME" ]]; then
       PREV_COUNT=0
     fi
 
-    # Already hit the limit on an unchanged file — force trace-mcp narrow lookups.
-    if (( PREV_COUNT >= REPEAT_READ_LIMIT )); then
-      REL_PATH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
-      deny \
-        "Already read ${REL_PATH} ${PREV_COUNT}x this session — use get_symbol/get_outline instead of re-reading." \
-        "trace-mcp alternatives for ${REL_PATH}:\\n- get_symbol { \\\"fqn\\\": \\\"SymbolName\\\" } — read ONE symbol instead of the whole file\\n- get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" } — signatures only (much cheaper than full reads)\\n- get_context_bundle { \\\"symbol_id\\\": \\\"...\\\" } — symbol + its imports in one call\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — NL query over the indexed codebase\\nThe counter resets automatically if you Edit/Write this file."
-    fi
-
-    # Compute relative path for consultation marker check (server writes markers keyed by relative path)
-    REL_PATH_FOR_HASH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
+    # Consultation marker check — server-side flag that the agent has called
+    # a trace-mcp tool that touches this file. If present, Read is allowed.
+    REL_PATH_FOR_HASH="$REL_PATH"
     CONSULTED_HASH=$(file_sha256 "$REL_PATH_FOR_HASH")
-
-    # Check if file was already consulted via trace-mcp (get_outline, get_symbol, etc.)
+    HAS_MARKER=0
     if [[ -n "$PROJECT_HASH" && -f "$CONSULTED_DIR/$CONSULTED_HASH" ]]; then
-      # File was consulted via trace-mcp → allow Read (agent needs full content for Edit)
+      HAS_MARKER=1
+    fi
+
+    if (( HAS_MARKER == 1 )); then
+      # Reset deny escalation — the agent did consult trace-mcp.
+      rm -f "$DENY_STATE" 2>/dev/null || true
+      # Repeat-read limit on unchanged file: force narrower lookups.
+      if (( PREV_COUNT >= REPEAT_READ_LIMIT )); then
+        deny \
+          "Already read ${REL_PATH} ${PREV_COUNT}x this session — use get_symbol/get_outline instead of re-reading." \
+          "trace-mcp alternatives for ${REL_PATH}:\\n- get_symbol { \\\"fqn\\\": \\\"SymbolName\\\" } — read ONE symbol instead of the whole file\\n- get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" } — signatures only (much cheaper than full reads)\\n- get_context_bundle { \\\"symbol_id\\\": \\\"...\\\" } — symbol + its imports in one call\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — NL query over the indexed codebase\\nThe counter resets automatically if you Edit/Write this file."
+      fi
       echo "$((PREV_COUNT + 1)):${CUR_MTIME}" > "$READ_STATE"
       exit 0
     fi
 
-    # If we already tracked this file this session (HAD_STATE=1), skip first-time
-    # friction — the agent already "earned" the right to read it. Covers both
-    # (a) mid-session re-reads and (b) post-Edit re-reads (count reset by mtime change).
-    if (( HAD_STATE == 1 )); then
-      echo "$((PREV_COUNT + 1)):${CUR_MTIME}" > "$READ_STATE"
-      exit 0
+    # No marker → deny. Track repeat denies for escalation.
+    DENY_COUNT=0
+    if [[ -f "$DENY_STATE" ]]; then
+      DENY_COUNT=$(cat "$DENY_STATE" 2>/dev/null || echo 0)
+      DENY_COUNT="${DENY_COUNT:-0}"
+    fi
+    DENY_COUNT=$((DENY_COUNT + 1))
+    echo "$DENY_COUNT" > "$DENY_STATE"
+
+    if (( DENY_COUNT >= 2 )); then
+      # Escalated: hard imperative, no advisory framing, no fallback hint.
+      deny \
+        "BLOCKED (attempt #${DENY_COUNT}). Read of ${REL_PATH} requires a prior trace-mcp consultation — none recorded." \
+        "Required next call: get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" }\\nAfter that call succeeds, Read of this file will be allowed automatically.\\nIf trace-mcp is genuinely unreachable, the heartbeat sentinel will detect it and switch this hook to fallback mode within ${STALE_THRESHOLD_SEC}s."
     fi
 
-    # First-time read: write initial state (count=0) so the retry attempt (HAD_STATE=1)
-    # can allow without a separate deny-marker file.  Then deny with redirect.
+    # First-time deny: standard advisory, no "retry will work" hint.
     echo "0:${CUR_MTIME}" > "$READ_STATE"
-    REL_PATH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
     deny \
-      "Use trace-mcp for code reading — it returns only what you need, saving tokens." \
-      "trace-mcp alternatives for ${REL_PATH}:\\n- get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" } — see file structure (signatures only)\\n- get_symbol { \\\"fqn\\\": \\\"SymbolName\\\" } — read one specific symbol\\n- search { \\\"query\\\": \\\"keyword\\\" } — find symbols by name\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — relevant code for a task\\nIf you need full file content before editing, retry Read — it will be allowed."
+      "Use trace-mcp for code reading — call get_outline first to record consultation, then Read will be allowed." \
+      "trace-mcp alternatives for ${REL_PATH}:\\n- get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" } — see file structure (signatures only); after this call, Read of this file is allowed\\n- get_symbol { \\\"fqn\\\": \\\"SymbolName\\\" } — read one specific symbol\\n- search { \\\"query\\\": \\\"keyword\\\" } — find symbols by name\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — relevant code for a task"
   fi
 
   exit 0
 fi
 
-# --- Grep ---
+# ─── Grep ──────────────────────────────────────────────────────────
 if [[ "$TOOL_NAME" == "Grep" ]]; then
   GREP_PATH=$(echo "$INPUT" | jq -r '.tool_input.path // empty')
   GREP_GLOB=$(echo "$INPUT" | jq -r '.tool_input.glob // empty')
   GREP_TYPE=$(echo "$INPUT" | jq -r '.tool_input.type // empty')
 
-  # Block grep on .env files — prevent secret leakage.
-  # Example/template variants are exempt (placeholders only).
   GREP_BLOCK_ENV=0
   if echo "$GREP_GLOB" | grep -qiE '\.env' && ! echo "$GREP_GLOB" | grep -qiE "$ENV_EXAMPLE_RE"; then
     GREP_BLOCK_ENV=1
@@ -201,104 +257,131 @@ if [[ "$TOOL_NAME" == "Grep" ]]; then
       "trace-mcp alternatives:\\n- get_env_vars { \\\"pattern\\\": \\\"search_term\\\" } — find env vars by key pattern without exposing values\\n(Template files like .env.example/.env.sample are allowed — grep those directly.)"
   fi
 
-  # Allow grep on non-code file types
   if echo "$GREP_GLOB" | grep -qiE '\.(md|json|ya?ml|toml|txt|html|xml|csv|cfg|ini|lock|log)'; then
     exit 0
   fi
-
-  # Allow grep on non-code type filter
   if [[ "$GREP_TYPE" == "md" || "$GREP_TYPE" == "json" || "$GREP_TYPE" == "yaml" || "$GREP_TYPE" == "toml" || "$GREP_TYPE" == "xml" || "$GREP_TYPE" == "html" || "$GREP_TYPE" == "csv" ]]; then
     exit 0
   fi
-
-  # Allow grep on config dirs
   if echo "$GREP_PATH" | grep -qE '(node_modules|vendor|dist|build|\.git)'; then
     exit 0
+  fi
+
+  # Heartbeat fallback applies to Grep too — server unavailable, allow.
+  if (( HEARTBEAT_DEAD == 1 )); then
+    allow_with_context \
+      "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Grep as fallback — restart trace-mcp to re-enable strict routing."
   fi
 
   PATTERN=$(echo "$INPUT" | jq -r '.tool_input.pattern // empty')
   deny \
     "Use trace-mcp for code search — it understands symbols and relationships." \
     "trace-mcp alternatives for searching \\\"${PATTERN}\\\":\\n- search { \\\"query\\\": \\\"${PATTERN}\\\" } — find symbols by name (supports kind, language, file_pattern filters)\\n- find_usages { \\\"fqn\\\": \\\"SymbolName\\\" } — find all usages (imports, calls, renders)\\n- get_call_graph { \\\"fqn\\\": \\\"FunctionName\\\" } — who calls it + what it calls\\nUse Grep only for non-code files (.md, .json, .yaml, config)."
-
 fi
 
-# --- Glob ---
+# ─── Glob ──────────────────────────────────────────────────────────
 if [[ "$TOOL_NAME" == "Glob" ]]; then
   GLOB_PATTERN=$(echo "$INPUT" | jq -r '.tool_input.pattern // empty')
 
-  # Block glob on .env patterns. Example/template variants are exempt.
   if echo "$GLOB_PATTERN" | grep -qiE '\.env' && ! echo "$GLOB_PATTERN" | grep -qiE "$ENV_EXAMPLE_RE"; then
     deny \
       "Use get_env_vars for .env files — it masks sensitive values." \
       "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files\\n(Template files like .env.example/.env.sample are allowed — glob those directly.)"
   fi
 
-  # Allow glob for non-code patterns
   if echo "$GLOB_PATTERN" | grep -qiE '\.(md|json|ya?ml|toml|txt|html|xml|csv|cfg|ini|lock|log)'; then
     exit 0
+  fi
+
+  if (( HEARTBEAT_DEAD == 1 )); then
+    allow_with_context \
+      "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Glob as fallback."
   fi
 
   deny \
     "Use trace-mcp for code file discovery — it knows your project structure." \
     "trace-mcp alternatives:\\n- get_project_map { \\\"summary_only\\\": true } — project overview (frameworks, languages, structure)\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"src/tools/*\\\" } — find symbols in specific paths\\n- get_outline { \\\"path\\\": \\\"path/to/file\\\" } — see what is in a file\\nUse Glob only for non-code file patterns."
-
 fi
 
-# --- Bash ---
+# ─── Bash ──────────────────────────────────────────────────────────
 if [[ "$TOOL_NAME" == "Bash" ]]; then
   COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
-  # Allow safe commands
-  if echo "$COMMAND" | grep -qE "$SAFE_BASH_RE"; then
-    exit 0
-  fi
-
-  # Block bash commands targeting .env files — prevent secret leakage.
-  # Example/template variants are exempt (placeholders only).
+  # .env access via shell — block (independent of heartbeat).
   if echo "$COMMAND" | grep -qiE "$ENV_FILE_RE" && ! echo "$COMMAND" | grep -qiE "$ENV_EXAMPLE_RE"; then
     deny \
       "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
       "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever access .env files via shell — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
   fi
 
-  # Block code exploration via bash (grep, find, cat, head, tail on code files)
-  if echo "$COMMAND" | grep -qE '(^|\|)\s*(grep|rg|find|cat|head|tail|less|more|awk|sed)\s' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+  # git show/diff/log -p/blame on code paths — these are de-facto Read.
+  if echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+    if echo "$COMMAND" | grep -qE '(^|[ |;&])git +(show|blame|cat-file)( |$)'; then
+      deny \
+        "Use trace-mcp instead of \\\"git show/blame/cat-file\\\" for reading code." \
+        "trace-mcp alternatives:\\n- get_symbol { \\\"fqn\\\": \\\"...\\\" } — current source\\n- get_outline { \\\"path\\\": \\\"...\\\" } — file structure\\n- get_changed_symbols / compare_branches — git-aware diffs\\nUse git show/blame/cat-file only on non-code files."
+    fi
+    if echo "$COMMAND" | grep -qE '(^|[ |;&])git +log +.*(-p|--patch)( |$)'; then
+      deny \
+        "Use trace-mcp instead of \\\"git log -p\\\" for reading code." \
+        "trace-mcp alternatives:\\n- compare_branches { \\\"branch\\\": \\\"current\\\" } — symbol-level diff\\n- get_changed_symbols { } — diff-aware symbol list"
+    fi
+    if echo "$COMMAND" | grep -qE '(^|[ |;&])git +diff( |$)'; then
+      deny \
+        "Use trace-mcp instead of \\\"git diff\\\" on code files." \
+        "trace-mcp alternatives:\\n- compare_branches { \\\"branch\\\": \\\"current\\\" } — symbol-level diff\\n- get_changed_symbols { } — diff-aware symbol list\\nUse git diff only on non-code files."
+    fi
+  fi
+
+  # Safe Bash whitelist (allows env-prefixed forms like `LC_ALL=C git ...`).
+  if echo "$COMMAND" | grep -qE "$SAFE_BASH_RE"; then
+    exit 0
+  fi
+
+  # Code exploration via shell on code files — block.
+  # Triggers: grep/rg/find/cat/head/tail/less/more/awk/sed/bat/code/subl/view
+  # appearing as a command (start of line or after pipe / && / ; / xargs)
+  # combined with a code-file extension somewhere in the command.
+  if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)(grep|rg|find|cat|head|tail|less|more|awk|sed|bat|view|subl|code)( |$)' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
     deny \
       "Use trace-mcp instead of shell commands for code exploration." \
       "trace-mcp has structured tools for this:\\n- search — find symbols by name\\n- get_symbol — read a specific symbol\\n- get_outline — file structure\\n- find_usages — all usages of a symbol\\nUse Bash only for builds, tests, git, and system commands."
   fi
 
+  # Input redirection from a code file: `cmd < src/foo.ts`.
+  if echo "$COMMAND" | grep -qE '< +[^ ]+' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+    deny \
+      "Use trace-mcp instead of shell input-redirection on code files." \
+      "trace-mcp alternatives:\\n- get_symbol — read a specific symbol\\n- get_outline — file structure"
+  fi
+
   exit 0
 fi
 
-# --- Agent ---
-# Block Agent(Explore) and exploration-style Agent(general-purpose).
-# Each Agent subprocess costs ~50K tokens overhead (system prompt + CLAUDE.md + memory).
-# trace-mcp tools (get_task_context, get_feature_context, batch) do the same for ~4K tokens.
+# ─── Agent ─────────────────────────────────────────────────────────
+# Whitelist-based: allow Agent(general-purpose) only when description
+# contains an explicit non-exploration verb. Agent(Explore) is always denied.
 if [[ "$TOOL_NAME" == "Agent" ]]; then
   SUBAGENT_TYPE=$(echo "$INPUT" | jq -r '.tool_input.subagent_type // "general-purpose"')
   DESCRIPTION=$(echo "$INPUT" | jq -r '.tool_input.description // ""' | tr '[:upper:]' '[:lower:]')
 
-  # Always block Explore agents — trace-mcp replaces them entirely
   if [[ "$SUBAGENT_TYPE" == "Explore" ]]; then
     deny \
       "Agent(Explore) wastes ~50K tokens on overhead. Use trace-mcp tools instead (~4K tokens)." \
       "trace-mcp alternatives:\\n- get_task_context { \\\"task\\\": \\\"your exploration goal\\\" } — focused context in one call\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — NL query → relevant symbols\\n- batch with multiple search/get_outline/get_symbol calls — parallel lookups\\n- get_project_map { \\\"summary_only\\\": true } — project overview"
   fi
 
-  # Block general-purpose agents doing code exploration (not coding/testing/research)
   if [[ "$SUBAGENT_TYPE" == "general-purpose" ]]; then
-    EXPLORE_RE='(explore|investigate|understand|analyz|analys|audit|study|deep dive|catalog|inspect|trace|walk ?through|summari[sz]e|identify|discover|locate|document .* (code|module|function|class|registry|package|file|project|handler|service|component|plugin|api|middleware|hook|schema)|review .* (code|module|file|implementation)|check .* (code|structure|architecture|implementation|pattern)|find .* (code|pattern|usage|definition|references?|callers?)|map .* (dependencies|imports|structure|flow)|list .* (files|symbols|classes|functions|modules)|how .* (work|implemented)|where .* (defined|used|called))'
-    if echo "$DESCRIPTION" | grep -qiE "$EXPLORE_RE"; then
+    # Allowed verbs — Agent is reasonable for these.
+    ALLOW_RE='\b(write|implement|build|create|generate|run|execute|test|deploy|publish|fix|refactor|migrate|upgrade|configure|install|fetch|web search|search the web|plan|review pr|review the pr|open a pr|open pr)\b'
+    if ! echo "$DESCRIPTION" | grep -qE "$ALLOW_RE"; then
       deny \
-        "Agent(general-purpose) for code exploration wastes ~50K tokens. Use trace-mcp tools instead." \
-        "trace-mcp alternatives:\\n- get_task_context { \\\"task\\\": \\\"${DESCRIPTION}\\\" } — replaces exploration agents (~4K tokens)\\n- get_feature_context { \\\"description\\\": \\\"...\\\" } — NL query → relevant code\\n- find_usages / get_call_graph / get_change_impact — relationship analysis\\n- batch { \\\"calls\\\": [...] } — multiple lookups in one call\\nAgent is OK for: writing code, running tests, web research, Plan mode."
+        "Agent(general-purpose) without an explicit action verb (write/implement/build/run/test/fix/refactor/fetch/plan/...) is treated as exploration. Use trace-mcp tools instead — they cost ~4K tokens vs ~50K per agent." \
+        "trace-mcp alternatives:\\n- get_task_context { \\\"task\\\": \\\"${DESCRIPTION}\\\" } — replaces exploration agents (~4K tokens)\\n- get_feature_context { \\\"description\\\": \\\"...\\\" } — NL query → relevant code\\n- find_usages / get_call_graph / get_change_impact — relationship analysis\\n- batch { \\\"calls\\\": [...] } — multiple lookups in one call\\nIf this is real coding work, rephrase the description with a concrete action verb."
     fi
   fi
 
   exit 0
 fi
 
-# Allow everything else
 exit 0

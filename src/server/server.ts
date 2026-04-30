@@ -46,6 +46,7 @@ import { withHints } from '../tools/shared/hints.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { validatePath } from '../utils/security.js';
 import { createExploredTracker } from './explored-tracker.js';
+import { startHeartbeat } from './heartbeat.js';
 import { buildInstructions } from './instructions.js';
 import { installToolGate } from './tool-gate.js';
 import type { MetaContext, ServerContext } from './types.js';
@@ -337,6 +338,11 @@ export function createServer(
     if (disposed) return;
     disposed = true;
     flushAll();
+    try {
+      heartbeat.stop();
+    } catch {
+      /* best-effort */
+    }
     // Close only resources we own (not shared via deps)
     if (ownsDecisionStore) {
       try {
@@ -463,6 +469,11 @@ export function createServer(
 
   // Explored-file tracker (guard hook reads markers to allow Read on explored files)
   const explored = createExploredTracker(projectRoot);
+
+  // Heartbeat sentinel — guard hook uses this to detect a live trace-mcp.
+  // When stale/missing, the hook falls back to allowing Read on code files
+  // instead of hard-blocking (covers crashed server / "session not found").
+  const heartbeat = startHeartbeat(projectRoot);
 
   // Build topology store (shared across navigation + advanced tools)
   // If deps provide a shared store, use it (caller manages lifecycle).
