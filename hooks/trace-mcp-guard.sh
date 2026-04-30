@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.7.1
+# trace-mcp-guard v0.8.0
 # trace-mcp PreToolUse guard
 # Routes Read/Grep/Glob/Bash/Agent on source code files through trace-mcp.
 #
-# v0.7.1 adds two fallback paths for the case where the trace-mcp process
-# is alive but its MCP channel is unresponsive (e.g. "Session not found"):
-#   - Manual bypass via scripts/trace-mcp-{disable,enable}-guard.sh — writes
-#     a TTL-based bypass sentinel that the hook honors.
-#   - Auto-degradation when N denies accumulate with zero consultation
-#     markers (proves the channel is dead).
+# Three modes (TRACE_MCP_GUARD_MODE env, default strict):
+#   - strict   : block code Read/Grep/Glob until trace-mcp consultation;
+#                full enforcement.
+#   - coach    : never block; instead inject the trace-mcp suggestion as
+#                additionalContext on every call that *would* have been
+#                denied. Designed for first-week users — value without
+#                friction; auto-promotes to strict via the desktop app.
+#   - off      : disable the hook entirely.
+#
+# Stall detection (v0.8): the server now writes a rich JSON status sentinel
+# (trace-mcp-status-{hash}.json). The hook reads `last_successful_tool_call_at`
+# and treats a long quiet period (>5min) with no recent calls as a stalled
+# MCP channel — auto-fallback without waiting for 5 denied attempts.
+#
+# Earlier fallback paths still apply:
+#   - Manual bypass via scripts/trace-mcp-{disable,enable}-guard.sh.
+#   - Auto-degradation when N denies pile up with zero consultation markers.
 #
 # Design (v0.7 — closes the retry-bypass loophole from v0.6):
 #
@@ -40,6 +51,17 @@ set -euo pipefail
 # ─── Manual user override ──────────────────────────────────────────
 # Allow direct shell users to opt out without editing settings.json.
 if [[ "${TRACE_MCP_GUARD_OFF:-0}" == "1" ]]; then
+  exit 0
+fi
+
+# ─── Mode selection ────────────────────────────────────────────────
+# strict (default) | coach | off
+GUARD_MODE="${TRACE_MCP_GUARD_MODE:-strict}"
+case "$GUARD_MODE" in
+  strict|coach|off) ;;
+  *) GUARD_MODE="strict" ;;
+esac
+if [[ "$GUARD_MODE" == "off" ]]; then
   exit 0
 fi
 
@@ -82,6 +104,19 @@ file_mtime() {
 deny() {
   local reason="$1"
   local context="$2"
+  if [[ "$GUARD_MODE" == "coach" ]]; then
+    # Coach mode: never block. Inject the trace-mcp hint as additionalContext
+    # so the agent sees the suggestion without losing the round-trip.
+    cat <<EOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "additionalContext": "trace-mcp coach: $reason\\n\\n$context"
+  }
+}
+EOF
+    exit 0
+  fi
   cat <<EOF
 {
   "hookSpecificOutput": {
@@ -120,6 +155,7 @@ else
 fi
 CONSULTED_DIR="${TMPDIR:-/tmp}/trace-mcp-consulted-${PROJECT_HASH}"
 HEARTBEAT_FILE="${TMPDIR:-/tmp}/trace-mcp-alive-${PROJECT_HASH}"
+STATUS_FILE="${TMPDIR:-/tmp}/trace-mcp-status-${PROJECT_HASH}.json"
 BYPASS_FILE="${TMPDIR:-/tmp}/trace-mcp-bypass-${PROJECT_HASH}"
 READS_DIR="${TMPDIR:-/tmp}/trace-mcp-reads-${SESSION_ID}"
 DENY_AGGREGATE_FILE="$READS_DIR/.deny-aggregate"
@@ -128,11 +164,27 @@ mkdir -p "$READS_DIR" 2>/dev/null || true
 # Tunables
 REPEAT_READ_LIMIT=${TRACE_MCP_GUARD_REPEAT_LIMIT:-3}
 STALE_THRESHOLD_SEC=${TRACE_MCP_GUARD_STALE_SEC:-30}
+# Stall detection: if status JSON shows last_successful_tool_call_at is older
+# than this AND tool_calls_total > 0, MCP channel is considered stalled.
+STALL_THRESHOLD_SEC=${TRACE_MCP_GUARD_STALL_SEC:-300}
 # Auto-degradation: trip when N denies accumulate within WINDOW seconds AND
 # no consultation markers exist (suggests MCP channel is dead but process is up).
 AUTO_DEGRADE_DENY_THRESHOLD=${TRACE_MCP_GUARD_AUTO_DENY:-5}
 AUTO_DEGRADE_WINDOW_SEC=${TRACE_MCP_GUARD_AUTO_WINDOW:-300}
 AUTO_DEGRADE_DURATION_SEC=${TRACE_MCP_GUARD_AUTO_DURATION:-300}
+
+# Convert ISO 8601 timestamp → epoch seconds. Empty/invalid input → 0.
+iso_to_epoch() {
+  local ts="$1"
+  [[ -z "$ts" ]] && { echo 0; return; }
+  # GNU date (Linux) and BSD date (macOS) both accept ISO 8601 via -d / -j.
+  date -d "$ts" +%s 2>/dev/null && return
+  # macOS BSD date: drop sub-seconds + Z, parse as UTC.
+  local trimmed="${ts%%.*}"
+  trimmed="${trimmed%Z}"
+  date -juf "%Y-%m-%dT%H:%M:%S" "$trimmed" +%s 2>/dev/null && return
+  echo 0
+}
 
 # ─── Liveness / bypass check ───────────────────────────────────────
 # HEARTBEAT_DEAD=1 → fallback mode: allow Read with warning instead of
@@ -173,6 +225,25 @@ if (( HEARTBEAT_DEAD == 0 )); then
     if (( AGE > STALE_THRESHOLD_SEC )); then
       HEARTBEAT_DEAD=1
       HEARTBEAT_REASON="trace-mcp heartbeat stale (${AGE}s old, threshold ${STALE_THRESHOLD_SEC}s)"
+    fi
+  fi
+fi
+
+# Stall detection (v0.8): even with a fresh heartbeat, the MCP channel may be
+# stuck. The status JSON exposes last_successful_tool_call_at; if it has been
+# silent for STALL_THRESHOLD_SEC AND tool_calls_total > 0 (i.e. MCP did work
+# at some point and then went quiet), treat as stalled.
+if (( HEARTBEAT_DEAD == 0 )) && [[ -f "$STATUS_FILE" ]]; then
+  STATUS_TOTAL=$(jq -r '.tool_calls_total // 0' "$STATUS_FILE" 2>/dev/null || echo 0)
+  STATUS_LAST=$(jq -r '.last_successful_tool_call_at // empty' "$STATUS_FILE" 2>/dev/null || echo "")
+  if [[ "$STATUS_TOTAL" =~ ^[0-9]+$ ]] && (( STATUS_TOTAL > 0 )) && [[ -n "$STATUS_LAST" ]]; then
+    LAST_EPOCH=$(iso_to_epoch "$STATUS_LAST")
+    if (( LAST_EPOCH > 0 )); then
+      QUIET=$((NOW - LAST_EPOCH))
+      if (( QUIET > STALL_THRESHOLD_SEC )); then
+        HEARTBEAT_DEAD=1
+        HEARTBEAT_REASON="trace-mcp MCP channel stalled — no successful tool call for ${QUIET}s (threshold ${STALL_THRESHOLD_SEC}s)"
+      fi
     fi
   fi
 fi

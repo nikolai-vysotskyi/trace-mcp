@@ -65,6 +65,7 @@ export function installToolGate(
   ) => Record<string, unknown> | undefined,
   stripMetaFields: (obj: Record<string, unknown>) => void,
   projectRoot?: string,
+  recordToolCall?: (success: boolean) => void,
 ): ToolGateResult {
   const includeSet = config.tools?.include ? new Set(config.tools.include) : null;
   const excludeSet = config.tools?.exclude ? new Set(config.tools.exclude) : null;
@@ -211,6 +212,7 @@ export function installToolGate(
             content: Array<{ type: string; text: string }>;
             isError?: boolean;
           };
+          recordToolCall?.(!result?.isError);
           if (result?.content?.[0]?.text && !result.isError) {
             try {
               const parsed = JSON.parse(result.content[0].text);
@@ -236,6 +238,7 @@ export function installToolGate(
           content: Array<{ type: string; text: string }>;
           isError?: boolean;
         };
+        recordToolCall?.(!resultObj?.isError);
         const count = extractResultCount(resultObj);
         const compactResult = extractCompactResult(name, resultObj);
         const resultTokens = resultObj?.content?.[0]?.text?.length

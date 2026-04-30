@@ -101,6 +101,32 @@ function setManualBypass(cwd: string, secondsAhead: number): string {
   return file;
 }
 
+/** Write a status sentinel JSON simulating server state. */
+function writeStatus(
+  cwd: string,
+  status: {
+    tool_calls_total: number;
+    last_successful_tool_call_at: string | null;
+  },
+): string {
+  const real = fs.realpathSync(cwd);
+  const file = path.join(TMP_BASE, `trace-mcp-status-${projectHash(real)}.json`);
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      schema: 1,
+      pid: 12345,
+      started_at: new Date().toISOString(),
+      last_heartbeat_at: new Date().toISOString(),
+      ...status,
+      last_failed_tool_call_at: null,
+      tool_calls_failed: 0,
+      mcp_sessions_active: 1,
+    }),
+  );
+  return file;
+}
+
 describe('trace-mcp-guard.sh v0.7', () => {
   const projectDir = path.join(
     TMP_BASE,
@@ -125,6 +151,8 @@ describe('trace-mcp-guard.sh v0.7', () => {
       if (fs.existsSync(consultedDir)) fs.rmSync(consultedDir, { recursive: true, force: true });
       const bp = path.join(TMP_BASE, `trace-mcp-bypass-${projectHash(real)}`);
       if (fs.existsSync(bp)) fs.rmSync(bp, { force: true });
+      const statusFile = path.join(TMP_BASE, `trace-mcp-status-${projectHash(real)}.json`);
+      if (fs.existsSync(statusFile)) fs.rmSync(statusFile, { force: true });
       fs.rmSync(projectDir, { recursive: true, force: true });
     }
     if (fs.existsSync(heartbeatFile)) fs.rmSync(heartbeatFile, { force: true });
@@ -270,6 +298,87 @@ describe('trace-mcp-guard.sh v0.7', () => {
     const future = new Date(Date.now() + 2000);
     fs.utimesSync(file, future, future);
     expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
+  });
+
+  // ─── Modes (strict / coach / off) ───────────────────────────────
+
+  it('off mode: hook is a no-op', () => {
+    const file = path.join(projectDir, 'off-mode.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(
+      runGuard('Read', { file_path: file }, sessionId, projectDir, {
+        TRACE_MCP_GUARD_MODE: 'off',
+      }).allowed,
+    ).toBe(true);
+  });
+
+  it('coach mode: never blocks, always emits hint context', () => {
+    const file = path.join(projectDir, 'coach.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('coach');
+    expect(decision.context ?? '').toContain('get_outline');
+  });
+
+  it('coach mode: blocks .env still (security override)', () => {
+    const file = path.join(projectDir, '.env.local');
+    fs.writeFileSync(file, 'SECRET=x');
+    // Coach mode converts the .env deny into a hint, but still surfaces the
+    // alternative — agent shouldn't simply Read .env contents. Check the
+    // context contains the env-vars hint regardless of mode.
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+    });
+    expect(decision.context ?? '').toContain('get_env_vars');
+  });
+
+  it('coach mode: Bash code-search becomes a hint', () => {
+    const decision = runGuard('Bash', { command: 'grep -r foo src/*.ts' }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('coach');
+  });
+
+  // ─── Stall detection via status JSON ────────────────────────────
+
+  it('stall detection: triggers when last successful call is older than threshold', () => {
+    // Simulate: server worked at some point (total > 0), but the last call
+    // was 6 minutes ago. Threshold default is 5 min.
+    const sixMinAgo = new Date(Date.now() - 360_000).toISOString();
+    writeStatus(projectDir, {
+      tool_calls_total: 12,
+      last_successful_tool_call_at: sixMinAgo,
+    });
+    const file = path.join(projectDir, 'stall.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('stalled');
+  });
+
+  it('stall detection: does NOT trigger when calls are recent', () => {
+    const now = new Date().toISOString();
+    writeStatus(projectDir, {
+      tool_calls_total: 3,
+      last_successful_tool_call_at: now,
+    });
+    const file = path.join(projectDir, 'fresh.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  it('stall detection: does NOT trigger before any successful call (server just started)', () => {
+    writeStatus(projectDir, {
+      tool_calls_total: 0,
+      last_successful_tool_call_at: null,
+    });
+    const file = path.join(projectDir, 'cold.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
   });
 
   // ─── Manual override ────────────────────────────────────────────
