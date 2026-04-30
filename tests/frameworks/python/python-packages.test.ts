@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AnthropicPythonPlugin } from '../../../src/indexer/plugins/integration/tooling/anthropic-py/index.js';
 import { AttrsPyPlugin } from '../../../src/indexer/plugins/integration/tooling/attrs-py/index.js';
 import { OpenAIPythonPlugin } from '../../../src/indexer/plugins/integration/tooling/openai-py/index.js';
 import { PythonAsyncPlugin } from '../../../src/indexer/plugins/integration/tooling/python-async/index.js';
@@ -12,6 +13,7 @@ import { Jinja2Plugin } from '../../../src/indexer/plugins/integration/view/jinj
 type AnyPlugin =
   | PythonHttpClientsPlugin
   | OpenAIPythonPlugin
+  | AnthropicPythonPlugin
   | PythonMLPlugin
   | PythonScientificPlugin
   | PythonImagingPlugin
@@ -140,6 +142,99 @@ openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[])
 `,
     );
     expect(r.edges!.some((e) => e.metadata?.kind === 'chat')).toBe(true);
+  });
+});
+
+describe('AnthropicPythonPlugin', () => {
+  const plugin = new AnthropicPythonPlugin();
+
+  it('manifest', () => {
+    expect(plugin.manifest.name).toBe('anthropic-py');
+    expect(plugin.manifest.category).toBe('tooling');
+  });
+
+  it('extracts messages.create with model', async () => {
+    const r = await extract(
+      plugin,
+      `
+from anthropic import Anthropic
+client = Anthropic()
+resp = client.messages.create(model="claude-3-5-sonnet-latest", max_tokens=1024, messages=[])
+`,
+    );
+    expect(r.frameworkRole).toBe('llm_client');
+    const e = r.edges!.find((x) => x.metadata?.kind === 'messages');
+    expect(e).toBeDefined();
+    expect(e!.metadata?.provider).toBe('anthropic');
+    expect(e!.metadata?.model).toBe('claude-3-5-sonnet-latest');
+  });
+
+  it('extracts messages.stream', async () => {
+    const r = await extract(
+      plugin,
+      `
+from anthropic import Anthropic
+client = Anthropic()
+with client.messages.stream(model="claude-3-haiku-20240307", messages=[]) as s:
+    pass
+`,
+    );
+    expect(r.edges!.some((e) => e.metadata?.kind === 'messages_stream')).toBe(true);
+  });
+
+  it('extracts batches.create', async () => {
+    const r = await extract(
+      plugin,
+      `
+import anthropic
+client = anthropic.Anthropic()
+client.beta.messages.batches.create(requests=[])
+`,
+    );
+    expect(r.edges!.some((e) => e.metadata?.kind === 'batch')).toBe(true);
+  });
+
+  it('extracts legacy completions.create', async () => {
+    const r = await extract(
+      plugin,
+      `
+import anthropic
+client = anthropic.Anthropic()
+client.completions.create(model="claude-2.1", prompt="Hi")
+`,
+    );
+    expect(r.edges!.some((e) => e.metadata?.kind === 'completion')).toBe(true);
+  });
+
+  it('extracts count_tokens utility', async () => {
+    const r = await extract(
+      plugin,
+      `
+import anthropic
+client = anthropic.Anthropic()
+client.messages.count_tokens(model="claude-3-5-sonnet-latest", messages=[])
+`,
+    );
+    expect(r.edges!.some((e) => e.metadata?.kind === 'count_tokens')).toBe(true);
+  });
+
+  it('extracts AsyncAnthropic patterns', async () => {
+    const r = await extract(
+      plugin,
+      `
+from anthropic import AsyncAnthropic
+client = AsyncAnthropic()
+
+async def go():
+    return await client.messages.create(model="claude-3-haiku-20240307", messages=[])
+`,
+    );
+    expect(r.edges!.some((e) => e.metadata?.kind === 'messages')).toBe(true);
+  });
+
+  it('skips files without anthropic', async () => {
+    const r = await extract(plugin, 'print("hi")');
+    expect(r.edges ?? []).toEqual([]);
   });
 });
 
