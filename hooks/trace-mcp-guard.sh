@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.8.1
+# trace-mcp-guard v0.9.0
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
 # trace-mcp PreToolUse guard
 # Routes Read/Grep/Glob/Bash/Agent on source code files through trace-mcp.
+#
+# v0.9 changes:
+#   - .md "doc tour" detection: when N+ markdown files are read inside source
+#     directories in one session (per-feature docs co-located with code), the
+#     hook injects a get_feature_context / get_task_context hint via
+#     additionalContext. Read still passes — this is a nudge, not a block.
+#     README/CHANGELOG/LICENSE in repo root are unaffected.
+#   - `ls` on source-tree paths is now denied (e.g. `ls src/...`,
+#     `ls /abs/.../packages/foo/`), redirecting to get_project_map / get_outline.
+#     Plain `ls`, `ls .`, `ls -la`, `ls dist/`, `ls node_modules/...` keep working.
 #
 # Three modes (TRACE_MCP_GUARD_MODE env, default strict):
 #   - strict   : block code Read/Grep/Glob until trace-mcp consultation;
@@ -319,8 +329,32 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
       "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
   fi
 
-  # Non-code files — always allow.
+  # Non-code files — allow, but watch for "Second Brain" / per-feature .md
+  # tours. Markdown files co-located with code (e.g. src/pipelines/steps/foo/
+  # foo.md sitting next to executor.js) are a popular doc layout. Reading
+  # 5+ of them is the same kind of token-burning navigation the guard blocks
+  # for .ts files, just under a different extension. Counter is per-session;
+  # README/CHANGELOG/LICENSE in repo root are unaffected because they don't
+  # live under src/lib/packages/...
   if echo "$FILE_PATH" | grep -qiE "$NONCODE_EXT_RE"; then
+    if echo "$FILE_PATH" | grep -qiE '\.md$' \
+       && echo "$FILE_PATH" | grep -qE '/(src|lib|packages|apps?|server|client|pkg|internal|modules|services|pipelines|cmd|tests?|specs?|features?)/' \
+       && ! echo "$FILE_PATH" | grep -qE '/(docs?|node_modules|vendor|dist|build|\.git|target|out)/'; then
+      MD_TOUR_THRESHOLD=${TRACE_MCP_GUARD_MD_HINT_THRESHOLD:-3}
+      MD_TOUR_FILE="$READS_DIR/.md-tour-count"
+      MD_TOUR_COUNT=0
+      if [[ -f "$MD_TOUR_FILE" ]]; then
+        MD_TOUR_COUNT=$(cat "$MD_TOUR_FILE" 2>/dev/null || echo 0)
+        MD_TOUR_COUNT="${MD_TOUR_COUNT:-0}"
+      fi
+      MD_TOUR_COUNT=$((MD_TOUR_COUNT + 1))
+      echo "$MD_TOUR_COUNT" > "$MD_TOUR_FILE" 2>/dev/null || true
+      if (( MD_TOUR_COUNT >= MD_TOUR_THRESHOLD )); then
+        REL_PATH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
+        allow_with_context \
+          "trace-mcp guard: ${MD_TOUR_COUNT}x .md reads inside source dirs this session — looks like a doc tour. For per-feature docs co-located with code, get_feature_context / get_task_context is usually faster than reading docs file-by-file. Reading ${REL_PATH} is allowed; this is a hint, not a block.\\nAlternatives:\\n- get_feature_context { \\\"description\\\": \\\"what these docs describe\\\" }\\n- get_task_context { \\\"task\\\": \\\"what you are working on\\\" }\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"**/*.md\\\" } — find specific doc by name"
+      fi
+    fi
     exit 0
   fi
 
@@ -515,6 +549,19 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
         "Use trace-mcp instead of \\\"git diff\\\" on code files." \
         "trace-mcp alternatives:\\n- compare_branches { \\\"branch\\\": \\\"current\\\" } — symbol-level diff\\n- get_changed_symbols { } — diff-aware symbol list\\nUse git diff only on non-code files."
     fi
+  fi
+
+  # `ls` on source-tree paths — code exploration disguised as listing.
+  # Allows: `ls`, `ls .`, `ls -la`, `ls /tmp/...`, `ls dist/`, `ls node_modules/...`
+  # Denies: `ls src/...`, `ls /abs/.../packages/foo/`, `ls foo/lib/bar`, etc.
+  # Pattern: `ls` as a command (start, after pipe / && / ; / xargs) AND any
+  # argument component is a known source-tree directory.
+  if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)ls( |$)' \
+     && echo "$COMMAND" | grep -qE '(^|[ /])(src|lib|packages|apps?|server|client|pkg|internal|modules|services|pipelines|cmd)/' \
+     && ! echo "$COMMAND" | grep -qE '(node_modules|vendor|dist|build|\.git|target|out)/'; then
+    deny \
+      "Use trace-mcp instead of \\\"ls\\\" on source-tree paths — it knows your project structure." \
+      "trace-mcp alternatives:\\n- get_project_map { \\\"summary_only\\\": true } — frameworks + structure overview\\n- get_outline { \\\"path\\\": \\\"src/foo/bar.ts\\\" } — symbols in a file (cheaper than Read)\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"src/**\\\" } — find symbols in a tree\\nUse \\\"ls\\\" only on non-source dirs (dist/, build/, /tmp, ~, node_modules/)."
   fi
 
   # Safe Bash whitelist (allows env-prefixed forms like `LC_ALL=C git ...`).
