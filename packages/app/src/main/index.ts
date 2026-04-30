@@ -158,6 +158,35 @@ ipcMain.handle('restart-daemon', async () => {
   return restartDaemon();
 });
 
+// IPC: trace-mcp guard control (status read + per-project mode toggle + bypass).
+// Status JSON is written by the trace-mcp server (src/server/heartbeat.ts).
+// Mode is persisted in <projectRoot>/.trace-mcp/guard-mode and read by the hook.
+ipcMain.handle('guard:status', async (_e, projectRoot: string) => {
+  const { getGuardStatus } = await import('./guard-control.js');
+  return getGuardStatus(projectRoot);
+});
+ipcMain.handle('guard:set-mode', async (_e, projectRoot: string, mode: string) => {
+  const { setGuardMode } = await import('./guard-control.js');
+  if (mode !== 'strict' && mode !== 'coach' && mode !== 'off') {
+    return { ok: false, error: `invalid mode: ${mode}` };
+  }
+  try {
+    setGuardMode(projectRoot, mode);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+ipcMain.handle('guard:set-bypass', async (_e, projectRoot: string, minutes: number) => {
+  const { setBypass } = await import('./guard-control.js');
+  try {
+    setBypass(projectRoot, minutes);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+
 // IPC: Ollama control surface — HTTP status + model listing + daemon lifecycle.
 // baseUrl is always passed from the renderer because users can repoint Ollama
 // to a remote host in settings; we don't assume localhost here.

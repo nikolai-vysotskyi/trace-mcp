@@ -49,6 +49,27 @@ declare global {
       onTabListChanged: (
         callback: (tabs: { id: string; title: string; type: string; active: boolean }[]) => void,
       ) => () => void;
+      guard: {
+        status: (projectRoot: string) => Promise<{
+          health: 'ok' | 'stalled' | 'down' | 'unknown';
+          mode: 'strict' | 'coach' | 'off';
+          pid?: number;
+          lastSuccessAt?: string | null;
+          toolCallsTotal?: number;
+          toolCallsFailed?: number;
+          quietSeconds?: number;
+          bypassUntil?: number;
+          reason?: string;
+        }>;
+        setMode: (
+          projectRoot: string,
+          mode: 'strict' | 'coach' | 'off',
+        ) => Promise<{ ok: boolean; error?: string }>;
+        setBypass: (
+          projectRoot: string,
+          minutes: number,
+        ) => Promise<{ ok: boolean; error?: string }>;
+      };
       ollama: {
         status: (
           baseUrl?: string,
