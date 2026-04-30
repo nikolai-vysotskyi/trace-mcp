@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
   openInEditor: (filePath: string): Promise<void> => ipcRenderer.invoke('open-in-editor', filePath),
+  openExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('open-external', url),
   detectIdeApps: (): Promise<{ id: string; name: string; bundlePath: string }[]> =>
     ipcRenderer.invoke('detect-ide-apps'),
   openInIde: (bundlePath: string, filePath: string): Promise<{ ok: boolean; error?: string }> =>

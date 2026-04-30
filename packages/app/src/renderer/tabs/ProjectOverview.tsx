@@ -44,6 +44,15 @@ function shortPath(root: string): string {
     .replace(/^[A-Z]:\\Users\\[^\\]+/, '~');
 }
 
+function openInBrowser(url: string): void {
+  const api = window.electronAPI;
+  if (api?.openExternal) {
+    void api.openExternal(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function buildIssueUrl(gap: CoverageGap | UnknownPackage): string {
   const isGap = 'priority' in gap;
   const title = isGap ? `Plugin support: ${gap.name}` : `Catalog review: ${gap.name}`;
@@ -458,7 +467,7 @@ export function ProjectOverview({
                   </div>
                   <button
                     type="button"
-                    onClick={() => window.open(buildIssueUrl(gap), '_blank')}
+                    onClick={() => openInBrowser(buildIssueUrl(gap))}
                     className="shrink-0 text-[11px] font-medium transition-colors hover:opacity-80"
                     style={{
                       background: 'var(--accent)',
@@ -499,7 +508,7 @@ export function ProjectOverview({
                   </div>
                   <button
                     type="button"
-                    onClick={() => window.open(buildIssueUrl(pkg), '_blank')}
+                    onClick={() => openInBrowser(buildIssueUrl(pkg))}
                     className="shrink-0 text-[11px] font-medium transition-colors hover:opacity-80"
                     style={{
                       background: 'var(--accent)',
