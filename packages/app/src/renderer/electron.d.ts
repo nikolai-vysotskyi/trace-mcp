@@ -5,6 +5,7 @@ declare global {
     electronAPI?: {
       selectFolder: () => Promise<string | null>;
       openInEditor: (filePath: string) => Promise<void>;
+      openExternal: (url: string) => Promise<{ ok: boolean; error?: string }>;
       detectIdeApps: () => Promise<{ id: string; name: string; bundlePath: string }[]>;
       openInIde: (bundlePath: string, filePath: string) => Promise<{ ok: boolean; error?: string }>;
       restartDaemon: () => Promise<{ ok: boolean }>;
