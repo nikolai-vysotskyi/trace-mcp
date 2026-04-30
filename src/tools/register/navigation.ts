@@ -3,6 +3,15 @@ import { z } from 'zod';
 import { formatToolError } from '../../errors.js';
 import { decisionsForImpact } from '../../memory/enrichment.js';
 import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
+import {
+  aggregateFreshness,
+  computeFileFreshness,
+  computeRepoFreshness,
+  enrichItemsWithFreshness,
+} from '../../scoring/freshness.js';
+import { renderItemsMarkdown, renderSectionsMarkdown } from '../../scoring/markdown-render.js';
+import { computeRetrievalConfidence } from '../../scoring/retrieval-confidence.js';
+import { loadTunedWeights } from '../../runtime/tuning.js';
 import type { ServerContext } from '../../server/types.js';
 import { SubprojectManager } from '../../subproject/manager.js';
 import { getChangeImpact } from '../analysis/impact.js';
@@ -67,6 +76,17 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       }
       const { symbol, file, source, truncated } = result.value;
       markExplored(file.path);
+      // Phase 4a: attribute this read to a recent ranked retrieval event when possible.
+      ctx.rankingLedger?.recordAcceptance(projectRoot, symbol.symbol_id);
+      const freshness = computeFileFreshness(projectRoot, file);
+      const summary = aggregateFreshness([freshness]);
+      const confidence = computeRetrievalConfidence({
+        scores: [1],
+        topName: symbol.name,
+        topFqn: symbol.fqn ?? null,
+        query: symbol.name,
+        freshnessSummary: summary,
+      });
       return {
         content: [
           {
@@ -83,6 +103,16 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
               line_end: symbol.line_end,
               source,
               ...(truncated ? { truncated: true } : {}),
+              _freshness: freshness,
+              _meta: {
+                freshness: summary,
+                ...(confidence
+                  ? {
+                      confidence: confidence.confidence,
+                      confidence_signals: confidence.signals,
+                    }
+                  : {}),
+              },
             }),
           },
         ],
@@ -216,6 +246,14 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         };
       }
 
+      // When fusion is requested without explicit weights, fall back to per-repo
+      // tuned weights from ~/.trace-mcp/tuning.jsonc (Phase 4b). Explicit
+      // `fusion_weights` from the call always wins.
+      let effectiveFusionWeights = fusion_weights;
+      if (fusion && !effectiveFusionWeights) {
+        const tuned = loadTunedWeights(projectRoot);
+        if (tuned) effectiveFusionWeights = tuned;
+      }
       const result = await search(
         store,
         query,
@@ -225,7 +263,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         { vectorStore, embeddingService, reranker },
         { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
         { semantic, semanticWeight: semantic_weight },
-        fusion ? { fusion: true, weights: fusion_weights, debug: fusion_debug } : undefined,
+        fusion ? { fusion: true, weights: effectiveFusionWeights, debug: fusion_debug } : undefined,
       );
       // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
       const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => {
@@ -309,6 +347,52 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         }
       }
 
+      // Attach per-item freshness + summary + retrieval confidence in _meta
+      if (Array.isArray(response.items) && response.items.length > 0) {
+        const items = response.items as Array<{
+          file: string;
+          score?: number;
+          name?: string;
+          fqn?: string | null;
+          symbol_id?: string;
+        }>;
+        const enriched = enrichItemsWithFreshness(store, projectRoot, items);
+        response.items = enriched.items;
+        // Record retrieval event for self-tuning. No-op when ledger is null.
+        if (ctx.rankingLedger) {
+          ctx.rankingLedger.recordEvent({
+            tool: 'search',
+            query,
+            topSymbolIds: items
+              .slice(0, 10)
+              .map((i) => i.symbol_id ?? '')
+              .filter(Boolean),
+            repo: projectRoot,
+          });
+        }
+        // Augment summary with repo-level HEAD comparison when available.
+        const repoFreshness = computeRepoFreshness(projectRoot, store);
+        if (repoFreshness) {
+          enriched.summary.repo_is_stale =
+            enriched.summary.repo_is_stale || repoFreshness.repo_is_stale;
+        }
+        const top = enriched.items[0];
+        const confidence = computeRetrievalConfidence({
+          scores: enriched.items.map((i) => Number(i.score ?? 0)),
+          topName: top?.name ?? null,
+          topFqn: top?.fqn ?? null,
+          query,
+          freshnessSummary: enriched.summary,
+        });
+        response._meta = {
+          ...((response._meta as Record<string, unknown> | undefined) ?? {}),
+          freshness: enriched.summary,
+          ...(repoFreshness ? { repo_freshness: repoFreshness } : {}),
+          ...(confidence
+            ? { confidence: confidence.confidence, confidence_signals: confidence.signals }
+            : {}),
+        };
+      }
       return { content: [{ type: 'text', text: jh('search', response) }] };
     },
   );
@@ -360,7 +444,24 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         };
       }
       markExplored(filePath);
-      return { content: [{ type: 'text', text: jh('get_outline', result.value) }] };
+      const fileRow = store.getFile(result.value.path);
+      const freshness = fileRow ? computeFileFreshness(projectRoot, fileRow) : 'fresh';
+      const summary = aggregateFreshness([freshness]);
+      const confidence = computeRetrievalConfidence({
+        scores: [1],
+        freshnessSummary: summary,
+      });
+      const outlineWithFreshness = {
+        ...result.value,
+        _freshness: freshness,
+        _meta: {
+          freshness: summary,
+          ...(confidence
+            ? { confidence: confidence.confidence, confidence_signals: confidence.signals }
+            : {}),
+        },
+      };
+      return { content: [{ type: 'text', text: jh('get_outline', outlineWithFreshness) }] };
     },
   );
 
@@ -447,7 +548,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_feature_context',
-    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points, use get_task_context instead. For symbol metadata without source, use search. Read-only. Returns JSON: { items: [{ symbol_id, name, file, source, score }], token_usage }.',
+    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points, use get_task_context instead. For symbol metadata without source, use search. Read-only. Returns JSON (default) or Markdown: { items: [{ symbol_id, name, file, source, score }], token_usage } | { content: "...markdown..." }.',
     {
       description: z
         .string()
@@ -461,8 +562,14 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         .max(100000)
         .optional()
         .describe('Max tokens for assembled context (default 4000)'),
+      output_format: z
+        .enum(['json', 'markdown'])
+        .optional()
+        .describe(
+          'Output format. "json" (default) returns structured items; "markdown" returns LLM-friendly fenced code blocks (~15-20% token savings, easier for the model to read).',
+        ),
     },
-    async ({ description, token_budget }) => {
+    async ({ description, token_budget, output_format }) => {
       const budgetState = {
         totalCalls: savings.getSessionStats().total_calls,
         totalRawTokens: savings.getSessionStats().total_raw_tokens,
@@ -482,7 +589,54 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         };
         return { content: [{ type: 'text', text: jh('get_feature_context', enriched) }] };
       }
-      return { content: [{ type: 'text', text: jh('get_feature_context', result) }] };
+      const freshened = enrichItemsWithFreshness(store, projectRoot, result.items);
+      const top = freshened.items[0];
+      const confidence = computeRetrievalConfidence({
+        scores: freshened.items.map((i) => Number((i as { score?: number }).score ?? 0)),
+        topName: (top as { name?: string }).name ?? null,
+        topFqn: (top as { fqn?: string | null }).fqn ?? null,
+        query: description,
+        freshnessSummary: freshened.summary,
+      });
+      const payload: Record<string, unknown> = {
+        ...result,
+        items: freshened.items,
+        _meta: {
+          freshness: freshened.summary,
+          ...(confidence
+            ? { confidence: confidence.confidence, confidence_signals: confidence.signals }
+            : {}),
+        },
+      };
+      if (output_format === 'markdown') {
+        const md = renderItemsMarkdown(
+          (
+            freshened.items as Array<{
+              name?: string;
+              file?: string;
+              symbol_id?: string;
+              source?: string;
+              score?: number;
+            }>
+          ).map((i) => ({
+            name: i.name ?? null,
+            file: i.file ?? null,
+            symbol_id: i.symbol_id ?? null,
+            source: i.source ?? null,
+            score: typeof i.score === 'number' ? i.score : null,
+          })),
+          { title: `Feature context: ${description}`, sectionTitle: 'Matches' },
+        );
+        // Drop the structured items to maximize savings — _meta + _freshness summary stay.
+        const mdPayload = {
+          content: md,
+          format: 'markdown' as const,
+          token_usage: (payload as { token_usage?: unknown }).token_usage,
+          _meta: payload._meta,
+        };
+        return { content: [{ type: 'text', text: jh('get_feature_context', mdPayload) }] };
+      }
+      return { content: [{ type: 'text', text: jh('get_feature_context', payload) }] };
     },
   );
 
@@ -569,13 +723,39 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       for (const sym of result.value.primary ?? []) {
         if (sym.file) markExplored(sym.file);
       }
-      return { content: [{ type: 'text', text: jh('get_context_bundle', result.value) }] };
+      // Per-symbol _freshness + summary in _meta
+      const primaryItems = (result.value.primary ?? []) as Array<{
+        file: string;
+        name?: string;
+        fqn?: string | null;
+      }>;
+      let payload: Record<string, unknown> = { ...(result.value as Record<string, unknown>) };
+      if (primaryItems.length > 0) {
+        const freshened = enrichItemsWithFreshness(store, projectRoot, primaryItems);
+        payload.primary = freshened.items;
+        const top = freshened.items[0];
+        const confidence = computeRetrievalConfidence({
+          scores: freshened.items.map(() => 1),
+          topName: top?.name ?? null,
+          topFqn: top?.fqn ?? null,
+          query: fqn ?? symbol_id ?? symbol_ids?.[0] ?? '',
+          freshnessSummary: freshened.summary,
+        });
+        payload._meta = {
+          ...((payload._meta as Record<string, unknown> | undefined) ?? {}),
+          freshness: freshened.summary,
+          ...(confidence
+            ? { confidence: confidence.confidence, confidence_signals: confidence.signals }
+            : {}),
+        };
+      }
+      return { content: [{ type: 'text', text: jh('get_context_bundle', payload) }] };
     },
   );
 
   server.tool(
     'get_task_context',
-    'All-in-one context for starting a dev task: execution paths, tests, entry points, adapted by task type. Use as your FIRST call when beginning any new task — replaces manual chaining of search → get_symbol → Read. For narrower feature-code lookup use get_feature_context instead. Read-only. Returns JSON: { symbols: [{ symbol_id, name, file, source }], tests, entryPoints, taskType, token_usage }.',
+    'All-in-one context for starting a dev task: execution paths, tests, entry points, adapted by task type. Use as your FIRST call when beginning any new task — replaces manual chaining of search → get_symbol → Read. For narrower feature-code lookup use get_feature_context instead. Read-only. Returns JSON (default) or Markdown.',
     {
       task: z.string().min(1).max(2000).describe('Natural language description of the task'),
       token_budget: z
@@ -592,8 +772,14 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
           'Context strategy: minimal (fast, essential only), broad (default, wide net), deep (follow full execution chains)',
         ),
       include_tests: z.boolean().optional().describe('Include relevant test files (default true)'),
+      output_format: z
+        .enum(['json', 'markdown'])
+        .optional()
+        .describe(
+          'Output format. "json" (default) returns structured fields; "markdown" returns a single LLM-optimized document with code fences (~15-20% token savings).',
+        ),
     },
-    async ({ task, token_budget, focus, include_tests }) => {
+    async ({ task, token_budget, focus, include_tests, output_format }) => {
       const budgetState = {
         totalCalls: savings.getSessionStats().total_calls,
         totalRawTokens: savings.getSessionStats().total_raw_tokens,
@@ -616,6 +802,64 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
           : { data: result };
       if (adaptive.reduced) {
         output._budget_adaptive = { budget: adaptive.budget, reason: adaptive.reason };
+      }
+      // Per-symbol _freshness + summary in _meta
+      if (Array.isArray(output.symbols) && (output.symbols as unknown[]).length > 0) {
+        const symItems = output.symbols as Array<{
+          file: string;
+          name?: string;
+          fqn?: string | null;
+        }>;
+        const freshened = enrichItemsWithFreshness(store, projectRoot, symItems);
+        output.symbols = freshened.items;
+        const top = freshened.items[0];
+        const confidence = computeRetrievalConfidence({
+          scores: freshened.items.map(() => 1),
+          topName: top?.name ?? null,
+          topFqn: top?.fqn ?? null,
+          query: task,
+          freshnessSummary: freshened.summary,
+        });
+        output._meta = {
+          ...((output._meta as Record<string, unknown> | undefined) ?? {}),
+          freshness: freshened.summary,
+          ...(confidence
+            ? { confidence: confidence.confidence, confidence_signals: confidence.signals }
+            : {}),
+        };
+      }
+      if (output_format === 'markdown') {
+        type SrcItem = { name?: string; file?: string; symbol_id?: string; source?: string };
+        const toMd = (i: SrcItem) => ({
+          name: i.name ?? null,
+          file: i.file ?? null,
+          symbol_id: i.symbol_id ?? null,
+          source: i.source ?? null,
+        });
+        const symbols = (output.symbols as SrcItem[] | undefined) ?? [];
+        const tests = (output.tests as SrcItem[] | undefined) ?? [];
+        const entryPoints = (output.entryPoints as SrcItem[] | undefined) ?? [];
+        const md = renderSectionsMarkdown({
+          title: `Task context: ${task}`,
+          subtitle:
+            typeof output.taskType === 'string'
+              ? `_Detected task type: ${output.taskType}_`
+              : undefined,
+          groups: [
+            { title: 'Primary Symbols', items: symbols.map(toMd) },
+            { title: 'Entry Points', items: entryPoints.map(toMd) },
+            { title: 'Tests', items: tests.map(toMd) },
+          ],
+        });
+        const mdOutput = {
+          content: md,
+          format: 'markdown' as const,
+          taskType: output.taskType,
+          token_usage: output.token_usage,
+          _meta: output._meta,
+          ...(output._budget_adaptive ? { _budget_adaptive: output._budget_adaptive } : {}),
+        };
+        return { content: [{ type: 'text', text: jh('get_task_context', mdOutput) }] };
       }
       return { content: [{ type: 'text', text: jh('get_task_context', output) }] };
     },

@@ -1,6 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { formatToolError } from '../../errors.js';
+import { enrichItemsWithFreshness } from '../../scoring/freshness.js';
+import { computeRetrievalConfidence } from '../../scoring/retrieval-confidence.js';
 import type { ServerContext } from '../../server/types.js';
 import { getModuleGraph } from '../analysis/module-graph.js';
 import { getCallGraph } from '../framework/call-graph.js';
@@ -286,7 +288,23 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
         };
         return { content: [{ type: 'text', text: jh('find_usages', enriched) }] };
       }
-      return { content: [{ type: 'text', text: jh('find_usages', result.value) }] };
+      const freshened = enrichItemsWithFreshness(store, projectRoot, result.value.references);
+      // Score channel for find_usages: each reference scores 1; identity is irrelevant here.
+      const confidence = computeRetrievalConfidence({
+        scores: freshened.items.map(() => 1),
+        freshnessSummary: freshened.summary,
+      });
+      const withFreshness = {
+        ...result.value,
+        references: freshened.items,
+        _meta: {
+          freshness: freshened.summary,
+          ...(confidence
+            ? { confidence: confidence.confidence, confidence_signals: confidence.signals }
+            : {}),
+        },
+      };
+      return { content: [{ type: 'text', text: jh('find_usages', withFreshness) }] };
     },
   );
 

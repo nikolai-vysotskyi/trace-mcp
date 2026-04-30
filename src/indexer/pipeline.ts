@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { cpus } from 'node:os';
 import path from 'node:path';
@@ -35,6 +36,26 @@ export interface IndexingResult {
   errors: number;
   durationMs: number;
   incremental?: boolean;
+}
+
+/**
+ * Read the current git HEAD SHA for a repo. Returns null when the path isn't a
+ * git working tree, when git isn't available, or when the call fails for any
+ * other reason — callers must treat freshness checks as best-effort.
+ */
+function readGitHeadSha(rootPath: string): string | null {
+  try {
+    const out = execSync('git rev-parse HEAD', {
+      cwd: rootPath,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 1000,
+    });
+    const sha = out.trim();
+    return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
 }
 
 export class IndexingPipeline {
@@ -176,6 +197,16 @@ export class IndexingPipeline {
       } catch (e) {
         logger.warn({ error: e }, 'Graph snapshot capture failed');
       }
+    }
+
+    // Capture git HEAD at index time so freshness checks can detect a stale snapshot.
+    // Best-effort — non-git repos and missing git binary are silently ignored.
+    try {
+      const head = readGitHeadSha(this.rootPath);
+      if (head) this.store.setRepoMetadata('index_head_sha', head);
+      this.store.setRepoMetadata('indexed_at_ms', String(Date.now()));
+    } catch {
+      /* best-effort */
     }
 
     result.durationMs = Date.now() - startMs;

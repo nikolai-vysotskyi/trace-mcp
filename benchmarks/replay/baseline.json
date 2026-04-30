@@ -1,0 +1,7 @@
+{
+  "ndcg_at_k": 1,
+  "mrr": 1,
+  "recall_at_k": 1,
+  "k": 10,
+  "generated_at": "2026-04-30T05:50:37.064Z"
+}

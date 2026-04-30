@@ -1,0 +1,49 @@
+// Golden retrieval queries used by the Phase 5 replay harness.
+//
+// Each entry pairs a query (typically a symbol name or distinctive identifier)
+// with `expected_match_substrings` — substring matches against returned
+// symbol_ids. Substring rather than exact ID keeps fixtures stable across
+// renames and refactors.
+//
+// Naming conventions tend to dominate FTS scoring: queries that contain a
+// camelCased symbol token reliably surface the symbol. Multi-word natural-
+// language queries are intentionally NOT used here — they exercise the
+// (separate) semantic-search path and require an embedding provider, which
+// CI may not have. Test those via integration tests instead.
+//
+// Add an entry whenever you ship a retrieval feature whose top hit you want
+// to protect against regression.
+[
+  {
+    "query": "SavingsTracker",
+    "expected_match_substrings": ["SavingsTracker", "savings.ts"]
+  },
+  {
+    "query": "computeFileFreshness",
+    "expected_match_substrings": ["computeFileFreshness", "freshness.ts"]
+  },
+  {
+    "query": "encodeWire",
+    "expected_match_substrings": ["encodeWire", "wire-format"]
+  },
+  {
+    "query": "RankingLedger",
+    "expected_match_substrings": ["RankingLedger", "ranking-ledger"]
+  },
+  {
+    "query": "TelemetrySink",
+    "expected_match_substrings": ["TelemetrySink", "telemetry-sink"]
+  },
+  {
+    "query": "computeRetrievalConfidence",
+    "expected_match_substrings": ["computeRetrievalConfidence", "retrieval-confidence"]
+  },
+  {
+    "query": "tuneRepoWeights",
+    "expected_match_substrings": ["tuneRepoWeights", "tuning.ts"]
+  },
+  {
+    "query": "checkEmbeddingDrift",
+    "expected_match_substrings": ["checkEmbeddingDrift", "embedding-drift"]
+  }
+]

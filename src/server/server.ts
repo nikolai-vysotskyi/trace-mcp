@@ -26,6 +26,8 @@ import { DecisionStore } from '../memory/decision-store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProgressState } from '../progress.js';
 import { computePageRank } from '../scoring/pagerank.js';
+import { RankingLedger } from '../runtime/ranking-ledger.js';
+import { TelemetrySink } from '../runtime/telemetry-sink.js';
 import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { HermesSessionProvider } from '../session/providers/hermes.js';
 import { getSessionProviderRegistry } from '../session/providers/registry.js';
@@ -224,7 +226,11 @@ export function createServer(
   );
 
   // Session tracking
-  const savings = new SessionTracker(projectRoot);
+  const telemetrySink = config.telemetry?.enabled
+    ? new TelemetrySink({ maxRows: config.telemetry?.max_rows })
+    : null;
+  const rankingLedger = config.telemetry?.enabled ? new RankingLedger() : null;
+  const savings = new SessionTracker(projectRoot, telemetrySink);
   const journal = new SessionJournal();
   const sessionStartedAt = new Date().toISOString();
   const snapshotPath = getSnapshotPath(projectRoot);
@@ -306,6 +312,20 @@ export function createServer(
   let sessionFlushed = false;
   const flushAll = () => {
     savings.flush();
+    if (telemetrySink) {
+      try {
+        telemetrySink.close();
+      } catch {
+        /* best-effort */
+      }
+    }
+    if (rankingLedger) {
+      try {
+        rankingLedger.close();
+      } catch {
+        /* best-effort */
+      }
+    }
     // Write final snapshot for PreCompact hook
     try {
       journal.flushSnapshotFile(snapshotPath);
@@ -517,6 +537,8 @@ export function createServer(
     progress: progress ?? null,
     topoStore,
     decisionStore,
+    telemetrySink,
+    rankingLedger,
   };
 
   const metaCtx: MetaContext = {

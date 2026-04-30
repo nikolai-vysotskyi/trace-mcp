@@ -214,6 +214,23 @@ const ToolsConfigSchema = z
       .default(true),
     /** Strip advanced/optional parameters from tool schemas to reduce token overhead (~40-60% schema size reduction). Only core parameters are exposed; advanced options still work if passed. */
     compact_schemas: z.boolean().default(false),
+    /** Wire format for tool responses.
+     *  - 'json' (default): standard JSON, unchanged from prior versions.
+     *  - 'compact': path-interning + row-packing (~25% token savings on retrieval-heavy responses).
+     *      LLM must decode positional rows — only enable for clients that handle it.
+     *  - 'auto': encode both, ship compact when it beats JSON by ≥15% bytes; else fall back to JSON.
+     *  Per-call override: pass `_format` in tool params to opt one call into a different mode. */
+    default_format: z.enum(['json', 'compact', 'auto']).default('json'),
+  })
+  .optional();
+
+const TelemetryConfigSchema = z
+  .object({
+    /** When true, persist tool-call latency to ~/.trace-mcp/telemetry.db. Off by default to avoid
+     *  unsolicited disk writes — analyze_perf works without the sink (in-memory ring). */
+    enabled: z.boolean().default(false),
+    /** Maximum rows to retain. Older rows are pruned when exceeded. 0 disables pruning. */
+    max_rows: z.number().int().min(0).max(10_000_000).default(500_000),
   })
   .optional();
 
@@ -363,6 +380,7 @@ export const TraceMcpConfigSchema = z.object({
   topology: TopologyConfigSchema,
   vault: VaultConfigSchema,
   quality_gates: QualityGatesConfigSchema,
+  telemetry: TelemetryConfigSchema,
   tools: ToolsConfigSchema,
   watch: z
     .object({
@@ -460,6 +478,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
     lsp: LspConfigSchema,
     topology: TopologyConfigSchema,
     quality_gates: QualityGatesConfigSchema,
+    telemetry: TelemetryConfigSchema,
     tools: ToolsConfigSchema,
     ignore: IgnoreConfigSchema,
     frameworks: FrameworkConfigSchema,

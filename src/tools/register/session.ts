@@ -10,6 +10,9 @@ import { listBundles, loadAllBundles, searchBundles } from '../../bundles.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
 import { decisionsForResume, decisionsForTask } from '../../memory/enrichment.js';
 import { registerPrompts } from '../../prompts/index.js';
+import { checkEmbeddingDrift } from '../../runtime/embedding-drift.js';
+import { tuneRepoWeights } from '../../runtime/tuning.js';
+import { enrichItemsWithFreshness } from '../../scoring/freshness.js';
 import type { MetaContext } from '../../server/types.js';
 import { getSessionResume } from '../../session/resume.js';
 import { registerAITools } from '../ai/ai-tools.js';
@@ -346,7 +349,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   // --- Session Stats ---
   _originalTool(
     'get_session_stats',
-    'Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings. Read-only. Returns JSON: { total_calls, total_raw_tokens, total_compact_tokens, savings_pct, dedup_saved_tokens, per_tool }.',
+    'Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings, and per-tool latency (p50/p95/max/error_rate). Read-only. Returns JSON: { session: { ..., latency_per_tool }, cumulative, dedup_saved_tokens }.',
     {},
     async () => {
       const stats = savings.getFullStats();
@@ -358,6 +361,151 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
             text: j({
               ...stats,
               dedup_saved_tokens: dedupTokens,
+            }),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    'check_embedding_drift',
+    'Pin and re-check a 16-string canary against the active embedding provider. Catches silent provider model swaps (OpenAI/Voyage/etc.) that quietly degrade hybrid retrieval. First call (or with capture=true) saves the baseline; subsequent calls report max cosine distance vs baseline. Read-only or write-only (capture). Returns JSON: { status, message, max_distance?, mean_distance?, per_string? }.',
+    {
+      capture: z
+        .boolean()
+        .optional()
+        .describe('Force a fresh baseline capture, overwriting any existing canary file.'),
+      threshold: z
+        .number()
+        .min(0)
+        .max(2)
+        .optional()
+        .describe('Cosine-distance threshold for flagging drift (default 0.05).'),
+    },
+    async ({ capture, threshold }) => {
+      const result = await checkEmbeddingDrift(ctx.embeddingService, {
+        capture,
+        threshold,
+        provider: ctx.config.ai?.provider ?? null,
+        model: ctx.config.ai?.embedding_model ?? null,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'tune_weights',
+    'Self-tuning retrieval: read the persistent ranking ledger and learn per-repo signal-fusion weights, written to ~/.trace-mcp/tuning.jsonc. Requires telemetry.enabled in config. Read-only by default (dry_run=true unless explicitly disabled). Returns JSON: { applied, reason, weights?, before?, events_used? }.',
+    {
+      dry_run: z
+        .boolean()
+        .optional()
+        .describe('When true (default), compute weights without persisting to disk.'),
+      min_events: z
+        .number()
+        .int()
+        .min(5)
+        .max(10000)
+        .optional()
+        .describe('Minimum ledger events required before writing a tuning override (default 25).'),
+    },
+    async ({ dry_run, min_events }) => {
+      const ledger = ctx.rankingLedger;
+      if (!ledger) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                applied: false,
+                reason:
+                  'Ranking ledger is disabled. Set telemetry.enabled = true in config.jsonc and run a few search queries first.',
+              }),
+            },
+          ],
+        };
+      }
+      const result = tuneRepoWeights(ledger, projectRoot, {
+        dryRun: dry_run ?? true,
+        minEvents: min_events,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'analyze_perf',
+    'Per-tool latency telemetry: p50/p95/max, count, error_rate. Default reads the current session ring; `window=1h|24h|7d|all` reads from ~/.trace-mcp/telemetry.db (requires telemetry.enabled in config). Sorted by p95 descending so the slowest tools surface first. Read-only. Returns JSON: { tools: [{ tool, p50, p95, max, count, errors, error_rate }], total_tools, source }.',
+    {
+      top: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe('Cap on number of tools returned (default 20)'),
+      tool: z.string().max(128).optional().describe('Filter to a single tool by name'),
+      window: z
+        .enum(['session', '1h', '24h', '7d', 'all'])
+        .optional()
+        .describe(
+          'Time window. "session" (default) uses the in-memory ring. "1h"/"24h"/"7d"/"all" read from the persistent telemetry DB.',
+        ),
+    },
+    async ({ top, tool, window }) => {
+      const limit = top ?? 20;
+      const useSink = window && window !== 'session';
+
+      if (useSink) {
+        const sink = ctx.telemetrySink;
+        if (!sink) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  tools: [],
+                  total_tools: 0,
+                  source: 'persistent',
+                  error:
+                    'Persistent telemetry is disabled. Set telemetry.enabled = true in config.jsonc and restart the server to enable cross-session analysis.',
+                }),
+              },
+            ],
+          };
+        }
+        const stats = sink.getStats(window, tool);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                tools: stats.slice(0, limit),
+                total_tools: stats.length,
+                source: 'persistent',
+                window,
+              }),
+            },
+          ],
+        };
+      }
+
+      const all = savings.getLatencyPerTool();
+      let entries = Object.entries(all).map(([toolName, stats]) => ({ tool: toolName, ...stats }));
+      if (tool) {
+        entries = entries.filter((e) => e.tool === tool);
+      }
+      entries.sort((a, b) => b.p95 - a.p95);
+      const sliced = entries.slice(0, limit);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: j({
+              tools: sliced,
+              total_tools: entries.length,
+              source: 'session_ring',
             }),
           },
         ],
@@ -501,6 +649,17 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         if (linked.length > 0) {
           payload.related_decisions = linked;
         }
+      }
+      // Per-target _freshness + summary in _meta. plan_turn already exposes its own
+      // top-level `confidence` (verdict-level), so we don't overwrite it.
+      if (Array.isArray(payload.targets) && (payload.targets as unknown[]).length > 0) {
+        const targetItems = payload.targets as Array<{ file: string }>;
+        const freshened = enrichItemsWithFreshness(store, projectRoot, targetItems);
+        payload.targets = freshened.items;
+        payload._meta = {
+          ...((payload._meta as Record<string, unknown> | undefined) ?? {}),
+          freshness: freshened.summary,
+        };
       }
       return { content: [{ type: 'text', text: jh('plan_turn', payload) }] };
     },
