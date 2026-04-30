@@ -602,6 +602,122 @@ describe('trace-mcp-guard.sh v0.7', () => {
     }
   });
 
+  // ─── .md "doc tour" detection (Second Brain pattern) ───────────
+
+  it('allows README.md in repo root without any hint', () => {
+    const file = path.join(projectDir, 'README.md');
+    fs.writeFileSync(file, '# readme');
+    for (let i = 0; i < 5; i++) {
+      const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+      expect(decision.allowed).toBe(true);
+      expect(decision.context ?? '').not.toContain('doc tour');
+    }
+  });
+
+  it('allows .md files in docs/ without any hint', () => {
+    const docs = path.join(projectDir, 'docs');
+    fs.mkdirSync(docs, { recursive: true });
+    for (let i = 0; i < 5; i++) {
+      const file = path.join(docs, `chapter-${i}.md`);
+      fs.writeFileSync(file, '# x');
+      const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+      expect(decision.allowed).toBe(true);
+      expect(decision.context ?? '').not.toContain('doc tour');
+    }
+  });
+
+  it('emits doc-tour hint after threshold .md reads inside source dirs', () => {
+    // Simulate the "Second Brain" layout: per-feature .md docs co-located
+    // with code under src/pipelines/steps/<feature>/<feature>.md.
+    const stepsDir = path.join(projectDir, 'src', 'pipelines', 'steps');
+    const features = [
+      'serp-analysis',
+      'keyword-suggestions',
+      'title-generation',
+      'title-validation',
+    ];
+    fs.mkdirSync(stepsDir, { recursive: true });
+
+    const decisions: HookDecision[] = [];
+    for (const feature of features) {
+      const dir = path.join(stepsDir, feature);
+      fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `${feature}.md`);
+      fs.writeFileSync(file, `# ${feature}`);
+      decisions.push(runGuard('Read', { file_path: file }, sessionId, projectDir));
+    }
+
+    // All allowed (this is a hint, not a block).
+    for (const d of decisions) expect(d.allowed).toBe(true);
+    // First two clean, third+ carries the doc-tour hint.
+    expect(decisions[0].context ?? '').not.toContain('doc tour');
+    expect(decisions[1].context ?? '').not.toContain('doc tour');
+    expect(decisions[2].context ?? '').toContain('doc tour');
+    expect(decisions[2].context ?? '').toContain('get_feature_context');
+    expect(decisions[3].context ?? '').toContain('doc tour');
+  });
+
+  it('doc-tour threshold is configurable via TRACE_MCP_GUARD_MD_HINT_THRESHOLD', () => {
+    const dir = path.join(projectDir, 'packages', 'foo');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'a.md');
+    fs.writeFileSync(file, '# a');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MD_HINT_THRESHOLD: '1',
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('doc tour');
+  });
+
+  it('non-.md files inside source dirs do not increment the .md tour counter', () => {
+    // README.md reads outside source paths shouldn't count, JSON files inside
+    // source paths shouldn't count either — only .md inside source dirs.
+    const dir = path.join(projectDir, 'src', 'foo');
+    fs.mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < 5; i++) {
+      const file = path.join(dir, `cfg-${i}.json`);
+      fs.writeFileSync(file, '{}');
+      const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+      expect(decision.allowed).toBe(true);
+      expect(decision.context ?? '').not.toContain('doc tour');
+    }
+  });
+
+  // ─── Bash: ls on source-tree paths ──────────────────────────────
+
+  it('denies `ls` on source-tree paths', () => {
+    const cases = [
+      'ls src/',
+      'ls src/pipelines/steps/',
+      'ls /Users/me/proj/server/src/pipelines/steps/',
+      'ls packages/foo/',
+      'ls foo/lib/bar',
+      'ls -la apps/web/',
+    ];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(false);
+      expect(decision.reason ?? '', `command: "${command}"`).toContain('ls');
+      expect(decision.context ?? '', `command: "${command}"`).toContain('get_project_map');
+    }
+  });
+
+  it('allows `ls` on non-source paths', () => {
+    const cases = [
+      'ls',
+      'ls .',
+      'ls -la',
+      'ls /tmp/',
+      'ls dist/',
+      'ls node_modules/x',
+      'ls build/',
+    ];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(true);
+    }
+  });
+
   it('allows Agent(general-purpose) for explicit action work', () => {
     const cases = [
       'write the implementation of the new plugin',
