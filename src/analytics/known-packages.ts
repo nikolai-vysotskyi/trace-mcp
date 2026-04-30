@@ -566,8 +566,10 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   d3: { category: 'ui', priority: 'medium', plugin: null },
   cmdk: { category: 'ui', priority: 'low', plugin: 'js-viz' },
   '@tanstack/react-router': { category: 'ui', priority: 'medium', plugin: null },
-  'react-router': { category: 'ui', priority: 'medium', plugin: null },
-  'react-router-dom': { category: 'ui', priority: 'medium', plugin: null },
+  'react-router': { category: 'framework', priority: 'medium', plugin: 'react-router' },
+  'react-router-dom': { category: 'framework', priority: 'medium', plugin: 'react-router' },
+  'react-router-native': { category: 'framework', priority: 'low', plugin: 'react-router' },
+  '@remix-run/react': { category: 'framework', priority: 'medium', plugin: 'react-router' },
   '@react-email/components': { category: 'ui', priority: 'low', plugin: null },
   // Radix UI primitives
   '@radix-ui/react-popover': { category: 'ui', priority: 'low', plugin: null },
@@ -1253,7 +1255,9 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
 
   // --- JavaScript / npm: AI / ML ---
   openai: { category: 'infra', priority: 'medium', plugin: 'openai-py' },
-  '@anthropic-ai/sdk': { category: 'infra', priority: 'medium', plugin: null },
+  '@anthropic-ai/sdk': { category: 'infra', priority: 'medium', plugin: 'anthropic-sdk' },
+  '@anthropic-ai/vertex-sdk': { category: 'infra', priority: 'low', plugin: 'anthropic-sdk' },
+  '@anthropic-ai/bedrock-sdk': { category: 'infra', priority: 'low', plugin: 'anthropic-sdk' },
   '@google/generative-ai': { category: 'infra', priority: 'medium', plugin: null },
   ai: { category: 'infra', priority: 'medium', plugin: null },
   '@ai-sdk/openai': { category: 'infra', priority: 'low', plugin: null },
@@ -1512,7 +1516,9 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
 
   // --- Python / pip: LLM frameworks ---
   // openai — already in npm AI section (same name, both ecosystems)
-  anthropic: { category: 'infra', priority: 'high', plugin: null },
+  anthropic: { category: 'infra', priority: 'high', plugin: 'anthropic-py' },
+  'anthropic-bedrock': { category: 'infra', priority: 'low', plugin: 'anthropic-py' },
+  'anthropic-vertex': { category: 'infra', priority: 'low', plugin: 'anthropic-py' },
   cohere: { category: 'infra', priority: 'medium', plugin: null },
   'google-generativeai': { category: 'infra', priority: 'medium', plugin: null },
   tiktoken: { category: 'utility', priority: 'medium', plugin: null },

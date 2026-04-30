@@ -19,6 +19,7 @@ import { NestJSPlugin } from './framework/nestjs/index.js';
 import { NextJSPlugin } from './framework/nextjs/index.js';
 import { NuxtPlugin } from './framework/nuxt/index.js';
 import { RailsPlugin } from './framework/rails/index.js';
+import { ReactRouterPlugin } from './framework/react-router/index.js';
 import { SpringPlugin } from './framework/spring/index.js';
 import { AsyncDbPlugin } from './orm/async-db/index.js';
 import { DrizzlePlugin } from './orm/drizzle/index.js';
@@ -40,6 +41,8 @@ import { AttrsPyPlugin } from './tooling/attrs-py/index.js';
 import { AwsS3Plugin } from './tooling/aws-s3/index.js';
 import { BuildToolsPlugin } from './tooling/build-tools/index.js';
 // --- tooling ---
+import { AnthropicPythonPlugin } from './tooling/anthropic-py/index.js';
+import { AnthropicSdkPlugin } from './tooling/anthropic-sdk/index.js';
 import { CeleryPlugin } from './tooling/celery/index.js';
 import { ClackPlugin } from './tooling/clack/index.js';
 import { CommanderPlugin } from './tooling/commander/index.js';
@@ -105,6 +108,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new NextJSPlugin(),
     new GinPlugin(),
     new EchoPlugin(),
+    new ReactRouterPlugin(),
     // orm
     new PrismaPlugin(),
     new TypeORMPlugin(),
@@ -169,6 +173,8 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new PhpEcosystemPlugin(),
     new PythonHttpClientsPlugin(),
     new OpenAIPythonPlugin(),
+    new AnthropicPythonPlugin(),
+    new AnthropicSdkPlugin(),
     new PythonMLPlugin(),
     new PythonScientificPlugin(),
     new PythonImagingPlugin(),
