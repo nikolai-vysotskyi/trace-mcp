@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { WindowTabBar } from './components/WindowTabBar';
 import { AskTab } from './tabs/AskTab';
 import { Clients } from './tabs/Clients';
@@ -696,6 +697,13 @@ export function App() {
     DEFAULT_GRAPH_GPU_SETTINGS,
   );
 
+  // Onboarding wizard — show once on first launch in the menu (project list)
+  // window. Project sub-windows skip it; the wizard belongs in the place
+  // where the user manages projects.
+  const [showOnboarding, setShowOnboarding] = useState(
+    !isProject && view === 'menu' && !isOnboardingDone(),
+  );
+
   const onGraphGpuSettingsChange = useCallback((patch: Partial<GraphGPUSettings>) => {
     setGraphGpuSettings((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -772,6 +780,7 @@ export function App() {
 
   return (
     <div className="flex flex-col h-screen" style={{ background: 'var(--bg-primary)' }}>
+      {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {/* Windows custom tab bar (hidden on macOS — native tabs handle it) */}
       <WindowTabBar />
 

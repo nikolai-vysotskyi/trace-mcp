@@ -1,5 +1,5 @@
 import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
-import { execFile, spawn } from 'child_process';
+import { execFile, spawn, spawnSync } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -175,6 +175,42 @@ ipcMain.handle('guard:set-mode', async (_e, projectRoot: string, mode: string) =
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+ipcMain.handle('guard:install-status', async () => {
+  const { checkInstallStatus } = await import('./guard-control.js');
+  return checkInstallStatus();
+});
+ipcMain.handle('guard:install', async () => {
+  const { installHook } = await import('./guard-control.js');
+  // Source script ships inside the npm trace-mcp package. Resolve it via
+  // the CLI's location so the app works whether trace-mcp is installed
+  // globally, via Homebrew, or symlinked.
+  const cliResolveResult = spawnSync('which', ['trace-mcp'], { encoding: 'utf-8' });
+  if (cliResolveResult.status !== 0 || !cliResolveResult.stdout) {
+    return { ok: false, error: 'trace-mcp CLI not on PATH' };
+  }
+  const cliPath = cliResolveResult.stdout.trim();
+  const realCli = fs.existsSync(cliPath) ? fs.realpathSync(cliPath) : cliPath;
+  // npm package layout: <pkg>/dist/cli.js, hooks at <pkg>/hooks/trace-mcp-guard.sh
+  const pkgRoot = path.resolve(path.dirname(realCli), '..');
+  const sourceScript = path.join(pkgRoot, 'hooks', 'trace-mcp-guard.sh');
+  return installHook({ sourceScript });
+});
+ipcMain.handle('guard:uninstall', async () => {
+  const { uninstallHook } = await import('./guard-control.js');
+  return uninstallHook();
+});
+ipcMain.handle('guard:check-cli-version', async () => {
+  const { checkCliVersion } = await import('./guard-control.js');
+  return checkCliVersion();
+});
+ipcMain.handle('guard:initialize', async (_e, projectRoot: string) => {
+  const { initializeGuard } = await import('./guard-control.js');
+  try {
+    return initializeGuard(projectRoot);
+  } catch (e) {
+    return { initialized: false, error: e instanceof Error ? e.message : String(e) };
   }
 });
 ipcMain.handle('guard:set-bypass', async (_e, projectRoot: string, minutes: number) => {

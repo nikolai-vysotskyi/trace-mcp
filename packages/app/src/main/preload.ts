@@ -102,7 +102,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
       quietSeconds?: number;
       bypassUntil?: number;
       reason?: string;
+      initializedAt?: number;
+      coachExpiresAt?: number;
+      autoPromoted?: boolean;
     }> => ipcRenderer.invoke('guard:status', projectRoot),
+    initialize: (
+      projectRoot: string,
+    ): Promise<{ initialized: boolean; mode?: 'strict' | 'coach' | 'off'; error?: string }> =>
+      ipcRenderer.invoke('guard:initialize', projectRoot),
+    checkCliVersion: (): Promise<{
+      current: string | null;
+      required: string;
+      ok: boolean;
+      needsUpgrade: boolean;
+      notInstalled: boolean;
+      reason?: string;
+    }> => ipcRenderer.invoke('guard:check-cli-version'),
+    installStatus: (): Promise<{
+      claudeDetected: boolean;
+      installed: boolean;
+      scriptPath?: string;
+      reason?: string;
+    }> => ipcRenderer.invoke('guard:install-status'),
+    install: (): Promise<{
+      ok: boolean;
+      alreadyInstalled?: boolean;
+      backupPath?: string;
+      scriptPath?: string;
+      error?: string;
+    }> => ipcRenderer.invoke('guard:install'),
+    uninstall: (): Promise<{
+      ok: boolean;
+      removed?: boolean;
+      backupPath?: string;
+      error?: string;
+    }> => ipcRenderer.invoke('guard:uninstall'),
     setMode: (
       projectRoot: string,
       mode: 'strict' | 'coach' | 'off',

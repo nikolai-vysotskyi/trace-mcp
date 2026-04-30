@@ -11,6 +11,9 @@ interface GuardStatusSnapshot {
   quietSeconds?: number;
   bypassUntil?: number;
   reason?: string;
+  initializedAt?: number;
+  coachExpiresAt?: number;
+  autoPromoted?: boolean;
 }
 
 interface GuardBadgeProps {
@@ -31,14 +34,30 @@ export function GuardBadge({ root, onModeChange }: GuardBadgeProps) {
   const [snapshot, setSnapshot] = useState<GuardStatusSnapshot | null>(null);
   const [pending, setPending] = useState<GuardMode | null>(null);
   const [open, setOpen] = useState(false);
+  const [promotionToast, setPromotionToast] = useState<string | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    // Initialize guard for this project on first mount (default = coach +
+    // 7-day auto-promote). Idempotent on the main side, so safe to call
+    // every mount.
+    void window.electronAPI?.guard.initialize(root);
+
     const poll = async () => {
       try {
         const s = await window.electronAPI?.guard.status(root);
-        if (!cancelled && s) setSnapshot(s);
+        if (cancelled || !s) return;
+        setSnapshot(s);
+        if (s.autoPromoted) {
+          const calls = s.toolCallsTotal ?? 0;
+          setPromotionToast(
+            calls > 0
+              ? `Coach mode finished — switched to Strict (${calls} tool calls so far)`
+              : 'Coach mode finished — switched to Strict',
+          );
+          window.setTimeout(() => setPromotionToast(null), 8000);
+        }
       } catch {
         /* ignore — main process may be busy */
       }
@@ -102,6 +121,18 @@ export function GuardBadge({ root, onModeChange }: GuardBadgeProps) {
         />
         <span>{label}</span>
       </button>
+      {promotionToast && (
+        <div
+          className="absolute z-20 right-0 top-full mt-1 px-2 py-1.5 rounded-md text-[10px] shadow-lg whitespace-nowrap"
+          style={{
+            background: 'var(--accent)',
+            color: 'var(--bg-primary)',
+          }}
+          role="status"
+        >
+          {promotionToast}
+        </div>
+      )}
 
       {open && (
         <div
@@ -178,7 +209,16 @@ function tooltipFor(s: GuardStatusSnapshot): string {
   if (s.health === 'down') return s.reason ?? 'trace-mcp not running';
   if (s.health === 'stalled') return s.reason ?? 'MCP channel stalled';
   if (s.health === 'ok') {
-    if (s.mode === 'coach') return 'Coach: hints only, never blocks';
+    if (s.mode === 'coach') {
+      if (s.coachExpiresAt) {
+        const days = Math.max(
+          0,
+          Math.ceil((s.coachExpiresAt - Math.floor(Date.now() / 1000)) / 86_400),
+        );
+        return `Coach: hints only — promotes to Strict in ${days}d`;
+      }
+      return 'Coach: hints only, never blocks';
+    }
     if (s.mode === 'off') return 'Disabled';
     if (typeof s.toolCallsTotal === 'number') {
       return `Strict — ${s.toolCallsTotal} tool calls`;

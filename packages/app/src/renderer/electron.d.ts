@@ -60,6 +60,41 @@ declare global {
           quietSeconds?: number;
           bypassUntil?: number;
           reason?: string;
+          initializedAt?: number;
+          coachExpiresAt?: number;
+          autoPromoted?: boolean;
+        }>;
+        initialize: (projectRoot: string) => Promise<{
+          initialized: boolean;
+          mode?: 'strict' | 'coach' | 'off';
+          error?: string;
+        }>;
+        checkCliVersion: () => Promise<{
+          current: string | null;
+          required: string;
+          ok: boolean;
+          needsUpgrade: boolean;
+          notInstalled: boolean;
+          reason?: string;
+        }>;
+        installStatus: () => Promise<{
+          claudeDetected: boolean;
+          installed: boolean;
+          scriptPath?: string;
+          reason?: string;
+        }>;
+        install: () => Promise<{
+          ok: boolean;
+          alreadyInstalled?: boolean;
+          backupPath?: string;
+          scriptPath?: string;
+          error?: string;
+        }>;
+        uninstall: () => Promise<{
+          ok: boolean;
+          removed?: boolean;
+          backupPath?: string;
+          error?: string;
         }>;
         setMode: (
           projectRoot: string,
