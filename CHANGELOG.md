@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.33.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.7...v1.33.0) (2026-04-30)
+
+
+### Features
+
+* **app:** Sprint 1B — per-project guard mode toggle on the project list ([20c1fd4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/20c1fd4e54482b11815c69f295da521b33224eb3))
+* **app:** Sprint 2 — onboarding, coach default, version contract, uninstall ([39b262f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/39b262f8af00a01be164e2c28b7f479c29ced796))
+* **guard:** add manual bypass + auto-degradation for unresponsive MCP ([4709803](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4709803072e457a2e14e9731158358ecd65a53eb))
+* **guard:** Sprint 1A — rich status sentinel + hook v0.8 (modes + stall detection) ([c857cab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c857cab2c698025b7cb1c70d5d9a6b28978696dd))
+* **guard:** v0.9 — doc-tour hint for .md reads in source dirs + deny ls on source paths ([465dd50](https://github.com/nikolai-vysotskyi/trace-mcp/commit/465dd50a9b9f15ad7fca5922b8165855fa18c7a4))
+* **plugins:** add Anthropic (Python + npm) and react-router coverage ([104c47a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/104c47a2eff889658b5c25b2a2b04a9bacc1d987))
+* **retrieval:** output-token efficiency phases 1-5 ([3120c6a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3120c6a41b483f207a92655104775d55ee39dd8d))
+
+
+### Bug Fixes
+
+* **app:** open Request links in default browser via shell.openExternal ([dad18cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dad18cf28abe3506b2e03cef7a96255ffaeca31b))
+* **app:** show "Restart to install" after npm-install update ([ed82585](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ed825850e5984dd1b3f237b06e972f66baa45bb0))
+* **guard:** close retry-bypass loophole, add heartbeat fallback ([9741210](https://github.com/nikolai-vysotskyi/trace-mcp/commit/974121098ada837c3618079628189f97bffc650f))
+
+
+### Documentation
+
+* **landing:** tighten hero CTA, add trust line, reword metrics ([decdf45](https://github.com/nikolai-vysotskyi/trace-mcp/commit/decdf4563ad547999fb7f0b05a6a35aff0ae922a))
+
+
+### Chores
+
+* **guard:** cross-platform hook resolution + Sprint 2 cleanups ([937621a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/937621a7c7515600a5d4644419dd76eb11b301ef))
+
 ## [1.32.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.6...v1.32.7) (2026-04-29)
 
 
