@@ -287,6 +287,81 @@ export function getGuardStatus(projectRoot: string): GuardStatus {
 
 const HOOK_SCRIPT_NAME = 'trace-mcp-guard.sh';
 
+/**
+ * Locate the trace-mcp guard hook script on the host machine.
+ *
+ * Resolution order (first match wins):
+ *   1. TRACE_MCP_HOOK_SCRIPT env override — for dev/source-clone installs.
+ *   2. The trace-mcp CLI on PATH (`which`/`where` per platform), then climb
+ *      to the npm package root and look for hooks/trace-mcp-guard.sh.
+ *   3. Common npm-global prefixes: $npm_config_prefix, $PREFIX,
+ *      /usr/local, /opt/homebrew (macOS), %APPDATA%/npm (Windows).
+ *
+ * Returns null when no script is found — caller should surface "install
+ * trace-mcp first" to the user instead of silently failing.
+ */
+export function resolveHookSourceScript(): string | null {
+  // 1. Explicit override.
+  const envOverride = process.env.TRACE_MCP_HOOK_SCRIPT;
+  if (envOverride && fs.existsSync(envOverride)) return envOverride;
+
+  // 2. CLI on PATH (cross-platform).
+  const cliBin = process.platform === 'win32' ? 'trace-mcp.cmd' : 'trace-mcp';
+  const lookup = process.platform === 'win32' ? 'where' : 'which';
+  try {
+    const result = spawnSync(lookup, [cliBin], { encoding: 'utf-8', timeout: 5_000 });
+    if (result.status === 0 && result.stdout) {
+      // `where` (Windows) can return multiple lines; take the first.
+      const cliPath = result.stdout.split(/\r?\n/)[0].trim();
+      if (cliPath && fs.existsSync(cliPath)) {
+        const real = fs.realpathSync(cliPath);
+        const candidate = climbToPackageScript(real);
+        if (candidate) return candidate;
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+
+  // 3. Probe common npm-global prefixes.
+  const candidates: string[] = [];
+  if (process.env.npm_config_prefix) {
+    candidates.push(process.env.npm_config_prefix);
+  }
+  if (process.env.PREFIX) {
+    candidates.push(process.env.PREFIX);
+  }
+  if (process.platform === 'win32') {
+    if (process.env.APPDATA) candidates.push(path.join(process.env.APPDATA, 'npm'));
+  } else {
+    candidates.push('/usr/local', '/opt/homebrew');
+    if (process.env.HOME) candidates.push(path.join(process.env.HOME, '.npm-global'));
+  }
+  for (const prefix of candidates) {
+    const guess = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'hooks', HOOK_SCRIPT_NAME);
+    if (fs.existsSync(guess)) return guess;
+  }
+  return null;
+}
+
+/**
+ * Given a resolved CLI binary path, walk up to find the npm package root
+ * (a directory that contains both hooks/<HOOK_SCRIPT_NAME> and a
+ * package.json). Returns the script path on match, null otherwise.
+ */
+function climbToPackageScript(realCliPath: string): string | null {
+  let dir = path.dirname(realCliPath);
+  for (let i = 0; i < 6; i++) {
+    const script = path.join(dir, 'hooks', HOOK_SCRIPT_NAME);
+    const pkgJson = path.join(dir, 'package.json');
+    if (fs.existsSync(script) && fs.existsSync(pkgJson)) return script;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 function claudeSettingsPath(): string {
   return path.join(os.homedir(), '.claude', 'settings.json');
 }

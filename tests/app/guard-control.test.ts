@@ -10,6 +10,7 @@ import {
   initializeGuard,
   installHook,
   MIN_TRACE_MCP_VERSION,
+  resolveHookSourceScript,
   setBypass,
   setGuardMode,
   uninstallHook,
@@ -317,6 +318,62 @@ describe('guard-control (app main process)', () => {
 
   it('exports a sane MIN_TRACE_MCP_VERSION', () => {
     expect(MIN_TRACE_MCP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  // ─── Hook source script resolution (cross-platform) ─────────────
+
+  it('resolveHookSourceScript honors TRACE_MCP_HOOK_SCRIPT env override', () => {
+    const fakeScript = path.join(projectDir, 'fake-guard.sh');
+    fs.writeFileSync(fakeScript, '#!/bin/bash\nexit 0');
+    const prev = process.env.TRACE_MCP_HOOK_SCRIPT;
+    process.env.TRACE_MCP_HOOK_SCRIPT = fakeScript;
+    try {
+      expect(resolveHookSourceScript()).toBe(fakeScript);
+    } finally {
+      if (prev) process.env.TRACE_MCP_HOOK_SCRIPT = prev;
+      else delete process.env.TRACE_MCP_HOOK_SCRIPT;
+    }
+  });
+
+  it('resolveHookSourceScript ignores TRACE_MCP_HOOK_SCRIPT pointing to a missing file', () => {
+    const prev = process.env.TRACE_MCP_HOOK_SCRIPT;
+    process.env.TRACE_MCP_HOOK_SCRIPT = path.join(projectDir, 'does-not-exist.sh');
+    try {
+      // Should not return the bogus path; falls through to PATH probing.
+      const result = resolveHookSourceScript();
+      expect(result).not.toBe(process.env.TRACE_MCP_HOOK_SCRIPT);
+    } finally {
+      if (prev) process.env.TRACE_MCP_HOOK_SCRIPT = prev;
+      else delete process.env.TRACE_MCP_HOOK_SCRIPT;
+    }
+  });
+
+  it('resolveHookSourceScript finds the script when CLI is installed via npm-global prefix probe', () => {
+    // Build a fake npm-global layout: $PREFIX/lib/node_modules/trace-mcp/hooks/trace-mcp-guard.sh
+    const fakePrefix = path.join(projectDir, 'fake-npm-prefix');
+    const pkgRoot = path.join(fakePrefix, 'lib', 'node_modules', 'trace-mcp');
+    const hooksDir = path.join(pkgRoot, 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    fs.writeFileSync(path.join(hooksDir, 'trace-mcp-guard.sh'), '#!/bin/bash\nexit 0');
+    fs.writeFileSync(path.join(pkgRoot, 'package.json'), '{"name":"trace-mcp"}');
+
+    const prevPrefix = process.env.npm_config_prefix;
+    const prevHookOverride = process.env.TRACE_MCP_HOOK_SCRIPT;
+    // Disable the env override + the PATH probe by clearing PATH temporarily:
+    // we want to verify the prefix probe step in isolation.
+    const prevPath = process.env.PATH;
+    process.env.npm_config_prefix = fakePrefix;
+    process.env.PATH = '';
+    delete process.env.TRACE_MCP_HOOK_SCRIPT;
+    try {
+      const result = resolveHookSourceScript();
+      expect(result).toBe(path.join(hooksDir, 'trace-mcp-guard.sh'));
+    } finally {
+      if (prevPrefix) process.env.npm_config_prefix = prevPrefix;
+      else delete process.env.npm_config_prefix;
+      if (prevHookOverride) process.env.TRACE_MCP_HOOK_SCRIPT = prevHookOverride;
+      if (prevPath !== undefined) process.env.PATH = prevPath;
+    }
   });
 
   // ─── Bypass ─────────────────────────────────────────────────────

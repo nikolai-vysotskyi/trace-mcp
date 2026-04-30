@@ -1,5 +1,5 @@
 import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
-import { execFile, spawn, spawnSync } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -182,19 +182,15 @@ ipcMain.handle('guard:install-status', async () => {
   return checkInstallStatus();
 });
 ipcMain.handle('guard:install', async () => {
-  const { installHook } = await import('./guard-control.js');
-  // Source script ships inside the npm trace-mcp package. Resolve it via
-  // the CLI's location so the app works whether trace-mcp is installed
-  // globally, via Homebrew, or symlinked.
-  const cliResolveResult = spawnSync('which', ['trace-mcp'], { encoding: 'utf-8' });
-  if (cliResolveResult.status !== 0 || !cliResolveResult.stdout) {
-    return { ok: false, error: 'trace-mcp CLI not on PATH' };
+  const { installHook, resolveHookSourceScript } = await import('./guard-control.js');
+  const sourceScript = resolveHookSourceScript();
+  if (!sourceScript) {
+    return {
+      ok: false,
+      error:
+        'Could not locate the trace-mcp guard hook script. Install the CLI (npm install -g trace-mcp) or set TRACE_MCP_HOOK_SCRIPT to its absolute path.',
+    };
   }
-  const cliPath = cliResolveResult.stdout.trim();
-  const realCli = fs.existsSync(cliPath) ? fs.realpathSync(cliPath) : cliPath;
-  // npm package layout: <pkg>/dist/cli.js, hooks at <pkg>/hooks/trace-mcp-guard.sh
-  const pkgRoot = path.resolve(path.dirname(realCli), '..');
-  const sourceScript = path.join(pkgRoot, 'hooks', 'trace-mcp-guard.sh');
   return installHook({ sourceScript });
 });
 ipcMain.handle('guard:uninstall', async () => {

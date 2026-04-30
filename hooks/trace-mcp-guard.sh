@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.8.0
+# trace-mcp-guard v0.8.1
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
 # trace-mcp PreToolUse guard
 # Routes Read/Grep/Glob/Bash/Agent on source code files through trace-mcp.
@@ -119,7 +119,7 @@ deny() {
 {
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
-    "additionalContext": "trace-mcp coach: $reason\\n\\n$context"
+    "additionalContext": "[trace-mcp coach] $reason\\n$context"
   }
 }
 EOF
