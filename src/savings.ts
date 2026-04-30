@@ -59,6 +59,33 @@ interface ToolCallRecord {
   raw_tokens: number;
 }
 
+/**
+ * Latency stats for a tool, computed on demand from a bounded ring buffer of
+ * recent durations. Bounded so a long-running session doesn't grow without limit.
+ */
+export interface ToolLatencyStats {
+  p50: number;
+  p95: number;
+  max: number;
+  count: number;
+  errors: number;
+  error_rate: number;
+  /** Window size — number of most-recent calls actually retained. */
+  window: number;
+}
+
+/** Max retained durations per tool. p95 stays meaningful at this size. */
+const LATENCY_WINDOW = 200;
+
+interface ToolLatencyState {
+  /** Bounded ring of recent durations in ms. */
+  durations: number[];
+  /** Total calls (incl. those rolled out of the ring). */
+  totalCalls: number;
+  /** Total errors (incl. those rolled out of the ring). */
+  totalErrors: number;
+}
+
 interface SessionStats {
   started_at: string;
   total_calls: number;
@@ -93,13 +120,25 @@ interface PersistentSavings {
   >;
 }
 
+/** Minimal sink interface — kept anemic so {@link SavingsTracker} doesn't pull in better-sqlite3
+ *  for tests and callers that don't enable telemetry persistence. */
+export interface LatencySink {
+  recordCall(toolName: string, durationMs: number, isError: boolean, ts?: number): void;
+}
+
 export class SavingsTracker {
   private session: SessionStats;
   private projectRoot: string;
   private flushed = false;
+  /** Per-tool latency state. Kept separate from per_tool savings so tokens-related logic
+   *  doesn't have to deal with timing concerns. */
+  private latency: Record<string, ToolLatencyState> = {};
+  /** Optional persistent sink for cross-session analysis. Only attached when telemetry is on. */
+  private sink: LatencySink | null = null;
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, sink: LatencySink | null = null) {
     this.projectRoot = projectRoot;
+    this.sink = sink;
     this.session = {
       started_at: new Date().toISOString(),
       total_calls: 0,
@@ -127,13 +166,56 @@ export class SavingsTracker {
     rec.raw_tokens += rawCost;
   }
 
+  /**
+   * Record the latency (wall-clock ms) and outcome of a tool call.
+   * Independent from {@link recordCall} so callers can record one without the other
+   * (e.g. an early validation failure doesn't have a meaningful token cost).
+   */
+  recordLatency(toolName: string, durationMs: number, isError = false): void {
+    const state = (this.latency[toolName] ??= { durations: [], totalCalls: 0, totalErrors: 0 });
+    state.totalCalls += 1;
+    if (isError) state.totalErrors += 1;
+    if (Number.isFinite(durationMs) && durationMs >= 0) {
+      state.durations.push(durationMs);
+      if (state.durations.length > LATENCY_WINDOW) {
+        state.durations.shift();
+      }
+    }
+    if (this.sink) {
+      this.sink.recordCall(toolName, durationMs, isError);
+    }
+  }
+
+  /** Get latency stats for a single tool, or null if no calls have been recorded. */
+  getLatencyStats(toolName: string): ToolLatencyStats | null {
+    const state = this.latency[toolName];
+    if (!state || state.totalCalls === 0) return null;
+    return computeLatencyStats(state);
+  }
+
+  /** Get latency stats for every tool with at least one recorded call. */
+  getLatencyPerTool(): Record<string, ToolLatencyStats> {
+    const out: Record<string, ToolLatencyStats> = {};
+    for (const [tool, state] of Object.entries(this.latency)) {
+      if (state.totalCalls > 0) out[tool] = computeLatencyStats(state);
+    }
+    return out;
+  }
+
   /** Get current session stats */
-  getSessionStats(): SessionStats & { reduction_pct: number } {
+  getSessionStats(): SessionStats & {
+    reduction_pct: number;
+    latency_per_tool: Record<string, ToolLatencyStats>;
+  } {
     const reduction =
       this.session.total_raw_tokens > 0
         ? Math.round((this.session.total_tokens_saved / this.session.total_raw_tokens) * 100)
         : 0;
-    return { ...this.session, reduction_pct: reduction };
+    return {
+      ...this.session,
+      reduction_pct: reduction,
+      latency_per_tool: this.getLatencyPerTool(),
+    };
   }
 
   /** Get combined session + cumulative stats */
@@ -217,4 +299,44 @@ function savePersistentSavings(data: PersistentSavings): void {
   const tmpPath = `${SAVINGS_PATH}.tmp`;
   fs.writeFileSync(tmpPath, `${JSON.stringify(data, null, 2)}\n`);
   fs.renameSync(tmpPath, SAVINGS_PATH);
+}
+
+/**
+ * Compute p50/p95/max from a duration ring. Sorts a copy so the live ring isn't
+ * disturbed; ring is bounded so the sort is cheap.
+ */
+function computeLatencyStats(state: ToolLatencyState): ToolLatencyStats {
+  const durations = state.durations;
+  if (durations.length === 0) {
+    return {
+      p50: 0,
+      p95: 0,
+      max: 0,
+      count: state.totalCalls,
+      errors: state.totalErrors,
+      error_rate: state.totalCalls > 0 ? state.totalErrors / state.totalCalls : 0,
+      window: 0,
+    };
+  }
+  const sorted = [...durations].sort((a, b) => a - b);
+  return {
+    p50: percentile(sorted, 0.5),
+    p95: percentile(sorted, 0.95),
+    max: sorted[sorted.length - 1] ?? 0,
+    count: state.totalCalls,
+    errors: state.totalErrors,
+    error_rate: state.totalCalls > 0 ? state.totalErrors / state.totalCalls : 0,
+    window: durations.length,
+  };
+}
+
+/** Linear-interp percentile; expects `sorted` ascending and non-empty. */
+function percentile(sorted: number[], q: number): number {
+  if (sorted.length === 1) return sorted[0] ?? 0;
+  const idx = q * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo] ?? 0;
+  const frac = idx - lo;
+  return (sorted[lo] ?? 0) * (1 - frac) + (sorted[hi] ?? 0) * frac;
 }

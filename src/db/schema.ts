@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 23;
+const SCHEMA_VERSION = 24;
 
 const DDL = `
 -- ============================================================
@@ -355,6 +355,13 @@ CREATE TABLE IF NOT EXISTS schema_meta (
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version     INTEGER PRIMARY KEY,
     applied_at  TEXT NOT NULL
+);
+
+-- Repo-level metadata (git HEAD at index time, etc.). Distinct from schema_meta
+-- which is purely about schema version management.
+CREATE TABLE IF NOT EXISTS repo_metadata (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 `;
 
@@ -1326,6 +1333,16 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     db.exec(`
       INSERT OR IGNORE INTO edge_types (name, category, directed, description)
       VALUES ('tagged', 'markdown', 1, 'Note is tagged with a #tag (frontmatter or inline)');
+    `);
+  },
+  24: (db) => {
+    // Phase 1 follow-up: repo_metadata captures the git HEAD at index time so the
+    // freshness module can flag results pointing at a stale snapshot of the repo.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS repo_metadata (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
   },
 };

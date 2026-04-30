@@ -453,6 +453,23 @@ export class Store {
     return this.analytics.getWorkspaceExports(workspace);
   }
 
+  // --- Repo metadata (key/value store, used for index_head_sha etc.) ---
+
+  /** Read a single repo-metadata value. Returns null when the key is absent. */
+  getRepoMetadata(key: string): string | null {
+    const row = this.db.prepare('SELECT value FROM repo_metadata WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined;
+    return row?.value ?? null;
+  }
+
+  /** Upsert a repo-metadata value. */
+  setRepoMetadata(key: string, value: string): void {
+    this.db
+      .prepare('INSERT OR REPLACE INTO repo_metadata (key, value) VALUES (?, ?)')
+      .run(key, value);
+  }
+
   getStats(): IndexStats {
     return this.analytics.getStats();
   }

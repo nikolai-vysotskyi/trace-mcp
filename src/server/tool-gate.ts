@@ -12,6 +12,7 @@ import { COMPACT_CORE_PARAMS } from './compact-params.js';
 import { markToolConsultation } from './consultation-markers.js';
 import { getToolAnnotations } from './tool-annotations.js';
 import type { ToolResponse } from './types.js';
+import { encodeWire, type WireFormat } from './wire-format.js';
 
 interface ToolGateResult {
   _originalTool: McpServer['tool'];
@@ -179,6 +180,17 @@ export function installToolGate(
         const params =
           cbArgs[0] && typeof cbArgs[0] === 'object' ? (cbArgs[0] as Record<string, unknown>) : {};
 
+        // Extract per-call wire format override (`_format`) and strip it from
+        // params so handlers don't see it. Falls back to server-wide default.
+        const callFormat =
+          typeof params._format === 'string' &&
+          (params._format === 'json' || params._format === 'compact' || params._format === 'auto')
+            ? (params._format as WireFormat)
+            : undefined;
+        if (callFormat !== undefined) delete params._format;
+        const effectiveFormat: WireFormat =
+          callFormat ?? (config.tools?.default_format as WireFormat | undefined) ?? 'json';
+
         // Budget-driven auto-defaults: at warning/critical level, silently cap
         // expensive parameters (graph depth, full project map, etc.) before the
         // tool runs. The applied list is attached to the response below.
@@ -208,10 +220,12 @@ export function installToolGate(
           }
 
           // Warn-only path
+          const warnStart = Date.now();
           const result = (await originalCb(...cbArgs)) as {
             content: Array<{ type: string; text: string }>;
             isError?: boolean;
           };
+          savings.recordLatency(name, Date.now() - warnStart, !!result?.isError);
           recordToolCall?.(!result?.isError);
           if (result?.content?.[0]?.text && !result.isError) {
             try {
@@ -233,11 +247,13 @@ export function installToolGate(
         }
 
         // Normal path
+        const normalStart = Date.now();
         const result = await originalCb(...cbArgs);
         const resultObj = result as {
           content: Array<{ type: string; text: string }>;
           isError?: boolean;
         };
+        savings.recordLatency(name, Date.now() - normalStart, !!resultObj?.isError);
         recordToolCall?.(!resultObj?.isError);
         const count = extractResultCount(resultObj);
         const compactResult = extractCompactResult(name, resultObj);
@@ -272,6 +288,18 @@ export function installToolGate(
             resultObj.content[0].text = JSON.stringify(obj);
           } catch {
             /* keep original response */
+          }
+        }
+
+        // Wire-format re-encoding (Phase 3a). Skipped for JSON (no-op) and for
+        // error responses (errors should stay LLM-readable in plain JSON).
+        if (effectiveFormat !== 'json' && resultObj?.content?.[0]?.text && !resultObj.isError) {
+          try {
+            const parsed = JSON.parse(resultObj.content[0].text);
+            const reencoded = encodeWire(parsed, effectiveFormat);
+            resultObj.content[0].text = reencoded.text;
+          } catch {
+            /* keep original — corrupt JSON is worse than losing the format upgrade */
           }
         }
 

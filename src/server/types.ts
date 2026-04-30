@@ -10,6 +10,8 @@ import type { Store } from '../db/store.js';
 import type { DecisionStore } from '../memory/decision-store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProgressState } from '../progress.js';
+import type { RankingLedger } from '../runtime/ranking-ledger.js';
+import type { TelemetrySink } from '../runtime/telemetry-sink.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
 import type { TopologyStore } from '../topology/topology-db.js';
@@ -43,6 +45,10 @@ export interface ServerContext {
   topoStore: TopologyStore | null;
   /** Decision memory store (null if memory disabled) */
   decisionStore: DecisionStore | null;
+  /** Optional persistent telemetry sink (null when telemetry.enabled = false) */
+  telemetrySink: TelemetrySink | null;
+  /** Optional persistent ranking ledger for self-tuning (null when disabled) */
+  rankingLedger: RankingLedger | null;
 }
 
 /** Extended context for meta tools that bypass preset gate */

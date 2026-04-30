@@ -27,6 +27,9 @@ function createMockServer() {
 function createMockSavings() {
   return {
     recordCall: vi.fn(),
+    recordLatency: vi.fn(),
+    getLatencyPerTool: vi.fn().mockReturnValue({}),
+    getLatencyStats: vi.fn().mockReturnValue(null),
     getSessionStats: vi.fn().mockReturnValue({
       total_calls: 0,
       total_raw_tokens: 0,
@@ -35,6 +38,7 @@ function createMockSavings() {
       reduction_pct: 0,
       per_tool: {},
       started_at: new Date().toISOString(),
+      latency_per_tool: {},
     }),
   } as any;
 }
