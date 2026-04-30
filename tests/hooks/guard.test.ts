@@ -340,7 +340,7 @@ describe('trace-mcp-guard.sh v0.7', () => {
       TRACE_MCP_GUARD_MODE: 'coach',
     });
     expect(decision.allowed).toBe(true);
-    expect(decision.context ?? '').toContain('coach');
+    expect(decision.context ?? '').toContain('[trace-mcp coach]');
     expect(decision.context ?? '').toContain('get_outline');
   });
 
@@ -361,7 +361,7 @@ describe('trace-mcp-guard.sh v0.7', () => {
       TRACE_MCP_GUARD_MODE: 'coach',
     });
     expect(decision.allowed).toBe(true);
-    expect(decision.context ?? '').toContain('coach');
+    expect(decision.context ?? '').toContain('[trace-mcp coach]');
   });
 
   // ─── Stall detection via status JSON ────────────────────────────
