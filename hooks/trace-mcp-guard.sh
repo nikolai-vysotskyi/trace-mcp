@@ -55,8 +55,15 @@ if [[ "${TRACE_MCP_GUARD_OFF:-0}" == "1" ]]; then
 fi
 
 # ─── Mode selection ────────────────────────────────────────────────
-# strict (default) | coach | off
-GUARD_MODE="${TRACE_MCP_GUARD_MODE:-strict}"
+# Resolution order:
+#   1. <PROJECT_ROOT>/.trace-mcp/guard-mode file (per-project, written by app)
+#   2. TRACE_MCP_GUARD_MODE env var (global default for non-app users)
+#   3. "strict"
+PROJECT_MODE_FILE="$(pwd)/.trace-mcp/guard-mode"
+if [[ -f "$PROJECT_MODE_FILE" ]]; then
+  GUARD_MODE=$(head -n1 "$PROJECT_MODE_FILE" 2>/dev/null | tr -d ' \t\n\r')
+fi
+GUARD_MODE="${GUARD_MODE:-${TRACE_MCP_GUARD_MODE:-strict}}"
 case "$GUARD_MODE" in
   strict|coach|off) ;;
   *) GUARD_MODE="strict" ;;

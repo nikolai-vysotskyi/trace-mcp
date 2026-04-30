@@ -312,6 +312,27 @@ describe('trace-mcp-guard.sh v0.7', () => {
     ).toBe(true);
   });
 
+  it('per-project mode file overrides env (strict file beats coach env)', () => {
+    const file = path.join(projectDir, 'pp.ts');
+    fs.writeFileSync(file, 'export {};');
+    const modeDir = path.join(projectDir, '.trace-mcp');
+    fs.mkdirSync(modeDir, { recursive: true });
+    fs.writeFileSync(path.join(modeDir, 'guard-mode'), 'strict\n');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+    });
+    expect(decision.allowed).toBe(false);
+  });
+
+  it('per-project mode file: off disables guard for that project', () => {
+    const file = path.join(projectDir, 'ppoff.ts');
+    fs.writeFileSync(file, 'export {};');
+    const modeDir = path.join(projectDir, '.trace-mcp');
+    fs.mkdirSync(modeDir, { recursive: true });
+    fs.writeFileSync(path.join(modeDir, 'guard-mode'), 'off');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
+  });
+
   it('coach mode: never blocks, always emits hint context', () => {
     const file = path.join(projectDir, 'coach.ts');
     fs.writeFileSync(file, 'export {};');

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { GuardBadge } from './GuardBadge';
 import { StatusDot } from './StatusDot';
 
 interface ProgressSnapshot {
@@ -91,6 +92,7 @@ export function ProjectRow({
         {/* biome-ignore lint/a11y/useKeyWithClickEvents: presentational wrapper that only stops bubbling so child <button>s handle keyboard nav themselves. */}
         {/* biome-ignore lint/a11y/noStaticElementInteractions: same — wrapper has no semantic role; children carry the actions. */}
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <GuardBadge root={root} />
           {!confirmRemove ? (
             <>
               <button

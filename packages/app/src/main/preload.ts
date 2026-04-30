@@ -86,6 +86,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('tab-list-changed', handler);
     };
   },
+  // trace-mcp guard control: read project status + toggle per-project mode.
+  // Mode persists in <projectRoot>/.trace-mcp/guard-mode; status JSON is
+  // refreshed by the trace-mcp server every ~5s.
+  guard: {
+    status: (
+      projectRoot: string,
+    ): Promise<{
+      health: 'ok' | 'stalled' | 'down' | 'unknown';
+      mode: 'strict' | 'coach' | 'off';
+      pid?: number;
+      lastSuccessAt?: string | null;
+      toolCallsTotal?: number;
+      toolCallsFailed?: number;
+      quietSeconds?: number;
+      bypassUntil?: number;
+      reason?: string;
+    }> => ipcRenderer.invoke('guard:status', projectRoot),
+    setMode: (
+      projectRoot: string,
+      mode: 'strict' | 'coach' | 'off',
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('guard:set-mode', projectRoot, mode),
+    setBypass: (
+      projectRoot: string,
+      minutes: number,
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('guard:set-bypass', projectRoot, minutes),
+  },
+
   // Ollama control: passes baseUrl through so the renderer stays authoritative about
   // which Ollama instance we're talking to (users can repoint in settings).
   ollama: {
