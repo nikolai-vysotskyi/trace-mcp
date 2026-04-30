@@ -436,6 +436,25 @@
       text-transform: uppercase;
       color: var(--text-disabled);
     }
+    .hero-trust {
+      margin-top: 18px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      display: flex; flex-wrap: wrap; gap: 10px;
+      align-items: center;
+    }
+    .hero-trust .dot {
+      width: 3px; height: 3px; border-radius: 50%;
+      background: var(--border-visible);
+      display: inline-block;
+    }
+    .hero-trust .ok {
+      color: var(--text-display);
+      font-weight: 500;
+    }
     @media (max-width: 700px) {
       .hero { padding: 88px 0 40px; }
       .hero-meta { margin-bottom: 28px; }
@@ -444,6 +463,7 @@
       .hero-cta { margin-top: 24px; gap: 8px; }
       .hero-cta .btn { padding: 12px 22px; font-size: 11px; }
       .hero-install { display: none; }
+      .hero-trust { font-size: 11px; gap: 8px; margin-top: 14px; }
     }
 
     /* ── Metrics strip (proof row under hero) ── */
@@ -1854,7 +1874,7 @@
 
       <div class="hero-cta">
         <a href="#install" class="btn btn-primary">
-          See your waste in 5 minutes <span class="arrow">&rarr;</span>
+          Analyze your AI system <span class="arrow">&rarr;</span>
         </a>
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" rel="noopener" class="btn btn-secondary">
           View on GitHub
@@ -1865,6 +1885,16 @@
         </span>
       </div>
 
+      <p class="hero-trust">
+        <span class="ok">Open source</span>
+        <span class="dot"></span>
+        <span>MIT licensed</span>
+        <span class="dot"></span>
+        <span>Used in real LLM workflows</span>
+        <span class="dot"></span>
+        <span>Runs locally &middot; no data leaves your machine</span>
+      </p>
+
     </div>
   </section>
 
@@ -1873,19 +1903,19 @@
     <div class="container">
       <div class="metrics-strip-grid">
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">40&ndash;50%</span>
-          <span class="metrics-strip-label">Average token reduction</span>
+          <span class="metrics-strip-value">~40&ndash;50%</span>
+          <span class="metrics-strip-label">Average token reduction across mixed agent workloads</span>
         </div>
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">up to 99%</span>
-          <span class="metrics-strip-label">Less redundant processing</span>
+          <span class="metrics-strip-value">94&ndash;99%</span>
+          <span class="metrics-strip-label">In structured workflows &mdash; code navigation, dependency graphs, repeated context</span>
         </div>
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">up to 2X</span>
-          <span class="metrics-strip-label">Effective capacity</span>
+          <span class="metrics-strip-value">up to 2&times;</span>
+          <span class="metrics-strip-label">Effective context capacity per session</span>
         </div>
       </div>
-      <p class="metrics-strip-foot">Based on early benchmarks across agent workflows with repeated context and dependency traversal.</p>
+      <p class="metrics-strip-foot">Measured against baseline agent runs that re-read files and re-traverse dependencies on every turn. Run <code>npx trace-mcp benchmark .</code> to reproduce on your own repo.</p>
     </div>
   </section>
 
