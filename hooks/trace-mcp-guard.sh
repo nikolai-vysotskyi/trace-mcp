@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.7.0
+# trace-mcp-guard v0.7.1
 # trace-mcp PreToolUse guard
 # Routes Read/Grep/Glob/Bash/Agent on source code files through trace-mcp.
+#
+# v0.7.1 adds two fallback paths for the case where the trace-mcp process
+# is alive but its MCP channel is unresponsive (e.g. "Session not found"):
+#   - Manual bypass via scripts/trace-mcp-{disable,enable}-guard.sh — writes
+#     a TTL-based bypass sentinel that the hook honors.
+#   - Auto-degradation when N denies accumulate with zero consultation
+#     markers (proves the channel is dead).
 #
 # Design (v0.7 — closes the retry-bypass loophole from v0.6):
 #
@@ -113,32 +120,111 @@ else
 fi
 CONSULTED_DIR="${TMPDIR:-/tmp}/trace-mcp-consulted-${PROJECT_HASH}"
 HEARTBEAT_FILE="${TMPDIR:-/tmp}/trace-mcp-alive-${PROJECT_HASH}"
+BYPASS_FILE="${TMPDIR:-/tmp}/trace-mcp-bypass-${PROJECT_HASH}"
 READS_DIR="${TMPDIR:-/tmp}/trace-mcp-reads-${SESSION_ID}"
+DENY_AGGREGATE_FILE="$READS_DIR/.deny-aggregate"
 mkdir -p "$READS_DIR" 2>/dev/null || true
 
 # Tunables
 REPEAT_READ_LIMIT=${TRACE_MCP_GUARD_REPEAT_LIMIT:-3}
 STALE_THRESHOLD_SEC=${TRACE_MCP_GUARD_STALE_SEC:-30}
+# Auto-degradation: trip when N denies accumulate within WINDOW seconds AND
+# no consultation markers exist (suggests MCP channel is dead but process is up).
+AUTO_DEGRADE_DENY_THRESHOLD=${TRACE_MCP_GUARD_AUTO_DENY:-5}
+AUTO_DEGRADE_WINDOW_SEC=${TRACE_MCP_GUARD_AUTO_WINDOW:-300}
+AUTO_DEGRADE_DURATION_SEC=${TRACE_MCP_GUARD_AUTO_DURATION:-300}
 
-# ─── Heartbeat liveness check ──────────────────────────────────────
+# ─── Liveness / bypass check ───────────────────────────────────────
 # HEARTBEAT_DEAD=1 → fallback mode: allow Read with warning instead of
-# hard-blocking. Triggered by missing sentinel or stale mtime.
+# hard-blocking. Triggered by:
+#   1. Manual bypass sentinel (bypass file exists with mtime in the future,
+#      written by scripts/trace-mcp-disable-guard.sh).
+#   2. Auto-degradation sentinel (same file, written by the hook itself
+#      after detecting many denies with zero consultation markers — covers
+#      the "process alive, MCP channel dead" case where heartbeat alone
+#      can't help).
+#   3. Heartbeat sentinel missing or stale (process not running).
 HEARTBEAT_DEAD=0
 HEARTBEAT_REASON=""
+NOW=$(date +%s)
+
 if [[ -z "$PROJECT_HASH" ]]; then
   HEARTBEAT_DEAD=1
   HEARTBEAT_REASON="hash unavailable"
-elif [[ ! -f "$HEARTBEAT_FILE" ]]; then
-  HEARTBEAT_DEAD=1
-  HEARTBEAT_REASON="trace-mcp server not running (no heartbeat sentinel)"
-else
-  HB_MTIME=$(file_mtime "$HEARTBEAT_FILE")
-  NOW=$(date +%s)
-  AGE=$((NOW - HB_MTIME))
-  if (( AGE > STALE_THRESHOLD_SEC )); then
+elif [[ -f "$BYPASS_FILE" ]]; then
+  BP_MTIME=$(file_mtime "$BYPASS_FILE")
+  if (( BP_MTIME > NOW )); then
+    REMAINING=$((BP_MTIME - NOW))
     HEARTBEAT_DEAD=1
-    HEARTBEAT_REASON="trace-mcp heartbeat stale (${AGE}s old, threshold ${STALE_THRESHOLD_SEC}s)"
+    HEARTBEAT_REASON="trace-mcp guard manually bypassed (${REMAINING}s remaining); re-enable: bash scripts/trace-mcp-enable-guard.sh"
+  else
+    # Expired bypass — clean up so it doesn't accumulate.
+    rm -f "$BYPASS_FILE" 2>/dev/null || true
   fi
+fi
+
+if (( HEARTBEAT_DEAD == 0 )); then
+  if [[ ! -f "$HEARTBEAT_FILE" ]]; then
+    HEARTBEAT_DEAD=1
+    HEARTBEAT_REASON="trace-mcp server not running (no heartbeat sentinel)"
+  else
+    HB_MTIME=$(file_mtime "$HEARTBEAT_FILE")
+    AGE=$((NOW - HB_MTIME))
+    if (( AGE > STALE_THRESHOLD_SEC )); then
+      HEARTBEAT_DEAD=1
+      HEARTBEAT_REASON="trace-mcp heartbeat stale (${AGE}s old, threshold ${STALE_THRESHOLD_SEC}s)"
+    fi
+  fi
+fi
+
+# Auto-degradation: track per-session deny aggregate. If N denies pile up
+# within the window AND no consultation markers exist, assume the MCP channel
+# is broken (process alive but session dead) and write a bypass sentinel.
+maybe_auto_degrade() {
+  # Already in fallback mode for any reason — nothing to do.
+  if (( HEARTBEAT_DEAD == 1 )); then
+    return
+  fi
+  # If consultation markers exist for this project, the agent is reaching
+  # trace-mcp successfully — don't auto-degrade.
+  if [[ -d "$CONSULTED_DIR" ]] && [[ -n "$(ls -A "$CONSULTED_DIR" 2>/dev/null)" ]]; then
+    return
+  fi
+
+  local count=0
+  local first_ts=$NOW
+  if [[ -f "$DENY_AGGREGATE_FILE" ]]; then
+    IFS=':' read -r count first_ts < "$DENY_AGGREGATE_FILE" || true
+    count="${count:-0}"
+    first_ts="${first_ts:-$NOW}"
+    # Reset window if it's fully elapsed.
+    if (( NOW - first_ts > AUTO_DEGRADE_WINDOW_SEC )); then
+      count=0
+      first_ts=$NOW
+    fi
+  fi
+  count=$((count + 1))
+  echo "${count}:${first_ts}" > "$DENY_AGGREGATE_FILE"
+
+  if (( count >= AUTO_DEGRADE_DENY_THRESHOLD )); then
+    # Trip auto-degradation: write bypass sentinel with mtime in the future.
+    local expiry=$((NOW + AUTO_DEGRADE_DURATION_SEC))
+    echo "auto-degraded" > "$BYPASS_FILE" 2>/dev/null || true
+    if command -v gtouch >/dev/null 2>&1; then
+      gtouch -d "@$expiry" "$BYPASS_FILE" 2>/dev/null || true
+    else
+      touch -t "$(date -r "$expiry" +%Y%m%d%H%M.%S 2>/dev/null || date -d "@$expiry" +%Y%m%d%H%M.%S 2>/dev/null)" "$BYPASS_FILE" 2>/dev/null || true
+    fi
+    HEARTBEAT_DEAD=1
+    HEARTBEAT_REASON="auto-degraded — ${count} denies / 0 consultation markers in window. trace-mcp MCP channel appears unresponsive. Auto-bypass for $((AUTO_DEGRADE_DURATION_SEC / 60))min; will re-arm on next consultation marker"
+    rm -f "$DENY_AGGREGATE_FILE" 2>/dev/null || true
+  fi
+}
+
+# Reset deny aggregate as soon as ANY consultation marker exists — that proves
+# the MCP channel is alive in this session.
+if [[ -d "$CONSULTED_DIR" ]] && [[ -n "$(ls -A "$CONSULTED_DIR" 2>/dev/null)" ]]; then
+  rm -f "$DENY_AGGREGATE_FILE" 2>/dev/null || true
 fi
 
 # ─── Read ──────────────────────────────────────────────────────────
@@ -212,6 +298,15 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
       exit 0
     fi
 
+    # No marker → first check whether we should auto-degrade based on
+    # session-wide failure pattern. If maybe_auto_degrade trips, it sets
+    # HEARTBEAT_DEAD=1 and we fall through to the fallback branch below.
+    maybe_auto_degrade
+    if (( HEARTBEAT_DEAD == 1 )); then
+      allow_with_context \
+        "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Read as fallback."
+    fi
+
     # No marker → deny. Track repeat denies for escalation.
     DENY_COUNT=0
     if [[ -f "$DENY_STATE" ]]; then
@@ -267,10 +362,15 @@ if [[ "$TOOL_NAME" == "Grep" ]]; then
     exit 0
   fi
 
-  # Heartbeat fallback applies to Grep too — server unavailable, allow.
+  # Heartbeat / bypass fallback applies to Grep too. Also try auto-degrade.
   if (( HEARTBEAT_DEAD == 1 )); then
     allow_with_context \
       "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Grep as fallback — restart trace-mcp to re-enable strict routing."
+  fi
+  maybe_auto_degrade
+  if (( HEARTBEAT_DEAD == 1 )); then
+    allow_with_context \
+      "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Grep as fallback."
   fi
 
   PATTERN=$(echo "$INPUT" | jq -r '.tool_input.pattern // empty')
@@ -293,6 +393,11 @@ if [[ "$TOOL_NAME" == "Glob" ]]; then
     exit 0
   fi
 
+  if (( HEARTBEAT_DEAD == 1 )); then
+    allow_with_context \
+      "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Glob as fallback."
+  fi
+  maybe_auto_degrade
   if (( HEARTBEAT_DEAD == 1 )); then
     allow_with_context \
       "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Glob as fallback."

@@ -86,6 +86,21 @@ function writeConsultationMarker(cwd: string, relPath: string): void {
   fs.writeFileSync(path.join(dir, fileHash(relPath)), '');
 }
 
+/** Path of the bypass sentinel for `cwd`. */
+function bypassFile(cwd: string): string {
+  const real = fs.realpathSync(cwd);
+  return path.join(TMP_BASE, `trace-mcp-bypass-${projectHash(real)}`);
+}
+
+/** Write the manual bypass sentinel with mtime N seconds in the future. */
+function setManualBypass(cwd: string, secondsAhead: number): string {
+  const file = bypassFile(cwd);
+  fs.writeFileSync(file, 'manual');
+  const future = new Date(Date.now() + secondsAhead * 1000);
+  fs.utimesSync(file, future, future);
+  return file;
+}
+
 describe('trace-mcp-guard.sh v0.7', () => {
   const projectDir = path.join(
     TMP_BASE,
@@ -108,6 +123,8 @@ describe('trace-mcp-guard.sh v0.7', () => {
       const real = fs.realpathSync(projectDir);
       const consultedDir = path.join(TMP_BASE, `trace-mcp-consulted-${projectHash(real)}`);
       if (fs.existsSync(consultedDir)) fs.rmSync(consultedDir, { recursive: true, force: true });
+      const bp = path.join(TMP_BASE, `trace-mcp-bypass-${projectHash(real)}`);
+      if (fs.existsSync(bp)) fs.rmSync(bp, { force: true });
       fs.rmSync(projectDir, { recursive: true, force: true });
     }
     if (fs.existsSync(heartbeatFile)) fs.rmSync(heartbeatFile, { force: true });
@@ -264,6 +281,72 @@ describe('trace-mcp-guard.sh v0.7', () => {
       TRACE_MCP_GUARD_OFF: '1',
     });
     expect(decision.allowed).toBe(true);
+  });
+
+  // ─── Manual TTL bypass (scripts/trace-mcp-disable-guard.sh) ─────
+
+  it('manual bypass sentinel allows Read with warning', () => {
+    setManualBypass(projectDir, 600); // 10 min into future
+    const file = path.join(projectDir, 'bypass.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+    expect(decision.context).toContain('manually bypassed');
+  });
+
+  it('expired manual bypass sentinel does NOT bypass', () => {
+    // mtime in the past = expired; hook ignores and stays strict.
+    const file = path.join(projectDir, 'expired.ts');
+    fs.writeFileSync(file, 'export {};');
+    const bp = bypassFile(projectDir);
+    fs.writeFileSync(bp, 'manual');
+    const past = new Date(Date.now() - 60_000);
+    fs.utimesSync(bp, past, past);
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.allowed).toBe(false);
+  });
+
+  // ─── Auto-degradation when MCP channel appears dead ─────────────
+
+  it('auto-degrades after threshold denies with zero consultation markers', () => {
+    // Heartbeat is alive (set in beforeEach), but no consultation markers
+    // ever appear. Simulates "process up, MCP channel dead".
+    // First 4 attempts get denied. 5th attempt trips auto-degrade and is
+    // allowed with "auto-degraded" in the context. After that the bypass
+    // sentinel takes over for subsequent attempts.
+    const decisions = [];
+    for (let i = 1; i <= 6; i++) {
+      const f = path.join(projectDir, `auto-${i}.ts`);
+      fs.writeFileSync(f, 'export {};');
+      decisions.push(
+        runGuard('Read', { file_path: f }, sessionId, projectDir, {
+          TRACE_MCP_GUARD_AUTO_DENY: '5',
+        }),
+      );
+    }
+    // Pre-trip denies
+    expect(decisions[0].allowed).toBe(false);
+    expect(decisions[3].allowed).toBe(false);
+    // The trip itself: 5th attempt flips to allowed with auto-degraded reason.
+    expect(decisions[4].allowed).toBe(true);
+    expect(decisions[4].context ?? '').toContain('auto-degraded');
+    // Subsequent attempts continue to be allowed (now via the bypass sentinel).
+    expect(decisions[5].allowed).toBe(true);
+  });
+
+  it('does NOT auto-degrade when consultation markers exist (channel works)', () => {
+    // The agent successfully consulted some other file → MCP is alive.
+    // Even if the agent then hammers Read on a different un-consulted file,
+    // auto-degrade should not kick in.
+    writeConsultationMarker(projectDir, 'something.ts');
+    const file = path.join(projectDir, 'noauto.ts');
+    fs.writeFileSync(file, 'export {};');
+    for (let i = 0; i < 7; i++) {
+      const d = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+        TRACE_MCP_GUARD_AUTO_DENY: '5',
+      });
+      expect(d.allowed).toBe(false);
+    }
   });
 
   // ─── Grep / Glob ────────────────────────────────────────────────
