@@ -393,6 +393,12 @@ export function createServer(
   const presetResult = resolvePreset(presetName);
   const activePreset = presetResult ?? 'all';
 
+  // Status sentinel — guard hook uses this to detect a live, healthy trace-mcp.
+  // Records tool-call counters + last successful call timestamp so the v0.8+
+  // hook can distinguish "process up but MCP channel stalled" from a healthy
+  // server, and the desktop app can render the project status badge.
+  const heartbeat = startHeartbeat(projectRoot);
+
   const { _originalTool, registeredToolNames, toolHandlers } = installToolGate(
     server,
     config,
@@ -404,6 +410,7 @@ export function createServer(
     extractCompactResult,
     stripMetaFields,
     projectRoot,
+    (success) => heartbeat.recordToolCall(success),
   );
 
   if (presetName !== 'full') {
@@ -469,11 +476,6 @@ export function createServer(
 
   // Explored-file tracker (guard hook reads markers to allow Read on explored files)
   const explored = createExploredTracker(projectRoot);
-
-  // Heartbeat sentinel — guard hook uses this to detect a live trace-mcp.
-  // When stale/missing, the hook falls back to allowing Read on code files
-  // instead of hard-blocking (covers crashed server / "session not found").
-  const heartbeat = startHeartbeat(projectRoot);
 
   // Build topology store (shared across navigation + advanced tools)
   // If deps provide a shared store, use it (caller manages lifecycle).
