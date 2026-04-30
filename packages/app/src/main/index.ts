@@ -42,6 +42,17 @@ ipcMain.handle('open-in-editor', async (_event, filePath: string) => {
   await shell.openPath(filePath);
 });
 
+// IPC: open URL in the user's default external browser. Using shell.openExternal
+// (instead of window.open in the renderer) keeps users out of an Electron-spawned
+// in-app window where they aren't logged into GitHub and would otherwise be
+// asked to authenticate again.
+ipcMain.handle('open-external', async (_event, url: string) => {
+  if (typeof url !== 'string') return { ok: false, error: 'invalid url' };
+  if (!/^https?:\/\//i.test(url)) return { ok: false, error: 'only http(s) urls allowed' };
+  await shell.openExternal(url);
+  return { ok: true };
+});
+
 // IPC: detect installed IDEs (macOS-first; Windows/Linux return []).
 // Scans /Applications and ~/Applications for well-known IDE .app bundles.
 ipcMain.handle('detect-ide-apps', async () => {
@@ -742,6 +753,24 @@ function appendUpdateLog(entry: Record<string, unknown>): void {
   }
 }
 
+function readInstalledVersion(npmRoot: string | null): string | undefined {
+  if (!npmRoot) return undefined;
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(npmRoot, 'trace-mcp', 'package.json'), 'utf-8'),
+    );
+    const v = String(pkg.version || '').replace(/^v/, '');
+    return v || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Set when `apply-update` finishes and the on-disk package is ahead of the
+// running process. Drives the "Restart to install" banner for the npm-install
+// path (the legacy zip-staged path uses hasPendingUpdate() instead).
+let pendingRestartVersion: string | undefined;
+
 ipcMain.handle('apply-update', async () => {
   // `install --force` is the robust swap: it replaces the package directory
   // wholesale rather than relying on `update`'s rename dance, which breaks when
@@ -843,8 +872,19 @@ ipcMain.handle('apply-update', async () => {
       error: `${summary}\n\nFull log: ${UPDATE_LOG}`,
     };
   }
-  appendUpdateLog({ event: 'apply-update:ok', pending: hasPendingUpdate() });
-  return { ok: true, pending: hasPendingUpdate() };
+  const installedVersion = readInstalledVersion(npmRoot);
+  const running = app.getVersion().replace(/^v/, '');
+  if (installedVersion && cmpSemver(installedVersion, running) > 0) {
+    pendingRestartVersion = installedVersion;
+  }
+  const pending = hasPendingUpdate() || pendingRestartVersion !== undefined;
+  appendUpdateLog({
+    event: 'apply-update:ok',
+    pending,
+    installedVersion: installedVersion ?? null,
+    runningVersion: running,
+  });
+  return { ok: true, pending, version: pendingRestartVersion };
 });
 
 // Pending update plumbing — postinstall stages a verified zip into ~/Applications/
@@ -877,21 +917,34 @@ function clearPendingFiles(): void {
 }
 
 ipcMain.handle('check-pending-update', () => {
-  if (!hasPendingUpdate()) return { pending: false };
-  let version: string | undefined;
-  try {
-    version = fs.readFileSync(PENDING_VERSION, 'utf-8').trim().replace(/^v/, '');
-  } catch {}
-  // Drop stale pending artefacts: when the bundle has already been swapped
-  // (e.g. postinstall ran while the app wasn't running) the marker files
-  // stick around and produce a zombie "Restart to install" banner for a
-  // version we are already on.
-  const current = app.getVersion().replace(/^v/, '');
-  if (version && cmpSemver(version, current) <= 0) {
+  // Path 1: legacy zip-staged pending swap (postinstall produced
+  // ~/Applications/.trace-mcp-pending.{zip,version}).
+  if (hasPendingUpdate()) {
+    let version: string | undefined;
+    try {
+      version = fs.readFileSync(PENDING_VERSION, 'utf-8').trim().replace(/^v/, '');
+    } catch {}
+    // Drop stale pending artefacts: when the bundle has already been swapped
+    // (e.g. postinstall ran while the app wasn't running) the marker files
+    // stick around and produce a zombie "Restart to install" banner for a
+    // version we are already on.
+    const current = app.getVersion().replace(/^v/, '');
+    if (!version || cmpSemver(version, current) > 0) {
+      return { pending: true, version };
+    }
     clearPendingFiles();
-    return { pending: false };
   }
-  return { pending: true, version };
+  // Path 2: npm-install path — `apply-update` updated the on-disk package but
+  // this Electron process is still on the previous version. Relaunch picks it
+  // up.
+  if (pendingRestartVersion) {
+    const current = app.getVersion().replace(/^v/, '');
+    if (cmpSemver(pendingRestartVersion, current) > 0) {
+      return { pending: true, version: pendingRestartVersion };
+    }
+    pendingRestartVersion = undefined;
+  }
+  return { pending: false };
 });
 
 // IPC: restart the app. If a staged update is waiting, spawn a detached helper
