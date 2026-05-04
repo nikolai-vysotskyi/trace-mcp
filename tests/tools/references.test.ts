@@ -105,4 +105,67 @@ describe('findReferences', () => {
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().references).toHaveLength(1);
   });
+
+  it('surfaces resolution_tier on each reference and tallies the summary', () => {
+    const target = addSymbol(store, { filePath: 'src/t.ts', name: 'T', kind: 'class' });
+    const lspCaller = addSymbol(store, { filePath: 'src/a.ts', name: 'a', kind: 'function' });
+    const astCaller = addSymbol(store, { filePath: 'src/b.ts', name: 'b', kind: 'function' });
+    const fuzzy = addSymbol(store, { filePath: 'src/c.ts', name: 'c', kind: 'function' });
+
+    store.insertEdge(
+      lspCaller.nodeId,
+      target.nodeId,
+      'calls',
+      true,
+      undefined,
+      false,
+      'lsp_resolved',
+    );
+    store.insertEdge(
+      astCaller.nodeId,
+      target.nodeId,
+      'calls',
+      true,
+      undefined,
+      false,
+      'ast_resolved',
+    );
+    store.insertEdge(fuzzy.nodeId, target.nodeId, 'calls', false, undefined, false, 'text_matched');
+
+    const result = findReferences(store, { symbolId: 'src/t.ts::T#class' });
+    expect(result.isOk()).toBe(true);
+    const val = result._unsafeUnwrap();
+
+    for (const ref of val.references) {
+      expect(['lsp_resolved', 'ast_resolved', 'ast_inferred', 'text_matched']).toContain(
+        ref.resolution_tier,
+      );
+    }
+
+    expect(val.resolution_tiers.lsp_resolved).toBe(1);
+    expect(val.resolution_tiers.ast_resolved).toBe(1);
+    expect(val.resolution_tiers.text_matched).toBe(1);
+    expect(val.resolution_tiers.ast_inferred).toBe(0);
+
+    const totalByTier =
+      val.resolution_tiers.lsp_resolved +
+      val.resolution_tiers.ast_resolved +
+      val.resolution_tiers.ast_inferred +
+      val.resolution_tiers.text_matched;
+    expect(totalByTier).toBe(val.total);
+  });
+
+  it('returns an empty resolution_tiers summary when nothing references the target', () => {
+    addSymbol(store, { filePath: 'src/lonely.ts', name: 'lonely', kind: 'function' });
+    const result = findReferences(store, { symbolId: 'src/lonely.ts::lonely#function' });
+    expect(result.isOk()).toBe(true);
+    const val = result._unsafeUnwrap();
+    expect(val.references).toHaveLength(0);
+    expect(val.resolution_tiers).toEqual({
+      lsp_resolved: 0,
+      ast_resolved: 0,
+      ast_inferred: 0,
+      text_matched: 0,
+    });
+  });
 });
