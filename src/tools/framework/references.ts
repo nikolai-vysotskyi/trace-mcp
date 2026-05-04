@@ -2,11 +2,19 @@ import { err, ok } from 'neverthrow';
 import type { Store } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { expandMethodViaCha } from '../shared/cha.js';
+import {
+  emptyResolutionTiers,
+  inferResolution,
+  type EdgeResolution,
+  type ResolutionTiers,
+} from '../shared/resolution.js';
 import { resolveSymbolInput } from '../shared/resolve.js';
 
 interface ReferenceItem {
   /** Edge type describing the relationship (e.g. 'imports', 'calls', 'renders_component') */
   edge_type: string;
+  /** Resolution confidence — lsp_resolved (compiler-grade) > ast_resolved > ast_inferred > text_matched (fuzzy) */
+  resolution_tier: EdgeResolution;
   /** Symbol that references the target (null if the referencing node is a file/route/component) */
   symbol: {
     symbol_id: string;
@@ -29,6 +37,8 @@ interface FindReferencesResult {
   };
   references: ReferenceItem[];
   total: number;
+  /** Counts of references by resolution tier — agents can prefer high-tier results when filtering noise */
+  resolution_tiers: ResolutionTiers;
   /** If CHA expanded the search, lists the equivalent methods found */
   cha_expansion?: { symbol_id: string; name: string; relation: string }[];
 }
@@ -63,7 +73,12 @@ export function findReferences(
 
   if (nodeId === undefined) {
     // Node not in the graph (file indexed but no edges yet)
-    return ok({ target: targetMeta, references: [], total: 0 });
+    return ok({
+      target: targetMeta,
+      references: [],
+      total: 0,
+      resolution_tiers: emptyResolutionTiers(),
+    });
   }
 
   // CHA expansion: for method symbols, also collect references to polymorphically-equivalent methods
@@ -162,6 +177,7 @@ export function findReferences(
 
     const ref: ReferenceItem = {
       edge_type: edge.edge_type_name,
+      resolution_tier: inferResolution(edge),
       symbol,
       file: filePath,
     };
@@ -169,7 +185,15 @@ export function findReferences(
     references.push(ref);
   }
 
-  const result: FindReferencesResult = { target: targetMeta, references, total: references.length };
+  const tiers = emptyResolutionTiers();
+  for (const r of references) tiers[r.resolution_tier]++;
+
+  const result: FindReferencesResult = {
+    target: targetMeta,
+    references,
+    total: references.length,
+    resolution_tiers: tiers,
+  };
   if (chaExpansion && chaExpansion.length > 0) result.cha_expansion = chaExpansion;
   return ok(result);
 }
