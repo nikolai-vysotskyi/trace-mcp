@@ -3,6 +3,12 @@ import type { Store, SymbolRow } from '../../db/store.js';
 import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { getChaNodeIds } from '../shared/cha.js';
+import {
+  emptyResolutionTiers,
+  inferResolution,
+  type EdgeResolution,
+  type ResolutionTiers,
+} from '../shared/resolution.js';
 import { resolveSymbolInput } from '../shared/resolve.js';
 
 // ─── Pennant (feature-flag) types ────────────────────────────────────────────
@@ -30,6 +36,8 @@ interface DependentSymbol {
   isExported?: boolean;
   /** Whether any test file both covers this file AND references this specific symbol */
   hasTestReach?: boolean;
+  /** Resolution confidence of the edge from this symbol to the target — agents can prefer high-tier results */
+  resolutionTier?: EdgeResolution;
 }
 
 interface EnrichedDependent {
@@ -95,6 +103,7 @@ interface RawDependent {
   symbolName?: string;
   symbolKind?: string;
   edgeType: string;
+  resolutionTier: EdgeResolution;
   depth: number;
   complexity?: number;
   hasTests?: boolean;
@@ -118,6 +127,8 @@ export interface ChangeImpactResult {
   coChangeHidden?: CoChangeHidden[];
   dependents: EnrichedDependent[];
   totalAffected: number;
+  /** Counts of dependent edges by resolution tier — agents can gauge how much of the impact is text_matched noise vs lsp_resolved certainty */
+  resolution_tiers: ResolutionTiers;
   truncated?: boolean;
   pennant?: PennantImpactResult;
   /** When symbol_ids are provided, only those symbols are analyzed (diff-aware mode) */
@@ -453,6 +464,7 @@ export function getChangeImpact(
       dependents: [],
       affectedTests: { total: 0, files: [] },
       totalAffected: 0,
+      resolution_tiers: emptyResolutionTiers(),
     });
   }
 
@@ -659,6 +671,10 @@ export function getChangeImpact(
     summary.sentence = `Impact: ${parts.join(', ')}.${risk.level !== 'low' ? ` Risk: ${risk.level}.` : ''}`;
   }
 
+  // ── Tally resolution tiers across all raw incoming edges ──
+  const resolutionTiers = emptyResolutionTiers();
+  for (const raw of rawDeps) resolutionTiers[raw.resolutionTier]++;
+
   // ── Build result, omitting empty optional sections ──
   const result: ChangeImpactResult = {
     target: {
@@ -672,6 +688,7 @@ export function getChangeImpact(
     affectedTests,
     dependents,
     totalAffected: dependents.length,
+    resolution_tiers: resolutionTiers,
   };
 
   if (breakingChanges.length > 0) result.breakingChanges = breakingChanges;
@@ -718,6 +735,7 @@ function deduplicateByFile(rawDeps: RawDependent[]): EnrichedDependent[] {
           symbolId: raw.symbolId,
           symbolName: raw.symbolName,
           symbolKind: raw.symbolKind,
+          resolutionTier: raw.resolutionTier,
         };
         if (raw.complexity != null) sym.complexity = raw.complexity;
         if (raw.isExported != null) sym.isExported = raw.isExported;
@@ -768,7 +786,7 @@ function traverseIncoming(
     const frontierSet = new Set(frontier);
     const newFrontier: number[] = [];
     const sourceNodeIds: number[] = [];
-    const edgeBySource = new Map<number, string>();
+    const edgeBySource = new Map<number, { type: string; tier: EdgeResolution }>();
 
     for (const edge of allEdges) {
       if (rawDeps.length + sourceNodeIds.length >= maxDependents) break;
@@ -780,7 +798,7 @@ function traverseIncoming(
       visited.add(srcId);
 
       sourceNodeIds.push(srcId);
-      edgeBySource.set(srcId, edge.edge_type_name);
+      edgeBySource.set(srcId, { type: edge.edge_type_name, tier: inferResolution(edge) });
       newFrontier.push(srcId);
     }
 
@@ -869,9 +887,11 @@ function traverseIncoming(
           hasTestReach = coveredNames?.has(symbolName.toLowerCase()) ?? false;
         }
 
+        const edgeMeta = edgeBySource.get(srcId);
         rawDeps.push({
           path: filePath,
-          edgeType: edgeBySource.get(srcId) ?? 'unknown',
+          edgeType: edgeMeta?.type ?? 'unknown',
+          resolutionTier: edgeMeta?.tier ?? 'ast_resolved',
           depth,
           symbolId,
           symbolName,
