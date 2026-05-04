@@ -5,6 +5,7 @@ import type { ServerContext } from '../../server/types.js';
 import { getEdgeBottlenecks } from '../analysis/bottlenecks.js';
 import { getComplexityTrend } from '../analysis/complexity-trend.js';
 import { checkSymbolForDuplicates } from '../analysis/duplication.js';
+import { generateInsightsReport } from '../analysis/insights-report.js';
 import {
   getCouplingMetrics,
   getDependencyCycles,
@@ -215,6 +216,21 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     {},
     async () => {
       return { content: [{ type: 'text', text: j(selfAudit(store)) }] };
+    },
+  );
+
+  server.tool(
+    'generate_insights_report',
+    'Single-call narrative health snapshot: god files (PageRank), architectural bridges (edge bottlenecks), risk hotspots (complexity × churn), edge resolution-tier breakdown, and gap counts (dead exports, untested, cycles). Aggregates already-computed metrics into ~2K tokens of Markdown plus a structured payload. Use at the start of a session to orient yourself instead of chaining get_pagerank + get_risk_hotspots + get_edge_bottlenecks + self_audit. Read-only. Returns JSON: { generated_at, totals, resolution_tiers, god_files, bridges, hotspots, gaps, markdown }.',
+    {
+      top_n: z.number().int().min(1).max(20).optional().describe('Items per section (default: 5)'),
+    },
+    async ({ top_n }) => {
+      const result = generateInsightsReport(store, { cwd: projectRoot, topN: top_n });
+      if (result.isErr()) {
+        return { content: [{ type: 'text', text: j(formatToolError(result.error)) }] };
+      }
+      return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
 
