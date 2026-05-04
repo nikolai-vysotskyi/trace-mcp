@@ -70,6 +70,29 @@ describe('get_change_impact', () => {
     }
   });
 
+  it('surfaces resolution_tiers summary on the impact result', () => {
+    const result = getChangeImpact(store, { filePath: 'src/components/UserCard.vue' });
+    expect(result.isOk()).toBe(true);
+
+    const impact = result._unsafeUnwrap();
+    expect(impact.resolution_tiers).toBeDefined();
+    const tiers = impact.resolution_tiers;
+    for (const key of ['lsp_resolved', 'ast_resolved', 'ast_inferred', 'text_matched'] as const) {
+      expect(tiers[key]).toBeGreaterThanOrEqual(0);
+    }
+
+    for (const dep of impact.dependents) {
+      if (!dep.symbols) continue;
+      for (const sym of dep.symbols) {
+        if (sym.resolutionTier !== undefined) {
+          expect(['lsp_resolved', 'ast_resolved', 'ast_inferred', 'text_matched']).toContain(
+            sym.resolutionTier,
+          );
+        }
+      }
+    }
+  });
+
   it('respects depth limit', () => {
     const result = getChangeImpact(store, { filePath: 'src/components/UserCard.vue' }, 1);
     expect(result.isOk()).toBe(true);
