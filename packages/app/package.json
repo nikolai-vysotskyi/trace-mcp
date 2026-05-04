@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cosmos.gl/graph": "3.0.0-beta.8",
+    "@cosmos.gl/graph": "3.0.0-beta.9",
     "menubar": "^9.5.0"
   },
   "overrides": {
