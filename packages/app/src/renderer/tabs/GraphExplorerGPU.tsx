@@ -192,6 +192,22 @@ function nodeColor01(
 }
 
 /**
+ * Dim non-highlighted points by attenuating their alpha. Replaces the
+ * grey-out effect that `Graph.selectPointsByIndices` provided in cosmos.gl
+ * <= 3.0.0-beta.8; the API was removed in beta.9, so the renderer now has
+ * to implement the visual itself by writing into the color buffer.
+ */
+const DIM_ALPHA_FACTOR = 0.2;
+function dimNonHighlighted(colors: Float32Array, highlighted: Iterable<number>): void {
+  const keep = new Set<number>(highlighted);
+  const numPoints = Math.floor(colors.length / 4);
+  for (let i = 0; i < numPoints; i++) {
+    if (keep.has(i)) continue;
+    colors[i * 4 + 3] *= DIM_ALPHA_FACTOR;
+  }
+}
+
+/**
  * Per-link RGBA tinted as a shade of the source node's color — lerped toward
  * the background so edges read as an atmospheric halo of their source node
  * instead of competing with it. Saturation ceiling in dense clusters is the
@@ -752,8 +768,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     colors[tgtIdx * 4 + 1] = 0.38;
     colors[tgtIdx * 4 + 2] = 0.38;
     colors[tgtIdx * 4 + 3] = 1.0;
+    dimNonHighlighted(colors, [srcIdx, tgtIdx]);
     graph.setPointColors(colors);
-    graph.selectPointsByIndices([srcIdx, tgtIdx]);
 
     // Only the specific edge is drawn; everything else goes to alpha 0.
     // Direction-agnostic match (src→tgt OR tgt→src) because cosmos.gl link
@@ -860,8 +876,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     colors[seedIdx * 4 + 1] = 1.0;
     colors[seedIdx * 4 + 2] = 1.0;
     colors[seedIdx * 4 + 3] = 1.0;
+    dimNonHighlighted(colors, highlighted);
     graph.setPointColors(colors);
-    graph.selectPointsByIndices(highlighted);
 
     // Link pass: only hot edges on this node get drawn, everything else goes
     // invisible. Alpha 0 on non-hot is OK even with linkVisibilityMinTransparency
@@ -920,7 +936,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // ── BFS-expand seeds to N hops, tinting each layer its own palette color ──
   // Depth 0 (clicked seed) = white, 1 = red-orange, 2 = gold, ... (DEPTH_COLORS).
   // We overwrite per-point colors for every highlighted node, then let cosmos.gl
-  // grey-out the rest via selectPointsByIndices. This gives the user a visible
+  // grey-out the rest via dimNonHighlighted. This gives the user a visible
   // "how many hops away is each neighbor" answer at a glance.
   const highlightNeighborhood = useCallback((seeds: number[]) => {
     const graph = graphRef.current;
@@ -937,7 +953,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     for (let d = 1; d <= depth && frontier.length > 0; d++) {
       const next: number[] = [];
       for (const idx of frontier) {
-        const adj = graph.getAdjacentIndices(idx);
+        const adj = graph.getNeighboringPointIndices(idx);
         if (!adj) continue;
         for (const n of adj) {
           if (!depthMap.has(n)) {
@@ -959,9 +975,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       colors[idx * 4 + 2] = b;
       colors[idx * 4 + 3] = a;
     }
-    graph.setPointColors(colors);
     const highlighted = Array.from(depthMap.keys());
-    graph.selectPointsByIndices(highlighted);
+    dimNonHighlighted(colors, highlighted);
+    graph.setPointColors(colors);
     highlightedDepthRef.current = new Map(depthMap);
 
     // Colorize links: only BFS tree edges (one endpoint at hop d, the other at
@@ -1012,9 +1028,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const graph = graphRef.current;
     const orig = origColorsRef.current;
     if (!graph) return;
-    graph.unselectPoints();
     // Restore original community/language/framework colors — highlight mode
-    // had overwritten the buffer for highlighted nodes.
+    // had overwritten the buffer for highlighted nodes (and dimmed everyone
+    // else's alpha to substitute for cosmos.gl's removed selection grey-out).
     if (orig) graph.setPointColors(new Float32Array(orig));
     // Reset link colors to the cached per-link tints (we overrode them per-link
     // in highlightNeighborhood, so cosmos.gl won't revert on its own).
@@ -2615,7 +2631,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     for (let d = 0; d < depth && frontier.length > 0; d++) {
       const next: number[] = [];
       for (const idx of frontier) {
-        const adj = graph.getAdjacentIndices(idx);
+        const adj = graph.getNeighboringPointIndices(idx);
         if (!adj) continue;
         for (const n of adj) {
           if (!visited.has(n)) {
@@ -2631,7 +2647,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // previous click's subgraph labels and tinted edges stick around on top
     // of the new cosmos.gl selection.
     if (highlightedDepthRef.current) clearHighlight();
-    graph.selectPointsByIndices(Array.from(visited));
+    const orig = origColorsRef.current;
+    if (orig) {
+      const colors = new Float32Array(orig);
+      dimNonHighlighted(colors, visited);
+      graph.setPointColors(colors);
+    }
     selectedIndicesRef.current = new Set(visited);
     setSearchQuery('');
   }, [searchQuery, clearHighlight]);
@@ -2664,7 +2685,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       // Wipe any active click-highlight (BFS colors, depth map, widened link
       // fade) before overlaying the group selection — see doSelectAllMatches.
       if (highlightedDepthRef.current) clearHighlight();
-      graph.selectPointsByIndices(indices);
+      const orig = origColorsRef.current;
+      if (orig) {
+        const colors = new Float32Array(orig);
+        dimNonHighlighted(colors, indices);
+        graph.setPointColors(colors);
+      }
       selectedIndicesRef.current = new Set(indices);
     },
     [clearHighlight],
