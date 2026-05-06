@@ -219,11 +219,16 @@ export interface FrameworkPlugin {
   manifest: PluginManifest;
   detect(ctx: ProjectContext): boolean;
   registerSchema(): { nodeTypes?: NodeTypeDeclaration[]; edgeTypes?: EdgeTypeDeclaration[] };
+  /**
+   * May return either a synchronous `TraceMcpResult` or a `Promise` of one —
+   * tree-sitter-based plugins (e.g. React) need async parser init on first
+   * use, while regex-only plugins stay sync. The executor `await`s either.
+   */
   extractNodes?(
     filePath: string,
     content: Buffer,
     language: string,
-  ): TraceMcpResult<FileParseResult>;
+  ): TraceMcpResult<FileParseResult> | Promise<TraceMcpResult<FileParseResult>>;
   resolveEdges?(ctx: ResolveContext): TraceMcpResult<RawEdge[]>;
   configure?(config: Record<string, unknown>): void;
 }
