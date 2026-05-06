@@ -190,8 +190,9 @@ export class FileExtractor {
       }
     }
 
-    // Collect framework extract results (no DB writes; entirely sync)
-    const frameworkExtracts = this.collectFrameworkExtracts(relPath, content, language);
+    // Collect framework extract results (no DB writes). Awaits async
+    // plugins (e.g. ReactPlugin uses tree-sitter via async getParser).
+    const frameworkExtracts = await this.collectFrameworkExtracts(relPath, content, language);
 
     return {
       relPath,
@@ -253,11 +254,11 @@ export class FileExtractor {
   /** Cache: root-level active framework plugins (computed once per extractor). */
   private rootPluginCache: FrameworkPlugin[] | undefined;
 
-  private collectFrameworkExtracts(
+  private async collectFrameworkExtracts(
     relPath: string,
     content: Buffer,
     language: string,
-  ): FileParseResult[] {
+  ): Promise<FileParseResult[]> {
     // Determine which plugins to run and what path to pass.
     // In a monorepo, each workspace may have its own framework (e.g. fair-front = Nuxt,
     // fair-laravel = Laravel).  We need to:
@@ -300,9 +301,11 @@ export class FileExtractor {
     const results: FileParseResult[] = [];
     for (const plugin of plugins) {
       if (!plugin.extractNodes) continue;
-      // Synchronous — no await. `extractNodes` is typed sync and the outer
-      // extract() call already provides timeout/error containment.
-      const result = executeFrameworkExtractNodes(plugin, extractPath, content, language);
+      // Most plugins are sync (regex-only); the few that need async parser
+      // init (e.g. ReactPlugin via tree-sitter getParser) hit the await
+      // branch inside the executor. The outer extract() call already
+      // provides timeout/error containment.
+      const result = await executeFrameworkExtractNodes(plugin, extractPath, content, language);
       if (result.isErr() || !result.value) continue;
       results.push(result.value);
     }

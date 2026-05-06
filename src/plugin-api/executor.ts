@@ -80,22 +80,23 @@ export async function executeLanguagePlugin(
 }
 
 /**
- * Synchronous fast path. `FrameworkPlugin.extractNodes` is typed as a sync
- * `TraceMcpResult` (no Promise), so awaiting it on every (file × plugin)
- * pair was buying 10k+ microtask hops per indexing run for nothing.
- * The outer extract() still sits inside an async function with its own
- * timeout/error budget, so dropping the wrapper here is safe.
+ * Awaits the plugin if it returned a Promise, otherwise returns the sync
+ * `TraceMcpResult` directly. Most framework plugins are sync (regex only) —
+ * the few that need async parser init (e.g. tree-sitter via getParser) hit
+ * the await branch. The outer extract() is already async so adding this
+ * here costs nothing for sync plugins.
  */
-export function executeFrameworkExtractNodes(
+export async function executeFrameworkExtractNodes(
   plugin: FrameworkPlugin,
   filePath: string,
   content: Buffer,
   language: string,
-): TraceMcpResult<FileParseResult | null> {
+): Promise<TraceMcpResult<FileParseResult | null>> {
   if (!plugin.extractNodes) return ok(null);
 
   try {
-    const result = plugin.extractNodes(filePath, content, language);
+    const maybe = plugin.extractNodes(filePath, content, language);
+    const result = maybe instanceof Promise ? await maybe : maybe;
     return result.map((r) => r as FileParseResult | null);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
