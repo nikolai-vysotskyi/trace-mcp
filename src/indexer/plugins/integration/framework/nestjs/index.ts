@@ -26,10 +26,58 @@ const USE_GUARDS_RE = /@UseGuards\(\s*([^)]+)\s*\)/g;
 const _USE_PIPES_RE = /@UsePipes\(\s*([^)]+)\s*\)/g;
 const _USE_INTERCEPTORS_RE = /@UseInterceptors\(\s*([^)]+)\s*\)/g;
 const CONSTRUCTOR_RE = /constructor\s*\(([^)]*)\)/s;
-const GATEWAY_RE = /@WebSocketGateway\s*\(/;
+const GATEWAY_RE = /@WebSocketGateway\b/;
+const GATEWAY_HEAD_RE = /@WebSocketGateway\s*\(\s*(?:(\d+)\s*,\s*)?\{/;
+const GATEWAY_PORT_RE = /@WebSocketGateway\s*\(\s*(\d+)\s*[,)]/;
 const SUBSCRIBE_RE = /@SubscribeMessage\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
+const WEBSOCKET_SERVER_RE = /@WebSocketServer\s*\(\s*\)/;
 const EVENT_PATTERN_RE = /@EventPattern\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
 const MICROSERVICE_RE = /@(MessagePattern|EventPattern)\s*\(/;
+
+interface GatewayMeta {
+  namespace?: string;
+  port?: number;
+  cors?: boolean;
+  hasServerInjection: boolean;
+}
+
+/** Slice a brace-balanced object literal beginning at `openBrace`. */
+function sliceBalancedBraces(source: string, openBrace: number): string | null {
+  if (source[openBrace] !== '{') return null;
+  let depth = 0;
+  for (let i = openBrace; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return source.slice(openBrace + 1, i);
+    }
+  }
+  return null;
+}
+
+/** Extract @WebSocketGateway() options + @WebSocketServer() injection presence. */
+export function extractGatewayMeta(source: string): GatewayMeta {
+  const meta: GatewayMeta = { hasServerInjection: WEBSOCKET_SERVER_RE.test(source) };
+
+  const portOnly = source.match(GATEWAY_PORT_RE);
+  if (portOnly) meta.port = Number.parseInt(portOnly[1], 10);
+
+  const headMatch = GATEWAY_HEAD_RE.exec(source);
+  if (headMatch) {
+    if (headMatch[1]) meta.port = Number.parseInt(headMatch[1], 10);
+    // headMatch[0] ends at the opening `{`; locate it and balance braces.
+    const openBrace = headMatch.index + headMatch[0].length - 1;
+    const body = sliceBalancedBraces(source, openBrace);
+    if (body !== null) {
+      const ns = body.match(/namespace\s*:\s*['"`]([^'"`]+)['"`]/);
+      if (ns) meta.namespace = ns[1];
+      if (/(?:^|[\s,{])cors\s*:/.test(body)) meta.cors = true;
+    }
+  }
+
+  return meta;
+}
 
 /** Extract array items from a module decorator property like `imports: [A, B]`. */
 function extractModuleArray(body: string, prop: string): string[] {
@@ -256,16 +304,28 @@ export class NestJSPlugin implements FrameworkPlugin {
     // WebSocket Gateway
     if (GATEWAY_RE.test(source)) {
       result.frameworkRole = 'nest_gateway';
+      const meta = extractGatewayMeta(source);
       const events = extractGatewayEvents(source);
-      if (events.length > 0) {
-        result.warnings = result.warnings ?? [];
-        // store gateway events in metadata via a synthetic warning-free mechanism
-        // Use routes as gateway event placeholders
-        if (!result.routes) result.routes = [];
-        for (const evt of events) {
-          result.routes.push({ method: 'WS', uri: evt });
-        }
+      if (!result.routes) result.routes = [];
+      if (meta.namespace) {
+        result.routes.push({
+          method: 'NAMESPACE',
+          uri: meta.namespace,
+          metadata: {
+            port: meta.port,
+            cors: meta.cors ?? false,
+            hasServerInjection: meta.hasServerInjection,
+          },
+        });
       }
+      for (const evt of events) {
+        result.routes.push({
+          method: 'WS',
+          uri: evt,
+          metadata: { namespace: meta.namespace, port: meta.port },
+        });
+      }
+      result.metadata = { ...(result.metadata ?? {}), gateway: meta };
     }
 
     // Microservice handlers
@@ -359,6 +419,72 @@ export class NestJSPlugin implements FrameworkPlugin {
                 targetRefId: target.id,
                 edgeType: 'nest_injects',
                 metadata: { dependency: dep },
+              });
+            }
+          }
+        }
+      }
+
+      // WebSocket gateway events — one aggregated self-loop per gateway class
+      // listing every @SubscribeMessage handler. Aggregated because the
+      // edges table has UNIQUE(src, tgt, edge_type), so per-event self-loops
+      // would collapse into one row and lose all but the first event name.
+      if (GATEWAY_RE.test(source)) {
+        const events = extractGatewayEvents(source);
+        if (events.length > 0) {
+          const symbols = ctx.getSymbolsByFile(file.id);
+          const cls = symbols.find((s) => s.kind === 'class');
+          if (cls) {
+            const meta = extractGatewayMeta(source);
+            edges.push({
+              sourceNodeType: 'symbol',
+              sourceRefId: cls.id,
+              targetNodeType: 'symbol',
+              targetRefId: cls.id,
+              edgeType: 'nest_gateway_event',
+              resolution: 'ast_inferred',
+              metadata: {
+                count: events.length,
+                events,
+                namespace: meta.namespace,
+                port: meta.port,
+              },
+            });
+          }
+        }
+      }
+
+      // Microservice patterns — one aggregated self-loop per controller class
+      // listing every @MessagePattern / @EventPattern handler. Same
+      // aggregation rationale as gateway events above.
+      if (MICROSERVICE_RE.test(source)) {
+        const patterns = extractMicroservicePatterns(source);
+        const message = patterns.filter((p) => p.type === 'message').map((p) => p.pattern);
+        const eventP = patterns.filter((p) => p.type === 'event').map((p) => p.pattern);
+        if (message.length > 0 || eventP.length > 0) {
+          const symbols = ctx.getSymbolsByFile(file.id);
+          const cls = symbols.find((s) => s.kind === 'class');
+          if (cls) {
+            if (message.length > 0) {
+              edges.push({
+                sourceNodeType: 'symbol',
+                sourceRefId: cls.id,
+                targetNodeType: 'symbol',
+                targetRefId: cls.id,
+                edgeType: 'nest_message_pattern',
+                resolution: 'ast_inferred',
+                metadata: { count: message.length, patterns: message },
+              });
+            }
+            if (eventP.length > 0) {
+              edges.push({
+                sourceNodeType: 'symbol',
+                sourceRefId: cls.id,
+                targetNodeType: 'symbol',
+                targetRefId: cls.id,
+                edgeType: 'nest_event_pattern',
+                resolution: 'ast_inferred',
+                metadata: { count: eventP.length, patterns: eventP },
               });
             }
           }
