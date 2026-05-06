@@ -1,0 +1,18 @@
+{
+  "name": "issue-126-129-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/passport": "^10.0.0",
+    "@nestjs/platform-socket.io": "^10.0.0",
+    "@nestjs/websockets": "^10.0.0",
+    "@tanstack/react-table": "^8.21.3",
+    "class-validator": "^0.14.1",
+    "class-transformer": "^0.5.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "react": "^18.0.0"
+  }
+}

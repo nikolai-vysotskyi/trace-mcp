@@ -18,6 +18,7 @@ import { LaravelPlugin } from './framework/laravel/index.js';
 import { NestJSPlugin } from './framework/nestjs/index.js';
 import { NextJSPlugin } from './framework/nextjs/index.js';
 import { NuxtPlugin } from './framework/nuxt/index.js';
+import { PassportPlugin } from './framework/passport/index.js';
 import { RailsPlugin } from './framework/rails/index.js';
 import { ReactRouterPlugin } from './framework/react-router/index.js';
 import { SpringPlugin } from './framework/spring/index.js';
@@ -69,6 +70,7 @@ import { SupabasePlugin } from './tooling/supabase/index.js';
 import { TqdmPyPlugin } from './tooling/tqdm-py/index.js';
 import { TreeSitterPlugin } from './tooling/tree-sitter/index.js';
 import { UvicornPlugin } from './tooling/uvicorn/index.js';
+import { ClassValidatorPlugin } from './validation/class-validator/index.js';
 import { PydanticPlugin } from './validation/pydantic/index.js';
 // --- validation ---
 import { ZodPlugin } from './validation/zod/index.js';
@@ -84,6 +86,7 @@ import { NuxtUiPlugin } from './view/nuxt-ui/index.js';
 // --- view ---
 import { ReactPlugin } from './view/react/index.js';
 import { ReactNativePlugin } from './view/react-native/index.js';
+import { ReactTablePlugin } from './view/react-table/index.js';
 import { ShadcnPlugin } from './view/shadcn/index.js';
 import { SortablePlugin } from './view/sortable/index.js';
 import { SveltePlugin } from './view/svelte/index.js';
@@ -109,6 +112,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new GinPlugin(),
     new EchoPlugin(),
     new ReactRouterPlugin(),
+    new PassportPlugin(),
     // orm
     new PrismaPlugin(),
     new TypeORMPlugin(),
@@ -134,6 +138,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new TailwindPlugin(),
     new JsVisualizationPlugin(),
     new SortablePlugin(),
+    new ReactTablePlugin(),
     // api
     new GraphQLPlugin(),
     new TrpcPlugin(),
@@ -142,6 +147,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     // validation
     new ZodPlugin(),
     new PydanticPlugin(),
+    new ClassValidatorPlugin(),
     // state
     new ZustandReduxPlugin(),
     // realtime
