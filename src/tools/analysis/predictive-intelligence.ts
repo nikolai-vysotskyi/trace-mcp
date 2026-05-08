@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
+import { safeGitEnv } from '../../utils/git-env.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import {
   type ConfidenceLevel,
@@ -221,6 +222,7 @@ function getGitFileStatsWithFixes(cwd: string, sinceDays: number): Map<string, G
       stdio: 'pipe',
       maxBuffer: 10 * 1024 * 1024,
       timeout: 30_000,
+      env: safeGitEnv(),
     }).toString('utf-8');
   } catch (e) {
     logger.warn({ error: e }, 'git log failed for predictive intelligence');
@@ -312,6 +314,7 @@ function getCommitFileGroups(cwd: string, sinceDays: number): Array<{ files: Set
       stdio: 'pipe',
       maxBuffer: 10 * 1024 * 1024,
       timeout: 30_000,
+      env: safeGitEnv(),
     }).toString('utf-8');
   } catch {
     return [];
@@ -1178,7 +1181,12 @@ function saveBugPredictionCache(
   try {
     let gitHead: string | null = null;
     try {
-      gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, stdio: 'pipe', timeout: 5000 })
+      gitHead = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd,
+        stdio: 'pipe',
+        timeout: 5000,
+        env: safeGitEnv(),
+      })
         .toString('utf-8')
         .trim();
     } catch {
