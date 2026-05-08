@@ -6,6 +6,7 @@ import { buildProjectContext } from '../../indexer/project-context.js';
 import { logger } from '../../logger.js';
 import type { ServerContext } from '../../server/types.js';
 import { checkFileForDuplicates } from '../analysis/duplication.js';
+import { getMinimalContext } from '../project/minimal-context.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
 
 export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
@@ -196,6 +197,32 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           },
         ],
       };
+    },
+  );
+
+  server.tool(
+    'get_minimal_context',
+    'Single-call orientation context (~150 tokens). Returns project shape, top 3 risk hotspots, top 3 PageRank-central files, top 3 communities, and 3-5 task-routed next-tool suggestions. Use at session start instead of chaining get_project_map + get_pagerank + get_risk_hotspots + get_communities. The optional `task` argument biases the suggestions toward review / refactor / debug / add_feature / understand. Read-only. Returns JSON: { project, health, communities, next_steps }.',
+    {
+      task: z
+        .string()
+        .max(500)
+        .optional()
+        .describe(
+          'Natural-language description of what you are about to do — drives the next_steps ranking. If omitted, returns the "understand" suggestion set.',
+        ),
+      intent: z
+        .enum(['understand', 'review', 'refactor', 'debug', 'add_feature'])
+        .optional()
+        .describe('Explicit intent override. Wins over keyword inference from `task`.'),
+    },
+    async ({ task, intent }) => {
+      const projectCtx = buildProjectContext(projectRoot);
+      const result = getMinimalContext(store, registry, config, projectRoot, projectCtx, {
+        task,
+        intent,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
     },
   );
 
