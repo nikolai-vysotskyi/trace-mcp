@@ -11,6 +11,7 @@ import type { DecisionType } from '../../memory/decision-store.js';
 import { indexSessions } from '../../memory/session-indexer.js';
 import { assembleWakeUp } from '../../memory/wake-up.js';
 import type { ServerContext } from '../../server/types.js';
+import { relativizeUnderRoot } from '../../utils/path-relativize.js';
 
 const DECISION_TYPES = [
   'architecture_decision',
@@ -153,12 +154,17 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       include_invalidated,
       limit,
     }) => {
+      // Mirror addDecision's storage canonicalisation so a query with an
+      // absolute path inside the project root still hits relative-stored rows.
+      const queryFilePath = file_path
+        ? (relativizeUnderRoot(file_path, projectRoot) ?? file_path)
+        : file_path;
       const decisions = decisionStore.queryDecisions({
         project_root: projectRoot,
         service_name,
         type: type as DecisionType | undefined,
         symbol_id,
-        file_path,
+        file_path: queryFilePath,
         tag,
         search,
         as_of,
