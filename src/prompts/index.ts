@@ -59,17 +59,23 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       // 1. Get changed files from git
       let changedFiles: string[] = [];
-      try {
-        const { execFileSync } = await import('node:child_process');
-        const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}...${branch}`], {
-          cwd: projectRoot,
-          encoding: 'utf-8',
-          timeout: 10000,
-        }).trim();
-        changedFiles = diff ? diff.split('\n').filter(Boolean) : [];
-      } catch {
-        changedFiles = [];
-        sections.push('> Could not determine changed files via git diff.\n');
+      const { isSafeGitRef, safeGitEnv } = await import('../utils/git-env.js');
+      if (!isSafeGitRef(branch) || !isSafeGitRef(baseRef)) {
+        sections.push('> Refusing to run git diff with an unsafe ref name.\n');
+      } else {
+        try {
+          const { execFileSync } = await import('node:child_process');
+          const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}...${branch}`], {
+            cwd: projectRoot,
+            encoding: 'utf-8',
+            timeout: 10000,
+            env: safeGitEnv(),
+          }).trim();
+          changedFiles = diff ? diff.split('\n').filter(Boolean) : [];
+        } catch {
+          changedFiles = [];
+          sections.push('> Could not determine changed files via git diff.\n');
+        }
       }
 
       if (changedFiles.length > 0) {
@@ -349,16 +355,22 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
 
       // Changed files
       let changedFiles: string[] = [];
-      try {
-        const { execFileSync } = await import('node:child_process');
-        const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}...${branch}`], {
-          cwd: projectRoot,
-          encoding: 'utf-8',
-          timeout: 10000,
-        }).trim();
-        changedFiles = diff ? diff.split('\n').filter(Boolean) : [];
-      } catch {
-        sections.push('> Could not determine changed files.\n');
+      const { isSafeGitRef, safeGitEnv } = await import('../utils/git-env.js');
+      if (!isSafeGitRef(branch) || !isSafeGitRef(baseRef)) {
+        sections.push('> Refusing to run git diff with an unsafe ref name.\n');
+      } else {
+        try {
+          const { execFileSync } = await import('node:child_process');
+          const diff = execFileSync('git', ['diff', '--name-only', `${baseRef}...${branch}`], {
+            cwd: projectRoot,
+            encoding: 'utf-8',
+            timeout: 10000,
+            env: safeGitEnv(),
+          }).trim();
+          changedFiles = diff ? diff.split('\n').filter(Boolean) : [];
+        } catch {
+          sections.push('> Could not determine changed files.\n');
+        }
       }
 
       sections.push(`## Changed Files: ${changedFiles.length}\n`);
