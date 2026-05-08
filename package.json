@@ -58,6 +58,7 @@
     "dist",
     "hooks",
     "scripts",
+    ".claude-plugin",
     "LICENSE",
     "README.md"
   ],
