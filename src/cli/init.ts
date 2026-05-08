@@ -20,6 +20,7 @@ import {
 } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
 import { configureMcpClients } from '../init/mcp-client.js';
+import { writeStampedVersion } from '../init/version-stamp.js';
 
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
@@ -645,6 +646,13 @@ function executeSteps(
 
   // 6. agent_behavior in global config (strict for Max tier, off otherwise)
   steps.push(applyAgentBehavior(opts.agentBehavior, { dryRun: opts.dryRun }));
+
+  // 7. Stamp the configured version so the server can detect drift on later
+  // upgrades that skip a re-init. Pure side-effect; no step row emitted —
+  // surfaces only if the stamp ever disagrees with the running version.
+  if (!opts.dryRun) {
+    writeStampedVersion(PKG_VERSION);
+  }
 }
 
 function applyAgentBehavior(target: 'strict' | 'off', opts: { dryRun?: boolean }): InitStepResult {
