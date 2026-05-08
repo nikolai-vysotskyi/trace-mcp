@@ -15,6 +15,7 @@ import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { safeGitEnv } from '../utils/git-env.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { validatePath } from '../utils/security.js';
+import { findPackageJsonEntries } from './package-entries.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import { EnvIndexer } from './env-indexer.js';
@@ -306,6 +307,12 @@ export class IndexingPipeline {
     // calls hit a Map instead of issuing a SELECT each.
     const existingFiles = this.store.getFilesByPaths(relPaths);
 
+    // Force-include set: package.json#main/module/bin/exports must always be
+    // indexed regardless of file-size cap. Without this, lodash-class
+    // monolithic libraries (single-file UMD/IIFE declared as `main`) drop
+    // out of the index and every published method looks dead.
+    const forceIncludePaths = findPackageJsonEntries(this.rootPath);
+
     const extractor = new FileExtractor({
       store: this.store,
       registry: this.registry,
@@ -315,6 +322,7 @@ export class IndexingPipeline {
       fileContentCache: this._fileContentCache,
       buildProjectContext: () => this.buildProjectContext(),
       existingFiles,
+      forceIncludePaths,
     });
 
     // FTS5 trigger disable+rebuild is only worth it on bulk indexing.
