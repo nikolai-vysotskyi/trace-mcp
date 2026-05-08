@@ -5,6 +5,7 @@
 <h1 align="center">trace-mcp</h1>
 
 <p align="center">
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/ci.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
   <a href="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp"><img src="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp/badges/score.svg" alt="Glama score" /></a>
   <a href="https://www.npmjs.com/package/trace-mcp"><img src="https://img.shields.io/npm/v/trace-mcp" alt="npm version" /></a>
   <img src="https://img.shields.io/node/v/trace-mcp" alt="Node.js version" />
