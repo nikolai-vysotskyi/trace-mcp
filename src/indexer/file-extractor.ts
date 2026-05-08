@@ -48,6 +48,15 @@ interface ExtractorContext {
    * (which is the dominant DB hit during incremental reindex of a large set).
    */
   existingFiles?: Map<string, FileRow>;
+  /**
+   * Project-relative paths declared as `package.json#main`/`module`/`bin`/
+   * `exports`. These are the package's public surface and must be indexed
+   * even if they exceed the default file-size cap (e.g. lodash.js is 548 KB
+   * declared as `main` — silently dropping it makes every published method
+   * invisible to dead-code and call-graph queries). Mirrors jcodemunch
+   * v1.80.9 force-include behavior.
+   */
+  forceIncludePaths?: ReadonlySet<string>;
 }
 
 /** Per-call inputs that override the context (used by the worker pool). */
@@ -128,10 +137,26 @@ export class FileExtractor {
       return 'skipped';
     }
 
-    // Reject oversized files (default 1 MB) to prevent OOM
-    const sizeCheck = validateFileSize(content.length);
-    if (sizeCheck.isErr()) {
-      logger.warn({ file: relPath, size: content.length }, 'File too large, skipping');
+    // Reject oversized files (default 1 MB) to prevent OOM — UNLESS the
+    // file is declared as a package entry point (main/module/bin/exports).
+    // Public API surface must be indexed regardless of monolithic size,
+    // otherwise dead-code/call-graph results are systematically wrong for
+    // single-file libraries (lodash-class).
+    const isForceIncluded = this.ctx.forceIncludePaths?.has(relPath) ?? false;
+    if (!isForceIncluded) {
+      const sizeCheck = validateFileSize(content.length);
+      if (sizeCheck.isErr()) {
+        logger.warn({ file: relPath, size: content.length }, 'File too large, skipping');
+        return 'error';
+      }
+    } else if (content.length > 5 * 1024 * 1024) {
+      // Above 5MB even a declared entry point is more likely a bundled
+      // artifact than real source. Refuse and let the operator opt in
+      // via an explicit raise of validateFileSize's max if they know.
+      logger.warn(
+        { file: relPath, size: content.length },
+        'force-included package entry exceeds 5 MB hard ceiling — skipping',
+      );
       return 'error';
     }
 
