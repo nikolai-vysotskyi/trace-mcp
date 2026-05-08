@@ -71,6 +71,125 @@ const DECORATOR_DRIVEN_FRAMEWORKS = new Set([
 ]);
 
 /**
+ * Decorators / annotations / attributes that mark a symbol as a framework
+ * entry point — invoked by the framework's runtime, never imported by hand.
+ *
+ * CRG v2.3.2 PR #249 surfaced "framework-aware dead code" specifically
+ * because controllers/services/repositories were getting flagged as dead
+ * by import-graph signal alone. We already warn about it; this set lets
+ * us hard-skip those symbols instead of just warning, which is how CRG
+ * actually filters its results.
+ *
+ * Match is case-insensitive and substring-based ("RestController" matches
+ * "@RestController" alike). Stored in symbol metadata under one of:
+ *   metadata.decorators (TS/JS, NestJS)
+ *   metadata.annotations (Java/Kotlin, Spring)
+ *   metadata.attributes (C#, .NET)
+ *   metadata.frameworkRole (any plugin that sets it explicitly)
+ */
+const FRAMEWORK_ENTRY_POINT_DECORATORS = new Set(
+  [
+    // Spring
+    'Controller',
+    'RestController',
+    'Service',
+    'Repository',
+    'Component',
+    'Configuration',
+    'Bean',
+    'Endpoint',
+    // NestJS
+    'Injectable',
+    'Module',
+    'Catch',
+    'WebSocketGateway',
+    // Decorators that mark route handlers / lifecycle hooks (NestJS+Spring)
+    'Get',
+    'Post',
+    'Put',
+    'Delete',
+    'Patch',
+    'GetMapping',
+    'PostMapping',
+    'PutMapping',
+    'DeleteMapping',
+    'PatchMapping',
+    'RequestMapping',
+    'KafkaListener',
+    'EventListener',
+    'Scheduled',
+    // Laravel / PHP attributes
+    'Route',
+    'Middleware',
+    // Django / DRF
+    'api_view',
+    'login_required',
+    'csrf_exempt',
+    // FastAPI / Flask
+    'router',
+    'app_route',
+    // Decorators that imply a framework-managed entry point in any context
+    'Listener',
+  ].map((s) => s.toLowerCase()),
+);
+
+const FRAMEWORK_ENTRY_POINT_ROLES = new Set([
+  'controller',
+  'service',
+  'repository',
+  'component',
+  'configuration',
+  'route',
+  'handler',
+  'middleware',
+  'guard',
+  'pipe',
+  'interceptor',
+  'gateway',
+  'listener',
+  'consumer',
+  'producer',
+  'job',
+  'task',
+  'view',
+  'page',
+  'layout',
+]);
+
+/**
+ * Returns true when a symbol's metadata marks it as something the framework
+ * runtime — not handwritten code — invokes. Used to hard-skip these from
+ * the dead-code candidate set, mirroring CRG's framework-aware filter.
+ */
+function isFrameworkEntryPoint(metadata: unknown): boolean {
+  if (!metadata) return false;
+  let meta: Record<string, unknown>;
+  try {
+    meta = (typeof metadata === 'string' ? JSON.parse(metadata) : metadata) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return false;
+  }
+
+  const role = typeof meta.frameworkRole === 'string' ? meta.frameworkRole.toLowerCase() : null;
+  if (role && FRAMEWORK_ENTRY_POINT_ROLES.has(role)) return true;
+
+  for (const key of ['decorators', 'annotations', 'attributes'] as const) {
+    const arr = meta[key];
+    if (!Array.isArray(arr)) continue;
+    for (const item of arr) {
+      if (typeof item !== 'string') continue;
+      // Strip leading `@` and any `(args)` so we match the bare name.
+      const bare = item.replace(/^@/, '').replace(/\(.*$/, '').trim().toLowerCase();
+      if (FRAMEWORK_ENTRY_POINT_DECORATORS.has(bare)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Languages whose import edges carry `specifiers` metadata — the only kind
  * the import_graph signal can read.  For all other languages, `buildImportedNamesSet`
  * returns empty (their imports don't contain named specifiers), so import_graph
@@ -236,11 +355,25 @@ export function getDeadCodeV2(
   // files (entry points run by test runners, never imported by production code).
   const TEST_FIXTURE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/fixtures?\//;
   const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.[jt]sx?$/;
+  // Framework-aware filter: drop symbols that the framework runtime invokes
+  // (controllers, services, repositories, route handlers, scheduled jobs,
+  // event listeners, etc.). The import-graph signal can't see these — they're
+  // discovered by decorator/annotation scan or convention. Without this drop
+  // every Spring @Controller and NestJS @Injectable shows up as dead-code
+  // confidence 1.0 — a noisy false positive.
+  let frameworkSkipped = 0;
   const exported = store
     .getExportedSymbols(filePattern)
     .filter((s) => s.kind !== 'method') // methods inherit export from class
     .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
-    .filter((s) => !TEST_FILE_RE.test(s.file_path));
+    .filter((s) => !TEST_FILE_RE.test(s.file_path))
+    .filter((s) => {
+      if (isFrameworkEntryPoint(s.metadata)) {
+        frameworkSkipped++;
+        return false;
+      }
+      return true;
+    });
 
   // Build all three signal datasets
   const importedNames = buildImportedNamesSet(store);
@@ -357,6 +490,16 @@ export function getDeadCodeV2(
         `Reachability mode (mode="reachability") is more reliable for these languages.`,
     );
   }
+  if (frameworkSkipped > 0) {
+    warnings.push(
+      `Framework-aware filter skipped ${frameworkSkipped} symbol(s) carrying ` +
+        `entry-point decorators/annotations (Spring stereotypes, NestJS @Injectable/@Controller, ` +
+        `Laravel/Django route handlers, etc.). These are invoked by the framework runtime, ` +
+        `not via import — counting them as dead is a known false-positive pattern. ` +
+        `Pass detail_level metadata or expand FRAMEWORK_ENTRY_POINT_DECORATORS if a real entry ` +
+        `point is being missed.`,
+    );
+  }
 
   const methodology: Methodology = {
     algorithm: 'multi_signal_export_analysis',
@@ -368,7 +511,7 @@ export function getDeadCodeV2(
     confidence_formula: 'signals_fired / 3 (1=low, 2=medium, 3=multi_signal)',
     limitations: [
       'dynamic dispatch and reflection are not tracked',
-      'framework decorators (@Controller, @Get, etc.) are not entry points',
+      'framework-aware filter drops symbols carrying stereotype decorators (@Controller, @Service, @Injectable, etc.) — see _warnings for the count and FRAMEWORK_ENTRY_POINT_DECORATORS for the full list',
       'file-system routing (Next.js pages, Nuxt) is not traced',
       'string-based references (e.g. dynamic imports with computed paths) are missed',
       'methods are excluded — only top-level exports are evaluated',
@@ -698,11 +841,19 @@ export function getDeadCodeReachability(
   const TEST_FIXTURE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/fixtures?\//;
   const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.[jt]sx?$/;
 
+  let frameworkSkipped = 0;
   const exported = store
     .getExportedSymbols(filePattern)
     .filter((s) => s.kind !== 'method')
     .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
-    .filter((s) => !TEST_FILE_RE.test(s.file_path));
+    .filter((s) => !TEST_FILE_RE.test(s.file_path))
+    .filter((s) => {
+      if (isFrameworkEntryPoint(s.metadata)) {
+        frameworkSkipped++;
+        return false;
+      }
+      return true;
+    });
 
   // Collect entry points
   const entries = collectEntryPoints(store, projectRoot, entryPoints);
@@ -800,6 +951,13 @@ export function getDeadCodeReachability(
       'No entry points were detected. Reachability analysis is meaningless ' +
         'without entry points — every exported symbol will be reported as dead. ' +
         'Pass `entryPoints` explicitly or ensure tests/main/bin/routes exist.',
+    );
+  }
+  if (frameworkSkipped > 0) {
+    warnings.push(
+      `Framework-aware filter skipped ${frameworkSkipped} symbol(s) carrying ` +
+        `entry-point decorators/annotations. See FRAMEWORK_ENTRY_POINT_DECORATORS ` +
+        `in src/tools/refactoring/dead-code.ts for the full list.`,
     );
   }
   const flaggedFrameworks = detectedFrameworks.filter((f) =>
