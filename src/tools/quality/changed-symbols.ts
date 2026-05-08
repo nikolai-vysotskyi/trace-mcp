@@ -7,6 +7,7 @@
 import { execSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult } from '../../errors.js';
+import { safeGitEnv } from '../../utils/git-env.js';
 
 type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
 
@@ -61,6 +62,7 @@ function detectBaseBranch(
         cwd: rootPath,
         encoding: 'utf-8',
         timeout: 10_000,
+        env: safeGitEnv(),
       }).trim();
       return ok(mergeBase);
     } catch {
@@ -104,6 +106,7 @@ export function getChangedSymbols(
       encoding: 'utf-8',
       maxBuffer: 10 * 1024 * 1024,
       timeout: 15_000,
+      env: safeGitEnv(),
     }).trim();
   } catch (e) {
     return err({
@@ -140,6 +143,7 @@ export function getChangedSymbols(
       encoding: 'utf-8',
       maxBuffer: 50 * 1024 * 1024,
       timeout: 30_000,
+      env: safeGitEnv(),
     });
   } catch {
     // Non-fatal — we can still report file-level changes
@@ -318,6 +322,7 @@ export function compareBranches(
         cwd: rootPath,
         encoding: 'utf-8',
         timeout: 10_000,
+        env: safeGitEnv(),
       }).trim();
     } catch (e) {
       return err({
@@ -339,6 +344,7 @@ export function compareBranches(
       cwd: rootPath,
       encoding: 'utf-8',
       timeout: 10_000,
+      env: safeGitEnv(),
     }).trim();
     commitCount = parseInt(countOutput, 10) || 0;
   } catch {

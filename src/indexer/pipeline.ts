@@ -12,6 +12,7 @@ import type { FrameworkPlugin, ProjectContext, ResolveContext } from '../plugin-
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
+import { safeGitEnv } from '../utils/git-env.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { validatePath } from '../utils/security.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
@@ -50,6 +51,7 @@ function readGitHeadSha(rootPath: string): string | null {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 1000,
+      env: safeGitEnv(),
     });
     const sha = out.trim();
     return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
