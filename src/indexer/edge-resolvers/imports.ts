@@ -63,20 +63,24 @@ export function resolveEsmImportEdges(state: PipelineState): void {
 
   const targetFileCache = new Map<string, { id: number; nodeId: number } | null>();
   const resolveTargetFile = (relPath: string): { id: number; nodeId: number } | null => {
-    const cached = targetFileCache.get(relPath);
+    // Files are stored with forward-slash paths (fast-glob normalizes on Windows
+    // too), but path.relative on Windows returns "src\foo.ts" — normalize before
+    // lookup so the cache key and store query match what's in the files table.
+    const key = path.sep === '/' ? relPath : relPath.split(path.sep).join('/');
+    const cached = targetFileCache.get(key);
     if (cached !== undefined) return cached;
-    const f = store.getFile(relPath);
+    const f = store.getFile(key);
     if (!f) {
-      targetFileCache.set(relPath, null);
+      targetFileCache.set(key, null);
       return null;
     }
     const nodeId = store.getNodeId('file', f.id);
     if (nodeId == null) {
-      targetFileCache.set(relPath, null);
+      targetFileCache.set(key, null);
       return null;
     }
     const entry = { id: f.id, nodeId };
-    targetFileCache.set(relPath, entry);
+    targetFileCache.set(key, entry);
     return entry;
   };
 
