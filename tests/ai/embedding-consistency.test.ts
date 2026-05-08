@@ -119,7 +119,11 @@ describe('EmbeddingPipeline.ensureConsistent', () => {
     const pipeline = new EmbeddingPipeline(store, mkEmbed(3, 'stable-model'), vectorStore);
     await pipeline.indexUnembedded();
 
-    expect(vectorStore.getMeta()).toEqual({ model: 'stable-model', dim: 3 });
+    expect(vectorStore.getMeta()).toEqual({
+      model: 'stable-model',
+      dim: 3,
+      provider: 'unknown',
+    });
     // All 3 symbols now have embeddings (the third was embedded in this run)
     expect(vectorStore.count()).toBe(3);
   });
@@ -129,13 +133,13 @@ describe('EmbeddingPipeline.ensureConsistent', () => {
     const p1 = new EmbeddingPipeline(store, mkEmbed(3, 'model-a'), vectorStore);
     await p1.indexUnembedded();
     expect(vectorStore.count()).toBe(3);
-    expect(vectorStore.getMeta()).toEqual({ model: 'model-a', dim: 3 });
+    expect(vectorStore.getMeta()).toEqual({ model: 'model-a', dim: 3, provider: 'unknown' });
 
     // Fresh pipeline with a different model, same dim
     const p2 = new EmbeddingPipeline(store, mkEmbed(3, 'model-b'), vectorStore);
     await p2.indexUnembedded();
 
-    expect(vectorStore.getMeta()).toEqual({ model: 'model-b', dim: 3 });
+    expect(vectorStore.getMeta()).toEqual({ model: 'model-b', dim: 3, provider: 'unknown' });
     expect(vectorStore.count()).toBe(3);
   });
 
@@ -148,7 +152,7 @@ describe('EmbeddingPipeline.ensureConsistent', () => {
     const p2 = new EmbeddingPipeline(store, mkEmbed(8, 'model-a'), vectorStore);
     await p2.indexUnembedded();
 
-    expect(vectorStore.getMeta()).toEqual({ model: 'model-a', dim: 8 });
+    expect(vectorStore.getMeta()).toEqual({ model: 'model-a', dim: 8, provider: 'unknown' });
     expect(vectorStore.count()).toBe(3);
   });
 
@@ -176,7 +180,7 @@ describe('EmbeddingPipeline.ensureConsistent', () => {
   it('reindexAll writes meta even when store was empty', async () => {
     const pipeline = new EmbeddingPipeline(store, mkEmbed(3, 'fresh-model'), vectorStore);
     await pipeline.reindexAll();
-    expect(vectorStore.getMeta()).toEqual({ model: 'fresh-model', dim: 3 });
+    expect(vectorStore.getMeta()).toEqual({ model: 'fresh-model', dim: 3, provider: 'unknown' });
     expect(vectorStore.count()).toBe(3);
   });
 });
