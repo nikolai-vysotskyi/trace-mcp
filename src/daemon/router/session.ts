@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { TraceMcpConfig } from '../../config.js';
 import { logger } from '../../logger.js';
+import { checkVersionDrift, versionDriftMessage } from '../../init/version-stamp.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
 import {
@@ -14,6 +15,10 @@ import { LocalBackend } from './local-backend.js';
 import { MessageRouter } from './message-router.js';
 import { ProxyBackend } from './proxy-backend.js';
 import type { Backend } from './types.js';
+
+declare const PKG_VERSION_INJECTED: string;
+const PKG_VERSION =
+  typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 
 export interface StdioSessionOptions {
   projectRoot: string;
@@ -137,6 +142,19 @@ export class StdioSession {
     this.resetIdleTimer();
 
     await this.stdio.start();
+    // Drift probe: warn (stderr-only) if installed version diverges from
+    // the version that last ran `trace-mcp init`. Best-effort; no-op when
+    // dev build (PKG_VERSION_INJECTED unset) or when no stamp file exists.
+    if (PKG_VERSION !== '0.0.0-dev') {
+      const drift = checkVersionDrift(PKG_VERSION);
+      if (drift.drift) {
+        try {
+          process.stderr.write(versionDriftMessage(drift));
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
     this.handshake = createHandshakeWatchdog({
       timeoutMs: resolveHandshakeTimeout(
         this.opts.handshakeTimeoutMs,
