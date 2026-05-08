@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <strong>40–50% fewer tokens</strong> on average &nbsp;·&nbsp; <strong>up to 2× effective capacity</strong> &nbsp;·&nbsp; <strong>up to 97% less redundant processing</strong>
+  <strong>40–50% fewer tokens</strong> on average &nbsp;·&nbsp; <strong>up to 2× effective capacity</strong> &nbsp;·&nbsp; <strong>up to 99% less redundant processing</strong>
   <br>
   <sub>Based on early benchmarks across agent workflows with repeated context and dependency traversal.</sub>
 </p>
@@ -163,11 +163,11 @@ AI agents burn tokens recomputing what they already discovered last turn — re-
 |---|---|
 | **Mixed real-world production** (code-aware tasks across a typical session) | **~40–50% on average** |
 | **Effective capacity at the same context budget** | **up to ~2×** |
-| **Structured code-navigation tasks** (symbol lookup, impact analysis, type hierarchy, call graph) | **up to 97% less redundant processing** |
+| **Structured code-navigation tasks** (symbol lookup, impact analysis, type hierarchy, call graph) | **up to 99% less redundant processing** |
 | **Targeted research / planning queries** (composite tasks that replace ~10 sequential operations) | **up to ~40× on individual calls** |
 | Non-code workloads (raw text, unstructured data) | Out of scope today |
 
-The averages are the honest number to plan against: across a typical session you're mixing high-leverage graph queries with reads, edits, and cheaper calls, and the net usually lands at 30–60% depending on stack and task mix. The peaks (up to 97% on individual structured calls) are real and reproducible — that's where recomputation gets eliminated most cleanly — but they're per-call, not per-session.
+The averages are the honest number to plan against: across a typical session you're mixing high-leverage graph queries with reads, edits, and cheaper calls, and the net usually lands at 30–60% depending on stack and task mix. The peaks (up to 99% on individual structured calls) are real and reproducible — that's where recomputation gets eliminated most cleanly — but they're per-call, not per-session.
 
 **Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols → 929 files, 5,197 symbols in v1.30):
 
@@ -189,7 +189,7 @@ Composite task              223,721 tokens      14,245 tokens       93.6%
 Total                       702,532 tokens      50,812 tokens       92.8%
 ```
 
-Across 11 structured task categories, recomputation drops by **up to ~97% per call** when the agent reuses the graph instead of re-reading files — peaks where the math gets dramatic. Read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **~40–50% on average**. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
+Across 11 structured task categories, recomputation drops by **up to ~99% per call** when the agent reuses the graph instead of re-reading files — peaks where the math gets dramatic. Read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **~40–50% on average**. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
 
 **Savings scale with project size.** On a 650-file project, structured-task savings cluster around ~522K tokens per session. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
 
