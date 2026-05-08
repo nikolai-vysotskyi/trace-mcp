@@ -9,6 +9,7 @@
 
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
+import { relativizeUnderRoot } from '../utils/path-relativize.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -283,6 +284,12 @@ export class DecisionStore {
 
   addDecision(input: DecisionInput): DecisionRow {
     const now = new Date().toISOString();
+    // Canonicalise file_path to repo-relative when it sits inside project_root.
+    // Stops absolute /Users/<dev>/<host-only>/... paths leaking into the
+    // decision store and downstream MCP responses (mempalace #1325).
+    const canonFilePath = input.project_root
+      ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
+      : (input.file_path ?? null);
     const stmt = this.db.prepare(`
       INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -294,7 +301,7 @@ export class DecisionStore {
       input.project_root,
       input.service_name ?? null,
       input.symbol_id ?? null,
-      input.file_path ?? null,
+      canonFilePath,
       input.tags ? JSON.stringify(input.tags) : null,
       input.valid_from ?? now,
       input.session_id ?? null,
