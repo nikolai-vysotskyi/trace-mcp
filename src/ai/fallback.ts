@@ -20,6 +20,10 @@ class FallbackEmbeddingService implements EmbeddingService {
   modelName(): string {
     return '';
   }
+
+  providerName(): string {
+    return 'fallback';
+  }
 }
 
 export class FallbackInferenceService implements InferenceService {

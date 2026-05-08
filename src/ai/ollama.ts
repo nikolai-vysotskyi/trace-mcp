@@ -55,6 +55,10 @@ class OllamaEmbeddingService implements EmbeddingService {
   modelName(): string {
     return this.model;
   }
+
+  providerName(): string {
+    return 'ollama';
+  }
 }
 
 class OllamaInferenceService implements InferenceService {

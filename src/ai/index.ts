@@ -139,6 +139,9 @@ class TrackedEmbeddingService implements EmbeddingService {
   modelName(): string {
     return this.inner.modelName();
   }
+  providerName(): string {
+    return this.inner.providerName?.() ?? this.provider;
+  }
 }
 
 class TrackedInferenceService implements InferenceService {

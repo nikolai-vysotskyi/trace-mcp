@@ -69,6 +69,10 @@ class OpenAIEmbeddingService implements EmbeddingService {
   modelName(): string {
     return this.model;
   }
+
+  providerName(): string {
+    return 'openai';
+  }
 }
 
 class OpenAIInferenceService implements InferenceService {

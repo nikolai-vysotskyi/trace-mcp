@@ -75,6 +75,10 @@ class OnnxEmbeddingService implements EmbeddingService {
   modelName(): string {
     return this.model;
   }
+
+  providerName(): string {
+    return 'onnx';
+  }
 }
 
 /**

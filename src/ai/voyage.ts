@@ -88,6 +88,10 @@ class VoyageEmbeddingService implements EmbeddingService {
   modelName(): string {
     return this.model;
   }
+
+  providerName(): string {
+    return 'voyage';
+  }
 }
 
 export class VoyageProvider implements AIProvider {

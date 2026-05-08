@@ -40,6 +40,7 @@ export class EmbeddingPipeline {
     if (this.consistent) return;
     const dim = this.embeddingService.dimensions();
     const model = this.embeddingService.modelName();
+    const provider = this.embeddingService.providerName?.() ?? 'unknown';
     // Skip for fallback/no-op services — they produce no vectors.
     if (dim === 0) {
       this.consistent = true;
@@ -51,14 +52,23 @@ export class EmbeddingPipeline {
       // Post-migration or first run: stamp without reindexing. Any existing
       // vectors are assumed to match the current config (the invariant starts
       // being enforced from this point forward).
-      this.vectorStore.setMeta(model, dim);
-    } else if (meta.model !== model || meta.dim !== dim) {
+      this.vectorStore.setMeta(model, dim, provider);
+    } else if (
+      meta.model !== model ||
+      meta.dim !== dim ||
+      // Only enforce provider mismatch when the index has it stamped — legacy
+      // indexes without the column are accepted and will be backfilled below.
+      (meta.provider !== undefined && meta.provider !== provider)
+    ) {
       logger.warn(
-        { old: meta, new: { model, dim } },
-        'Embedding model/dim changed — dropping vector index for reindex',
+        { old: meta, new: { model, dim, provider } },
+        'Embedding provider/model/dim changed — dropping vector index for reindex',
       );
       this.vectorStore.clear();
-      this.vectorStore.setMeta(model, dim);
+      this.vectorStore.setMeta(model, dim, provider);
+    } else if (meta.provider === undefined) {
+      // Legacy index missing the provider column — backfill in place.
+      this.vectorStore.setMeta(model, dim, provider);
     }
     this.consistent = true;
   }
@@ -206,7 +216,11 @@ export class EmbeddingPipeline {
     this.vectorStore.clear();
     const dim = this.embeddingService.dimensions();
     if (dim > 0) {
-      this.vectorStore.setMeta(this.embeddingService.modelName(), dim);
+      this.vectorStore.setMeta(
+        this.embeddingService.modelName(),
+        dim,
+        this.embeddingService.providerName?.() ?? 'unknown',
+      );
     }
     this.consistent = true;
     return this.indexUnembedded(DEFAULT_BATCH_SIZE);

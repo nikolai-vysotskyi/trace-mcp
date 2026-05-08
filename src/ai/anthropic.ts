@@ -31,6 +31,9 @@ class NoEmbeddingService implements EmbeddingService {
   modelName(): string {
     return '';
   }
+  providerName(): string {
+    return 'anthropic-noop';
+  }
 }
 
 class AnthropicInferenceService implements InferenceService {
