@@ -171,8 +171,11 @@ export class FileExtractor {
       return 'skipped';
     }
 
-    // Find matching language plugin
-    const plugin = registry.getLanguagePluginForFile(relPath);
+    // Find matching language plugin. Pass the file's first bytes so the
+    // registry can fall back to a `#!` shebang when the extension match
+    // fails — extensionless scripts like bin/deploy or scripts/migrate
+    // would otherwise drop out of the index entirely.
+    const plugin = registry.getLanguagePluginForFileWithFallback(relPath, content);
     if (!plugin) {
       return 'skipped';
     }

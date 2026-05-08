@@ -3,6 +3,40 @@ import { createAllIntegrationPlugins } from '../indexer/plugins/integration/all.
 import { createAllLanguagePlugins } from '../indexer/plugins/language/all.js';
 import type { FrameworkPlugin, LanguagePlugin, PluginManifest, ProjectContext } from './types.js';
 
+/**
+ * Map a shebang interpreter name to the file extension whose plugin handles
+ * the same language. Keeping this as an extension lookup means new languages
+ * (or plugin renames) keep working with shebangs automatically.
+ */
+const SHEBANG_TO_EXT: Readonly<Record<string, string>> = Object.freeze({
+  python: '.py',
+  python2: '.py',
+  python3: '.py',
+  bash: '.sh',
+  sh: '.sh',
+  zsh: '.sh',
+  ksh: '.sh',
+  dash: '.sh',
+  ash: '.sh',
+  node: '.js',
+  nodejs: '.js',
+  deno: '.ts',
+  bun: '.ts',
+  ruby: '.rb',
+  perl: '.pl',
+  php: '.php',
+  lua: '.lua',
+  luau: '.luau',
+  tclsh: '.tcl',
+  wish: '.tcl',
+  fish: '.sh',
+  pwsh: '.ps1',
+  powershell: '.ps1',
+  rscript: '.R',
+  julia: '.jl',
+  groovy: '.groovy',
+});
+
 export class PluginRegistry {
   private languagePlugins: LanguagePlugin[] = [];
   private frameworkPlugins: FrameworkPlugin[] = [];
@@ -55,6 +89,61 @@ export class PluginRegistry {
   getLanguagePluginForFile(filePath: string): LanguagePlugin | undefined {
     const ext = filePath.slice(filePath.lastIndexOf('.'));
     return this.getExtensionMap().get(ext);
+  }
+
+  /**
+   * Resolve a language plugin from a `#!` shebang on the first line.
+   * graphify v0.6.2 added the same fallback so extensionless scripts
+   * (`bin/deploy`, `scripts/migrate`, etc.) actually get indexed instead
+   * of dropping out silently. We map the interpreter to the existing
+   * extension-based plugin lookup — so adding `.py` to a plugin
+   * automatically enables it for Python shebangs too.
+   */
+  getLanguagePluginByShebang(firstBytes: Buffer | string): LanguagePlugin | undefined {
+    const head = typeof firstBytes === 'string' ? firstBytes : firstBytes.toString('utf-8', 0, 200);
+    if (!head.startsWith('#!')) return undefined;
+    const eol = head.indexOf('\n');
+    const line = (eol >= 0 ? head.slice(0, eol) : head).toLowerCase();
+
+    // Take the component after the last slash, then split into tokens.
+    // For `#!/usr/bin/env python3 -u` the last slash sits after `/usr/bin`,
+    // so tail is `env python3 -u`. For `#!/bin/bash` it is just `bash`.
+    const lastSlash = line.lastIndexOf('/');
+    const tail = (lastSlash >= 0 ? line.slice(lastSlash + 1) : line.slice(2)).trim();
+    const tokens = tail.split(/\s+/).filter(Boolean);
+
+    // Skip `env` and any of its flags (`-S`, `--split-string`, `KEY=val` env-vars)
+    // until we hit the actual interpreter name.
+    let i = 0;
+    if (tokens[i] === 'env') {
+      i++;
+      while (i < tokens.length) {
+        const t = tokens[i];
+        if (t.startsWith('-') || /^[A-Z_][A-Z0-9_]*=/i.test(t)) {
+          i++;
+        } else break;
+      }
+    }
+    const interpreter = tokens[i];
+    if (!interpreter) return undefined;
+    const ext = SHEBANG_TO_EXT[interpreter];
+    if (!ext) return undefined;
+    return this.getExtensionMap().get(ext);
+  }
+
+  /**
+   * Convenience that combines extension lookup with a shebang fallback.
+   * Falls back to shebang only when the extension lookup fails — keeps
+   * the fast path identical for the 99% of files with a normal extension.
+   */
+  getLanguagePluginForFileWithFallback(
+    filePath: string,
+    firstBytes?: Buffer | string,
+  ): LanguagePlugin | undefined {
+    const direct = this.getLanguagePluginForFile(filePath);
+    if (direct) return direct;
+    if (firstBytes === undefined) return undefined;
+    return this.getLanguagePluginByShebang(firstBytes);
   }
 
   private getExtensionMap(): Map<string, LanguagePlugin> {
