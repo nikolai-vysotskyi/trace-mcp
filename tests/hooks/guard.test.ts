@@ -127,7 +127,12 @@ function writeStatus(
   return file;
 }
 
-describe('trace-mcp-guard.sh v0.7', () => {
+// The bash guard hook is the POSIX implementation — Windows agents use the
+// .cmd variant in production. Running this suite under Git Bash on the
+// windows-latest runner exposes shell/path quirks that don't reflect the
+// actual Windows code path. Skip the whole describe on Windows; cover .cmd
+// behavior with dedicated tests if needed.
+describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
   const projectDir = path.join(
     TMP_BASE,
     `trace-mcp-guard-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
