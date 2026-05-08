@@ -95,6 +95,10 @@ class VertexAIEmbeddingService implements EmbeddingService {
   modelName(): string {
     return this.cfg.embeddingModel;
   }
+
+  providerName(): string {
+    return 'vertex';
+  }
 }
 
 class VertexAIInferenceService implements InferenceService {

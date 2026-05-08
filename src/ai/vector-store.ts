@@ -25,6 +25,41 @@ export class DimensionMismatchError extends Error {
   }
 }
 
+/**
+ * Raised when the configured embedding provider/model does not match the
+ * one that built the index on disk. Querying a vector store cross-provider
+ * silently returns garbage similarity scores — see CRG v2.3.3 security
+ * hardening, which refuses to mix indexes built with different providers.
+ *
+ * The fix is one of:
+ *   - switch the active provider config back to the one that built the index, or
+ *   - run `embed_repo({ force: true })` to drop and re-embed under the new
+ *     provider.
+ */
+export class ProviderMismatchError extends Error {
+  constructor(
+    public readonly stored: { provider: string; model: string },
+    public readonly active: { provider: string; model: string },
+  ) {
+    super(
+      `Embedding provider mismatch: index was built with ${stored.provider}/${stored.model}, ` +
+        `current config uses ${active.provider}/${active.model}. ` +
+        `Run embed_repo with force=true to re-embed under the new provider, ` +
+        `or revert the AI provider config to match the index.`,
+    );
+    this.name = 'ProviderMismatchError';
+  }
+}
+
+export type ProviderCheckResult =
+  | { kind: 'ok' }
+  | { kind: 'no_index' }
+  | {
+      kind: 'mismatch';
+      stored: { provider: string; model: string };
+      active: { provider: string; model: string };
+    };
+
 export class BlobVectorStore implements VectorStore {
   /** Cached expected dim — null until first getMeta() or setMeta(). */
   private cachedDim: number | null = null;
@@ -102,30 +137,59 @@ export class BlobVectorStore implements VectorStore {
     this.db.exec('DELETE FROM symbol_embeddings');
   }
 
-  setMeta(model: string, dim: number): void {
+  setMeta(model: string, dim: number, provider?: string): void {
     const upsert = this.db.prepare(
       'INSERT OR REPLACE INTO embedding_meta (key, value) VALUES (?, ?)',
     );
     const tx = this.db.transaction(() => {
       upsert.run('model', model);
       upsert.run('dim', String(dim));
+      if (provider !== undefined) {
+        upsert.run('provider', provider);
+      }
     });
     tx();
     this.cachedDim = dim;
   }
 
-  getMeta(): { model: string; dim: number } | null {
+  getMeta(): { model: string; dim: number; provider?: string } | null {
     const rows = this.db
-      .prepare("SELECT key, value FROM embedding_meta WHERE key IN ('model', 'dim')")
+      .prepare("SELECT key, value FROM embedding_meta WHERE key IN ('model', 'dim', 'provider')")
       .all() as { key: string; value: string }[];
     if (rows.length < 2) return null;
     const map = new Map(rows.map((r) => [r.key, r.value]));
     const model = map.get('model');
     const dimStr = map.get('dim');
+    const provider = map.get('provider');
     if (model === undefined || dimStr === undefined) return null;
     const dim = parseInt(dimStr, 10);
     if (!Number.isFinite(dim) || dim <= 0) return null;
-    return { model, dim };
+    return provider !== undefined ? { model, dim, provider } : { model, dim };
+  }
+
+  /**
+   * Compare the (provider, model) the index was built with against the
+   * currently-active provider/model and report mismatch.
+   *
+   * Older indexes that pre-date the provider column return `kind: 'ok'` —
+   * we don't have the data to tell, and refusing every legacy index would
+   * surprise users. The provider column gets backfilled the next time
+   * embed_repo runs.
+   */
+  checkProviderMatch(active: { provider: string; model: string }): ProviderCheckResult {
+    const stored = this.getMeta();
+    if (!stored) return { kind: 'no_index' };
+    // Legacy index without a provider column — accept and let setMeta
+    // backfill on the next embed_repo run.
+    if (stored.provider === undefined) return { kind: 'ok' };
+    if (stored.provider === active.provider && stored.model === active.model) {
+      return { kind: 'ok' };
+    }
+    return {
+      kind: 'mismatch',
+      stored: { provider: stored.provider, model: stored.model },
+      active,
+    };
   }
 }
 

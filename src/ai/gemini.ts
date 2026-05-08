@@ -80,6 +80,10 @@ class GeminiEmbeddingService implements EmbeddingService {
   modelName(): string {
     return this.model;
   }
+
+  providerName(): string {
+    return 'gemini';
+  }
 }
 
 class GeminiInferenceService implements InferenceService {

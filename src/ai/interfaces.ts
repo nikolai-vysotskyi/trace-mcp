@@ -16,6 +16,13 @@ export interface EmbeddingService {
   dimensions(): number;
   /** Identifier of the embedding model in use (empty for no-op/fallback). */
   modelName(): string;
+  /**
+   * Identifier of the embedding *provider* (e.g. "openai", "ollama",
+   * "openai-compatible"). Used to refuse cross-provider queries against an
+   * already-built index — see CRG v2.3.3 hardening. Optional: pre-existing
+   * services that don't override this default to "unknown".
+   */
+  providerName?(): string;
 }
 
 export interface ChatMessage {
@@ -37,10 +44,14 @@ export interface VectorStore {
   delete(id: number): void;
   /** Wipe all vectors. Used when the embedding space changes. */
   clear(): void;
-  /** Stamp the producing model + dimensionality for the current vectors. */
-  setMeta(model: string, dim: number): void;
+  /**
+   * Stamp the producing provider + model + dimensionality for the current
+   * vectors. Provider is optional for backwards compatibility with stores
+   * that pre-date the column.
+   */
+  setMeta(model: string, dim: number, provider?: string): void;
   /** Returns the stamped meta, or null if vectors have never been written. */
-  getMeta(): { model: string; dim: number } | null;
+  getMeta(): { model: string; dim: number; provider?: string } | null;
 }
 
 export interface RerankerService {
