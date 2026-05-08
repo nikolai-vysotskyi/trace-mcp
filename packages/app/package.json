@@ -9,13 +9,14 @@
     "dev:electron": "tsc -p tsconfig.main.json && node scripts/patch-electron-dev.mjs && unset ELECTRON_RUN_AS_NODE && electron .",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
-    "build": "npm run build:renderer && npm run build:main",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder",
+    "build": "pnpm run build:renderer && pnpm run build:main",
+    "pack": "pnpm run build && electron-builder --dir",
+    "dist": "pnpm run build && electron-builder",
     "postinstall": "node scripts/patch-electron-dev.mjs",
     "generate-icons": "node scripts/generate-icons.mjs",
     "typecheck": "tsc --noEmit"
   },
+  "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "@cosmos.gl/graph": "3.0.0-beta.9",
     "menubar": "^9.5.0"
@@ -27,6 +28,14 @@
     "menubar": {
       "electron": "$electron"
     }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "sharp"
+    ]
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
