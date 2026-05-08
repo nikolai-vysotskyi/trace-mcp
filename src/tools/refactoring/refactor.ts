@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { Store } from '../../db/store.js';
+import { maybeYield } from '../../utils/event-loop.js';
 import { scanNonCodeFiles } from './non-code-scanner.js';
 import { checkRenameSafe } from './rename-check.js';
 import {
@@ -494,7 +495,7 @@ const CODEMOD_MAX_PREVIEW = 20;
 const CODEMOD_LARGE_THRESHOLD = 20;
 const CODEMOD_CONTEXT_LINES = 2;
 
-export function applyCodemod(
+export async function applyCodemod(
   projectRoot: string,
   pattern: string,
   replacement: string,
@@ -505,7 +506,7 @@ export function applyCodemod(
     filterContent?: string;
     multiline?: boolean;
   },
-): CodemodResult {
+): Promise<CodemodResult> {
   const result: CodemodResult = {
     success: false,
     tool: 'apply_codemod',
@@ -553,7 +554,11 @@ export function applyCodemod(
   const allMatches: CodemodMatch[] = [];
   const filesWithMatches = new Set<string>();
 
+  let scanned = 0;
   for (const relPath of files) {
+    // Yield to the event loop every 64 files so large monorepos don't block stdio.
+    await maybeYield(scanned, 64);
+    scanned++;
     const absPath = path.resolve(projectRoot, relPath);
     if (!fs.existsSync(absPath)) continue;
 
