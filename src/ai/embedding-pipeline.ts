@@ -5,6 +5,7 @@
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
 import type { ProgressState } from '../progress.js';
+import { warnIfCloudEmbeddingProvider } from './cloud-warning.js';
 import type { EmbeddingService, VectorStore } from './interfaces.js';
 
 const DEFAULT_BATCH_SIZE = 50;
@@ -46,6 +47,11 @@ export class EmbeddingPipeline {
       this.consistent = true;
       return;
     }
+
+    // One-shot stderr warning before the first cloud-bound embedding leaves
+    // the machine. Suppressed by TRACE_MCP_ACCEPT_CLOUD_EMBEDDINGS=1 and
+    // never fires for local providers (ollama, onnx, fallback).
+    warnIfCloudEmbeddingProvider(provider);
 
     const meta = this.vectorStore.getMeta();
     if (!meta) {
