@@ -72,6 +72,8 @@ const GUARD_HOOK: HookDescriptor = {
   auxFiles: [
     // Windows-only PowerShell helper for the Read-handler repeat-read dedup.
     { file: 'trace-mcp-guard-read.ps1', platforms: ['win32'] },
+    // Windows-only PowerShell helper for the .md doc-tour detection (v0.9).
+    { file: 'trace-mcp-guard-md-tour.ps1', platforms: ['win32'] },
   ],
 };
 

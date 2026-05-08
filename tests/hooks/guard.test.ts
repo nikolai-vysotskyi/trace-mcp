@@ -718,6 +718,28 @@ describe('trace-mcp-guard.sh v0.7', () => {
     }
   });
 
+  it('denies `find` on source-tree paths even with no code extension', () => {
+    // Pre-existing rule catches `find . -name "*.ts"` via the code-ext match.
+    // The new rule additionally catches `find src -type f` etc. (no extension).
+    const cases = [
+      'find src -type f',
+      'find packages/foo -name README',
+      'find /Users/me/proj/server/src -type d',
+    ];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(false);
+    }
+  });
+
+  it('allows `find` on non-source paths', () => {
+    const cases = ['find . -name package.json', 'find /tmp -type f', 'find dist/ -type d'];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(true);
+    }
+  });
+
   it('allows Agent(general-purpose) for explicit action work', () => {
     const cases = [
       'write the implementation of the new plugin',

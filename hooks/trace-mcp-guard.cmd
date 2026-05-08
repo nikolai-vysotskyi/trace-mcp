@@ -1,5 +1,5 @@
 @echo off
-REM trace-mcp-guard v0.6.0
+REM trace-mcp-guard v0.9.0
 REM trace-mcp PreToolUse guard (Windows)
 REM Blocks Read/Grep/Glob/Bash on source code files + Agent(Explore) subagents - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
@@ -29,6 +29,10 @@ if defined CLAUDE_TOOL_NAME (
 
 if "%TOOL_NAME%"=="" goto :allow
 
+REM Extract session id once — needed by .md doc-tour helper and the code-file branch.
+set "SESSION_ID=default"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).session_id } catch { 'default' }"`) do set "SESSION_ID=%%i"
+
 REM --- Read ---
 if /i not "%TOOL_NAME%"=="Read" goto :check_grep
 
@@ -45,9 +49,24 @@ if "%ENV_EXAMPLE%"=="0" (
     )
 )
 
-REM Allow non-code files
-echo "%FILE_PATH%" | findstr /i /r "\.md$ \.json$ \.jsonc$ \.yaml$ \.yml$ \.toml$ \.ini$ \.cfg$ \.txt$ \.html$ \.xml$ \.csv$ \.svg$ \.lock$ \.log$ \.sh$ \.bash$ \.zsh$ \.fish$ \.ps1$ \.bat$ \.cmd$" >nul 2>&1
+REM Allow non-code, non-.md files (json, yaml, etc.) unconditionally.
+echo "%FILE_PATH%" | findstr /i /r "\.json$ \.jsonc$ \.yaml$ \.yml$ \.toml$ \.ini$ \.cfg$ \.txt$ \.html$ \.xml$ \.csv$ \.svg$ \.lock$ \.log$ \.sh$ \.bash$ \.zsh$ \.fish$ \.ps1$ \.bat$ \.cmd$" >nul 2>&1
 if %errorlevel%==0 goto :allow
+
+REM .md special-case: allow, but watch for "Second Brain" doc-tour patterns
+REM (per-feature .md docs co-located with code under src/, packages/, etc.).
+REM The helper either exits silently (clean allow) or writes a full
+REM PreToolUse JSON with additionalContext (hint, still allowed).
+echo "%FILE_PATH%" | findstr /i /r "\.md$" >nul 2>&1
+if %errorlevel%==0 (
+    set "TMG_FILE=%FILE_PATH%"
+    set "TMG_SESSION=%SESSION_ID%"
+    set "TMG_ROOT=%CD%"
+    if exist "%~dp0trace-mcp-guard-md-tour.ps1" (
+        powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0trace-mcp-guard-md-tour.ps1"
+    )
+    goto :cleanup
+)
 
 REM Allow files in non-source dirs
 echo "%FILE_PATH%" | findstr /i /r "node_modules\\ vendor\\ dist\\ build\\ \.git\\" >nul 2>&1
@@ -56,10 +75,6 @@ if %errorlevel%==0 goto :allow
 REM Block code file reads - redirect to trace-mcp
 echo "%FILE_PATH%" | findstr /i /r "\.ts$ \.tsx$ \.js$ \.jsx$ \.mjs$ \.cjs$ \.py$ \.pyi$ \.go$ \.rs$ \.java$ \.kt$ \.kts$ \.rb$ \.php$ \.cs$ \.cpp$ \.c$ \.h$ \.hpp$ \.swift$ \.scala$ \.vue$ \.svelte$ \.astro$" >nul 2>&1
 if not %errorlevel%==0 goto :allow
-
-REM Extract session id for per-session state dirs
-set "SESSION_ID=default"
-for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).session_id } catch { 'default' }"`) do set "SESSION_ID=%%i"
 
 REM Delegate repeat-read dedup + consultation marker + deny-marker cycle to PowerShell helper.
 REM The helper lives next to this .cmd and is installed by trace-mcp init/upgrade.
@@ -228,6 +243,26 @@ if "%ENV_EXAMPLE%"=="0" (
         call :deny "Use get_env_vars for .env files - it masks sensitive values (passwords, API keys, tokens)." "trace-mcp alternatives: get_env_vars to list keys + types without exposing secrets. Never access .env files via shell. Template files like .env.example/.env.sample are allowed."
         goto :cleanup
     )
+)
+
+REM Block ls/dir/find on source-tree paths (code exploration disguised as listing).
+REM Allows: plain `ls`/`dir`, `ls .`, `ls /tmp/...`, `dir C:\Temp`, `ls dist/`.
+REM Denies: `ls src/...`, `dir packages\foo`, `find src -type f`, etc.
+set "HAS_LIST=0"
+echo "%COMMAND%" | findstr /i /r /c:"^ls " /c:"^dir " /c:"^find " /c:" ls " /c:" dir " /c:" find " /c:"&&ls " /c:"&&dir " /c:"&&find " /c:";ls " /c:";dir " /c:";find " /c:"|ls " /c:"|dir " /c:"|find " >nul 2>&1
+if %errorlevel%==0 set "HAS_LIST=1"
+
+set "HAS_SRC=0"
+echo "%COMMAND%" | findstr /i /r /c:" src[/\\]" /c:" lib[/\\]" /c:" packages[/\\]" /c:" apps[/\\]" /c:" app[/\\]" /c:" server[/\\]" /c:" client[/\\]" /c:" pkg[/\\]" /c:" internal[/\\]" /c:" modules[/\\]" /c:" services[/\\]" /c:" pipelines[/\\]" /c:" cmd[/\\]" /c:"[/\\]src[/\\]" /c:"[/\\]lib[/\\]" /c:"[/\\]packages[/\\]" /c:"[/\\]apps[/\\]" /c:"[/\\]app[/\\]" /c:"[/\\]server[/\\]" /c:"[/\\]client[/\\]" /c:"[/\\]pkg[/\\]" /c:"[/\\]internal[/\\]" /c:"[/\\]modules[/\\]" /c:"[/\\]services[/\\]" /c:"[/\\]pipelines[/\\]" /c:"[/\\]cmd[/\\]" >nul 2>&1
+if %errorlevel%==0 set "HAS_SRC=1"
+
+set "HAS_VENDORED=0"
+echo "%COMMAND%" | findstr /i /r /c:"node_modules" /c:"vendor[/\\]" /c:"dist[/\\]" /c:"build[/\\]" /c:"\.git[/\\]" /c:"target[/\\]" /c:" out[/\\]" >nul 2>&1
+if %errorlevel%==0 set "HAS_VENDORED=1"
+
+if "%HAS_LIST%"=="1" if "%HAS_SRC%"=="1" if "%HAS_VENDORED%"=="0" (
+    call :deny "Use trace-mcp instead of ls/dir/find on source-tree paths - it knows your project structure." "trace-mcp alternatives: get_project_map (structure overview), get_outline (file symbols), search with file_pattern. Use ls/dir/find only on non-source dirs (dist, build, /tmp, node_modules)."
+    goto :cleanup
 )
 
 REM Block code exploration via bash
