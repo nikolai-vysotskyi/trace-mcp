@@ -120,17 +120,35 @@ export class SpringPlugin implements FrameworkPlugin {
   }
 
   private extractInjections(source: string, filePath: string, result: FileParseResult): void {
-    // @Autowired fields
+    // Track owning class so the metadata can carry the source side. Without
+    // this, a downstream resolver has no anchor for `this.fieldName.X()` —
+    // CRG v2.3.3 Spring DI work depends on this same fact.
+    const ownerClass = extractOwningClass(source);
+
+    // ── @Autowired fields ──
+    // Build a fieldName → targetType map so we can scan call sites later.
+    const fieldTypes = new Map<string, string>();
     const autowiredRe = /@Autowired\s+(?:private\s+|protected\s+|public\s+)?(\w+)\s+(\w+)/g;
     let m: RegExpExecArray | null;
     while ((m = autowiredRe.exec(source)) !== null) {
+      const targetType = m[1];
+      const fieldName = m[2];
+      fieldTypes.set(fieldName, targetType);
       result.edges!.push({
         edgeType: 'spring_injects',
-        metadata: { targetType: m[1], fieldName: m[2], style: 'field' },
+        metadata: {
+          targetType,
+          fieldName,
+          style: 'field',
+          ownerClass,
+          // Method-level hints — downstream resolver can resolve
+          // `this.<fieldName>.<methodHint>` to <targetType>.<methodHint>.
+          methodHints: collectInvokedMembers(source, fieldName),
+        },
       });
     }
 
-    // Constructor injection (Kotlin-style or Java record-style)
+    // ── Constructor injection (Kotlin/Java record style) ──
     const constructorRe = /(?:constructor|public\s+\w+)\s*\(([^)]+)\)/g;
     let cm: RegExpExecArray | null;
     while ((cm = constructorRe.exec(source)) !== null) {
@@ -139,27 +157,36 @@ export class SpringPlugin implements FrameworkPlugin {
         const parts = param.trim().split(/\s+/);
         if (parts.length >= 2) {
           const typeName = parts[parts.length - 2];
+          // Last token is the parameter name — used for `this.<name>.X()` lookup.
+          const paramName = parts[parts.length - 1].replace(/[):,]/g, '');
           if (
             typeName[0] === typeName[0].toUpperCase() &&
             typeName !== 'String' &&
             typeName !== 'Integer'
           ) {
+            fieldTypes.set(paramName, typeName);
             result.edges!.push({
               edgeType: 'spring_injects',
-              metadata: { targetType: typeName, style: 'constructor' },
+              metadata: {
+                targetType: typeName,
+                fieldName: paramName,
+                style: 'constructor',
+                ownerClass,
+                methodHints: collectInvokedMembers(source, paramName),
+              },
             });
           }
         }
       }
     }
 
-    // @Value
+    // ── @Value ──
     const valueRe = /@Value\s*\(\s*["']([^"']+)["']\s*\)/g;
     let vm: RegExpExecArray | null;
     while ((vm = valueRe.exec(source)) !== null) {
       result.edges!.push({
         edgeType: 'spring_config_value',
-        metadata: { expression: vm[1] },
+        metadata: { expression: vm[1], ownerClass },
       });
     }
   }
@@ -184,4 +211,39 @@ export class SpringPlugin implements FrameworkPlugin {
 
 function normalizePath(path: string): string {
   return `/${path.replace(/\/+/g, '/').replace(/^\/|\/$/g, '')}`;
+}
+
+/**
+ * Best-effort extraction of the first Spring stereotype class declared in a
+ * source file. Java/Kotlin convention is one class per file for stereotypes —
+ * if the file declares more than one, the first wins. Returns null if no
+ * class line is found (defensive — the regex isn't a parser).
+ */
+function extractOwningClass(source: string): string | null {
+  const m = source.match(
+    /(?:^|\n)\s*(?:public\s+|abstract\s+|final\s+|sealed\s+|open\s+)*class\s+(\w+)/,
+  );
+  return m ? m[1] : null;
+}
+
+/**
+ * Scan the source for `this.<fieldName>.<member>(...)` and bare
+ * `<fieldName>.<member>(...)` invocations and collect the unique member
+ * names. Downstream call resolution can use these as candidates to look up
+ * on the injected target type. Conservative — caps at 50 hints per field
+ * to avoid runaway metadata on generated code.
+ */
+function collectInvokedMembers(source: string, fieldName: string): string[] {
+  const re = new RegExp(`(?:this\\.)?\\b${escapeRegex(fieldName)}\\s*\\.\\s*(\\w+)\\s*\\(`, 'g');
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    seen.add(m[1]);
+    if (seen.size >= 50) break;
+  }
+  return [...seen];
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
