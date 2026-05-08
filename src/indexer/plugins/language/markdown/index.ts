@@ -174,11 +174,14 @@ function deriveSignature(fm: Record<string, unknown> | undefined, body: string):
 export const MarkdownLanguagePlugin = class implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'markdown-language',
-    version: '2.0.0',
+    version: '2.1.0',
     priority: 3,
   };
 
-  supportedExtensions = ['.md', '.mdx', '.markdown'];
+  // .qmd is Quarto, a Markdown variant that adds typed code chunks. The body
+  // is plain Markdown plus fenced executable blocks, which our plugin already
+  // tolerates — accept the extension here, matching graphify v0.7.9.
+  supportedExtensions = ['.md', '.mdx', '.markdown', '.qmd'];
   supportedVersions = undefined;
 
   extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {

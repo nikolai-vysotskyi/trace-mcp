@@ -58,11 +58,14 @@ function extractSignature(node: TSNode): string {
 export class LuaLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'lua-language',
-    version: '2.0.0',
+    version: '2.1.0',
     priority: 5,
   };
 
-  supportedExtensions = ['.lua'];
+  // .luau is Roblox's Lua dialect; tree-sitter-lua parses it correctly so we
+  // accept the extension here rather than ship a separate plugin (matches
+  // graphify v0.7.8).
+  supportedExtensions = ['.lua', '.luau'];
 
   async extractSymbols(
     filePath: string,
