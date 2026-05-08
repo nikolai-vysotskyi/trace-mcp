@@ -8,6 +8,7 @@
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
 import { AnthropicProvider } from './anthropic.js';
+import { checkConsent, consentInstruction } from './consent.js';
 import { FallbackProvider } from './fallback.js';
 import { GeminiProvider } from './gemini.js';
 import type {
@@ -268,6 +269,19 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
   }
 
   const provider = config.ai.provider;
+
+  // Consent gate — refuse to instantiate cloud providers without explicit
+  // consent so the indexer can't silently start sending code to a
+  // third-party API after a config change. Local providers (ollama / onnx /
+  // lmstudio / llama-cpp) bypass this check. mempalace #1233.
+  const decision = checkConsent(provider);
+  if (!decision.allowed) {
+    logger.warn(
+      { provider, reason: decision.reason, hint: consentInstruction(provider) },
+      'AI provider blocked by consent gate — falling back to no-op provider',
+    );
+    return new FallbackProvider();
+  }
 
   if (provider === 'onnx') {
     return new GatedAIProvider(
