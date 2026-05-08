@@ -65,7 +65,10 @@ describe('listAllSessions — golden lockdown', () => {
 
     const result = listAllSessions()
       .map((r) => ({
-        rel: path.relative(fakeHome, r.filePath),
+        // Normalize to forward slashes — on Windows, path.relative emits
+        // backslashes, but the golden expectation uses POSIX form for
+        // cross-platform stability.
+        rel: path.relative(fakeHome, r.filePath).replace(/\\/g, '/'),
         client: r.client,
       }))
       .sort((a, b) => a.rel.localeCompare(b.rel));

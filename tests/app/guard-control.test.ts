@@ -216,7 +216,10 @@ describe('guard-control (app main process)', () => {
     const fakeHome = path.join(TMP_BASE, `home-${Date.now()}-${Math.random()}`);
     fs.mkdirSync(fakeHome, { recursive: true });
     const prevHome = process.env.HOME;
+    const prevUserProfile = process.env.USERPROFILE;
+    // os.homedir() reads HOME on POSIX, USERPROFILE on Windows — set both.
     process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
     try {
       // Provide a fake source script.
       const sourceScript = path.join(fakeHome, 'source-guard.sh');
@@ -242,6 +245,8 @@ describe('guard-control (app main process)', () => {
     } finally {
       if (prevHome) process.env.HOME = prevHome;
       else delete process.env.HOME;
+      if (prevUserProfile) process.env.USERPROFILE = prevUserProfile;
+      else delete process.env.USERPROFILE;
       fs.rmSync(fakeHome, { recursive: true, force: true });
     }
   });
@@ -250,7 +255,9 @@ describe('guard-control (app main process)', () => {
     const fakeHome = path.join(TMP_BASE, `home-${Date.now()}-${Math.random()}`);
     fs.mkdirSync(fakeHome, { recursive: true });
     const prevHome = process.env.HOME;
+    const prevUserProfile = process.env.USERPROFILE;
     process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
     try {
       const sourceScript = path.join(fakeHome, 'source-guard.sh');
       fs.writeFileSync(sourceScript, '#!/bin/bash\nexit 0');
@@ -261,6 +268,8 @@ describe('guard-control (app main process)', () => {
     } finally {
       if (prevHome) process.env.HOME = prevHome;
       else delete process.env.HOME;
+      if (prevUserProfile) process.env.USERPROFILE = prevUserProfile;
+      else delete process.env.USERPROFILE;
       fs.rmSync(fakeHome, { recursive: true, force: true });
     }
   });
@@ -269,7 +278,9 @@ describe('guard-control (app main process)', () => {
     const fakeHome = path.join(TMP_BASE, `home-${Date.now()}-${Math.random()}`);
     fs.mkdirSync(fakeHome, { recursive: true });
     const prevHome = process.env.HOME;
+    const prevUserProfile = process.env.USERPROFILE;
     process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
     try {
       const settingsPath = path.join(fakeHome, '.claude', 'settings.json');
       fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
@@ -296,6 +307,8 @@ describe('guard-control (app main process)', () => {
     } finally {
       if (prevHome) process.env.HOME = prevHome;
       else delete process.env.HOME;
+      if (prevUserProfile) process.env.USERPROFILE = prevUserProfile;
+      else delete process.env.USERPROFILE;
       fs.rmSync(fakeHome, { recursive: true, force: true });
     }
   });
@@ -304,7 +317,9 @@ describe('guard-control (app main process)', () => {
     const fakeHome = path.join(TMP_BASE, `home-${Date.now()}-${Math.random()}`);
     fs.mkdirSync(fakeHome, { recursive: true });
     const prevHome = process.env.HOME;
+    const prevUserProfile = process.env.USERPROFILE;
     process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
     try {
       const status = checkInstallStatus();
       expect(status.claudeDetected).toBe(false);
@@ -312,6 +327,8 @@ describe('guard-control (app main process)', () => {
     } finally {
       if (prevHome) process.env.HOME = prevHome;
       else delete process.env.HOME;
+      if (prevUserProfile) process.env.USERPROFILE = prevUserProfile;
+      else delete process.env.USERPROFILE;
       fs.rmSync(fakeHome, { recursive: true, force: true });
     }
   });
