@@ -8,6 +8,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import type { NapiResolveOptions, TsconfigOptions } from 'oxc-resolver';
 import { ResolverFactory } from 'oxc-resolver';
 import { logger } from '../../logger.js';
@@ -33,7 +34,16 @@ function detectViteSrcDir(projectRoot: string): string | null {
   return null;
 }
 
-/** Try to find the nearest valid tsconfig.json or jsconfig.json (Next.js JS projects). */
+/**
+ * Try to find the nearest valid tsconfig.json or jsconfig.json (Next.js JS
+ * projects).
+ *
+ * Real-world tsconfig.json files are JSONC: the TypeScript compiler accepts
+ * `//` and `/* *​/` comments and trailing commas, so essentially every framework
+ * scaffold (SvelteKit, NestJS, T3, Astro, Vite, Nx) ships them. Strict
+ * `JSON.parse` would throw on those and we'd silently fall back to no aliases —
+ * meaning `@/...`, `~/...` and friends would be reported as external packages.
+ */
 function findTsconfig(startDir: string, stopDir: string): string | undefined {
   let dir = startDir;
   while (dir.startsWith(stopDir)) {
@@ -42,7 +52,21 @@ function findTsconfig(startDir: string, stopDir: string): string | undefined {
       const candidate = path.join(dir, fileName);
       if (!fs.existsSync(candidate)) continue;
       try {
-        const raw = JSON.parse(fs.readFileSync(candidate, 'utf-8')) as { extends?: string };
+        const text = fs.readFileSync(candidate, 'utf-8');
+        const errors: import('jsonc-parser').ParseError[] = [];
+        const raw = parseJsonc(text, errors, { allowTrailingComma: true }) as
+          | { extends?: string }
+          | undefined;
+        if (errors.length > 0) {
+          logger.debug(
+            {
+              tsconfig: candidate,
+              errors: errors.map((e) => printParseErrorCode(e.error)),
+            },
+            'tsconfig has JSONC parse errors — using anyway',
+          );
+        }
+        if (!raw) continue;
         if (raw.extends) {
           const extendsPath = path.resolve(path.dirname(candidate), raw.extends);
           if (!fs.existsSync(extendsPath)) {
