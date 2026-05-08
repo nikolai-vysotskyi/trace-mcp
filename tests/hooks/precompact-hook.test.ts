@@ -8,7 +8,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 const HOOK_SCRIPT = path.resolve('hooks/trace-mcp-precompact.sh');
 const TRACE_MCP_HOME = path.join(os.homedir(), '.trace-mcp');
 
-describe('trace-mcp-precompact.sh', () => {
+// trace-mcp-precompact.sh is the POSIX implementation. On Windows the equivalent
+// runs via the .cmd variant; this bash test under Git Bash exposes shell-specific
+// quirks unrelated to production behavior.
+describe.skipIf(process.platform === 'win32')('trace-mcp-precompact.sh', () => {
   // Use realpath to match what pwd -L returns from within execSync
   const testProjectDir = path.join(
     fs.realpathSync(os.tmpdir()),
