@@ -38,9 +38,9 @@ All text committed to the repository — UI strings, button labels, tooltips, er
 ## Build & Test
 
 ```bash
-npm run build          # TypeScript compilation
-npm test               # Vitest (all tests)
-npm test -- --run <pattern>  # Run specific test
+pnpm run build          # TypeScript compilation
+pnpm run test               # Vitest (all tests)
+pnpm run test --run <pattern> # Run specific test
 ```
 
 ## trace-mcp Tool Routing — MANDATORY (for AI agents working ON this codebase)
@@ -113,7 +113,7 @@ Agent is ONLY acceptable for: writing code in parallel (background workers), run
 - **Read**: ONLY for non-code files (.md, .json, .yaml, .env, config), OR immediately before using Edit on a file you need to modify
 - **Grep**: ONLY for searching non-code file content (config, markdown, yaml)
 - **Glob**: ONLY for finding non-code files by name pattern
-- **Bash**: ONLY for running builds (`npm run build`), tests (`npm test`), git commands, or other CLI operations — NEVER for code exploration
+- **Bash**: ONLY for running builds (`pnpm run build`), tests (`pnpm run test`), git commands, or other CLI operations — NEVER for code exploration
 - **Edit**: ONLY for unique, one-off changes. If you are about to make the same kind of change (same pattern/intent) **2 or more times** — whether in one file or across files — STOP and use `apply_codemod` instead. This includes: adding async/await, updating function signatures, fixing import paths, adding/removing keywords, wrapping calls. **No exceptions. No "it's just a few edits". Use apply_codemod.**
 
 ### Read-before-Edit optimization (saves ~80K tokens/day)

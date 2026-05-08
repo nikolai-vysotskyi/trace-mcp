@@ -5,24 +5,24 @@
 ```bash
 git clone https://github.com/nikolai-vysotskyi/trace-mcp.git
 cd trace-mcp
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ## Scripts
 
 | Script | What it does |
 |---|---|
-| `npm run build` | TypeScript compilation via tsup |
-| `npm run dev` | Watch mode (tsup --watch) |
-| `npm test` | Run all tests (vitest) |
-| `npm run test:watch` | Watch mode for tests |
-| `npm run typecheck` | TypeScript type checking (`tsc --noEmit`) |
-| `npm run lint` | Same as `typecheck` (legacy alias) |
-| `npm run format` | Auto-format the repo with Biome |
-| `npm run format:check` | Check formatting without writing |
-| `npm run biome:ci` | Full Biome check (formatter + linter) — same as CI |
-| `npm run serve` | Start MCP server (dev) |
+| `pnpm run build` | TypeScript compilation via tsup |
+| `pnpm run dev` | Watch mode (tsup --watch) |
+| `pnpm run test` | Run all tests (vitest) |
+| `pnpm run test:watch` | Watch mode for tests |
+| `pnpm run typecheck` | TypeScript type checking (`tsc --noEmit`) |
+| `pnpm run lint` | Same as `typecheck` (legacy alias) |
+| `pnpm run format` | Auto-format the repo with Biome |
+| `pnpm run format:check` | Check formatting without writing |
+| `pnpm run biome:ci` | Full Biome check (formatter + linter) — same as CI |
+| `pnpm run serve` | Start MCP server (dev) |
 
 ## Code style — Biome
 
@@ -39,15 +39,15 @@ Formatter and linter are unified under [Biome](https://biomejs.dev). Config live
 
 When promoting a new rule:
 
-1. Add it to `biome.jsonc` at severity `warn` first to see the blast radius (`npx biome lint --reporter=summary`).
-2. If the rule has a safe auto-fix, run `npx biome lint --write --only=<rule-id>`. Review the diff.
+1. Add it to `biome.jsonc` at severity `warn` first to see the blast radius (`pnpm exec biome lint --reporter=summary`).
+2. If the rule has a safe auto-fix, run `pnpm exec biome lint --write --only=<rule-id>`. Review the diff.
 3. For unsafe fixes (e.g. `useExhaustiveDependencies` removing deps, `useButtonType` guessing `type="button"`): hand-fix or scope via `overrides` in `biome.jsonc`.
 4. Once violations hit zero, promote severity to `error`.
 5. Mass-fix commits should be added to `.git-blame-ignore-revs`.
 
 ### Remaining warning burndown
 
-`npm run biome:ci` exits clean (**0 errors**). The remaining warnings are the
+`pnpm run biome:ci` exits clean (**0 errors**). The remaining warnings are the
 `noExplicitAny` backlog (~170, scoped to `src/` and `packages/app/` — tests are
 overridden to `off` because mocks and AST fixtures intentionally use `any`).
 
@@ -64,9 +64,9 @@ Promote `suspicious/noExplicitAny` from warn to error once the backlog is gone.
 ## Tests
 
 ```bash
-npm test                       # All tests (1668 tests, ~2s)
-npm test -- --run <pattern>    # Run specific test files
-npm run test:watch             # Watch mode
+pnpm run test                       # All tests (1668 tests, ~2s)
+pnpm run test --run <pattern>  # Run specific test files
+pnpm run test:watch             # Watch mode
 ```
 
 Test files live alongside source or in `tests/`:
