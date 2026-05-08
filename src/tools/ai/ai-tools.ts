@@ -19,6 +19,7 @@ import {
   assembleStructuredContext,
   renderStructuredContext,
 } from '../../scoring/structured-assembly.js';
+import { sanitizeValue } from '../../utils/mcp-sanitize.js';
 import { readByteRange } from '../../utils/source-reader.js';
 import { getChangeImpact } from '../analysis/impact.js';
 import { resolveSymbolInput } from '../shared/resolve.js';
@@ -34,7 +35,7 @@ interface AIToolsContext {
 }
 
 function j(value: unknown): string {
-  return JSON.stringify(value);
+  return JSON.stringify(sanitizeValue(value));
 }
 
 function symbolToContextItem(
