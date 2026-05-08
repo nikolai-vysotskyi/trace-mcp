@@ -2,6 +2,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../../logger.js';
 import { resolveRegisteredAncestor } from '../../registry.js';
+import { resolveWorktreeAware, worktreeHint } from '../../registry-worktree.js';
 import type { Backend } from './types.js';
 
 export interface ProxyBackendOptions {
@@ -38,12 +39,35 @@ export class ProxyBackend implements Backend {
     // nested package in a monorepo), route to that parent's index instead of
     // asking the daemon to spin up a duplicate one for this subdir.
     const ancestor = resolveRegisteredAncestor(this.opts.projectRoot);
-    const projectRoot = ancestor?.root ?? this.opts.projectRoot;
+    let projectRoot = ancestor?.root ?? this.opts.projectRoot;
     if (ancestor && ancestor.root !== this.opts.projectRoot) {
       logger.info(
         { requested: this.opts.projectRoot, parent: ancestor.root },
         'ProxyBackend: routing subdirectory to registered parent project',
       );
+    }
+
+    // Worktree-aware fallback: if path-only resolution didn't land on a
+    // registered project, check whether this path is a *linked* git
+    // worktree of an already-indexed canonical repo. Mirrors jcodemunch
+    // v1.82.0 — common when AI agents spawn from `git worktree add`
+    // feature branches.
+    if (!ancestor) {
+      const wt = resolveWorktreeAware(this.opts.projectRoot);
+      if (wt.canonicalCandidates.length > 0) {
+        const canonical = wt.canonicalCandidates[0].entry;
+        projectRoot = canonical.root;
+        const hint = worktreeHint(wt);
+        logger.info(
+          {
+            requested: this.opts.projectRoot,
+            canonical: canonical.root,
+            rationale: wt.canonicalCandidates[0].rationale,
+            hint,
+          },
+          'ProxyBackend: routing worktree to canonical indexed repo',
+        );
+      }
     }
     const mcpUrl = `${daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
 
