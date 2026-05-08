@@ -1,0 +1,117 @@
+{
+  "name": "trace-mcp-vscode",
+  "displayName": "trace-mcp",
+  "description": "Auto-reindex on save for any MCP client running inside VS Code (Copilot Chat, Continue, Cline, Roo Code).",
+  "version": "0.1.0",
+  "publisher": "trace-mcp",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=20.0.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "trace-mcp",
+      "properties": {
+        "traceMcp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reindex files on save by shelling out to the trace-mcp CLI. Disable to suspend without uninstalling."
+        },
+        "traceMcp.commandPath": {
+          "type": "string",
+          "default": "trace-mcp",
+          "description": "Path to the trace-mcp binary. Default resolves via PATH; set an absolute path if your install isn't on the GUI process's PATH (typical when installed via pipx, asdf, or a Node version manager)."
+        },
+        "traceMcp.debounceMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "Per-file debounce in milliseconds. Multiple saves of the same file inside this window collapse into a single reindex call."
+        },
+        "traceMcp.excludeGlobs": {
+          "type": "array",
+          "default": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.git/**",
+            "**/*.lock",
+            "**/*.log"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Glob patterns whose matches are NOT reindexed on save. Matched against the workspace-relative path."
+        },
+        "traceMcp.languages": {
+          "type": "array",
+          "default": [
+            "typescript",
+            "javascript",
+            "typescriptreact",
+            "javascriptreact",
+            "python",
+            "go",
+            "rust",
+            "java",
+            "kotlin",
+            "scala",
+            "ruby",
+            "php",
+            "csharp",
+            "cpp",
+            "c",
+            "swift",
+            "elixir",
+            "vue",
+            "svelte"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Editor language IDs whose saves trigger a reindex. Files in other languages are ignored."
+        },
+        "traceMcp.timeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "maximum": 300000,
+          "description": "Wall-clock timeout for the reindex CLI call. Falls back silently when exceeded."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "traceMcp.reindexCurrentFile",
+        "title": "trace-mcp: Reindex current file"
+      },
+      {
+        "command": "traceMcp.reindexWorkspace",
+        "title": "trace-mcp: Reindex entire workspace"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^6.0.0",
+    "vitest": "^4.1.0"
+  }
+}
