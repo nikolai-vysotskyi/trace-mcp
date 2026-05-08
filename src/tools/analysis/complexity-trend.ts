@@ -8,6 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
+import { isSafeGitRef, safeGitEnv } from '../../utils/git-env.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { computeCyclomatic, computeMaxNesting } from './complexity.js';
 
@@ -58,6 +59,7 @@ function getHistoricalCommits(
         cwd,
         stdio: 'pipe',
         timeout: 10_000,
+        env: safeGitEnv(),
       },
     ).toString('utf-8');
 
@@ -87,13 +89,17 @@ function getHistoricalCommits(
   }
 }
 
-/** Get file content at a specific commit. */
+/** Get file content at a specific commit.
+ * `commitHash` is validated as a safe git ref so a value starting with `-`
+ * cannot be reinterpreted by `git show` as a flag. */
 function getFileAtCommit(cwd: string, filePath: string, commitHash: string): string | null {
+  if (!isSafeGitRef(commitHash)) return null;
   try {
     return execFileSync('git', ['show', `${commitHash}:${filePath}`], {
       cwd,
       stdio: 'pipe',
       timeout: 10_000,
+      env: safeGitEnv(),
     }).toString('utf-8');
   } catch (e) {
     // File may not exist at this commit (e.g., before creation or rename)

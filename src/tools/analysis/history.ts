@@ -9,6 +9,7 @@
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
+import { isSafeGitRef, safeGitEnv } from '../../utils/git-env.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { computeCyclomatic, computeMaxNesting, computeParamCount } from './complexity.js';
 
@@ -87,6 +88,7 @@ function sampleFileCommits(
       cwd,
       stdio: 'pipe',
       timeout: 10_000,
+      env: safeGitEnv(),
     }).toString('utf-8');
   } catch {
     return [];
@@ -114,14 +116,19 @@ function sampleFileCommits(
   return sampled;
 }
 
-/** Get file content at a specific commit. Returns null if file doesn't exist. */
+/** Get file content at a specific commit. Returns null if file doesn't exist.
+ * `commitHash` is validated as a safe git ref so a value starting with `-`
+ * cannot be reinterpreted by `git show` as a flag (e.g. `-c=core.sshCommand=...`)
+ * once interpolated into the `<rev>:<path>` syntax. */
 function getFileAtCommit(cwd: string, filePath: string, commitHash: string): string | null {
+  if (!isSafeGitRef(commitHash)) return null;
   try {
     return execFileSync('git', ['show', `${commitHash}:${filePath}`], {
       cwd,
       stdio: 'pipe',
       timeout: 10_000,
       maxBuffer: 5 * 1024 * 1024,
+      env: safeGitEnv(),
     }).toString('utf-8');
   } catch {
     return null;
@@ -179,6 +186,10 @@ function countImportersAtCommit(cwd: string, filePath: string, commitHash: strin
   // Skip patterns that are too short / ambiguous (< 8 chars → too many false positives)
   if (searchPattern.length < 8) return 0;
 
+  // Defensive: `commitHash` is positional argv. A value starting with `-`
+  // would be parsed as a `git grep` flag rather than a tree-ish.
+  if (!isSafeGitRef(commitHash)) return 0;
+
   try {
     const output = execFileSync(
       'git',
@@ -188,6 +199,7 @@ function countImportersAtCommit(cwd: string, filePath: string, commitHash: strin
         stdio: 'pipe',
         timeout: 15_000,
         maxBuffer: 2 * 1024 * 1024,
+        env: safeGitEnv(),
       },
     ).toString('utf-8');
 
@@ -532,6 +544,7 @@ export function captureGraphSnapshots(store: Store, cwd: string): void {
       cwd,
       stdio: 'pipe',
       timeout: 5000,
+      env: safeGitEnv(),
     })
       .toString('utf-8')
       .trim();

@@ -45,3 +45,64 @@ export function safeGitEnv(extra?: Record<string, string | undefined>): NodeJS.P
 
 /** Read-only export for callers that want to inspect the override list. */
 export const SAFE_GIT_ENV_KEYS = Object.freeze(Object.keys(SAFE_GIT_ENV_OVERRIDES));
+
+// ─── Reference validation ────────────────────────────────────────────
+//
+// Tools like compare_branches and get_changed_symbols accept raw git ref
+// strings from the MCP caller. If those strings ever reach a shell command
+// (`execSync(\`git ... ${ref}\`)`) or are passed as the first argv to a
+// subcommand without `--`, a malicious caller can inject git flags or shell
+// metacharacters: a ref of `-c=core.sshCommand=evil` becomes a global option
+// when interpolated, and `; rm -rf /;` is full RCE under execSync.
+//
+// We never need to round-trip exotic ref characters — git refs in the wild
+// use the conservative subset below. Tightening here costs nothing and
+// closes a whole class of bugs.
+
+/**
+ * Strict whitelist for git refs / commitishes accepted from external input.
+ * Allows: ASCII letters, digits, `_`, `-`, `.`, `/`, `@`, `^`, `~`, `+`.
+ * Rejects: leading `-`, empty string, anything with `..`, control chars,
+ * spaces, shell metacharacters.
+ *
+ * Note: git itself permits a wider character set (see
+ * `git check-ref-format`), but every ref produced by a normal workflow
+ * fits this whitelist. Callers that need broader names can call git's
+ * own checker.
+ */
+const REF_RE = /^[a-zA-Z0-9_./@^~+-]+$/;
+
+export function isSafeGitRef(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (value.length === 0 || value.length > 256) return false;
+  if (value.startsWith('-')) return false;
+  if (value.includes('..')) return false;
+  return REF_RE.test(value);
+}
+
+/**
+ * Throws if `value` is not a safe git ref. Keeps call sites short while
+ * surfacing a clear error message at the boundary.
+ */
+export function assertSafeGitRef(value: unknown, paramName: string): asserts value is string {
+  if (!isSafeGitRef(value)) {
+    throw new Error(
+      `Invalid git ref for "${paramName}": ${JSON.stringify(value)}. Refs must match ${REF_RE} and not start with "-".`,
+    );
+  }
+}
+
+/**
+ * Validate every ref-like argument in a record; returns the first failure.
+ * Useful for compare_branches / get_changed_symbols which accept several
+ * refs at once.
+ */
+export function findUnsafeRef(
+  refs: Record<string, unknown>,
+): { name: string; value: unknown } | null {
+  for (const [name, value] of Object.entries(refs)) {
+    if (value === undefined || value === null) continue;
+    if (!isSafeGitRef(value)) return { name, value };
+  }
+  return null;
+}

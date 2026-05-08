@@ -4,10 +4,10 @@
  *
  * Performance: Single `git diff` call, single batch SQL for symbol lookup per file.
  */
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult } from '../../errors.js';
-import { safeGitEnv } from '../../utils/git-env.js';
+import { findUnsafeRef, isSafeGitRef, safeGitEnv } from '../../utils/git-env.js';
 
 type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
 
@@ -54,15 +54,26 @@ function detectBaseBranch(
   until: string,
   defaultBaseBranch?: string,
 ): TraceMcpResult<string> {
+  // `until` is already validated by the caller; defend against accidental
+  // misuse if a future caller wires it up wrong.
+  if (!isSafeGitRef(until)) {
+    return err({
+      code: 'VALIDATION_ERROR',
+      message: `Invalid "until" ref: ${JSON.stringify(until)}.`,
+    });
+  }
+
   const candidates = defaultBaseBranch ? [defaultBaseBranch] : ['main', 'master'];
 
   for (const candidate of candidates) {
+    if (!isSafeGitRef(candidate)) continue;
     try {
-      const mergeBase = execSync(`git merge-base ${candidate} ${until}`, {
+      const mergeBase = execFileSync('git', ['merge-base', candidate, until], {
         cwd: rootPath,
         encoding: 'utf-8',
         timeout: 10_000,
         env: safeGitEnv(),
+        stdio: 'pipe',
       }).trim();
       return ok(mergeBase);
     } catch {
@@ -88,6 +99,22 @@ export function getChangedSymbols(
 ): TraceMcpResult<ChangedSymbolsResult> {
   const until = opts.until ?? 'HEAD';
 
+  // Reject hostile ref strings before they hit any subprocess. The previous
+  // implementation interpolated `since`/`until` into a shell command via
+  // execSync, so `; rm -rf /;` was a real vector. We now use execFileSync
+  // and require refs to match a strict whitelist.
+  const unsafe = findUnsafeRef({
+    since: opts.since,
+    until,
+    defaultBaseBranch: opts.defaultBaseBranch,
+  });
+  if (unsafe) {
+    return err({
+      code: 'VALIDATION_ERROR',
+      message: `Invalid git ref for "${unsafe.name}": ${JSON.stringify(unsafe.value)}.`,
+    });
+  }
+
   // Auto-detect base branch when `since` is omitted
   let since: string;
   if (opts.since) {
@@ -98,15 +125,18 @@ export function getChangedSymbols(
     since = detected.value;
   }
 
+  const range = `${since}..${until}`;
+
   // Get list of changed files with their status
   let diffNameStatus: string;
   try {
-    diffNameStatus = execSync(`git diff --name-status --diff-filter=AMRD ${since}..${until}`, {
+    diffNameStatus = execFileSync('git', ['diff', '--name-status', '--diff-filter=AMRD', range], {
       cwd: rootPath,
       encoding: 'utf-8',
       maxBuffer: 10 * 1024 * 1024,
       timeout: 15_000,
       env: safeGitEnv(),
+      stdio: 'pipe',
     }).trim();
   } catch (e) {
     return err({
@@ -138,12 +168,13 @@ export function getChangedSymbols(
   // Get unified diff with line numbers for modified files
   let diffUnified = '';
   try {
-    diffUnified = execSync(`git diff --unified=0 ${since}..${until}`, {
+    diffUnified = execFileSync('git', ['diff', '--unified=0', range], {
       cwd: rootPath,
       encoding: 'utf-8',
       maxBuffer: 50 * 1024 * 1024,
       timeout: 30_000,
       env: safeGitEnv(),
+      stdio: 'pipe',
     });
   } catch {
     // Non-fatal — we can still report file-level changes
@@ -312,17 +343,30 @@ export function compareBranches(
 ): TraceMcpResult<BranchComparisonResult> {
   const branch = opts.branch;
 
+  const unsafe = findUnsafeRef({
+    branch,
+    base: opts.base,
+    defaultBaseBranch: opts.defaultBaseBranch,
+  });
+  if (unsafe) {
+    return err({
+      code: 'VALIDATION_ERROR',
+      message: `Invalid git ref for "${unsafe.name}": ${JSON.stringify(unsafe.value)}.`,
+    });
+  }
+
   // Resolve base branch: explicit > config > auto-detect main/master
   let base: string;
   let mergeBase: string;
   if (opts.base) {
     base = opts.base;
     try {
-      mergeBase = execSync(`git merge-base ${base} ${branch}`, {
+      mergeBase = execFileSync('git', ['merge-base', base, branch], {
         cwd: rootPath,
         encoding: 'utf-8',
         timeout: 10_000,
         env: safeGitEnv(),
+        stdio: 'pipe',
       }).trim();
     } catch (e) {
       return err({
@@ -340,11 +384,12 @@ export function compareBranches(
   // Count commits in range
   let commitCount = 0;
   try {
-    const countOutput = execSync(`git rev-list --count ${mergeBase}..${branch}`, {
+    const countOutput = execFileSync('git', ['rev-list', '--count', `${mergeBase}..${branch}`], {
       cwd: rootPath,
       encoding: 'utf-8',
       timeout: 10_000,
       env: safeGitEnv(),
+      stdio: 'pipe',
     }).trim();
     commitCount = parseInt(countOutput, 10) || 0;
   } catch {
