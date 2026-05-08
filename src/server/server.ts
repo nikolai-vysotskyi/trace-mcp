@@ -46,6 +46,7 @@ import { registerRefactoringTools } from '../tools/register/refactoring.js';
 import { registerSessionTools } from '../tools/register/session.js';
 import { withHints } from '../tools/shared/hints.js';
 import { TopologyStore } from '../topology/topology-db.js';
+import { sanitizeValue } from '../utils/mcp-sanitize.js';
 import { validatePath } from '../utils/security.js';
 import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
@@ -53,9 +54,12 @@ import { buildInstructions } from './instructions.js';
 import { installToolGate } from './tool-gate.js';
 import type { MetaContext, ServerContext } from './types.js';
 
-/** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response */
+/** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response.
+ * Every string in the payload is run through {@link sanitizeValue} first to defuse
+ * prompt-injection delivered through indexed source code (synthetic framing tags,
+ * U+2028/U+2029, raw C0 controls). */
 function j(value: unknown): string {
-  return JSON.stringify(value, (_key, val) =>
+  return JSON.stringify(sanitizeValue(value), (_key, val) =>
     val === null || val === undefined ? undefined : val,
   );
 }
