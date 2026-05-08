@@ -37,7 +37,29 @@ export interface IndexingResult {
   errors: number;
   durationMs: number;
   incremental?: boolean;
+  /**
+   * Set when a full reindex shrunk the symbol or edge count by more than
+   * SHRINK_THRESHOLD. graphify v0.5.0 hit this same hazard: an `--update`
+   * could silently overwrite a healthy graph with a degenerate one because
+   * a parser regression caused half the files to fail. Fail loud, do not
+   * fail silent — callers can re-run with `force=true` after investigating.
+   */
+  shrinkWarning?: {
+    beforeSymbols: number;
+    afterSymbols: number;
+    beforeEdges: number;
+    afterEdges: number;
+    reason: string;
+  };
 }
+
+/** A full rebuild that drops more than this fraction of symbols or edges
+ * triggers a shrink warning. Tuned to catch real regressions without firing
+ * on legitimate large refactors. */
+const SHRINK_THRESHOLD = 0.5;
+/** Below this absolute symbol count the shrink check is skipped — empty /
+ * tiny indexes naturally fluctuate. */
+const SHRINK_MIN_BASELINE = 200;
 
 /**
  * Read the current git HEAD SHA for a repo. Returns null when the path isn't a
@@ -102,6 +124,10 @@ export class IndexingPipeline {
     const result = this._lock.then(async () => {
       this._isIncremental = false;
       const start = Date.now();
+      // Snapshot the existing index size so runPipeline can detect a
+      // catastrophic shrink (e.g. parser regression dropping half the files
+      // silently). Skip when force=true — caller has acknowledged the risk.
+      const before = force ? null : this.captureSizeSnapshot();
       if (this.config.children?.length) {
         this.workspaces = buildMultiRootWorkspaces(this.rootPath, this.config.children);
         logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Multi-root workspaces');
@@ -112,10 +138,56 @@ export class IndexingPipeline {
         }
       }
       const filePaths = await this.collectFiles();
-      return this.runPipeline(filePaths, force ?? false, start);
+      const r = await this.runPipeline(filePaths, force ?? false, start);
+      if (before) this.checkShrink(before, r);
+      return r;
     });
     this._lock = result.catch(() => {});
     return result as Promise<IndexingResult>;
+  }
+
+  /** Snapshot the current symbol / edge count to compare against after a
+   * full reindex. Returns null when the index is empty or below the baseline
+   * threshold — at that size the shrink check is statistically meaningless. */
+  private captureSizeSnapshot(): { symbols: number; edges: number } | null {
+    try {
+      const stats = this.store.getStats();
+      if (stats.totalSymbols < SHRINK_MIN_BASELINE) return null;
+      return { symbols: stats.totalSymbols, edges: stats.totalEdges };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Compare post-index counts to the pre-index snapshot and attach a warning
+   * to the result if symbols or edges dropped by more than SHRINK_THRESHOLD.
+   * The DB is not rolled back — graphify's approach is "warn loudly, let the
+   * caller re-run with force"; ours is the same. */
+  private checkShrink(before: { symbols: number; edges: number }, result: IndexingResult): void {
+    try {
+      const stats = this.store.getStats();
+      const symbolRatio = stats.totalSymbols / before.symbols;
+      const edgeRatio = before.edges > 0 ? stats.totalEdges / before.edges : 1;
+      if (symbolRatio < 1 - SHRINK_THRESHOLD || edgeRatio < 1 - SHRINK_THRESHOLD) {
+        const reason =
+          symbolRatio < edgeRatio
+            ? `symbols dropped from ${before.symbols} to ${stats.totalSymbols} (${Math.round(symbolRatio * 100)}%)`
+            : `edges dropped from ${before.edges} to ${stats.totalEdges} (${Math.round(edgeRatio * 100)}%)`;
+        result.shrinkWarning = {
+          beforeSymbols: before.symbols,
+          afterSymbols: stats.totalSymbols,
+          beforeEdges: before.edges,
+          afterEdges: stats.totalEdges,
+          reason,
+        };
+        logger.warn(
+          { before, after: stats, reason },
+          'Indexing produced a much smaller graph — possible parser regression. Re-run with force=true after investigating.',
+        );
+      }
+    } catch (e) {
+      logger.debug({ error: e }, 'Shrink check skipped');
+    }
   }
 
   deleteFiles(filePaths: string[]): void {
