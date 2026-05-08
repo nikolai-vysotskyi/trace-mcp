@@ -844,6 +844,56 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
     },
   );
 
+  // --- Graph Snapshots (compare graph state over time) ---
+
+  server.tool(
+    'snapshot_graph',
+    'Capture the current graph shape (file/symbol counts, edges by type, top in-degree files, communities, exported symbols) under a named label. Use as a checkpoint before/after a refactor; later compare with diff_graph_snapshots. Mutates a single graph_snapshots row; idempotent (re-stamps if name exists). Returns JSON: { id, name, captured_at, summary }.',
+    {
+      name: z
+        .string()
+        .min(1)
+        .max(128)
+        .describe('Stable label for the snapshot, e.g. "before-refactor" or "v1.2.0".'),
+    },
+    async ({ name }) => {
+      const { captureSnapshot } = await import('../analysis/graph-snapshot.js');
+      const result = captureSnapshot(store, name);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  server.tool(
+    'list_graph_snapshots',
+    'List previously captured graph snapshots, most recent first. Each entry includes its summary so you can inspect counts without diffing. Read-only. Returns JSON: { snapshots: [{ id, name, captured_at, summary }], total }.',
+    {},
+    async () => {
+      const { listSnapshots } = await import('../analysis/graph-snapshot.js');
+      const snapshots = listSnapshots(store);
+      return { content: [{ type: 'text', text: j({ snapshots, total: snapshots.length }) }] };
+    },
+  );
+
+  server.tool(
+    'diff_graph_snapshots',
+    'Compare two named graph snapshots and report deltas in counts, communities, and top in-degree files. Use to track graph evolution over time without git as the axis (e.g. before/after a refactor, week-over-week health). Read-only. Returns JSON: { base, head, files, symbols, symbols_by_kind, edges_by_type, exported_symbols, communities, top_files }.',
+    {
+      base: z.string().min(1).max(128).describe('Snapshot name to compare from.'),
+      head: z.string().min(1).max(128).describe('Snapshot name to compare to.'),
+    },
+    async ({ base, head }) => {
+      const { diffSnapshots } = await import('../analysis/graph-snapshot.js');
+      const result = diffSnapshots(store, base, head);
+      if (!result) {
+        return {
+          content: [{ type: 'text', text: j({ error: 'one or both snapshots not found' }) }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
   // --- Graph Export (GraphML / Cypher / Obsidian) ---
 
   server.tool(
