@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ensureGlobalDirs, projectHash, TRACE_MCP_HOME } from '../global.js';
 import { logger } from '../logger.js';
+import { atomicWriteJson } from '../utils/atomic-write.js';
 
 const SESSIONS_DIR = path.join(TRACE_MCP_HOME, 'sessions');
 
@@ -76,7 +77,7 @@ function saveSessions(projectRoot: string, sessions: SessionSummary[]): void {
     const filePath = getSessionsPath(projectRoot);
     // Keep only the most recent sessions
     const trimmed = sessions.slice(-MAX_SESSIONS);
-    fs.writeFileSync(filePath, JSON.stringify(trimmed, null, 2));
+    atomicWriteJson(filePath, trimmed, { trailingNewline: false });
   } catch (e) {
     logger.warn({ error: e }, 'Failed to save session summary');
   }

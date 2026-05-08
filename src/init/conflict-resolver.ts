@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { atomicWriteJson } from '../utils/atomic-write.js';
 import type { Conflict } from './conflict-detector.js';
 
 type FixAction = 'removed' | 'disabled' | 'cleaned' | 'skipped';
@@ -260,7 +261,7 @@ function fixHookInSettings(conflict: Conflict, opts: { dryRun?: boolean }): FixR
       };
     }
 
-    fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+    atomicWriteJson(settingsPath, settings);
     return {
       conflictId: conflict.id,
       action: 'removed',

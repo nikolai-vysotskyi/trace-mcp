@@ -17,6 +17,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
+import { atomicWriteJson } from './utils/atomic-write.js';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -68,7 +69,7 @@ function loadManifest(): BundleManifest {
 
 function saveManifest(manifest: BundleManifest): void {
   ensureBundlesDir();
-  fs.writeFileSync(getManifestPath(), `${JSON.stringify(manifest, null, 2)}\n`);
+  atomicWriteJson(getManifestPath(), manifest);
 }
 
 // ---------------------------------------------------------------------------

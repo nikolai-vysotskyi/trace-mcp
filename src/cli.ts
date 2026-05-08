@@ -66,6 +66,7 @@ import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
+import { atomicWriteJson } from './utils/atomic-write.js';
 
 /**
  * Resolve DB path for a project:
@@ -1825,7 +1826,7 @@ program
             if (value !== undefined) merged[key] = value;
           }
           ensureGlobalDirs();
-          fs.writeFileSync(GLOBAL_CONFIG_PATH, JSON.stringify(merged, null, 2));
+          atomicWriteJson(GLOBAL_CONFIG_PATH, merged);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'updated', settings: merged }));
         } catch (e) {

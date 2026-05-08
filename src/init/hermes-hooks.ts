@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import YAML from 'yaml';
+import { atomicWriteJson } from '../utils/atomic-write.js';
 import type { InitStepResult } from './types.js';
 
 const HERMES_GUARD_VERSION = '0.1.1';
@@ -310,18 +311,7 @@ function writeAllowlistAtomic(p: string, data: AllowlistFile): void {
   // We skip the flock Hermes uses cross-process — init is a one-shot write
   // and the blast radius of a rare race is "user re-runs init".
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.${process.pid}.tmp`;
-  try {
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-    fs.renameSync(tmp, p);
-  } catch (e) {
-    try {
-      fs.unlinkSync(tmp);
-    } catch {
-      /* best-effort */
-    }
-    throw e;
-  }
+  atomicWriteJson(p, data, { trailingNewline: false });
 }
 
 type MatchKind = 'exact' | 'stale' | 'none';

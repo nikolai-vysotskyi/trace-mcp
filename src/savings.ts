@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
+import { atomicWriteJson } from './utils/atomic-write.js';
 
 export const SAVINGS_PATH = path.join(TRACE_MCP_HOME, 'savings.json');
 
@@ -294,11 +295,8 @@ export function loadPersistentSavings(): PersistentSavings | null {
   }
 }
 
-/** Atomic write of persistent savings. */
 function savePersistentSavings(data: PersistentSavings): void {
-  const tmpPath = `${SAVINGS_PATH}.tmp`;
-  fs.writeFileSync(tmpPath, `${JSON.stringify(data, null, 2)}\n`);
-  fs.renameSync(tmpPath, SAVINGS_PATH);
+  atomicWriteJson(SAVINGS_PATH, data);
 }
 
 /**

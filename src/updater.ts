@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureGlobalDirs, getDbPath, TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
+import { atomicWriteJson } from './utils/atomic-write.js';
 
 declare const PKG_VERSION_INJECTED: string;
 const CURRENT_VERSION =
@@ -100,7 +101,7 @@ function readCache(): UpdateCache | null {
 
 function writeCache(cache: UpdateCache): void {
   try {
-    fs.writeFileSync(UPDATE_CACHE_PATH, JSON.stringify(cache));
+    atomicWriteJson(UPDATE_CACHE_PATH, cache, { indent: 0, trailingNewline: false });
   } catch {}
 }
 

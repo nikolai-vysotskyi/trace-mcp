@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { atomicWriteJson } from '../utils/atomic-write.js';
 import type { InitStepResult } from './types.js';
 import {
   GUARD_HOOK_VERSION,
@@ -196,7 +197,7 @@ function readSettings(filePath: string): Record<string, unknown> {
 
 function writeSettings(filePath: string, settings: Record<string, unknown>): void {
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, `${JSON.stringify(settings, null, 2)}\n`);
+  atomicWriteJson(filePath, settings);
 }
 
 function addHookEntry(settings: Record<string, unknown>, desc: HookDescriptor, dest: string): void {
