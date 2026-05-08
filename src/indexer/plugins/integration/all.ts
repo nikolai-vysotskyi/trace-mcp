@@ -31,6 +31,8 @@ import { RawSqlPlugin } from './orm/raw-sql/index.js';
 import { SequelizePlugin } from './orm/sequelize/index.js';
 import { SQLAlchemyPlugin } from './orm/sqlalchemy/index.js';
 import { TypeORMPlugin } from './orm/typeorm/index.js';
+// --- messaging ---
+import { KafkaPlugin } from './messaging/kafka/index.js';
 // --- realtime ---
 import { SocketIoPlugin } from './realtime/socketio/index.js';
 // --- state ---
@@ -150,6 +152,8 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new ClassValidatorPlugin(),
     // state
     new ZustandReduxPlugin(),
+    // messaging
+    new KafkaPlugin(),
     // realtime
     new SocketIoPlugin(),
     // testing
