@@ -15,17 +15,29 @@ import type { LookupAddress } from 'node:dns';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 
-/** Blocked IPv4 CIDRs. Each tuple is [ip-as-bigint-style-number, prefix]. */
-const BLOCKED_V4_CIDRS: ReadonlyArray<[string, number]> = [
-  ['0.0.0.0', 8], // "this network" / unspecified
+/**
+ * IPv4 CIDRs that are private but represent a "user's own network" — those
+ * become allowed when `allowPrivateNetworks: true`. Includes RFC 1918, RFC
+ * 6598 (CGN / Tailscale), and loopback.
+ */
+const PRIVATE_OWN_NETWORK_V4_CIDRS: ReadonlyArray<[string, number]> = [
   ['10.0.0.0', 8], // RFC 1918 private
-  ['100.64.0.0', 10], // RFC 6598 CGN — graphify v0.7.9 advisory
+  ['100.64.0.0', 10], // RFC 6598 CGN — Tailscale, mempalace #1225
   ['127.0.0.0', 8], // loopback
-  ['169.254.0.0', 16], // link-local — AWS / GCP / Azure metadata
   ['172.16.0.0', 12], // RFC 1918 private
+  ['192.168.0.0', 16], // RFC 1918 private
+];
+
+/**
+ * IPv4 CIDRs that are blocked unconditionally — even with
+ * `allowPrivateNetworks: true`. Cloud metadata (link-local), unspecified,
+ * test/benchmark/multicast/reserved blocks remain off-limits.
+ */
+const ALWAYS_BLOCKED_V4_CIDRS: ReadonlyArray<[string, number]> = [
+  ['0.0.0.0', 8], // "this network" / unspecified
+  ['169.254.0.0', 16], // link-local — AWS / GCP / Azure metadata
   ['192.0.0.0', 24], // IETF protocol assignments
   ['192.0.2.0', 24], // TEST-NET-1
-  ['192.168.0.0', 16], // RFC 1918 private
   ['198.18.0.0', 15], // benchmarking
   ['198.51.100.0', 24], // TEST-NET-2
   ['203.0.113.0', 24], // TEST-NET-3
@@ -33,12 +45,21 @@ const BLOCKED_V4_CIDRS: ReadonlyArray<[string, number]> = [
   ['240.0.0.0', 4], // reserved + broadcast
 ];
 
-/** Blocked IPv6 prefixes (lowercased, no zone id). */
-const BLOCKED_V6_PREFIXES: ReadonlyArray<string> = [
-  '::1', // loopback
-  '::', // unspecified
+/**
+ * IPv6 prefixes that represent a "user's own network" — ULA only here. The
+ * loopback `::1` is handled by exact match in `isBlockedV6` (a startsWith
+ * check would incorrectly catch `::` too).
+ */
+const PRIVATE_OWN_NETWORK_V6_PREFIXES: ReadonlyArray<string> = [
   'fc', // fc00::/7 — unique local
-  'fd', // fc00::/7 — unique local (second nibble)
+  'fd',
+];
+
+/**
+ * IPv6 prefixes blocked unconditionally (link-local metadata, multicast). The
+ * unspecified `::` is handled by exact match in `isBlockedV6`.
+ */
+const ALWAYS_BLOCKED_V6_PREFIXES: ReadonlyArray<string> = [
   'fe8', // fe80::/10 — link-local
   'fe9',
   'fea',
@@ -59,10 +80,8 @@ function ipv4ToInt(ip: string): number | null {
   return n >>> 0;
 }
 
-function isBlockedV4(ip: string): boolean {
-  const n = ipv4ToInt(ip);
-  if (n === null) return true; // malformed — fail closed
-  for (const [base, prefix] of BLOCKED_V4_CIDRS) {
+function matchesV4Cidr(n: number, cidrs: ReadonlyArray<[string, number]>): boolean {
+  for (const [base, prefix] of cidrs) {
     const baseInt = ipv4ToInt(base);
     if (baseInt === null) continue;
     const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
@@ -71,15 +90,50 @@ function isBlockedV4(ip: string): boolean {
   return false;
 }
 
-function isBlockedV6(ip: string): boolean {
+function isBlockedV4(ip: string, allowPrivate = false): boolean {
+  const n = ipv4ToInt(ip);
+  if (n === null) return true; // malformed — fail closed
+  if (matchesV4Cidr(n, ALWAYS_BLOCKED_V4_CIDRS)) return true;
+  if (!allowPrivate && matchesV4Cidr(n, PRIVATE_OWN_NETWORK_V4_CIDRS)) return true;
+  return false;
+}
+
+/**
+ * Decode an `::ffff:a.b.c.d` IPv4-mapped IPv6 to its IPv4 dotted form. Node's
+ * URL parser may canonicalise either as `::ffff:127.0.0.1` (dotted) or as
+ * `::ffff:7f00:1` (hex), so handle both.
+ */
+function ipv4MappedToV4(cleaned: string): string | null {
+  const dotted = cleaned.match(/^::ffff:([\d.]+)$/);
+  if (dotted) return dotted[1];
+  const hex = cleaned.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1], 16);
+    const lo = parseInt(hex[2], 16);
+    if (Number.isFinite(hi) && Number.isFinite(lo) && hi <= 0xffff && lo <= 0xffff) {
+      return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+    }
+  }
+  return null;
+}
+
+function isBlockedV6(ip: string, allowPrivate = false): boolean {
   // Strip zone identifier (e.g. `%eth0`) and lowercase.
   const cleaned = ip.split('%')[0].toLowerCase();
-  if (cleaned === '::1' || cleaned === '::' || cleaned === '0:0:0:0:0:0:0:0') return true;
-  // IPv4-mapped (::ffff:a.b.c.d) — recurse into IPv4 check
-  const v4Match = cleaned.match(/^::ffff:([\d.]+)$/);
-  if (v4Match) return isBlockedV4(v4Match[1]);
-  for (const prefix of BLOCKED_V6_PREFIXES) {
+  // Unspecified always blocked (cannot be "user's own network")
+  if (cleaned === '::' || cleaned === '0:0:0:0:0:0:0:0') return true;
+  // Loopback — private own-network: blocked unless allowPrivate=true
+  if (cleaned === '::1') return !allowPrivate;
+  // IPv4-mapped (::ffff:a.b.c.d / ::ffff:HEX:HEX) — recurse into IPv4 check
+  const mappedV4 = ipv4MappedToV4(cleaned);
+  if (mappedV4 !== null) return isBlockedV4(mappedV4, allowPrivate);
+  for (const prefix of ALWAYS_BLOCKED_V6_PREFIXES) {
     if (cleaned.startsWith(prefix)) return true;
+  }
+  if (!allowPrivate) {
+    for (const prefix of PRIVATE_OWN_NETWORK_V6_PREFIXES) {
+      if (cleaned.startsWith(prefix)) return true;
+    }
   }
   return false;
 }
@@ -93,6 +147,15 @@ export interface SsrfGuardOptions {
    * Default false.
    */
   skipDns?: boolean;
+  /**
+   * Opt-in: treat RFC 1918 private space, RFC 6598 CGN (Tailscale), loopback,
+   * and IPv6 ULA as allowed. Useful when the URL is a deliberately configured
+   * local LLM endpoint (Ollama on a Tailscale homelab, LM Studio on
+   * 192.168.x.x, llama.cpp on 127.0.0.1). Link-local (cloud-metadata),
+   * unspecified (0.0.0.0), test/multicast/reserved blocks remain blocked even
+   * when this is true. Default false.
+   */
+  allowPrivateNetworks?: boolean;
 }
 
 export interface SsrfGuardResult {
@@ -115,6 +178,7 @@ export async function checkOutboundUrl(
   opts: SsrfGuardOptions = {},
 ): Promise<SsrfGuardResult> {
   const allowSchemes = opts.allowSchemes ?? DEFAULT_SCHEMES;
+  const allowPrivate = opts.allowPrivateNetworks ?? false;
 
   let parsed: URL;
   try {
@@ -133,11 +197,13 @@ export async function checkOutboundUrl(
 
   const literal = net.isIP(host);
   if (literal === 4) {
-    if (isBlockedV4(host)) return { ok: false, reason: `Private/loopback IPv4: ${host}` };
+    if (isBlockedV4(host, allowPrivate))
+      return { ok: false, reason: `Private/loopback IPv4: ${host}` };
     return { ok: true, resolvedIp: host };
   }
   if (literal === 6) {
-    if (isBlockedV6(host)) return { ok: false, reason: `Private/loopback IPv6: ${host}` };
+    if (isBlockedV6(host, allowPrivate))
+      return { ok: false, reason: `Private/loopback IPv6: ${host}` };
     return { ok: true, resolvedIp: host };
   }
 
@@ -160,10 +226,10 @@ export async function checkOutboundUrl(
   }
 
   for (const a of addrs) {
-    if (a.family === 4 && isBlockedV4(a.address)) {
+    if (a.family === 4 && isBlockedV4(a.address, allowPrivate)) {
       return { ok: false, reason: `Host ${host} resolves to private IPv4 ${a.address}` };
     }
-    if (a.family === 6 && isBlockedV6(a.address)) {
+    if (a.family === 6 && isBlockedV6(a.address, allowPrivate)) {
       return { ok: false, reason: `Host ${host} resolves to private IPv6 ${a.address}` };
     }
   }
@@ -179,6 +245,7 @@ export async function checkOutboundUrl(
  */
 export function checkOutboundUrlSync(url: string, opts: SsrfGuardOptions = {}): SsrfGuardResult {
   const allowSchemes = opts.allowSchemes ?? DEFAULT_SCHEMES;
+  const allowPrivate = opts.allowPrivateNetworks ?? false;
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -192,10 +259,10 @@ export function checkOutboundUrlSync(url: string, opts: SsrfGuardOptions = {}): 
   if (host === '') return { ok: false, reason: 'Empty host' };
 
   const literal = net.isIP(host);
-  if (literal === 4 && isBlockedV4(host)) {
+  if (literal === 4 && isBlockedV4(host, allowPrivate)) {
     return { ok: false, reason: `Private/loopback IPv4: ${host}` };
   }
-  if (literal === 6 && isBlockedV6(host)) {
+  if (literal === 6 && isBlockedV6(host, allowPrivate)) {
     return { ok: false, reason: `Private/loopback IPv6: ${host}` };
   }
   return { ok: true, resolvedIp: literal ? host : undefined };

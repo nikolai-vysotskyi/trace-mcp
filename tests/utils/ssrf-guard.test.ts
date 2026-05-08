@@ -54,6 +54,40 @@ describe('checkOutboundUrlSync — literal-IP shape checks', () => {
   });
 });
 
+describe('checkOutboundUrlSync — allowPrivateNetworks opt-in', () => {
+  it('accepts loopback / RFC 1918 / Tailscale CGN when explicitly allowed', () => {
+    const opts = { allowPrivateNetworks: true };
+    // typical local LLM endpoints
+    expect(checkOutboundUrlSync('http://127.0.0.1:11434/', opts).ok).toBe(true);
+    expect(checkOutboundUrlSync('http://192.168.1.50:1234/', opts).ok).toBe(true);
+    expect(checkOutboundUrlSync('http://10.0.0.20:8080/', opts).ok).toBe(true);
+    // Tailscale homelab — mempalace #1225
+    expect(checkOutboundUrlSync('http://100.64.0.5:11434/', opts).ok).toBe(true);
+    // IPv6 ULA + loopback
+    expect(checkOutboundUrlSync('http://[::1]/', opts).ok).toBe(true);
+    expect(checkOutboundUrlSync('http://[fc00::1]/', opts).ok).toBe(true);
+  });
+
+  it('still blocks cloud-metadata link-local even with allowPrivateNetworks', () => {
+    const opts = { allowPrivateNetworks: true };
+    expect(checkOutboundUrlSync('http://169.254.169.254/', opts).ok).toBe(false);
+    expect(checkOutboundUrlSync('http://[fe80::1]/', opts).ok).toBe(false);
+  });
+
+  it('still blocks unspecified, multicast, and reserved blocks', () => {
+    const opts = { allowPrivateNetworks: true };
+    expect(checkOutboundUrlSync('http://0.0.0.0/', opts).ok).toBe(false);
+    expect(checkOutboundUrlSync('http://224.0.0.1/', opts).ok).toBe(false);
+    expect(checkOutboundUrlSync('http://240.0.0.1/', opts).ok).toBe(false);
+    expect(checkOutboundUrlSync('http://198.51.100.1/', opts).ok).toBe(false);
+  });
+
+  it('still blocks non-http schemes even with allowPrivateNetworks', () => {
+    const opts = { allowPrivateNetworks: true };
+    expect(checkOutboundUrlSync('file:///etc/passwd', opts).ok).toBe(false);
+  });
+});
+
 describe('checkOutboundUrl — async with DNS', () => {
   it('rejects literal private IPs without doing DNS', async () => {
     const r = await checkOutboundUrl('http://127.0.0.1/');
