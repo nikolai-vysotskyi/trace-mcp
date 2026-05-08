@@ -14,6 +14,7 @@ import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { safeGitEnv } from '../utils/git-env.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
+import { hashContent } from '../utils/hasher.js';
 import { validatePath } from '../utils/security.js';
 import { findPackageJsonEntries } from './package-entries.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
@@ -297,6 +298,73 @@ export class IndexingPipeline {
     return result;
   }
 
+  /**
+   * Pre-pass: detect file renames by content hash. When a path on disk has
+   * no matching DB row but its content hash matches a DB row whose old path
+   * no longer exists on disk, treat it as a rename — atomically update the
+   * file row's path and skip extraction. Inspired by graphify v0.7.0's move
+   * to content-only cache keys.
+   *
+   * Returns the count of detected renames. Mutates the DB and the
+   * `existingFiles` lookup so the caller can re-load it.
+   */
+  private detectRenames(
+    relPaths: string[],
+    existingFiles: Map<string, import('../db/types.js').FileRow>,
+  ): number {
+    // Files in DB whose path is not in the current scan list — candidates
+    // for "old name of a renamed file".
+    const onDiskSet = new Set(relPaths);
+    const orphans = this.store.getAllFiles().filter((f) => {
+      if (!f.content_hash) return false;
+      if (onDiskSet.has(f.path)) return false;
+      // Defensive: only consider rows whose old path actually no longer exists
+      // on disk. A second snapshot could otherwise mistakenly rename a row
+      // whose original file was simply excluded from this batch.
+      const abs = path.resolve(this.rootPath, f.path);
+      return !fs.existsSync(abs);
+    });
+    if (orphans.length === 0) return 0;
+
+    // Index orphans by hash for O(1) lookup. A given hash may appear under
+    // multiple orphans (legitimate identical files that were all moved); we
+    // keep them in an array and pick the first available match per new path.
+    const orphansByHash = new Map<string, import('../db/types.js').FileRow[]>();
+    for (const o of orphans) {
+      const arr = orphansByHash.get(o.content_hash!) ?? [];
+      arr.push(o);
+      orphansByHash.set(o.content_hash!, arr);
+    }
+
+    let renamed = 0;
+    for (const relPath of relPaths) {
+      if (existingFiles.has(relPath)) continue; // already known under this path
+      const abs = path.resolve(this.rootPath, relPath);
+      let buf: Buffer;
+      try {
+        buf = fs.readFileSync(abs);
+      } catch {
+        continue; // unreadable file — leave for the normal error path
+      }
+      const hash = hashContent(buf);
+      const candidates = orphansByHash.get(hash);
+      if (!candidates || candidates.length === 0) continue;
+
+      const orphan = candidates.shift()!;
+      // Carry the existing row over to the new path. All FK references
+      // (symbols, edges, nodes) keep their connection because the row id
+      // does not change.
+      this.store.updateFilePath(orphan.id, relPath);
+      existingFiles.set(relPath, { ...orphan, path: relPath });
+      renamed++;
+      logger.debug(
+        { from: orphan.path, to: relPath, hash: hash.slice(0, 8) },
+        'Detected rename — reused existing symbols',
+      );
+    }
+    return renamed;
+  }
+
   /** Pass 1: extract symbols from files and persist in batched transactions. */
   private async extractAndPersist(
     relPaths: string[],
@@ -305,7 +373,19 @@ export class IndexingPipeline {
   ): Promise<void> {
     // Preload all existing file rows in one IN-query so per-file extract()
     // calls hit a Map instead of issuing a SELECT each.
-    const existingFiles = this.store.getFilesByPaths(relPaths);
+    let existingFiles = this.store.getFilesByPaths(relPaths);
+
+    // Detect renames before extraction. Without this pass a refactor that
+    // moves N files to new paths re-extracts every byte, even though the
+    // content is identical to known DB rows. graphify v0.7.0 fixed the same
+    // wasted work by keying its cache on content alone.
+    const renamed = this.detectRenames(relPaths, existingFiles);
+    if (renamed > 0) {
+      // Renamed paths are now keyed under their new path in the DB; refresh
+      // the lookup map so the extractor sees them as "existing".
+      existingFiles = this.store.getFilesByPaths(relPaths);
+      logger.info({ renamed }, 'Detected renames — reused existing symbols');
+    }
 
     // Force-include set: package.json#main/module/bin/exports must always be
     // indexed regardless of file-size cap. Without this, lodash-class

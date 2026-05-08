@@ -78,6 +78,17 @@ export class Store {
     this.files.updateFileHash(fileId, hash, byteLength, mtimeMs ?? null);
   }
 
+  /** Find files whose content_hash matches — used by rename detection. */
+  findFilesByContentHash(hash: string): FileRow[] {
+    return this.files.findFilesByContentHash(hash);
+  }
+
+  /** Atomically rename a file row, preserving its id so symbols / edges / nodes
+   * keep pointing at it. Caller must ensure the new path is unused. */
+  updateFilePath(fileId: number, newPath: string): void {
+    this.files.updateFilePath(fileId, newPath);
+  }
+
   updateFileStatus(fileId: number, status: string, frameworkRole?: string): void {
     this.files.updateFileStatus(fileId, status, frameworkRole ?? null);
   }
