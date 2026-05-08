@@ -21,6 +21,8 @@ interface SearchTextResult {
   files_searched: number;
   files_matched: number;
   truncated: boolean;
+  /** True when the wall-clock budget elapsed before all files were scanned. */
+  timed_out: boolean;
 }
 
 interface SearchTextOptions {
@@ -31,7 +33,16 @@ interface SearchTextOptions {
   maxResults?: number;
   contextLines?: number;
   caseSensitive?: boolean;
+  /**
+   * Wall-clock budget in milliseconds. Catastrophic-backtracking regexes
+   * cannot pin a worker for arbitrary time. Default: 2000 (2s). Set 0 to
+   * disable (not recommended on shared/public deployments).
+   */
+  timeoutMs?: number;
 }
+
+/** Default regex wall-clock budget. Mirrors jcodemunch v1.81.2 (2s). */
+const DEFAULT_TIMEOUT_MS = 2_000;
 
 /**
  * Full-text search across indexed files. Supports regex and glob file patterns.
@@ -52,7 +63,13 @@ export function searchText(
     maxResults = 50,
     contextLines = 0,
     caseSensitive = false,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
   } = opts;
+
+  const startMs = Date.now();
+  const budgetMs = Math.max(0, timeoutMs);
+  const budgetActive = budgetMs > 0;
+  const overBudget = () => budgetActive && Date.now() - startMs > budgetMs;
 
   if (!query || query.length === 0) {
     return err(validationError('query is required'));
@@ -90,10 +107,15 @@ export function searchText(
   let totalMatches = 0;
   let filesMatched = 0;
   let truncated = false;
+  let timedOut = false;
 
   for (const file of files) {
     if (matches.length >= maxResults) {
       truncated = true;
+      break;
+    }
+    if (overBudget()) {
+      timedOut = true;
       break;
     }
 
@@ -119,6 +141,13 @@ export function searchText(
     for (let i = 0; i < lines.length; i++) {
       if (matches.length >= maxResults) {
         truncated = true;
+        break;
+      }
+      // Cheap budget check every 64 lines: amortizes Date.now() cost while
+      // still catching catastrophic-backtracking regexes within ~milliseconds
+      // of the budget on a normal-sized file.
+      if (budgetActive && (i & 63) === 0 && overBudget()) {
+        timedOut = true;
         break;
       }
 
@@ -150,6 +179,7 @@ export function searchText(
     }
 
     if (fileHasMatch) filesMatched++;
+    if (timedOut) break;
   }
 
   return ok({
@@ -158,6 +188,7 @@ export function searchText(
     files_searched: files.length,
     files_matched: filesMatched,
     truncated,
+    timed_out: timedOut,
   });
 }
 

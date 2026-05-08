@@ -891,6 +891,15 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           'Lines of context before/after each match (default 0 — set higher if you need surrounding code)',
         ),
       case_sensitive: z.boolean().optional().describe('Case-sensitive search (default false)'),
+      timeout_ms: z
+        .number()
+        .int()
+        .min(0)
+        .max(30_000)
+        .optional()
+        .describe(
+          'Wall-clock budget in milliseconds. Catastrophic-backtracking regex cannot pin a worker beyond this. Default 2000. Set 0 to disable.',
+        ),
     },
     async ({
       query,
@@ -900,6 +909,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       max_results,
       context_lines,
       case_sensitive,
+      timeout_ms,
     }) => {
       const result = searchText(store, projectRoot, {
         query,
@@ -909,6 +919,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         maxResults: max_results,
         contextLines: context_lines,
         caseSensitive: case_sensitive,
+        timeoutMs: timeout_ms,
       });
       if (result.isErr())
         return {
