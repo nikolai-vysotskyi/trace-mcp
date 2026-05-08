@@ -126,30 +126,61 @@ function clientExists(client: ClientDir): boolean {
   return fs.existsSync(path.join(HOME, client.configDir));
 }
 
+/**
+ * Reject a candidate path that does not start with `installRoot` *and* does
+ * not consist solely of a basename inside an allowlisted hooks/ directory.
+ * Prevents `scriptName` containing `..` from escaping the hooks tree, and
+ * prevents `process.cwd()`-relative fallbacks from picking up a malicious
+ * script when trace-mcp init is run from a hostile working directory.
+ */
+function isWithin(parent: string, child: string): boolean {
+  const rel = path.relative(parent, child);
+  if (rel === '') return true;
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return false;
+  return true;
+}
+
+function isSafeFilename(basename: string): boolean {
+  // Reject path separators, parent-dir tokens, and absolute paths.
+  if (basename.length === 0 || basename.length > 200) return false;
+  if (basename.includes('/') || basename.includes('\\')) return false;
+  if (basename === '.' || basename === '..') return false;
+  if (path.isAbsolute(basename)) return false;
+  return true;
+}
+
 function findHookSource(scriptName: string): string {
+  if (!isSafeFilename(scriptName)) {
+    throw new Error(
+      `Refusing to install hook with unsafe script name: ${JSON.stringify(scriptName)}`,
+    );
+  }
   const filename = `${scriptName}${HOOK_EXT}`;
   const base = import.meta.dirname ?? '.';
-  const candidates = [
-    path.resolve(base, '..', '..', 'hooks', filename), // dev: src/init/ → ../../hooks
-    path.resolve(base, '..', 'hooks', filename), // bundled: dist/ → ../hooks
-    path.resolve(process.cwd(), 'hooks', filename),
+  // Only accept candidates that resolve inside the trace-mcp install tree.
+  // The previous implementation also fell back to `process.cwd()/hooks/`,
+  // which let a hostile working directory replace the script during init.
+  const installRoots = [
+    path.resolve(base, '..', '..'), // dev: src/init/ → repo root
+    path.resolve(base, '..'), // bundled: dist/ → install root
   ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
+  for (const root of installRoots) {
+    const candidate = path.resolve(root, 'hooks', filename);
+    if (!isWithin(root, candidate)) continue;
+    if (fs.existsSync(candidate)) return candidate;
   }
   throw new Error(`Could not find hooks/${filename} — trace-mcp installation may be corrupted.`);
 }
 
 /** Locate an aux hook file by basename (same search path as findHookSource). */
 function findAuxFile(basename: string): string | null {
+  if (!isSafeFilename(basename)) return null;
   const base = import.meta.dirname ?? '.';
-  const candidates = [
-    path.resolve(base, '..', '..', 'hooks', basename),
-    path.resolve(base, '..', 'hooks', basename),
-    path.resolve(process.cwd(), 'hooks', basename),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
+  const installRoots = [path.resolve(base, '..', '..'), path.resolve(base, '..')];
+  for (const root of installRoots) {
+    const candidate = path.resolve(root, 'hooks', basename);
+    if (!isWithin(root, candidate)) continue;
+    if (fs.existsSync(candidate)) return candidate;
   }
   return null;
 }
