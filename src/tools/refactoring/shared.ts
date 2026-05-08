@@ -104,6 +104,16 @@ export function writeLines(filePath: string, lines: string[]): void {
   fs.writeFileSync(filePath, lines.join('\n'), 'utf-8');
 }
 
+/**
+ * Normalize a file path to forward-slash form for cross-platform API
+ * consistency. Refactor tools must apply this to every path that flows
+ * into a public result (edits[].file, files_modified, warning strings)
+ * so callers see the same representation regardless of host OS.
+ */
+export function toPosix(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // SYMBOL / IMPORT HELPERS
 // ════════════════════════════════════════════════════════════════════════

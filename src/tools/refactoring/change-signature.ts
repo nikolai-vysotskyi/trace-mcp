@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import type { FileEdit, RefactorResult } from './shared.js';
-import { detectLanguage, readLines, writeLines } from './shared.js';
+import { detectLanguage, readLines, toPosix, writeLines } from './shared.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -179,7 +179,7 @@ export function changeSignature(
   // Record the edit for the definition
   const newDefLines = newDefRegion.split('\n');
   result.edits.push({
-    file: symbolFile.path,
+    file: toPosix(symbolFile.path),
     original_line: symbol.line_start,
     original_text: defRegion
       .split('\n')
@@ -193,9 +193,9 @@ export function changeSignature(
     // Replace the definition lines
     lines.splice(defStartIdx, symbol.line_end - defStartIdx, ...newDefLines);
     writeLines(filePath, lines);
-    result.files_modified.push(symbolFile.path);
+    result.files_modified.push(toPosix(symbolFile.path));
   } else {
-    result.files_modified.push(symbolFile.path);
+    result.files_modified.push(toPosix(symbolFile.path));
   }
 
   // 7. Find and update all call sites
@@ -482,7 +482,9 @@ function updateCallSites(
       const { args: callArgText, endLine, endCol } = extractCallArgs(lines, i, callStartCol);
 
       if (callArgText === null) {
-        result.warnings.push(`Could not parse call args at ${file.path}:${i + 1} — skipped`);
+        result.warnings.push(
+          `Could not parse call args at ${toPosix(file.path)}:${i + 1} — skipped`,
+        );
         continue;
       }
 
@@ -504,7 +506,7 @@ function updateCallSites(
         const newLine = `${before + newArgText})${after}`;
 
         result.edits.push({
-          file: file.path,
+          file: toPosix(file.path),
           original_line: i + 1,
           original_text: oldLine.trimStart(),
           new_text: newLine.trimStart(),
@@ -516,7 +518,7 @@ function updateCallSites(
         const firstLine = lines[i];
         const newFirstLine = `${firstLine.slice(0, callStartCol + 1) + newArgText})`;
         result.edits.push({
-          file: file.path,
+          file: toPosix(file.path),
           original_line: i + 1,
           original_text: lines
             .slice(i, endLine + 1)
@@ -534,7 +536,7 @@ function updateCallSites(
       if (!dryRun) {
         writeLines(filePath, lines);
       }
-      result.files.push(file.path);
+      result.files.push(toPosix(file.path));
     }
   }
 

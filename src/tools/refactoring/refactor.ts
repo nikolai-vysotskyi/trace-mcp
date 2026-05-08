@@ -22,6 +22,7 @@ import {
   type RefactorResult,
   readLines,
   SKIP_DIRS,
+  toPosix,
   writeLines,
 } from './shared.js';
 
@@ -106,7 +107,7 @@ export function applyRename(
         regex.lastIndex = 0;
         if (newLine !== line) {
           result.edits.push({
-            file: path.relative(projectRoot, filePath),
+            file: toPosix(path.relative(projectRoot, filePath)),
             original_line: i + 1,
             original_text: line.trimStart(),
             new_text: newLine.trimStart(),
@@ -122,7 +123,7 @@ export function applyRename(
       if (!dryRun) {
         writeLines(filePath, lines);
       }
-      modifiedFiles.add(path.relative(projectRoot, filePath));
+      modifiedFiles.add(toPosix(path.relative(projectRoot, filePath)));
     }
   }
 
@@ -248,7 +249,7 @@ export function removeDeadCode(
   // Record the edit
   const removedLines = lines.slice(actualStart, endLine);
   result.edits.push({
-    file: symbolFile.path,
+    file: toPosix(symbolFile.path),
     original_line: actualStart + 1,
     original_text: removedLines.map((l) => l.trimStart()).join('\n'),
     new_text: '(removed)',
@@ -283,15 +284,15 @@ export function removeDeadCode(
     const importers = getImportingFiles(store, symbol.file_id, projectRoot);
     if (importers.length > 0) {
       result.warnings.push(
-        `Removed the last exported symbol from ${symbolFile.path}. ` +
+        `Removed the last exported symbol from ${toPosix(symbolFile.path)}. ` +
           `${importers.length} file(s) still import from it — review for unused imports: ` +
-          importers.map((f) => path.relative(projectRoot, f.filePath)).join(', '),
+          importers.map((f) => toPosix(path.relative(projectRoot, f.filePath))).join(', '),
       );
     }
   }
 
   result.success = true;
-  result.files_modified = [symbolFile.path];
+  result.files_modified = [toPosix(symbolFile.path)];
 
   return result;
 }
