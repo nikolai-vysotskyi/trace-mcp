@@ -26,4 +26,17 @@ describe('EsModuleResolver', () => {
     expect(resolved).toBeDefined();
     expect(resolved).toContain('utils.ts');
   });
+
+  it('resolves @/* alias from a tsconfig.json with comments and trailing commas (JSONC)', () => {
+    // Regression: SvelteKit / NestJS / T3 / Astro / Vite scaffolds ship JSONC
+    // tsconfig.json files. Strict JSON.parse threw and the catch fell through
+    // to no-aliases — meaning every @/... and ~/... import was reported as
+    // an external package. This fixture reproduces that real-world shape.
+    const jsoncRoot = path.resolve(import.meta.dirname, '../fixtures/ts-project-jsonc');
+    const jsoncSrc = path.join(jsoncRoot, 'src');
+    const resolver = new EsModuleResolver(jsoncRoot);
+    const resolved = resolver.resolve('@/utils', path.join(jsoncSrc, 'index.ts'));
+    expect(resolved).toBeDefined();
+    expect(resolved).toContain('utils.ts');
+  });
 });
