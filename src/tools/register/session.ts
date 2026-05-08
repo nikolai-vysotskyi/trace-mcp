@@ -20,6 +20,7 @@ import { getCommunities } from '../analysis/communities.js';
 import { getPageRank } from '../analysis/graph-analysis.js';
 import { generateInsightsReport } from '../analysis/insights-report.js';
 import { getDeadExports, getUntestedExports } from '../analysis/introspect.js';
+import { getSurprises } from '../analysis/surprises.js';
 import { getHotspots } from '../git/git-analysis.js';
 import { planTurn } from '../navigation/plan-turn.js';
 import { listPresets } from '../project/presets.js';
@@ -178,6 +179,23 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
             text: j({ exports: exportsResult, untested: untestedResult }),
           },
         ],
+      };
+    },
+  );
+
+  server.resource(
+    'project-surprises',
+    'project://surprises',
+    {
+      mimeType: 'application/json',
+      description:
+        'Cross-module file edges ranked by how unexpected they look (top 20). Empty until detect_communities has been run.',
+    },
+    async () => {
+      const result = getSurprises(store, { topN: 20 });
+      const text = result.isOk() ? j(result.value) : j({ edges: [] });
+      return {
+        contents: [{ uri: 'project://surprises', mimeType: 'application/json', text }],
       };
     },
   );

@@ -4,6 +4,7 @@ import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
 import { detectCommunities, getCommunities, getCommunityDetail } from '../analysis/communities.js';
 import { getControlFlow } from '../analysis/control-flow.js';
+import { getSurprises } from '../analysis/surprises.js';
 import { generateDocs } from '../project/generate-docs.js';
 import { getPackageDeps } from '../project/package-deps.js';
 import { auditConfig } from '../quality/audit-config.js';
@@ -191,7 +192,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         ),
     },
     async ({ resolution, seed }) => {
-      const result = detectCommunities(store, resolution ?? 1.0, seed ?? 0);
+      const result = await detectCommunities(store, resolution ?? 1.0, seed ?? 0);
       if (result.isErr())
         return {
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],
@@ -220,6 +221,30 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
     { id: z.number().int().min(0).describe('Community ID') },
     async ({ id }) => {
       const result = getCommunityDetail(store, id);
+      if (result.isErr())
+        return {
+          content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+          isError: true,
+        };
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Surprising Connections ---
+  server.tool(
+    'get_surprises',
+    'Rank cross-module file edges by how unexpected they look (deep folder distance + popular target + few edges = high surprise). Surfaces hidden coupling that shotgun-changes through unrelated modules. Requires detect_communities to have been run first. Read-only. Returns JSON: { edges: [{ sourceFile, targetFile, surpriseScore, ... }], totalCommunities }.',
+    {
+      top_n: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe('Number of top surprising edges to return (default 20)'),
+    },
+    async ({ top_n }) => {
+      const result = getSurprises(store, { topN: top_n ?? 20 });
       if (result.isErr())
         return {
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],
