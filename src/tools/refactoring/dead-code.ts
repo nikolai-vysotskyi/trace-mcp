@@ -457,8 +457,13 @@ const ENTRY_FILE_PATTERNS: Array<{ re: RegExp; source: string }> = [
 ];
 
 /**
- * Read package.json `main` and `bin` entries (if present) and resolve to
- * absolute file paths under projectRoot.
+ * Read package.json `main`, `module`, `bin`, and `exports` entries (if
+ * present) and resolve to relative file paths under projectRoot.
+ *
+ * `exports` is the modern Node entry-point declaration and is the only
+ * authoritative entry list for ESM-first packages. Without it, dead-code
+ * reachability flags every public export of a modern npm package as dead.
+ * Mirrors the discovery side of jcodemunch v1.80.7 fix.
  */
 function readPackageEntries(projectRoot: string): {
   paths: Set<string>;
@@ -472,6 +477,8 @@ function readPackageEntries(projectRoot: string): {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     const add = (rel: string, src: string) => {
+      // Skip patterns we can't resolve to a single file (subpath wildcards)
+      if (rel.includes('*')) return;
       const norm = path.normalize(rel).replace(/\\/g, '/');
       paths.add(norm);
       sources[norm] = src;
@@ -484,10 +491,65 @@ function readPackageEntries(projectRoot: string): {
         if (typeof v === 'string') add(v, 'package_bin');
       }
     }
+    if (pkg.exports !== undefined) {
+      for (const target of collectExportsTargets(pkg.exports)) {
+        add(target, 'package_exports');
+      }
+    }
   } catch (e) {
     logger.warn({ err: e }, 'reachability: failed to parse package.json');
   }
   return { paths, sources };
+}
+
+/**
+ * Walk the `exports` field per the Node spec and yield concrete relative
+ * file paths. Handles:
+ *
+ * - String shorthand:                 `"exports": "./dist/index.js"`
+ * - Conditional at root:              `"exports": { "import": "...", "require": "..." }`
+ * - Subpath map:                      `"exports": { ".": "...", "./feat": "..." }`
+ * - Nested conditions:                `{ ".": { "import": { "default": "..." } } }`
+ * - Conditional arrays (fallbacks):   `"exports": [{ "import": "..." }, "./fallback.js"]`
+ *
+ * Wildcards (`./feature/*`) are skipped — they map to many files and aren't
+ * meaningful as entry-point seeds. Strings that don't begin with `./` or
+ * `/` are also skipped (they're package self-references, not file paths).
+ */
+export function collectExportsTargets(node: unknown): string[] {
+  const out: string[] = [];
+  visit(node);
+  return out;
+
+  function visit(n: unknown): void {
+    if (typeof n === 'string') {
+      if (n.startsWith('./') || n.startsWith('/')) out.push(n);
+      return;
+    }
+    if (Array.isArray(n)) {
+      // Per spec: arrays are ordered fallbacks. Yield every concrete entry
+      // because we don't know which condition will match at runtime.
+      for (const item of n) visit(item);
+      return;
+    }
+    if (n && typeof n === 'object') {
+      const obj = n as Record<string, unknown>;
+      // If keys look like subpaths (start with "."), recurse into each value.
+      // Otherwise this is a conditions object (import/require/default/...) —
+      // recurse into every condition for the same reason as arrays.
+      const keys = Object.keys(obj);
+      const isSubpathMap = keys.some((k) => k === '.' || k.startsWith('./'));
+      if (isSubpathMap) {
+        for (const k of keys) {
+          // Wildcard-keyed subpaths can't be expanded to a single file; skip.
+          if (k.includes('*')) continue;
+          visit(obj[k]);
+        }
+      } else {
+        for (const k of keys) visit(obj[k]);
+      }
+    }
+  }
 }
 
 interface EntryCollection {
