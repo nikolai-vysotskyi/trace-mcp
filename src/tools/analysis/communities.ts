@@ -30,6 +30,28 @@ interface CommunitiesResult {
   communities: Community[];
   totalFiles: number;
   resolution: number;
+  seed: number;
+}
+
+// ─── Seedable PRNG ────────────────────────────────────────
+
+/**
+ * mulberry32 — small, fast, well-distributed seedable PRNG. Returns a function
+ * that yields a float in [0, 1). Used in place of Math.random() so that two
+ * runs of community detection on the same graph produce identical assignments.
+ *
+ * Without this, parallel rebuilds give different community IDs which means
+ * decisions/queries that pin to community_id drift between runs.
+ */
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 // ─── Graph building ───────────────────────────────────────
@@ -101,9 +123,11 @@ function buildFileGraph(store: Store): FileGraph {
  * 4. Repeat until no improvement
  * 5. Aggregate communities and repeat on the coarsened graph
  */
-function leidenDetect(graph: FileGraph, resolution = 1.0, maxIterations = 20): number[] {
+function leidenDetect(graph: FileGraph, resolution = 1.0, maxIterations = 20, seed = 0): number[] {
   const n = graph.nodes.length;
   if (n === 0) return [];
+
+  const rng = mulberry32(seed);
 
   // Community assignment: community[i] = community id for node i
   const community = Array.from({ length: n }, (_, i) => i);
@@ -132,10 +156,10 @@ function leidenDetect(graph: FileGraph, resolution = 1.0, maxIterations = 20): n
   for (let iter = 0; iter < maxIterations; iter++) {
     let improved = false;
 
-    // Randomize node order for better convergence
+    // Randomize node order for better convergence (seeded — deterministic across runs).
     const order = Array.from({ length: n }, (_, i) => i);
     for (let i = n - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rng() * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
     }
 
@@ -235,14 +259,15 @@ function autoLabel(files: string[]): string {
 export function detectCommunities(
   store: Store,
   resolution = 1.0,
+  seed = 0,
 ): TraceMcpResult<CommunitiesResult> {
   const graph = buildFileGraph(store);
 
   if (graph.nodes.length === 0) {
-    return ok({ communities: [], totalFiles: 0, resolution });
+    return ok({ communities: [], totalFiles: 0, resolution, seed });
   }
 
-  const assignments = leidenDetect(graph, resolution);
+  const assignments = leidenDetect(graph, resolution, 20, seed);
   const _numCommunities = Math.max(...assignments) + 1;
 
   // Group files by community
@@ -326,6 +351,7 @@ export function detectCommunities(
     communities,
     totalFiles: graph.nodes.length,
     resolution,
+    seed,
   });
 }
 
@@ -345,7 +371,7 @@ export function getCommunities(store: Store): TraceMcpResult<CommunitiesResult> 
   }>;
 
   if (rows.length === 0) {
-    return ok({ communities: [], totalFiles: 0, resolution: 1.0 });
+    return ok({ communities: [], totalFiles: 0, resolution: 1.0, seed: 0 });
   }
 
   const communities: Community[] = rows.map((r) => {
@@ -365,7 +391,7 @@ export function getCommunities(store: Store): TraceMcpResult<CommunitiesResult> 
   });
 
   const totalFiles = communities.reduce((sum, c) => sum + c.fileCount, 0);
-  return ok({ communities, totalFiles, resolution: 1.0 });
+  return ok({ communities, totalFiles, resolution: 1.0, seed: 0 });
 }
 
 /**

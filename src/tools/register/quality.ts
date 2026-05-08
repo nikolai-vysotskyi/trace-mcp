@@ -172,7 +172,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Community Detection ---
   server.tool(
     'detect_communities',
-    'Run Leiden community detection on the file dependency graph. Identifies tightly-coupled file clusters (modules). Mutates the community index (stores results); idempotent. Use before get_communities or get_community. Returns JSON: { communities: [{ id, files, size }], modularity }.',
+    'Run Leiden community detection on the file dependency graph. Identifies tightly-coupled file clusters (modules). Mutates the community index (stores results); idempotent. Deterministic — same `seed` produces identical assignments across runs. Use before get_communities or get_community. Returns JSON: { communities: [{ id, files, size }], modularity, seed }.',
     {
       resolution: z
         .number()
@@ -180,9 +180,18 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .max(5)
         .optional()
         .describe('Resolution parameter — higher values produce more communities (default 1.0)'),
+      seed: z
+        .number()
+        .int()
+        .min(0)
+        .max(0xffffffff)
+        .optional()
+        .describe(
+          'PRNG seed for the Leiden node-shuffle. Same seed reproduces identical community IDs across runs. Default 0.',
+        ),
     },
-    async ({ resolution }) => {
-      const result = detectCommunities(store, resolution ?? 1.0);
+    async ({ resolution, seed }) => {
+      const result = detectCommunities(store, resolution ?? 1.0, seed ?? 0);
       if (result.isErr())
         return {
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],

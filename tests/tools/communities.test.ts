@@ -149,4 +149,27 @@ describe('Community Detection', () => {
       expect(result.isOk()).toBe(true);
     });
   });
+
+  describe('determinism', () => {
+    it('produces identical communities across runs with the same seed', () => {
+      const a = detectCommunities(store, 1.0, 42)._unsafeUnwrap();
+      const b = detectCommunities(store, 1.0, 42)._unsafeUnwrap();
+
+      const keyA = a.communities
+        .map((c) => `${c.label}:${c.fileCount}:${c.cohesion}:${c.internalEdges}:${c.externalEdges}`)
+        .sort();
+      const keyB = b.communities
+        .map((c) => `${c.label}:${c.fileCount}:${c.cohesion}:${c.internalEdges}:${c.externalEdges}`)
+        .sort();
+
+      expect(keyA).toEqual(keyB);
+      expect(a.seed).toBe(42);
+      expect(b.seed).toBe(42);
+    });
+
+    it('default seed is 0 and reports it in the result', () => {
+      const result = detectCommunities(store, 1.0)._unsafeUnwrap();
+      expect(result.seed).toBe(0);
+    });
+  });
 });
