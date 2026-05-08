@@ -23,11 +23,11 @@
     "replay:check": "tsx scripts/replay-eval.ts",
     "replay:update-baseline": "tsx scripts/replay-eval.ts --update-baseline",
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "pnpm run build",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "npx lint-staged"
+    "pre-commit": "pnpm exec lint-staged"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css}": [
@@ -37,6 +37,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "packageManager": "pnpm@10.33.0",
   "license": "MIT",
   "author": "Nikolai Vysotskyi",
   "repository": {
@@ -105,7 +106,10 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3"
+      "@parcel/watcher",
+      "better-sqlite3",
+      "esbuild",
+      "simple-git-hooks"
     ]
   }
 }
