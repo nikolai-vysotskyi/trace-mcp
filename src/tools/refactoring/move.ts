@@ -9,7 +9,7 @@ import type { Store } from '../../db/store.js';
 import type { EsModuleResolver } from '../../indexer/resolvers/es-modules.js';
 import { computeRelativeSpecifier, rewriteImportForMovedTarget } from './import-rewriter.js';
 import type { FileEdit, RefactorResult } from './shared.js';
-import { getImportingFiles, readLines, writeLines } from './shared.js';
+import { getImportingFiles, readLines, toPosix, writeLines } from './shared.js';
 
 export interface MoveSymbolParams {
   symbol_id: string;
@@ -227,7 +227,7 @@ function moveSymbol(
       );
       result.edits.push(...importEdits);
       if (importEdits.length > 0) {
-        result.files_modified.push(path.relative(projectRoot, importerAbsPath));
+        result.files_modified.push(toPosix(path.relative(projectRoot, importerAbsPath)));
       }
     }
 
@@ -275,9 +275,9 @@ function moveSymbol(
       writeLines(targetAbsPath, insertLines);
     }
 
-    result.files_modified.push(sourceFile.path, params.target_file);
+    result.files_modified.push(toPosix(sourceFile.path), toPosix(params.target_file));
   } else {
-    result.files_modified.push(sourceFile.path, params.target_file);
+    result.files_modified.push(toPosix(sourceFile.path), toPosix(params.target_file));
   }
 
   result.success = true;
@@ -339,7 +339,7 @@ function moveFile(
     );
     result.edits.push(...edits);
     if (edits.length > 0) {
-      result.files_modified.push(path.relative(projectRoot, importerAbsPath));
+      result.files_modified.push(toPosix(path.relative(projectRoot, importerAbsPath)));
     }
   }
 
@@ -356,10 +356,10 @@ function moveFile(
 
   // 4. Move the file
   result.edits.push({
-    file: params.source_file,
+    file: toPosix(params.source_file),
     original_line: 0,
-    original_text: `(file at ${params.source_file})`,
-    new_text: `(moved to ${params.new_path})`,
+    original_text: `(file at ${toPosix(params.source_file)})`,
+    new_text: `(moved to ${toPosix(params.new_path)})`,
   });
 
   if (!dryRun) {
@@ -377,7 +377,7 @@ function moveFile(
     }
   }
 
-  result.files_modified.push(params.source_file, params.new_path);
+  result.files_modified.push(toPosix(params.source_file), toPosix(params.new_path));
   result.success = true;
   return result;
 }
