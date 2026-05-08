@@ -1,0 +1,19 @@
+{
+  // SvelteKit / NestJS / T3 / Astro / Vite all ship tsconfig.json files
+  // with comments and trailing commas — JSON.parse rejects them, jsonc-parser
+  // accepts them. This fixture mirrors that real-world shape.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    /* Path aliases — the bug, when tsconfig is parsed strictly, is that
+     * these were silently dropped because JSON.parse threw on the comments
+     * above and the catch fell through to no-aliases. */
+    "paths": {
+      "@/*": ["src/*"],
+    },
+    "strict": true,
+  },
+  "include": ["src/**/*.ts"],
+}
