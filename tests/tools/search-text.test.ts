@@ -209,4 +209,41 @@ describe('searchText', () => {
     expect(data.truncated).toBe(true);
     // Files beyond maxResults are not even read
   });
+
+  it('reports timed_out=false when budget is not exceeded', () => {
+    const result = searchText(store, tmpDir, { query: 'TODO' });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.timed_out).toBe(false);
+  });
+
+  it('aborts and reports timed_out=true when wall-clock budget elapses', () => {
+    // Seed enough files that even O(N) per-file iteration sees the elapsed budget.
+    for (let i = 0; i < 200; i++) {
+      const filePath = `src/budget${i}.ts`;
+      fs.writeFileSync(path.join(tmpDir, filePath), `// fill ${i}\n${'const x = 1;\n'.repeat(50)}`);
+      store.insertFile(filePath, 'typescript', `bh${i}`, 800);
+    }
+
+    // 1ms budget — first overBudget() check after the first file sees it elapsed.
+    const result = searchText(store, tmpDir, {
+      query: 'fill',
+      timeoutMs: 1,
+      maxResults: 10_000,
+    });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.timed_out).toBe(true);
+  });
+
+  it('treats timeoutMs=0 as disabled budget', () => {
+    const result = searchText(store, tmpDir, {
+      query: 'TODO',
+      timeoutMs: 0,
+    });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.timed_out).toBe(false);
+    expect(data.matches.length).toBe(2);
+  });
 });
