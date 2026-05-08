@@ -9,6 +9,7 @@
  */
 import type { Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
+import { maybeYield } from '../../utils/event-loop.js';
 
 interface Community {
   id: number;
@@ -123,7 +124,12 @@ function buildFileGraph(store: Store): FileGraph {
  * 4. Repeat until no improvement
  * 5. Aggregate communities and repeat on the coarsened graph
  */
-function leidenDetect(graph: FileGraph, resolution = 1.0, maxIterations = 20, seed = 0): number[] {
+async function leidenDetect(
+  graph: FileGraph,
+  resolution = 1.0,
+  maxIterations = 20,
+  seed = 0,
+): Promise<number[]> {
   const n = graph.nodes.length;
   if (n === 0) return [];
 
@@ -153,8 +159,16 @@ function leidenDetect(graph: FileGraph, resolution = 1.0, maxIterations = 20, se
 
   const m2 = 2 * totalWeight; // 2m for modularity formula
 
+  // Yield more often on bigger graphs — n=1000 → every 64 nodes; n=10000 → every 16.
+  const yieldEvery = Math.max(16, Math.min(512, Math.floor(8192 / Math.max(1, n))));
+
   for (let iter = 0; iter < maxIterations; iter++) {
     let improved = false;
+
+    // Yield once per outer iteration so the event loop can pump stdio between
+    // O(n²) sweeps. Critical for big graphs — without this, stdio is blocked
+    // for the entire Leiden run and the MCP client times out.
+    await maybeYield(iter + 1, 1);
 
     // Randomize node order for better convergence (seeded — deterministic across runs).
     const order = Array.from({ length: n }, (_, i) => i);
@@ -163,6 +177,7 @@ function leidenDetect(graph: FileGraph, resolution = 1.0, maxIterations = 20, se
       [order[i], order[j]] = [order[j], order[i]];
     }
 
+    let processed = 0;
     for (const i of order) {
       const currentComm = community[i];
 
@@ -209,6 +224,11 @@ function leidenDetect(graph: FileGraph, resolution = 1.0, maxIterations = 20, se
         community[i] = bestComm;
         improved = true;
       }
+
+      // Inner-loop yield: every `yieldEvery` nodes within the O(n²) sweep so
+      // very large graphs don't block stdio for an entire iteration either.
+      processed++;
+      await maybeYield(processed, yieldEvery);
     }
 
     if (!improved) break;
@@ -251,23 +271,135 @@ function autoLabel(files: string[]): string {
   return bestSegment;
 }
 
+// ─── Two-phase cohesion pass ──────────────────────────────
+
+/**
+ * After the first Leiden pass, find communities that ended up large but
+ * weakly cohesive (e.g. a doc-hub or god-file pulled unrelated subsystems
+ * together) and re-cluster their induced subgraph. Mirrors graphify v0.6.9
+ * (#683) — without this, a single ubiquitous file can collapse half the
+ * project into one meaningless community.
+ *
+ * `assignments` is mutated in place; new sub-community IDs are allocated
+ * after the existing maximum so they do not collide with stable communities.
+ */
+async function refineLowCohesionCommunities(
+  graph: FileGraph,
+  assignments: number[],
+  resolution: number,
+  seed: number,
+  minSize = 50,
+  cohesionThreshold = 0.05,
+): Promise<void> {
+  // Group node indices by community.
+  const byCommunity = new Map<number, number[]>();
+  for (let i = 0; i < assignments.length; i++) {
+    const c = assignments[i];
+    const arr = byCommunity.get(c) ?? [];
+    arr.push(i);
+    byCommunity.set(c, arr);
+  }
+
+  let nextId = 0;
+  for (const c of byCommunity.keys()) if (c >= nextId) nextId = c + 1;
+
+  for (const [commId, indices] of byCommunity) {
+    if (indices.length < minSize) continue;
+
+    // Compute cohesion for this community on the original graph.
+    const memberSet = new Set(indices);
+    let internal = 0;
+    let external = 0;
+    for (const i of indices) {
+      for (let j = 0; j < graph.nodes.length; j++) {
+        const w = graph.weights[i][j];
+        if (w === 0) continue;
+        if (memberSet.has(j)) internal += w;
+        else external += w;
+      }
+    }
+    internal = Math.floor(internal / 2);
+    const total = internal + external;
+    const cohesion = total > 0 ? internal / total : 0;
+    if (cohesion >= cohesionThreshold) continue;
+
+    // Build induced subgraph and re-cluster.
+    const localToGlobal = indices;
+    const subNodes = indices.map((i) => graph.nodes[i]);
+    const subWeights: number[][] = Array.from({ length: indices.length }, () =>
+      new Array(indices.length).fill(0),
+    );
+    const globalToLocal = new Map<number, number>();
+    indices.forEach((g, l) => globalToLocal.set(g, l));
+    for (let li = 0; li < indices.length; li++) {
+      const gi = indices[li];
+      for (let lj = li + 1; lj < indices.length; lj++) {
+        const gj = indices[lj];
+        const w = graph.weights[gi][gj];
+        if (w === 0) continue;
+        subWeights[li][lj] = w;
+        subWeights[lj][li] = w;
+      }
+    }
+    const subGraph: FileGraph = {
+      nodes: subNodes,
+      nodeIndex: new Map(subNodes.map((n, i) => [n, i])),
+      weights: subWeights,
+    };
+
+    // Vary the seed so we do not just reproduce the parent partition.
+    const subAssignments = await leidenDetect(subGraph, resolution, 20, seed ^ commId ^ 0x9e3779b1);
+    const numSub = Math.max(...subAssignments) + 1;
+    if (numSub <= 1) continue; // nothing learned — keep original
+
+    // First sub-cluster keeps the parent id, the rest get fresh ids beyond
+    // the existing max so we never collide with another stable community.
+    for (let li = 0; li < subAssignments.length; li++) {
+      const sub = subAssignments[li];
+      const globalIdx = localToGlobal[li];
+      assignments[globalIdx] = sub === 0 ? commId : nextId + sub - 1;
+    }
+    nextId += numSub - 1;
+  }
+
+  // Renormalize ids to a contiguous 0..k-1 range so callers see clean numbers.
+  const seen = new Map<number, number>();
+  for (let i = 0; i < assignments.length; i++) {
+    const c = assignments[i];
+    let mapped = seen.get(c);
+    if (mapped === undefined) {
+      mapped = seen.size;
+      seen.set(c, mapped);
+    }
+    assignments[i] = mapped;
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────
 
 /**
  * Detect communities, persist to DB, and return results.
+ *
+ * Async so the inner Leiden loop can yield to the event loop between
+ * iterations — keeps stdio responsive on large graphs.
  */
-export function detectCommunities(
+export async function detectCommunities(
   store: Store,
   resolution = 1.0,
   seed = 0,
-): TraceMcpResult<CommunitiesResult> {
+): Promise<TraceMcpResult<CommunitiesResult>> {
   const graph = buildFileGraph(store);
 
   if (graph.nodes.length === 0) {
     return ok({ communities: [], totalFiles: 0, resolution, seed });
   }
 
-  const assignments = leidenDetect(graph, resolution, 20, seed);
+  const assignments = await leidenDetect(graph, resolution, 20, seed);
+  // Two-phase pass: split low-cohesion megaclusters created by doc-hub /
+  // god-file glue. graphify v0.6.9 found that without this step a single
+  // CLAUDE.md or barrel file could merge unrelated subsystems into one
+  // useless community. Same bug pattern applies here.
+  await refineLowCohesionCommunities(graph, assignments, resolution, seed);
   const _numCommunities = Math.max(...assignments) + 1;
 
   // Group files by community
