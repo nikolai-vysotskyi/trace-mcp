@@ -16,9 +16,15 @@ import { enrichItemsWithFreshness } from '../../scoring/freshness.js';
 import type { MetaContext } from '../../server/types.js';
 import { getSessionResume } from '../../session/resume.js';
 import { registerAITools } from '../ai/ai-tools.js';
+import { getCommunities } from '../analysis/communities.js';
+import { getPageRank } from '../analysis/graph-analysis.js';
+import { generateInsightsReport } from '../analysis/insights-report.js';
+import { getDeadExports, getUntestedExports } from '../analysis/introspect.js';
+import { getHotspots } from '../git/git-analysis.js';
 import { planTurn } from '../navigation/plan-turn.js';
 import { listPresets } from '../project/presets.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
+import { getDeadCodeV2 } from '../refactoring/dead-code.js';
 
 export function registerSessionTools(server: McpServer, ctx: MetaContext): void {
   const {
@@ -64,6 +70,114 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       const result = getIndexHealth(store, config);
       return {
         contents: [{ uri: 'project://health', mimeType: 'application/json', text: j(result) }],
+      };
+    },
+  );
+
+  // Inspired by graphify v0.7.9 — agents that subscribe to MCP resources
+  // get these read-only artifacts as orientation context on connect, without
+  // having to spend the first few tool calls discovering the codebase.
+  server.resource(
+    'project-hotspots',
+    'project://hotspots',
+    {
+      mimeType: 'application/json',
+      description: 'Top complexity-and-churn risk hotspots (top 20)',
+    },
+    async () => {
+      const hotspots = getHotspots(store, projectRoot, { limit: 20 });
+      return {
+        contents: [
+          { uri: 'project://hotspots', mimeType: 'application/json', text: j({ hotspots }) },
+        ],
+      };
+    },
+  );
+
+  server.resource(
+    'project-god-nodes',
+    'project://god-nodes',
+    {
+      mimeType: 'application/json',
+      description: 'Top files by PageRank — most architecturally central code',
+    },
+    async () => {
+      const ranks = getPageRank(store).slice(0, 20);
+      return {
+        contents: [
+          { uri: 'project://god-nodes', mimeType: 'application/json', text: j({ files: ranks }) },
+        ],
+      };
+    },
+  );
+
+  server.resource(
+    'project-communities',
+    'project://communities',
+    {
+      mimeType: 'application/json',
+      description:
+        'File-cluster communities (Leiden). Empty until detect_communities has been run.',
+    },
+    async () => {
+      const result = getCommunities(store);
+      const text = result.isOk() ? j(result.value) : j({ communities: [], totalFiles: 0 });
+      return {
+        contents: [{ uri: 'project://communities', mimeType: 'application/json', text }],
+      };
+    },
+  );
+
+  server.resource(
+    'project-insights',
+    'project://insights',
+    {
+      mimeType: 'application/json',
+      description:
+        'Aggregated narrative report: god files, bridges, hotspots, gaps. Markdown included.',
+    },
+    async () => {
+      const result = generateInsightsReport(store, { topN: 5, cwd: projectRoot });
+      const text = result.isOk() ? j(result.value) : j({ error: 'insights unavailable' });
+      return {
+        contents: [{ uri: 'project://insights', mimeType: 'application/json', text }],
+      };
+    },
+  );
+
+  server.resource(
+    'project-dead-code',
+    'project://dead-code',
+    {
+      mimeType: 'application/json',
+      description: 'Symbols flagged dead by multi-signal detection (top 50, threshold 0.5)',
+    },
+    async () => {
+      const result = getDeadCodeV2(store, { threshold: 0.5, limit: 50 });
+      return {
+        contents: [{ uri: 'project://dead-code', mimeType: 'application/json', text: j(result) }],
+      };
+    },
+  );
+
+  server.resource(
+    'project-untested',
+    'project://untested',
+    {
+      mimeType: 'application/json',
+      description: 'Public exports with no matching test file',
+    },
+    async () => {
+      const exportsResult = getDeadExports(store);
+      const untestedResult = getUntestedExports(store);
+      return {
+        contents: [
+          {
+            uri: 'project://untested',
+            mimeType: 'application/json',
+            text: j({ exports: exportsResult, untested: untestedResult }),
+          },
+        ],
       };
     },
   );
