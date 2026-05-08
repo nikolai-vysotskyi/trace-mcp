@@ -5,6 +5,11 @@ import type { TraceMcpConfig } from '../../config.js';
 import { logger } from '../../logger.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
+import {
+  createHandshakeWatchdog,
+  type HandshakeWatchdog,
+  resolveHandshakeTimeout,
+} from './handshake-watchdog.js';
 import { LocalBackend } from './local-backend.js';
 import { MessageRouter } from './message-router.js';
 import { ProxyBackend } from './proxy-backend.js';
@@ -27,6 +32,14 @@ export interface StdioSessionOptions {
   autoSpawnDaemon?: boolean;
   /** ms to wait for an auto-spawned daemon's /health to respond. */
   autoSpawnTimeoutMs?: number;
+  /**
+   * Wall-clock budget for the MCP client to send its first JSON-RPC frame
+   * after stdio comes up. If exceeded, write a one-line diagnostic to stderr
+   * pointing at the most common failure modes (stdout-corruption from npm/
+   * pnpm/uvx output, wrong binary path). Best-effort — server keeps running.
+   * Defaults to env TRACE_MCP_HANDSHAKE_TIMEOUT or 5_000. Set 0 to disable.
+   */
+  handshakeTimeoutMs?: number;
 }
 
 /**
@@ -43,6 +56,7 @@ export class StdioSession {
   private readonly router: MessageRouter;
   private readonly watcher: PollingDaemonWatcher;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private handshake: HandshakeWatchdog | null = null;
   private readonly pendingBackgroundDisposes = new Set<Promise<void>>();
   private shuttingDown = false;
   private bootstrapped = false;
@@ -74,6 +88,7 @@ export class StdioSession {
 
     // Wire the stdio transport so inbound messages go to the router.
     this.stdio.onmessage = (msg) => {
+      this.handshake?.observe();
       this.resetIdleTimer();
       void this.router.ingestFromClient(msg as JSONRPCMessage);
     };
@@ -122,6 +137,20 @@ export class StdioSession {
     this.resetIdleTimer();
 
     await this.stdio.start();
+    this.handshake = createHandshakeWatchdog({
+      timeoutMs: resolveHandshakeTimeout(
+        this.opts.handshakeTimeoutMs,
+        process.env.TRACE_MCP_HANDSHAKE_TIMEOUT,
+      ),
+      write: (line) => {
+        // stderr only — stdout would itself corrupt the JSON-RPC stream
+        try {
+          process.stderr.write(line);
+        } catch {
+          /* best-effort */
+        }
+      },
+    });
     logger.info(
       {
         mode: this.desiredMode,
@@ -145,6 +174,8 @@ export class StdioSession {
     this.watcher.stop();
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
+    this.handshake?.cancel();
+    this.handshake = null;
 
     const active = this.router.getActiveBackend();
     await this.router.shutdown();
