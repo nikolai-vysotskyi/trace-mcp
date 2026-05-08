@@ -25,7 +25,7 @@ describe('MarkdownLanguagePlugin', () => {
   describe('manifest', () => {
     it('has the expected identity', () => {
       expect(plugin.manifest.name).toBe('markdown-language');
-      expect(plugin.supportedExtensions).toEqual(['.md', '.mdx', '.markdown']);
+      expect(plugin.supportedExtensions).toEqual(['.md', '.mdx', '.markdown', '.qmd']);
     });
   });
 
