@@ -449,6 +449,19 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
     },
   );
 
+  // --- Suggested Review Questions ---
+
+  server.tool(
+    'get_suggested_questions',
+    'Auto-generated, prioritized review questions derived from the analyses we already cache (untested framework entry points, circular imports, ast-clone clusters, dead-export drift, untested-but-exported symbols). Use during PR review to surface "what should I be looking at?" without manually chaining six tools. Each question carries a severity (high/medium/low) and the follow-up tool to drill in. Read-only. Returns JSON: { questions: [{ id, severity, question, reason, follow_up }], total, generated_at }.',
+    {},
+    async () => {
+      const { getSuggestedQuestions } = await import('../quality/suggested-questions.js');
+      const result = getSuggestedQuestions(store);
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
   // --- Quality Gates ---
 
   server.tool(
