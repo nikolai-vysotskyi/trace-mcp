@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import { AnalyticsStore } from '../../analytics/analytics-store.js';
 import { formatBenchmarkMarkdown, runBenchmark } from '../../analytics/benchmark.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
@@ -293,7 +294,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         .enum(['today', 'week', 'month', 'all'])
         .optional()
         .describe('Time period (default: week)'),
-      session_id: z.string().max(128).optional().describe('Specific session ID to analyze'),
+      session_id: optionalNonEmptyString(128).describe('Specific session ID to analyze'),
     },
     async ({ period, session_id }) => {
       try {
@@ -577,7 +578,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         .max(200)
         .optional()
         .describe('Cap on number of tools returned (default 20)'),
-      tool: z.string().max(128).optional().describe('Filter to a single tool by name'),
+      tool: optionalNonEmptyString(128).describe('Filter to a single tool by name'),
       window: z
         .enum(['session', '1h', '24h', '7d', 'all'])
         .optional()

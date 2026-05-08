@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
 import { decisionsForImpact } from '../../memory/enrichment.js';
 import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
@@ -59,8 +60,8 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
     'get_symbol',
     'Look up a symbol by symbol_id or FQN and return its source code. Use instead of Read when you need one specific function/class/method — returns only the symbol, not the whole file. For multiple symbols at once, prefer get_context_bundle. Read-only. Returns JSON: { symbol_id, name, kind, fqn, signature, file, line_start, line_end, source }.',
     {
-      symbol_id: z.string().max(512).optional().describe('The symbol_id to look up'),
-      fqn: z.string().max(512).optional().describe('The fully qualified name to look up'),
+      symbol_id: optionalNonEmptyString(512).describe('The symbol_id to look up'),
+      fqn: optionalNonEmptyString(512).describe('The fully qualified name to look up'),
       max_lines: z
         .number()
         .int()
@@ -137,8 +138,8 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         .max(64)
         .optional()
         .describe('Filter by symbol kind (class, method, function, etc.)'),
-      language: z.string().max(64).optional().describe('Filter by language'),
-      file_pattern: z.string().max(512).optional().describe('Filter by file path pattern'),
+      language: optionalNonEmptyString(64).describe('Filter by language'),
+      file_pattern: optionalNonEmptyString(512).describe('Filter by file path pattern'),
       implements: z
         .string()
         .max(256)
@@ -492,8 +493,8 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
     'get_change_impact',
     'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Supports diff-aware mode via symbol_ids to scope analysis to only changed symbols. Use before modifying code to understand blast radius. For quick risk assessment without full report, use assess_change_risk instead. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
     {
-      file_path: z.string().max(512).optional().describe('Relative file path to analyze'),
-      symbol_id: z.string().max(512).optional().describe('Symbol ID to analyze'),
+      file_path: optionalNonEmptyString(512).describe('Relative file path to analyze'),
+      symbol_id: optionalNonEmptyString(512).describe('Symbol ID to analyze'),
       fqn: z
         .string()
         .max(512)
@@ -699,13 +700,13 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
     'get_context_bundle',
     "Get a symbol's source code + its import dependencies + optional callers, packed within a token budget. Supports batch queries with shared-import deduplication. Use instead of chaining get_symbol calls — deduplicates shared imports across symbols. For a single symbol without imports, get_symbol is lighter. Read-only. Returns JSON: { primary: [{ symbol_id, file, source }], imports: [{ file, source }], token_usage }.",
     {
-      symbol_id: z.string().max(512).optional().describe('Single symbol ID'),
+      symbol_id: optionalNonEmptyString(512).describe('Single symbol ID'),
       symbol_ids: z
         .array(z.string().max(512))
         .max(20)
         .optional()
         .describe('Batch: multiple symbol IDs'),
-      fqn: z.string().max(512).optional().describe('Alternative: look up by FQN'),
+      fqn: optionalNonEmptyString(512).describe('Alternative: look up by FQN'),
       include_callers: z
         .boolean()
         .optional()

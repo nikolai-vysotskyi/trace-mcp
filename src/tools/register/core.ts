@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
@@ -259,7 +260,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         .max(256)
         .optional()
         .describe('Filter keys by pattern (e.g. "DB_" or "REDIS")'),
-      file: z.string().max(512).optional().describe('Filter by specific .env file path'),
+      file: optionalNonEmptyString(512).describe('Filter by specific .env file path'),
     },
     async ({ pattern, file }) => {
       let vars = pattern ? store.searchEnvVars(pattern) : store.getAllEnvVars();

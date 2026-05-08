@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { RuntimeIntelligence } from '../../runtime/lifecycle.js';
@@ -86,8 +87,8 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       'Analyze cross-service impact of changing an endpoint or event. Shows which services would be affected. Use before modifying a shared endpoint. For within-codebase impact use get_change_impact instead. Read-only. Returns JSON: { service, affectedServices: [{ name, reason }], total }.',
       {
         service: z.string().min(1).max(256).describe('Service name'),
-        endpoint: z.string().max(512).optional().describe('Endpoint path (e.g. /api/users/{id})'),
-        event: z.string().max(256).optional().describe('Event channel name (e.g. user.created)'),
+        endpoint: optionalNonEmptyString(512).describe('Endpoint path (e.g. /api/users/{id})'),
+        event: optionalNonEmptyString(256).describe('Event channel name (e.g. user.created)'),
       },
       async ({ service, endpoint, event }) => {
         const result = getCrossServiceImpact(topoStore, projectRoot, additionalRepos, {
@@ -197,8 +198,8 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           .max(512)
           .optional()
           .describe('Endpoint path pattern (e.g. /api/users)'),
-        method: z.string().max(10).optional().describe('HTTP method filter (e.g. GET, POST)'),
-        service: z.string().max(256).optional().describe('Service name filter'),
+        method: optionalNonEmptyString(10).describe('HTTP method filter (e.g. GET, POST)'),
+        service: optionalNonEmptyString(256).describe('Service name filter'),
       },
       async ({ endpoint, method, service }) => {
         const result = getSubprojectImpact(topoStore, { endpoint, method, service });
@@ -294,7 +295,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           .min(1)
           .max(512)
           .describe('Endpoint path to search for (e.g. /api/users)'),
-        method: z.string().max(10).optional().describe('HTTP method filter'),
+        method: optionalNonEmptyString(10).describe('HTTP method filter'),
       },
       async ({ endpoint, method }) => {
         const result = getSubprojectClients(topoStore, { endpoint, method });
@@ -423,10 +424,10 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       'get_runtime_profile',
       'Runtime profile for a symbol or route: call count, latency percentiles (p50/p95/p99), error rate, calls per hour. Requires OTLP trace ingestion. Read-only, queries external runtime data. Use for performance analysis of specific endpoints. Returns JSON: { symbol_id, callCount, latency: { p50, p95, p99 }, errorRate, callsPerHour }.',
       {
-        symbol_id: z.string().max(512).optional().describe('Symbol ID to profile'),
-        fqn: z.string().max(512).optional().describe('Fully qualified name'),
-        route_uri: z.string().max(512).optional().describe('Route URI to profile'),
-        since: z.string().max(64).optional().describe('ISO8601 start time (default: 24h ago)'),
+        symbol_id: optionalNonEmptyString(512).describe('Symbol ID to profile'),
+        fqn: optionalNonEmptyString(512).describe('Fully qualified name'),
+        route_uri: optionalNonEmptyString(512).describe('Route URI to profile'),
+        since: optionalNonEmptyString(64).describe('ISO8601 start time (default: 24h ago)'),
       },
       async ({ symbol_id, fqn, route_uri, since }) => {
         const result = getRuntimeProfile(store, {
@@ -448,8 +449,8 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       'get_runtime_call_graph',
       'Actual call graph from runtime traces (vs static analysis). Shows observed call paths with call counts and latency. Requires OTLP trace ingestion. Read-only, queries external runtime data. For static call graph use get_call_graph instead. Returns JSON: { root, calls: [{ symbol, count, latency }] }.',
       {
-        symbol_id: z.string().max(512).optional().describe('Symbol ID as root'),
-        fqn: z.string().max(512).optional().describe('Fully qualified name as root'),
+        symbol_id: optionalNonEmptyString(512).describe('Symbol ID as root'),
+        fqn: optionalNonEmptyString(512).describe('Fully qualified name as root'),
         depth: z
           .number()
           .int()
@@ -457,7 +458,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           .max(10)
           .optional()
           .describe('Max traversal depth (default 3)'),
-        since: z.string().max(64).optional().describe('ISO8601 start time (default: 24h ago)'),
+        since: optionalNonEmptyString(64).describe('ISO8601 start time (default: 24h ago)'),
       },
       async ({ symbol_id, fqn, depth, since }) => {
         const result = getRuntimeCallGraph(store, { symbolId: symbol_id, fqn, depth, since });
@@ -475,8 +476,8 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       'Per-route analytics: request count, error rate, latency, caller services. Requires OTLP trace ingestion. Read-only, queries external runtime data. Use to understand endpoint performance and traffic. Returns JSON: { uri, method, requestCount, errorRate, latency, callerServices }.',
       {
         uri: z.string().max(512).describe('Route URI (e.g. "/api/users/{id}")'),
-        method: z.string().max(10).optional().describe('HTTP method filter'),
-        since: z.string().max(64).optional().describe('ISO8601 start time (default: 24h ago)'),
+        method: optionalNonEmptyString(10).describe('HTTP method filter'),
+        since: optionalNonEmptyString(64).describe('ISO8601 start time (default: 24h ago)'),
       },
       async ({ uri, method, since }) => {
         const result = getEndpointAnalytics(store, { uri, method, since });
@@ -493,9 +494,9 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       'get_runtime_deps',
       'Which external services (databases, caches, APIs, queues) does this code actually call at runtime. Based on OTLP traces. Read-only, queries external runtime data. Use to discover actual runtime dependencies vs static analysis. Returns JSON: { dependencies: [{ type, name, callCount }] }.',
       {
-        symbol_id: z.string().max(512).optional().describe('Symbol ID'),
-        fqn: z.string().max(512).optional().describe('Fully qualified name'),
-        file_path: z.string().max(512).optional().describe('File path'),
+        symbol_id: optionalNonEmptyString(512).describe('Symbol ID'),
+        fqn: optionalNonEmptyString(512).describe('Fully qualified name'),
+        file_path: optionalNonEmptyString(512).describe('File path'),
       },
       async ({ symbol_id, fqn, file_path }) => {
         if (file_path) {
@@ -669,7 +670,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
     'get_cross_domain_deps',
     'Show which business domains depend on which. Based on edges between symbols in different domains. Use to understand domain coupling. Read-only. Returns JSON: { dependencies: [{ from, to, edgeCount }] }.',
     {
-      domain: z.string().max(256).optional().describe('Focus on a specific domain (default: all)'),
+      domain: optionalNonEmptyString(256).describe('Focus on a specific domain (default: all)'),
     },
     async ({ domain }) => {
       const result = await getCrossDomainDependencies(store, { domain });
@@ -815,7 +816,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         .max(512)
         .optional()
         .describe('Symbol ID of the function/method to analyze'),
-      fqn: z.string().max(512).optional().describe('Fully qualified name of the function/method'),
+      fqn: optionalNonEmptyString(512).describe('Fully qualified name of the function/method'),
       direction: z
         .enum(['forward', 'backward', 'both'])
         .optional()
@@ -1052,7 +1053,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
     {
       query: z.string().min(1).max(1000).describe('Search string or regex pattern'),
       is_regex: z.boolean().optional().describe('Treat query as regex (default false)'),
-      file_pattern: z.string().max(512).optional().describe('Glob filter, e.g. "src/**/*.ts"'),
+      file_pattern: optionalNonEmptyString(512).describe('Glob filter, e.g. "src/**/*.ts"'),
       language: z
         .string()
         .max(64)
@@ -1230,8 +1231,8 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
     'assess_change_risk',
     'Before modifying a file or symbol, predict risk level (low/medium/high/critical) with contributing factors and recommended mitigations. Combines blast radius, complexity, git churn, test coverage, and coupling. Use as a quick risk check. For full impact report with affected tests and dependents use get_change_impact instead. Read-only. Returns JSON: { risk, level, factors: [{ name, value }], mitigations }.',
     {
-      file_path: z.string().max(512).optional().describe('File path to assess'),
-      symbol_id: z.string().max(512).optional().describe('Symbol ID to assess'),
+      file_path: optionalNonEmptyString(512).describe('File path to assess'),
+      symbol_id: optionalNonEmptyString(512).describe('Symbol ID to assess'),
     },
     async ({ file_path, symbol_id }) => {
       if (file_path) {
@@ -1257,8 +1258,8 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
     'get_health_trends',
     'Time-series health metrics for a file or module: bug score, complexity, coupling, churn over time. Populated by predict_bugs runs. Use to track if a module is improving or degrading. Read-only. Returns JSON: { dataPoints: [{ date, bugScore, complexity, coupling, churn }] }.',
     {
-      file_path: z.string().max(512).optional().describe('File path to check'),
-      module: z.string().max(256).optional().describe('Module path prefix to check'),
+      file_path: optionalNonEmptyString(512).describe('File path to check'),
+      module: optionalNonEmptyString(256).describe('Module path prefix to check'),
       limit: z.number().int().min(1).max(100).optional().describe('Max data points (default: 50)'),
     },
     async ({ file_path, module, limit }) => {

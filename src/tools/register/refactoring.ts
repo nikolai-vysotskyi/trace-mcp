@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import type { ServerContext } from '../../server/types.js';
 import { changeSignature, type SignatureChange } from '../refactoring/change-signature.js';
 import { applyMove } from '../refactoring/move.js';
@@ -146,14 +147,14 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
     'apply_move',
     'Move a symbol to a different file or rename/move a file, updating all import paths across the codebase. Dry-run by default (safe preview). Modifies source files. Use plan_refactoring with type="move" to preview first. Returns JSON: { success, edits: [{ file, old_text, new_text }], filesModified }.',
     {
-      symbol_id: z.string().max(512).optional().describe('Symbol ID to move (mode: symbol)'),
+      symbol_id: optionalNonEmptyString(512).describe('Symbol ID to move (mode: symbol)'),
       target_file: z
         .string()
         .max(512)
         .optional()
         .describe('Target file path for the symbol (mode: symbol)'),
-      source_file: z.string().max(512).optional().describe('File to move/rename (mode: file)'),
-      new_path: z.string().max(512).optional().describe('New file path (mode: file)'),
+      source_file: optionalNonEmptyString(512).describe('File to move/rename (mode: file)'),
+      new_path: optionalNonEmptyString(512).describe('New file path (mode: file)'),
       dry_run: z
         .boolean()
         .default(true)
@@ -211,8 +212,8 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
     add_param: z
       .object({
         name: z.string().min(1).max(256),
-        type: z.string().max(256).optional(),
-        default_value: z.string().max(256).optional(),
+        type: optionalNonEmptyString(256),
+        default_value: optionalNonEmptyString(256),
         position: z.number().int().min(0).optional(),
       })
       .optional(),
@@ -260,8 +261,8 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
     add_param: z
       .object({
         name: z.string().min(1).max(256),
-        type: z.string().max(256).optional(),
-        default_value: z.string().max(256).optional(),
+        type: optionalNonEmptyString(256),
+        default_value: optionalNonEmptyString(256),
         position: z.number().int().min(0).optional(),
       })
       .optional(),
@@ -287,14 +288,14 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
         .max(512)
         .optional()
         .describe('Symbol ID (for rename, move symbol, signature)'),
-      new_name: z.string().max(256).optional().describe('New name (for rename)'),
-      target_file: z.string().max(512).optional().describe('Target file (for move symbol)'),
-      source_file: z.string().max(512).optional().describe('Source file (for move file)'),
-      new_path: z.string().max(512).optional().describe('New path (for move file)'),
-      file_path: z.string().max(512).optional().describe('File path (for extract)'),
+      new_name: optionalNonEmptyString(256).describe('New name (for rename)'),
+      target_file: optionalNonEmptyString(512).describe('Target file (for move symbol)'),
+      source_file: optionalNonEmptyString(512).describe('Source file (for move file)'),
+      new_path: optionalNonEmptyString(512).describe('New path (for move file)'),
+      file_path: optionalNonEmptyString(512).describe('File path (for extract)'),
       start_line: z.number().int().min(1).optional().describe('Start line (for extract)'),
       end_line: z.number().int().min(1).optional().describe('End line (for extract)'),
-      function_name: z.string().max(256).optional().describe('Function name (for extract)'),
+      function_name: optionalNonEmptyString(256).describe('Function name (for extract)'),
       changes: z
         .array(planSignatureChangeSchema)
         .optional()
