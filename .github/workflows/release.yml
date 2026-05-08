@@ -57,14 +57,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: 'pnpm'
 
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm run test
 
       - name: Index project
         run: node dist/cli.js index . --force
@@ -118,15 +120,20 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '22'
+          cache: 'pnpm'
           registry-url: https://registry.npmjs.org
 
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
-      - run: npx -y npm@11 publish --provenance --access public
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm run test
+      # pnpm 10+ supports --provenance natively via OIDC; the previous
+      # gymnastics with `npx -y npm@11 publish` is no longer required.
+      - run: pnpm publish --provenance --access public --no-git-checks
 
   build-app-mac:
     needs: release-please
@@ -144,23 +151,25 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install root dependencies and build server
         run: |
-          npm ci
-          npm run build
+          pnpm install --frozen-lockfile
+          pnpm run build
 
       - name: Install app dependencies
         working-directory: packages/app
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build app
         working-directory: packages/app
-        run: npm run build
+        run: pnpm run build
 
       - name: Sync app version from root package.json
         working-directory: packages/app
@@ -172,7 +181,7 @@ jobs:
         working-directory: packages/app
         env:
           ARCH: ${{ matrix.arch }}
-        run: npx electron-builder --mac --${{ matrix.arch }} --publish never
+        run: pnpm exec electron-builder --mac --${{ matrix.arch }} --publish never
 
       # Per-asset .sha256 files only (no combined manifest) because matrix
       # jobs run in parallel and would clobber each other's SHASUMS256.txt.
@@ -206,19 +215,21 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install root dependencies and build server
         run: |
-          npm ci
-          npm run build
+          pnpm install --frozen-lockfile
+          pnpm run build
 
       - name: Install app dependencies
         working-directory: packages/app
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Generate icons (including .ico for Windows)
         working-directory: packages/app
@@ -226,7 +237,7 @@ jobs:
 
       - name: Build app
         working-directory: packages/app
-        run: npm run build
+        run: pnpm run build
 
       - name: Sync app version from root package.json
         working-directory: packages/app
@@ -237,7 +248,7 @@ jobs:
 
       - name: Package with electron-builder
         working-directory: packages/app
-        run: npx electron-builder --win --x64 --publish never
+        run: pnpm exec electron-builder --win --x64 --publish never
 
       - name: Generate SHA-256 checksums
         shell: bash
