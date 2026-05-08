@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   detectSecrets,
@@ -11,12 +12,15 @@ import {
 
 describe('security', () => {
   describe('path traversal', () => {
-    const root = '/projects/my-app';
+    // path.resolve makes the root native (D:\projects\my-app on Windows,
+    // /projects/my-app elsewhere). Expected values are built the same way
+    // so assertions are platform-agnostic.
+    const root = path.resolve('/projects/my-app');
 
     it('allows paths within root', () => {
       const result = validatePath('app/Models/User.php', root);
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toBe('/projects/my-app/app/Models/User.php');
+      expect(result._unsafeUnwrap()).toBe(path.join(root, 'app', 'Models', 'User.php'));
     });
 
     it('blocks path traversal with ..', () => {
@@ -60,14 +64,14 @@ describe('security', () => {
       const result = validatePath('app/..%2f..%2f..%2fetc/passwd', root);
       // %2f is not decoded by path.resolve, so this stays in root — that's fine
       if (result.isOk()) {
-        expect(result._unsafeUnwrap().startsWith(`${root}/`)).toBe(true);
+        expect(result._unsafeUnwrap().startsWith(`${root}${path.sep}`)).toBe(true);
       }
     });
 
     it('handles empty path as root', () => {
       const result = validatePath('', root);
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toBe('/projects/my-app');
+      expect(result._unsafeUnwrap()).toBe(root);
     });
 
     it('blocks traversal disguised in middle segments', () => {
@@ -78,12 +82,13 @@ describe('security', () => {
     it('allows paths with .. that stay within root', () => {
       const result = validatePath('app/Models/../Services/UserService.php', root);
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toBe('/projects/my-app/app/Services/UserService.php');
+      expect(result._unsafeUnwrap()).toBe(path.join(root, 'app', 'Services', 'UserService.php'));
     });
 
     it('blocks root prefix attack (rootpath substring)', () => {
       // If root is /projects/my-app, /projects/my-app-evil should be blocked
-      const result = validatePath('/projects/my-app-evil/file.ts', '/projects/my-app');
+      const evilRoot = path.resolve('/projects/my-app-evil');
+      const result = validatePath(path.join(evilRoot, 'file.ts'), root);
       expect(result.isErr()).toBe(true);
     });
   });
