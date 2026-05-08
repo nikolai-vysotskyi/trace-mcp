@@ -11,6 +11,7 @@
  * CGN range here and recommend callers pass the resolved IP into the fetch
  * itself once full DNS rebinding protection lands.
  */
+import type { LookupAddress } from 'node:dns';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 
@@ -148,7 +149,7 @@ export async function checkOutboundUrl(
   // Resolve all addresses; refuse if *any* falls in a blocked range, since
   // a multi-A DNS response could otherwise be used to exfiltrate via a
   // private fallback address.
-  let addrs: dns.LookupAddress[];
+  let addrs: LookupAddress[];
   try {
     addrs = await dns.lookup(host, { all: true });
   } catch (e) {
