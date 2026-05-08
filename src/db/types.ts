@@ -42,6 +42,14 @@ export interface EdgeRow {
   metadata: string | null;
   is_cross_ws: number;
   resolution_tier: string;
+  /**
+   * Numeric confidence in [0, 1]. Default seeded from resolution_tier:
+   * lsp_resolved → 1.0, ast_resolved → 0.95, ast_inferred → 0.7,
+   * text_matched → 0.4. Plugins MAY override on insert when they have a
+   * better signal (e.g. spring DI through @Autowired metadata vs heuristic
+   * receiver-type lookup).
+   */
+  confidence: number;
 }
 
 export interface RouteRow {

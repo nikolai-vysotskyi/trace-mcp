@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 24;
+const SCHEMA_VERSION = 25;
 
 const DDL = `
 -- ============================================================
@@ -174,8 +174,28 @@ CREATE TABLE IF NOT EXISTS edges (
     metadata        TEXT,
     is_cross_ws     INTEGER NOT NULL DEFAULT 0,
     resolution_tier TEXT NOT NULL DEFAULT 'ast_resolved',
+    confidence      REAL NOT NULL DEFAULT 0.95,
     UNIQUE(source_node_id, target_node_id, edge_type_id)
 );
+
+-- Seed confidence from resolution_tier whenever an edge is inserted
+-- without an explicit override. Existing plugin INSERT statements stay
+-- unchanged: every code path emitting a non-ast tier (lsp_resolved /
+-- ast_inferred / text_matched) gets the right score without having to
+-- widen its INSERT signature. Plugins that want to set a custom score
+-- MUST pass a value other than 0.95.
+CREATE TRIGGER IF NOT EXISTS edges_confidence_from_tier
+AFTER INSERT ON edges
+WHEN NEW.confidence = 0.95 AND NEW.resolution_tier != 'ast_resolved'
+BEGIN
+  UPDATE edges SET confidence = CASE NEW.resolution_tier
+    WHEN 'lsp_resolved' THEN 1.0
+    WHEN 'ast_inferred' THEN 0.7
+    WHEN 'text_matched' THEN 0.4
+    ELSE 0.95
+  END
+  WHERE id = NEW.id;
+END;
 
 CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_node_id);
 CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_node_id);
@@ -1343,6 +1363,42 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+    `);
+  },
+  25: (db) => {
+    // Edge confidence as a numeric score on top of the categorical
+    // resolution_tier. CRG v2.3.2 added a 3-tier (EXTRACTED/INFERRED/AMBIGUOUS)
+    // scheme with float scores; we already had a 4-tier categorical but no
+    // scalar — this column lets ranking, filtering, and visualisation reason
+    // about strength continuously instead of bucket-by-bucket.
+    //
+    // Default 0.95 matches the modal tier (`ast_resolved`). Existing rows get
+    // a per-tier backfill below.
+    const cols = (db.pragma('table_info(edges)') as Array<{ name: string }>).map((c) => c.name);
+    if (!cols.includes('confidence')) {
+      db.exec(`ALTER TABLE edges ADD COLUMN confidence REAL NOT NULL DEFAULT 0.95`);
+    }
+    // Per-tier backfill — confidenceForTier() in confidence.ts is the source
+    // of truth, but inlined here so the migration stays self-contained.
+    db.exec(`UPDATE edges SET confidence = 1.00 WHERE resolution_tier = 'lsp_resolved'`);
+    db.exec(`UPDATE edges SET confidence = 0.95 WHERE resolution_tier = 'ast_resolved'`);
+    db.exec(`UPDATE edges SET confidence = 0.70 WHERE resolution_tier = 'ast_inferred'`);
+    db.exec(`UPDATE edges SET confidence = 0.40 WHERE resolution_tier = 'text_matched'`);
+    // Trigger that seeds confidence from tier on future inserts so the
+    // existing INSERT statements across plugins keep working unchanged.
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS edges_confidence_from_tier
+      AFTER INSERT ON edges
+      WHEN NEW.confidence = 0.95 AND NEW.resolution_tier != 'ast_resolved'
+      BEGIN
+        UPDATE edges SET confidence = CASE NEW.resolution_tier
+          WHEN 'lsp_resolved' THEN 1.0
+          WHEN 'ast_inferred' THEN 0.7
+          WHEN 'text_matched' THEN 0.4
+          ELSE 0.95
+        END
+        WHERE id = NEW.id;
+      END;
     `);
   },
 };
