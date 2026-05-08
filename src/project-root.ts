@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.svn', '__pycache__', '.tox']);
@@ -243,8 +244,22 @@ export function hasRootMarkers(dir: string): boolean {
 /**
  * Walk up from `from` (default: cwd) and return the first directory
  * that contains any root marker. Throws if none found.
+ *
+ * Env-var override: `TRACE_MCP_REPO_ROOT` short-circuits the walk and is
+ * returned verbatim (after `~` expansion). Useful for scripted callers
+ * that invoke trace-mcp from a parent directory or for Docker/CI contexts
+ * where the repo lives outside the cwd. CRG v2.3.0 (#155) introduced the
+ * same knob.
  */
 export function findProjectRoot(from?: string): string {
+  const envOverride = process.env.TRACE_MCP_REPO_ROOT;
+  if (envOverride && envOverride.length > 0) {
+    const expanded = envOverride.startsWith('~')
+      ? path.join(os.homedir(), envOverride.slice(1))
+      : envOverride;
+    return path.resolve(expanded);
+  }
+
   let dir = path.resolve(from ?? process.cwd());
 
   while (true) {

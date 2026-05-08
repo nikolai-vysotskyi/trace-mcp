@@ -12,8 +12,25 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/** Root of all trace-mcp global state. */
-export const TRACE_MCP_HOME = path.join(os.homedir(), '.trace-mcp');
+/**
+ * Root of all trace-mcp global state.
+ *
+ * Default: `~/.trace-mcp/`. Override with `TRACE_MCP_DATA_DIR=<path>` for
+ * Docker volumes, ephemeral CI workspaces, multi-repo orchestrators, or
+ * shared cache locations. CRG v2.3.0 (#155) introduced the same knob — the
+ * env var replaces the default verbatim, with `~` expansion. Resolved at
+ * import time so a user-facing change requires a process restart.
+ */
+export const TRACE_MCP_HOME = (() => {
+  const override = process.env.TRACE_MCP_DATA_DIR;
+  if (override && override.length > 0) {
+    const expanded = override.startsWith('~')
+      ? path.join(os.homedir(), override.slice(1))
+      : override;
+    return path.resolve(expanded);
+  }
+  return path.join(os.homedir(), '.trace-mcp');
+})();
 
 /** Global config file (replaces per-project .trace-mcp.json). */
 export const GLOBAL_CONFIG_PATH = path.join(TRACE_MCP_HOME, '.config.json');
