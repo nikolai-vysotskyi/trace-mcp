@@ -1,0 +1,32 @@
+{
+  "name": "trace-mcp",
+  "version": "1.33.0",
+  "description": "Framework-aware code intelligence MCP server. 60+ framework integrations, 81 languages, semantic search with Signal Fusion (BM25 + PageRank + embeddings + identity), refactoring tools (rename/move/extract/codemod), change-impact analysis, security scanning, and decision/session memory.",
+  "author": {
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "license": "MIT",
+  "commands": [],
+  "mcpServers": {
+    "trace-mcp": {
+      "command": "trace-mcp"
+    }
+  },
+  "keywords": [
+    "mcp",
+    "code-intelligence",
+    "static-analysis",
+    "refactoring",
+    "semantic-search",
+    "framework-aware",
+    "laravel",
+    "vue",
+    "nuxt",
+    "react",
+    "typescript",
+    "decisions",
+    "memory"
+  ],
+  "repository": "https://github.com/nikolai-vysotskyi/trace-mcp"
+}

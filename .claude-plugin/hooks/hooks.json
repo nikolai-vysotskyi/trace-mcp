@@ -1,0 +1,26 @@
+{
+  "description": "trace-mcp guard + pre-compact hooks. The guard blocks Bash exploration on source trees in favor of trace-mcp tools; the pre-compact hook injects a session snapshot to survive context compaction.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/../hooks/trace-mcp-guard.sh\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/../hooks/trace-mcp-precompact.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
