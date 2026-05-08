@@ -10,6 +10,7 @@ import {
 } from '../../subproject/manager.js';
 import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
+import { cloneRemoteRepo, isSafeGitUrl } from './subproject-clone.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // 1. SUBPROJECT GRAPH — show all subprojects and their connections
@@ -44,7 +45,14 @@ export function getSubprojectImpact(
 
 export function subprojectAddRepo(
   topoStore: TopologyStore,
-  opts: { repoPath: string; projectRoot: string; name?: string; contractPaths?: string[] },
+  opts: {
+    repoPath?: string;
+    gitUrl?: string;
+    gitRef?: string;
+    projectRoot: string;
+    name?: string;
+    contractPaths?: string[];
+  },
 ): TraceMcpResult<{
   repo: string;
   name: string;
@@ -52,14 +60,34 @@ export function subprojectAddRepo(
   endpoints: number;
   clientCalls: number;
   linkedCalls: number;
+  cloned?: { gitUrl: string; cloneDir: string; reused: boolean };
 }> {
+  if (!opts.repoPath && !opts.gitUrl) {
+    return err(validationError('repo_path or git_url is required'));
+  }
+
+  let repoPath = opts.repoPath ?? '';
+  let cloneInfo: { gitUrl: string; cloneDir: string; reused: boolean } | undefined;
+
+  if (opts.gitUrl) {
+    if (!isSafeGitUrl(opts.gitUrl)) {
+      return err(
+        validationError(`Refusing to clone unsafe git URL: ${JSON.stringify(opts.gitUrl)}`),
+      );
+    }
+    const cloneResult = cloneRemoteRepo(opts.projectRoot, opts.gitUrl, { ref: opts.gitRef });
+    if (cloneResult.isErr()) return err(cloneResult.error);
+    repoPath = cloneResult.value.cloneDir;
+    cloneInfo = { gitUrl: opts.gitUrl, ...cloneResult.value };
+  }
+
   try {
     const manager = new SubprojectManager(topoStore);
-    const result = manager.add(opts.repoPath, opts.projectRoot, {
+    const result = manager.add(repoPath, opts.projectRoot, {
       name: opts.name,
       contractPaths: opts.contractPaths,
     });
-    return ok(result);
+    return ok(cloneInfo ? { ...result, cloned: cloneInfo } : result);
   } catch (e) {
     return err(validationError((e as Error).message));
   }

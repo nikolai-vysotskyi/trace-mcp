@@ -213,13 +213,29 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'subproject_add_repo',
-      'Add a repository as a subproject of the current project. A subproject is any working repository in your ecosystem: microservices, frontends, backends, shared libraries, CLI tools. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints. Mutates the topology store; idempotent. Use to build multi-repo intelligence. Returns JSON: { added, services, contracts, clientCalls }.',
+      'Add a repository as a subproject of the current project. Pass `repo_path` for a local checkout, or `git_url` to shallow-clone a remote repo into .trace-mcp/subprojects/<owner>/<repo> first (idempotent — re-runs reuse the existing clone). A subproject is any working repository in your ecosystem: microservices, frontends, backends, shared libraries, CLI tools. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints. Mutates the topology store; idempotent. Returns JSON: { added, services, contracts, clientCalls, cloned? }.',
       {
         repo_path: z
           .string()
           .min(1)
           .max(1024)
-          .describe('Absolute or relative path to the repository/service'),
+          .optional()
+          .describe(
+            'Absolute or relative path to a local repository/service. Mutually exclusive with git_url.',
+          ),
+        git_url: z
+          .string()
+          .min(1)
+          .max(1024)
+          .optional()
+          .describe(
+            'HTTPS or SSH git URL to clone. Restricted to https://host/owner/repo and git@host:owner/repo forms — no shell metacharacters, no leading dash.',
+          ),
+        git_ref: z
+          .string()
+          .max(256)
+          .optional()
+          .describe('Optional branch / tag / SHA to check out after cloning.'),
         name: z
           .string()
           .max(256)
@@ -235,10 +251,12 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           .optional()
           .describe('Explicit contract file paths relative to repo root'),
       },
-      async ({ repo_path, name, project, contract_paths }) => {
+      async ({ repo_path, git_url, git_ref, name, project, contract_paths }) => {
         const targetProject = project ?? projectRoot;
         const result = subprojectAddRepo(topoStore, {
           repoPath: repo_path,
+          gitUrl: git_url,
+          gitRef: git_ref,
           projectRoot: targetProject,
           name,
           contractPaths: contract_paths,
@@ -823,6 +841,30 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           isError: true,
         };
       return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Graph Export (GraphML / Cypher / Obsidian) ---
+
+  server.tool(
+    'export_graph',
+    'Export the dependency graph in formats external tools understand. Supports GraphML (Gephi/yEd/NetworkX), Cypher (Neo4j import script), and Obsidian (markdown vault with [[wikilinks]]). Use to crunch the graph in tools that already exist — Cypher queries, betweenness-centrality in NetworkX, vault navigation. For interactive HTML use visualize_graph; for Mermaid/DOT diagrams use get_dependency_diagram. Read-only. Returns JSON: { format, content, node_count, edge_count }.',
+    {
+      format: z
+        .enum(['graphml', 'cypher', 'obsidian'])
+        .describe('Export format. graphml=Gephi/yEd, cypher=Neo4j, obsidian=markdown vault.'),
+      max_nodes: z
+        .number()
+        .int()
+        .min(1)
+        .max(50000)
+        .optional()
+        .describe('Cap on exported nodes (default 5000). Beyond ~50k Gephi struggles.'),
+    },
+    async ({ format, max_nodes }) => {
+      const { exportGraph } = await import('../analysis/export-graph.js');
+      const result = exportGraph(store, format, { max_nodes });
+      return { content: [{ type: 'text', text: j(result) }] };
     },
   );
 
