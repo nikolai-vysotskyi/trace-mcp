@@ -262,19 +262,30 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'find_usages',
-    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — understands semantic relationships, not just text matches. For bidirectional call graph use get_call_graph instead. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total }.',
+    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — understands semantic relationships, not just text matches. For bidirectional call graph use get_call_graph instead. By default, weakly-grounded `text_matched` edges into a target whose simple name collides with many other symbols are dropped (phantom god-node filter). Pass `include_ambiguous_text_matched: true` to keep them. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total, ambiguous_filtered? }.',
     {
       symbol_id: z.string().max(512).optional().describe('Symbol ID to find references for'),
       fqn: z.string().max(512).optional().describe('Fully qualified name to find references for'),
       file_path: z.string().max(512).optional().describe('File path to find references for'),
       detail_level: DetailLevelSchema,
+      include_ambiguous_text_matched: z
+        .boolean()
+        .optional()
+        .describe(
+          'Keep text_matched edges whose target name collides with >=3 other symbols (default false — they produce phantom god-nodes).',
+        ),
     },
-    async ({ symbol_id, fqn, file_path, detail_level }) => {
+    async ({ symbol_id, fqn, file_path, detail_level, include_ambiguous_text_matched }) => {
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
       }
-      const result = findReferences(store, { symbolId: symbol_id, fqn, filePath: file_path });
+      const result = findReferences(store, {
+        symbolId: symbol_id,
+        fqn,
+        filePath: file_path,
+        includeAmbiguousTextMatched: include_ambiguous_text_matched,
+      });
       if (result.isErr()) {
         return {
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],
@@ -298,7 +309,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       if (isMinimal(detail_level)) {
         const minimal = {
           ...result.value,
-          references: compactUsageRefs(result.value.references as UsageRefFull[]),
+          references: compactUsageRefs(result.value.references as unknown as UsageRefFull[]),
           detail_level: 'minimal' as const,
         };
         return { content: [{ type: 'text', text: jh('find_usages', minimal) }] };

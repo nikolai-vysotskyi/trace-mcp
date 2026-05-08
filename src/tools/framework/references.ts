@@ -41,15 +41,32 @@ interface FindReferencesResult {
   resolution_tiers: ResolutionTiers;
   /** If CHA expanded the search, lists the equivalent methods found */
   cha_expansion?: { symbol_id: string; name: string; relation: string }[];
+  /** Set when ambiguous text_matched edges were skipped because the target
+   * name is shared with many other symbols (graphify #543 phantom-god-node
+   * fix). Lets callers know the result was tightened. */
+  ambiguous_filtered?: { dropped: number; nameCollisions: number };
 }
 
 /**
  * Find all incoming references to a symbol or file node.
  * Returns every edge pointing at the target, with the referencing symbol resolved.
+ *
+ * `includeAmbiguousTextMatched` (default false) controls whether weakly-grounded
+ * `text_matched` edges aimed at common method names like `log`, `execute`, `run`
+ * are kept. graphify v0.5.5 / v0.6.3 fixed the same phantom-god-node problem
+ * by dropping cross-file edges whose callee resolved to 2+ candidates. We do
+ * the analogous filter at query time: when the target's simple name collides
+ * with many other symbols and the edge is text_matched, drop it.
  */
 export function findReferences(
   store: Store,
-  opts: { symbolId?: string; fqn?: string; filePath?: string },
+  opts: {
+    symbolId?: string;
+    fqn?: string;
+    filePath?: string;
+    includeAmbiguousTextMatched?: boolean;
+    ambiguityThreshold?: number;
+  },
 ): TraceMcpResult<FindReferencesResult> {
   let nodeId: number | undefined;
   const targetMeta: FindReferencesResult['target'] = {};
@@ -185,15 +202,40 @@ export function findReferences(
     references.push(ref);
   }
 
+  // Phantom god-node filter — drop text_matched edges into a target whose
+  // simple name collides with many other symbols. Without this, names like
+  // `log`, `handle`, `execute`, `run` accumulate hundreds of spurious cross-
+  // file incoming edges, since the indexer cannot tell which `log` is meant.
+  let kept = references;
+  let ambiguousFiltered: { dropped: number; nameCollisions: number } | undefined;
+  const includeAmbiguous = opts.includeAmbiguousTextMatched ?? false;
+  const ambiguityThreshold = opts.ambiguityThreshold ?? 3;
+  if (!includeAmbiguous && (opts.symbolId || opts.fqn)) {
+    const resolved = resolveSymbolInput(store, opts);
+    if (resolved) {
+      const targetName = resolved.symbol.name;
+      const nameCollisions = store.countSymbolsByName(targetName);
+      if (nameCollisions >= ambiguityThreshold) {
+        const filtered = references.filter((r) => r.resolution_tier !== 'text_matched');
+        const dropped = references.length - filtered.length;
+        if (dropped > 0) {
+          kept = filtered;
+          ambiguousFiltered = { dropped, nameCollisions };
+        }
+      }
+    }
+  }
+
   const tiers = emptyResolutionTiers();
-  for (const r of references) tiers[r.resolution_tier]++;
+  for (const r of kept) tiers[r.resolution_tier]++;
 
   const result: FindReferencesResult = {
     target: targetMeta,
-    references,
-    total: references.length,
+    references: kept,
+    total: kept.length,
     resolution_tiers: tiers,
   };
   if (chaExpansion && chaExpansion.length > 0) result.cha_expansion = chaExpansion;
+  if (ambiguousFiltered) result.ambiguous_filtered = ambiguousFiltered;
   return ok(result);
 }
