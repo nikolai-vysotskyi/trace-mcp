@@ -33,8 +33,10 @@ describe('launcher config paths', () => {
   });
 
   it('honors $TRACE_MCP_HOME override', () => {
+    // On Windows the launcher is a .cmd shim; on POSIX it's a bare bash script.
+    const launcherName = process.platform === 'win32' ? 'trace-mcp.cmd' : 'trace-mcp';
     expect(getLauncherDir()).toBe(tmp);
-    expect(getLauncherPath()).toBe(path.join(tmp, 'bin', 'trace-mcp'));
+    expect(getLauncherPath()).toBe(path.join(tmp, 'bin', launcherName));
     expect(getLauncherConfigPath()).toBe(path.join(tmp, 'launcher.env'));
   });
 
@@ -68,7 +70,10 @@ describe('writeLauncherConfig / readLauncherConfig', () => {
     });
   });
 
-  it('writes file with 0600 perms', () => {
+  // POSIX permission bits don't apply on Windows — fs.chmod's mode argument is
+  // ignored there, files are stored with default 0o666. Skip rather than assert
+  // a separate platform-specific value.
+  it.skipIf(process.platform === 'win32')('writes file with 0600 perms', () => {
     writeLauncherConfig({ node: '/x', cli: '/y', version: '0.0.1' });
     const stat = fs.statSync(getLauncherConfigPath());
     // On macOS/Linux, mode includes file-type bits — mask to perms only.
@@ -118,19 +123,25 @@ describe('installLauncher', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('creates launcher on first install, with correct version and +x', () => {
-    const step = installLauncher({});
-    expect(step.action).toBe('created');
+  // The bash launcher script and the +x bit are POSIX-specific. Windows
+  // installs a .cmd shim with different content; that path is exercised by
+  // tests/init/launcher-integration-windows.test.ts.
+  it.skipIf(process.platform === 'win32')(
+    'creates launcher on first install, with correct version and +x',
+    () => {
+      const step = installLauncher({});
+      expect(step.action).toBe('created');
 
-    const p = getLauncherPath();
-    expect(fs.existsSync(p)).toBe(true);
-    expect(fs.statSync(p).mode & 0o111).not.toBe(0); // any exec bit set
-    expect(readInstalledLauncherVersion()).toBe(LAUNCHER_VERSION);
+      const p = getLauncherPath();
+      expect(fs.existsSync(p)).toBe(true);
+      expect(fs.statSync(p).mode & 0o111).not.toBe(0); // any exec bit set
+      expect(readInstalledLauncherVersion()).toBe(LAUNCHER_VERSION);
 
-    const body = fs.readFileSync(p, 'utf-8');
-    expect(body).toContain('#!/bin/bash');
-    expect(body).toContain(`trace-mcp-launcher v${LAUNCHER_VERSION}`);
-  });
+      const body = fs.readFileSync(p, 'utf-8');
+      expect(body).toContain('#!/bin/bash');
+      expect(body).toContain(`trace-mcp-launcher v${LAUNCHER_VERSION}`);
+    },
+  );
 
   it('skips reinstall when version matches', () => {
     installLauncher({});

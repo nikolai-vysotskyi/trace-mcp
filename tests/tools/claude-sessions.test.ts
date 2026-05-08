@@ -35,7 +35,12 @@ describe('decodeClaudeProjectName', () => {
 // The "real" project is placed at a dash-free tmpdir path so encoding is
 // unambiguous (no literal dashes in the path segments).
 
-describe('discoverClaudeSessions', () => {
+// The fixture builds Claude-encoded directory names by replacing `/` with `-`
+// in an absolute path. On Windows, paths contain backslashes, so the encoding
+// step does nothing and the resulting names contain native separators that
+// can't be used as directory names. Skip on win32 — the production code path
+// (Windows session discovery) needs separate, dedicated coverage.
+describe.skipIf(process.platform === 'win32')('discoverClaudeSessions', () => {
   let claudeRoot: string; // stands in for ~/.claude/projects
   let projectsDir: string;
   let realProject: string; // a dash-free path that will round-trip cleanly

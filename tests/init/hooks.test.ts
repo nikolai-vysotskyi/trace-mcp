@@ -52,7 +52,9 @@ describe('installGuardHook', () => {
   it('copies hook script and creates settings entry (global)', () => {
     // Hook source exists at package path, but not yet installed at dest
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
+      // Normalize path separators so `s.includes('hooks/...')` matchers work
+      // on Windows runners (where path.join emits backslashes).
+      const s = String(p).replace(/\\/g, '/');
       if (s.includes('hooks') && s.includes('hooks/trace-mcp-guard') && !s.includes('.claude'))
         return true;
       if (s.includes('.claw')) return false;
@@ -77,7 +79,9 @@ describe('installGuardHook', () => {
 
   it('reports updated when hook already exists at dest', () => {
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
+      // Normalize path separators so `s.includes('hooks/...')` matchers work
+      // on Windows runners (where path.join emits backslashes).
+      const s = String(p).replace(/\\/g, '/');
       // Source and dest both exist
       if (s.includes('trace-mcp-guard')) return true;
       if (s.includes('.claw')) return false;
@@ -101,7 +105,9 @@ describe('installGuardHook', () => {
     });
 
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
+      // Normalize path separators so `s.includes('hooks/...')` matchers work
+      // on Windows runners (where path.join emits backslashes).
+      const s = String(p).replace(/\\/g, '/');
       if (s.includes('hooks/trace-mcp-guard')) return true;
       if (s.includes('settings.json')) return true;
       if (s.includes('.claw')) return false;
@@ -153,26 +159,34 @@ describe('installGuardHook', () => {
     }
   });
 
-  it('does NOT copy Windows aux .ps1 helpers on non-win32 platforms', () => {
-    // Current platform is non-win32 (darwin/linux in CI); aux files should be skipped.
-    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
-      if (s.includes('hooks') && s.includes('trace-mcp-guard') && !s.includes('.claude'))
-        return true;
-      if (s.includes('.claw')) return false;
-      return false;
-    });
+  it.skipIf(process.platform === 'win32')(
+    'does NOT copy Windows aux .ps1 helpers on non-win32 platforms',
+    () => {
+      // Asserts non-win32 branch behavior; can't run on the windows-latest runner
+      // because the production code under test reads process.platform directly.
+      mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+        // Normalize path separators so `s.includes('hooks/...')` matchers work
+        // on Windows runners (where path.join emits backslashes).
+        const s = String(p).replace(/\\/g, '/');
+        if (s.includes('hooks') && s.includes('trace-mcp-guard') && !s.includes('.claude'))
+          return true;
+        if (s.includes('.claw')) return false;
+        return false;
+      });
 
-    installGuardHook({ global: true });
+      installGuardHook({ global: true });
 
-    const copies = mockFs.copyFileSync.mock.calls.map((c) => String(c[1]));
-    expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(false);
-    expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-md-tour.ps1'))).toBe(false);
-  });
+      const copies = mockFs.copyFileSync.mock.calls.map((c) => String(c[1]));
+      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(false);
+      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-md-tour.ps1'))).toBe(false);
+    },
+  );
 
   it('also installs for Claw Code when .claw exists', () => {
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
+      // Normalize path separators so `s.includes('hooks/...')` matchers work
+      // on Windows runners (where path.join emits backslashes).
+      const s = String(p).replace(/\\/g, '/');
       if (s.includes('hooks/trace-mcp-guard')) return true;
       if (s.endsWith('.claw')) return true; // claw dir exists
       return false;
@@ -200,7 +214,9 @@ describe('uninstallGuardHook', () => {
     });
 
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
+      // Normalize path separators so `s.includes('hooks/...')` matchers work
+      // on Windows runners (where path.join emits backslashes).
+      const s = String(p).replace(/\\/g, '/');
       if (s.includes('settings')) return true;
       if (s.includes('trace-mcp-guard')) return true;
       if (s.includes('.claw')) return false;
@@ -229,7 +245,9 @@ describe('uninstallGuardHook', () => {
     });
 
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
+      // Normalize path separators so `s.includes('hooks/...')` matchers work
+      // on Windows runners (where path.join emits backslashes).
+      const s = String(p).replace(/\\/g, '/');
       if (s.includes('settings')) return true;
       if (s.includes('.claw')) return false;
       return false;
@@ -255,7 +273,9 @@ describe('installReindexHook', () => {
 
   it('installs PostToolUse hook with Edit|Write|MultiEdit matcher', () => {
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
-      const s = String(p);
+      // Normalize path separators so `s.includes('hooks/...')` matchers work
+      // on Windows runners (where path.join emits backslashes).
+      const s = String(p).replace(/\\/g, '/');
       if (s.includes('trace-mcp-reindex') && !s.includes('.claude')) return true;
       if (s.includes('.claw')) return false;
       return false;

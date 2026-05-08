@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:fs');
@@ -65,12 +66,21 @@ describe('updateClaudeMd', () => {
 
   it('uses global path when scope is global', () => {
     const origHome = process.env.HOME;
+    const origUserProfile = process.env.USERPROFILE;
     process.env.HOME = '/home/user';
+    // os.homedir() reads USERPROFILE on Windows; set both so the production
+    // code under test resolves to the same fake home regardless of platform.
+    process.env.USERPROFILE = '/home/user';
 
     const result = updateClaudeMd('/project', { scope: 'global' });
-    expect(result.target).toContain('.claude/CLAUDE.md');
+    // path.join uses native separator; assert against the platform-correct
+    // form so the test doesn't bake in POSIX expectations.
+    expect(result.target).toContain(path.join('.claude', 'CLAUDE.md'));
 
-    process.env.HOME = origHome;
+    if (origHome !== undefined) process.env.HOME = origHome;
+    else delete process.env.HOME;
+    if (origUserProfile !== undefined) process.env.USERPROFILE = origUserProfile;
+    else delete process.env.USERPROFILE;
   });
 
   it('replaces existing block between markers', () => {

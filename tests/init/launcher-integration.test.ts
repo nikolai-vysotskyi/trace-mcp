@@ -56,7 +56,10 @@ afterAll(() => {
   fs.rmSync(FIXTURES, { recursive: true, force: true });
 });
 
-describe('launcher shim integration', () => {
+// The POSIX launcher shim (sh) is meaningful only on macOS/Linux. The Windows
+// equivalent is covered by tests/init/launcher-integration-windows.test.ts via
+// cmd.exe + powershell. Skip this suite on win32.
+describe.skipIf(process.platform === 'win32')('launcher shim integration', () => {
   it('happy path: valid config → execs node+cli with passed args', () => {
     const { home, traceHome, node, cli } = setupFakeHome();
     writeConfig(traceHome, node, cli);
