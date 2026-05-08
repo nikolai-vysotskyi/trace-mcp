@@ -551,17 +551,21 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
     fi
   fi
 
-  # `ls` on source-tree paths — code exploration disguised as listing.
-  # Allows: `ls`, `ls .`, `ls -la`, `ls /tmp/...`, `ls dist/`, `ls node_modules/...`
-  # Denies: `ls src/...`, `ls /abs/.../packages/foo/`, `ls foo/lib/bar`, etc.
-  # Pattern: `ls` as a command (start, after pipe / && / ; / xargs) AND any
-  # argument component is a known source-tree directory.
-  if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)ls( |$)' \
-     && echo "$COMMAND" | grep -qE '(^|[ /])(src|lib|packages|apps?|server|client|pkg|internal|modules|services|pipelines|cmd)/' \
+  # `ls` / `find` on source-tree paths — code exploration disguised as listing.
+  # Allows: `ls`, `ls .`, `ls -la`, `ls /tmp/...`, `ls dist/`, `find . -name foo`,
+  #         `find /tmp -type f`.
+  # Denies: `ls src/...`, `ls /abs/.../packages/foo/`, `find src -type f`,
+  #         `find packages/ -name '*.json'`.
+  # Pattern: command starts with `ls` or `find` (with the usual command-prefix
+  # delimiters) AND any argument component is a known source-tree directory.
+  # Note: the existing `find` rule below catches `find ... *.ts` via code-ext
+  # match; this rule additionally catches `find src -type f` (no extension).
+  if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)(ls|find)( |$)' \
+     && echo "$COMMAND" | grep -qE '(^|[ /])(src|lib|packages|apps?|server|client|pkg|internal|modules|services|pipelines|cmd)([/ ]|$)' \
      && ! echo "$COMMAND" | grep -qE '(node_modules|vendor|dist|build|\.git|target|out)/'; then
     deny \
-      "Use trace-mcp instead of \\\"ls\\\" on source-tree paths — it knows your project structure." \
-      "trace-mcp alternatives:\\n- get_project_map { \\\"summary_only\\\": true } — frameworks + structure overview\\n- get_outline { \\\"path\\\": \\\"src/foo/bar.ts\\\" } — symbols in a file (cheaper than Read)\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"src/**\\\" } — find symbols in a tree\\nUse \\\"ls\\\" only on non-source dirs (dist/, build/, /tmp, ~, node_modules/)."
+      "Use trace-mcp instead of \\\"ls\\\"/\\\"find\\\" on source-tree paths — it knows your project structure." \
+      "trace-mcp alternatives:\\n- get_project_map { \\\"summary_only\\\": true } — frameworks + structure overview\\n- get_outline { \\\"path\\\": \\\"src/foo/bar.ts\\\" } — symbols in a file (cheaper than Read)\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"src/**\\\" } — find symbols in a tree\\nUse \\\"ls\\\"/\\\"find\\\" only on non-source dirs (dist/, build/, /tmp, ~, node_modules/)."
   fi
 
   # Safe Bash whitelist (allows env-prefixed forms like `LC_ALL=C git ...`).

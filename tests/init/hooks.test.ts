@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GUARD_HOOK_VERSION } from '../../src/init/types.js';
+
 // Mock fs and os before importing the module under test
 vi.mock('node:fs');
 vi.mock('node:os');
@@ -116,7 +118,7 @@ describe('installGuardHook', () => {
     expect(settings.hooks.PreToolUse).toHaveLength(1); // not duplicated
   });
 
-  it('copies Windows aux .ps1 helper alongside .cmd on win32', async () => {
+  it('copies Windows aux .ps1 helpers alongside .cmd on win32', async () => {
     // IS_WINDOWS / HOOK_EXT are module-level constants, so we have to stub the
     // platform BEFORE importing the module under test.
     const origPlatform = process.platform;
@@ -129,6 +131,12 @@ describe('installGuardHook', () => {
           return true;
         if (s.includes('hooks') && s.includes('trace-mcp-guard-read.ps1') && !s.includes('.claude'))
           return true;
+        if (
+          s.includes('hooks') &&
+          s.includes('trace-mcp-guard-md-tour.ps1') &&
+          !s.includes('.claude')
+        )
+          return true;
         if (s.includes('.claw')) return false;
         return false;
       });
@@ -139,13 +147,14 @@ describe('installGuardHook', () => {
       const copies = mockFs.copyFileSync.mock.calls.map((c) => String(c[1]));
       expect(copies.some((dest) => dest.endsWith('trace-mcp-guard.cmd'))).toBe(true);
       expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(true);
+      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-md-tour.ps1'))).toBe(true);
     } finally {
       Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     }
   });
 
-  it('does NOT copy Windows aux .ps1 helper on non-win32 platforms', () => {
-    // Current platform is non-win32 (darwin/linux in CI); aux file should be skipped.
+  it('does NOT copy Windows aux .ps1 helpers on non-win32 platforms', () => {
+    // Current platform is non-win32 (darwin/linux in CI); aux files should be skipped.
     mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
       const s = String(p);
       if (s.includes('hooks') && s.includes('trace-mcp-guard') && !s.includes('.claude'))
@@ -158,6 +167,7 @@ describe('installGuardHook', () => {
 
     const copies = mockFs.copyFileSync.mock.calls.map((c) => String(c[1]));
     expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(false);
+    expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-md-tour.ps1'))).toBe(false);
   });
 
   it('also installs for Claw Code when .claw exists', () => {
@@ -273,7 +283,6 @@ describe('isHookOutdated', () => {
   });
 
   it('returns false for matching version', () => {
-    // The current version is exported from types
-    expect(isHookOutdated('0.6.0')).toBe(false);
+    expect(isHookOutdated(GUARD_HOOK_VERSION)).toBe(false);
   });
 });
