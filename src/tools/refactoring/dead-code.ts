@@ -257,9 +257,21 @@ export function getDeadCodeV2(
     // Signal 1: not in any import specifier
     const notImported = !importedNames.has(sym.name);
 
-    // Signal 2: no incoming call/reference edges to this symbol's node
+    // Signal 2: no incoming call/reference edges to this symbol's node.
+    // Note: `referencedNodeIds` is built from *all* call/reference edges
+    // regardless of which file the source lives in, so an intra-file
+    // caller correctly flips this signal to false. Mirrors the
+    // jcodemunch v1.80.10 fix.
     const symNodeId = symNodeIdMap.get(sym.id);
     const notReferenced = symNodeId === undefined || !referencedNodeIds.has(symNodeId);
+
+    // Hard skip when *anything* references the symbol. The two remaining
+    // signals (import + barrel) describe the public surface, not whether
+    // the function is actually invoked. With both surface-signals firing
+    // and a single intra-file caller we'd otherwise return confidence
+    // 0.67 — a confidence-laundered false positive in any monolithic file
+    // (entry points, lodash-class single-file libs).
+    if (!notReferenced) continue;
 
     // Signal 3: not re-exported from any barrel file
     const notInBarrel = !barrelExportedNames.has(sym.name);

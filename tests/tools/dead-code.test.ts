@@ -86,7 +86,7 @@ describe('getDeadCodeV2', () => {
     expect(result.dead_symbols[0].signals.import_graph).toBe(false);
   });
 
-  it('does not report symbol with incoming call edge (signal 2 = false)', () => {
+  it('does not report symbol with incoming call edge', () => {
     const fA = insertFile(store, 'src/a.ts');
     const fB = insertFile(store, 'src/b.ts');
     const symId = insertExportedSymbol(store, fA, 'calledFunc');
@@ -103,13 +103,11 @@ describe('getDeadCodeV2', () => {
     const callerNodeId = store.getNodeId('symbol', callerSymId)!;
     insertEdge(store, callerNodeId, symNodeId, 'calls');
 
+    // Hard skip on any incoming call/reference: a symbol that's actually
+    // invoked is never dead, even if its public surface (import + barrel)
+    // looks unused. Mirrors the jcodemunch v1.80.10 false-positive fix.
     const result = getDeadCodeV2(store);
-    // Signal 1 = true (not imported by name)
-    // Signal 2 = false (has incoming call)
-    // Signal 3 = true (not in barrel)
-    // confidence = 2/3 = 0.67
-    expect(result.dead_symbols.length).toBe(1);
-    expect(result.dead_symbols[0].signals.call_graph).toBe(false);
+    expect(result.dead_symbols.length).toBe(0);
   });
 
   it('does not report symbol re-exported from barrel (signal 3 = false)', () => {
