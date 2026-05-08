@@ -8,6 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
+import { safeGitEnv } from '../../utils/git-env.js';
 import { isGitRepo } from './git-analysis.js';
 
 // ════════════════════════════════════════════════════════════════════════
@@ -44,6 +45,7 @@ export function getFileOwnership(cwd: string, filePaths: string[]): FileOwnershi
         cwd,
         stdio: 'pipe',
         timeout: 10_000,
+        env: safeGitEnv(),
       }).toString('utf-8');
 
       const owners: { author: string; commits: number }[] = [];
@@ -101,6 +103,7 @@ export function getSymbolOwnership(
         cwd,
         stdio: 'pipe',
         timeout: 10_000,
+        env: safeGitEnv(),
       },
     ).toString('utf-8');
 

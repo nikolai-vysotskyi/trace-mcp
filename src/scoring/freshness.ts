@@ -158,6 +158,7 @@ export function enrichItemsWithFreshness<T extends { file: string }>(
  * Best-effort: any failure resolves to null so freshness reporting never blocks.
  */
 import { execSync as _execSync } from 'node:child_process';
+import { safeGitEnv } from '../utils/git-env.js';
 
 export function computeRepoFreshness(
   rootPath: string,
@@ -178,6 +179,7 @@ export function computeRepoFreshness(
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 1000,
+      env: safeGitEnv(),
     });
     const sha = out.trim();
     if (/^[0-9a-f]{40}$/.test(sha)) current = sha;

@@ -7,6 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
+import { safeGitEnv } from '../../utils/git-env.js';
 import {
   type ConfidenceLevel,
   classifyConfidence,
@@ -88,6 +89,7 @@ export function isGitRepo(cwd: string): boolean {
       cwd,
       stdio: 'pipe',
       timeout: 5000,
+      env: safeGitEnv(),
     });
     return true;
   } catch {
@@ -118,6 +120,7 @@ function getGitFileStats(cwd: string, sinceDays?: number): Map<string, GitLogEnt
       stdio: 'pipe',
       maxBuffer: 10 * 1024 * 1024, // 10 MB
       timeout: 30_000,
+      env: safeGitEnv(),
     }).toString('utf-8');
   } catch (e) {
     logger.warn({ error: e }, 'git log failed');
