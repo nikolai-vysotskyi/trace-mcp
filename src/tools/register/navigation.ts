@@ -30,6 +30,13 @@ import { getTaskContext } from '../navigation/task-context.js';
 import { fallbackOutline, fallbackSearch } from '../navigation/zero-index.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../shared/confidence.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
+import {
+  compactOutlineSymbols,
+  compactSearchItems,
+  DetailLevelSchema,
+  isMinimal,
+  type SearchItemFull,
+} from '../_common/detail-level.js';
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
   const {
@@ -205,6 +212,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         .describe('Include per-channel rank contributions in fusion results.'),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
       offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
+      detail_level: DetailLevelSchema,
     },
     async ({
       query,
@@ -224,6 +232,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       fusion,
       fusion_weights,
       fusion_debug,
+      detail_level,
     }) => {
       // Zero-index fallback: if index is empty, use ripgrep
       const stats = store.getStats();
@@ -295,11 +304,15 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         }
         return item;
       });
+      const projectedItems = isMinimal(detail_level)
+        ? compactSearchItems(items as SearchItemFull[])
+        : items;
       const response: Record<string, unknown> = {
-        items,
+        items: projectedItems,
         total: result.total,
         search_mode: result.search_mode,
       };
+      if (isMinimal(detail_level)) response.detail_level = 'minimal';
       if (result.fusion_debug) response.fusion_debug = result.fusion_debug;
       if (items.length === 0) {
         // Auto-fallback: try text search when symbol search finds nothing
@@ -402,8 +415,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
     "Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens. For reading one symbol's source, follow up with get_symbol. Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd }] }.",
     {
       path: z.string().max(512).describe('Relative file path'),
+      detail_level: DetailLevelSchema,
     },
-    async ({ path: filePath }) => {
+    async ({ path: filePath, detail_level }) => {
       const blocked = guardPath(filePath);
       if (blocked) return blocked;
 
@@ -451,15 +465,24 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         scores: [1],
         freshnessSummary: summary,
       });
+      const projectedSymbols = isMinimal(detail_level)
+        ? compactOutlineSymbols(result.value.symbols)
+        : result.value.symbols;
       const outlineWithFreshness = {
-        ...result.value,
-        _freshness: freshness,
-        _meta: {
-          freshness: summary,
-          ...(confidence
-            ? { confidence: confidence.confidence, confidence_signals: confidence.signals }
-            : {}),
-        },
+        path: result.value.path,
+        language: result.value.language,
+        symbols: projectedSymbols,
+        ...(isMinimal(detail_level)
+          ? { detail_level: 'minimal' as const }
+          : {
+              _freshness: freshness,
+              _meta: {
+                freshness: summary,
+                ...(confidence
+                  ? { confidence: confidence.confidence, confidence_signals: confidence.signals }
+                  : {}),
+              },
+            }),
       };
       return { content: [{ type: 'text', text: jh('get_outline', outlineWithFreshness) }] };
     },
