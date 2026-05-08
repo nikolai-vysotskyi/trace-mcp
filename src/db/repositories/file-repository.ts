@@ -152,4 +152,28 @@ export class FileRepository {
     }
     return map;
   }
+
+  /**
+   * Find every file row whose content_hash matches `hash`. Used by the
+   * rename-detection pre-pass: when a "new" path on disk has the same content
+   * hash as a known DB row whose old path no longer exists, that's a rename
+   * and the existing symbols can be carried over instead of re-extracted.
+   * graphify v0.7.0 made this work by removing path from the cache key — we
+   * already key by content alone, this helper just exposes the lookup.
+   */
+  findFilesByContentHash(hash: string): FileRow[] {
+    return this.db.prepare('SELECT * FROM files WHERE content_hash = ?').all(hash) as FileRow[];
+  }
+
+  /**
+   * Atomically update a file row's path. Used for rename detection — we keep
+   * the existing fileId so all foreign-key references (symbols, edges, nodes)
+   * stay attached. ON CONFLICT(path) on the unique index is impossible by the
+   * caller's contract: caller must verify the new path is free first.
+   */
+  updateFilePath(fileId: number, newPath: string): void {
+    this.db
+      .prepare("UPDATE files SET path = ?, indexed_at = datetime('now') WHERE id = ?")
+      .run(newPath, fileId);
+  }
 }
