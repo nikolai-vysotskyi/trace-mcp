@@ -31,6 +31,7 @@ import {
 } from '../advanced/subproject.js';
 import { getDataflow } from '../analysis/dataflow.js';
 import { graphQuery } from '../analysis/graph-query.js';
+import { traverseGraph } from '../analysis/traverse-graph.js';
 import {
   assessChangeRisk,
   detectDrift,
@@ -691,6 +692,97 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           isError: true,
         };
       return { content: [{ type: 'text', text: jh('graph_query', result.value) }] };
+    },
+  );
+
+  // --- Graph Traversal (BFS/DFS with token budget) ---
+
+  server.tool(
+    'traverse_graph',
+    'Walk the dependency graph from a starting symbol or file using BFS/DFS, with a hard token budget on the response. Use when you want a structured "what reaches this from N hops away?" answer without committing to the call-graph or impact-radius shape. Read-only. Returns JSON: { start, direction, nodes: [{ id, kind, name, depth, edge_type, in_degree }], total_visited, truncated_by_depth, truncated_by_nodes, truncated_by_budget }.',
+    {
+      start_symbol_id: z
+        .string()
+        .max(512)
+        .optional()
+        .describe('Symbol ID to start from. Mutually exclusive with start_file_path.'),
+      start_file_path: z
+        .string()
+        .max(512)
+        .optional()
+        .describe('File path to start from. Mutually exclusive with start_symbol_id.'),
+      direction: z
+        .enum(['outgoing', 'incoming', 'both'])
+        .optional()
+        .describe(
+          'Direction of traversal (default outgoing — follow what the start node points to).',
+        ),
+      max_depth: z
+        .number()
+        .int()
+        .min(1)
+        .max(15)
+        .optional()
+        .describe('Maximum BFS depth (default 3).'),
+      max_nodes: z
+        .number()
+        .int()
+        .min(1)
+        .max(2000)
+        .optional()
+        .describe('Maximum nodes to visit (default 100).'),
+      edge_types: z
+        .array(z.string())
+        .optional()
+        .describe('Restrict the walk to these edge types (default: all).'),
+      token_budget: z
+        .number()
+        .int()
+        .min(200)
+        .max(50000)
+        .optional()
+        .describe('Approximate token cap on the response (default 4000).'),
+    },
+    async ({
+      start_symbol_id,
+      start_file_path,
+      direction,
+      max_depth,
+      max_nodes,
+      edge_types,
+      token_budget,
+    }) => {
+      if (!start_symbol_id && !start_file_path) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({ error: 'one of start_symbol_id or start_file_path is required' }),
+            },
+          ],
+          isError: true,
+        };
+      }
+      if (start_file_path) {
+        const blocked = guardPath(start_file_path);
+        if (blocked) return blocked;
+      }
+      const result = traverseGraph(store, {
+        start_symbol_id,
+        start_file_path,
+        direction,
+        max_depth,
+        max_nodes,
+        edge_types,
+        token_budget,
+      });
+      if (!result) {
+        return {
+          content: [{ type: 'text', text: j({ error: 'start node not found in index' }) }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text', text: jh('traverse_graph', result) }] };
     },
   );
 
