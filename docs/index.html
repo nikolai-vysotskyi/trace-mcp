@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- ── Primary Meta ── -->
-  <title>trace-mcp — recomputation → reuse for AI systems</title>
-  <meta name="description" content="AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 99% less redundant processing. Open source, local-first, MCP-native.">
+  <title>trace-mcp — Make AI agents understand your codebase, not just read it</title>
+  <meta name="description" content="A structured map of your codebase for AI agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn. ~40–50% fewer tokens on average, faster responses, more reliable at scale. Open source, local-first, MCP-native.">
   <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -47,8 +47,8 @@
   <meta property="og:site_name" content="trace-mcp">
   <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://trace-mcp.com/">
-  <meta property="og:title" content="trace-mcp — recomputation → reuse for AI systems">
-  <meta property="og:description" content="AI agents recompute the same work every turn. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 99% less redundant processing.">
+  <meta property="og:title" content="trace-mcp — Make AI agents understand your codebase, not just read it">
+  <meta property="og:description" content="A structured map of your codebase for AI agents. Stop paying for the same re-reads every turn. ~40–50% fewer tokens, faster responses, more reliable at scale.">
   <meta property="og:image" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:secure_url" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:type" content="image/png">
@@ -58,8 +58,8 @@
 
   <!-- ── Twitter / X Card ── -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="trace-mcp — recomputation → reuse for AI systems">
-  <meta name="twitter:description" content="AI agents recompute the same work every turn. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity. Open source, local-first.">
+  <meta name="twitter:title" content="trace-mcp — Make AI agents understand your codebase, not just read it">
+  <meta name="twitter:description" content="A structured map of your codebase for AI agents. ~40–50% fewer tokens, faster responses, more reliable at scale. Open source, local-first.">
   <meta name="twitter:image" content="https://trace-mcp.com/og-image.png">
   <meta name="twitter:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
 
@@ -412,6 +412,35 @@
       font-weight: 400;
     }
     .hero-desc .accent-text { color: var(--text-display); font-weight: 500; }
+    .hero-bullets {
+      list-style: none;
+      margin-top: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 17px;
+      color: var(--text-primary);
+      font-weight: 400;
+    }
+    .hero-bullets li {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .hero-bullets li::before {
+      content: '●';
+      font-size: 9px;
+      color: var(--success);
+      flex-shrink: 0;
+      line-height: 1.9;
+    }
+    .bullet-accent {
+      color: var(--text-display);
+      font-weight: 600;
+    }
+    @media (max-width: 700px) {
+      .hero-bullets { font-size: 15px; margin-top: 20px; gap: 8px; }
+    }
     .hero-cta {
       margin-top: 56px;
       display: flex; gap: 12px; flex-wrap: wrap;
@@ -1865,12 +1894,18 @@
       </div>
 
       <h1 class="hero-headline">
-        Give AI agents a map of your <span class="em">codebase.</span>
+        Make AI agents understand your codebase &mdash; <span class="em">not just read it.</span>
       </h1>
 
       <p class="hero-desc">
-        trace-mcp builds a framework-aware graph of your codebase once, then serves it through MCP so agents <span class="accent-text">reason from a precomputed structure instead of brute-reading the repo</span> &mdash; lower cost, lower latency, fewer hallucinations.
+        A structured map of your codebase for AI agents. trace-mcp indexes your repo once and serves it through MCP &mdash; so agents query a precomputed graph instead of re-reading the same files on every turn.
       </p>
+
+      <ul class="hero-bullets">
+        <li><span class="bullet-accent">~40&ndash;50%</span> fewer tokens on average</li>
+        <li><span class="bullet-accent">Faster responses</span> as the codebase grows</li>
+        <li><span class="bullet-accent">More reliable</span> results at scale</li>
+      </ul>
 
       <div class="hero-cta">
         <a href="#install" class="btn btn-primary">
@@ -1907,8 +1942,8 @@
           <span class="metrics-strip-label">Average token reduction across mixed agent workloads</span>
         </div>
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">94&ndash;99%</span>
-          <span class="metrics-strip-label">In structured workflows &mdash; code navigation, dependency graphs, repeated context</span>
+          <span class="metrics-strip-value">up to 99%</span>
+          <span class="metrics-strip-label">In structured workflows &mdash; repeated navigation, dependency traversal, context re-inflation</span>
         </div>
         <div class="metrics-strip-item">
           <span class="metrics-strip-value">up to 2&times;</span>
