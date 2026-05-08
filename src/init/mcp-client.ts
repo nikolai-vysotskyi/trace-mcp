@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 import YAML from 'yaml';
+import { atomicWriteJson } from '../utils/atomic-write.js';
 import { getLauncherPath } from './launcher.js';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 
@@ -431,7 +432,7 @@ function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 
   }
   (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
 
-  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  atomicWriteJson(configPath, config);
   return isNew ? 'created' : 'updated';
 }
 
@@ -593,7 +594,7 @@ function writeFactoryJsonEntry(
     config.mcpServers = {};
   }
   (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  atomicWriteJson(configPath, config);
   return isNew ? 'created' : 'updated';
 }
 

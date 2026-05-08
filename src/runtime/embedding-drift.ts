@@ -18,6 +18,7 @@ import path from 'node:path';
 import type { EmbeddingService } from '../ai/interfaces.js';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
 import { logger } from '../logger.js';
+import { atomicWriteJson } from '../utils/atomic-write.js';
 
 export const CANARY_PATH = path.join(TRACE_MCP_HOME, 'embedding-canary.json');
 
@@ -168,9 +169,7 @@ function loadCanary(filePath: string): CanaryFile | null {
 
 function saveCanary(filePath: string, data: CanaryFile): void {
   ensureGlobalDirs();
-  const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`);
-  fs.renameSync(tmp, filePath);
+  atomicWriteJson(filePath, data);
 }
 
 async function embedAll(svc: EmbeddingService, strings: string[]): Promise<number[][]> {
