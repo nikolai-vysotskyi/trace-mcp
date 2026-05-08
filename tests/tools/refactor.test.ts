@@ -76,13 +76,13 @@ describe('applyRename', () => {
     if (tmpDir) removeTmpDir(tmpDir);
   });
 
-  it('returns error for unknown symbol', () => {
+  it('returns error for unknown symbol', async () => {
     const result = applyRename(store, '/tmp', 'nonexistent#function', 'newName');
     expect(result.success).toBe(false);
     expect(result.error).toContain('Symbol not found');
   });
 
-  it('returns error when new name equals old name', () => {
+  it('returns error when new name equals old name', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'export function foo() {}' }, 'refactor-test-');
     const fA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fA, 'foo');
@@ -92,7 +92,7 @@ describe('applyRename', () => {
     expect(result.error).toContain('same as the current name');
   });
 
-  it('aborts on naming conflict in same file', () => {
+  it('aborts on naming conflict in same file', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'export function foo() {}\nfunction bar() {}' });
     const fA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fA, 'foo');
@@ -104,7 +104,7 @@ describe('applyRename', () => {
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 
-  it('renames symbol in definition file', () => {
+  it('renames symbol in definition file', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': 'export function oldName() {\n  return oldName;\n}\n',
     });
@@ -121,7 +121,7 @@ describe('applyRename', () => {
     expect(content).not.toContain('oldName');
   });
 
-  it('renames across importing files', () => {
+  it('renames across importing files', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': 'export function myFunc() {}\n',
       'src/b.ts': 'import { myFunc } from "./a";\nmyFunc();\n',
@@ -149,7 +149,7 @@ describe('applyRename', () => {
     expect(bContent).not.toContain('myFunc');
   });
 
-  it('respects word boundaries (does not rename substrings)', () => {
+  it('respects word boundaries (does not rename substrings)', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': 'export function get() {}\nfunction getAll() {}\nfunction doGet() {}\n',
     });
@@ -166,7 +166,7 @@ describe('applyRename', () => {
     expect(content).not.toMatch(/\bget\b/);
   });
 
-  it('warns when file missing on disk', () => {
+  it('warns when file missing on disk', async () => {
     tmpDir = createTmpFixture({});
     const fA = insertFile(store, 'src/missing.ts');
     insertSymbol(store, fA, 'foo');
@@ -194,13 +194,13 @@ describe('removeDeadCode', () => {
     if (tmpDir) removeTmpDir(tmpDir);
   });
 
-  it('returns error for unknown symbol', () => {
+  it('returns error for unknown symbol', async () => {
     const result = removeDeadCode(store, '/tmp', 'nonexistent#function');
     expect(result.success).toBe(false);
     expect(result.error).toContain('Symbol not found');
   });
 
-  it('refuses to remove symbol with incoming references', () => {
+  it('refuses to remove symbol with incoming references', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'export function used() {}' });
     const fA = insertFile(store, 'src/a.ts');
     const symDbId = insertSymbol(store, fA, 'used', { lineStart: 1, lineEnd: 1 });
@@ -218,7 +218,7 @@ describe('removeDeadCode', () => {
     expect(result.error).toContain('caller');
   });
 
-  it('returns error when symbol has no line range', () => {
+  it('returns error when symbol has no line range', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'export function noLines() {}' });
     const fA = insertFile(store, 'src/a.ts');
     insertSymbol(store, fA, 'noLines'); // no lineStart/lineEnd
@@ -228,7 +228,7 @@ describe('removeDeadCode', () => {
     expect(result.error).toContain('no line range');
   });
 
-  it('removes dead symbol from file', () => {
+  it('removes dead symbol from file', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'const x = 1;',
@@ -251,7 +251,7 @@ describe('removeDeadCode', () => {
     expect(content).toContain('const y = 2;');
   });
 
-  it('removes JSDoc and decorators above the symbol', () => {
+  it('removes JSDoc and decorators above the symbol', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'const keep = 1;',
@@ -277,7 +277,7 @@ describe('removeDeadCode', () => {
     expect(content).toContain('const alsoKeep = 2;');
   });
 
-  it('warns about orphaned imports when last export removed', () => {
+  it('warns about orphaned imports when last export removed', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': 'export function onlyExport() {\n  return 1;\n}\n',
       'src/b.ts': 'import { onlyExport } from "./a";\n',
@@ -301,7 +301,7 @@ describe('removeDeadCode', () => {
     expect(result.warnings.some((w) => w.includes('src/b.ts'))).toBe(true);
   });
 
-  it('cleans up consecutive blank lines after removal', () => {
+  it('cleans up consecutive blank lines after removal', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'const before = 1;',
@@ -343,28 +343,28 @@ describe('extractFunction', () => {
     if (tmpDir) removeTmpDir(tmpDir);
   });
 
-  it('returns error for missing file', () => {
+  it('returns error for missing file', async () => {
     tmpDir = createTmpFixture({});
     const result = extractFunction(store, tmpDir, 'src/nope.ts', 1, 3, 'extracted');
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
   });
 
-  it('returns error for invalid line range', () => {
+  it('returns error for invalid line range', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'line1\nline2\n' });
     const result = extractFunction(store, tmpDir, 'src/a.ts', 5, 10, 'extracted');
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid line range');
   });
 
-  it('returns error for inverted range (start > end)', () => {
+  it('returns error for inverted range (start > end)', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'line1\nline2\nline3\n' });
     const result = extractFunction(store, tmpDir, 'src/a.ts', 3, 1, 'extracted');
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid line range');
   });
 
-  it('extracts simple TS function with no params/returns', () => {
+  it('extracts simple TS function with no params/returns', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'function main() {',
@@ -384,7 +384,7 @@ describe('extractFunction', () => {
     expect(content).toContain('function greet()');
   });
 
-  it('detects parameters from outer scope', () => {
+  it('detects parameters from outer scope', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'const items = [1, 2, 3];',
@@ -407,7 +407,7 @@ describe('extractFunction', () => {
     expect(content).toContain('function transform(');
   });
 
-  it('detects return values used after extraction', () => {
+  it('detects return values used after extraction', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'const input = 10;',
@@ -427,7 +427,7 @@ describe('extractFunction', () => {
     expect(content).toMatch(/return/);
   });
 
-  it('generates Python syntax for .py files', () => {
+  it('generates Python syntax for .py files', async () => {
     tmpDir = createTmpFixture({
       'src/main.py': [
         'data = [1, 2, 3]',
@@ -445,7 +445,7 @@ describe('extractFunction', () => {
     expect(content).not.toContain('function ');
   });
 
-  it('generates Go syntax for .go files', () => {
+  it('generates Go syntax for .go files', async () => {
     tmpDir = createTmpFixture({
       'src/main.go': [
         'package main',
@@ -467,7 +467,7 @@ describe('extractFunction', () => {
     expect(content).not.toContain('def ');
   });
 
-  it('preserves lines before and after extraction', () => {
+  it('preserves lines before and after extraction', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'const header = "start";',
@@ -497,13 +497,13 @@ describe('applyCodemod', () => {
     if (tmpDir) removeTmpDir(tmpDir);
   });
 
-  it('dry_run returns preview without writing', () => {
+  it('dry_run returns preview without writing', async () => {
     tmpDir = createTmpFixture({
       'tests/a.test.ts': "it('works', () => {\n  doStuff();\n});\n",
       'tests/b.test.ts': "it('also works', () => {\n  doOther();\n});\n",
     });
 
-    const result = applyCodemod(
+    const result = await applyCodemod(
       tmpDir,
       "it\\('([^']+)',\\s*\\(\\)",
       "it('$1', async ()",
@@ -524,13 +524,13 @@ describe('applyCodemod', () => {
     expect(readFile(tmpDir, 'tests/a.test.ts')).not.toContain('async');
   });
 
-  it('applies changes when dry_run=false', () => {
+  it('applies changes when dry_run=false', async () => {
     tmpDir = createTmpFixture({
       'tests/a.test.ts': "it('works', () => {\n  doStuff();\n});\n",
       'tests/b.test.ts': "it('also works', () => {\n  doOther();\n});\n",
     });
 
-    const result = applyCodemod(
+    const result = await applyCodemod(
       tmpDir,
       "it\\('([^']+)',\\s*\\(\\)",
       "it('$1', async ()",
@@ -548,34 +548,36 @@ describe('applyCodemod', () => {
     expect(readFile(tmpDir, 'tests/b.test.ts')).toContain('async ()');
   });
 
-  it('returns error for invalid regex', () => {
+  it('returns error for invalid regex', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'hello' });
-    const result = applyCodemod(tmpDir, '(unclosed', 'x', 'src/**', { dryRun: true });
+    const result = await applyCodemod(tmpDir, '(unclosed', 'x', 'src/**', { dryRun: true });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid regex');
   });
 
-  it('returns error when no files match glob', () => {
+  it('returns error when no files match glob', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'hello' });
-    const result = applyCodemod(tmpDir, 'hello', 'bye', 'nonexistent/**/*.xyz', { dryRun: true });
+    const result = await applyCodemod(tmpDir, 'hello', 'bye', 'nonexistent/**/*.xyz', {
+      dryRun: true,
+    });
     expect(result.success).toBe(false);
     expect(result.error).toContain('No files matched');
   });
 
-  it('returns error when no content matches pattern', () => {
+  it('returns error when no content matches pattern', async () => {
     tmpDir = createTmpFixture({ 'src/a.ts': 'hello world' });
-    const result = applyCodemod(tmpDir, 'zzzzz', 'x', 'src/**', { dryRun: true });
+    const result = await applyCodemod(tmpDir, 'zzzzz', 'x', 'src/**', { dryRun: true });
     expect(result.success).toBe(false);
     expect(result.error).toContain('No matches found');
   });
 
-  it('filter_content narrows scope', () => {
+  it('filter_content narrows scope', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': "import { foo } from './foo';\nconst x = foo();\n",
       'src/b.ts': 'const y = 42;\n',
     });
 
-    const result = applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
+    const result = await applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
       dryRun: true,
       filterContent: 'foo',
     });
@@ -586,14 +588,14 @@ describe('applyCodemod', () => {
     expect(result.matches[0].file).toBe('src/a.ts');
   });
 
-  it('blocks large changes without confirm_large', () => {
+  it('blocks large changes without confirm_large', async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 25; i++) {
       files[`src/file${i}.ts`] = 'const x = 1;\n';
     }
     tmpDir = createTmpFixture(files);
 
-    const result = applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
+    const result = await applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
       dryRun: false,
     });
 
@@ -604,14 +606,14 @@ describe('applyCodemod', () => {
     expect(result.files_modified).toHaveLength(0);
   });
 
-  it('allows large changes with confirm_large=true', () => {
+  it('allows large changes with confirm_large=true', async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 25; i++) {
       files[`src/file${i}.ts`] = 'const x = 1;\n';
     }
     tmpDir = createTmpFixture(files);
 
-    const result = applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
+    const result = await applyCodemod(tmpDir, 'const', 'let', 'src/**/*.ts', {
       dryRun: false,
       confirmLarge: true,
     });
@@ -621,35 +623,37 @@ describe('applyCodemod', () => {
     expect(result.files_modified).toHaveLength(25);
   });
 
-  it('skips binary files', () => {
+  it('skips binary files', async () => {
     tmpDir = createTmpFixture({
       'assets/icon.png': 'fake binary content with const keyword',
       'src/a.ts': 'const x = 1;\n',
     });
 
-    const result = applyCodemod(tmpDir, 'const', 'let', '**/*', { dryRun: true });
+    const result = await applyCodemod(tmpDir, 'const', 'let', '**/*', { dryRun: true });
     expect(result.success).toBe(true);
     expect(result.total_files).toBe(1);
     expect(result.matches[0].file).toBe('src/a.ts');
   });
 
-  it('provides context lines in preview', () => {
+  it('provides context lines in preview', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': 'line1\nline2\nconst target = 1;\nline4\nline5\n',
     });
 
-    const result = applyCodemod(tmpDir, 'const target', 'let target', 'src/**', { dryRun: true });
+    const result = await applyCodemod(tmpDir, 'const target', 'let target', 'src/**', {
+      dryRun: true,
+    });
     expect(result.success).toBe(true);
     expect(result.matches[0].context_before.length).toBeGreaterThan(0);
     expect(result.matches[0].context_after.length).toBeGreaterThan(0);
   });
 
-  it('supports multiline mode', () => {
+  it('supports multiline mode', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': 'if (cond) {\n  doA();\n  doB();\n}\n',
     });
 
-    const result = applyCodemod(
+    const result = await applyCodemod(
       tmpDir,
       'if \\(cond\\) \\{\\n  doA\\(\\);',
       'if (cond) {\n  doX();',
@@ -666,12 +670,12 @@ describe('applyCodemod', () => {
     expect(content).not.toContain('doA()');
   });
 
-  it('handles multiple matches per file', () => {
+  it('handles multiple matches per file', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': "it('test1', () => {});\nit('test2', () => {});\nit('test3', () => {});\n",
     });
 
-    const result = applyCodemod(
+    const result = await applyCodemod(
       tmpDir,
       "it\\('([^']+)',\\s*\\(\\)",
       "it('$1', async ()",

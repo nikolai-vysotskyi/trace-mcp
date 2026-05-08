@@ -129,7 +129,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
       filter_content,
       multiline,
     }) => {
-      const result = applyCodemod(projectRoot, pattern, replacement, file_pattern, {
+      const result = await applyCodemod(projectRoot, pattern, replacement, file_pattern, {
         dryRun: dry_run,
         confirmLarge: confirm_large,
         filterContent: filter_content,
