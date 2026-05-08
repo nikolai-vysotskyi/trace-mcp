@@ -21,6 +21,12 @@ import { getScreenContext } from '../framework/screen-context.js';
 import { getTestsFor } from '../framework/tests.js';
 import { CALL_GRAPH_METHODOLOGY } from '../shared/confidence.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
+import {
+  compactUsageRefs,
+  DetailLevelSchema,
+  isMinimal,
+  type UsageRefFull,
+} from '../_common/detail-level.js';
 
 export function registerFrameworkTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j, jh, has } = ctx;
@@ -261,8 +267,9 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       symbol_id: z.string().max(512).optional().describe('Symbol ID to find references for'),
       fqn: z.string().max(512).optional().describe('Fully qualified name to find references for'),
       file_path: z.string().max(512).optional().describe('File path to find references for'),
+      detail_level: DetailLevelSchema,
     },
-    async ({ symbol_id, fqn, file_path }) => {
+    async ({ symbol_id, fqn, file_path, detail_level }) => {
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
@@ -287,6 +294,14 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
           }),
         };
         return { content: [{ type: 'text', text: jh('find_usages', enriched) }] };
+      }
+      if (isMinimal(detail_level)) {
+        const minimal = {
+          ...result.value,
+          references: compactUsageRefs(result.value.references as UsageRefFull[]),
+          detail_level: 'minimal' as const,
+        };
+        return { content: [{ type: 'text', text: jh('find_usages', minimal) }] };
       }
       const freshened = enrichItemsWithFreshness(store, projectRoot, result.value.references);
       // Score channel for find_usages: each reference scores 1; identity is irrelevant here.
