@@ -41,7 +41,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'reindex',
-    'Trigger (re)indexing of the project or a subdirectory. Mutates the local index (SQLite). Use after major file changes; for single-file updates prefer register_edit instead. Idempotent — safe to re-run. Returns JSON: { status, totalFiles, indexed, skipped, errors, durationMs }.',
+    'Trigger (re)indexing of the project or a subdirectory. Mutates the local index (SQLite). Use after major file changes; for single-file updates prefer register_edit instead. The optional `postprocess` flag controls how much work runs after raw symbol extraction: "full" (default) does everything; "minimal" skips LSP enrichment + env-var scan + git history snapshots (~30-50% faster on warm CI runs); "none" also skips edge resolution and gives you raw symbols only. Idempotent — safe to re-run. Returns JSON: { status, totalFiles, indexed, skipped, errors, durationMs, postprocess }.',
     {
       path: z
         .string()
@@ -49,18 +49,24 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         .optional()
         .describe('Subdirectory to index (default: project root)'),
       force: z.boolean().optional().describe('Skip hash check and reindex all files'),
+      postprocess: z
+        .enum(['full', 'minimal', 'none'])
+        .optional()
+        .describe(
+          'Postprocess level. full = everything (default). minimal = skips LSP/env/snapshots. none = also skips edge resolution.',
+        ),
     },
-    async ({ path: indexPath, force }) => {
+    async ({ path: indexPath, force, postprocess }) => {
       if (indexPath) {
         const blocked = guardPath(indexPath);
         if (blocked) return blocked;
       }
-      logger.info({ path: indexPath, force }, 'Reindex requested');
+      logger.info({ path: indexPath, force, postprocess }, 'Reindex requested');
       const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
 
       const result = indexPath
-        ? await pipeline.indexFiles([indexPath])
-        : await pipeline.indexAll(force ?? false);
+        ? await pipeline.indexFiles([indexPath], { postprocess })
+        : await pipeline.indexAll(force ?? false, { postprocess });
 
       return { content: [{ type: 'text', text: j({ status: 'completed', ...result }) }] };
     },

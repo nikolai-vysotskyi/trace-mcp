@@ -32,6 +32,17 @@ export type { FileExtraction } from './pipeline-state.js';
 import type { ProgressState } from '../progress.js';
 import type { FileExtraction } from './pipeline-state.js';
 
+/**
+ * Postprocess intensity level for an indexing run. CRG v2.2.0 introduced
+ * this knob so CI builds and incremental updates could skip the
+ * heavyweight passes that aren't needed every time.
+ *
+ *   full    — the default; runs every postprocess phase
+ *   minimal — skips LSP enrichment + env-var scan + git history snapshots
+ *   none    — skips edge resolution as well; raw symbols only
+ */
+export type PostprocessLevel = 'full' | 'minimal' | 'none';
+
 export interface IndexingResult {
   totalFiles: number;
   indexed: number;
@@ -39,6 +50,8 @@ export interface IndexingResult {
   errors: number;
   durationMs: number;
   incremental?: boolean;
+  /** Postprocess level the result was produced at — surfaced for callers. */
+  postprocess?: PostprocessLevel;
   /**
    * Set when a full reindex shrunk the symbol or edge count by more than
    * SHRINK_THRESHOLD. graphify v0.5.0 hit this same hazard: an `--update`
@@ -106,6 +119,14 @@ export class IndexingPipeline {
   private _changedFileIds = new Set<number>();
   private _isIncremental = false;
   private _extractPool: ExtractPool | undefined;
+  /**
+   * Postprocess level for the current run, set by indexAll/indexFiles. CRG
+   * v2.2.0 made this configurable so CI builds and incremental updates
+   * could skip the heavyweight LSP / env / snapshot phases. 'full' runs
+   * everything; 'minimal' skips LSP enrichment and env-var scan; 'none'
+   * also skips git-history snapshots and the registry-side capture.
+   */
+  private _postprocessLevel: PostprocessLevel = 'full';
 
   getPipelineState(): PipelineState {
     return {
@@ -122,9 +143,13 @@ export class IndexingPipeline {
     };
   }
 
-  async indexAll(force?: boolean): Promise<IndexingResult> {
+  async indexAll(
+    force?: boolean,
+    opts: { postprocess?: PostprocessLevel } = {},
+  ): Promise<IndexingResult> {
     const result = this._lock.then(async () => {
       this._isIncremental = false;
+      this._postprocessLevel = opts.postprocess ?? 'full';
       const start = Date.now();
       // Snapshot the existing index size so runPipeline can detect a
       // catastrophic shrink (e.g. parser regression dropping half the files
@@ -206,9 +231,13 @@ export class IndexingPipeline {
     })();
   }
 
-  async indexFiles(filePaths: string[]): Promise<IndexingResult> {
+  async indexFiles(
+    filePaths: string[],
+    opts: { postprocess?: PostprocessLevel } = {},
+  ): Promise<IndexingResult> {
     const result = this._lock.then(async () => {
       this._isIncremental = true;
+      this._postprocessLevel = opts.postprocess ?? 'full';
       const start = Date.now();
       const relPaths: string[] = [];
       for (const fp of filePaths) {
@@ -256,9 +285,15 @@ export class IndexingPipeline {
 
     try {
       await this.extractAndPersist(relPaths, force, result);
-      await this.resolveAllEdges();
-      await this.runLspEnrichment();
-      await this.indexEnvFiles(force);
+      // Postprocess-level gating: 'none' stops after raw symbol extraction;
+      // 'minimal' resolves edges but skips LSP + env scan; 'full' runs all.
+      if (this._postprocessLevel !== 'none') {
+        await this.resolveAllEdges();
+      }
+      if (this._postprocessLevel === 'full') {
+        await this.runLspEnrichment();
+        await this.indexEnvFiles(force);
+      }
     } finally {
       this._fileContentCache.clear();
       this._pendingImports.clear();
@@ -267,7 +302,7 @@ export class IndexingPipeline {
       invalidateSearchCache();
     }
 
-    if (!this._isIncremental && result.indexed > 0) {
+    if (this._postprocessLevel === 'full' && !this._isIncremental && result.indexed > 0) {
       try {
         captureGraphSnapshots(this.store, this.rootPath);
       } catch (e) {
@@ -287,6 +322,7 @@ export class IndexingPipeline {
 
     result.durationMs = Date.now() - startMs;
     result.incremental = this._isIncremental;
+    result.postprocess = this._postprocessLevel;
 
     this.progress?.update('indexing', {
       phase: 'completed',
