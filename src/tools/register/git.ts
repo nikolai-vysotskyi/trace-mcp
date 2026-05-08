@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
 import { detectAstClones } from '../analysis/ast-clones.js';
@@ -195,7 +196,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
     'scan_security',
     'Scan project files for OWASP Top-10 security vulnerabilities using pattern matching. Detects SQL injection (CWE-89), XSS (CWE-79), command injection (CWE-78), path traversal (CWE-22), hardcoded secrets (CWE-798), insecure crypto (CWE-327), open redirects (CWE-601), and SSRF (CWE-918). Skips test files. Use for pattern-based security audit. For data-flow-aware analysis use taint_analysis instead. Read-only. Returns JSON: { findings: [{ rule, severity, cwe, file, line, message }], total, summary }.',
     {
-      scope: z.string().max(512).optional().describe('Directory to scan (default: whole project)'),
+      scope: optionalNonEmptyString(512).describe('Directory to scan (default: whole project)'),
       rules: z
         .array(
           z.enum([
@@ -301,7 +302,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .array(z.enum(['todo_comment', 'empty_function', 'hardcoded_value', 'debug_artifact']))
         .optional()
         .describe('Categories to scan (default: all)'),
-      scope: z.string().max(512).optional().describe('Directory to scan (default: whole project)'),
+      scope: optionalNonEmptyString(512).describe('Directory to scan (default: whole project)'),
       priority_threshold: z
         .enum(['high', 'medium', 'low'])
         .optional()
@@ -398,7 +399,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
     'taint_analysis',
     'Track flow of untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL queries, exec, innerHTML, redirects). Framework-aware: knows Express req.params, Laravel $request->input, Django request.GET, FastAPI Query(), etc. Reports unsanitized flows with CWE IDs and fix suggestions. More accurate than pattern-based scanning — traces actual data flow paths. Use for data-flow security analysis. For pattern-based OWASP scanning use scan_security instead. Read-only. Returns JSON: { flows: [{ source, sink, path, sanitized, cwe, suggestion }], total }.',
     {
-      scope: z.string().max(512).optional().describe('Directory to scan (default: whole project)'),
+      scope: optionalNonEmptyString(512).describe('Directory to scan (default: whole project)'),
       sources: z
         .array(
           z.enum([
@@ -501,7 +502,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .enum(['database', 'api', 'infra', 'ci', 'config', 'all'])
         .optional()
         .describe('Filter by artifact category (default: all)'),
-      query: z.string().max(256).optional().describe('Text filter on name/kind/file'),
+      query: optionalNonEmptyString(256).describe('Text filter on name/kind/file'),
       limit: z.number().int().min(1).max(1000).optional().describe('Max results (default: 200)'),
     },
     async ({ category, query, limit }) => {
@@ -523,8 +524,8 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .min(1)
         .max(256)
         .describe('Package name (e.g. "express", "laravel/framework", "react")'),
-      from_version: z.string().max(64).optional().describe('Current version'),
-      to_version: z.string().max(64).optional().describe('Target version'),
+      from_version: optionalNonEmptyString(64).describe('Current version'),
+      to_version: optionalNonEmptyString(64).describe('Target version'),
       breaking_changes: z
         .array(z.string().max(500))
         .max(20)

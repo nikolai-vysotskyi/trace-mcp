@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
 import { enrichItemsWithFreshness } from '../../scoring/freshness.js';
 import { computeRetrievalConfidence } from '../../scoring/retrieval-confidence.js';
@@ -85,7 +86,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       'Trace request flow for a URL+method: route → middleware → controller → service (Laravel/Express/NestJS/Fastify/Hono/tRPC/FastAPI/Flask/DRF). Use to understand how a request is handled end-to-end. For middleware-only analysis use get_middleware_chain instead. Read-only. Returns JSON: { route, steps: [{ type, symbol_id, name, file }] }.',
       {
         url: z.string().max(512).describe('Route URL (e.g. /api/users)'),
-        method: z.string().max(64).optional().describe('HTTP method (default GET)'),
+        method: optionalNonEmptyString(64).describe('HTTP method (default GET)'),
       },
       async ({ url, method }) => {
         const result = getRequestFlow(store, url, method ?? 'GET');
@@ -264,9 +265,9 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
     'find_usages',
     'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — understands semantic relationships, not just text matches. For bidirectional call graph use get_call_graph instead. By default, weakly-grounded `text_matched` edges into a target whose simple name collides with many other symbols are dropped (phantom god-node filter). Pass `include_ambiguous_text_matched: true` to keep them. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total, ambiguous_filtered? }.',
     {
-      symbol_id: z.string().max(512).optional().describe('Symbol ID to find references for'),
-      fqn: z.string().max(512).optional().describe('Fully qualified name to find references for'),
-      file_path: z.string().max(512).optional().describe('File path to find references for'),
+      symbol_id: optionalNonEmptyString(512).describe('Symbol ID to find references for'),
+      fqn: optionalNonEmptyString(512).describe('Fully qualified name to find references for'),
+      file_path: optionalNonEmptyString(512).describe('File path to find references for'),
       detail_level: DetailLevelSchema,
       include_ambiguous_text_matched: z
         .boolean()
@@ -338,8 +339,8 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
     'get_call_graph',
     'Build a bidirectional call graph centered on a symbol (who calls it + what it calls). Use to understand control flow through a function. For flat list of all references use find_usages instead. Read-only. Returns JSON: { root: { symbol_id, name, calls: [...], called_by: [...] } }.',
     {
-      symbol_id: z.string().max(512).optional().describe('Symbol ID to center the graph on'),
-      fqn: z.string().max(512).optional().describe('Fully qualified name to center the graph on'),
+      symbol_id: optionalNonEmptyString(512).describe('Symbol ID to center the graph on'),
+      fqn: optionalNonEmptyString(512).describe('Fully qualified name to center the graph on'),
       depth: z
         .number()
         .int()
@@ -381,9 +382,9 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
     'get_tests_for',
     'Find test files and test functions that cover a given symbol or file. Use instead of Glob/Grep — understands test-to-source mapping, not just filename conventions. For project-wide test coverage gaps use get_untested_symbols instead. Read-only. Returns JSON: { tests: [{ file, testName, symbol_id }], total }.',
     {
-      symbol_id: z.string().max(512).optional().describe('Symbol ID to find tests for'),
-      fqn: z.string().max(512).optional().describe('Fully qualified name to find tests for'),
-      file_path: z.string().max(512).optional().describe('File path to find tests for'),
+      symbol_id: optionalNonEmptyString(512).describe('Symbol ID to find tests for'),
+      fqn: optionalNonEmptyString(512).describe('Fully qualified name to find tests for'),
+      file_path: optionalNonEmptyString(512).describe('File path to find tests for'),
     },
     async ({ symbol_id, fqn, file_path }) => {
       if (file_path) {

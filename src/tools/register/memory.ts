@@ -5,6 +5,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import { mineSessions } from '../../memory/conversation-miner.js';
 import type { DecisionType } from '../../memory/decision-store.js';
 import { indexSessions } from '../../memory/session-indexer.js';
@@ -90,7 +91,7 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         .describe(
           'Symbol FQN this decision is about (e.g., "src/auth/provider.ts::AuthProvider#class")',
         ),
-      file_path: z.string().max(1024).optional().describe('File path this decision is about'),
+      file_path: optionalNonEmptyString(1024).describe('File path this decision is about'),
       tags: z
         .array(z.string().max(64))
         .max(20)
@@ -126,15 +127,15 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         .max(256)
         .optional()
         .describe('Filter by subproject name (e.g., "auth-api")'),
-      symbol_id: z.string().max(512).optional().describe('Filter by linked symbol FQN'),
-      file_path: z.string().max(1024).optional().describe('Filter by linked file path'),
-      tag: z.string().max(64).optional().describe('Filter by tag'),
+      symbol_id: optionalNonEmptyString(512).describe('Filter by linked symbol FQN'),
+      file_path: optionalNonEmptyString(1024).describe('Filter by linked file path'),
+      tag: optionalNonEmptyString(64).describe('Filter by tag'),
       search: z
         .string()
         .max(500)
         .optional()
         .describe('Full-text search query (FTS5 with porter stemming)'),
-      as_of: z.string().max(30).optional().describe('Only decisions active at this ISO timestamp'),
+      as_of: optionalNonEmptyString(30).describe('Only decisions active at this ISO timestamp'),
       include_invalidated: z
         .boolean()
         .optional()

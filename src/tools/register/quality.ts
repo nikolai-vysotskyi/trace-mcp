@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
 import { detectCommunities, getCommunities, getCommunityDetail } from '../analysis/communities.js';
@@ -98,7 +99,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .describe(
           'Git ref to compare from (SHA, branch, tag). If omitted, auto-detects main/master merge-base',
         ),
-      until: z.string().max(256).optional().describe('Git ref to compare to (default: HEAD)'),
+      until: optionalNonEmptyString(256).describe('Git ref to compare to (default: HEAD)'),
       include_blast_radius: z
         .boolean()
         .optional()
@@ -133,7 +134,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
     'Compare two branches at symbol level: what was added, modified, removed. Resolves merge-base automatically, groups by category/file/risk, includes blast radius and risk assessment. Requires git. Use for comprehensive PR comparison. For a quick list of changed symbols without risk analysis use get_changed_symbols instead. Read-only. Returns JSON: { branch, base, mergeBase, changes: [{ symbol_id, category, risk }], summary }.',
     {
       branch: z.string().min(1).max(256).describe('Branch to compare (e.g. "feature/payments")'),
-      base: z.string().max(256).optional().describe('Base branch (default: "main")'),
+      base: optionalNonEmptyString(256).describe('Base branch (default: "main")'),
       include_blast_radius: z
         .boolean()
         .optional()
@@ -279,8 +280,8 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
     'get_control_flow',
     'Build a Control Flow Graph (CFG) for a function/method: if/else branches, loops, try/catch, returns, throws. Shows logical paths through the code. Outputs Mermaid diagram, ASCII, or JSON. Use to understand branching logic before modifying complex functions. For call-level graph (who calls whom) use get_call_graph instead. Read-only. Returns Mermaid/ASCII/JSON: { nodes, edges, entryPoint, exitPoints }.',
     {
-      symbol_id: z.string().max(512).optional().describe('Symbol ID of the function/method'),
-      fqn: z.string().max(512).optional().describe('Fully qualified name of the function/method'),
+      symbol_id: optionalNonEmptyString(512).describe('Symbol ID of the function/method'),
+      fqn: optionalNonEmptyString(512).describe('Fully qualified name of the function/method'),
       format: z
         .enum(['json', 'mermaid', 'ascii'])
         .optional()
@@ -343,7 +344,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .enum(['project', 'module', 'directory'])
         .optional()
         .describe('Scope (default: project)'),
-      path: z.string().max(512).optional().describe('Path for module/directory scope'),
+      path: optionalNonEmptyString(512).describe('Path for module/directory scope'),
       format: z.enum(['markdown', 'html']).optional().describe('Output format (default: markdown)'),
       sections: z
         .array(
@@ -388,8 +389,8 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
       scope: z
         .enum(['project', 'module', 'feature'])
         .describe('Scope: project (whole repo), module (subdirectory), feature (NL query)'),
-      path: z.string().max(512).optional().describe('Subdirectory path (for module scope)'),
-      query: z.string().max(500).optional().describe('Natural language query (for feature scope)'),
+      path: optionalNonEmptyString(512).describe('Subdirectory path (for module scope)'),
+      query: optionalNonEmptyString(500).describe('Natural language query (for feature scope)'),
       format: z
         .enum(['xml', 'markdown', 'json'])
         .optional()
@@ -472,7 +473,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .enum(['project', 'changed'])
         .optional()
         .describe('Scope: "project" (all) or "changed" (git diff). Default: project'),
-      since: z.string().max(128).optional().describe('Git ref for "changed" scope (e.g. "main")'),
+      since: optionalNonEmptyString(128).describe('Git ref for "changed" scope (e.g. "main")'),
       config: z
         .object({
           fail_on: z.enum(['error', 'warning', 'none']).optional(),
