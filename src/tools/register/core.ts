@@ -2,10 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
+import { LOCKS_DIR, projectHash } from '../../global.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
 import { logger } from '../../logger.js';
 import type { ServerContext } from '../../server/types.js';
+import { LockError, withLock } from '../../utils/pid-lock.js';
 import { checkFileForDuplicates } from '../analysis/duplication.js';
 import { getMinimalContext } from '../project/minimal-context.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
@@ -65,11 +67,34 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       logger.info({ path: indexPath, force, postprocess }, 'Reindex requested');
       const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
 
-      const result = indexPath
-        ? await pipeline.indexFiles([indexPath], { postprocess })
-        : await pipeline.indexAll(force ?? false, { postprocess });
-
-      return { content: [{ type: 'text', text: j({ status: 'completed', ...result }) }] };
+      try {
+        const result = await withLock(
+          { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-reindex`, op: 'reindex' },
+          async () =>
+            indexPath
+              ? pipeline.indexFiles([indexPath], { postprocess })
+              : pipeline.indexAll(force ?? false, { postprocess }),
+        );
+        return { content: [{ type: 'text', text: j({ status: 'completed', ...result }) }] };
+      } catch (e) {
+        if (e instanceof LockError) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  status: 'busy',
+                  error: 'reindex_in_progress',
+                  message: e.message,
+                  holder: e.holder,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        throw e;
+      }
     },
   );
 
@@ -114,9 +139,10 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       );
       try {
         const startedAt = Date.now();
-        const indexed = force
-          ? await pipeline.reindexAll()
-          : await pipeline.indexUnembedded(batch_size ?? 50);
+        const indexed = await withLock(
+          { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-embed`, op: 'embed_repo' },
+          async () => (force ? pipeline.reindexAll() : pipeline.indexUnembedded(batch_size ?? 50)),
+        );
         const totalEmbedded = vectorStore.count();
         const totalSymbols = store.getStats().totalSymbols;
         return {
@@ -137,6 +163,22 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           ],
         };
       } catch (e) {
+        if (e instanceof LockError) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  status: 'busy',
+                  error: 'embed_repo_in_progress',
+                  message: e.message,
+                  holder: e.holder,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
         return {
           content: [
             {
