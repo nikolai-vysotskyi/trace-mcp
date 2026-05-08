@@ -168,4 +168,75 @@ describe('findReferences', () => {
       text_matched: 0,
     });
   });
+
+  describe('ambiguous text_matched filter', () => {
+    it('drops text_matched edges when the target name collides with many other symbols', () => {
+      // Define seven separate `log` methods across different files — the
+      // exact pattern that produced phantom god-nodes in graphify v0.5.5.
+      // Then create one text_matched edge into one specific `log`.
+      const targetFile = 'src/services/logger.ts';
+      const target = addSymbol(store, { filePath: targetFile, name: 'log', kind: 'method' });
+      for (let i = 0; i < 6; i++) {
+        addSymbol(store, { filePath: `src/other/file${i}.ts`, name: 'log', kind: 'method' });
+      }
+      const caller = addSymbol(store, {
+        filePath: 'src/caller.ts',
+        name: 'doStuff',
+        kind: 'function',
+      });
+      const edgeResult = store.insertEdge(
+        caller.nodeId,
+        target.nodeId,
+        'calls',
+        true,
+        undefined,
+        false,
+        'text_matched',
+      );
+      expect(edgeResult.isOk()).toBe(true);
+
+      // Default behavior — ambiguous filter ON — should drop the text_matched edge.
+      const filtered = findReferences(store, { symbolId: `${targetFile}::log#method` });
+      expect(filtered.isOk()).toBe(true);
+      const v = filtered._unsafeUnwrap();
+      expect(v.references).toHaveLength(0);
+      expect(v.ambiguous_filtered).toBeDefined();
+      expect(v.ambiguous_filtered?.dropped).toBe(1);
+      expect(v.ambiguous_filtered?.nameCollisions).toBeGreaterThanOrEqual(7);
+
+      // Opt out — caller wants the noisy edges anyway.
+      const unfiltered = findReferences(store, {
+        symbolId: `${targetFile}::log#method`,
+        includeAmbiguousTextMatched: true,
+      });
+      expect(unfiltered.isOk()).toBe(true);
+      expect(unfiltered._unsafeUnwrap().references).toHaveLength(1);
+    });
+
+    it('keeps text_matched edges when the name is unique', () => {
+      const target = addSymbol(store, {
+        filePath: 'src/u.ts',
+        name: 'extremelyUniqueWorkerXyz',
+        kind: 'function',
+      });
+      const caller = addSymbol(store, { filePath: 'src/c.ts', name: 'c', kind: 'function' });
+      store.insertEdge(
+        caller.nodeId,
+        target.nodeId,
+        'calls',
+        true,
+        undefined,
+        false,
+        'text_matched',
+      );
+
+      const result = findReferences(store, {
+        symbolId: 'src/u.ts::extremelyUniqueWorkerXyz#function',
+      });
+      expect(result.isOk()).toBe(true);
+      const v = result._unsafeUnwrap();
+      expect(v.references).toHaveLength(1);
+      expect(v.ambiguous_filtered).toBeUndefined();
+    });
+  });
 });

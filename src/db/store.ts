@@ -145,6 +145,19 @@ export class Store {
     return this.symbols.getSymbolById(id);
   }
 
+  /**
+   * Count how many distinct symbols share this exact simple name. Used by
+   * findReferences to detect when a name is too common for text_matched
+   * edges to be trustworthy (graphify v0.5.5 / v0.6.3 phantom-god-node fix).
+   * Cheap: indexed lookup, no body reads.
+   */
+  countSymbolsByName(name: string): number {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM symbols WHERE name = ?').get(name) as
+      | { n: number }
+      | undefined;
+    return row?.n ?? 0;
+  }
+
   getSymbolByName(name: string, kind?: string): SymbolRow | undefined {
     return this.symbols.getSymbolByName(name, kind);
   }
