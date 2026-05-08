@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import type { Store, SymbolRow } from '../../db/store.js';
 import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
+import { safeGitEnv } from '../../utils/git-env.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { getChaNodeIds } from '../shared/cha.js';
 import {
@@ -327,6 +328,7 @@ function getFileChurn(cwd: string, filePath: string, days: number): number {
       encoding: 'utf8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: safeGitEnv(),
     });
     return parseInt(output.trim(), 10) || 0;
   } catch {

@@ -9,6 +9,7 @@ import { execSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
 import { logger } from '../../logger.js';
+import { safeGitEnv } from '../../utils/git-env.js';
 
 interface CoChangeEntry {
   file: string;
@@ -49,7 +50,13 @@ export function collectCoChanges(
   try {
     gitOutput = execSync(
       `git log --name-only --pretty=format:"COMMIT:%H:%aI" --since="${since}" --diff-filter=AMRD`,
-      { cwd: rootPath, maxBuffer: 50 * 1024 * 1024, encoding: 'utf-8', timeout: 30_000 },
+      {
+        cwd: rootPath,
+        maxBuffer: 50 * 1024 * 1024,
+        encoding: 'utf-8',
+        timeout: 30_000,
+        env: safeGitEnv(),
+      },
     );
   } catch (e) {
     logger.warn({ error: e }, 'Failed to read git log for co-change analysis');
