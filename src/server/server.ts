@@ -29,6 +29,7 @@ import { computePageRank } from '../scoring/pagerank.js';
 import { RankingLedger } from '../runtime/ranking-ledger.js';
 import { TelemetrySink } from '../runtime/telemetry-sink.js';
 import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
+import { CodexSessionProvider } from '../session/providers/codex.js';
 import { HermesSessionProvider } from '../session/providers/hermes.js';
 import { getSessionProviderRegistry } from '../session/providers/registry.js';
 import { flushSessionSummary } from '../session/resume.js';
@@ -559,6 +560,15 @@ export function createServer(
     const registry = getSessionProviderRegistry();
     if (!registry.get('hermes')) {
       registry.register(new HermesSessionProvider());
+    }
+  }
+  // Codex CLI (~/.codex/sessions/*.jsonl). Auto-enabled — discovery returns
+  // [] cheaply when the directory is absent, so there's no need for a config
+  // flag until users hit a reason to disable it.
+  {
+    const registry = getSessionProviderRegistry();
+    if (!registry.get('codex')) {
+      registry.register(new CodexSessionProvider());
     }
   }
 

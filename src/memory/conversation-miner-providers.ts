@@ -37,7 +37,7 @@ export interface ProviderMineOpts {
 
 /** Provider ids we know how to mine additively. Keep this list narrow — each
  *  entry claims the provider is battle-tested on real data. */
-const ADDITIVE_PROVIDER_IDS = new Set(['hermes']);
+const ADDITIVE_PROVIDER_IDS = new Set(['hermes', 'codex']);
 
 /** Feed RawMessage stream from a SessionProvider into extractDecisions and
  *  persist the output. Mutates `counters` in place. */
