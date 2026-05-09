@@ -48,7 +48,13 @@ function writeRegistryProjects(projects: Record<string, { root: string; name: st
 
 describe('resolveWorktreeAware', () => {
   beforeEach(() => {
-    tmpDir = createTmpDir('registry-worktree-');
+    // Resolve symlinks AND any 8.3-shortname encoding (Windows
+    // mkdtempSync sometimes returns `C:\Users\RUNNER~1\…`, while git
+    // probing inside the dir reports the long form
+    // `C:\Users\runneradmin\…`). Without realpath both worktree
+    // commonDirs come back unequal even though they reference the
+    // same on-disk path.
+    tmpDir = fs.realpathSync(createTmpDir('registry-worktree-'));
     savedRegistry = fs.existsSync(REGISTRY_PATH) ? fs.readFileSync(REGISTRY_PATH, 'utf-8') : null;
   });
 

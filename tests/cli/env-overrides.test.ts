@@ -10,10 +10,16 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(__dirname, '../..');
+
+/** Normalise both expected suffix and actual output to forward slashes so
+ *  endsWith() checks are path-separator-agnostic. Without this, Windows
+ *  runners see `\custom-trace-mcp` and the `'/custom-trace-mcp'` literal
+ *  in the assertion never matches. */
+const fwd = (p: string) => p.split(sep).join('/');
 
 function runWithEnv(script: string, env: Record<string, string>): string {
   const out = execFileSync(
@@ -43,7 +49,7 @@ describe('TRACE_MCP_DATA_DIR', () => {
       `import { TRACE_MCP_HOME } from './src/global.ts'; console.log(TRACE_MCP_HOME);`,
       { TRACE_MCP_DATA_DIR: '~/custom-trace-mcp' },
     );
-    expect(out.endsWith('/custom-trace-mcp')).toBe(true);
+    expect(fwd(out).endsWith('/custom-trace-mcp')).toBe(true);
     expect(out).not.toBe('~/custom-trace-mcp'); // expansion must have happened
   });
 
@@ -52,7 +58,7 @@ describe('TRACE_MCP_DATA_DIR', () => {
       `import { TRACE_MCP_HOME } from './src/global.ts'; console.log(TRACE_MCP_HOME);`,
       { TRACE_MCP_DATA_DIR: '' },
     );
-    expect(out.endsWith('/.trace-mcp')).toBe(true);
+    expect(fwd(out).endsWith('/.trace-mcp')).toBe(true);
   });
 });
 
@@ -83,7 +89,7 @@ describe('TRACE_MCP_REPO_ROOT', () => {
       `import { findProjectRoot } from './src/project-root.ts'; console.log(findProjectRoot());`,
       { TRACE_MCP_REPO_ROOT: '~/some-repo' },
     );
-    expect(out.endsWith('/some-repo')).toBe(true);
+    expect(fwd(out).endsWith('/some-repo')).toBe(true);
     expect(out).not.toBe('~/some-repo');
   });
 });
