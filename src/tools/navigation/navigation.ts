@@ -155,6 +155,15 @@ interface SearchResult {
   total: number;
   search_mode?: 'hybrid_ai' | 'fts' | 'fuzzy' | 'fusion';
   fusion_debug?: FusionDebugInfo[];
+  /** Set when an explicit semantic mode (`on`/`only`) was downgraded to
+   *  lexical because the AI provider is not configured. Lets callers
+   *  detect silent degradation instead of trusting that they got what
+   *  they asked for. */
+  _warning?: string;
+  /** Structured error envelope for hard failures (e.g. `semantic="only"`
+   *  with no AI provider). Mirrors `_warning` but signals "no usable
+   *  results possible" rather than "results may be lower quality". */
+  _error?: { code: string; message: string; hint?: string };
 }
 
 export async function search(
@@ -185,6 +194,33 @@ export async function search(
   const fetchLimit = limit + offset + 50;
   const semanticMode = semanticOptions?.semantic ?? 'auto';
   const aiAvailable = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
+
+  // Hard failure: `only` means "pure vector" — there is no useful FTS
+  // fallback that satisfies the user's intent. Surface a structured error
+  // instead of silently switching to lexical (which is what shipped before
+  // and led to wrong-result surprise).
+  if (semanticMode === 'only' && !aiAvailable) {
+    return {
+      items: [],
+      total: 0,
+      search_mode: 'fts',
+      _error: {
+        code: 'no_ai_provider',
+        message:
+          'semantic="only" requires an AI provider with a built embedding index, but none is configured.',
+        hint: 'Configure an AI provider (e.g. ollama / openai), run `embed_repo`, then retry — or pass semantic="off" / "auto" to use lexical search.',
+      },
+    };
+  }
+
+  // Soft degradation: `on` was an explicit ask for hybrid; if AI isn't
+  // there we fall through to FTS but stamp `_warning` on the response so
+  // the caller can tell they got lower-fidelity results.
+  let degradedFromOn = false;
+  if (semanticMode === 'on' && !aiAvailable) {
+    degradedFromOn = true;
+  }
+
   // 'off' forces FTS regardless of AI availability; 'only'/'on' require AI configured.
   const useAI =
     semanticMode === 'off'
@@ -217,7 +253,20 @@ export async function search(
       mode: 'fts',
     });
     const cached = getCachedSearch(cacheKey, symbolCount);
-    if (cached) return cached;
+    if (cached) {
+      // `_warning` is metadata about THIS call, not the cached result body
+      // — re-stamp it so a cache hit doesn't hide the silent-degradation
+      // signal from the caller. Cache stays useful (same items + total)
+      // while still telling the caller they didn't get hybrid ranking.
+      if (degradedFromOn && !cached._warning) {
+        return {
+          ...cached,
+          _warning:
+            'semantic="on" was requested but no AI provider is available; results came from lexical (FTS5) search. Configure an AI provider + run `embed_repo` for hybrid ranking.',
+        };
+      }
+      return cached;
+    }
   }
 
   // Build initial candidates: (symbolIdStr, relevance [0,1])
@@ -366,6 +415,10 @@ export async function search(
   }
 
   const result: SearchResult = { items, total, search_mode: searchMode };
+  if (degradedFromOn) {
+    result._warning =
+      'semantic="on" was requested but no AI provider is available; results came from lexical (FTS5) search. Configure an AI provider + run `embed_repo` for hybrid ranking.';
+  }
   if (cacheable && cacheKey) putCachedSearch(cacheKey, result, symbolCount);
   return result;
 }

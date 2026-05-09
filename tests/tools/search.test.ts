@@ -84,6 +84,61 @@ describe('Navigation tools', () => {
         expect(page1.items[0].symbol.symbol_id).not.toBe(page2.items[0].symbol.symbol_id);
       }
     });
+
+    describe('semantic-mode degradation when AI is unavailable', () => {
+      // Reproduces the silent-degradation surprise: callers used to ask for
+      // semantic="on" / "only" against an instance with no AI provider and get
+      // unmarked FTS results back. The fix:
+      //   - "only" must hard-fail with a structured _error
+      //   - "on"   must succeed via FTS but stamp _warning so the caller sees
+      //            the degradation
+      //   - "auto" / "off" stay silent (their contract is "use what's available")
+
+      const noAiOptions = {
+        vectorStore: null,
+        embeddingService: null,
+        reranker: null,
+      } as const;
+
+      it('semantic="only" returns _error when no AI provider is configured', async () => {
+        const result = await search(store, 'User', undefined, 20, 0, noAiOptions, undefined, {
+          semantic: 'only',
+        });
+        expect(result._error).toBeDefined();
+        expect(result._error?.code).toBe('no_ai_provider');
+        expect(result._error?.message).toMatch(/semantic="only"/);
+        expect(result._error?.hint).toMatch(/embed_repo/);
+        expect(result.items).toEqual([]);
+      });
+
+      it('semantic="on" stamps _warning and falls through to FTS', async () => {
+        const result = await search(store, 'User', undefined, 20, 0, noAiOptions, undefined, {
+          semantic: 'on',
+        });
+        expect(result._warning).toMatch(/semantic="on"/);
+        expect(result._warning).toMatch(/lexical/);
+        expect(result.search_mode).toBe('fts');
+        expect(result.items.length).toBeGreaterThan(0);
+        expect(result._error).toBeUndefined();
+      });
+
+      it('semantic="auto" stays silent on FTS fallback', async () => {
+        const result = await search(store, 'User', undefined, 20, 0, noAiOptions, undefined, {
+          semantic: 'auto',
+        });
+        expect(result._warning).toBeUndefined();
+        expect(result._error).toBeUndefined();
+        expect(result.search_mode).toBe('fts');
+      });
+
+      it('semantic="off" stays silent on FTS', async () => {
+        const result = await search(store, 'User', undefined, 20, 0, noAiOptions, undefined, {
+          semantic: 'off',
+        });
+        expect(result._warning).toBeUndefined();
+        expect(result._error).toBeUndefined();
+      });
+    });
   });
 
   describe('getSymbol()', () => {
