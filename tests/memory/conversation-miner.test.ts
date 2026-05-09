@@ -292,3 +292,69 @@ describe('Conversation Miner — privacy filtering', () => {
     expect(stripPrivacyTags(input)).toBe(' ');
   });
 });
+
+describe('Conversation Miner — worktree adoption', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-adopt-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns the path unchanged when not a linked worktree', async () => {
+    const { adoptWorktreeRoot } = await import('../../src/memory/conversation-miner.js');
+    const cache = new Map<string, string>();
+    const root = path.join(tmpDir, 'plain-project');
+    fs.mkdirSync(root);
+    expect(adoptWorktreeRoot(root, cache)).toBe(root);
+  });
+
+  it('returns the path unchanged when the directory does not exist', async () => {
+    const { adoptWorktreeRoot } = await import('../../src/memory/conversation-miner.js');
+    const cache = new Map<string, string>();
+    const ghost = path.join(tmpDir, 'no-such');
+    expect(adoptWorktreeRoot(ghost, cache)).toBe(ghost);
+  });
+
+  it('returns parent main root when the path is a linked worktree', async () => {
+    const { adoptWorktreeRoot } = await import('../../src/memory/conversation-miner.js');
+    const cache = new Map<string, string>();
+
+    // Build a fake linked-worktree layout:
+    //   tmpDir/main/.git/worktrees/feat-x/
+    //   tmpDir/main/.git/worktrees/feat-x/commondir   → "../.."  (relative)
+    //   tmpDir/wt-feat-x/.git                          → file: "gitdir: <admin>"
+    const main = path.join(tmpDir, 'main');
+    const mainGit = path.join(main, '.git');
+    const adminDir = path.join(mainGit, 'worktrees', 'feat-x');
+    fs.mkdirSync(adminDir, { recursive: true });
+    fs.writeFileSync(path.join(adminDir, 'commondir'), '../..\n');
+    // Bare HEAD/refs files some `git rev-parse` paths probe — not strictly
+    // required by `detectGitWorktree`, but harmless and realistic.
+    fs.writeFileSync(path.join(mainGit, 'HEAD'), 'ref: refs/heads/main\n');
+
+    const wt = path.join(tmpDir, 'wt-feat-x');
+    fs.mkdirSync(wt);
+    fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${adminDir}\n`);
+    // detectGitWorktree validates that the resolved main root has a real
+    // .git *directory*; the dir was already created above.
+
+    const adopted = adoptWorktreeRoot(wt, cache);
+    expect(adopted).toBe(main);
+  });
+
+  it('caches results for the same path', async () => {
+    const { adoptWorktreeRoot } = await import('../../src/memory/conversation-miner.js');
+    const cache = new Map<string, string>();
+    const root = path.join(tmpDir, 'cached');
+    fs.mkdirSync(root);
+    adoptWorktreeRoot(root, cache);
+    expect(cache.has(root)).toBe(true);
+    // Second call must read from cache, not re-stat (we can't easily prove
+    // no fs read, but at least result is stable).
+    expect(adoptWorktreeRoot(root, cache)).toBe(root);
+  });
+});
