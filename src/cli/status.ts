@@ -71,6 +71,8 @@ export const statusCommand = new Command('status')
     const db = new Database(dbPath, { readonly: true });
     db.pragma('journal_mode = WAL');
 
+    db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
+
     try {
       const progress = readProgressFromDb(db);
 

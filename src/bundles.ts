@@ -92,6 +92,8 @@ export function exportBundle(
   const dst = new Database(bundlePath);
 
   dst.pragma('journal_mode = WAL');
+
+  dst.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
   dst.pragma('synchronous = OFF');
 
   // Create minimal schema

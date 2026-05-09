@@ -1434,6 +1434,8 @@ export function initializeDatabase(dbPath: string): Database.Database {
 
   // WAL mode for concurrent reads + write performance
   db.pragma('journal_mode = WAL');
+
+  db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
   // NORMAL is safe in WAL mode (data survives process crash, not OS crash) and

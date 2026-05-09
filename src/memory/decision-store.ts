@@ -244,13 +244,50 @@ export class DecisionStore {
       logger.debug({ dbPath, readonly: true }, 'Decision store opened (readonly)');
     } else {
       this.db.pragma('journal_mode = WAL');
+      // Bound WAL/journal growth: long-running daemons accumulating decisions
+      // would otherwise grow `*-wal` unbounded between checkpoints. 100 MiB is
+      // enough headroom for normal write bursts but caps worst-case disk use.
+      this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
       this.db.pragma('foreign_keys = ON');
       this.db.pragma('busy_timeout = 5000');
       this.preMigrate();
       this.db.exec(DECISIONS_DDL);
       this.migrate();
+      this.scheduleWalCheckpoint();
       logger.debug({ dbPath }, 'Decision store initialized');
     }
+  }
+
+  private checkpointTimer: NodeJS.Timeout | null = null;
+
+  /**
+   * Periodic `wal_checkpoint(TRUNCATE)` keeps `*-wal` from growing forever in
+   * a long-running daemon. SQLite auto-checkpoints on the writer thread, but
+   * only when the WAL crosses 1000 frames — heavy read traffic with light
+   * writes can stall a checkpoint indefinitely. TRUNCATE truncates the WAL
+   * back to zero after a successful checkpoint.
+   */
+  private scheduleWalCheckpoint(): void {
+    if (this.checkpointTimer !== null) return;
+    const tick = () => {
+      try {
+        this.db.pragma('wal_checkpoint(TRUNCATE)');
+      } catch (err) {
+        // Non-fatal: another writer holds the lock, or DB just closed.
+        logger.debug?.({ err: (err as Error).message }, 'wal_checkpoint failed');
+      }
+    };
+    // 5 minutes — short enough to keep WAL bounded, long enough to amortise
+    // checkpoint cost across many writes.
+    this.checkpointTimer = setInterval(tick, 5 * 60 * 1000);
+    // Don't pin the event loop on the checkpoint timer.
+    this.checkpointTimer.unref?.();
+  }
+
+  private cancelWalCheckpoint(): void {
+    if (this.checkpointTimer === null) return;
+    clearInterval(this.checkpointTimer);
+    this.checkpointTimer = null;
   }
 
   /**
@@ -277,6 +314,13 @@ export class DecisionStore {
   }
 
   close(): void {
+    this.cancelWalCheckpoint();
+    // Final checkpoint before close so the next opener sees an empty WAL.
+    try {
+      if (this.db.open) this.db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch {
+      /* best-effort */
+    }
     this.db.close();
   }
 
