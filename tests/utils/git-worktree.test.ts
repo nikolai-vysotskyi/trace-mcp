@@ -26,7 +26,12 @@ describe('probeWorktree', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = createTmpDir('worktree-probe-');
+    // Resolve symlinks AND any 8.3-shortname encoding (Windows
+    // mkdtempSync sometimes returns `C:\Users\RUNNER~1\…`, while git
+    // operating inside that dir reports the long form
+    // `C:\Users\runneradmin\…`). Without realpath here the two come
+    // back unequal even though they reference the same on-disk dir.
+    tmpDir = fs.realpathSync(createTmpDir('worktree-probe-'));
   });
 
   afterEach(() => {
@@ -91,7 +96,9 @@ describe('sharesGitCommonDir', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = createTmpDir('shares-git-common-');
+    // See note in `describe('probeWorktree', …)` above re: 8.3 shortnames
+    // on Windows runners.
+    tmpDir = fs.realpathSync(createTmpDir('shares-git-common-'));
   });
 
   afterEach(() => {

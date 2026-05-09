@@ -121,6 +121,11 @@ describe('ensureBundlesDir', () => {
 // ── exportBundle ──────────────────────────────────────────────────────────────
 
 describe('exportBundle', () => {
+  // Windows runners hit the default 10s ceiling on the very first
+  // exportBundle test (the one that VACUUMs + opens fresh tmp DBs);
+  // all subsequent calls reuse warmed paths and are much faster.
+  // 30s is generous enough for the slowest known runner without masking
+  // a real performance regression — anything beyond that is a hang.
   it('creates a bundle DB file and returns a manifest entry', () => {
     const src = makeSourceDb([
       { name: 'createUser', kind: 'function' },
@@ -137,7 +142,7 @@ describe('exportBundle', () => {
 
     const bundlePath = path.join(tmpHome, 'bundles', entry.file);
     expect(fs.existsSync(bundlePath)).toBe(true);
-  });
+  }, 30_000);
 
   it('registers the entry in the manifest', () => {
     const src = makeSourceDb([{ name: 'foo', kind: 'function' }]);
