@@ -208,3 +208,87 @@ describe('Conversation Miner — extraction patterns', () => {
     });
   });
 });
+
+describe('Conversation Miner — privacy filtering', () => {
+  it('strips <private> blocks before mining', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = 'visible <private>password=hunter2</private> tail';
+    expect(stripPrivacyTags(input)).toBe('visible  tail');
+  });
+
+  it('strips <persisted-output> blocks (Claude Code captured tool output)', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = 'before <persisted-output>...100KB of file body...</persisted-output> after';
+    expect(stripPrivacyTags(input)).toBe('before  after');
+  });
+
+  it('strips <system-reminder> blocks', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = 'note <system-reminder>TodoWrite has not been used</system-reminder> end';
+    expect(stripPrivacyTags(input)).toBe('note  end');
+  });
+
+  it('strips <task-notification> autonomous protocol payloads', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = 'a <task-notification>{"agent":"Explore","status":"done"}</task-notification> b';
+    expect(stripPrivacyTags(input)).toBe('a  b');
+  });
+
+  it('strips <ide_selection> echoes', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = 'pre <ide_selection>secret_key = "abc"</ide_selection> post';
+    expect(stripPrivacyTags(input)).toBe('pre  post');
+  });
+
+  it('strips <local-command-stdout> blocks', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = '<local-command-stdout>API_TOKEN=secret\n</local-command-stdout>';
+    expect(stripPrivacyTags(input)).toBe('');
+  });
+
+  it('keeps <command-message> and <command-name> (real user slash-commands)', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = '<command-name>/loop</command-name> body <command-message>5m</command-message>';
+    expect(stripPrivacyTags(input)).toBe(input);
+  });
+
+  it('handles multiple privacy tags in one message', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = '<private>a</private> middle <system-reminder>b</system-reminder>';
+    expect(stripPrivacyTags(input)).toBe(' middle ');
+  });
+
+  it('does not regex-bomb on >256 KiB payloads', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const huge = `<persisted-output>${'x'.repeat(300_000)}</persisted-output>`;
+    const start = Date.now();
+    const out = stripPrivacyTags(huge);
+    expect(Date.now() - start).toBeLessThan(200);
+    expect(out).toBe('');
+  });
+
+  it('detects internal-protocol-only payloads', async () => {
+    const { isInternalProtocolPayload } = await import('../../src/memory/conversation-miner.js');
+    expect(isInternalProtocolPayload('<system-reminder>x</system-reminder>')).toBe(true);
+    expect(
+      isInternalProtocolPayload(
+        '<task-notification>foo</task-notification>\n  <system-reminder>bar</system-reminder>',
+      ),
+    ).toBe(true);
+    expect(isInternalProtocolPayload('real user content')).toBe(false);
+    expect(isInternalProtocolPayload('user wrote this <private>x</private>')).toBe(false);
+    expect(isInternalProtocolPayload('')).toBe(false);
+  });
+
+  it('handles empty and missing input gracefully', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    expect(stripPrivacyTags('')).toBe('');
+    expect(stripPrivacyTags('plain text')).toBe('plain text');
+  });
+
+  it('is case-insensitive on tag names', async () => {
+    const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
+    const input = '<Private>secret</Private> <SYSTEM-REMINDER>x</SYSTEM-REMINDER>';
+    expect(stripPrivacyTags(input)).toBe(' ');
+  });
+});

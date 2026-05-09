@@ -201,6 +201,77 @@ interface ConversationMessage {
   content?: string | ConversationContentItem[];
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// PRIVACY FILTERING — strip non-user content before persisting to memory
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Block-tags whose content should be redacted before mining.
+ *
+ * - `<private>…</private>` — user-curated "do not remember this" markers
+ * - `<persisted-output>…</persisted-output>` — Claude Code's offline tool-output
+ *   capture, often hundreds of KB of file contents we don't want to mine
+ * - `<system-reminder>…</system-reminder>` — runtime nudges (e.g. "TodoWrite
+ *   has not been used"), not user-authored content
+ * - `<ide_selection>…</ide_selection>` — IDE selection echo, can contain
+ *   sensitive code we shouldn't surface back across sessions
+ * - `<task-notification>…</task-notification>` — autonomous protocol payloads
+ *   emitted by Claude Code on background `Agent` completion (claude-mem v12.4.2
+ *   found 471 of these polluting one local DB)
+ * - `<local-command-stdout>…</local-command-stdout>` — captured shell output
+ *   (e.g. `!pwd`), may contain secrets
+ *
+ * `<command-message>` and `<command-name>` are kept — those wrap real user
+ * slash-commands and are part of the conversation.
+ *
+ * Tempered greedy body (`[\s\S]*?`) prevents one tag from spanning across
+ * unrelated text. 256 KiB size guard short-circuits the regex on hostile
+ * payloads to avoid pathological backtracking.
+ */
+const PRIVACY_BLOCK_TAGS = [
+  'private',
+  'persisted-output',
+  'system-reminder',
+  'ide_selection',
+  'task-notification',
+  'local-command-stdout',
+] as const;
+
+const PRIVACY_TAG_REGEX = new RegExp(
+  `<(${PRIVACY_BLOCK_TAGS.join('|')})\\b[^>]*>[\\s\\S]*?</\\1>`,
+  'gi',
+);
+
+const PRIVACY_REGEX_BUDGET = 256 * 1024;
+
+export function stripPrivacyTags(text: string): string {
+  if (!text) return text;
+  if (text.length > PRIVACY_REGEX_BUDGET) {
+    // Don't run the regex on hostile input; nuke any opening privacy tag
+    // through to end-of-string as a conservative fallback. We'd rather
+    // drop the message than spend seconds backtracking.
+    return text.replace(
+      new RegExp(`<(${PRIVACY_BLOCK_TAGS.join('|')})\\b[^>]*>[\\s\\S]*$`, 'i'),
+      '',
+    );
+  }
+  return text.replace(PRIVACY_TAG_REGEX, '');
+}
+
+/**
+ * Detect messages whose visible content is *only* an internal protocol
+ * payload — e.g. autonomous `<task-notification>` blocks or stale system
+ * reminders. After stripping privacy tags, what's left is whitespace.
+ *
+ * Mining these as user prompts pollutes the decision graph (claude-mem
+ * v12.4.2: 471 ghost rows in one local DB). Returning `true` tells the
+ * caller to skip the turn entirely.
+ */
+export function isInternalProtocolPayload(text: string): boolean {
+  if (!text) return false;
+  return stripPrivacyTags(text).trim().length === 0;
+}
+
 function extractTurnContent(
   msg: ConversationMessage,
   role: 'user' | 'assistant',
@@ -232,7 +303,12 @@ function extractTurnContent(
     }
   }
 
-  const text = textParts.join('\n');
+  const rawText = textParts.join('\n');
+  // Privacy filter: drop messages that are entirely auto-generated protocol
+  // payloads (system reminders, task notifications), then strip any remaining
+  // private/persisted-output blocks from the user-visible content.
+  if (isInternalProtocolPayload(rawText)) return null;
+  const text = stripPrivacyTags(rawText).trim();
   if (!text) return null;
 
   return {
