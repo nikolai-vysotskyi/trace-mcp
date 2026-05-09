@@ -51,10 +51,12 @@ describe('resolveWorktreeAware', () => {
     // Resolve symlinks AND any 8.3-shortname encoding (Windows
     // mkdtempSync sometimes returns `C:\Users\RUNNER~1\…`, while git
     // probing inside the dir reports the long form
-    // `C:\Users\runneradmin\…`). Without realpath both worktree
-    // commonDirs come back unequal even though they reference the
-    // same on-disk path.
-    tmpDir = fs.realpathSync(createTmpDir('registry-worktree-'));
+    // `C:\Users\runneradmin\…`). Production `realpathSafe` prefers the
+    // native binding (which always returns the long form on Windows);
+    // mirror that on the test side or string-comparisons diverge.
+    const realpath: (p: string) => string =
+      typeof fs.realpathSync.native === 'function' ? fs.realpathSync.native : fs.realpathSync;
+    tmpDir = realpath(createTmpDir('registry-worktree-'));
     savedRegistry = fs.existsSync(REGISTRY_PATH) ? fs.readFileSync(REGISTRY_PATH, 'utf-8') : null;
   });
 
