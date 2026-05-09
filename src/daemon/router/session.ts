@@ -4,6 +4,7 @@ import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { TraceMcpConfig } from '../../config.js';
 import { logger } from '../../logger.js';
 import { checkVersionDrift, versionDriftMessage } from '../../init/version-stamp.js';
+import { disarmStdoutGuard } from '../../server/transport-hardening.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
 import {
@@ -141,6 +142,10 @@ export class StdioSession {
     // Install idle timer (non-lethal).
     this.resetIdleTimer();
 
+    // Release the early-init stdout guard now that the MCP transport owns
+    // the stream. Anything that writes to stdout from this point on is
+    // expected to be a JSON-RPC frame.
+    disarmStdoutGuard();
     await this.stdio.start();
     // Drift probe: warn (stderr-only) if installed version diverges from
     // the version that last ran `trace-mcp init`. Best-effort; no-op when
