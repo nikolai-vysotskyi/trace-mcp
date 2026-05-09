@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { listAllSessions } from '../analytics/log-parser.js';
 import { logger } from '../logger.js';
+import { detectGitWorktree } from '../project-root.js';
 import { mineProviderSessions } from './conversation-miner-providers.js';
 import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
 
@@ -410,6 +411,65 @@ function inferTags(content: string): string[] {
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// WORKTREE ADOPTION
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve a session's recorded project path to its **canonical** project root.
+ *
+ * If the recorded path is a linked git worktree, the canonical root is the
+ * parent worktree (where the primary `.git` directory lives). Otherwise the
+ * recorded path is returned unchanged.
+ *
+ * Why
+ * ───
+ * Claude Code stores `cwd` per session in `~/.claude/projects/<encoded-cwd>/`.
+ * When a developer runs Claude inside `repo/.git/worktrees/feat-x`, every
+ * decision mined from that session lands under the worktree's project_root.
+ * Once the worktree is removed (post-merge), those decisions become orphans
+ * — invisible to `query_decisions { project_root: '<repo>' }` — even though
+ * the merged code now lives in the parent.
+ *
+ * claude-mem v12.2.0 ("Worktree Adoption") solved this with the same idea:
+ * collapse worktree decisions under the parent at mining time, so memory
+ * follows the code through a merge.
+ *
+ * Failure modes
+ * ─────────────
+ * `detectGitWorktree` returns null when the directory no longer exists, when
+ * the `.git` entry is unreadable, or when the dir is not a git repo at all.
+ * In every "can't tell" case we fall back to the original path — adoption is
+ * opportunistic, never destructive. Decisions filed before this fix stay where
+ * they are; manual reattribution is a follow-up CLI concern.
+ *
+ * Cache
+ * ─────
+ * Worktree detection touches the filesystem. Callers pass a `Map` so we
+ * don't re-stat the same path for every session in a long mining run.
+ */
+export function adoptWorktreeRoot(rawProjectPath: string, cache: Map<string, string>): string {
+  const cached = cache.get(rawProjectPath);
+  if (cached !== undefined) return cached;
+
+  let resolved = rawProjectPath;
+  try {
+    const wt = detectGitWorktree(rawProjectPath);
+    if (wt && wt.mainRoot && wt.mainRoot !== rawProjectPath) {
+      resolved = wt.mainRoot;
+      logger.debug?.(
+        { from: rawProjectPath, to: resolved },
+        'mineSessions: adopted worktree decisions to parent project',
+      );
+    }
+  } catch {
+    /* defensive — never block mining on a worktree detection failure */
+  }
+
+  cache.set(rawProjectPath, resolved);
+  return resolved;
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ════════════════════════════════════════════════════════════════════════
 
@@ -431,6 +491,15 @@ export async function mineSessions(
   const start = Date.now();
   const sessions = listAllSessions();
   const minConfidence = opts.minConfidence ?? 0.6;
+  const worktreeCache = new Map<string, string>();
+
+  // Optionally adopt the filter target itself, in case the user passed a
+  // worktree path: we want their `--project /repo/wt-x` to also pick up
+  // sessions whose recorded cwd is `/repo/wt-x` AND those whose cwd is the
+  // parent `/repo` (after adoption they share the same canonical root).
+  const filterRoot = opts.projectRoot
+    ? adoptWorktreeRoot(opts.projectRoot, worktreeCache)
+    : undefined;
 
   let scanned = 0;
   let skipped = 0;
@@ -441,8 +510,10 @@ export async function mineSessions(
   for (const session of sessions) {
     scanned++;
 
+    const canonicalProjectPath = adoptWorktreeRoot(session.projectPath, worktreeCache);
+
     // Filter by project if specified
-    if (opts.projectRoot && session.projectPath !== opts.projectRoot) {
+    if (filterRoot && canonicalProjectPath !== filterRoot) {
       skipped++;
       continue;
     }
@@ -468,7 +539,9 @@ export async function mineSessions(
           title: d.title,
           content: d.content,
           type: d.type,
-          project_root: session.projectPath,
+          // Adopted to the parent worktree if `session.projectPath` is a
+          // linked worktree, so post-merge memory still queries cleanly.
+          project_root: canonicalProjectPath,
           symbol_id: d.symbol_id,
           file_path: d.file_path,
           tags: d.tags,
@@ -493,7 +566,13 @@ export async function mineSessions(
   const _providerCounters = { scanned, skipped, mined, extracted, errors };
   await mineProviderSessions(
     decisionStore,
-    { projectRoot: opts.projectRoot, force: opts.force, minConfidence: opts.minConfidence },
+    {
+      // Forward the canonical (worktree-adopted) root so provider mining
+      // also files decisions under the parent project.
+      projectRoot: filterRoot ?? opts.projectRoot,
+      force: opts.force,
+      minConfidence: opts.minConfidence,
+    },
     _providerCounters,
   );
   scanned = _providerCounters.scanned;
