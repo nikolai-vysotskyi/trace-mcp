@@ -12,7 +12,7 @@
  * and packages/app/src/main/daemon-lifecycle.ts (electron app).
  */
 
-import { execSync, spawn } from 'node:child_process';
+import { execSync, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -226,22 +226,145 @@ function getPidFilePath(): string {
   return path.join(TRACE_MCP_HOME, 'daemon.pid');
 }
 
+/**
+ * Capture an opaque process-start identity token alongside the PID.
+ *
+ * Without this, `process.kill(pid, 0)` false-positives when a PID was reused
+ * — most commonly after `docker stop` / `docker start` with a bind-mounted
+ * data directory: the new daemon boots as the same low PID (often 11) as the
+ * old one, liveness reports "alive", and the daemon refuses to start against
+ * its own prior incarnation.
+ *
+ * Returns `null` when the token cannot be captured (Windows, missing /proc,
+ * `ps` failure). Callers must treat `null` as "skip identity check, fall back
+ * to liveness-only".
+ */
+export function captureProcessStartToken(pid: number): string | null {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  if (isWin) return null; // Container PID-reuse scenario doesn't apply on Windows.
+
+  if (process.platform === 'linux') {
+    try {
+      // /proc/<pid>/stat field 22 = starttime in jiffies since boot.
+      // Same signal pgrep/systemd use. Cheap, no exec.
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf-8');
+      // Field 2 (comm) is parenthesised and may contain spaces. Skip past
+      // the closing ')' to start parsing fields from #3.
+      const closeParen = stat.lastIndexOf(')');
+      if (closeParen < 0) return null;
+      const fields = stat
+        .slice(closeParen + 2)
+        .trim()
+        .split(/\s+/);
+      // After the close-paren, fields are 3..end. starttime is field 22 → idx 22-3 = 19.
+      const starttime = fields[19];
+      if (!starttime || !/^\d+$/.test(starttime)) return null;
+      return `linux:${starttime}`;
+    } catch {
+      return null;
+    }
+  }
+
+  // POSIX (macOS, BSD, …): ps -p <pid> -o lstart= with LC_ALL=C so the
+  // emitted timestamp is locale-independent across environments.
+  try {
+    const out = execFileSync('ps', ['-p', String(pid), '-o', 'lstart='], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
+      timeout: 2_000,
+    }).trim();
+    if (!out) return null;
+    return `posix:${out}`;
+  } catch {
+    return null;
+  }
+}
+
+interface PidFilePayload {
+  pid: number;
+  token: string | null;
+}
+
+function parsePidFile(content: string): PidFilePayload | null {
+  // Backwards-compatible parser:
+  //   line 1 = PID
+  //   line 2 (optional) = identity token
+  // PID files written by older versions are token-less and validated by
+  // liveness alone.
+  const lines = content.split(/\r?\n/);
+  const pid = parseInt((lines[0] ?? '').trim(), 10);
+  if (Number.isNaN(pid)) return null;
+  const token = (lines[1] ?? '').trim();
+  return { pid, token: token.length > 0 ? token : null };
+}
+
+function writePidFile(pid: number, token: string | null): void {
+  const body = token === null ? `${pid}\n` : `${pid}\n${token}\n`;
+  fs.writeFileSync(getPidFilePath(), body, 'utf-8');
+}
+
+/**
+ * Verify a PID file's owner is still the same process we recorded.
+ *
+ * Returns `true` when:
+ *   1. PID file exists, parseable, and the PID is alive, AND
+ *   2. either the file lacks an identity token (legacy file → liveness wins),
+ *      OR the captured token still matches the recorded one.
+ *
+ * Returns `false` (and logs the PID-reused case at debug level) when liveness
+ * passes but the token mismatches — that's "PID was recycled by an unrelated
+ * process".
+ */
+export function verifyPidFileOwnership(content: string): {
+  ok: boolean;
+  pid: number | null;
+  reason?: string;
+} {
+  const parsed = parsePidFile(content);
+  if (parsed === null) return { ok: false, pid: null, reason: 'unparseable' };
+
+  // Liveness check first.
+  try {
+    process.kill(parsed.pid, 0);
+  } catch {
+    return { ok: false, pid: parsed.pid, reason: 'dead' };
+  }
+
+  // No recorded token → backwards-compat, accept liveness alone.
+  if (parsed.token === null) return { ok: true, pid: parsed.pid };
+
+  const current = captureProcessStartToken(parsed.pid);
+  if (current === null) {
+    // Couldn't capture (Windows / missing /proc) — accept liveness.
+    return { ok: true, pid: parsed.pid };
+  }
+  if (current === parsed.token) return { ok: true, pid: parsed.pid };
+  return { ok: false, pid: parsed.pid, reason: 'pid-reused' };
+}
+
 function readDaemonPid(): number | null {
   const pidFile = getPidFilePath();
   if (!fs.existsSync(pidFile)) return null;
-  const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
-  if (Number.isNaN(pid)) return null;
+  let content: string;
   try {
-    process.kill(pid, 0);
-    return pid;
+    content = fs.readFileSync(pidFile, 'utf-8');
   } catch {
-    try {
-      fs.unlinkSync(pidFile);
-    } catch {
-      /* noop */
-    }
     return null;
   }
+  const verdict = verifyPidFileOwnership(content);
+  if (verdict.ok && verdict.pid !== null) return verdict.pid;
+  if (verdict.reason === 'pid-reused') {
+    logger.debug?.(
+      `daemon.pid identity mismatch (PID ${verdict.pid} reused by unrelated process); discarding`,
+    );
+  }
+  try {
+    fs.unlinkSync(pidFile);
+  } catch {
+    /* noop */
+  }
+  return null;
 }
 
 function stopDaemonByPid(): void {
@@ -295,7 +418,12 @@ function ensureDaemonGeneric(port: number): EnsureResult {
     });
     child.unref();
     if (child.pid) {
-      fs.writeFileSync(getPidFilePath(), String(child.pid), 'utf-8');
+      // Capture identity token immediately so a recycled-PID restart can be
+      // distinguished from a real liveness signal. Token capture may fail on
+      // very-fresh PIDs or platforms without /proc/ps; in that case we fall
+      // back to liveness-only validation (older PID-file shape).
+      const token = captureProcessStartToken(child.pid);
+      writePidFile(child.pid, token);
     }
   } catch (err) {
     return { ok: false, error: `Spawn failed: ${(err as Error).message}` };
@@ -378,21 +506,24 @@ const SPAWN_LOCK_STALE_MS = 30_000;
 function acquireSpawnLock(): boolean {
   if (!fs.existsSync(TRACE_MCP_HOME)) fs.mkdirSync(TRACE_MCP_HOME, { recursive: true });
 
+  const ownToken = captureProcessStartToken(process.pid);
+  const ownPayload = ownToken === null ? `${process.pid}\n` : `${process.pid}\n${ownToken}\n`;
+
   try {
     // 'wx' = fail if file exists. Atomic on POSIX; best-effort on Windows.
     const fd = fs.openSync(SPAWN_LOCK_PATH, 'wx');
-    fs.writeSync(fd, String(process.pid));
+    fs.writeSync(fd, ownPayload);
     fs.closeSync(fd);
     return true;
   } catch {
-    // Lock file exists — check if it's stale (dead PID or older than N ms).
+    // Lock file exists — check if it's stale (dead PID, recycled PID, or older than N ms).
     try {
       const stat = fs.statSync(SPAWN_LOCK_PATH);
       const age = Date.now() - stat.mtimeMs;
-      const pid = parseInt(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8').trim(), 10);
-      const dead = Number.isNaN(pid) || !isProcessAlive(pid);
+      const parsed = parsePidFile(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8'));
+      const dead = parsed === null || !isProcessAliveWithToken(parsed.pid, parsed.token);
       if (dead || age > SPAWN_LOCK_STALE_MS) {
-        fs.writeFileSync(SPAWN_LOCK_PATH, String(process.pid), 'utf-8');
+        fs.writeFileSync(SPAWN_LOCK_PATH, ownPayload, 'utf-8');
         return true;
       }
     } catch {
@@ -404,8 +535,8 @@ function acquireSpawnLock(): boolean {
 
 function releaseSpawnLock(): void {
   try {
-    const pid = parseInt(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8').trim(), 10);
-    if (pid === process.pid) {
+    const parsed = parsePidFile(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8'));
+    if (parsed !== null && parsed.pid === process.pid) {
       fs.unlinkSync(SPAWN_LOCK_PATH);
     }
   } catch {
@@ -420,6 +551,19 @@ function isProcessAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Liveness + identity check using the recorded token (when present).
+ * Returns true only when the PID is alive AND its identity token still matches
+ * the recorded one (or no token was recorded → liveness wins).
+ */
+function isProcessAliveWithToken(pid: number, recordedToken: string | null): boolean {
+  if (!isProcessAlive(pid)) return false;
+  if (recordedToken === null) return true;
+  const current = captureProcessStartToken(pid);
+  if (current === null) return true; // Couldn't capture — accept liveness.
+  return current === recordedToken;
 }
 
 export interface AutoSpawnResult {

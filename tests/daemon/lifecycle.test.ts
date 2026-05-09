@@ -9,7 +9,12 @@ vi.mock('../../src/daemon/client.js', () => {
 });
 
 import * as daemonClient from '../../src/daemon/client.js';
-import { tryAutoSpawnDaemon, waitForDaemonUp } from '../../src/daemon/lifecycle.js';
+import {
+  captureProcessStartToken,
+  tryAutoSpawnDaemon,
+  verifyPidFileOwnership,
+  waitForDaemonUp,
+} from '../../src/daemon/lifecycle.js';
 
 const mockIsRunning = vi.mocked(daemonClient.isDaemonRunning);
 const mockGetHealth = vi.mocked(daemonClient.getDaemonHealth);
@@ -64,4 +69,86 @@ describe('tryAutoSpawnDaemon', () => {
   // Spawning a real daemon is out of scope — these tests would launch a
   // real child process. Happy-path spawning is covered by the manual
   // integration tests in the plan.
+});
+
+describe('captureProcessStartToken', () => {
+  it('returns a non-empty token for the current process on POSIX', () => {
+    if (process.platform === 'win32') return;
+    const token = captureProcessStartToken(process.pid);
+    expect(token).not.toBeNull();
+    expect(typeof token).toBe('string');
+    expect((token as string).length).toBeGreaterThan(0);
+  });
+
+  it('returns null for a clearly invalid PID', () => {
+    expect(captureProcessStartToken(0)).toBeNull();
+    expect(captureProcessStartToken(-1)).toBeNull();
+    expect(captureProcessStartToken(Number.NaN)).toBeNull();
+  });
+
+  it('returns null on Windows (PID-reuse scenario does not apply)', () => {
+    if (process.platform !== 'win32') return;
+    expect(captureProcessStartToken(process.pid)).toBeNull();
+  });
+
+  it('returns null for a PID that does not exist', () => {
+    if (process.platform === 'win32') return;
+    // Use a high PID that's extremely unlikely to be in use.
+    const result = captureProcessStartToken(999_999_999);
+    expect(result).toBeNull();
+  });
+
+  it('produces stable tokens across two calls for the same PID', () => {
+    if (process.platform === 'win32') return;
+    const a = captureProcessStartToken(process.pid);
+    const b = captureProcessStartToken(process.pid);
+    expect(a).not.toBeNull();
+    expect(a).toBe(b);
+  });
+});
+
+describe('verifyPidFileOwnership', () => {
+  it('rejects unparseable content', () => {
+    expect(verifyPidFileOwnership('not a pid').ok).toBe(false);
+    expect(verifyPidFileOwnership('not a pid').reason).toBe('unparseable');
+    expect(verifyPidFileOwnership('').ok).toBe(false);
+  });
+
+  it('accepts a token-less file when the PID is alive (backwards compat)', () => {
+    const v = verifyPidFileOwnership(`${process.pid}`);
+    expect(v.ok).toBe(true);
+    expect(v.pid).toBe(process.pid);
+  });
+
+  it('accepts a tokened file when the token still matches', () => {
+    if (process.platform === 'win32') return;
+    const token = captureProcessStartToken(process.pid);
+    if (token === null) return; // Couldn't capture — skip.
+    const v = verifyPidFileOwnership(`${process.pid}\n${token}\n`);
+    expect(v.ok).toBe(true);
+    expect(v.pid).toBe(process.pid);
+  });
+
+  it('rejects a tokened file when the recorded token mismatches (PID-reuse)', () => {
+    if (process.platform === 'win32') return;
+    const real = captureProcessStartToken(process.pid);
+    if (real === null) return;
+    const fakeToken = `${real}-stale-suffix`;
+    const v = verifyPidFileOwnership(`${process.pid}\n${fakeToken}\n`);
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('pid-reused');
+    expect(v.pid).toBe(process.pid);
+  });
+
+  it('rejects a file whose PID is dead', () => {
+    if (process.platform === 'win32') return;
+    const v = verifyPidFileOwnership('999999999');
+    expect(v.ok).toBe(false);
+    expect(v.reason).toBe('dead');
+  });
+
+  it('handles trailing whitespace and empty token line gracefully', () => {
+    const v = verifyPidFileOwnership(`${process.pid}\n   \n`);
+    expect(v.ok).toBe(true);
+  });
 });
