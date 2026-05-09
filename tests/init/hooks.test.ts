@@ -8,6 +8,34 @@ import { GUARD_HOOK_VERSION } from '../../src/init/types.js';
 vi.mock('node:fs');
 vi.mock('node:os');
 
+// `writeSettings` was switched to atomicWriteJson (commits leading up to
+// e948a22+), which routes through `fs.openSync(tmp, …)` + `fs.writeFileSync(fd,
+// body)` + `fs.renameSync(tmp, target)`. The existing test surface — find a
+// `writeFileSync` call whose first arg is a path containing `'settings.json'`
+// — therefore breaks: `c[0]` is a file descriptor (number), not the path.
+//
+// Re-route the production atomic-write helpers back to the simple
+// `fs.writeFileSync(path, body)` shape the tests expect. The atomicity
+// behaviour itself is covered by atomic-write's own tests; here we only
+// care that hook-install logic produces the right settings payload.
+vi.mock('../../src/utils/atomic-write.js', async () => {
+  const fsMod = await import('node:fs');
+  type Opts = { indent?: number; trailingNewline?: boolean };
+  const finalize = (payload: string, opts?: Opts) => {
+    const trailingNewline = opts?.trailingNewline ?? true;
+    return trailingNewline && !payload.endsWith('\n') ? `${payload}\n` : payload;
+  };
+  return {
+    atomicWriteString: (target: string, payload: string, opts?: Opts) => {
+      fsMod.default.writeFileSync(target, finalize(payload, opts));
+    },
+    atomicWriteJson: (target: string, data: unknown, opts?: Opts) => {
+      const indent = opts?.indent ?? 2;
+      fsMod.default.writeFileSync(target, finalize(JSON.stringify(data, null, indent), opts));
+    },
+  };
+});
+
 const mockFs = vi.mocked(fs);
 const mockOs = vi.mocked(os);
 
