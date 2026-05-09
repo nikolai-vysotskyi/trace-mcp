@@ -198,6 +198,8 @@ export class RankingLedger {
     ensureGlobalDirs();
     this.db = new Database(this.dbPath);
     this.db.pragma('journal_mode = WAL');
+
+    this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
     this.db.pragma('synchronous = NORMAL');
     this.db.exec(
       `CREATE TABLE IF NOT EXISTS ranking_events (

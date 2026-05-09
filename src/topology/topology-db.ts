@@ -299,6 +299,8 @@ export class TopologyStore {
       logger.debug({ dbPath, readonly: true }, 'Topology database opened (readonly)');
     } else {
       this.db.pragma('journal_mode = WAL');
+
+      this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
       this.db.pragma('foreign_keys = ON');
       this.db.pragma('busy_timeout = 5000');
       this.preMigrate();

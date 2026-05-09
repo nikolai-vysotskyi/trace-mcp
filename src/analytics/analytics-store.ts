@@ -68,6 +68,8 @@ export class AnalyticsStore {
     const p = dbPath ?? ANALYTICS_DB_PATH;
     this.db = new Database(p);
     this.db.pragma('journal_mode = WAL');
+
+    this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
     this.db.pragma('foreign_keys = OFF'); // for performance during bulk inserts
     this.db.exec(SCHEMA_SQL);
   }
