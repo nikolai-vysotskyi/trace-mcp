@@ -113,13 +113,24 @@ export function probeWorktree(repoPath: string): WorktreeProbe {
 
 /**
  * Resolve symlinks where possible, fall back to the input on failure.
+ *
  * On macOS the system tmp dir resolves through `/var → /private/var`; without
  * canonicalizing, two paths that point at the same on-disk location compare
  * unequal as strings.
+ *
+ * On Windows, git sometimes returns a path in 8.3 short form
+ * (`C:\Users\RUNNER~1\…`) and sometimes the long form
+ * (`C:\Users\runneradmin\…`) for the SAME on-disk location, depending on
+ * which API it used. JS-mode `fs.realpathSync` does not normalise between
+ * the two; the **native** variant calls `GetFinalPathNameByHandle` which
+ * always returns the canonical long form. Use the native binding when it's
+ * available so two probes of the same dir always compare equal.
  */
 function realpathSafe(p: string): string {
+  const realpathFn =
+    typeof fs.realpathSync.native === 'function' ? fs.realpathSync.native : fs.realpathSync;
   try {
-    return fs.realpathSync(p);
+    return realpathFn(p);
   } catch {
     return p;
   }
