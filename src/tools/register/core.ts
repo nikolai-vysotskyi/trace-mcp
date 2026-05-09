@@ -2,6 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
+import { repairIndex, type RepairMode } from '../../db/repair.js';
+import { verifyIndex } from '../../db/verify.js';
 import { LOCKS_DIR, projectHash } from '../../global.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
@@ -186,6 +188,70 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
               text: j({
                 status: 'error',
                 error: e instanceof Error ? e.message : String(e),
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    'verify_index',
+    'Read-only structural check of the local SQLite index: SQLite integrity_check, foreign-key violations, required-table presence, FTS5 integrity-check, embedding dimension consistency, and orphan embedding detection. Returns a check-by-check report with status (ok/warn/error) and a suggested repair mode for any non-ok finding. Never writes. Use as a preflight before reindex/embed_repo or when search is misbehaving. Returns JSON: { ok, status, checks: [{ name, status, detail, count?, suggested_repair? }] }.',
+    {},
+    async () => {
+      const report = verifyIndex(store.db);
+      return {
+        content: [{ type: 'text', text: j(report) }],
+        isError: report.status === 'error',
+      };
+    },
+  );
+
+  server.tool(
+    'repair_index',
+    'Apply a targeted repair to the local SQLite index. Modes: drop-orphans (delete embedding rows whose symbol_id no longer exists), drop-vec (drop the entire vector store — search falls back to BM25; embed_repo rebuilds), rebuild-fts (drop and reload symbols_fts from the symbols table). Each mode runs in a transaction so a partial failure leaves the DB unchanged. DESTRUCTIVE — verify_index first to find out which mode is needed. Returns JSON: { mode, ok, detail, affected }.',
+    {
+      mode: z
+        .enum(['drop-orphans', 'drop-vec', 'rebuild-fts'])
+        .describe(
+          'Repair mode: drop-orphans, drop-vec (forces a re-embed), or rebuild-fts (refreshes the FTS5 inverted index from symbols).',
+        ),
+    },
+    async ({ mode }) => {
+      try {
+        const result = await withLock(
+          { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-repair`, op: 'repair_index' },
+          async () => repairIndex(store.db, mode as RepairMode),
+        );
+        return { content: [{ type: 'text', text: j(result) }] };
+      } catch (e) {
+        if (e instanceof LockError) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  status: 'busy',
+                  error: 'index_busy',
+                  message: e.message,
+                  holder: e.holder,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                ok: false,
+                mode,
+                detail: e instanceof Error ? e.message : String(e),
               }),
             },
           ],
