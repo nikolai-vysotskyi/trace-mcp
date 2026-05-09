@@ -7,6 +7,31 @@ vi.mock('node:fs');
 vi.mock('node:https');
 vi.mock('node:child_process');
 
+// `updater.ts` writes the update-check cache via `atomicWriteJson`, which
+// internally goes through `fs.openSync(tmp,…)` + `fs.writeFileSync(fd,body)` +
+// `fs.renameSync(tmp,target)`. The existing `getWrittenCache()` helper looks
+// for `mockFs.writeFileSync` calls whose first arg equals CACHE_PATH — that
+// won't match a file descriptor. Re-route the helper to the simpler
+// `fs.writeFileSync(target, body)` shape so this test stays focused on cache
+// payload semantics, not on atomic-write plumbing.
+vi.mock('../src/utils/atomic-write.js', async () => {
+  const fsMod = await import('node:fs');
+  type Opts = { indent?: number; trailingNewline?: boolean };
+  const finalize = (payload: string, opts?: Opts) => {
+    const trailingNewline = opts?.trailingNewline ?? true;
+    return trailingNewline && !payload.endsWith('\n') ? `${payload}\n` : payload;
+  };
+  return {
+    atomicWriteString: (target: string, payload: string, opts?: Opts) => {
+      fsMod.default.writeFileSync(target, finalize(payload, opts));
+    },
+    atomicWriteJson: (target: string, data: unknown, opts?: Opts) => {
+      const indent = opts?.indent ?? 2;
+      fsMod.default.writeFileSync(target, finalize(JSON.stringify(data, null, indent), opts));
+    },
+  };
+});
+
 // Mock all dynamic-import targets so runPostUpdateMigrations doesn't need real modules
 vi.mock('../src/config-jsonc.js', () => ({
   migrateGlobalConfig: vi.fn(() => ({ changed: false, added: [] })),
