@@ -40,6 +40,7 @@ import { registerAnalysisTools } from '../tools/register/analysis.js';
 import { registerCoreTools } from '../tools/register/core.js';
 import { registerFrameworkTools } from '../tools/register/framework.js';
 import { registerGitTools } from '../tools/register/git.js';
+import { registerKnowledgeTools } from '../tools/register/knowledge.js';
 import { registerMemoryTools } from '../tools/register/memory.js';
 import { registerNavigationTools } from '../tools/register/navigation.js';
 import { registerQualityTools } from '../tools/register/quality.js';
@@ -581,6 +582,7 @@ export function createServer(
   registerAdvancedTools(server, ctx);
   registerQualityTools(server, ctx);
   registerMemoryTools(server, ctx);
+  registerKnowledgeTools(server, ctx);
   registerSessionTools(server, metaCtx);
 
   return { server, dispose };
