@@ -1,5 +1,16 @@
 #!/usr/bin/env node
 
+// Harden the stdio transport BEFORE any other module import — once a native
+// binding (better-sqlite3, parcel/watcher) or a deprecation warning writes a
+// stray byte to stdout the JSON-RPC framing is corrupted for the entire
+// session. We force UTF-8 and route stdout writes to stderr until the MCP
+// server is wired (see src/server/transport-hardening.ts).
+import { hardenStdio } from './server/transport-hardening.js';
+
+if (process.argv.includes('serve') || process.argv.length === 2) {
+  hardenStdio();
+}
+
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
