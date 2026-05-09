@@ -45,7 +45,11 @@ const OPENAI_COMPAT_DEFAULTS: Record<
     baseUrl: 'https://api.openai.com/v1',
     embeddingModel: 'text-embedding-3-small',
     embeddingDimensions: 1536,
-    inferenceModel: 'gpt-4o-mini',
+    // Smart tier (`inference`) for synthesis / Q&A / corpus prompts;
+    // fast tier (`fastInference`) for low-stakes calls (rerankers,
+    // file/symbol summarisation). Same separation as Anthropic
+    // Sonnet/Haiku and Groq 70B/8B. Users can override via config.
+    inferenceModel: 'gpt-4o',
     fastModel: 'gpt-4o-mini',
     envKey: 'OPENAI_API_KEY',
   },
@@ -85,7 +89,7 @@ const OPENAI_COMPAT_DEFAULTS: Record<
     baseUrl: 'https://api.mistral.ai/v1',
     embeddingModel: 'mistral-embed',
     embeddingDimensions: 1024,
-    inferenceModel: 'mistral-small-latest',
+    inferenceModel: 'mistral-medium-latest',
     fastModel: 'mistral-small-latest',
     envKey: 'MISTRAL_API_KEY',
   },
@@ -327,7 +331,10 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
           apiKey,
           embeddingModel: pick(config.ai.embedding_model, 'text-embedding-004'),
           embeddingDimensions: config.ai.embedding_dimensions ?? 768,
-          inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-flash'),
+          // Smart tier for Q&A / synthesis; fast tier for low-stakes work
+          // (rerankers, file/symbol summarisation). Match Anthropic's
+          // Sonnet/Haiku separation so fastInference() is actually faster.
+          inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-pro'),
           fastModel: pick(config.ai.fast_model, 'gemini-2.5-flash'),
         }),
         'gemini',
@@ -403,7 +410,8 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
           location,
           embeddingModel: pick(config.ai.embedding_model, 'text-embedding-005'),
           embeddingDimensions: config.ai.embedding_dimensions ?? 768,
-          inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-flash'),
+          // Smart tier for Q&A / synthesis; fast tier for low-stakes work.
+          inferenceModel: pick(config.ai.inference_model, 'gemini-2.5-pro'),
           fastModel: pick(config.ai.fast_model, 'gemini-2.5-flash'),
         }),
         'vertex',
