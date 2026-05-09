@@ -5,6 +5,7 @@
 
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
+import { restrictDbPerms } from '../shared/db-perms.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -298,6 +299,7 @@ export class TopologyStore {
       this.db.pragma('busy_timeout = 5000');
       logger.debug({ dbPath, readonly: true }, 'Topology database opened (readonly)');
     } else {
+      restrictDbPerms(dbPath);
       this.db.pragma('journal_mode = WAL');
 
       this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
