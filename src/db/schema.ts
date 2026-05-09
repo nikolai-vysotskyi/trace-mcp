@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
 const SCHEMA_VERSION = 25;
@@ -1431,6 +1432,7 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
 
 export function initializeDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
+  restrictDbPerms(dbPath);
 
   // WAL mode for concurrent reads + write performance
   db.pragma('journal_mode = WAL');

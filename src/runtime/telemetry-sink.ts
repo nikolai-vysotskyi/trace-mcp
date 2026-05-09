@@ -13,6 +13,7 @@
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { TRACE_MCP_HOME, ensureGlobalDirs } from '../global.js';
+import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
 export const TELEMETRY_DB_PATH = path.join(TRACE_MCP_HOME, 'telemetry.db');
@@ -135,6 +136,7 @@ export class TelemetrySink {
     if (this.db) return;
     ensureGlobalDirs();
     this.db = new Database(this.dbPath);
+    restrictDbPerms(this.dbPath);
     this.db.pragma('journal_mode = WAL');
 
     this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);

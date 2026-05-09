@@ -1,6 +1,7 @@
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
+import { restrictDbPerms } from '../shared/db-perms.js';
 import type { ParsedSession } from './log-parser.js';
 
 const ANALYTICS_DB_PATH = path.join(TRACE_MCP_HOME, 'analytics.db');
@@ -67,6 +68,7 @@ export class AnalyticsStore {
     ensureGlobalDirs();
     const p = dbPath ?? ANALYTICS_DB_PATH;
     this.db = new Database(p);
+    restrictDbPerms(p);
     this.db.pragma('journal_mode = WAL');
 
     this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);

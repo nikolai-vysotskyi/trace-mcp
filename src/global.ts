@@ -251,9 +251,29 @@ export const DEFAULT_CONFIG_JSONC = `{
 export function ensureGlobalDirs(): void {
   fs.mkdirSync(INDEX_DIR, { recursive: true });
 
+  // Restrict the data dir + index dir to 0700 so DB sidecars (WAL/SHM that
+  // come and go with write activity) are protected by the parent ACL even
+  // when their per-file bit is briefly default-umask. No-op on Windows.
+  if (process.platform !== 'win32') {
+    for (const dir of [TRACE_MCP_HOME, INDEX_DIR]) {
+      try {
+        fs.chmodSync(dir, 0o700);
+      } catch {
+        /* not ours / not yet present — best-effort */
+      }
+    }
+  }
+
   // Seed default config on first run so users see all available parameters
   if (!fs.existsSync(GLOBAL_CONFIG_PATH)) {
     fs.writeFileSync(GLOBAL_CONFIG_PATH, DEFAULT_CONFIG_JSONC);
+    if (process.platform !== 'win32') {
+      try {
+        fs.chmodSync(GLOBAL_CONFIG_PATH, 0o600);
+      } catch {
+        /* best-effort */
+      }
+    }
   }
 }
 
