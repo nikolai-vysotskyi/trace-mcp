@@ -5,6 +5,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { probeWorktree, sharesGitCommonDir } from '../../src/utils/git-worktree.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
+/** Match production: `realpathSafe` in src/utils/git-worktree.ts prefers
+ *  `fs.realpathSync.native` when available so 8.3 short paths
+ *  (`C:\Users\RUNNER~1\…`) and long paths (`C:\Users\runneradmin\…`)
+ *  always normalise to the same canonical form. The JS-only variant
+ *  doesn't bridge the two on Windows, so test-side comparisons must
+ *  use the same binding. */
+const realpath: (p: string) => string =
+  typeof fs.realpathSync.native === 'function' ? fs.realpathSync.native : fs.realpathSync;
+
 function runGit(cwd: string, ...args: string[]): void {
   execFileSync('git', args, {
     cwd,
@@ -31,7 +40,7 @@ describe('probeWorktree', () => {
     // operating inside that dir reports the long form
     // `C:\Users\runneradmin\…`). Without realpath here the two come
     // back unequal even though they reference the same on-disk dir.
-    tmpDir = fs.realpathSync(createTmpDir('worktree-probe-'));
+    tmpDir = realpath(createTmpDir('worktree-probe-'));
   });
 
   afterEach(() => {
@@ -63,7 +72,7 @@ describe('probeWorktree', () => {
     expect(probe.isLinkedWorktree).toBe(false);
     expect(probe.commonDir).toBeTruthy();
     expect(path.basename(probe.commonDir!)).toBe('.git');
-    expect(probe.mainWorktreePath).toBe(fs.realpathSync(repo));
+    expect(probe.mainWorktreePath).toBe(realpath(repo));
   });
 
   it('detects a linked worktree as such, with the same commonDir as main', () => {
@@ -98,7 +107,7 @@ describe('sharesGitCommonDir', () => {
   beforeEach(() => {
     // See note in `describe('probeWorktree', …)` above re: 8.3 shortnames
     // on Windows runners.
-    tmpDir = fs.realpathSync(createTmpDir('shares-git-common-'));
+    tmpDir = realpath(createTmpDir('shares-git-common-'));
   });
 
   afterEach(() => {
