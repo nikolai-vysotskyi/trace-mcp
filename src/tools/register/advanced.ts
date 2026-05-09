@@ -30,6 +30,7 @@ import {
   subprojectAddRepo,
   subprojectSync,
 } from '../advanced/subproject.js';
+import { detectTopicTunnels } from '../../topology/topic-tunnels.js';
 import { getDataflow } from '../analysis/dataflow.js';
 import { graphQuery } from '../analysis/graph-query.js';
 import { traverseGraph } from '../analysis/traverse-graph.js';
@@ -283,6 +284,55 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
             isError: true,
           };
         return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'detect_topic_tunnels',
+      'Cross-project topic tunnels: links between registered subprojects that share canonical entities — package names from manifests (package.json / composer.json / pyproject.toml / Cargo.toml / go.mod), declared dependencies (top-level only), and human contributors from `git shortlog` (bots filtered out). Two subprojects are tunnelled when their entity sets overlap; the tunnel weight emphasises shared people and project names over common dependencies (typescript, eslint, etc. are down-weighted to 25% to avoid noise). Use to discover hidden cross-repo coupling, surface "this team also owns that repo", or seed cross-project search. Read-only — no DB writes. Returns JSON: { tunnels: [{ project_a, project_b, shared: [{ kind, canonical, display }], weight }], total }.',
+      {
+        min_weight: z
+          .number()
+          .min(0)
+          .max(100)
+          .optional()
+          .describe('Minimum raw tunnel weight to surface (default 1).'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe('Cap on tunnels returned (highest-weight first; default 100).'),
+      },
+      async ({ min_weight, limit }) => {
+        const subprojects = topoStore
+          .getSubprojectsByProject(projectRoot)
+          .map((s) => ({ name: s.name, repoRoot: s.repo_root }));
+        if (subprojects.length < 2) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  tunnels: [],
+                  total: 0,
+                  note:
+                    subprojects.length === 0
+                      ? 'No subprojects registered for this project — call subproject_add_repo first.'
+                      : 'Need at least two registered subprojects to compute tunnels.',
+                }),
+              },
+            ],
+          };
+        }
+        const tunnels = detectTopicTunnels(subprojects, {
+          minWeight: min_weight,
+          limit,
+        });
+        return {
+          content: [{ type: 'text', text: j({ tunnels, total: tunnels.length }) }],
+        };
       },
     );
 
