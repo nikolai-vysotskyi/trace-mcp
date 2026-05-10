@@ -22,6 +22,7 @@ import {
   TRACE_MCP_HOME,
 } from '../global.js';
 import { logger } from '../logger.js';
+import { atomicWriteString } from '../utils/atomic-write.js';
 import { getDaemonHealth, isDaemonRunning } from './client.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
@@ -301,7 +302,7 @@ function parsePidFile(content: string): PidFilePayload | null {
 
 function writePidFile(pid: number, token: string | null): void {
   const body = token === null ? `${pid}\n` : `${pid}\n${token}\n`;
-  fs.writeFileSync(getPidFilePath(), body, 'utf-8');
+  atomicWriteString(getPidFilePath(), body, { mode: 0o600 });
 }
 
 /**
@@ -523,8 +524,24 @@ function acquireSpawnLock(): boolean {
       const parsed = parsePidFile(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8'));
       const dead = parsed === null || !isProcessAliveWithToken(parsed.pid, parsed.token);
       if (dead || age > SPAWN_LOCK_STALE_MS) {
-        fs.writeFileSync(SPAWN_LOCK_PATH, ownPayload, 'utf-8');
-        return true;
+        // Atomic stale-lock takeover: drop the dead file then retry the O_EXCL
+        // create. If two callers both detect staleness, only one wins the
+        // create — the other catches EEXIST and returns false.
+        try {
+          fs.unlinkSync(SPAWN_LOCK_PATH);
+        } catch {
+          // ENOENT — another process already unlinked it; that's fine.
+        }
+        try {
+          const fd = fs.openSync(SPAWN_LOCK_PATH, 'wx');
+          fs.writeSync(fd, ownPayload);
+          fs.closeSync(fd);
+          return true;
+        } catch {
+          // Lost the race — another process recreated the lock between our
+          // unlink and create. They own it now.
+          return false;
+        }
       }
     } catch {
       /* race with another process — give up */
