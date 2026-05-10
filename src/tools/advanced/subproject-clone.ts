@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
-import { safeGitEnv } from '../../utils/git-env.js';
+import { isSafeGitRef, safeGitEnv } from '../../utils/git-env.js';
 
 /**
  * Accept three URL shapes:
@@ -95,6 +95,11 @@ export function cloneRemoteRepo(
   if (!isSafeGitUrl(gitUrl)) {
     return err(validationError(`Refusing to clone unsafe git URL: ${JSON.stringify(gitUrl)}`));
   }
+  if (opts.ref !== undefined && !isSafeGitRef(opts.ref)) {
+    return err(
+      validationError(`Refusing to clone with unsafe git ref: ${JSON.stringify(opts.ref)}`),
+    );
+  }
 
   let cloneDir: string;
   try {
@@ -114,8 +119,6 @@ export function cloneRemoteRepo(
   const args = ['clone'];
   if (opts.shallow ?? true) args.push('--depth', '1');
   if (opts.ref) {
-    // ref is validated upstream by isSafeGitRef; defensive belt-and-suspenders
-    // here would just duplicate that check, so we trust the caller.
     args.push('--branch', opts.ref);
   }
   // `--` is critical: prevents any future argument from being interpreted as

@@ -10,6 +10,7 @@ import {
 } from '../../subproject/manager.js';
 import { diffEndpoints, type EndpointSchemaDiff } from '../../subproject/schema-diff.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
+import { isSafeGitRef } from '../../utils/git-env.js';
 import { cloneRemoteRepo, isSafeGitUrl } from './subproject-clone.js';
 
 // ════════════════════════════════════════════════════════════════════════
@@ -73,6 +74,11 @@ export function subprojectAddRepo(
     if (!isSafeGitUrl(opts.gitUrl)) {
       return err(
         validationError(`Refusing to clone unsafe git URL: ${JSON.stringify(opts.gitUrl)}`),
+      );
+    }
+    if (opts.gitRef !== undefined && !isSafeGitRef(opts.gitRef)) {
+      return err(
+        validationError(`Refusing to clone with unsafe git ref: ${JSON.stringify(opts.gitRef)}`),
       );
     }
     const cloneResult = cloneRemoteRepo(opts.projectRoot, opts.gitUrl, { ref: opts.gitRef });

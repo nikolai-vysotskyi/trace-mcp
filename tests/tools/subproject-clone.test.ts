@@ -1,6 +1,10 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isSafeGitUrl, resolveCloneDir } from '../../src/tools/advanced/subproject-clone.js';
+import {
+  cloneRemoteRepo,
+  isSafeGitUrl,
+  resolveCloneDir,
+} from '../../src/tools/advanced/subproject-clone.js';
 
 describe('isSafeGitUrl', () => {
   it('accepts ordinary https GitHub / GitLab URLs', () => {
@@ -63,5 +67,45 @@ describe('resolveCloneDir', () => {
     const dir = resolveCloneDir('/tmp/p', 'https://gitlab.com/team/sub/svc.git');
     // Expect the leaf two: "sub/svc"
     expect(dir).toBe(path.resolve('/tmp/p', '.trace-mcp/subprojects/sub/svc'));
+  });
+});
+
+describe('cloneRemoteRepo ref validation', () => {
+  // The validator runs before any filesystem mutation or git invocation, so
+  // these calls return Err without touching disk.
+  const safeUrl = 'https://github.com/owner/repo.git';
+
+  it('refuses refs that start with a dash (argv injection into --branch)', () => {
+    const r = cloneRemoteRepo('/tmp/p', safeUrl, { ref: '-c=core.sshCommand=evil' });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error.message).toContain('unsafe git ref');
+  });
+
+  it('refuses refs containing shell metacharacters and spaces', () => {
+    for (const ref of [
+      'main; rm -rf /',
+      'main && id',
+      'feature with spaces',
+      'main`whoami`',
+      'main$(id)',
+    ]) {
+      const r = cloneRemoteRepo('/tmp/p', safeUrl, { ref });
+      expect(r.isErr(), `expected reject: ${ref}`).toBe(true);
+    }
+  });
+
+  it('refuses oversize refs', () => {
+    const r = cloneRemoteRepo('/tmp/p', safeUrl, { ref: 'a'.repeat(257) });
+    expect(r.isErr()).toBe(true);
+  });
+
+  it('does not invoke ref validation when ref is undefined', () => {
+    // No ref means cloneRemoteRepo proceeds past the validator and would
+    // resolve a clone dir / call git; we expect either Ok (when destination
+    // already exists from a prior run) or Err with a non-ref reason.
+    const r = cloneRemoteRepo('/tmp/p', safeUrl, {});
+    if (r.isErr()) {
+      expect(r.error.message).not.toContain('unsafe git ref');
+    }
   });
 });
