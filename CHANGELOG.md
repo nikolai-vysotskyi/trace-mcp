@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.35.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.34.2...v1.35.0) (2026-05-10)
+
+
+### Features
+
+* **app:** four new tabs — Activity, Memory, Ask v2, Dashboard ([acdd9a5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/acdd9a55523e7aeb4cd33144aa86e530249521c7))
+* **app:** four tabs v2 — stats, write actions, slash-commands, real metrics ([42857d1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/42857d1356fca8a1828b40d2c038b3137a8d1594))
+* **memory:** lifecycle hooks, branch-aware decisions, stats modal, filter bar, recall harness ([62d010a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/62d010aed298c3c79f1c19a90e8c6e6334f64145))
+* **memory:** tiered retrieval modes + decision confidence/review queue ([eb58bc0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eb58bc039cc487249126a5eb621d1c0e06fa4651))
+
+
+### Bug Fixes
+
+* **server:** keep stdin in Buffer mode — setEncoding crashes MCP SDK ([bbfb7bb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bbfb7bb106ffd2d116ff636c701869165e4c980c))
+
 ## [1.34.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.34.1...v1.34.2) (2026-05-10)
 
 
