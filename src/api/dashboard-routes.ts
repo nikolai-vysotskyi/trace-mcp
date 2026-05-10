@@ -4,6 +4,9 @@
  * Endpoint: GET /api/dashboard/projects
  * Returns: { projects: ProjectHealth[] }
  *
+ * Endpoint: POST /api/dashboard/refresh
+ * Returns: 200 — invalidates the cache so the next GET recomputes metrics.
+ *
  * Each ProjectHealth entry is computed by opening the project's SQLite DB
  * directly (read-only). Does NOT depend on ProjectManager — safe to call
  * even if a project is not currently loaded by the daemon.
@@ -11,9 +14,12 @@
 
 import fs from 'node:fs';
 import http from 'node:http';
-import path from 'node:path';
 import Database from 'better-sqlite3';
 import { REGISTRY_PATH } from '../global.js';
+import { Store } from '../db/store.js';
+import { getDeadExports, getUntestedSymbols } from '../tools/analysis/introspect.js';
+import { getTechDebt } from '../tools/analysis/predictive-intelligence.js';
+import { scanSecurity } from '../tools/quality/security-scan.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,7 +30,7 @@ export type TechDebtGrade = 'A' | 'B' | 'C' | 'D' | 'F';
 export interface ProjectHealth {
   root: string;
   name: string;
-  status: 'ok' | 'error' | 'indexing' | 'not_loaded';
+  status: 'ok' | 'error' | 'indexing' | 'not_loaded' | 'computing';
   lastIndexed: string | null;
   totalFiles: number;
   totalSymbols: number;
@@ -32,6 +38,7 @@ export interface ProjectHealth {
   deadExports: number;
   untestedSymbols: number;
   techDebtGrade?: TechDebtGrade;
+  securityFindings: number;
   error?: string;
 }
 
@@ -75,108 +82,21 @@ function readRegistry(): Registry {
 }
 
 // ---------------------------------------------------------------------------
-// Per-project SQL queries (run directly on better-sqlite3, read-only)
+// Per-project metrics using real tooling
 // ---------------------------------------------------------------------------
 
 /**
- * Derive a tech-debt grade from the ratio of cyclomatic complexity > 10 symbols
- * to total symbols. This is a cheap heuristic that only touches the symbols table.
+ * Open the project's SQLite DB read-only and wrap it in a Store so that
+ * the real analysis tools (getDeadExports, getUntestedSymbols, getTechDebt,
+ * scanSecurity) can be called against it.
  *
- * Grade thresholds (% of complex symbols):
- *   A  <  5 %
- *   B  < 15 %
- *   C  < 30 %
- *   D  < 50 %
- *   F  >= 50 %
+ * The caller is responsible for calling db.close() in a finally block.
  */
-function computeGrade(db: Database.Database): TechDebtGrade {
-  const total = (db.prepare('SELECT COUNT(*) AS c FROM symbols').get() as { c: number })?.c ?? 0;
-  if (total === 0) return 'A';
-  const complex =
-    (
-      db
-        .prepare(
-          'SELECT COUNT(*) AS c FROM symbols WHERE cyclomatic IS NOT NULL AND cyclomatic > 10',
-        )
-        .get() as { c: number }
-    )?.c ?? 0;
-  const ratio = complex / total;
-  if (ratio < 0.05) return 'A';
-  if (ratio < 0.15) return 'B';
-  if (ratio < 0.3) return 'C';
-  if (ratio < 0.5) return 'D';
-  return 'F';
+function openStore(dbPath: string): { db: Database.Database; store: Store } {
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+  const store = new Store(db);
+  return { db, store };
 }
-
-/**
- * Count exported symbols that have zero incoming edges.
- *
- * SQL logic:
- *   1. Restrict to symbols where metadata->>'$.exported' = 1, excluding test files.
- *   2. Left-join to nodes (node_type='symbol') and then to edges (target_node_id).
- *   3. Count rows where the edges join produced no match (i.e. e.id IS NULL).
- *
- * This mirrors the intent of getDeadExports() without using the expensive
- * import-specifier cross-reference (which requires loading all edge metadata).
- * For an MVP health overview the node-graph approximation is sufficient.
- */
-const DEAD_EXPORTS_SQL = `
-  SELECT COUNT(*) AS c
-  FROM symbols s
-  JOIN files f ON f.id = s.file_id
-  LEFT JOIN nodes n ON n.node_type = 'symbol' AND n.ref_id = s.id
-  LEFT JOIN edges e ON e.target_node_id = n.id
-  WHERE json_extract(s.metadata, '$.exported') = 1
-    AND s.kind != 'method'
-    AND f.path NOT LIKE '%/test/%'
-    AND f.path NOT LIKE '%/tests/%'
-    AND f.path NOT LIKE '%/spec/%'
-    AND f.path NOT LIKE '%.test.%'
-    AND f.path NOT LIKE '%.spec.%'
-    AND e.id IS NULL
-`;
-
-/**
- * Count symbols in non-test files that are NOT referenced by any test file.
- *
- * SQL logic:
- *   1. Select all testable symbols (function/method/class/interface) from source files.
- *   2. Left-join to nodes and then to edges where the SOURCE of the edge is a
- *      node whose file_id belongs to a test file (path LIKE '%.test.%' etc.).
- *   3. Count symbols for which no such test-originated edge exists.
- *
- * This is intentionally a rough heuristic — exact coverage would require
- * running the full getUntestedSymbols() algorithm. The count is for display
- * only and will never be used as a gate.
- */
-const UNTESTED_SYMBOLS_SQL = `
-  SELECT COUNT(*) AS c
-  FROM symbols s
-  JOIN files f ON f.id = s.file_id
-  LEFT JOIN nodes n_src ON n_src.node_type = 'symbol' AND n_src.ref_id = s.id
-  LEFT JOIN edges e ON e.target_node_id = n_src.id
-  LEFT JOIN nodes n_caller ON n_caller.id = e.source_node_id
-  LEFT JOIN (
-    SELECT s2.id AS sid
-    FROM symbols s2
-    JOIN files f2 ON f2.id = s2.file_id
-    WHERE f2.path LIKE '%.test.%'
-       OR f2.path LIKE '%.spec.%'
-       OR f2.path LIKE '%/test/%'
-       OR f2.path LIKE '%/tests/%'
-       OR f2.path LIKE '%/spec/%'
-       OR f2.path LIKE '%/__tests__/%'
-  ) tf ON tf.sid = n_caller.ref_id
-  WHERE s.kind IN ('function', 'method', 'class', 'interface')
-    AND f.path NOT LIKE '%.test.%'
-    AND f.path NOT LIKE '%.spec.%'
-    AND f.path NOT LIKE '%/test/%'
-    AND f.path NOT LIKE '%/tests/%'
-    AND f.path NOT LIKE '%/spec/%'
-    AND f.path NOT LIKE '%/__tests__/%'
-  GROUP BY s.id
-  HAVING COUNT(tf.sid) = 0
-`;
 
 function queryProjectHealth(entry: RegistryEntry): ProjectHealth {
   const base: Pick<ProjectHealth, 'root' | 'name' | 'lastIndexed'> = {
@@ -194,12 +114,17 @@ function queryProjectHealth(entry: RegistryEntry): ProjectHealth {
       totalEdges: 0,
       deadExports: 0,
       untestedSymbols: 0,
+      securityFindings: 0,
     };
   }
 
   let db: Database.Database | undefined;
   try {
-    db = new Database(entry.dbPath, { readonly: true, fileMustExist: true });
+    const opened = openStore(entry.dbPath);
+    db = opened.db;
+    const store = opened.store;
+
+    // ── Basic counts ─────────────────────────────────────────────────────────
 
     const totalFiles =
       (db.prepare("SELECT COUNT(*) AS c FROM files WHERE status = 'ok'").get() as { c: number })
@@ -209,11 +134,52 @@ function queryProjectHealth(entry: RegistryEntry): ProjectHealth {
     const totalEdges =
       (db.prepare('SELECT COUNT(*) AS c FROM edges').get() as { c: number })?.c ?? 0;
 
-    const deadExports = (db.prepare(DEAD_EXPORTS_SQL).get() as { c: number })?.c ?? 0;
+    // ── Dead exports (real implementation) ───────────────────────────────────
+    // getDeadExports returns { total_dead, dead_exports[] } scoped to non-test files.
+    let deadExports = 0;
+    try {
+      const deadResult = getDeadExports(store);
+      deadExports = deadResult.total_dead;
+    } catch {
+      // fallback: leave 0
+    }
 
-    const untestedSymbols = (db.prepare(UNTESTED_SYMBOLS_SQL).get() as { c: number })?.c ?? 0;
+    // ── Untested symbols (real implementation) ────────────────────────────────
+    // getUntestedSymbols classifies 'unreached' + 'imported_not_called'; sum both.
+    let untestedSymbols = 0;
+    try {
+      const untestedResult = getUntestedSymbols(store);
+      untestedSymbols =
+        untestedResult.by_level.unreached + untestedResult.by_level.imported_not_called;
+    } catch {
+      // fallback: leave 0
+    }
 
-    const techDebtGrade = computeGrade(db);
+    // ── Tech debt grade (real implementation) ────────────────────────────────
+    // getTechDebt returns a TraceMcpResult<TechDebtResult> with project_grade.
+    let techDebtGrade: TechDebtGrade | undefined;
+    try {
+      const debtResult = getTechDebt(store, entry.root, {});
+      if (debtResult.isOk()) {
+        techDebtGrade = debtResult.value.project_grade;
+      }
+    } catch {
+      // fallback: leave undefined
+    }
+
+    // ── Security findings (real implementation) ───────────────────────────────
+    // scanSecurity returns a TraceMcpResult<SecurityScanResult> with summary.
+    // We count only critical + high findings.
+    let securityFindings = 0;
+    try {
+      const secResult = scanSecurity(store, entry.root, { rules: ['all'] });
+      if (secResult.isOk()) {
+        securityFindings =
+          (secResult.value.summary.critical ?? 0) + (secResult.value.summary.high ?? 0);
+      }
+    } catch {
+      // fallback: leave 0
+    }
 
     return {
       ...base,
@@ -224,6 +190,7 @@ function queryProjectHealth(entry: RegistryEntry): ProjectHealth {
       deadExports,
       untestedSymbols,
       techDebtGrade,
+      securityFindings,
     };
   } catch (err) {
     return {
@@ -234,6 +201,7 @@ function queryProjectHealth(entry: RegistryEntry): ProjectHealth {
       totalEdges: 0,
       deadExports: 0,
       untestedSymbols: 0,
+      securityFindings: 0,
       error: (err as Error)?.message ?? 'Failed to query project DB',
     };
   } finally {
@@ -246,7 +214,7 @@ function queryProjectHealth(entry: RegistryEntry): ProjectHealth {
 }
 
 // ---------------------------------------------------------------------------
-// In-process cache (60 s TTL)
+// In-process cache (5 min TTL — real metrics are expensive)
 // ---------------------------------------------------------------------------
 
 interface CacheEntry {
@@ -255,11 +223,15 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 300_000; // 5 minutes
 
 function getCacheKey(): string {
   // Single key — the registry is global, not per-project
   return 'dashboard';
+}
+
+function invalidateCache(): void {
+  cache.delete(getCacheKey());
 }
 
 async function fetchAllProjects(): Promise<ProjectHealth[]> {
@@ -270,7 +242,7 @@ async function fetchAllProjects(): Promise<ProjectHealth[]> {
   const registry = readRegistry();
   const entries = Object.values(registry.projects);
 
-  // Run all per-project queries in parallel
+  // Run all per-project queries in parallel; each is wrapped in try/catch internally
   const results = await Promise.all(
     entries.map((entry) => Promise.resolve(queryProjectHealth(entry))),
   );
@@ -300,6 +272,7 @@ export async function handleDashboardRequest(
 ): Promise<boolean> {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
+  // GET /api/dashboard/projects — returns cached project health data
   if (req.method === 'GET' && url.pathname === '/api/dashboard/projects') {
     try {
       const projects = await fetchAllProjects();
@@ -313,6 +286,14 @@ export async function handleDashboardRequest(
         }),
       );
     }
+    return true;
+  }
+
+  // POST /api/dashboard/refresh — invalidates cache so next GET recomputes
+  if (req.method === 'POST' && url.pathname === '/api/dashboard/refresh') {
+    invalidateCache();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
     return true;
   }
 

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -28,6 +30,39 @@ interface Session {
 }
 
 type Phase = 'idle' | 'retrieving' | 'streaming' | 'error';
+
+// ── Slash-command definitions ─────────────────────────────────────────
+
+interface SlashCommand {
+  name: string;
+  usage: string;
+  description: string;
+  needsArgs: boolean;
+}
+
+const SLASH_COMMANDS: SlashCommand[] = [
+  { name: 'find', usage: '/find <query>', description: 'Search symbols by name', needsArgs: true },
+  { name: 'impact', usage: '/impact <symbol_id>', description: 'Show change impact for a symbol', needsArgs: true },
+  { name: 'scan', usage: '/scan', description: 'Run security scan (OWASP top findings)', needsArgs: false },
+];
+
+/** Parse slash command from input. Returns null if not a slash command. */
+function parseSlash(input: string): { command: string; args: string } | null {
+  if (!input.startsWith('/')) return null;
+  const parts = input.slice(1).split(/\s+/);
+  const command = parts[0].toLowerCase();
+  const args = parts.slice(1).join(' ');
+  if (!SLASH_COMMANDS.some((c) => c.name === command)) return null;
+  return { command, args };
+}
+
+/** Returns matching slash commands for a partial input starting with '/'. */
+function matchSlash(input: string): SlashCommand[] {
+  if (!input.startsWith('/')) return [];
+  const partial = input.slice(1).split(/\s+/)[0].toLowerCase();
+  if (partial === '') return SLASH_COMMANDS;
+  return SLASH_COMMANDS.filter((c) => c.name.startsWith(partial));
+}
 
 // ── LocalStorage helpers ─────────────────────────────────────────────
 
@@ -63,6 +98,8 @@ export function AskTab({ root }: { root: string }) {
   const [providerReady, setProviderReady] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [loadingSession, setLoadingSession] = useState(false);
+  const [slashSuggestions, setSlashSuggestions] = useState<SlashCommand[]>([]);
+  const [slashIndex, setSlashIndex] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -193,10 +230,68 @@ export function AskTab({ root }: { root: string }) {
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   }, []);
 
-  // Send a message
+  // Update slash suggestions when input changes
+  const updateSlash = useCallback((value: string) => {
+    if (value.startsWith('/') && !value.includes('\n')) {
+      const matches = matchSlash(value);
+      setSlashSuggestions(matches);
+      setSlashIndex(0);
+    } else {
+      setSlashSuggestions([]);
+    }
+  }, []);
+
+  // Send a slash command (POST to /slash endpoint, get JSON back)
+  const sendSlash = useCallback(
+    async (sessionId: string, command: string, args: string) => {
+      setPhase('retrieving');
+      setError(null);
+      try {
+        const r = await fetch(
+          `${BASE}/api/ask/sessions/${encodeURIComponent(sessionId)}/slash`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command, args }),
+          },
+        );
+        if (!r.ok) {
+          const errBody = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+          throw new Error(errBody.error ?? `HTTP ${r.status}`);
+        }
+        const { id, content } = await r.json();
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: id ?? `slash-${Date.now()}`,
+            role: 'assistant',
+            content,
+            created_at: Date.now(),
+            context_envelope: null,
+          },
+        ]);
+        setPhase('idle');
+        loadSessions();
+      } catch (e) {
+        setError((e as Error)?.message ?? 'Slash command failed');
+        setPhase('error');
+      }
+    },
+    [loadSessions],
+  );
+
+  // Send a message (or slash command)
   const send = useCallback(async () => {
     const q = input.trim();
     if (!q || busy || !ok) return;
+
+    // Close slash popup
+    setSlashSuggestions([]);
+    setInput('');
+    if (taRef.current) taRef.current.style.height = 'auto';
+
+    // Check if this is a slash command
+    const parsed = parseSlash(q);
 
     let sessionId = activeSessionId;
 
@@ -225,6 +320,7 @@ export function AskTab({ root }: { root: string }) {
       return;
     }
 
+    // Optimistic user bubble (show for both slash and LLM)
     const optimisticMsg: ChatMessage = {
       id: `opt-${Date.now()}`,
       role: 'user',
@@ -232,13 +328,18 @@ export function AskTab({ root }: { root: string }) {
       created_at: Date.now(),
     };
     setMessages((prev) => [...prev, optimisticMsg]);
-    setInput('');
     setError(null);
-    setPhase('retrieving');
     setStreaming('');
     setStreamingEnvelope(null);
-    if (taRef.current) taRef.current.style.height = 'auto';
 
+    if (parsed) {
+      // Slash command path — no SSE, no context_envelope
+      await sendSlash(sessionId, parsed.command, parsed.args);
+      return;
+    }
+
+    // Regular LLM path
+    setPhase('retrieving');
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
@@ -338,7 +439,7 @@ export function AskTab({ root }: { root: string }) {
     } finally {
       abortRef.current = null;
     }
-  }, [input, busy, ok, activeSessionId, root, loadSessions]);
+  }, [input, busy, ok, activeSessionId, root, loadSessions, sendSlash]);
 
   const openSettings = useCallback(() => {
     window.electronAPI?.openSettings?.('ai');
@@ -559,7 +660,7 @@ export function AskTab({ root }: { root: string }) {
           className="flex-1 min-h-0 overflow-y-auto"
           style={{ padding: '0 2px' }}
         >
-          {/* Empty / no session state */}
+          {/* Empty / no session state — shows slash-command hint card */}
           {!activeSessionId && !loadingSession && (
             <div className="flex flex-col items-center justify-center h-full" style={{ gap: 16 }}>
               <div
@@ -571,6 +672,44 @@ export function AskTab({ root }: { root: string }) {
                 }}
               >
                 Ask anything about this codebase
+              </div>
+              {/* Slash-command hint card */}
+              <div
+                style={{
+                  background: 'var(--fill-control)',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 10,
+                  padding: '10px 14px',
+                  maxWidth: 300,
+                  width: '100%',
+                }}
+              >
+                <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                  Slash commands
+                </div>
+                {SLASH_COMMANDS.map((cmd) => (
+                  <div
+                    key={cmd.name}
+                    style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5 }}
+                  >
+                    <code
+                      style={{
+                        fontSize: 10,
+                        color: 'var(--accent)',
+                        background: 'rgba(0,122,255,0.08)',
+                        borderRadius: 4,
+                        padding: '1px 5px',
+                        flexShrink: 0,
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {cmd.usage}
+                    </code>
+                    <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                      {cmd.description}
+                    </span>
+                  </div>
+                ))}
               </div>
               <div
                 style={{
@@ -633,7 +772,7 @@ export function AskTab({ root }: { root: string }) {
           {streaming && (
             <div style={{ display: 'flex', padding: '3px 2px' }}>
               <div style={{ ...assistantStyle, maxWidth: '88%' }}>
-                {streaming}
+                <MarkdownBody content={streaming} />
                 <span
                   style={{
                     display: 'inline-block',
@@ -679,8 +818,68 @@ export function AskTab({ root }: { root: string }) {
           <div ref={endRef} />
         </div>
 
-        {/* Input bar */}
-        <div style={{ padding: '8px 2px 4px', flexShrink: 0 }}>
+        {/* Input bar + slash popup */}
+        <div style={{ padding: '8px 2px 4px', flexShrink: 0, position: 'relative' }}>
+          {/* Slash command popup */}
+          {slashSuggestions.length > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '100%',
+                left: 2,
+                right: 2,
+                marginBottom: 4,
+                background: 'var(--bg-grouped)',
+                border: '0.5px solid var(--border)',
+                borderRadius: 10,
+                boxShadow: 'var(--shadow-grouped)',
+                overflow: 'hidden',
+                zIndex: 50,
+              }}
+            >
+              {slashSuggestions.map((cmd, i) => (
+                <button
+                  type="button"
+                  key={cmd.name}
+                  onClick={() => {
+                    setInput(`/${cmd.name}${cmd.needsArgs ? ' ' : ''}`);
+                    setSlashSuggestions([]);
+                    taRef.current?.focus();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    width: '100%',
+                    padding: '7px 12px',
+                    background: i === slashIndex ? 'var(--accent-tint, rgba(0,122,255,0.08))' : 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    borderBottom: i < slashSuggestions.length - 1 ? '0.5px solid var(--border)' : 'none',
+                  }}
+                >
+                  <code
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--accent)',
+                      fontFamily: 'monospace',
+                      minWidth: 80,
+                    }}
+                  >
+                    /{cmd.name}
+                  </code>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                    {cmd.description}
+                  </span>
+                  <span style={{ fontSize: 9, color: 'var(--text-tertiary)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+                    {cmd.usage}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div
             style={{
               display: 'flex',
@@ -701,14 +900,41 @@ export function AskTab({ root }: { root: string }) {
               onChange={(e) => {
                 setInput(e.target.value);
                 grow();
+                updateSlash(e.target.value);
               }}
               onKeyDown={(e) => {
+                // Arrow keys navigate slash popup
+                if (slashSuggestions.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSlashIndex((i) => (i + 1) % slashSuggestions.length);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSlashIndex((i) => (i - 1 + slashSuggestions.length) % slashSuggestions.length);
+                    return;
+                  }
+                  if (e.key === 'Tab' || e.key === 'Enter') {
+                    e.preventDefault();
+                    const chosen = slashSuggestions[slashIndex];
+                    if (chosen) {
+                      setInput(`/${chosen.name}${chosen.needsArgs ? ' ' : ''}`);
+                      setSlashSuggestions([]);
+                    }
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    setSlashSuggestions([]);
+                    return;
+                  }
+                }
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                   e.preventDefault();
                   send();
                 }
               }}
-              placeholder="Ask about your code... (⌘↵ to send)"
+              placeholder="Ask about your code... (⌘↵ to send, / for commands)"
               rows={1}
               disabled={!ok}
               style={{
@@ -789,6 +1015,185 @@ export function AskTab({ root }: { root: string }) {
   );
 }
 
+// ── Markdown renderer with copy-to-clipboard code blocks ─────────────
+
+function CodeBlock({ children, className }: { children?: React.ReactNode; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  const code = typeof children === 'string' ? children : String(children ?? '');
+
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }, [code]);
+
+  return (
+    <div style={{ position: 'relative' }} className="group">
+      <pre
+        style={{
+          background: 'var(--bg-code, rgba(0,0,0,0.06))',
+          borderRadius: 7,
+          padding: '8px 10px',
+          overflowX: 'auto',
+          fontSize: 11,
+          lineHeight: '1.5',
+          margin: '6px 0',
+          border: '0.5px solid var(--border)',
+        }}
+      >
+        <code className={className} style={{ fontFamily: 'monospace' }}>
+          {code}
+        </code>
+      </pre>
+      <button
+        type="button"
+        onClick={copy}
+        title="Copy code"
+        style={{
+          position: 'absolute',
+          top: 5,
+          right: 6,
+          fontSize: 9,
+          padding: '2px 7px',
+          borderRadius: 5,
+          background: copied ? 'var(--success, #34c759)' : 'var(--fill-control)',
+          border: '0.5px solid var(--border)',
+          color: copied ? '#fff' : 'var(--text-secondary)',
+          cursor: 'pointer',
+          transition: 'all 0.15s',
+          opacity: 0.85,
+        }}
+      >
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
+function InlineCode({ children }: { children?: React.ReactNode }) {
+  return (
+    <code
+      style={{
+        fontFamily: 'monospace',
+        fontSize: '0.9em',
+        background: 'var(--bg-code, rgba(0,0,0,0.06))',
+        borderRadius: 4,
+        padding: '1px 4px',
+        border: '0.5px solid var(--border)',
+      }}
+    >
+      {children}
+    </code>
+  );
+}
+
+function MarkdownBody({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        // react-markdown v9: block code lives inside a <pre> node in the hast tree.
+        // The `pre` override receives the block code child; we render CodeBlock there.
+        // The `code` override is only reached for inline code (not wrapped in <pre>).
+        pre({ children }) {
+          // children is the <code> element from react-markdown — unwrap and render as CodeBlock.
+          // biome-ignore lint/suspicious/noExplicitAny: react-markdown child is untyped
+          const codeEl = children as any;
+          const className = codeEl?.props?.className ?? '';
+          const content = String(codeEl?.props?.children ?? '').replace(/\n$/, '');
+          return <CodeBlock className={className}>{content}</CodeBlock>;
+        },
+        // biome-ignore lint/suspicious/noExplicitAny: react-markdown passes untyped props
+        code({ className, children, ...props }: any) {
+          // Only reached for inline code (block code is intercepted by `pre` above).
+          return <InlineCode {...props}>{children}</InlineCode>;
+        },
+        p({ children }) {
+          return <p style={{ margin: '4px 0', lineHeight: '1.55' }}>{children}</p>;
+        },
+        ul({ children }) {
+          return <ul style={{ paddingLeft: 16, margin: '4px 0' }}>{children}</ul>;
+        },
+        ol({ children }) {
+          return <ol style={{ paddingLeft: 16, margin: '4px 0' }}>{children}</ol>;
+        },
+        li({ children }) {
+          return <li style={{ marginBottom: 2 }}>{children}</li>;
+        },
+        h1({ children }) {
+          return <h1 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 4px' }}>{children}</h1>;
+        },
+        h2({ children }) {
+          return <h2 style={{ fontSize: 13, fontWeight: 600, margin: '6px 0 3px' }}>{children}</h2>;
+        },
+        h3({ children }) {
+          return <h3 style={{ fontSize: 12, fontWeight: 600, margin: '4px 0 2px' }}>{children}</h3>;
+        },
+        table({ children }) {
+          return (
+            <div style={{ overflowX: 'auto', margin: '6px 0' }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%' }}>{children}</table>
+            </div>
+          );
+        },
+        th({ children }) {
+          return (
+            <th
+              style={{
+                padding: '4px 8px',
+                borderBottom: '1px solid var(--border)',
+                textAlign: 'left',
+                fontWeight: 600,
+                fontSize: 10,
+                color: 'var(--text-secondary)',
+              }}
+            >
+              {children}
+            </th>
+          );
+        },
+        td({ children }) {
+          return (
+            <td
+              style={{
+                padding: '3px 8px',
+                borderBottom: '0.5px solid var(--border)',
+                fontSize: 10,
+              }}
+            >
+              {children}
+            </td>
+          );
+        },
+        blockquote({ children }) {
+          return (
+            <blockquote
+              style={{
+                borderLeft: '3px solid var(--accent)',
+                paddingLeft: 10,
+                margin: '4px 0',
+                color: 'var(--text-secondary)',
+                fontStyle: 'italic',
+              }}
+            >
+              {children}
+            </blockquote>
+          );
+        },
+        strong({ children }) {
+          return <strong style={{ fontWeight: 600 }}>{children}</strong>;
+        },
+        em({ children }) {
+          return <em style={{ fontStyle: 'italic' }}>{children}</em>;
+        },
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+}
+
 // ── Transparency panel ────────────────────────────────────────────────
 
 function TransparencyPanel({
@@ -866,12 +1271,16 @@ function TransparencyPanel({
               }}
             >
               Context used by the LLM appears here after you send a message.
+              <br />
+              <span style={{ fontSize: 9, opacity: 0.7 }}>
+                Slash commands do not retrieve context.
+              </span>
             </div>
           )}
 
           {envelope && (
             <>
-              {/* Files */}
+              {/* Files — clickable, opens in editor */}
               <EnvelopeSection
                 title="Files in context"
                 count={envelope.files.length}
@@ -882,12 +1291,14 @@ function TransparencyPanel({
                     key={f}
                     label={f.split('/').pop() ?? f}
                     detail={f}
-                    onClick={() => console.log('[trace-mcp] navigate to file:', f)}
+                    onClick={() => {
+                      window.electronAPI?.openInEditor?.(f);
+                    }}
                   />
                 ))}
               </EnvelopeSection>
 
-              {/* Symbols */}
+              {/* Symbols — tooltip shows full symbol_id; console.log on click */}
               {envelope.symbols.length > 0 && (
                 <EnvelopeSection
                   title="Symbols read"
@@ -897,7 +1308,7 @@ function TransparencyPanel({
                     <EnvelopeItem
                       key={s.symbol_id}
                       label={s.symbol_id.split(':').pop() ?? s.symbol_id}
-                      detail={`${s.file}:${s.line}`}
+                      detail={s.symbol_id}
                       onClick={() =>
                         console.log('[trace-mcp] navigate to symbol:', s.symbol_id, s.file, s.line)
                       }
@@ -1140,7 +1551,6 @@ const assistantStyle: React.CSSProperties = {
   padding: '10px 14px',
   fontSize: 12,
   lineHeight: '1.55',
-  whiteSpace: 'pre-wrap',
   color: 'var(--text-primary)',
   background: 'var(--bg-grouped)',
   boxShadow: 'var(--shadow-grouped)',
@@ -1164,14 +1574,18 @@ function Bubble({ msg }: { msg: ChatMessage }) {
           padding: '10px 14px',
           fontSize: 12,
           lineHeight: '1.55',
-          whiteSpace: 'pre-wrap',
           maxWidth: '88%',
           ...(u
-            ? { background: 'var(--accent)', color: '#fff', borderRadius: '14px 14px 4px 14px' }
+            ? {
+                background: 'var(--accent)',
+                color: '#fff',
+                borderRadius: '14px 14px 4px 14px',
+                whiteSpace: 'pre-wrap',
+              }
             : assistantStyle),
         }}
       >
-        {msg.content}
+        {u ? msg.content : <MarkdownBody content={msg.content} />}
       </div>
     </div>
   );

@@ -1,0 +1,30 @@
+{
+  "id": "08-decisions-tag-filter",
+  "query": "plugins",
+  "kind": "decision",
+  "expected_ids": ["Plugin registry default set"],
+  "k": 10,
+  "min_recall_at_k": 1.0,
+  "decision_filters": { "tag": "plugins" },
+  "decisions_seed": [
+    {
+      "title": "Plugin registry default set",
+      "content": "PluginRegistry.createWithDefaults wires every shipped language and framework plugin so callers do not have to enumerate them manually.",
+      "type": "convention",
+      "tags": ["plugins"]
+    },
+    {
+      "title": "Use neverthrow Result envelope",
+      "content": "Return ok/err Result everywhere instead of throwing.",
+      "type": "convention",
+      "tags": ["typescript", "errors"]
+    },
+    {
+      "title": "WAL checkpoint policy",
+      "content": "Run wal_checkpoint TRUNCATE on a 30-second timer.",
+      "type": "architecture_decision",
+      "tags": ["sqlite", "decisions-db"]
+    }
+  ],
+  "notes": "Verifies query_decisions tag filtering still narrows the corpus to the right slice. Regression here means decisions can no longer be retrieved via their tags."
+}

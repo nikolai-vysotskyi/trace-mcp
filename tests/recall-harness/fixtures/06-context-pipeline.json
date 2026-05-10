@@ -1,0 +1,9 @@
+{
+  "id": "06-context-pipeline",
+  "query": "IndexingPipeline",
+  "kind": "file",
+  "expected_ids": ["pipeline.ts"],
+  "k": 10,
+  "min_recall_at_k": 1.0,
+  "notes": "A user question about the indexer pipeline must result in src/indexer/pipeline.ts being included in the packed context. Regression here = packContext lost its identifier-driven file ranking."
+}

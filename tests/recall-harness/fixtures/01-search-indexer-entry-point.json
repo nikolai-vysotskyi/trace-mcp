@@ -1,0 +1,9 @@
+{
+  "id": "01-search-indexer-entry-point",
+  "query": "IndexingPipeline",
+  "kind": "symbol",
+  "expected_ids": ["IndexingPipeline"],
+  "k": 5,
+  "min_recall_at_k": 1.0,
+  "notes": "The indexer entry point — search must always surface the IndexingPipeline class first when queried by name. A regression here means the symbol ranker stopped honouring exact name matches."
+}
