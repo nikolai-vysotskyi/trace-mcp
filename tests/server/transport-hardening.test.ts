@@ -1,3 +1,4 @@
+import { ReadBuffer } from '@modelcontextprotocol/sdk/shared/stdio.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   _isStdoutGuardArmedForTest,
@@ -6,6 +7,9 @@ import {
   forceUtf8Stdio,
   hardenStdio,
 } from '../../src/server/transport-hardening.js';
+
+const INIT_FRAME =
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.0"}}}\n';
 
 describe('transport-hardening', () => {
   afterEach(() => {
@@ -16,6 +20,12 @@ describe('transport-hardening', () => {
 
   it('forceUtf8Stdio does not throw on this platform', () => {
     expect(() => forceUtf8Stdio()).not.toThrow();
+  });
+
+  it('forceUtf8Stdio never calls setEncoding on stdin — would crash MCP ReadBuffer.subarray', () => {
+    const stdinSpy = vi.spyOn(process.stdin, 'setEncoding');
+    forceUtf8Stdio();
+    expect(stdinSpy).not.toHaveBeenCalled();
   });
 
   it('armStdoutGuard is idempotent', () => {
@@ -54,5 +64,29 @@ describe('transport-hardening', () => {
     hardenStdio();
     expect(_isStdoutGuardArmedForTest()).toBe(true);
     disarmStdoutGuard();
+  });
+
+  // The two tests below pin the upstream SDK invariant that motivates
+  // forceUtf8Stdio NOT touching stdin. The SDK's ReadBuffer assumes Buffer
+  // chunks and calls `.subarray()` on the accumulated buffer; if stdin is
+  // ever flipped into string-emitting mode (e.g. via setEncoding) the SDK
+  // crashes on every frame.
+
+  it('SDK ReadBuffer parses a JSON-RPC frame from a Buffer chunk (happy path)', () => {
+    const buf = new ReadBuffer();
+    buf.append(Buffer.from(INIT_FRAME, 'utf8'));
+    const msg = buf.readMessage() as { method?: string; id?: number } | null;
+    expect(msg).not.toBeNull();
+    expect(msg?.method).toBe('initialize');
+    expect(msg?.id).toBe(1);
+  });
+
+  it('SDK ReadBuffer crashes on string chunks — pins the invariant fix relies on', () => {
+    const buf = new ReadBuffer();
+    // Simulate what stdin would emit if forceUtf8Stdio ever set its encoding
+    // to utf8: chunks arrive as strings instead of Buffers.
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately violating the SDK type to reproduce the bug
+    (buf as any).append(INIT_FRAME);
+    expect(() => buf.readMessage()).toThrowError(/subarray is not a function/);
   });
 });
