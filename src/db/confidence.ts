@@ -14,9 +14,21 @@
  * DI through `@Autowired` metadata vs a heuristic name match) can return a
  * higher number from this helper's range to break ties cleanly.
  *
- * IMPORTANT: keep this in sync with the per-tier backfill in migration 25
- * (src/db/schema.ts). The migration runs once on existing DBs; new edges
- * route through this helper. Drift = inconsistent ranking after upgrade.
+ * IMPORTANT: keep `CONFIDENCE_BY_TIER` in sync with the per-tier backfill
+ * in migration 25 and the `edges_confidence_from_tier` trigger in
+ * src/db/schema.ts. The migration runs once on existing DBs; the trigger
+ * normalises only the SQL-default value (0.95) on new inserts. Drift
+ * between any of the three would produce inconsistent ranking after an
+ * upgrade.
+ *
+ * Trigger contract (intentional, not a bug):
+ *  - INSERT with confidence omitted → SQL default 0.95 → trigger fires when
+ *    tier ≠ ast_resolved and snaps to canonical for the tier.
+ *  - INSERT with an explicit non-0.95 confidence → trigger does NOT fire;
+ *    plugins use this to break ties within a tier (e.g. spring `@Autowired`
+ *    can return 0.97 vs a generic 0.95 ast_resolved heuristic).
+ *  `normalizeConfidence` preserves explicit values verbatim (clamped to
+ *  [0, 1]); only NaN/undefined fall back to the tier canonical.
  */
 import type { EdgeResolution } from '../plugin-api/types.js';
 
