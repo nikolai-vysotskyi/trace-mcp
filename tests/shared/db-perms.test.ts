@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { restrictDbPerms, restrictHomeDirPerms } from '../../src/shared/db-perms.js';
+import { restrictDbPerms } from '../../src/shared/db-perms.js';
 
 describe('restrictDbPerms', () => {
   let tmpDir: string;
@@ -53,33 +53,5 @@ describe('restrictDbPerms', () => {
 
   it('does not throw when the DB file does not exist', () => {
     expect(() => restrictDbPerms(path.join(tmpDir, 'nope.db'))).not.toThrow();
-  });
-});
-
-describe('restrictHomeDirPerms', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'home-perms-test-'));
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('chmods the home dir to 0700 on POSIX', () => {
-    if (process.platform === 'win32') return;
-    fs.chmodSync(tmpDir, 0o755);
-    restrictHomeDirPerms(tmpDir);
-    expect(fs.statSync(tmpDir).mode & 0o777).toBe(0o700);
-  });
-
-  it('does not throw when the dir does not exist', () => {
-    expect(() => restrictHomeDirPerms(path.join(tmpDir, 'missing'))).not.toThrow();
-  });
-
-  it('is a no-op on Windows', () => {
-    if (process.platform !== 'win32') return;
-    expect(() => restrictHomeDirPerms(tmpDir)).not.toThrow();
   });
 });

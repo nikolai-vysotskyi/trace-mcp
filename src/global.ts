@@ -254,6 +254,10 @@ export function ensureGlobalDirs(): void {
   // Restrict the data dir + index dir to 0700 so DB sidecars (WAL/SHM that
   // come and go with write activity) are protected by the parent ACL even
   // when their per-file bit is briefly default-umask. No-op on Windows.
+  // Inlined (rather than calling shared/db-perms.ts) so this module stays
+  // free of cross-module imports — `tests/cli/env-overrides.test.ts` runs
+  // global.ts under `node --experimental-strip-types` and can't resolve
+  // `.js → .ts` imports of sibling modules.
   if (process.platform !== 'win32') {
     for (const dir of [TRACE_MCP_HOME, INDEX_DIR]) {
       try {
