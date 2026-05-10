@@ -23,6 +23,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { TRACE_MCP_HOME } from '../global.js';
+import type { Store } from '../db/store.js';
+import { search } from '../tools/navigation/navigation.js';
+import { getChangeImpact } from '../tools/analysis/impact.js';
+import { scanSecurity, type RuleName } from '../tools/quality/security-scan.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -432,6 +436,140 @@ export async function handleAskSessionsRequest(
     }
 
     res.end();
+    return true;
+  }
+
+  // ── POST /api/ask/sessions/:id/slash ─────────────────────────────────
+  const slashMatch = /^\/api\/ask\/sessions\/([^/]+)\/slash$/.exec(pathname);
+  if (method === 'POST' && slashMatch) {
+    const sessionId = decodeURIComponent(slashMatch[1]);
+    const db = getDb();
+    const session = db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(sessionId) as
+      | SessionRow
+      | undefined;
+    if (!session) {
+      sendJson(res, 404, { error: 'Session not found' });
+      return true;
+    }
+
+    let body: { command?: string; args?: string };
+    try {
+      const raw = await collectBody(req);
+      body = JSON.parse(raw.toString());
+    } catch {
+      sendJson(res, 400, { error: 'Invalid JSON body' });
+      return true;
+    }
+
+    const command = body.command?.trim();
+    const args = body.args?.trim() ?? '';
+
+    if (!command || !['find', 'impact', 'scan'].includes(command)) {
+      sendJson(res, 400, { error: 'command must be one of: find, impact, scan' });
+      return true;
+    }
+
+    const managed = ctx.projectManager.getProject(session.project_root);
+    if (!managed || managed.status !== 'ready') {
+      sendJson(res, 404, { error: 'Project not found or not ready' });
+      return true;
+    }
+
+    const store = managed.store as Store;
+    let markdown = '';
+
+    try {
+      if (command === 'find') {
+        if (!args) {
+          sendJson(res, 400, { error: '/find requires a query argument' });
+          return true;
+        }
+        const result = await search(store, args, undefined, 10);
+        if (result.items.length === 0) {
+          markdown = `<!-- slash:find -->\n**No results for \`${args}\`.**`;
+        } else {
+          const rows = result.items
+            .map(
+              ({ symbol, file, score }) =>
+                `| \`${symbol.name}\` | ${symbol.kind} | \`${file.path}:${symbol.line_start ?? ''}\` | ${score.toFixed(3)} |`,
+            )
+            .join('\n');
+          markdown =
+            `<!-- slash:find -->\n` +
+            `**Search results for \`${args}\`** (${result.items.length} of ${result.total})\n\n` +
+            `| Name | Kind | Location | Score |\n` +
+            `|------|------|----------|-------|\n` +
+            rows;
+        }
+      } else if (command === 'impact') {
+        if (!args) {
+          sendJson(res, 400, { error: '/impact requires a symbol_id argument' });
+          return true;
+        }
+        const result = getChangeImpact(store, { symbolId: args });
+        if (result.isErr()) {
+          markdown = `<!-- slash:impact -->\n**Error:** ${result.error.message}`;
+        } else {
+          const { dependents, totalAffected, summary } = result.value;
+          if (dependents.length === 0) {
+            markdown = `<!-- slash:impact -->\n**No dependents found for \`${args}\`.**`;
+          } else {
+            const rows = dependents
+              .slice(0, 20)
+              .map((d) => `| \`${d.path}\` | depth ${d.depth} | ${d.edgeTypes.join(', ')} |`)
+              .join('\n');
+            markdown =
+              `<!-- slash:impact -->\n` +
+              `**Change impact for \`${args}\`** — ${totalAffected} affected file${totalAffected !== 1 ? 's' : ''} · ${summary.sentence}\n\n` +
+              `| File | Depth | Edge Types |\n` +
+              `|------|-------|------------|\n` +
+              rows +
+              (dependents.length > 20 ? `\n\n_...and ${dependents.length - 20} more_` : '');
+          }
+        }
+      } else if (command === 'scan') {
+        const result = scanSecurity(store, session.project_root, {
+          rules: ['all'] as RuleName[],
+          severityThreshold: 'medium',
+        });
+        if (result.isErr()) {
+          markdown = `<!-- slash:scan -->\n**Error:** ${result.error.message}`;
+        } else {
+          const { findings, files_scanned } = result.value;
+          const total = findings.length;
+          if (total === 0) {
+            markdown = `<!-- slash:scan -->\n**No security findings** (medium+ severity) across ${files_scanned} files.`;
+          } else {
+            const top = findings.slice(0, 15);
+            const rows = top
+              .map(
+                (f) =>
+                  `| ${f.severity.toUpperCase()} | ${f.rule_name} | \`${f.file}:${f.line}\` | ${f.fix} |`,
+              )
+              .join('\n');
+            markdown =
+              `<!-- slash:scan -->\n` +
+              `**Security scan** — ${total} finding${total !== 1 ? 's' : ''} across ${files_scanned} files (showing top ${top.length}, medium+ severity)\n\n` +
+              `| Severity | Rule | Location | Suggestion |\n` +
+              `|----------|------|----------|------------|\n` +
+              rows +
+              (findings.length > 15 ? `\n\n_...and ${findings.length - 15} more_` : '');
+          }
+        }
+      }
+
+      // Persist as assistant message (no context_envelope — this is a tool call, not LLM stream)
+      const msgId = uuid();
+      const now = Date.now();
+      db.prepare(
+        'INSERT INTO chat_messages (id, session_id, role, content, context_envelope, created_at) VALUES (?, ?, ?, ?, NULL, ?)',
+      ).run(msgId, sessionId, 'assistant', markdown, now);
+      db.prepare('UPDATE chat_sessions SET last_msg_at = ? WHERE id = ?').run(now, sessionId);
+
+      sendJson(res, 200, { id: msgId, content: markdown });
+    } catch (e) {
+      sendJson(res, 500, { error: (e as Error)?.message ?? 'Internal error' });
+    }
     return true;
   }
 

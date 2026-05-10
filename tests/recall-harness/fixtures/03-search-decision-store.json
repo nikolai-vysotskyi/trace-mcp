@@ -1,0 +1,9 @@
+{
+  "id": "03-search-decision-store",
+  "query": "DecisionStore",
+  "kind": "symbol",
+  "expected_ids": ["DecisionStore", "decision-store.ts"],
+  "k": 5,
+  "min_recall_at_k": 1.0,
+  "notes": "Anything that writes to decisions.db goes through DecisionStore. A search by class name must surface the class itself in the top results."
+}

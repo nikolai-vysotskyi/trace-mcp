@@ -1,0 +1,36 @@
+{
+  "id": "07-decisions-fts-search",
+  "query": "WAL checkpoint",
+  "kind": "decision",
+  "expected_ids": ["WAL checkpoint policy", "Bound WAL growth"],
+  "k": 10,
+  "min_recall_at_k": 1.0,
+  "decision_filters": { "search": "WAL checkpoint" },
+  "decisions_seed": [
+    {
+      "title": "WAL checkpoint policy",
+      "content": "Run wal_checkpoint TRUNCATE on a 30-second timer to keep the journal bounded under heavy read traffic with sparse writes.",
+      "type": "architecture_decision",
+      "tags": ["sqlite", "decisions-db"]
+    },
+    {
+      "title": "Bound WAL growth",
+      "content": "journal_size_limit is set to 100 MiB so a stalled checkpoint can never balloon disk use without bound.",
+      "type": "architecture_decision",
+      "tags": ["sqlite", "decisions-db"]
+    },
+    {
+      "title": "Use neverthrow Result envelope",
+      "content": "Return ok/err Result everywhere instead of throwing — improves call-site control flow and machine-parsability for the MCP transport.",
+      "type": "convention",
+      "tags": ["typescript", "errors"]
+    },
+    {
+      "title": "Plugin registry default set",
+      "content": "PluginRegistry.createWithDefaults wires every shipped language and framework plugin so callers do not have to enumerate them manually.",
+      "type": "convention",
+      "tags": ["plugins"]
+    }
+  ],
+  "notes": "Verifies query_decisions FTS5 search still ranks decisions matching the query above unrelated decisions, even when the corpus contains noise."
+}

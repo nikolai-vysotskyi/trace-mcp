@@ -53,6 +53,8 @@ export interface DecisionRow {
   /** Confidence score 0..1 for mined decisions */
   confidence: number;
   created_at: string;
+  /** Unix millisecond timestamp of the last write (insert, update, or invalidate). */
+  updated_at: number | null;
 }
 
 export interface DecisionInput {
@@ -313,6 +315,48 @@ export class DecisionStore {
 
   private migrate(): void {
     // (service_name migration now handled in preMigrate)
+    // v2: add updated_at column (Unix ms) for incremental refresh.
+    const hasUpdatedAt = (this.db.pragma('table_info(decisions)') as Array<{ name: string }>).some(
+      (c) => c.name === 'updated_at',
+    );
+    if (!hasUpdatedAt) {
+      this.db.exec(`
+        ALTER TABLE decisions ADD COLUMN updated_at INTEGER;
+        UPDATE decisions SET updated_at = strftime('%s','now')*1000 WHERE updated_at IS NULL;
+      `);
+      logger.info('Migration: added updated_at column to decisions table');
+    }
+  }
+
+  /**
+   * Update mutable fields on an existing decision.
+   * Returns the updated row, or undefined when the id does not exist.
+   */
+  updateDecision(
+    id: number,
+    fields: Partial<
+      Pick<
+        DecisionRow,
+        'title' | 'content' | 'type' | 'symbol_id' | 'file_path' | 'tags' | 'source' | 'confidence'
+      >
+    >,
+  ): DecisionRow | undefined {
+    const cols = Object.keys(fields) as Array<keyof typeof fields>;
+    if (cols.length === 0) return this.getDecision(id);
+
+    const setClauses = cols.map((k) => `${k} = ?`).join(', ');
+    const values = cols.map((k) => {
+      if (k === 'tags' && Array.isArray(fields[k])) return JSON.stringify(fields[k]);
+      return fields[k] ?? null;
+    });
+
+    this.db
+      .prepare(
+        `UPDATE decisions SET ${setClauses}, updated_at = strftime('%s','now')*1000 WHERE id = ?`,
+      )
+      .run(...values, id);
+
+    return this.getDecision(id);
   }
 
   close(): void {
@@ -337,8 +381,8 @@ export class DecisionStore {
       ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
       : (input.file_path ?? null);
     const stmt = this.db.prepare(`
-      INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now')*1000)
     `);
     const info = stmt.run(
       input.title,
@@ -379,7 +423,10 @@ export class DecisionStore {
   invalidateDecision(id: number, validUntil?: string): boolean {
     const until = validUntil ?? new Date().toISOString();
     const info = this.db
-      .prepare('UPDATE decisions SET valid_until = ? WHERE id = ? AND valid_until IS NULL')
+      .prepare(
+        `UPDATE decisions SET valid_until = ?, updated_at = strftime('%s','now')*1000
+         WHERE id = ? AND valid_until IS NULL`,
+      )
       .run(until, id);
     return info.changes > 0;
   }

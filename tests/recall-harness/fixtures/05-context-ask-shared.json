@@ -1,0 +1,9 @@
+{
+  "id": "05-context-ask-shared",
+  "query": "gatherContext",
+  "kind": "file",
+  "expected_ids": ["ask-shared.ts"],
+  "k": 10,
+  "min_recall_at_k": 1.0,
+  "notes": "When a user asks about gatherContext, gatherContext / packContext should pull src/ai/ask-shared.ts into the LLM context envelope. This proves the feature-scope file selector still wires FTS file matches into the envelope."
+}

@@ -1,0 +1,9 @@
+{
+  "id": "04-search-pack-context",
+  "query": "packContext",
+  "kind": "symbol",
+  "expected_ids": ["packContext"],
+  "k": 5,
+  "min_recall_at_k": 1.0,
+  "notes": "packContext is the engine behind gatherContext — it must be discoverable by name."
+}

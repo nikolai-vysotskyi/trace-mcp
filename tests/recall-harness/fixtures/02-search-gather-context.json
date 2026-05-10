@@ -1,0 +1,9 @@
+{
+  "id": "02-search-gather-context",
+  "query": "gatherContext",
+  "kind": "symbol",
+  "expected_ids": ["gatherContext", "ask-shared.ts"],
+  "k": 5,
+  "min_recall_at_k": 1.0,
+  "notes": "The ask pipeline composes prompt context via gatherContext(). Both the function and its file should be reachable from a search by name."
+}

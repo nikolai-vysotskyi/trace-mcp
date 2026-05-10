@@ -75,6 +75,7 @@ import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
 import { handleAskSessionsRequest } from './api/ask-sessions-routes.js';
 import { handleDashboardRequest } from './api/dashboard-routes.js';
+import { handleJournalStatsRequest, type JournalStatsContext } from './api/journal-stats-routes.js';
 import { handleMemoryRequest } from './api/memory-routes.js';
 import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
 import { createServer } from './server/server.js';
@@ -2112,6 +2113,21 @@ program
         res.end(JSON.stringify(snapshot));
         return;
       }
+
+      // ── Activity stats — aggregated journal metrics for the Activity tab ─
+      const journalStatsCtx: JournalStatsContext = {
+        listEntriesForProject(projectRoot) {
+          const sids = projectSessions.get(projectRoot);
+          if (!sids || sids.size === 0) return [];
+          const out: ReturnType<typeof buildJournalSnapshot> = [];
+          for (const sid of sids) {
+            const handle = sessionHandles.get(sid);
+            if (handle) out.push(...buildJournalSnapshot(handle.journal, projectRoot, sid, 10_000));
+          }
+          return out;
+        },
+      };
+      if (handleJournalStatsRequest(req, res, url, journalStatsCtx)) return;
 
       // ── Memory explorer (decisions / corpora / sessions) ──────────────
       if (handleMemoryRequest(req, res, url)) return;
