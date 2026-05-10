@@ -237,9 +237,49 @@ describe('withRetry', () => {
         maxDelayMs: 10,
         signal: ac.signal,
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ kind: 'aborted' });
     // Either the sleep is interrupted by the abort, or the next attempt is.
     // Either way: not all 5 attempts run.
     expect(calls).toBeLessThanOrEqual(2);
+  });
+
+  it('classifies a pre-loop abort as kind=aborted (not unrecoverable)', async () => {
+    const ac = new AbortController();
+    ac.abort();
+    const op = vi.fn(async () => 'never-runs');
+    await expect(
+      withRetry(op, {
+        provider: 'x',
+        maxAttempts: 3,
+        baseDelayMs: 1,
+        maxDelayMs: 1,
+        signal: ac.signal,
+      }),
+    ).rejects.toMatchObject({ kind: 'aborted' });
+    expect(op).not.toHaveBeenCalled();
+  });
+
+  it('classifies abort-during-sleep as kind=aborted (not transient)', async () => {
+    const ac = new AbortController();
+    let calls = 0;
+    const op = vi.fn(async () => {
+      calls++;
+      if (calls === 1) {
+        // Schedule an abort to fire while withRetry is in its backoff sleep.
+        setTimeout(() => ac.abort(), 5);
+      }
+      throw { status: 503 };
+    });
+    await expect(
+      withRetry(op, {
+        provider: 'x',
+        maxAttempts: 5,
+        baseDelayMs: 100,
+        maxDelayMs: 500,
+        jitter: 0,
+        signal: ac.signal,
+      }),
+    ).rejects.toMatchObject({ kind: 'aborted' });
+    expect(calls).toBe(1);
   });
 });

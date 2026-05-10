@@ -42,6 +42,7 @@ export type ProviderErrorKind =
   | 'rate_limit'
   | 'quota_exhausted'
   | 'auth_invalid'
+  | 'aborted'
   | 'unrecoverable'
   | 'unknown';
 
@@ -264,11 +265,22 @@ export async function withRetry<T>(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (opts.signal?.aborted) {
-      throw new ClassifiedProviderError(opts.provider, 'unrecoverable', 'aborted by caller');
+      throw new ClassifiedProviderError(opts.provider, 'aborted', 'aborted by caller');
     }
     try {
       return await op(attempt);
     } catch (err) {
+      // Caller cancelled mid-op (their signal fired). The fetch surfaces this
+      // as AbortError — which classifyProviderError otherwise treats as
+      // transient (the same path covers AbortSignal.timeout retries). Detect
+      // the caller-driven case via the signal itself and surface it as
+      // `aborted`, so callers can distinguish "user pressed cancel" from a
+      // network blip.
+      if (opts.signal?.aborted) {
+        throw new ClassifiedProviderError(opts.provider, 'aborted', 'aborted by caller', {
+          cause: err,
+        });
+      }
       const classified = classifyProviderError(opts.provider, err);
       lastErr = classified;
 
@@ -298,7 +310,20 @@ export async function withRetry<T>(
         'withRetry: retrying after classified provider error',
       );
 
-      await sleep(backoff, opts.signal);
+      try {
+        await sleep(backoff, opts.signal);
+      } catch {
+        // sleep rejects with Error('aborted') when signal fires during the
+        // backoff window. Without this catch the unclassified Error escapes
+        // withRetry, and the caller cannot tell cancellation from any other
+        // failure. Re-throw as a classified abort.
+        throw new ClassifiedProviderError(
+          opts.provider,
+          'aborted',
+          'aborted by caller during retry backoff',
+          { cause: lastErr },
+        );
+      }
     }
   }
 
