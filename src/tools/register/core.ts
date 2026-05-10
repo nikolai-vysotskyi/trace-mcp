@@ -272,7 +272,35 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       if (blocked) return blocked;
 
       const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
-      const result = await pipeline.indexFiles([filePath]);
+      let result: Awaited<ReturnType<typeof pipeline.indexFiles>>;
+      try {
+        // Share the reindex lock so a single-file edit cannot race with a
+        // running full-project reindex. The two paths mutate the same SQLite
+        // database (and vector store), and concurrent writers were called out
+        // as a corruption risk in the original PID-guard rollout.
+        result = await withLock(
+          { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-reindex`, op: 'register_edit' },
+          () => pipeline.indexFiles([filePath]),
+        );
+      } catch (e) {
+        if (e instanceof LockError) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  status: 'busy',
+                  error: 'reindex_in_progress',
+                  message: e.message,
+                  holder: e.holder,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        throw e;
+      }
 
       // Record in journal so session knows this file was edited
       journal.record('register_edit', { file_path: filePath }, 1);
