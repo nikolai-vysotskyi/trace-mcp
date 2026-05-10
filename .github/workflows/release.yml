@@ -131,9 +131,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - run: pnpm run test
-      # pnpm 10+ supports --provenance natively via OIDC; the previous
-      # gymnastics with `npx -y npm@11 publish` is no longer required.
-      - run: pnpm publish --provenance --access public --no-git-checks
+      # pnpm 10's `--provenance` flow signs the sigstore attestation
+      # successfully but the subsequent `PUT /trace-mcp` to the npm
+      # registry returns 404 — the OIDC-token-to-npm-scoped-token swap
+      # for trusted publishers isn't implemented compatibly. v1.33.0 was
+      # published cleanly with the npm-CLI workaround below; v1.34.0 and
+      # v1.34.1 both failed under pnpm publish (runs 25635344085 and
+      # 25635744167). Stay on `npx -y npm@11 publish` until pnpm fixes
+      # the trusted-publisher exchange.
+      - run: npx -y npm@11 publish --provenance --access public
 
   build-app-mac:
     needs: release-please
