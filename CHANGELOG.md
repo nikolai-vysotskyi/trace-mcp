@@ -6,6 +6,141 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.34.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.33.0...v1.34.0) (2026-05-10)
+
+
+### Features
+
+* **ai:** classified provider errors + retry helper with exp backoff ([9d0f513](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9d0f513cf6dbdd455b9a1609e4be85acf663cece))
+* **ai:** consent gate for outbound LLM provider traffic ([6ec8630](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6ec8630923daa708f6cd379cb19984d4b52819a6))
+* **ai:** detect local LLM endpoints (Ollama / LM Studio / llama.cpp) ([be6075e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/be6075e1a9f3e2102ae5e4308c0fd8407f1754c2))
+* **ai:** one-shot stderr warning before cloud-bound embeddings ([2753856](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2753856e498a6f0614983e5e4c649459ae3ced49))
+* **ai:** per-provider quota / auth circuit-breaker ([c82fea1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c82fea15ac9df09cadade72870fb1a1c4dfd5250))
+* **ai:** stamp embedding provider on the index, refuse cross-provider mix ([1ee2a11](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ee2a11910f6441cc1700c87c82b92ec4382681b))
+* **ai:** tier-router helper + tier-separated default models ([d0e2848](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d0e28486bebb7ef9a04d93748dfbf862d006c618))
+* **analysis:** rank cross-community edges by surprise score ([9c184f5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9c184f50c15b52112f6da728d5401e3e2b6410c4))
+* **communities:** seed Leiden PRNG so community IDs are deterministic ([8dff326](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8dff3263cde7cc12fd68deb69da44205b5db953b))
+* **communities:** split low-cohesion mega-clusters in a second Leiden pass ([3fa7078](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3fa7078db59ddc63cf27b0af4994a65a3cd46387))
+* **config:** add TRACE_MCP_DATA_DIR + TRACE_MCP_REPO_ROOT env overrides ([f326a81](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f326a81494e1f6f093b6c70ca3aa77fbef33e1a9))
+* **daemon:** add stdio handshake watchdog ([f0d82ea](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f0d82eae0160dfc6c05dfd2c9942977a1fafd554))
+* **daemon:** proxy-backend routes worktree paths to canonical indexed repo ([2b22c11](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2b22c116af0084a754f330b28ea53ce27dedc876))
+* **db:** verify_index + repair_index MCP tools ([f66fe32](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f66fe325df16a2e66eda14faf8571743148702c2))
+* **dead-code:** drop framework entry points from the candidate set ([25a7825](https://github.com/nikolai-vysotskyi/trace-mcp/commit/25a78253d78d856624f93eac3e13072a9feedd37))
+* **dead-code:** seed reachability with package.json#exports entries ([da7c69d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/da7c69df37a7c80cacf0a1b7f08b54c73120ab14))
+* **find_usages:** drop text_matched edges into ambiguously-named targets ([1407af2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1407af2fd4f6ebdef94f4ee9d116ad53602d709f))
+* **graph:** add float edge confidence on top of resolution_tier ([92d7190](https://github.com/nikolai-vysotskyi/trace-mcp/commit/92d7190d35245975cd34d229d213d8dd9da1e78d))
+* **hooks:** guard v0.9 — block bare directory walks + .md doc-tour hint ([45a9be2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/45a9be29a1d09bfc8d63a05926bcf1a570cd7d23))
+* **impact,refs:** surface resolution_tier on find_usages and get_change_impact ([4eff222](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4eff2228df9631864c72c6eb32f67e223d9c0a15))
+* **indexer:** add postprocess level knob (full / minimal / none) ([cab7e90](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cab7e90aeb961122714fff9c3ea14b73c8c95865))
+* **indexer:** detect file renames by content hash and skip re-extraction ([46ca974](https://github.com/nikolai-vysotskyi/trace-mcp/commit/46ca974e33449289aec020c37bcacd395002b111))
+* **indexer:** force-include files declared as package.json entry points ([83cada2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/83cada2342e0683df8453ee8554031cfa5e08fb4))
+* **indexer:** per-target PID-guard for reindex / embed_repo ([656efe4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/656efe4286c42930db1c60c72288088cbdfdf42f))
+* **indexer:** warn when a full reindex shrinks the graph by more than half ([eb43ee9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eb43ee94c66a0a785bea17b7aabc50434ad1f63e))
+* **insights:** add generate_insights_report MCP tool ([50a4820](https://github.com/nikolai-vysotskyi/trace-mcp/commit/50a48206238d5a2f48849ee28ccb8b61a0efe984))
+* **memory:** canonicalise decision file_path to repo-relative on store + query ([8d4cdfd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8d4cdfdfca72a524e9f1739669f3d0bdd083b07b))
+* **memory:** CorpusBuilder — materialise corpora via packContext ([5e34f59](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5e34f59e7af4a9019d6813eb2d76a7d34bdbc5ab))
+* **memory:** CorpusStore — persistent code-context corpora on disk ([6425e26](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6425e264e1cd546ca0d95b630479046503f78574))
+* **memory:** privacy filter for mine_sessions strips internal payloads ([1134509](https://github.com/nikolai-vysotskyi/trace-mcp/commit/11345095262761a9f2a1cee0fb0fa8b971486e43))
+* **memory:** worktree adoption — mine_sessions files decisions under parent ([9d9b836](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9d9b836139d993a299334b8a581a1f6ee1c83e82))
+* **perf:** cooperative yield from heavy CPU loops to keep stdio responsive ([6f40b78](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6f40b7823fba7be84d1f6cfdc9242e10053fd9b4))
+* **plugin-api:** support async extractNodes in framework plugins ([1b6095e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b6095ea00a9d89845aeec80f62e3b0c2fa2424f))
+* **plugin:** add Claude Code plugin manifest for one-step install ([b1f3719](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b1f37190e257152ebeae56d0b309ad0320f27383))
+* **plugins:** add class-validator, passport, react-table; expand NestJS WS ([50c17ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/50c17ec5db7fa6fda0d1802146892015a445e2fa))
+* **plugins:** add Kafka producer/consumer indexer (Spring, kafkajs, Python) ([6c80def](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c80defbf79a6689e4d0cd6ca37803c651aa5e4c))
+* **plugins:** index .luau (Roblox Lua) and .qmd (Quarto) files ([ccc9c2d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ccc9c2d143a4a8e8f90b2c801aee17c7fc1c65fc))
+* **plugins:** index extensionless scripts via #! shebang fallback ([39abbfd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/39abbfdfc2b843568fe6e37773b8d0fdf65cd186))
+* **registry:** add git-worktree probe primitives ([a7d489c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a7d489c346f0afb6cb56707caf79839c4d4d70da))
+* **registry:** worktree-aware project resolution ([9f4bda3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9f4bda33b8c9297d308ef8aa9f3d252c4ea3c48d))
+* **security:** add SSRF guard utility for outbound fetches ([c8204c5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c8204c57044fb0ff8ef4414fa79817843faaba59))
+* **security:** add wall-clock budget to searchText regex iteration ([b651b90](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b651b90d79022fef9d3f0b0a64e83236772ce7b7))
+* **security:** extend git env hardening to predictive + impact paths ([848c23a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/848c23a7cecc98e2eba98811fee7fb787658650f))
+* **security:** harden git env in workspace-spawned commands ([124bdd0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/124bdd04c900aca0eadb0f0d3aa23e8f6eed28e6))
+* **server:** expose project state through six MCP resources ([59b4267](https://github.com/nikolai-vysotskyi/trace-mcp/commit/59b426716da1d9b684619a598e8e0f46dbf8a24f))
+* **server:** sanitize MCP tool output against prompt injection ([4331183](https://github.com/nikolai-vysotskyi/trace-mcp/commit/433118357a2325ad2cc7df5d892db38b252f3cfe))
+* **server:** UTF-8 + stdout-guard hardening for the MCP stdio transport ([2fa4a4d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2fa4a4ded4256a0ed62a9373df459a13ba5670b0))
+* **session:** Codex CLI session provider for mine_sessions / discover ([207152d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/207152d2ed6fa6557557f302dcb84185abf3a1fe))
+* **shared:** centralised path accessors + invariant test ([3a32cc8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a32cc823d04bb8214d86f08dbf63535d7d520af))
+* **spring:** enrich @Autowired/constructor metadata with call-site hints ([469534e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/469534e0574113f78bae5d64839db76e570da38c))
+* **ssrf-guard:** add allowPrivateNetworks opt-in for local LLM endpoints ([46ac4d3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/46ac4d36076b00ab5f36ca2b993605adf5b7106a))
+* **subproject:** add a remote repo as a subproject in one shot via git_url ([dd440bc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dd440bc5abbe46957675b2cdadde21062746a40c))
+* **tools:** add detail_level=minimal knob on search/get_outline/find_usages ([b5af6ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b5af6ef5c2b353bbe95ffaecdef78e321968411f))
+* **tools:** add get_minimal_context — single-call orientation entrypoint ([b02a2a1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b02a2a1fc72aa2548c692d6f26d0d8971dd4f817))
+* **tools:** add get_suggested_questions for ranked review checklists ([c6090c3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c6090c3804f55466feb6938e0c8935b0e7ef794e))
+* **tools:** add named graph snapshots + diff for tracking evolution ([22d6e4b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/22d6e4b7ab10685eb78f5c688b4a4f2a71667c56))
+* **tools:** add traverse_graph BFS walker with token budget ([7485574](https://github.com/nikolai-vysotskyi/trace-mcp/commit/748557457cb54c141b436e5b3a1ac76410ced98e))
+* **tools:** coerce empty-string MCP args to undefined for filter fields ([0357e7c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0357e7ce25f09cdad1017b7ce179282b22fe3d3f))
+* **tools:** export the dependency graph as GraphML / Cypher / Obsidian ([6c72ff1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c72ff1dc029eb5628cf5f885d3da55808bf9cdc))
+* **tools:** Knowledge Agent MCP surface — build/list/query/delete corpus ([3401e9d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3401e9d198016db50b13e4cee96bb81d209b6409))
+* **topology:** cross-project topic tunnels via entity registry ([7360aee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7360aee3050e434bf759ffa60ea29220f185b6d6))
+* **utils:** atomicWriteJson helper + apply at all state-file write sites ([470b83f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/470b83fdb826727f058221dde86638a0dda18ba5))
+* **viz:** community-aggregation helper for large-graph visualisation ([0c36fb3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0c36fb3a26c9390e2b39fead4232a329133799f9))
+* **vscode-extension:** on-save reindex extension ([45d53a1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/45d53a137699e29541ac42ed689b4ab1c0164b69))
+
+
+### Bug Fixes
+
+* **ai:** classify caller-driven aborts in withRetry as kind=aborted ([c01a854](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c01a854f650ed762b3f815c12195b7d68e325dfe))
+* **app:** declare @types/node directly so tsc -p tsconfig.main.json works under pnpm ([49e5502](https://github.com/nikolai-vysotskyi/trace-mcp/commit/49e5502bb7eb2de94b20c5a760d6872aedb0c1a5))
+* **config:** atomic write for global JSONC config mutations ([d22be14](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d22be14a99fc6abd9aeff78d8e56d549323a858d))
+* **daemon:** atomic write for PID file + atomic stale-lock takeover ([5c0f5ea](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5c0f5ea70fca706a7c6719c962add53ec37e3bce))
+* **daemon:** identity-token PID-reuse guard for daemon lifecycle ([e948a22](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e948a229dfc61efde3191aaa6b12a215797c7adb))
+* **db:** bound WAL growth and add periodic checkpoint to long-lived stores ([68b4157](https://github.com/nikolai-vysotskyi/trace-mcp/commit/68b41575528b05f51c487103fe04a5ba269fac1e))
+* **db:** centralise symbols_fts DDL so repair-fts cannot drift from schema ([89a1bea](https://github.com/nikolai-vysotskyi/trace-mcp/commit/89a1beab080f46e32c001b8022d862ffd6283dfe))
+* **dead-code:** never flag symbols that have any incoming call/ref edge ([a3fc0e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a3fc0e0b805b134ce03b69325dd11d2cb13e3370))
+* **git-worktree:** use fs.realpathSync.native for Win32 8.3-shortname normalisation ([b3d5f41](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b3d5f41076600684920ea5c0a8192e65d0faaf46))
+* **indexer:** normalize relTarget separators when resolving import edges ([fc28bfb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fc28bfbcab057ffc5c480cdc12443b52e51594fe))
+* **indexer:** parse tsconfig.json as JSONC to recover path aliases ([3ac3cd9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ac3cd94c08d1e44e629c344755a2aa959da3677))
+* **indexer:** serialize register_edit and reindex through the same lock ([918921f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/918921f5233faff5077db40aa35a18b84c4cb672))
+* **indexer:** suppress shrinkWarning + execFileSync for git rev-parse ([5f0cbf1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5f0cbf1a742c55fc7de61cff2964450ad867db32))
+* **navigation:** explicit degradation signal for semantic search without AI ([6bbeb53](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6bbeb53a21ee5354582208ec329c0877bf3b2059))
+* pin zod to 4.3.6 via pnpm.overrides (4.4.x breaks dist/cli.js) ([4cf12c7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4cf12c76d24bd90ab5ccccf050948b29d1fbf4a0))
+* **refactoring:** normalize result paths to forward slashes for cross-platform consistency ([848f668](https://github.com/nikolai-vysotskyi/trace-mcp/commit/848f6680fa5ffeb5efb49f3be442be56790f6afe))
+* **resolver:** parse tsconfig.json as JSONC, not strict JSON ([5cadb07](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5cadb07814b17904b4c06753ea0d1c29cb29eeed))
+* **security:** chmod 0700 on ~/.trace-mcp and 0600 on local SQLite stores ([0c0fac2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0c0fac263a630ac0b23d0ff1be1eb6d423b263b9))
+* **security:** keep hook source lookup inside the trace-mcp install tree ([32bcda7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/32bcda76043c84aff801a759f233e97d92cd136b))
+* **security:** validate git refs and replace shell-mode execSync with execFileSync ([3b08ed0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3b08ed0d4094f25914911274fc5437faa7cc7c00))
+* **security:** validate git_ref before passing to git --branch in subproject_add_repo ([e197184](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e197184d85f8a6e35bd44c7409b350a22e98f512))
+* **security:** wire SSRF guard into AI provider fetches and git-clone path ([b7fb294](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b7fb294748c04144b2ac0e0c7fa35680bfdb2af9))
+* **ssrf-guard:** import LookupAddress from node:dns instead of node:dns/promises ([8f1e184](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8f1e184ecd2bbc8371ef93a4ec981530186a340f))
+
+
+### Documentation
+
+* bump headline figures to 99% and refresh hero copy ([43d12e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/43d12e096f4f86fb86763a0f84e0630747cd4dee))
+* **confidence:** clarify trigger contract + add SQL-level regression tests ([f4a85bd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f4a85bd0ce5c12bebf9050eabcb0a7708635d8eb))
+* **readme:** add CI status badge ([33169e4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/33169e445fcd39fbdefb6e9566c5b437d8b9bad5))
+* update contributor instructions for pnpm ([3a4344a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a4344a5c9f5c6f04e1084362755f44f4e367d4d))
+
+
+### Tests
+
+* **ci:** align test-side realpath with production native binding ([782097b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/782097bbd0146626fc60cc05134d8d556c7bb328))
+* **ci:** fix 7 baseline Windows-only failures (path separators + 8.3 names) ([82ab7eb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/82ab7eb9bb58df917e588a40e0fdfe7096c7c30c))
+* cover remaining Windows-runner failures from cross-platform CI ([086aedd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/086aedd4054908aff66b2fa96014bb2e93c5beae))
+* cover the long-tail Windows-runner failures from cross-platform CI ([6075495](https://github.com/nikolai-vysotskyi/trace-mcp/commit/60754951f75e0bd2e4c4d60fa05aaf4ec714bfc9))
+* **docs:** regression test for numeric README claims + sync stale numbers ([1b18d46](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b18d46fecf7b363a54f25aacd45b37c1101a42a))
+* **impact,refs:** cover resolution_tier surfacing ([4915eb1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4915eb19208a4ccf11e220f3c2a3394564d56ab3))
+* **markdown:** include .qmd in supportedExtensions assertion ([a38c18a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a38c18a796bad25fdc854e2bf6316193e6b4fe5d))
+* **perf:** de-flake batched-inserts benchmark across CI runners ([c9f8988](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c9f8988091fa7150db51e23e76ee2d37438827d8))
+* **perf:** re-deflake batched-inserts benchmark — loosen to regression guard ([d524b1e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d524b1ef295860ea2d164f801b6e3d8a8a4fc482))
+* **perf:** skip batched-inserts benchmark on Windows runner ([a434dcf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a434dcfcfa4d20434a684965e280fd5938d6c078))
+* **security:** cover hook-source path-traversal validators ([d414327](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d4143273c07e910d6a0270f1925b8e405be75875))
+* **security:** make path expectations Windows-safe ([61e3345](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61e33451775e4e76056bd8fbb2ae5a4ed40081b2))
+
+
+### Chores
+
+* **app:** migrate packages/app from npm to pnpm ([3d75a19](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3d75a19e14f92b6bb960e667bd8075b8d23a7d37))
+* migrate root package manager from npm to pnpm ([d36486c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d36486c2e3355f40554dbd67bc2bb36a96c9d50f))
+* **security:** drop unused restrictHomeDirPerms helper ([4b5b827](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4b5b827441bd651a821d4e1433bc13015e7260de))
+* **wip:** version-stamp init helper + daemon session change ([cd45cde](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cd45cde8400d091713ad39a411866b9dc5311faf))
+
+
+### CI/CD
+
+* also run on push to master ([c2382ca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c2382ca0913a7dccee7647bdab8240c34321f5aa))
+* switch CI install path to pnpm + add cross-platform test matrix ([6bc2f7a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6bc2f7aa76a6ba5004ca9bc13e18830f89bbf4e8))
+
 ## [1.33.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.32.7...v1.33.0) (2026-04-30)
 
 
