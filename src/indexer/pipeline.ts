@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { cpus } from 'node:os';
 import path from 'node:path';
@@ -83,7 +83,12 @@ const SHRINK_MIN_BASELINE = 200;
  */
 function readGitHeadSha(rootPath: string): string | null {
   try {
-    const out = execSync('git rev-parse HEAD', {
+    // execFileSync (no shell) — matches the boundary established in 3b08ed0
+    // for every other git spawn in the codebase. Inputs here are constants
+    // so there is no current injection vector, but keeping the spawn shape
+    // uniform means the next change to this function cannot accidentally
+    // reintroduce a shell-mode call.
+    const out = execFileSync('git', ['rev-parse', 'HEAD'], {
       cwd: rootPath,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -153,8 +158,14 @@ export class IndexingPipeline {
       const start = Date.now();
       // Snapshot the existing index size so runPipeline can detect a
       // catastrophic shrink (e.g. parser regression dropping half the files
-      // silently). Skip when force=true — caller has acknowledged the risk.
-      const before = force ? null : this.captureSizeSnapshot();
+      // silently). Skip when:
+      //   - force=true: caller has acknowledged the risk
+      //   - postprocess=none: edge resolution is skipped by design, so an
+      //     N→0 edge ratio after the run is expected and a `shrinkWarning`
+      //     would be a false positive that automated quality gates would
+      //     misinterpret as a regression.
+      const skipShrinkCheck = force === true || this._postprocessLevel === 'none';
+      const before = skipShrinkCheck ? null : this.captureSizeSnapshot();
       if (this.config.children?.length) {
         this.workspaces = buildMultiRootWorkspaces(this.rootPath, this.config.children);
         logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Multi-root workspaces');
