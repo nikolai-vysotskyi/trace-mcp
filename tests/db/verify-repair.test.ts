@@ -184,4 +184,18 @@ describe('repairIndex', () => {
     const ftsCount = (db.prepare('SELECT COUNT(*) AS c FROM symbols_fts').get() as { c: number }).c;
     expect(ftsCount).toBe(10);
   });
+
+  it('rebuild-fts produces a table with the same column tuple as the bootstrap DDL', () => {
+    // Regression: repair.ts used to copy-paste the FTS DDL. A future column
+    // addition in schema.ts would silently leave repair creating the old
+    // schema. Both paths now share createSymbolsFtsTable — verify that the
+    // column shape after rebuild-fts matches what was created at bootstrap.
+    const db = new Database(':memory:');
+    bootstrapMinimalIndex(db);
+    const before = db.prepare('PRAGMA table_info(symbols_fts)').all() as { name: string }[];
+    repairIndex(db, 'rebuild-fts');
+    const after = db.prepare('PRAGMA table_info(symbols_fts)').all() as { name: string }[];
+    expect(after.map((c) => c.name)).toEqual(before.map((c) => c.name));
+    expect(after.map((c) => c.name)).toEqual(['name', 'fqn', 'signature', 'summary']);
+  });
 });
