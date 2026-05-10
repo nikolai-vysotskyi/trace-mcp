@@ -11,6 +11,16 @@
           "type": "json",
           "path": "packages/app/package.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": ".claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": ".claude-plugin/marketplace.json",
+          "jsonpath": "$.plugins[0].version"
         }
       ],
       "changelog-sections": [
