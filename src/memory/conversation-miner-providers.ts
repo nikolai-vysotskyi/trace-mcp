@@ -17,7 +17,13 @@ import { logger } from '../logger.js';
 import { getSessionProviderRegistry } from '../session/providers/registry.js';
 import type { RawMessage, SessionHandle } from '../session/providers/types.js';
 import { getCurrentBranch } from '../utils/git-branch.js';
-import { type ConversationTurn, extractDecisions } from './conversation-miner.js';
+import {
+  type ConversationTurn,
+  DEFAULT_REJECT_THRESHOLD,
+  DEFAULT_REVIEW_THRESHOLD,
+  classifyConfidence,
+  extractDecisions,
+} from './conversation-miner.js';
 import type { DecisionInput, DecisionStore } from './decision-store.js';
 
 export interface ProviderMineCounters {
@@ -34,6 +40,10 @@ export interface ProviderMineOpts {
   projectRoot?: string;
   force?: boolean;
   minConfidence?: number;
+  /** Memoir confidence tier: rows ≥ this are auto-approved. */
+  reviewThreshold?: number;
+  /** Memoir confidence tier: rows below this are dropped entirely. */
+  rejectThreshold?: number;
 }
 
 /** Provider ids we know how to mine additively. Keep this list narrow — each
@@ -56,7 +66,8 @@ export async function mineProviderSessions(
   const providers = registry.all().filter((p) => ADDITIVE_PROVIDER_IDS.has(p.id));
   if (providers.length === 0) return;
 
-  const minConfidence = opts.minConfidence ?? 0.6;
+  const reviewThreshold = opts.reviewThreshold ?? DEFAULT_REVIEW_THRESHOLD;
+  const rejectThreshold = opts.rejectThreshold ?? opts.minConfidence ?? DEFAULT_REJECT_THRESHOLD;
   // Branch-aware capture: resolve once per call. Provider mining is scoped
   // to a single projectRoot, so a single lookup is enough.
   const capturedBranch = getCurrentBranch(opts.projectRoot);
@@ -92,10 +103,16 @@ export async function mineProviderSessions(
           continue;
         }
 
-        const decisions = extractDecisions(turns).filter((d) => d.confidence >= minConfidence);
+        // Memoir tiering — same auto/pending/drop split used for native sessions.
+        const tiered = extractDecisions(turns)
+          .map((d) => ({
+            d,
+            tier: classifyConfidence(d.confidence, reviewThreshold, rejectThreshold),
+          }))
+          .filter((x) => x.tier !== 'drop');
 
-        if (decisions.length > 0) {
-          const inputs: DecisionInput[] = decisions.map((d) => ({
+        if (tiered.length > 0) {
+          const inputs: DecisionInput[] = tiered.map(({ d, tier }) => ({
             title: d.title,
             content: d.content,
             type: d.type,
@@ -108,13 +125,14 @@ export async function mineProviderSessions(
             source: 'mined' as const,
             confidence: d.confidence,
             git_branch: capturedBranch,
+            review_status: tier === 'pending' ? 'pending' : null,
           }));
 
           decisionStore.addDecisions(inputs);
-          counters.extracted += decisions.length;
+          counters.extracted += tiered.length;
         }
 
-        decisionStore.markSessionMined(sessionKey, decisions.length);
+        decisionStore.markSessionMined(sessionKey, tiered.length);
         counters.mined++;
       } catch (e) {
         logger.warn({ err: e, session: sessionKey }, 'Failed to mine provider session');

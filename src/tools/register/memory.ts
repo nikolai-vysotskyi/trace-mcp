@@ -56,13 +56,33 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         .min(0)
         .max(1)
         .optional()
-        .describe('Minimum confidence threshold for extracted decisions (default: 0.6)'),
+        .describe(
+          'Legacy reject floor — drops decisions below this. Superseded by reject_threshold; kept for back-compat.',
+        ),
+      review_threshold: z
+        .number()
+        .min(0)
+        .max(1)
+        .optional()
+        .describe(
+          'Memoir auto-approve cutoff (default: decisions.review_threshold from config, fallback 0.75). Decisions ≥ this enter the active knowledge graph immediately.',
+        ),
+      reject_threshold: z
+        .number()
+        .min(0)
+        .max(1)
+        .optional()
+        .describe(
+          'Memoir reject floor (default: decisions.reject_threshold from config, fallback 0.45). Decisions in [reject_threshold, review_threshold) go into the review queue; below reject_threshold they are dropped.',
+        ),
     },
-    async ({ project_root, force, min_confidence }) => {
+    async ({ project_root, force, min_confidence, review_threshold, reject_threshold }) => {
       const result = await mineSessions(decisionStore, {
         projectRoot: project_root ?? projectRoot,
         force,
         minConfidence: min_confidence,
+        reviewThreshold: review_threshold ?? ctx.config?.decisions?.review_threshold,
+        rejectThreshold: reject_threshold ?? ctx.config?.decisions?.reject_threshold,
       });
       return { content: [{ type: 'text', text: j(result) }] };
     },
@@ -133,7 +153,7 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'query_decisions',
-    'Query the decision knowledge graph. Filter by type, subproject, code symbol, file path, tag, or time. Returns decisions linked to code — "why was this architecture chosen?" answered with the actual decision record. Use service_name to filter by a specific subproject within the project. Read-only. Returns JSON: { decisions: [{ id, title, type, content, tags }], total_results }.',
+    'Query the decision knowledge graph. Filter by type, subproject, code symbol, file path, tag, or time. Returns decisions linked to code — "why was this architecture chosen?" answered with the actual decision record. Use service_name to filter by a specific subproject within the project. By default returns auto-approved + human-approved decisions (review_status NULL or "approved"); use include_pending to also return the review queue, or review_status to fetch a specific tier. Read-only. Returns JSON: { decisions: [{ id, title, type, content, tags, review_status }], total_results }.',
     {
       type: z.enum(DECISION_TYPES).optional().describe('Filter by decision type'),
       service_name: z
@@ -154,6 +174,18 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         .boolean()
         .optional()
         .describe('Include invalidated decisions (default: false)'),
+      include_pending: z
+        .boolean()
+        .optional()
+        .describe(
+          'Also return decisions in the review queue (review_status="pending"). Default: false — only auto-approved and approved rows are returned.',
+        ),
+      review_status: z
+        .enum(['pending', 'approved', 'rejected'])
+        .optional()
+        .describe(
+          'Restrict to a single review tier (overrides default + include_pending). Use "pending" to fetch the review queue.',
+        ),
       git_branch: z
         .string()
         .max(256)
@@ -172,6 +204,8 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       search,
       as_of,
       include_invalidated,
+      include_pending,
+      review_status,
       git_branch,
       limit,
     }) => {
@@ -207,6 +241,8 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         search,
         as_of,
         include_invalidated,
+        include_pending,
+        review_status,
         git_branch: branchFilter,
         limit,
       });
@@ -250,6 +286,48 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       }
       const updated = decisionStore.getDecision(id);
       return { content: [{ type: 'text', text: j({ invalidated: updated }) }] };
+    },
+  );
+
+  // ── approve_decision ──────────────────────────────────────────────
+
+  server.tool(
+    'approve_decision',
+    'Approve a decision currently in the memoir-style review queue (review_status="pending"). Sets review_status="approved" so the row appears in default query_decisions results. Mutates the decision store; idempotent (re-approving an already-approved row is a no-op). Pair with reject_decision to clear out the review queue. Returns JSON: { approved: { id, title, review_status } }.',
+    {
+      id: z.number().int().min(1).describe('Decision ID to approve'),
+    },
+    async ({ id }) => {
+      const ok = decisionStore.setReviewStatus(id, 'approved');
+      if (!ok) {
+        return {
+          content: [{ type: 'text', text: j({ error: `Decision ${id} not found` }) }],
+          isError: true,
+        };
+      }
+      const updated = decisionStore.getDecision(id);
+      return { content: [{ type: 'text', text: j({ approved: updated }) }] };
+    },
+  );
+
+  // ── reject_decision ───────────────────────────────────────────────
+
+  server.tool(
+    'reject_decision',
+    'Reject a decision currently in the memoir-style review queue (review_status="pending"). Sets review_status="rejected" so the row is hidden from default query_decisions results but kept for audit. Mutates the decision store; idempotent. Use approve_decision for the opposite. Returns JSON: { rejected: { id, title, review_status } }.',
+    {
+      id: z.number().int().min(1).describe('Decision ID to reject'),
+    },
+    async ({ id }) => {
+      const ok = decisionStore.setReviewStatus(id, 'rejected');
+      if (!ok) {
+        return {
+          content: [{ type: 'text', text: j({ error: `Decision ${id} not found` }) }],
+          isError: true,
+        };
+      }
+      const updated = decisionStore.getDecision(id);
+      return { content: [{ type: 'text', text: j({ rejected: updated }) }] };
     },
   );
 

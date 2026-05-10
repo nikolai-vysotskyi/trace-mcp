@@ -57,6 +57,14 @@ export interface DecisionRow {
    * (captured outside a git repo, on detached HEAD, or pre-feature legacy data).
    */
   git_branch: string | null;
+  /**
+   * Memoir-style review status:
+   *   - `null`       — auto-approved or legacy row (default; visible by default)
+   *   - `'pending'`  — captured at borderline confidence; awaiting human review
+   *   - `'approved'` — explicitly approved by a human (visible by default)
+   *   - `'rejected'` — explicitly rejected by a human (hidden by default)
+   */
+  review_status: 'pending' | 'approved' | 'rejected' | null;
   created_at: string;
   /** Unix millisecond timestamp of the last write (insert, update, or invalidate). */
   updated_at: number | null;
@@ -82,6 +90,12 @@ export interface DecisionInput {
    * the project root automatically when omitted.
    */
   git_branch?: string | null;
+  /**
+   * Memoir-style review status. Omit (or pass `null`) for auto-approved /
+   * legacy rows; pass `'pending'` when capture confidence is borderline so
+   * the row goes into the human review queue.
+   */
+  review_status?: 'pending' | 'approved' | 'rejected' | null;
 }
 
 export interface DecisionQuery {
@@ -108,6 +122,17 @@ export interface DecisionQuery {
    * (see `getCurrentBranch`) and pass the resolved name.
    */
   git_branch?: string | null | 'all';
+  /**
+   * Review-queue filter (memoir-style confidence tiers).
+   * Default behaviour returns auto-approved (`NULL`) and explicitly-approved
+   * rows so the review queue stays out of regular queries.
+   *
+   *   - omitted              — only `NULL` + `'approved'` rows
+   *   - `include_pending`    — convenience flag; when true also returns `'pending'`
+   *   - `review_status`      — restrict to that exact status (overrides default)
+   */
+  include_pending?: boolean;
+  review_status?: 'pending' | 'approved' | 'rejected';
   limit?: number;
   offset?: number;
 }
@@ -173,6 +198,7 @@ CREATE TABLE IF NOT EXISTS decisions (
     source          TEXT NOT NULL DEFAULT 'manual',
     confidence      REAL NOT NULL DEFAULT 1.0,
     git_branch      TEXT,
+    review_status   TEXT,
     created_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_project ON decisions(project_root);
@@ -183,6 +209,7 @@ CREATE INDEX IF NOT EXISTS idx_decisions_file ON decisions(file_path);
 CREATE INDEX IF NOT EXISTS idx_decisions_valid ON decisions(valid_from, valid_until);
 CREATE INDEX IF NOT EXISTS idx_decisions_branch ON decisions(git_branch);
 CREATE INDEX IF NOT EXISTS idx_decisions_file_branch ON decisions(file_path, git_branch);
+CREATE INDEX IF NOT EXISTS idx_decisions_review_status ON decisions(review_status);
 
 -- FTS5 virtual table for full-text search over decisions
 CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(
@@ -340,6 +367,14 @@ export class DecisionStore {
         this.db.exec('ALTER TABLE decisions ADD COLUMN git_branch TEXT');
         logger.info('Pre-migration: added git_branch column to decisions table');
       }
+      // Memoir-style review queue: existing rows backfill to NULL
+      // (= auto-approved / legacy, visible by default). Idempotent: ALTER TABLE
+      // only runs when the column is missing — SQLite has no native
+      // "ADD COLUMN IF NOT EXISTS", so we probe via PRAGMA table_info first.
+      if (!cols.includes('review_status')) {
+        this.db.exec('ALTER TABLE decisions ADD COLUMN review_status TEXT');
+        logger.info('Pre-migration: added review_status column to decisions table');
+      }
     }
   }
 
@@ -411,8 +446,8 @@ export class DecisionStore {
       ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
       : (input.file_path ?? null);
     const stmt = this.db.prepare(`
-      INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, git_branch, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now')*1000)
+      INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, git_branch, review_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now')*1000)
     `);
     const info = stmt.run(
       input.title,
@@ -428,6 +463,7 @@ export class DecisionStore {
       input.source ?? 'manual',
       input.confidence ?? 1.0,
       input.git_branch ?? null,
+      input.review_status ?? null,
       now,
     );
     return this.getDecision(info.lastInsertRowid as number)!;
@@ -449,6 +485,44 @@ export class DecisionStore {
     return this.db.prepare('SELECT * FROM decisions WHERE id = ?').get(id) as
       | DecisionRow
       | undefined;
+  }
+
+  /**
+   * Memoir-style review queue actions: stamp a decision as approved or
+   * rejected (or back to pending). Returns true when a row was actually
+   * updated. Backing for the `approve_decision` / `reject_decision` MCP
+   * tools and the `/api/projects/decisions/:id/review` HTTP endpoint.
+   */
+  setReviewStatus(id: number, status: 'pending' | 'approved' | 'rejected'): boolean {
+    const info = this.db
+      .prepare(
+        `UPDATE decisions SET review_status = ?, updated_at = strftime('%s','now')*1000 WHERE id = ?`,
+      )
+      .run(status, id);
+    return info.changes > 0;
+  }
+
+  /**
+   * Count of rows currently in the review queue (`review_status = 'pending'`).
+   * Used by the Memory Explorer Review tab badge and the wake-up surface.
+   */
+  countPendingReviews(projectRoot?: string): number {
+    if (projectRoot) {
+      return (
+        this.db
+          .prepare(
+            "SELECT COUNT(*) as c FROM decisions WHERE review_status = 'pending' AND project_root = ? AND valid_until IS NULL",
+          )
+          .get(projectRoot) as { c: number }
+      ).c;
+    }
+    return (
+      this.db
+        .prepare(
+          "SELECT COUNT(*) as c FROM decisions WHERE review_status = 'pending' AND valid_until IS NULL",
+        )
+        .get() as { c: number }
+    ).c;
   }
 
   invalidateDecision(id: number, validUntil?: string): boolean {
@@ -517,6 +591,19 @@ export class DecisionStore {
       } else {
         conditions.push('d.valid_until IS NULL');
       }
+    }
+
+    // Memoir-style review filter:
+    //   review_status given       → restrict to that exact status
+    //   include_pending = true    → return NULL + 'approved' + 'pending'
+    //   neither                   → default: NULL + 'approved' (hide pending/rejected)
+    if (query.review_status) {
+      conditions.push('d.review_status = ?');
+      params.push(query.review_status);
+    } else if (query.include_pending) {
+      conditions.push("(d.review_status IS NULL OR d.review_status IN ('approved','pending'))");
+    } else {
+      conditions.push("(d.review_status IS NULL OR d.review_status = 'approved')");
     }
 
     // FTS search — join with FTS table

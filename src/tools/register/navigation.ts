@@ -2,6 +2,13 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
+import {
+  bucketize,
+  RETRIEVAL_MODES,
+  type RetrievalItem,
+  selectRetrievalMode,
+  TIERED_TOTAL_LIMIT,
+} from '../../ai/retrieval-modes.js';
 import { decisionsForImpact } from '../../memory/enrichment.js';
 import { computeAdaptiveBudget } from '../../scoring/adaptive-budget.js';
 import {
@@ -38,6 +45,192 @@ import {
   isMinimal,
   type SearchItemFull,
 } from '../_common/detail-level.js';
+import { searchFts as ftsSearch } from '../../db/fts.js';
+import type { FileRow, Store, SymbolRow } from '../../db/store.js';
+
+// ─── Retrieval-mode helpers ──────────────────────────────────────────
+// Lightweight building blocks for the memoir-style retrieval modes
+// wired into the `search` tool below. Kept at module scope so the test
+// suite can exercise them in isolation if needed in the future.
+
+interface FlatSearchFilters {
+  kind?: string;
+  language?: string;
+  filePattern?: string;
+  implements?: string;
+  extends?: string;
+  decorator?: string;
+}
+
+interface FlatSearchResult {
+  items: { symbol: SymbolRow; file: FileRow; score: number }[];
+  total: number;
+  search_mode: 'flat';
+  /** Always undefined for flat mode — present only so the union type stays
+   *  assignment-compatible with `SearchResult.fusion_debug`. */
+  fusion_debug?: undefined;
+}
+
+/**
+ * `flat` mode entry point: BM25 hits, no PageRank / hybrid / fusion enrichment.
+ * Returns a result object shaped like {@link search}'s output so the rest of
+ * the tool pipeline (projection, freshness, _meta) can treat it uniformly.
+ */
+async function runFlatSearch(
+  store: Store,
+  query: string,
+  filters: FlatSearchFilters,
+  limit: number,
+  offset: number,
+): Promise<FlatSearchResult> {
+  const ftsResults = ftsSearch(
+    store.db,
+    query,
+    limit + offset + 20,
+    0,
+    filters.kind || filters.language || filters.filePattern
+      ? { kind: filters.kind, language: filters.language, filePattern: filters.filePattern }
+      : undefined,
+  );
+  if (ftsResults.length === 0) {
+    return { items: [], total: 0, search_mode: 'flat' };
+  }
+
+  const symbolNumIds = ftsResults.map((r) => r.symbolId);
+  const symMap = store.getSymbolsByIds(symbolNumIds);
+  const fileIds = [...new Set(ftsResults.map((r) => r.fileId))];
+  const fileMap = store.getFilesByIds(fileIds);
+
+  const minRank = Math.min(...ftsResults.map((r) => r.rank));
+  const maxRank = Math.max(...ftsResults.map((r) => r.rank));
+  const rankSpread = maxRank - minRank || 1;
+
+  const heritage = filters.implements || filters.extends;
+  const decorator = filters.decorator;
+
+  const items: { symbol: SymbolRow; file: FileRow; score: number }[] = [];
+  for (const r of ftsResults) {
+    const symbol = symMap.get(r.symbolId);
+    if (!symbol) continue;
+    const file = fileMap.get(symbol.file_id);
+    if (!file) continue;
+
+    if ((heritage || decorator) && symbol.metadata) {
+      try {
+        const meta = (
+          typeof symbol.metadata === 'string' ? JSON.parse(symbol.metadata) : symbol.metadata
+        ) as Record<string, unknown>;
+        if (filters.implements) {
+          const impl = meta.implements;
+          if (!Array.isArray(impl) || !(impl as string[]).includes(filters.implements)) continue;
+        }
+        if (filters.extends) {
+          const ext = meta.extends;
+          const arr = Array.isArray(ext) ? (ext as string[]) : typeof ext === 'string' ? [ext] : [];
+          if (!arr.includes(filters.extends)) continue;
+        }
+        if (decorator) {
+          const decs =
+            (meta.decorators as string[] | undefined) ??
+            (meta.annotations as string[] | undefined) ??
+            (meta.attributes as string[] | undefined);
+          if (
+            !Array.isArray(decs) ||
+            !decs.some(
+              (d) =>
+                d === decorator || d.endsWith(`.${decorator}`) || d.startsWith(`${decorator}(`),
+            )
+          )
+            continue;
+        }
+      } catch {
+        /* malformed metadata → skip */
+        continue;
+      }
+    } else if (heritage || decorator) {
+      continue;
+    }
+
+    // Normalize BM25 (negative, lower=better) to a 0..1 score.
+    const score = 1 - (r.rank - minRank) / rankSpread;
+    items.push({ symbol, file, score });
+  }
+
+  const total = items.length;
+  const sliced = items.slice(offset, offset + limit);
+  return { items: sliced, total, search_mode: 'flat' };
+}
+
+/**
+ * `get` mode entry point: exact symbol_id or file path lookup. No search.
+ *
+ * - If the query parses as a symbol_id (contains `:` and matches the lang:path:line:col:name shape),
+ *   we look it up by symbol_id first, then by FQN.
+ * - If the query looks like a file path, we return the first symbol of that file as a representative.
+ * - Otherwise (the heuristic flagged it as path-shaped but nothing matched), returns null.
+ */
+function resolveExactLookup(
+  store: Store,
+  query: string,
+): {
+  symbol_id: string;
+  name: string;
+  kind: string;
+  fqn: string | null;
+  file: string;
+  line: number | null;
+} | null {
+  // Symbol-id shape first.
+  const bySymbolId = store.getSymbolBySymbolId(query);
+  if (bySymbolId) {
+    const file = store.getFileById(bySymbolId.file_id);
+    if (file) {
+      return {
+        symbol_id: bySymbolId.symbol_id,
+        name: bySymbolId.name,
+        kind: bySymbolId.kind,
+        fqn: bySymbolId.fqn,
+        file: file.path,
+        line: bySymbolId.line_start,
+      };
+    }
+  }
+
+  // FQN fallback (lets `get` resolve dotted names).
+  const byFqn = store.getSymbolByFqn(query);
+  if (byFqn) {
+    const file = store.getFileById(byFqn.file_id);
+    if (file) {
+      return {
+        symbol_id: byFqn.symbol_id,
+        name: byFqn.name,
+        kind: byFqn.kind,
+        fqn: byFqn.fqn,
+        file: file.path,
+        line: byFqn.line_start,
+      };
+    }
+  }
+
+  // File-path shape: return the file's first ranked symbol as a representative.
+  const file = store.getFile(query);
+  if (file) {
+    const syms = store.getSymbolsByFile(file.id);
+    const first = syms[0];
+    if (first) {
+      return {
+        symbol_id: first.symbol_id,
+        name: first.name,
+        kind: first.kind,
+        fqn: first.fqn,
+        file: file.path,
+        line: first.line_start,
+      };
+    }
+  }
+
+  return null;
+}
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
   const {
@@ -130,7 +323,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'search',
-    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. For raw text/string/comment search use search_text instead. For finding who references a known symbol use find_usages instead. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once). Set fusion=true for Signal Fusion — multi-channel ranking (BM25 + PageRank + embeddings + identity match) via Weighted Reciprocal Rank fusion. Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode }.',
+    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. For raw text/string/comment search use search_text instead. For finding who references a known symbol use find_usages instead. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once). Set fusion=true for Signal Fusion — multi-channel ranking (BM25 + PageRank + embeddings + identity match) via Weighted Reciprocal Rank fusion. Use mode to switch retrieval strategy: single (default — top-K, current behavior), tiered (high/medium/low buckets), drill (scope to a parent_path/parent_symbol_id subtree via drill_from), flat (raw FTS hits, cheapest), get (exact path/symbol_id lookup, no search). Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode } — mode-specific shape when mode!=single.',
     {
       query: z.string().min(1).max(500).describe('Search query'),
       kind: z
@@ -213,6 +406,19 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         .describe('Include per-channel rank contributions in fusion results.'),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
       offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
+      mode: z
+        .enum(RETRIEVAL_MODES)
+        .optional()
+        .describe(
+          'Memoir-style retrieval mode: single (default — top-K), tiered (high/medium/low buckets), drill (scoped to drill_from), flat (raw FTS, no PageRank), get (exact lookup). Omit to auto-pick (path-shaped query → get, otherwise → single).',
+        ),
+      drill_from: z
+        .string()
+        .max(512)
+        .optional()
+        .describe(
+          'Drill scope for mode="drill" — a file path or symbol_id. Results are restricted to the subtree rooted here.',
+        ),
       detail_level: DetailLevelSchema,
     },
     async ({
@@ -233,8 +439,34 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       fusion,
       fusion_weights,
       fusion_debug,
+      mode,
+      drill_from,
       detail_level,
     }) => {
+      // Resolve effective mode. Explicit `mode` wins; otherwise heuristic.
+      const effectiveMode = mode ?? selectRetrievalMode(query, { drillFrom: drill_from });
+
+      // ─── get mode: exact lookup, no search ─────────────────────
+      if (effectiveMode === 'get') {
+        const lookup = resolveExactLookup(store, query);
+        const payload = {
+          mode: 'get' as const,
+          item: lookup,
+        };
+        return { content: [{ type: 'text', text: jh('search', payload) }] };
+      }
+
+      // For tiered mode, ensure we ask the underlying ranker for at least
+      // enough results to fill all buckets; honor caller-specified `limit`
+      // only when it is larger than the tiered total.
+      const effectiveLimit =
+        effectiveMode === 'tiered'
+          ? Math.max(limit ?? TIERED_TOTAL_LIMIT, TIERED_TOTAL_LIMIT)
+          : limit;
+
+      // For drill mode, scope by file_pattern / parent prefix. We still run a
+      // normal search but apply a drill filter on the way out.
+      const drillScope = effectiveMode === 'drill' ? (drill_from ?? '') : '';
       // Zero-index fallback: if index is empty, use ripgrep
       const stats = store.getStats();
       if (stats.totalFiles === 0) {
@@ -264,17 +496,46 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         const tuned = loadTunedWeights(projectRoot);
         if (tuned) effectiveFusionWeights = tuned;
       }
-      const result = await search(
-        store,
-        query,
-        { kind, language, filePattern: file_pattern, implements: impl, extends: ext, decorator },
-        limit ?? 20,
-        offset ?? 0,
-        { vectorStore, embeddingService, reranker },
-        { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
-        { semantic, semanticWeight: semantic_weight },
-        fusion ? { fusion: true, weights: effectiveFusionWeights, debug: fusion_debug } : undefined,
-      );
+      // ─── flat mode: raw FTS hits, skip PageRank/hybrid/fusion ──
+      // We still construct a `result` shaped like the regular search output
+      // so the downstream projection / freshness / subproject layers work
+      // uniformly. The key difference: scores reflect BM25 only.
+      const result =
+        effectiveMode === 'flat'
+          ? await runFlatSearch(
+              store,
+              query,
+              {
+                kind,
+                language,
+                filePattern: file_pattern,
+                implements: impl,
+                extends: ext,
+                decorator,
+              },
+              effectiveLimit ?? 20,
+              offset ?? 0,
+            )
+          : await search(
+              store,
+              query,
+              {
+                kind,
+                language,
+                filePattern: file_pattern,
+                implements: impl,
+                extends: ext,
+                decorator,
+              },
+              effectiveLimit ?? 20,
+              offset ?? 0,
+              { vectorStore, embeddingService, reranker },
+              { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
+              { semantic, semanticWeight: semantic_weight },
+              fusion
+                ? { fusion: true, weights: effectiveFusionWeights, debug: fusion_debug }
+                : undefined,
+            );
       // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
       const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => {
         const item: SearchResultItemProjected = {
@@ -305,14 +566,41 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         }
         return item;
       });
+      // ─── Drill filter: scope to the requested subtree before projection ──
+      // Apply on the rich `items` so we can inspect file paths and symbol_ids.
+      let modeFilteredItems = items;
+      if (effectiveMode === 'drill' && drillScope) {
+        modeFilteredItems = items.filter((it) => {
+          // Drill scope can be a file path prefix OR a symbol_id prefix.
+          if (it.file === drillScope || it.file.startsWith(`${drillScope}/`)) return true;
+          if (it.file.startsWith(drillScope)) return true;
+          if (it.symbol_id === drillScope || it.symbol_id.startsWith(`${drillScope}:`)) return true;
+          return false;
+        });
+      }
       const projectedItems = isMinimal(detail_level)
-        ? compactSearchItems(items as SearchItemFull[])
-        : items;
+        ? compactSearchItems(modeFilteredItems as SearchItemFull[])
+        : modeFilteredItems;
       const response: Record<string, unknown> = {
         items: projectedItems,
-        total: result.total,
+        total: effectiveMode === 'drill' ? modeFilteredItems.length : result.total,
         search_mode: result.search_mode,
       };
+      // Stamp the memoir-style mode label so callers can branch on shape.
+      response.mode = effectiveMode;
+      if (effectiveMode === 'tiered') {
+        // Bucketize the projected items into high/medium/low slices. The
+        // flat `items` array stays in place for back-compat with single-mode
+        // callers; new callers prefer `buckets`.
+        const bucketSource = (modeFilteredItems as unknown as RetrievalItem[]).slice(
+          0,
+          TIERED_TOTAL_LIMIT,
+        );
+        response.buckets = bucketize(bucketSource);
+      }
+      if (effectiveMode === 'drill') {
+        response.parent = drillScope;
+      }
       if (isMinimal(detail_level)) response.detail_level = 'minimal';
       if (result.fusion_debug) response.fusion_debug = result.fusion_debug;
       if (items.length === 0) {

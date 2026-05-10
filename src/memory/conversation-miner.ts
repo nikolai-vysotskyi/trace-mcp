@@ -51,6 +51,42 @@ export interface ConversationTurn {
 }
 
 // ════════════════════════════════════════════════════════════════════════
+// CONFIDENCE TIERS — memoir-style auto / review / reject split
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Default review-tier thresholds (overridable via `decisions.review_threshold`
+ * and `decisions.reject_threshold` in trace-mcp config).
+ *
+ *   confidence ≥ REVIEW_THRESHOLD → auto-approved (review_status = NULL)
+ *   confidence ≥ REJECT_THRESHOLD → 'pending' (queued for human review)
+ *   otherwise                     → dropped entirely (current behaviour)
+ *
+ * Pre-feature behaviour kept any decision that cleared `minConfidence`
+ * (default 0.6) and dropped the rest. The new tier system splits that
+ * "kept" bucket so borderline rows surface in the review queue instead
+ * of silently entering the active knowledge graph.
+ */
+export const DEFAULT_REVIEW_THRESHOLD = 0.75;
+export const DEFAULT_REJECT_THRESHOLD = 0.45;
+
+/**
+ * Classify a confidence score against the configured thresholds.
+ * Returns `'drop'` to skip the row entirely (caller does nothing),
+ * `'pending'` to insert with `review_status = 'pending'`, or
+ * `'auto'` to insert with `review_status = NULL` (visible by default).
+ */
+export function classifyConfidence(
+  confidence: number,
+  reviewThreshold = DEFAULT_REVIEW_THRESHOLD,
+  rejectThreshold = DEFAULT_REJECT_THRESHOLD,
+): 'auto' | 'pending' | 'drop' {
+  if (confidence >= reviewThreshold) return 'auto';
+  if (confidence >= rejectThreshold) return 'pending';
+  return 'drop';
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // DECISION EXTRACTION PATTERNS
 // ════════════════════════════════════════════════════════════════════════
 
@@ -386,8 +422,11 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
     }
   }
 
-  // Filter low-confidence and deduplicate
-  return decisions.filter((d) => d.confidence >= 0.5);
+  // Keep everything above the hard reject floor; the caller (mineSessions /
+  // mineProviderSessions) applies the auto/pending split via classifyConfidence.
+  // 0.4 = a touch below DEFAULT_REJECT_THRESHOLD so users can lower their
+  // reject_threshold without re-running extraction.
+  return decisions.filter((d) => d.confidence >= 0.4);
 }
 
 const TAG_PATTERNS: Array<{ pattern: RegExp; tag: string }> = [
@@ -485,13 +524,23 @@ export async function mineSessions(
     projectRoot?: string;
     /** Re-mine already processed sessions */
     force?: boolean;
-    /** Minimum confidence threshold (default: 0.6) */
+    /** Minimum confidence threshold (default: 0.6).
+     *  Kept for back-compat callers; review/reject thresholds take precedence
+     *  when supplied. When only minConfidence is passed, it's used as the
+     *  reject floor — i.e. legacy "drop everything below this" semantics. */
     minConfidence?: number;
+    /** Memoir confidence tier: rows ≥ this are auto-approved (review_status=NULL). */
+    reviewThreshold?: number;
+    /** Memoir confidence tier: rows below this are dropped entirely. */
+    rejectThreshold?: number;
   } = {},
 ): Promise<MineResult> {
   const start = Date.now();
   const sessions = listAllSessions();
-  const minConfidence = opts.minConfidence ?? 0.6;
+  // Legacy `minConfidence` falls back to the default reject floor so behaviour
+  // is unchanged for callers that don't opt into the tiered review queue.
+  const reviewThreshold = opts.reviewThreshold ?? DEFAULT_REVIEW_THRESHOLD;
+  const rejectThreshold = opts.rejectThreshold ?? opts.minConfidence ?? DEFAULT_REJECT_THRESHOLD;
   const worktreeCache = new Map<string, string>();
   // Branch-aware capture: resolve current branch per canonical project root, once.
   // Mining can span thousands of sessions across many projects; the cache keeps
@@ -543,11 +592,19 @@ export async function mineSessions(
         continue;
       }
 
-      const decisions = extractDecisions(turns).filter((d) => d.confidence >= minConfidence);
+      // Memoir tiering: drop rows below the reject floor; everything else
+      // becomes either auto-approved (review_status = NULL) or queued for
+      // human review (review_status = 'pending').
+      const tiered = extractDecisions(turns)
+        .map((d) => ({
+          d,
+          tier: classifyConfidence(d.confidence, reviewThreshold, rejectThreshold),
+        }))
+        .filter((x) => x.tier !== 'drop');
 
-      if (decisions.length > 0) {
+      if (tiered.length > 0) {
         const capturedBranch = branchFor(canonicalProjectPath);
-        const inputs: DecisionInput[] = decisions.map((d) => ({
+        const inputs: DecisionInput[] = tiered.map(({ d, tier }) => ({
           title: d.title,
           content: d.content,
           type: d.type,
@@ -562,13 +619,14 @@ export async function mineSessions(
           source: 'mined' as const,
           confidence: d.confidence,
           git_branch: capturedBranch,
+          review_status: tier === 'pending' ? 'pending' : null,
         }));
 
         decisionStore.addDecisions(inputs);
-        extracted += decisions.length;
+        extracted += tiered.length;
       }
 
-      decisionStore.markSessionMined(session.filePath, decisions.length);
+      decisionStore.markSessionMined(session.filePath, tiered.length);
       mined++;
     } catch (e) {
       logger.warn({ error: e, file: session.filePath }, 'Failed to mine session for decisions');
@@ -585,6 +643,8 @@ export async function mineSessions(
       projectRoot: filterRoot ?? opts.projectRoot,
       force: opts.force,
       minConfidence: opts.minConfidence,
+      reviewThreshold,
+      rejectThreshold,
     },
     _providerCounters,
   );

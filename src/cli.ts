@@ -42,6 +42,7 @@ import { initCommand } from './cli/init.js';
 import { installAppCommand } from './cli/install-app.js';
 import { memoryCommand } from './cli/memory.js';
 import { removeCommand } from './cli/remove.js';
+import { searchCommand } from './cli/search.js';
 import { statusCommand } from './cli/status.js';
 import { subprojectCommand } from './cli/subproject.js';
 import { upgradeCommand } from './cli/upgrade.js';
@@ -2423,6 +2424,7 @@ program.addCommand(visualizeCommand);
 program.addCommand(daemonCommand);
 program.addCommand(installAppCommand);
 program.addCommand(askCommand);
+program.addCommand(searchCommand);
 program.addCommand(exportSecurityContextCommand);
 
 program.parse();

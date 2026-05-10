@@ -86,6 +86,8 @@ const OVERRIDES: Record<string, ToolAnnotations> = {
   subproject_add_repo: INDEX_MUTATING,
   subproject_sync: INDEX_MUTATING,
   invalidate_decision: INDEX_MUTATING,
+  approve_decision: INDEX_MUTATING,
+  reject_decision: INDEX_MUTATING,
   index_sessions: INDEX_MUTATING,
   mine_sessions: INDEX_MUTATING,
   refresh_co_changes: INDEX_MUTATING,
