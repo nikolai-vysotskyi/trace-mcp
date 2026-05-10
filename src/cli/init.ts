@@ -16,6 +16,7 @@ import {
   installReindexHook,
   installPrecompactHook,
   installWorktreeHook,
+  installLifecycleHooks,
   cleanupLegacyHooks,
 } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
@@ -609,6 +610,9 @@ function executeSteps(
     steps.push(installReindexHook({ global: true, dryRun: opts.dryRun }));
     steps.push(installPrecompactHook({ global: true, dryRun: opts.dryRun }));
     steps.push(...installWorktreeHook({ global: true, dryRun: opts.dryRun }));
+    // Lifecycle hooks (SessionStart / UserPromptSubmit / Stop / SessionEnd) —
+    // active context injection. Same Standard/Max tier gate as the rest.
+    steps.push(...installLifecycleHooks({ global: true, dryRun: opts.dryRun }));
 
     // Hermes uses its own shell-hook mechanism (config.yaml + ~/.hermes/agent-hooks/),
     // so it doesn't share the ~/.claude/hooks/ machinery above. Gate on selection.

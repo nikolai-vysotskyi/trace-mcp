@@ -23,3 +23,7 @@ packages/app/release/
 # MCP registry publisher tokens (GitHub PAT + JWT)
 .mcpregistry_github_token
 .mcpregistry_registry_token
+
+# Recall harness reports — regenerated on every run
+tests/recall-harness/report.json
+tests/recall-harness/report.md

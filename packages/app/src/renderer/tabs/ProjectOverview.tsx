@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ProjectStatsModal } from '../components/ProjectStatsModal';
 import { StatusDot } from '../components/StatusDot';
 import { useDaemon } from '../hooks/useDaemon';
 
@@ -149,6 +150,7 @@ export function ProjectOverview({
   const [smells, setSmells] = useState<SmellReport | null>(null);
   const [smellsLoading, setSmellsLoading] = useState(false);
   const [smellsCategory, setSmellsCategory] = useState<SmellFinding['category']>('debug_artifact');
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -287,18 +289,32 @@ export function ProjectOverview({
           : status;
 
   return (
+    <>
     <div className="space-y-5 pb-4">
       {/* ── Hero header ──────────────────────────────── */}
       <div className="pt-1">
         <div className="flex items-center gap-2.5">
           <StatusDot status={statusDot} />
           <h2
-            className="text-[17px] font-semibold leading-tight truncate"
+            className="text-[17px] font-semibold leading-tight truncate flex-1 min-w-0"
             style={{ color: 'var(--text-primary)', letterSpacing: '-0.022em' }}
             title={root.split(/[/\\]/).filter(Boolean).pop()}
           >
             {root.split(/[/\\]/).filter(Boolean).pop()}
           </h2>
+          <button
+            type="button"
+            onClick={() => setStatsModalOpen(true)}
+            className="shrink-0 text-[11px] px-2 py-1 rounded font-medium transition-opacity hover:opacity-80"
+            style={{
+              background: 'var(--fill-control)',
+              color: 'var(--accent)',
+              border: '0.5px solid var(--border)',
+            }}
+            title="Open the project stats modal (7 sections)"
+          >
+            View Stats
+          </button>
         </div>
         <div
           className="text-[11px] mt-1 ml-[18px] truncate"
@@ -1018,6 +1034,10 @@ export function ProjectOverview({
         );
       })()}
     </div>
+    {statsModalOpen && (
+      <ProjectStatsModal root={root} onClose={() => setStatsModalOpen(false)} />
+    )}
+    </>
   );
 }
 

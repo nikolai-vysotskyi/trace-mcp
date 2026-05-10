@@ -268,15 +268,37 @@ export interface ContextEnvelope {
   files: string[];
 }
 
+/**
+ * Branch-aware decision filter passed through to decision retrieval.
+ *
+ * - omitted / `undefined` → no filter (back-compat: behavior unchanged)
+ * - `'all'`               → every branch
+ * - `<name>`              → that branch + branch-agnostic (NULL) decisions
+ * - `null`                → only branch-agnostic decisions
+ *
+ * Decisions are not yet surfaced by `packContext` — the param is plumbed for
+ * forward compatibility so call sites can opt into branch awareness now and
+ * reap it the moment decisions are wired into the envelope.
+ */
+export type DecisionBranchFilter = string | null | 'all';
+
 export async function gatherContext(
   projectRoot: string,
   store: Store,
   pluginRegistry: PluginRegistry,
   question: string,
   tokenBudget: number,
+  gitBranch?: DecisionBranchFilter,
 ): Promise<string> {
   return (
-    await gatherContextWithEnvelope(projectRoot, store, pluginRegistry, question, tokenBudget)
+    await gatherContextWithEnvelope(
+      projectRoot,
+      store,
+      pluginRegistry,
+      question,
+      tokenBudget,
+      gitBranch,
+    )
   ).context;
 }
 
@@ -284,6 +306,9 @@ export async function gatherContext(
  * Like `gatherContext` but also returns a structured `ContextEnvelope`
  * describing which files and symbols were included. Used by the sessions
  * endpoint to emit `{ type: 'context_envelope' }` before streaming starts.
+ *
+ * The optional `gitBranch` argument is forwarded to decision retrieval; when
+ * omitted, behavior is unchanged.
  */
 export async function gatherContextWithEnvelope(
   projectRoot: string,
@@ -291,6 +316,8 @@ export async function gatherContextWithEnvelope(
   pluginRegistry: PluginRegistry,
   question: string,
   tokenBudget: number,
+  // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved — wired to decisions in a follow-up
+  gitBranch?: DecisionBranchFilter,
 ): Promise<{ context: string; envelope: ContextEnvelope }> {
   const { packContext } = await import('../tools/refactoring/pack-context.js');
   const result = packContext(store, pluginRegistry, {

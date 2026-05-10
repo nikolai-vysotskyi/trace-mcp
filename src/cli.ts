@@ -62,7 +62,12 @@ import {
   TOPOLOGY_DB_PATH,
 } from './global.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
-import { installGuardHook, uninstallGuardHook } from './init/hooks.js';
+import {
+  installGuardHook,
+  installLifecycleHooks,
+  uninstallGuardHook,
+  uninstallLifecycleHooks,
+} from './init/hooks.js';
 import { attachFileLogging, logger } from './logger.js';
 import { PluginRegistry } from './plugin-api/registry.js';
 import {
@@ -77,6 +82,7 @@ import { handleAskSessionsRequest } from './api/ask-sessions-routes.js';
 import { handleDashboardRequest } from './api/dashboard-routes.js';
 import { handleJournalStatsRequest, type JournalStatsContext } from './api/journal-stats-routes.js';
 import { handleMemoryRequest } from './api/memory-routes.js';
+import { handleProjectStatsRequest } from './api/project-stats-routes.js';
 import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
 import { createServer } from './server/server.js';
 import { SubprojectManager } from './subproject/manager.js';
@@ -2129,6 +2135,9 @@ program
       };
       if (handleJournalStatsRequest(req, res, url, journalStatsCtx)) return;
 
+      // ── Per-project deep-dive stats (Stats modal) ─────────────────────
+      if (handleProjectStatsRequest(req, res, url, { journalStats: journalStatsCtx })) return;
+
       // ── Memory explorer (decisions / corpora / sessions) ──────────────
       if (handleMemoryRequest(req, res, url)) return;
 
@@ -2334,13 +2343,32 @@ program
 
 program
   .command('setup-hooks')
-  .description('Install Claude Code PreToolUse guard hook (alias: use `trace-mcp init` instead)')
+  .description(
+    'Install Claude Code PreToolUse guard + lifecycle hooks (alias: use `trace-mcp init` instead)',
+  )
   .option(
     '--global',
     'Install to ~/.claude/settings.json (default: project-level .claude/settings.local.json)',
   )
-  .option('--uninstall', 'Remove the hook')
-  .action((opts: { global?: boolean; uninstall?: boolean }) => {
+  .option('--uninstall', 'Remove the hook(s)')
+  .option(
+    '--lifecycle',
+    'Operate on the lifecycle hooks (SessionStart / UserPromptSubmit / Stop / SessionEnd) instead of the guard hook',
+  )
+  .action((opts: { global?: boolean; uninstall?: boolean; lifecycle?: boolean }) => {
+    if (opts.lifecycle) {
+      if (opts.uninstall) {
+        const removed = uninstallLifecycleHooks({ global: opts.global });
+        console.log(`Removed ${removed.length} lifecycle hook entries.`);
+        return;
+      }
+      const installed = installLifecycleHooks({ global: opts.global });
+      for (const r of installed) {
+        console.log(`Hook ${r.action}: ${r.target}`);
+        if (r.detail) console.log(`  ${r.detail}`);
+      }
+      return;
+    }
     if (opts.uninstall) {
       uninstallGuardHook({ global: opts.global });
       console.log('trace-mcp hook removed.');

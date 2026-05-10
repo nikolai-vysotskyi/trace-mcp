@@ -32,6 +32,7 @@ import { DECISIONS_DB_PATH, CORPORA_DIR } from '../shared/paths.js';
 import type { DecisionRow, DecisionTimelineEntry } from '../memory/decision-store.js';
 import { DecisionStore } from '../memory/decision-store.js';
 import { CorpusStore, validateCorpusName, CorpusValidationError } from '../memory/corpus-store.js';
+import { getCurrentBranch } from '../utils/git-branch.js';
 
 // ── Types matching the DecisionStore schema ──────────────────────────────────
 
@@ -142,6 +143,11 @@ export function handleMemoryRequest(
         file_path?: string;
         tags?: string | string[];
         source?: string;
+        /**
+         * Git branch this decision belongs to. Omit to auto-detect from
+         * `project_root`; pass `null` to make the decision branch-agnostic.
+         */
+        git_branch?: string | null;
       }
       const body = await parseBody<CreateBody>(req);
       if (!body || !body.project_root || !body.title || !body.content) {
@@ -181,6 +187,11 @@ export function handleMemoryRequest(
         }
         const store = new DecisionStore(DECISIONS_DB_PATH);
         try {
+          // Branch-aware decision memory: caller can pass an explicit branch
+          // (including `null` for branch-agnostic), or omit and let us probe
+          // the project root.
+          const resolvedBranch =
+            body.git_branch === undefined ? getCurrentBranch(body.project_root) : body.git_branch;
           const row = store.addDecision({
             project_root: body.project_root,
             title: body.title,
@@ -190,6 +201,7 @@ export function handleMemoryRequest(
             file_path: body.file_path,
             tags: tagsArray,
             source: (body.source as 'manual' | 'mined' | 'auto') ?? 'manual',
+            git_branch: resolvedBranch,
           });
           sendJson(res, 201, { id: row.id });
         } finally {
@@ -440,6 +452,8 @@ export function handleMemoryRequest(
     const type = url.searchParams.get('type') ?? '';
     const symbolId = url.searchParams.get('symbol_id') ?? '';
     const filePath = url.searchParams.get('file_path') ?? '';
+    // Branch-aware filter: ?branch=current|all|<name>. Defaults to "current".
+    const branchParam = url.searchParams.get('branch') ?? 'current';
     const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10), 1), 200);
     const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10), 0);
 
@@ -468,6 +482,15 @@ export function handleMemoryRequest(
       if (q) {
         conditions.push('id IN (SELECT rowid FROM decisions_fts WHERE decisions_fts MATCH ?)');
         params.push(q);
+      }
+      // Three-mode branch filter, mirroring the MCP/CLI semantics.
+      if (branchParam !== 'all') {
+        const resolved = branchParam === 'current' ? getCurrentBranch(projectRoot) : branchParam;
+        if (resolved !== null) {
+          conditions.push('(git_branch = ? OR git_branch IS NULL)');
+          params.push(resolved);
+        }
+        // resolved === null + 'current' → no usable branch context, skip filter
       }
 
       const where = `WHERE ${conditions.join(' AND ')}`;

@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { listAllSessions } from '../analytics/log-parser.js';
 import { logger } from '../logger.js';
 import { detectGitWorktree } from '../project-root.js';
+import { getCurrentBranch } from '../utils/git-branch.js';
 import { mineProviderSessions } from './conversation-miner-providers.js';
 import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
 
@@ -492,6 +493,16 @@ export async function mineSessions(
   const sessions = listAllSessions();
   const minConfidence = opts.minConfidence ?? 0.6;
   const worktreeCache = new Map<string, string>();
+  // Branch-aware capture: resolve current branch per canonical project root, once.
+  // Mining can span thousands of sessions across many projects; the cache keeps
+  // it to one `git rev-parse` per project.
+  const branchCache = new Map<string, string | null>();
+  const branchFor = (projectPath: string): string | null => {
+    if (branchCache.has(projectPath)) return branchCache.get(projectPath) ?? null;
+    const b = getCurrentBranch(projectPath);
+    branchCache.set(projectPath, b);
+    return b;
+  };
 
   // Optionally adopt the filter target itself, in case the user passed a
   // worktree path: we want their `--project /repo/wt-x` to also pick up
@@ -535,6 +546,7 @@ export async function mineSessions(
       const decisions = extractDecisions(turns).filter((d) => d.confidence >= minConfidence);
 
       if (decisions.length > 0) {
+        const capturedBranch = branchFor(canonicalProjectPath);
         const inputs: DecisionInput[] = decisions.map((d) => ({
           title: d.title,
           content: d.content,
@@ -549,6 +561,7 @@ export async function mineSessions(
           session_id: path.basename(session.filePath, '.jsonl'),
           source: 'mined' as const,
           confidence: d.confidence,
+          git_branch: capturedBranch,
         }));
 
         decisionStore.addDecisions(inputs);

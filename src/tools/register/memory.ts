@@ -11,6 +11,7 @@ import type { DecisionType } from '../../memory/decision-store.js';
 import { indexSessions } from '../../memory/session-indexer.js';
 import { assembleWakeUp } from '../../memory/wake-up.js';
 import type { ServerContext } from '../../server/types.js';
+import { getCurrentBranch } from '../../utils/git-branch.js';
 import { relativizeUnderRoot } from '../../utils/path-relativize.js';
 
 const DECISION_TYPES = [
@@ -98,8 +99,19 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         .max(20)
         .optional()
         .describe('Tags for categorization (e.g., ["auth", "security"])'),
+      git_branch: z
+        .string()
+        .max(256)
+        .nullable()
+        .optional()
+        .describe(
+          'Git branch this decision belongs to. Omit to auto-detect from the project root, or pass null to make the decision branch-agnostic (visible from every branch).',
+        ),
     },
-    async ({ title, content, type, service_name, symbol_id, file_path, tags }) => {
+    async ({ title, content, type, service_name, symbol_id, file_path, tags, git_branch }) => {
+      // Auto-capture from project root when caller omitted the field. `null`
+      // is preserved as an explicit "branch-agnostic" signal.
+      const resolvedBranch = git_branch === undefined ? getCurrentBranch(projectRoot) : git_branch;
       const decision = decisionStore.addDecision({
         title,
         content,
@@ -111,6 +123,7 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         tags,
         source: 'manual',
         confidence: 1.0,
+        git_branch: resolvedBranch,
       });
       return { content: [{ type: 'text', text: j({ added: decision }) }] };
     },
@@ -141,6 +154,13 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         .boolean()
         .optional()
         .describe('Include invalidated decisions (default: false)'),
+      git_branch: z
+        .string()
+        .max(256)
+        .optional()
+        .describe(
+          'Branch filter. "current" (default) → current branch + branch-agnostic decisions. "all" → every branch. Any other value → that specific branch + branch-agnostic decisions.',
+        ),
       limit: z.number().int().min(1).max(100).optional().describe('Max results (default: 50)'),
     },
     async ({
@@ -152,6 +172,7 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       search,
       as_of,
       include_invalidated,
+      git_branch,
       limit,
     }) => {
       // Mirror addDecision's storage canonicalisation so a query with an
@@ -159,6 +180,23 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
       const queryFilePath = file_path
         ? (relativizeUnderRoot(file_path, projectRoot) ?? file_path)
         : file_path;
+      // Resolve the three-mode branch filter:
+      //   undefined/'current' → current branch + NULL
+      //   'all'               → no filter
+      //   <name>              → that branch + NULL
+      const branchMode = git_branch ?? 'current';
+      let branchFilter: string | null | 'all' | undefined;
+      if (branchMode === 'all') {
+        branchFilter = 'all';
+      } else if (branchMode === 'current') {
+        const current = getCurrentBranch(projectRoot);
+        // When we can't resolve the branch (non-git/detached HEAD), fall back
+        // to returning every row — the caller's "current" intent is satisfied
+        // because there is no other branch context.
+        branchFilter = current ?? 'all';
+      } else {
+        branchFilter = branchMode;
+      }
       const decisions = decisionStore.queryDecisions({
         project_root: projectRoot,
         service_name,
@@ -169,6 +207,7 @@ export function registerMemoryTools(server: McpServer, ctx: ServerContext): void
         search,
         as_of,
         include_invalidated,
+        git_branch: branchFilter,
         limit,
       });
 
