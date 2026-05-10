@@ -255,7 +255,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       },
       async ({ repo_path, git_url, git_ref, name, project, contract_paths }) => {
         const targetProject = project ?? projectRoot;
-        const result = subprojectAddRepo(topoStore, {
+        const result = await subprojectAddRepo(topoStore, {
           repoPath: repo_path,
           gitUrl: git_url,
           gitRef: git_ref,

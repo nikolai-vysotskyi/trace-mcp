@@ -8,6 +8,7 @@
 
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import { FallbackInferenceService } from './fallback.js';
 import type {
   AIProvider,
@@ -39,6 +40,7 @@ class VoyageEmbeddingService implements EmbeddingService {
   }
 
   async embedBatch(texts: string[], task: EmbeddingTask = 'document'): Promise<number[][]> {
+    const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
         const body: Record<string, unknown> = {
@@ -52,15 +54,19 @@ class VoyageEmbeddingService implements EmbeddingService {
         // Older models ignore this field.
         if (this.dims > 0) body.output_dimension = this.dims;
 
-        const resp = await fetch(`${this.baseUrl}/embeddings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
+        const resp = await safeFetch(
+          `${this.baseUrl}/embeddings`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.apiKey}`,
+            },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(30_000),
           },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(30_000),
-        });
+          { allowPrivateNetworks },
+        );
 
         if (!resp.ok) {
           const payload = await resp.text().catch(() => '');
@@ -105,15 +111,19 @@ export class VoyageProvider implements AIProvider {
     try {
       // Voyage has no lightweight health endpoint — a 1-token embed is the
       // smallest probe that exercises auth + routing.
-      const resp = await fetch(`${this.config.baseUrl}/embeddings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
+      const resp = await safeFetch(
+        `${this.config.baseUrl}/embeddings`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.config.apiKey}`,
+          },
+          body: JSON.stringify({ model: this.config.embeddingModel, input: ['ping'] }),
+          signal: AbortSignal.timeout(5000),
         },
-        body: JSON.stringify({ model: this.config.embeddingModel, input: ['ping'] }),
-        signal: AbortSignal.timeout(5000),
-      });
+        { allowPrivateNetworks: isExplicitlyLocalUrl(this.config.baseUrl) },
+      );
       return resp.ok;
     } catch {
       logger.debug('Voyage not available');

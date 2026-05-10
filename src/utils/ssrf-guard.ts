@@ -238,6 +238,50 @@ export async function checkOutboundUrl(
 }
 
 /**
+ * Wraps `fetch` with `checkOutboundUrl` so a single misconfigured baseUrl
+ * cannot reach a private / loopback / metadata endpoint. Throws on guard
+ * refusal — callers see a regular Error their existing retry/error-handling
+ * path already covers, instead of a successful fetch to an internal IP.
+ */
+export async function safeFetch(
+  url: string,
+  init?: RequestInit,
+  guardOpts: SsrfGuardOptions = {},
+): Promise<Response> {
+  const guard = await checkOutboundUrl(url, guardOpts);
+  if (!guard.ok) {
+    throw new Error(`SSRF guard refused ${url}: ${guard.reason ?? 'blocked'}`);
+  }
+  return fetch(url, init);
+}
+
+/**
+ * Returns true when `url` is a deliberately-local endpoint: `localhost`, a
+ * literal RFC 1918 / RFC 6598 IP, IPv4/IPv6 loopback, or an IPv6 ULA. The
+ * presence of such a URL in user config is treated as an explicit opt-in for
+ * the SSRF guard's `allowPrivateNetworks` mode — they typed
+ * `http://localhost:11434`, so we honour it. URLs whose host is a public
+ * domain (e.g. `https://api.openai.com`) return false even if DNS would later
+ * resolve to a private IP — those are the rebinding/SSRF cases we still block.
+ */
+export function isExplicitlyLocalUrl(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (host === 'localhost') return true;
+  // Strict check rejects literal private IPs; lax check accepts them. The
+  // private/loopback bucket is exactly the set blocked by the first and
+  // accepted by the second — no need to duplicate the CIDR tables here.
+  const strict = checkOutboundUrlSync(url, { allowPrivateNetworks: false });
+  if (strict.ok) return false;
+  const lax = checkOutboundUrlSync(url, { allowPrivateNetworks: true });
+  return lax.ok;
+}
+
+/**
  * Synchronous variant for cases where DNS is not available or callers do not
  * want to await: only inspects the URL itself. Returns ok=true for hostnames
  * (since we cannot resolve them), but blocks literal private IPs and

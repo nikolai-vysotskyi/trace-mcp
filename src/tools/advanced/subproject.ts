@@ -44,7 +44,7 @@ export function getSubprojectImpact(
 // 3. SUBPROJECT ADD — add a repo as a subproject (via MCP tool)
 // ════════════════════════════════════════════════════════════════════════
 
-export function subprojectAddRepo(
+export async function subprojectAddRepo(
   topoStore: TopologyStore,
   opts: {
     repoPath?: string;
@@ -54,15 +54,17 @@ export function subprojectAddRepo(
     name?: string;
     contractPaths?: string[];
   },
-): TraceMcpResult<{
-  repo: string;
-  name: string;
-  services: number;
-  endpoints: number;
-  clientCalls: number;
-  linkedCalls: number;
-  cloned?: { gitUrl: string; cloneDir: string; reused: boolean };
-}> {
+): Promise<
+  TraceMcpResult<{
+    repo: string;
+    name: string;
+    services: number;
+    endpoints: number;
+    clientCalls: number;
+    linkedCalls: number;
+    cloned?: { gitUrl: string; cloneDir: string; reused: boolean };
+  }>
+> {
   if (!opts.repoPath && !opts.gitUrl) {
     return err(validationError('repo_path or git_url is required'));
   }
@@ -81,7 +83,7 @@ export function subprojectAddRepo(
         validationError(`Refusing to clone with unsafe git ref: ${JSON.stringify(opts.gitRef)}`),
       );
     }
-    const cloneResult = cloneRemoteRepo(opts.projectRoot, opts.gitUrl, { ref: opts.gitRef });
+    const cloneResult = await cloneRemoteRepo(opts.projectRoot, opts.gitUrl, { ref: opts.gitRef });
     if (cloneResult.isErr()) return err(cloneResult.error);
     repoPath = cloneResult.value.cloneDir;
     cloneInfo = { gitUrl: opts.gitUrl, ...cloneResult.value };

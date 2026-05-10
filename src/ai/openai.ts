@@ -5,6 +5,7 @@
 
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
 import { parseOpenAIStream } from './sse.js';
 
@@ -31,17 +32,22 @@ class OpenAIEmbeddingService implements EmbeddingService {
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
+    const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
-        const resp = await fetch(`${this.baseUrl}/embeddings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
+        const resp = await safeFetch(
+          `${this.baseUrl}/embeddings`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.apiKey}`,
+            },
+            body: JSON.stringify({ model: this.model, input: texts }),
+            signal: AbortSignal.timeout(30_000),
           },
-          body: JSON.stringify({ model: this.model, input: texts }),
-          signal: AbortSignal.timeout(30_000),
-        });
+          { allowPrivateNetworks },
+        );
 
         if (!resp.ok) {
           const body = await resp.text().catch(() => '');
@@ -86,22 +92,27 @@ class OpenAIInferenceService implements InferenceService {
     prompt: string,
     options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
+    const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
-        const resp = await fetch(`${this.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
+        const resp = await safeFetch(
+          `${this.baseUrl}/chat/completions`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.apiKey}`,
+            },
+            body: JSON.stringify({
+              model: this.model,
+              messages: [{ role: 'user', content: prompt }],
+              ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
+              ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+            }),
+            signal: AbortSignal.timeout(60_000),
           },
-          body: JSON.stringify({
-            model: this.model,
-            messages: [{ role: 'user', content: prompt }],
-            ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
-            ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-          }),
-          signal: AbortSignal.timeout(60_000),
-        });
+          { allowPrivateNetworks },
+        );
 
         if (!resp.ok) {
           const body = await resp.text().catch(() => '');
@@ -120,21 +131,25 @@ class OpenAIInferenceService implements InferenceService {
     messages: ChatMessage[],
     options?: { maxTokens?: number; temperature?: number },
   ): AsyncIterable<string> {
-    const resp = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
+    const resp = await safeFetch(
+      `${this.baseUrl}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages,
+          stream: true,
+          ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
+          ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+        }),
+        signal: AbortSignal.timeout(120_000),
       },
-      body: JSON.stringify({
-        model: this.model,
-        messages,
-        stream: true,
-        ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
-        ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-      }),
-      signal: AbortSignal.timeout(120_000),
-    });
+      { allowPrivateNetworks: isExplicitlyLocalUrl(this.baseUrl) },
+    );
 
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
@@ -155,10 +170,14 @@ export class OpenAIProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      const resp = await fetch(`${this.config.baseUrl}/models`, {
-        headers: { Authorization: `Bearer ${this.config.apiKey}` },
-        signal: AbortSignal.timeout(3000),
-      });
+      const resp = await safeFetch(
+        `${this.config.baseUrl}/models`,
+        {
+          headers: { Authorization: `Bearer ${this.config.apiKey}` },
+          signal: AbortSignal.timeout(3000),
+        },
+        { allowPrivateNetworks: isExplicitlyLocalUrl(this.config.baseUrl) },
+      );
       return resp.ok;
     } catch {
       logger.debug('OpenAI not available');
