@@ -18,6 +18,8 @@ interface DecisionRow {
   session_id: string | null;
   source: 'manual' | 'mined' | 'auto';
   confidence: number;
+  git_branch: string | null;
+  review_status: 'pending' | 'approved' | 'rejected' | null;
   created_at: string;
   updated_at: number | null;
 }
@@ -27,6 +29,8 @@ interface DecisionStats {
   active: number;
   by_type: Record<string, number>;
   by_source: Record<string, number>;
+  /** Number of mined decisions awaiting human review (review_status='pending'). */
+  pending_reviews?: number;
 }
 
 interface CorpusItem {
@@ -1480,15 +1484,400 @@ function SessionsView({ root }: { root: string }) {
   );
 }
 
+// ── Review queue (memoir-style confidence triage) ─────────────────────────────
+
+/**
+ * Compact card for a single pending decision. Shows the extracted text,
+ * source session id, file_path, confidence (numeric + bar), captured branch,
+ * plus Approve / Reject buttons. Buttons fire optimistic UI: the card is
+ * removed before the POST resolves; on failure the card is reinserted and
+ * an inline error replaces the buttons.
+ */
+function ReviewCard({
+  decision,
+  onApprove,
+  onReject,
+}: {
+  decision: DecisionRow;
+  onApprove: (id: number) => Promise<void>;
+  onReject: (id: number) => Promise<void>;
+}) {
+  const [pending, setPending] = useState<'approve' | 'reject' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const confidencePct = Math.round((decision.confidence ?? 0) * 100);
+  const tags = parseTags(decision.tags);
+
+  const handle = (kind: 'approve' | 'reject') => async () => {
+    setPending(kind);
+    setError(null);
+    try {
+      if (kind === 'approve') {
+        await onApprove(decision.id);
+      } else {
+        await onReject(decision.id);
+      }
+    } catch (e) {
+      setError((e as Error).message ?? 'Action failed');
+      setPending(null);
+    }
+  };
+
+  return (
+    <div className="px-3 py-2.5 space-y-2">
+      {/* Header: title + type/source badges */}
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              className="text-[13px] font-medium leading-tight"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {decision.title}
+            </span>
+            <TypeBadge type={decision.type} />
+            <SourceBadge source={decision.source} />
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded font-medium uppercase shrink-0"
+              style={{
+                background: 'rgba(234,179,8,0.15)',
+                color: '#fbbf24',
+                letterSpacing: '0.03em',
+              }}
+            >
+              pending review
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Content excerpt */}
+      <div
+        className="text-[12px] leading-relaxed whitespace-pre-wrap"
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        {decision.content}
+      </div>
+
+      {/* Confidence bar + numeric */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+          confidence
+        </span>
+        <div
+          className="flex-1 h-1.5 rounded overflow-hidden"
+          style={{ background: 'var(--bg-inset)', maxWidth: 200 }}
+        >
+          <div
+            style={{
+              width: `${confidencePct}%`,
+              height: '100%',
+              background:
+                confidencePct >= 75
+                  ? 'var(--green, #22c55e)'
+                  : confidencePct >= 50
+                  ? '#fbbf24'
+                  : '#f87171',
+            }}
+          />
+        </div>
+        <span
+          className="text-[10px] tabular-nums"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          {confidencePct}%
+        </span>
+      </div>
+
+      {/* Meta row: session, file, branch */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {decision.session_id && (
+          <a
+            href={`#session:${decision.session_id}`}
+            className="text-[10px] truncate max-w-[180px] hover:underline"
+            style={{
+              color: 'var(--accent, #818cf8)',
+              fontFamily: 'SF Mono, Menlo, monospace',
+            }}
+            title={`Session ${decision.session_id}`}
+          >
+            {decision.session_id.slice(0, 14)}…
+          </a>
+        )}
+        {decision.file_path && (
+          <span
+            className="text-[10px] truncate max-w-[200px]"
+            style={{
+              color: 'var(--text-tertiary)',
+              fontFamily: 'SF Mono, Menlo, monospace',
+            }}
+            title={decision.file_path}
+          >
+            {decision.file_path}
+          </span>
+        )}
+        {decision.git_branch && (
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded"
+            style={{
+              background: 'var(--bg-inset)',
+              color: 'var(--text-secondary)',
+              border: '0.5px solid var(--border-row)',
+              fontFamily: 'SF Mono, Menlo, monospace',
+            }}
+            title={`Captured on branch ${decision.git_branch}`}
+          >
+            {decision.git_branch}
+          </span>
+        )}
+      </div>
+
+      {/* Tags */}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-[10px] px-1.5 py-0.5 rounded"
+              style={{
+                background: 'var(--bg-inset)',
+                color: 'var(--text-secondary)',
+                border: '0.5px solid var(--border-row)',
+              }}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => { void handle('approve')(); }}
+          disabled={pending !== null}
+          className="text-[12px] font-medium px-3 py-1.5 rounded"
+          style={{
+            background: 'var(--green, #22c55e)',
+            color: '#fff',
+            cursor: pending ? 'not-allowed' : 'pointer',
+            opacity: pending ? 0.6 : 1,
+          }}
+        >
+          {pending === 'approve' ? 'Approving…' : 'Approve'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { void handle('reject')(); }}
+          disabled={pending !== null}
+          className="text-[12px] font-medium px-3 py-1.5 rounded"
+          style={{
+            background: 'rgba(239,68,68,0.15)',
+            color: '#f87171',
+            border: '0.5px solid rgba(239,68,68,0.4)',
+            cursor: pending ? 'not-allowed' : 'pointer',
+            opacity: pending ? 0.6 : 1,
+          }}
+        >
+          {pending === 'reject' ? 'Rejecting…' : 'Reject'}
+        </button>
+        {error && (
+          <span className="text-[11px] self-center" style={{ color: '#f87171' }}>
+            {error}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface ToastState {
+  message: string;
+  kind: 'error' | 'success';
+}
+
+function ReviewView({
+  root,
+  onPendingCountChange,
+}: {
+  root: string;
+  onPendingCountChange?: (count: number) => void;
+}) {
+  const [decisions, setDecisions] = useState<DecisionRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  const fetchPending = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        project: root,
+        review_status: 'pending',
+        limit: '100',
+      });
+      const res = await fetch(`${BASE}/api/projects/decisions?${params}`);
+      if (res.ok) {
+        const data = (await res.json()) as { decisions: DecisionRow[]; total: number };
+        setDecisions(data.decisions);
+        onPendingCountChange?.(data.total);
+      }
+    } catch {
+      /* optional */
+    }
+    setLoading(false);
+  }, [root, onPendingCountChange]);
+
+  useEffect(() => {
+    void fetchPending();
+  }, [fetchPending]);
+
+  const showToast = (message: string, kind: ToastState['kind']) => {
+    setToast({ message, kind });
+    window.setTimeout(() => setToast(null), 3000);
+  };
+
+  // Optimistic action: drop the card immediately, POST in the background.
+  // On failure, splice the card back into the list and surface a toast.
+  const handleAction = async (
+    id: number,
+    status: 'approved' | 'rejected',
+  ): Promise<void> => {
+    const idx = decisions.findIndex((d) => d.id === id);
+    if (idx < 0) return;
+    const removed = decisions[idx];
+
+    setDecisions((prev) => prev.filter((d) => d.id !== id));
+    onPendingCountChange?.(Math.max(0, decisions.length - 1));
+
+    try {
+      const res = await fetch(`${BASE}/api/projects/decisions/${id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+      showToast(`Decision ${status}.`, 'success');
+    } catch (e) {
+      // Revert: reinsert at original index so list order is preserved.
+      setDecisions((prev) => {
+        const next = [...prev];
+        next.splice(idx, 0, removed);
+        return next;
+      });
+      onPendingCountChange?.(decisions.length);
+      showToast((e as Error).message ?? 'Action failed', 'error');
+      throw e;
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Toast */}
+      {toast && (
+        <div
+          className="px-3 py-2 text-[12px] rounded-md"
+          style={{
+            background:
+              toast.kind === 'error'
+                ? 'rgba(239,68,68,0.15)'
+                : 'rgba(34,197,94,0.15)',
+            color: toast.kind === 'error' ? '#f87171' : '#22c55e',
+            border: `0.5px solid ${toast.kind === 'error' ? '#f8717140' : '#22c55e40'}`,
+          }}
+        >
+          {toast.message}
+        </div>
+      )}
+
+      <div className="flex items-baseline justify-between mb-1.5 px-3">
+        <span
+          className="text-[11px]"
+          style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}
+        >
+          Review queue
+        </span>
+        {!loading && (
+          <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
+            {decisions.length}
+          </span>
+        )}
+      </div>
+
+      <div
+        style={{
+          background: 'var(--bg-grouped)',
+          borderRadius: 10,
+          boxShadow: 'var(--shadow-grouped)',
+          overflow: 'hidden',
+        }}
+      >
+        {loading && (
+          <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+            Loading…
+          </div>
+        )}
+
+        {!loading && decisions.length === 0 && (
+          <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+            Nothing to review — the queue is empty.
+          </div>
+        )}
+
+        {!loading &&
+          decisions.map((d, i) => {
+            const isLast = i === decisions.length - 1;
+            return (
+              <div
+                key={d.id}
+                style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)' }}
+              >
+                <ReviewCard
+                  decision={d}
+                  onApprove={(id) => handleAction(id, 'approved')}
+                  onReject={(id) => handleAction(id, 'rejected')}
+                />
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
-type SubTab = 'decisions' | 'corpora' | 'sessions';
+type SubTab = 'decisions' | 'review' | 'corpora' | 'sessions';
 
 export function MemoryExplorer({ root }: { root: string }) {
   const [activeTab, setActiveTab] = useState<SubTab>('decisions');
+  // Pending count lives in the parent so the Review (N) badge in the tab bar
+  // stays in sync with optimistic mutations inside ReviewView.
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Refresh the badge whenever the user switches into Memory or any sub-view.
+  // Cheap stats endpoint, returns the same number ReviewView would compute.
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`${BASE}/api/projects/decisions/stats?${new URLSearchParams({ project: root })}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: DecisionStats | null) => {
+        if (!cancelled && data && typeof data.pending_reviews === 'number') {
+          setPendingCount(data.pending_reviews);
+        }
+      })
+      .catch(() => { /* optional */ });
+    return () => {
+      cancelled = true;
+    };
+  }, [root]);
 
   const tabs: { key: SubTab; label: string }[] = [
     { key: 'decisions', label: 'Decisions' },
+    { key: 'review', label: `Review (${pendingCount})` },
     { key: 'corpora', label: 'Corpora' },
     { key: 'sessions', label: 'Sessions' },
   ];
@@ -1520,6 +1909,9 @@ export function MemoryExplorer({ root }: { root: string }) {
 
       {/* Content */}
       {activeTab === 'decisions' && <DecisionsView root={root} />}
+      {activeTab === 'review' && (
+        <ReviewView root={root} onPendingCountChange={setPendingCount} />
+      )}
       {activeTab === 'corpora' && <CorporaView root={root} />}
       {activeTab === 'sessions' && <SessionsView root={root} />}
     </div>

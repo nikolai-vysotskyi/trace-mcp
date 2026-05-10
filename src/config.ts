@@ -298,6 +298,27 @@ const TopologyConfigSchema = z
   })
   .optional();
 
+/**
+ * Memoir-style decision capture thresholds — split mined decisions into
+ * three tiers so borderline rows surface in a review queue instead of
+ * silently entering the active knowledge graph.
+ *
+ *   confidence ≥ review_threshold  → auto-approved (review_status = NULL)
+ *   confidence ≥ reject_threshold  → 'pending'      (queued for human review)
+ *   otherwise                      → dropped         (current behaviour)
+ *
+ * Tunable via `decisions.review_threshold` / `decisions.reject_threshold`
+ * in `~/.trace-mcp/.config.json` or `.trace-mcp.json` per project.
+ * Defaults match `DEFAULT_REVIEW_THRESHOLD` / `DEFAULT_REJECT_THRESHOLD`
+ * in `src/memory/conversation-miner.ts` (kept in sync).
+ */
+const DecisionsConfigSchema = z
+  .object({
+    review_threshold: z.number().min(0).max(1).default(0.75),
+    reject_threshold: z.number().min(0).max(1).default(0.45),
+  })
+  .prefault({});
+
 const VaultConfigSchema = z
   .object({
     /**
@@ -379,6 +400,7 @@ export const TraceMcpConfigSchema = z.object({
   lsp: LspConfigSchema,
   topology: TopologyConfigSchema,
   vault: VaultConfigSchema,
+  decisions: DecisionsConfigSchema,
   quality_gates: QualityGatesConfigSchema,
   telemetry: TelemetryConfigSchema,
   tools: ToolsConfigSchema,
@@ -478,6 +500,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
     lsp: LspConfigSchema,
     topology: TopologyConfigSchema,
     quality_gates: QualityGatesConfigSchema,
+    decisions: DecisionsConfigSchema,
     telemetry: TelemetryConfigSchema,
     tools: ToolsConfigSchema,
     ignore: IgnoreConfigSchema,

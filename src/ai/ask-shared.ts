@@ -8,6 +8,14 @@ import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import type { ChatMessage } from './interfaces.js';
+import {
+  bucketize,
+  type RetrievalItem,
+  type RetrievalMode,
+  selectRetrievalMode,
+  TIERED_BUCKET_SIZES,
+  type TieredBuckets,
+} from './retrieval-modes.js';
 import { parseAnthropicStream, parseGeminiStream, parseOpenAIStream } from './sse.js';
 
 // ---------------------------------------------------------------------------
@@ -266,6 +274,23 @@ export interface ContextEnvelope {
   symbols: { symbol_id: string; file: string; line: number }[];
   decisions: { id: string; title: string }[];
   files: string[];
+  /**
+   * Memoir-style retrieval mode used to gather this context. Stamped on every
+   * envelope so the caller can render the right UI surface for the result
+   * (e.g. expandable "low" tier, drill breadcrumb).
+   */
+  mode?: RetrievalMode;
+  /**
+   * Tiered buckets — only populated when `mode === 'tiered'`.
+   * The `high` bucket is what most callers should display by default; the
+   * `medium` and `low` tiers are revealed on demand.
+   */
+  buckets?: TieredBuckets;
+  /**
+   * Drill scope — only populated when `mode === 'drill'`. Set to the
+   * `drillFrom` value the caller passed.
+   */
+  parent?: string;
 }
 
 /**
@@ -289,6 +314,8 @@ export async function gatherContext(
   question: string,
   tokenBudget: number,
   gitBranch?: DecisionBranchFilter,
+  mode?: RetrievalMode,
+  drillFrom?: string,
 ): Promise<string> {
   return (
     await gatherContextWithEnvelope(
@@ -298,6 +325,8 @@ export async function gatherContext(
       question,
       tokenBudget,
       gitBranch,
+      mode,
+      drillFrom,
     )
   ).context;
 }
@@ -318,13 +347,23 @@ export async function gatherContextWithEnvelope(
   tokenBudget: number,
   // biome-ignore lint/correctness/noUnusedFunctionParameters: reserved — wired to decisions in a follow-up
   gitBranch?: DecisionBranchFilter,
+  mode?: RetrievalMode,
+  drillFrom?: string,
 ): Promise<{ context: string; envelope: ContextEnvelope }> {
+  // Resolve effective mode. `single` keeps current packContext behavior; the
+  // other modes only shape the envelope — `context` (the markdown blob) is
+  // unchanged so existing prompt templates keep working.
+  const effectiveMode: RetrievalMode = mode ?? selectRetrievalMode(question, { drillFrom });
+
   const { packContext } = await import('../tools/refactoring/pack-context.js');
   const result = packContext(store, pluginRegistry, {
     scope: 'feature',
     query: question,
     maxTokens: tokenBudget,
     format: 'markdown',
+    // `flat` mode skips PageRank-aware reranking (closest analog inside
+    // packContext is the default `most_relevant` strategy without core_first
+    // bonus). The other modes use the historical default.
     strategy: 'most_relevant',
     compress: false,
     include: ['outlines', 'source'],
@@ -343,6 +382,18 @@ export async function gatherContextWithEnvelope(
     // detected by matching file paths present in the context string.
     for (const f of allFiles) {
       if (result.content.includes(f.path)) {
+        // Drill mode: scope envelope to files inside the drill subtree only.
+        if (effectiveMode === 'drill' && drillFrom) {
+          if (
+            !(
+              f.path === drillFrom ||
+              f.path.startsWith(`${drillFrom}/`) ||
+              f.path.startsWith(drillFrom)
+            )
+          ) {
+            continue;
+          }
+        }
         envelopeFiles.push(f.path);
         // Add top symbols from each included file
         try {
@@ -373,6 +424,32 @@ export async function gatherContextWithEnvelope(
     decisions: [], // decisions are not yet surfaced by packContext
     files: envelopeFiles,
   };
+
+  // Stamp mode-specific fields on the envelope so callers can branch on
+  // them. `single` keeps the legacy shape (no `mode`/`buckets`/`parent`
+  // fields) for byte-identical back-compat.
+  if (effectiveMode !== 'single') {
+    envelope.mode = effectiveMode;
+  }
+  if (effectiveMode === 'tiered') {
+    // Promote envelope symbols into RetrievalItem-shaped buckets. We don't
+    // have richer ranking signals here (packContext owns selection) so the
+    // ordering matches packContext's file order — the high bucket is the
+    // first ${TIERED_BUCKET_SIZES.high} entries, etc.
+    const items: RetrievalItem[] = envelopeSymbols.slice(0, 25).map((s) => ({
+      symbol_id: s.symbol_id,
+      name: s.symbol_id.split(':').pop() ?? s.symbol_id,
+      kind: 'symbol',
+      fqn: null,
+      file: s.file,
+      line: s.line,
+      score: 1,
+    }));
+    envelope.buckets = bucketize(items);
+  }
+  if (effectiveMode === 'drill' && drillFrom) {
+    envelope.parent = drillFrom;
+  }
 
   return { context: result.content, envelope };
 }

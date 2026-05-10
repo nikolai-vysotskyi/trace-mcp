@@ -12,6 +12,7 @@
  *   POST   /api/projects/decisions                  — create a decision
  *   PATCH  /api/projects/decisions/:id              — update mutable fields
  *   POST   /api/projects/decisions/:id/invalidate   — mark decision invalid
+ *   POST   /api/projects/decisions/:id/review       — set review_status (approve/reject)
  *   POST   /api/projects/corpora/:name/query        — query a corpus pack
  *   DELETE /api/projects/corpora/:name              — delete corpus files
  *
@@ -331,6 +332,48 @@ export function handleMemoryRequest(
     return true;
   }
 
+  // POST /api/projects/decisions/:id/review — set memoir-style review_status
+  // Mirrors the MCP `approve_decision` / `reject_decision` tools so the
+  // Memory Explorer review queue can drive both flows from the renderer.
+  const reviewMatch = /^\/api\/projects\/decisions\/(\d+)\/review$/.exec(url.pathname);
+  if (method === 'POST' && reviewMatch) {
+    const id = parseInt(reviewMatch[1], 10);
+    void (async () => {
+      interface ReviewBody {
+        status?: 'pending' | 'approved' | 'rejected';
+      }
+      const body = (await parseBody<ReviewBody>(req)) ?? {};
+      const status = body.status;
+      if (status !== 'pending' && status !== 'approved' && status !== 'rejected') {
+        sendJson(res, 400, {
+          error: 'status must be one of: "pending", "approved", "rejected"',
+        });
+        return;
+      }
+
+      try {
+        if (!fs.existsSync(DECISIONS_DB_PATH)) {
+          sendJson(res, 404, { error: 'decisions.db not found' });
+          return;
+        }
+        const store = new DecisionStore(DECISIONS_DB_PATH);
+        try {
+          const changed = store.setReviewStatus(id, status);
+          if (!changed) {
+            sendJson(res, 404, { error: `Decision ${id} not found` });
+            return;
+          }
+          sendJson(res, 200, { ok: true, id, review_status: status });
+        } finally {
+          store.close();
+        }
+      } catch (e) {
+        sendJson(res, 500, { error: (e as Error).message ?? 'Failed to set review status' });
+      }
+    })();
+    return true;
+  }
+
   // POST /api/projects/corpora/:name/query — query a corpus pack body
   const corpusQueryMatch = /^\/api\/projects\/corpora\/([^/]+)\/query$/.exec(url.pathname);
   if (method === 'POST' && corpusQueryMatch) {
@@ -454,6 +497,14 @@ export function handleMemoryRequest(
     const filePath = url.searchParams.get('file_path') ?? '';
     // Branch-aware filter: ?branch=current|all|<name>. Defaults to "current".
     const branchParam = url.searchParams.get('branch') ?? 'current';
+    // Memoir-style review filter:
+    //   ?review_status=pending|approved|rejected → restrict to that tier
+    //   ?include_pending=1                       → also return 'pending' rows
+    //   neither                                  → default: NULL + 'approved'
+    const reviewStatusParam = url.searchParams.get('review_status') ?? '';
+    const includePending =
+      url.searchParams.get('include_pending') === '1' ||
+      url.searchParams.get('include_pending') === 'true';
     const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') ?? '50', 10), 1), 200);
     const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10), 0);
 
@@ -491,6 +542,20 @@ export function handleMemoryRequest(
           params.push(resolved);
         }
         // resolved === null + 'current' → no usable branch context, skip filter
+      }
+
+      // Memoir review filter — same precedence as queryDecisions().
+      if (
+        reviewStatusParam === 'pending' ||
+        reviewStatusParam === 'approved' ||
+        reviewStatusParam === 'rejected'
+      ) {
+        conditions.push('review_status = ?');
+        params.push(reviewStatusParam);
+      } else if (includePending) {
+        conditions.push("(review_status IS NULL OR review_status IN ('approved','pending'))");
+      } else {
+        conditions.push("(review_status IS NULL OR review_status = 'approved')");
       }
 
       const where = `WHERE ${conditions.join(' AND ')}`;
@@ -572,7 +637,7 @@ export function handleMemoryRequest(
 
     const db = openDecisionsDb();
     if (!db) {
-      sendJson(res, 200, { total: 0, active: 0, by_type: {}, by_source: {} });
+      sendJson(res, 200, { total: 0, active: 0, by_type: {}, by_source: {}, pending_reviews: 0 });
       return true;
     }
 
@@ -605,7 +670,16 @@ export function handleMemoryRequest(
       const by_source: Record<string, number> = {};
       for (const r of sourceRows) by_source[r.source] = r.c;
 
-      sendJson(res, 200, { total, active, by_type, by_source });
+      // Memoir review queue count — drives the "Review (N)" tab badge.
+      const pending_reviews = (
+        db
+          .prepare(
+            "SELECT COUNT(*) as c FROM decisions WHERE project_root = ? AND review_status = 'pending' AND valid_until IS NULL",
+          )
+          .get(projectRoot) as { c: number }
+      ).c;
+
+      sendJson(res, 200, { total, active, by_type, by_source, pending_reviews });
     } catch (e) {
       sendJson(res, 500, { error: (e as Error).message ?? 'Query failed' });
     } finally {
