@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.34.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.34.1...v1.34.2) (2026-05-10)
+
+
+### Bug Fixes
+
+* **ci:** pin npm publish back to npx npm@11 — pnpm provenance flow broken ([a052a62](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a052a625c4b22f81258e2b9dce6fb138709ceca0))
+
 ## [1.34.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.34.0...v1.34.1) (2026-05-10)
 
 
