@@ -12,6 +12,10 @@ import {
   GUARD_HOOK_VERSION,
   PRECOMPACT_HOOK_VERSION,
   REINDEX_HOOK_VERSION,
+  SESSION_END_HOOK_VERSION,
+  SESSION_START_HOOK_VERSION,
+  STOP_HOOK_VERSION,
+  USER_PROMPT_SUBMIT_HOOK_VERSION,
   WORKTREE_HOOK_VERSION,
 } from './types.js';
 
@@ -110,6 +114,57 @@ const WORKTREE_REMOVE_HOOK: HookDescriptor = {
   dryRunLabel: 'Would install worktree remove hook',
   plainCommand: true,
 };
+
+// --- Lifecycle hooks ("memoir-style" active context injection) ---------
+// These four hooks turn the project's decision memory into something Claude
+// Code injects automatically across the session lifecycle. Without them the
+// agent has to call get_wake_up / query_decisions / mine_sessions explicitly,
+// which it rarely does. Modeled on the same install machinery as the guard +
+// precompact hooks so they share install/uninstall/aux-file plumbing.
+
+const SESSION_START_HOOK: HookDescriptor = {
+  scriptName: 'trace-mcp-session-start',
+  settingsKey: 'SessionStart',
+  version: SESSION_START_HOOK_VERSION,
+  dryRunLabel: 'Would install session-start hook',
+  plainCommand: true,
+};
+
+const USER_PROMPT_SUBMIT_HOOK: HookDescriptor = {
+  scriptName: 'trace-mcp-user-prompt-submit',
+  settingsKey: 'UserPromptSubmit',
+  version: USER_PROMPT_SUBMIT_HOOK_VERSION,
+  dryRunLabel: 'Would install user-prompt-submit hook',
+  plainCommand: true,
+};
+
+const STOP_HOOK: HookDescriptor = {
+  scriptName: 'trace-mcp-stop',
+  settingsKey: 'Stop',
+  version: STOP_HOOK_VERSION,
+  dryRunLabel: 'Would install stop hook',
+  plainCommand: true,
+};
+
+const SESSION_END_HOOK: HookDescriptor = {
+  scriptName: 'trace-mcp-session-end',
+  settingsKey: 'SessionEnd',
+  version: SESSION_END_HOOK_VERSION,
+  dryRunLabel: 'Would install session-end hook',
+  plainCommand: true,
+};
+
+/**
+ * All four lifecycle hooks. Exposed as a tuple for callers that want to
+ * iterate (executeSteps, the upgrade path, the legacy cleanup tests) without
+ * having to remember the individual exports.
+ */
+const LIFECYCLE_HOOKS: readonly HookDescriptor[] = [
+  SESSION_START_HOOK,
+  USER_PROMPT_SUBMIT_HOOK,
+  STOP_HOOK,
+  SESSION_END_HOOK,
+] as const;
 
 // --- Helpers ---
 
@@ -360,6 +415,49 @@ export function installWorktreeHook(opts: {
 
 function _uninstallWorktreeHook(opts: { global?: boolean }): InitStepResult[] {
   return [uninstallHook(WORKTREE_HOOK, opts), uninstallHook(WORKTREE_REMOVE_HOOK, opts)];
+}
+
+// --- Lifecycle hook public API -----------------------------------------
+
+export function installSessionStartHook(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+}): InitStepResult {
+  return installHook(SESSION_START_HOOK, opts);
+}
+
+export function installUserPromptSubmitHook(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+}): InitStepResult {
+  return installHook(USER_PROMPT_SUBMIT_HOOK, opts);
+}
+
+export function installStopHook(opts: { global?: boolean; dryRun?: boolean }): InitStepResult {
+  return installHook(STOP_HOOK, opts);
+}
+
+export function installSessionEndHook(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+}): InitStepResult {
+  return installHook(SESSION_END_HOOK, opts);
+}
+
+/**
+ * Install all four lifecycle hooks in one call. Used by `trace-mcp init` at
+ * Standard / Max tier alongside the existing guard + reindex + precompact +
+ * worktree hooks.
+ */
+export function installLifecycleHooks(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+}): InitStepResult[] {
+  return LIFECYCLE_HOOKS.map((desc) => installHook(desc, opts));
+}
+
+export function uninstallLifecycleHooks(opts: { global?: boolean }): InitStepResult[] {
+  return LIFECYCLE_HOOKS.map((desc) => uninstallHook(desc, opts));
 }
 
 /**

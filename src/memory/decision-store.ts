@@ -52,6 +52,11 @@ export interface DecisionRow {
   source: 'manual' | 'mined' | 'auto';
   /** Confidence score 0..1 for mined decisions */
   confidence: number;
+  /**
+   * Git branch the decision was captured on. NULL = branch-agnostic
+   * (captured outside a git repo, on detached HEAD, or pre-feature legacy data).
+   */
+  git_branch: string | null;
   created_at: string;
   /** Unix millisecond timestamp of the last write (insert, update, or invalidate). */
   updated_at: number | null;
@@ -71,6 +76,12 @@ export interface DecisionInput {
   session_id?: string;
   source?: 'manual' | 'mined' | 'auto';
   confidence?: number;
+  /**
+   * Git branch the decision was captured on. Omit / pass `null` for branch-agnostic
+   * decisions (queryable from every branch). The capture path resolves this from
+   * the project root automatically when omitted.
+   */
+  git_branch?: string | null;
 }
 
 export interface DecisionQuery {
@@ -87,6 +98,16 @@ export interface DecisionQuery {
   include_invalidated?: boolean;
   /** Full-text search query */
   search?: string;
+  /**
+   * Git-branch filter. Three modes:
+   *   - `'all'`           — every branch (no filter)
+   *   - `string` (other)  — only that branch + branch-agnostic (NULL) rows
+   *   - `null`            — only branch-agnostic (NULL) rows
+   *   - omitted/`undefined` — no filter (back-compat: equivalent to `'all'`)
+   * Callers that want "current branch + NULL" should resolve the branch first
+   * (see `getCurrentBranch`) and pass the resolved name.
+   */
+  git_branch?: string | null | 'all';
   limit?: number;
   offset?: number;
 }
@@ -151,6 +172,7 @@ CREATE TABLE IF NOT EXISTS decisions (
     session_id      TEXT,
     source          TEXT NOT NULL DEFAULT 'manual',
     confidence      REAL NOT NULL DEFAULT 1.0,
+    git_branch      TEXT,
     created_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_project ON decisions(project_root);
@@ -159,6 +181,8 @@ CREATE INDEX IF NOT EXISTS idx_decisions_type ON decisions(type);
 CREATE INDEX IF NOT EXISTS idx_decisions_symbol ON decisions(symbol_id);
 CREATE INDEX IF NOT EXISTS idx_decisions_file ON decisions(file_path);
 CREATE INDEX IF NOT EXISTS idx_decisions_valid ON decisions(valid_from, valid_until);
+CREATE INDEX IF NOT EXISTS idx_decisions_branch ON decisions(git_branch);
+CREATE INDEX IF NOT EXISTS idx_decisions_file_branch ON decisions(file_path, git_branch);
 
 -- FTS5 virtual table for full-text search over decisions
 CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(
@@ -310,6 +334,12 @@ export class DecisionStore {
         this.db.exec('ALTER TABLE decisions ADD COLUMN service_name TEXT');
         logger.info('Pre-migration: added service_name column to decisions table');
       }
+      // Branch-aware decision memory: existing rows backfill to NULL
+      // (= branch-agnostic). Idempotent: ALTER TABLE only runs when column missing.
+      if (!cols.includes('git_branch')) {
+        this.db.exec('ALTER TABLE decisions ADD COLUMN git_branch TEXT');
+        logger.info('Pre-migration: added git_branch column to decisions table');
+      }
     }
   }
 
@@ -381,8 +411,8 @@ export class DecisionStore {
       ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
       : (input.file_path ?? null);
     const stmt = this.db.prepare(`
-      INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now')*1000)
+      INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, git_branch, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now')*1000)
     `);
     const info = stmt.run(
       input.title,
@@ -397,6 +427,7 @@ export class DecisionStore {
       input.session_id ?? null,
       input.source ?? 'manual',
       input.confidence ?? 1.0,
+      input.git_branch ?? null,
       now,
     );
     return this.getDecision(info.lastInsertRowid as number)!;
@@ -465,6 +496,19 @@ export class DecisionStore {
     if (query.tag) {
       conditions.push("d.tags LIKE '%' || ? || '%'");
       params.push(query.tag);
+    }
+    // git_branch filter:
+    //   undefined  → no filter (back-compat)
+    //   'all'      → no filter
+    //   null       → only branch-agnostic rows
+    //   <string>   → that branch + branch-agnostic rows
+    if (query.git_branch !== undefined && query.git_branch !== 'all') {
+      if (query.git_branch === null) {
+        conditions.push('d.git_branch IS NULL');
+      } else {
+        conditions.push('(d.git_branch = ? OR d.git_branch IS NULL)');
+        params.push(query.git_branch);
+      }
     }
     if (!query.include_invalidated) {
       if (query.as_of) {

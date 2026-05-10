@@ -39,6 +39,27 @@ function compact(d: DecisionRow): CompactDecision {
 // ════════════════════════════════════════════════════════════════════════
 
 /**
+ * Optional branch filter applied after fetch. Same three-mode semantics as
+ * `DecisionQuery.git_branch`:
+ *   - omitted / `undefined` → no filter (preserves pre-feature behavior)
+ *   - `'all'`               → no filter
+ *   - `null`                → only branch-agnostic rows
+ *   - `<name>`              → that branch + branch-agnostic rows
+ *
+ * The per-symbol / per-file lookups in this module bypass `queryDecisions`,
+ * so we filter post-fetch rather than push the predicate down. The total row
+ * count touched here is bounded by `limit` upstream, so a JS-side filter is
+ * cheaper than maintaining parallel SQL.
+ */
+type BranchFilter = string | null | 'all' | undefined;
+
+function matchesBranch(row: { git_branch: string | null }, filter: BranchFilter): boolean {
+  if (filter === undefined || filter === 'all') return true;
+  if (filter === null) return row.git_branch === null;
+  return row.git_branch === null || row.git_branch === filter;
+}
+
+/**
  * Find decisions relevant to a change impact analysis.
  * Looks up by: target symbol, target file, affected files.
  */
@@ -48,6 +69,7 @@ export function decisionsForImpact(
   target: { symbolId?: string; filePath?: string },
   affectedFiles?: string[],
   limit = 10,
+  gitBranch?: BranchFilter,
 ): CompactDecision[] {
   const seen = new Set<number>();
   const results: CompactDecision[] = [];
@@ -55,6 +77,7 @@ export function decisionsForImpact(
   // 1. Decisions linked to the target symbol
   if (target.symbolId) {
     for (const d of decisionStore.getDecisionsForSymbol(target.symbolId)) {
+      if (!matchesBranch(d, gitBranch)) continue;
       if (!seen.has(d.id)) {
         seen.add(d.id);
         results.push(compact(d));
@@ -65,6 +88,7 @@ export function decisionsForImpact(
   // 2. Decisions linked to the target file
   if (target.filePath) {
     for (const d of decisionStore.getDecisionsForFile(target.filePath)) {
+      if (!matchesBranch(d, gitBranch)) continue;
       if (!seen.has(d.id)) {
         seen.add(d.id);
         results.push(compact(d));
@@ -76,6 +100,7 @@ export function decisionsForImpact(
   if (affectedFiles) {
     for (const file of affectedFiles.slice(0, 5)) {
       for (const d of decisionStore.getDecisionsForFile(file)) {
+        if (!matchesBranch(d, gitBranch)) continue;
         if (!seen.has(d.id)) {
           seen.add(d.id);
           results.push(compact(d));

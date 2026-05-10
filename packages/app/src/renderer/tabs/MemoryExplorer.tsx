@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { EMPTY_FILTER_VALUE, FilterBar, type FilterValue, matchesFilter } from '../components/FilterBar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -756,18 +757,23 @@ function DecisionsView({ root }: { root: string }) {
   const [stats, setStats] = useState<DecisionStats | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [q, setQ] = useState('');
+  // Filter state — match feeds the FTS `q` parameter, exclude is applied
+  // client-side over the returned rows. Depth is intentionally disabled for
+  // this view: decisions are a flat list with no hierarchical depth concept.
+  const [filter, setFilter] = useState<FilterValue>(EMPTY_FILTER_VALUE);
   const [activeType, setActiveType] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchDecisions = useCallback(
     async (search: string, type: string) => {
       setLoading(true);
       try {
         const params = new URLSearchParams({ project: root, limit: '50', offset: '0' });
-        if (search) params.set('q', search);
+        // Only forward plain-text matches as the FTS query — regex form
+        // (`/.../`) wouldn't survive server-side FTS, so we drop it and let
+        // the client-side filter do the work after the fetch.
+        if (search && !search.startsWith('/')) params.set('q', search);
         if (type) params.set('type', type);
         const res = await fetch(`${BASE}/api/projects/decisions?${params}`);
         if (res.ok) {
@@ -796,21 +802,33 @@ function DecisionsView({ root }: { root: string }) {
 
   useEffect(() => {
     fetchStats();
-    fetchDecisions('', '');
-  }, [fetchStats, fetchDecisions]);
+  }, [fetchStats]);
 
-  const handleSearch = (value: string) => {
-    setQ(value);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => {
-      void fetchDecisions(value, activeType);
-    }, 300);
-  };
+  // Refetch whenever match or active type changes. FilterBar already
+  // debounces so we can react synchronously here.
+  useEffect(() => {
+    void fetchDecisions(filter.match, activeType);
+  }, [fetchDecisions, filter.match, activeType]);
+
+  // Client-side filter pass: applies `match` (when regex), and `exclude`
+  // against title + content + type + file_path so the user can quickly
+  // narrow noisy result sets without a server round-trip.
+  const visibleDecisions = useMemo(() => {
+    if (!filter.match && !filter.exclude) return decisions;
+    return decisions.filter((d) => {
+      const haystack = `${d.title}\n${d.content}\n${d.type}\n${d.file_path ?? ''}`;
+      // For regex matches the server returned everything (we couldn't push
+      // the regex down) so we still need the include check here. For plain
+      // text the server already filtered, so matchesFilter is a no-op pass.
+      if (filter.match && !matchesFilter(haystack, filter.match)) return false;
+      if (filter.exclude && matchesFilter(haystack, filter.exclude)) return false;
+      return true;
+    });
+  }, [decisions, filter.match, filter.exclude]);
 
   const handleTypeFilter = (type: string) => {
     const next = activeType === type ? '' : type;
     setActiveType(next);
-    void fetchDecisions(q, next);
   };
 
   const handleAdd = async (values: DecisionFormValues) => {
@@ -834,7 +852,7 @@ function DecisionsView({ root }: { root: string }) {
     }
     setShowAddForm(false);
     // Refetch to get accurate totals and server-generated id
-    await fetchDecisions(q, activeType);
+    await fetchDecisions(filter.match, activeType);
     await fetchStats();
   };
 
@@ -879,36 +897,24 @@ function DecisionsView({ root }: { root: string }) {
         </button>
       )}
 
-      {/* Search input */}
-      <div className="relative">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search decisions…"
-          className="w-full text-[12px] outline-none pl-7 pr-3"
-          style={{
-            background: 'var(--bg-grouped)',
-            border: '0.5px solid var(--border-row)',
-            borderRadius: 8,
-            height: 30,
-            color: 'var(--text-primary)',
-            boxShadow: 'var(--shadow-grouped)',
+      {/* Filter bar — match feeds FTS, exclude is client-side */}
+      <div
+        className="px-3 py-2"
+        style={{
+          background: 'var(--bg-grouped)',
+          border: '0.5px solid var(--border-row)',
+          borderRadius: 8,
+          boxShadow: 'var(--shadow-grouped)',
+        }}
+      >
+        <FilterBar
+          value={filter}
+          onChange={setFilter}
+          depthEnabled={false}
+          storageKey="filter:decisions"
+          placeholder={{
+            match: 'Search decisions…',
+            exclude: 'hide rows containing…',
           }}
         />
       </div>
@@ -964,15 +970,17 @@ function DecisionsView({ root }: { root: string }) {
             </div>
           )}
 
-          {!loading && decisions.length === 0 && (
+          {!loading && visibleDecisions.length === 0 && (
             <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-              {q || activeType ? 'No matching decisions.' : 'No decisions stored yet.'}
+              {filter.match || filter.exclude || activeType
+                ? 'No matching decisions.'
+                : 'No decisions stored yet.'}
             </div>
           )}
 
           {!loading &&
-            decisions.map((d, i) => {
-              const isLast = i === decisions.length - 1;
+            visibleDecisions.map((d, i) => {
+              const isLast = i === visibleDecisions.length - 1;
               return (
                 <div
                   key={d.id}
@@ -990,12 +998,14 @@ function DecisionsView({ root }: { root: string }) {
               );
             })}
 
-          {!loading && total > decisions.length && (
+          {!loading && total > visibleDecisions.length && (
             <div
               className="px-3 py-1.5 text-[10px] text-center"
               style={{ color: 'var(--text-tertiary)', borderTop: '0.5px solid var(--border-row)' }}
             >
-              Showing {decisions.length} of {total} — refine your search to narrow results
+              {filter.exclude
+                ? `Showing ${visibleDecisions.length} of ${total} (${decisions.length - visibleDecisions.length} hidden by exclude)`
+                : `Showing ${visibleDecisions.length} of ${total} — refine your search to narrow results`}
             </div>
           )}
         </div>

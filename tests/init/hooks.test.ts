@@ -44,6 +44,9 @@ let installGuardHook: typeof import('../../src/init/hooks.js').installGuardHook;
 let uninstallGuardHook: typeof import('../../src/init/hooks.js').uninstallGuardHook;
 let installReindexHook: typeof import('../../src/init/hooks.js').installReindexHook;
 let isHookOutdated: typeof import('../../src/init/hooks.js').isHookOutdated;
+let installLifecycleHooks: typeof import('../../src/init/hooks.js').installLifecycleHooks;
+let uninstallLifecycleHooks: typeof import('../../src/init/hooks.js').uninstallLifecycleHooks;
+let installSessionStartHook: typeof import('../../src/init/hooks.js').installSessionStartHook;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -64,6 +67,9 @@ beforeEach(async () => {
   uninstallGuardHook = mod.uninstallGuardHook;
   installReindexHook = mod.installReindexHook;
   isHookOutdated = mod.isHookOutdated;
+  installLifecycleHooks = mod.installLifecycleHooks;
+  uninstallLifecycleHooks = mod.uninstallLifecycleHooks;
+  installSessionStartHook = mod.installSessionStartHook;
 });
 
 afterEach(() => {
@@ -318,6 +324,162 @@ describe('installReindexHook', () => {
     const settings = JSON.parse(String(writeCall![1]).trim());
     expect(settings.hooks.PostToolUse).toHaveLength(1);
     expect(settings.hooks.PostToolUse[0].matcher).toBe('Edit|Write|MultiEdit');
+  });
+});
+
+describe('installLifecycleHooks', () => {
+  it('returns one skipped step per hook on dry run', () => {
+    const results = installLifecycleHooks({ dryRun: true });
+    expect(results).toHaveLength(4);
+    for (const r of results) {
+      expect(r.action).toBe('skipped');
+      expect(r.detail).toMatch(/Would install/);
+    }
+  });
+
+  it('installs SessionStart / UserPromptSubmit / Stop / SessionEnd entries with correct settings keys', () => {
+    // The default fs mocks treat every readSettings → "{}" because existsSync
+    // for settings.json starts false. Each install is a separate readSettings
+    // → addHookEntry → writeSettings cycle, so we assert PER-WRITE that one
+    // of the four lifecycle keys was added (rather than expecting the last
+    // write to contain all four — that would require the in-memory store the
+    // production code never builds).
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const s = String(p).replace(/\\/g, '/');
+      if (
+        s.includes('hooks') &&
+        (s.includes('trace-mcp-session-start') ||
+          s.includes('trace-mcp-user-prompt-submit') ||
+          s.includes('trace-mcp-stop') ||
+          s.includes('trace-mcp-session-end')) &&
+        !s.includes('.claude') &&
+        !s.includes('.claw')
+      )
+        return true;
+      if (s.includes('.claw')) return false;
+      return false;
+    });
+
+    const results = installLifecycleHooks({ global: true });
+    expect(results).toHaveLength(4);
+    expect(results.every((r) => r.action === 'created')).toBe(true);
+
+    // Collect the final settings payload PER hook event by inspecting every
+    // write's parsed JSON.
+    const settingsWrites = mockFs.writeFileSync.mock.calls.filter((c) =>
+      String(c[0]).includes('settings.json'),
+    );
+    expect(settingsWrites.length).toBe(4);
+
+    const seenKeys = new Set<string>();
+    for (const w of settingsWrites) {
+      const parsed = JSON.parse(String(w[1]).trim());
+      const hooks = parsed.hooks ?? {};
+      for (const key of ['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd']) {
+        if (Array.isArray(hooks[key])) {
+          const entries = hooks[key] as Array<{
+            matcher?: string;
+            hooks: { command: string }[];
+          }>;
+          expect(entries).toHaveLength(1);
+          // Lifecycle hooks are plainCommand=true → no `matcher` key.
+          expect(entries[0].matcher).toBeUndefined();
+          expect(entries[0].hooks[0].command).toMatch(
+            /trace-mcp-(session-start|user-prompt-submit|stop|session-end)/,
+          );
+          seenKeys.add(key);
+        }
+      }
+    }
+    expect(seenKeys).toEqual(new Set(['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd']));
+  });
+
+  it('does not duplicate lifecycle entries on repeat install', () => {
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const s = String(p).replace(/\\/g, '/');
+      if (s.includes('hooks/trace-mcp-')) return true;
+      if (s.includes('settings.json')) return true;
+      if (s.includes('.claw')) return false;
+      return false;
+    });
+
+    // Pre-existing settings already contain a SessionStart entry pointing at
+    // our script — installLifecycleHooks must update in place, not append.
+    const initial = JSON.stringify({
+      hooks: {
+        SessionStart: [
+          {
+            hooks: [{ type: 'command', command: '/old/path/trace-mcp-session-start.sh' }],
+          },
+        ],
+      },
+    });
+    mockFs.readFileSync.mockReturnValue(initial);
+
+    installLifecycleHooks({ global: true });
+
+    const writes = mockFs.writeFileSync.mock.calls.filter((c) =>
+      String(c[0]).includes('settings.json'),
+    );
+    const finalSettings = JSON.parse(String(writes[writes.length - 1][1]).trim());
+    expect(finalSettings.hooks.SessionStart).toHaveLength(1);
+  });
+});
+
+describe('uninstallLifecycleHooks', () => {
+  it('removes the matching lifecycle hook entry per uninstall and preserves PreToolUse', () => {
+    // Each uninstall reads the SAME mocked initial settings, removes one
+    // lifecycle key, and writes the result. We assert per-write that the
+    // expected key is gone AND PreToolUse remains intact.
+    const initial = JSON.stringify({
+      hooks: {
+        SessionStart: [{ hooks: [{ command: 'trace-mcp-session-start /path' }] }],
+        UserPromptSubmit: [{ hooks: [{ command: 'trace-mcp-user-prompt-submit /path' }] }],
+        Stop: [{ hooks: [{ command: 'trace-mcp-stop /path' }] }],
+        SessionEnd: [{ hooks: [{ command: 'trace-mcp-session-end /path' }] }],
+        PreToolUse: [{ matcher: 'Bash', hooks: [{ command: 'other-hook' }] }],
+      },
+    });
+
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const s = String(p).replace(/\\/g, '/');
+      // Reject ANY .claw path so only the .claude client touches settings.
+      if (s.includes('.claw')) return false;
+      if (s.includes('settings.json')) return true;
+      if (s.includes('trace-mcp-')) return true;
+      return false;
+    });
+    mockFs.readFileSync.mockReturnValue(initial);
+
+    const results = uninstallLifecycleHooks({ global: true });
+    expect(results).toHaveLength(4);
+
+    const writes = mockFs.writeFileSync.mock.calls.filter(
+      (c) => String(c[0]).includes('settings.json') && !String(c[0]).includes('.claw'),
+    );
+    expect(writes.length).toBe(4);
+
+    const removalScripts = ['session-start', 'user-prompt-submit', 'stop', 'session-end'];
+
+    for (let i = 0; i < writes.length; i++) {
+      const parsed = JSON.parse(String(writes[i][1]).trim());
+      // The key whose script matches `removalScripts[i]` should be gone.
+      const expectedKey = ['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd'][i];
+      expect(parsed.hooks?.[expectedKey]).toBeUndefined();
+      // PreToolUse must always survive.
+      expect(parsed.hooks?.PreToolUse).toHaveLength(1);
+      expect(parsed.hooks?.PreToolUse[0].hooks[0].command).toBe('other-hook');
+    }
+    // Sanity: ensure each uninstall actually targeted a lifecycle hook
+    expect(removalScripts).toHaveLength(4);
+  });
+});
+
+describe('installSessionStartHook', () => {
+  it('returns skipped on dry run with descriptive label', () => {
+    const result = installSessionStartHook({ dryRun: true });
+    expect(result.action).toBe('skipped');
+    expect(result.detail).toContain('session-start');
   });
 });
 

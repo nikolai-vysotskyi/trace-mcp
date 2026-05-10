@@ -8,6 +8,12 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  EMPTY_FILTER_VALUE,
+  FilterBar,
+  type FilterValue,
+  matchesFilter,
+} from '../components/FilterBar';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -679,7 +685,19 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     };
   }, []);
   const [theme, setTheme] = useState<'light' | 'dark'>(detectTheme());
-  const [searchQuery, setSearchQuery] = useState('');
+  // Unified filter state — match feeds the existing search/typeahead path,
+  // exclude is applied as a client-side post-filter (drops nodes whose label
+  // or id matches), depth controls the BFS hop limit for click-highlight and
+  // group-select expansion.
+  const [filter, setFilter] = useState<FilterValue>({
+    ...EMPTY_FILTER_VALUE,
+    depth: 1,
+  });
+  const searchQuery = filter.match;
+  const setSearchQuery = useCallback(
+    (next: string) => setFilter((prev) => ({ ...prev, match: next })),
+    [],
+  );
   const [live, setLive] = useState(true); // Live = simulation running + breathing
   const [simRunning, setSimRunning] = useState(true); // polled from cosmos.gl
   // Synchronous mirror of `live` — onSimulationTick (fired from cosmos.gl's
@@ -702,7 +720,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     bottlenecks,
     stressTest,
   } = settings;
-  const HIGHLIGHT_DEPTH = 1;
+  // Click-highlight + select-all neighborhood expansion radius. Driven by the
+  // FilterBar depth stepper — `null` (∞) maps to a generous 6-hop ceiling so
+  // we don't risk infinite traversal on dense graphs but still feel "open".
+  const HIGHLIGHT_DEPTH = filter.depth ?? 6;
   // Mirror `showLabels` into a ref so the RAF tick reads the latest value
   // directly without relying on useCallback dep propagation. Belt-and-suspenders
   // against any stale-closure scenarios in the label loop.
@@ -2441,20 +2462,24 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   }, []);
 
   // ── Search: collect ALL matches; cap preview list at 8 ───────
+  // Honors FilterBar semantics: match accepts substring or /regex/i; the
+  // `exclude` filter (also substring or regex) drops any node whose label or
+  // id matches it. Empty match → no typeahead suggestions.
   // biome-ignore lint/correctness/useExhaustiveDependencies: stats is the proxy that signals "nodesRef.current has been replaced" — the ref itself isn't a tracked dep, but stats updates each time the payload reloads.
   const { searchMatches, searchTotal } = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = filter.match.trim();
     if (!q || q.length < 2) return { searchMatches: [] as VizNode[], searchTotal: 0 };
     const hits: VizNode[] = [];
     let total = 0;
     for (const n of nodesRef.current) {
-      if (n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)) {
-        total++;
-        if (hits.length < 8) hits.push(n);
-      }
+      const haystack = `${n.label}\n${n.id}`;
+      if (!matchesFilter(haystack, q)) continue;
+      if (filter.exclude && matchesFilter(haystack, filter.exclude)) continue;
+      total++;
+      if (hits.length < 8) hits.push(n);
     }
     return { searchMatches: hits, searchTotal: total };
-  }, [searchQuery, stats]);
+  }, [filter.match, filter.exclude, stats]);
 
   const doFocus = (node: VizNode) => {
     focusNode(node.id);
@@ -2615,12 +2640,15 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // Intentionally does NOT auto-zoom — for large groups that would fling
   // the view way out. User can hit Fit explicitly if they want.
   const doSelectAllMatches = useCallback(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = filter.match.trim();
     if (!q) return;
     const indices: number[] = [];
     for (let i = 0; i < nodesRef.current.length; i++) {
       const n = nodesRef.current[i];
-      if (n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)) indices.push(i);
+      const haystack = `${n.label}\n${n.id}`;
+      if (!matchesFilter(haystack, q)) continue;
+      if (filter.exclude && matchesFilter(haystack, filter.exclude)) continue;
+      indices.push(i);
     }
     if (indices.length === 0) return;
     const graph = graphRef.current;
@@ -2655,7 +2683,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     }
     selectedIndicesRef.current = new Set(visited);
     setSearchQuery('');
-  }, [searchQuery, clearHighlight]);
+  }, [filter.match, filter.exclude, HIGHLIGHT_DEPTH, clearHighlight, setSearchQuery]);
 
   // ── Workspace/group list (for "highlight group" dropdown) ────
   // biome-ignore lint/correctness/useExhaustiveDependencies: stats is the proxy that signals nodesRef.current was replaced after a new payload load.
@@ -3581,6 +3609,38 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           ↻
         </button>
       </div>
+
+      {/* ── Shared filter bar — match / exclude / depth. ──
+       *  Placed as a second floating pill directly below the main toolbar.
+       *  match is wired into the existing search/typeahead path; exclude is
+       *  applied to the same haystack and drops matching nodes from
+       *  search results + select-all; depth feeds HIGHLIGHT_DEPTH, controlling
+       *  the BFS radius for click-highlight and select-all neighbourhood
+       *  expansion. */}
+      <div
+        className="absolute z-30 px-3 py-1.5"
+        style={{
+          ...pillStyle,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          top: toolbarHeight + 16,
+          width: 'max-content',
+          maxWidth: 'calc(100% - 24px)',
+          minWidth: 480,
+        }}
+      >
+        <FilterBar
+          value={filter}
+          onChange={setFilter}
+          depthEnabled
+          storageKey="filter:graph"
+          placeholder={{
+            match: 'substring or /regex/i',
+            exclude: 'hide nodes matching…',
+          }}
+        />
+      </div>
+
       <style>{`
         @keyframes cosmos-gpu-pulse {
           0%, 100% { transform: scale(1); opacity: 1; }

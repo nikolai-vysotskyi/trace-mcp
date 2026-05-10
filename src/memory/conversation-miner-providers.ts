@@ -16,6 +16,7 @@
 import { logger } from '../logger.js';
 import { getSessionProviderRegistry } from '../session/providers/registry.js';
 import type { RawMessage, SessionHandle } from '../session/providers/types.js';
+import { getCurrentBranch } from '../utils/git-branch.js';
 import { type ConversationTurn, extractDecisions } from './conversation-miner.js';
 import type { DecisionInput, DecisionStore } from './decision-store.js';
 
@@ -56,6 +57,9 @@ export async function mineProviderSessions(
   if (providers.length === 0) return;
 
   const minConfidence = opts.minConfidence ?? 0.6;
+  // Branch-aware capture: resolve once per call. Provider mining is scoped
+  // to a single projectRoot, so a single lookup is enough.
+  const capturedBranch = getCurrentBranch(opts.projectRoot);
 
   for (const provider of providers) {
     let handles: SessionHandle[];
@@ -103,6 +107,7 @@ export async function mineProviderSessions(
             session_id: sessionKey,
             source: 'mined' as const,
             confidence: d.confidence,
+            git_branch: capturedBranch,
           }));
 
           decisionStore.addDecisions(inputs);
