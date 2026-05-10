@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.34.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.34.0...v1.34.1) (2026-05-10)
+
+
+### Bug Fixes
+
+* **release:** sync Claude Code plugin manifests with package.json on bump ([404c4bd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/404c4bddce2d28512acc5cc2bb28e17ea019bbd3))
+
 ## [1.34.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.33.0...v1.34.0) (2026-05-10)
 
 
