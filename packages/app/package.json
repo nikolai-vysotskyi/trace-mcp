@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp-app",
-  "version": "1.34.1",
+  "version": "1.34.2",
   "private": true,
   "description": "trace-mcp menu bar app",
   "main": "dist/main/index.js",
