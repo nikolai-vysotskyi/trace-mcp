@@ -261,6 +261,13 @@ export function resolveProvider(
 // Context retrieval
 // ---------------------------------------------------------------------------
 
+/** Structured summary of what was pulled into an LLM context window. */
+export interface ContextEnvelope {
+  symbols: { symbol_id: string; file: string; line: number }[];
+  decisions: { id: string; title: string }[];
+  files: string[];
+}
+
 export async function gatherContext(
   projectRoot: string,
   store: Store,
@@ -268,6 +275,23 @@ export async function gatherContext(
   question: string,
   tokenBudget: number,
 ): Promise<string> {
+  return (
+    await gatherContextWithEnvelope(projectRoot, store, pluginRegistry, question, tokenBudget)
+  ).context;
+}
+
+/**
+ * Like `gatherContext` but also returns a structured `ContextEnvelope`
+ * describing which files and symbols were included. Used by the sessions
+ * endpoint to emit `{ type: 'context_envelope' }` before streaming starts.
+ */
+export async function gatherContextWithEnvelope(
+  projectRoot: string,
+  store: Store,
+  pluginRegistry: PluginRegistry,
+  question: string,
+  tokenBudget: number,
+): Promise<{ context: string; envelope: ContextEnvelope }> {
   const { packContext } = await import('../tools/refactoring/pack-context.js');
   const result = packContext(store, pluginRegistry, {
     scope: 'feature',
@@ -280,7 +304,50 @@ export async function gatherContext(
     projectRoot,
   });
 
-  return result.content;
+  // Build the envelope from the files that packContext selected.
+  // We reconstruct the file list by querying the store the same way
+  // packContext does internally (feature scope + FTS).
+  const envelopeFiles: string[] = [];
+  const envelopeSymbols: ContextEnvelope['symbols'] = [];
+
+  try {
+    const allFiles = store.getAllFiles() as { id: number; path: string }[];
+    // Take up to the first 20 files that appear in the packed content —
+    // detected by matching file paths present in the context string.
+    for (const f of allFiles) {
+      if (result.content.includes(f.path)) {
+        envelopeFiles.push(f.path);
+        // Add top symbols from each included file
+        try {
+          const syms = store.getSymbolsByFile(f.id) as {
+            symbol_id: string;
+            name: string;
+            line_start: number | null;
+          }[];
+          for (const s of syms.slice(0, 3)) {
+            envelopeSymbols.push({
+              symbol_id: s.symbol_id,
+              file: f.path,
+              line: s.line_start ?? 1,
+            });
+          }
+        } catch {
+          // Non-fatal: store API may differ slightly across versions
+        }
+        if (envelopeFiles.length >= 20) break;
+      }
+    }
+  } catch {
+    // Non-fatal: envelope is best-effort
+  }
+
+  const envelope: ContextEnvelope = {
+    symbols: envelopeSymbols.slice(0, 30),
+    decisions: [], // decisions are not yet surfaced by packContext
+    files: envelopeFiles,
+  };
+
+  return { context: result.content, envelope };
 }
 
 // ---------------------------------------------------------------------------

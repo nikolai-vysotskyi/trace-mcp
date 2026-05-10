@@ -6,6 +6,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { TraceMcpConfig } from '../config.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
+import type { JournalEntryCallbackData } from './journal-broadcast.js';
 import { ALWAYS_LOAD_TOOLS } from '../tools/project/presets.js';
 import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
 import { COMPACT_CORE_PARAMS } from './compact-params.js';
@@ -67,6 +68,8 @@ export function installToolGate(
   stripMetaFields: (obj: Record<string, unknown>) => void,
   projectRoot?: string,
   recordToolCall?: (success: boolean) => void,
+  onJournalEntry?: (data: JournalEntryCallbackData) => void,
+  sessionId?: string,
 ): ToolGateResult {
   const includeSet = config.tools?.include ? new Set(config.tools.include) : null;
   const excludeSet = config.tools?.exclude ? new Set(config.tools.exclude) : null;
@@ -225,7 +228,8 @@ export function installToolGate(
             content: Array<{ type: string; text: string }>;
             isError?: boolean;
           };
-          savings.recordLatency(name, Date.now() - warnStart, !!result?.isError);
+          const warnLatency = Date.now() - warnStart;
+          savings.recordLatency(name, warnLatency, !!result?.isError);
           recordToolCall?.(!result?.isError);
           if (result?.content?.[0]?.text && !result.isError) {
             try {
@@ -243,6 +247,19 @@ export function installToolGate(
           }
           const count = extractResultCount(result);
           journal.record(name, params, count);
+          if (onJournalEntry && sessionId) {
+            onJournalEntry({
+              project: projectRoot ?? '',
+              ts: Date.now(),
+              tool: name,
+              params_summary: journal.getEntries().at(-1)?.params_summary ?? '',
+              result_count: count,
+              result_tokens: undefined,
+              latency_ms: warnLatency,
+              is_error: !!result?.isError,
+              session_id: sessionId,
+            });
+          }
           return result;
         }
 
@@ -253,7 +270,8 @@ export function installToolGate(
           content: Array<{ type: string; text: string }>;
           isError?: boolean;
         };
-        savings.recordLatency(name, Date.now() - normalStart, !!resultObj?.isError);
+        const normalLatency = Date.now() - normalStart;
+        savings.recordLatency(name, normalLatency, !!resultObj?.isError);
         recordToolCall?.(!resultObj?.isError);
         const count = extractResultCount(resultObj);
         const compactResult = extractCompactResult(name, resultObj);
@@ -261,6 +279,19 @@ export function installToolGate(
           ? Math.ceil(resultObj.content[0].text.length / 4)
           : undefined;
         journal.record(name, params, count, { compactResult, resultTokens });
+        if (onJournalEntry && sessionId) {
+          onJournalEntry({
+            project: projectRoot ?? '',
+            ts: Date.now(),
+            tool: name,
+            params_summary: journal.getEntries().at(-1)?.params_summary ?? '',
+            result_count: count,
+            result_tokens: resultTokens,
+            latency_ms: normalLatency,
+            is_error: !!resultObj?.isError,
+            session_id: sessionId,
+          });
+        }
 
         // Optimization hint + budget auto-defaults metadata
         const optHint = journal.getOptimizationHint(name, params);
