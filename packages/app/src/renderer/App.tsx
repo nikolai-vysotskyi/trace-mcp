@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { WindowTabBar } from './components/WindowTabBar';
+import { Activity } from './tabs/Activity';
 import { AskTab } from './tabs/AskTab';
 import { Clients } from './tabs/Clients';
+import { Dashboard } from './tabs/Dashboard';
 import {
   DEFAULT_GRAPH_GPU_SETTINGS,
   GraphExplorerGPU,
@@ -10,6 +12,7 @@ import {
   type GraphGPUSettings,
 } from './tabs/GraphExplorerGPU';
 import { Indexes } from './tabs/Indexes';
+import { MemoryExplorer } from './tabs/MemoryExplorer';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
 
@@ -17,19 +20,22 @@ import { Settings } from './tabs/Settings';
 // ?view=menu&tab=projects  → Menu window (sidebar + Projects/Clients/Settings)
 // ?view=project&root=/path → Project window (sidebar + Overview/Graph)
 
-type GlobalTab = 'projects' | 'clients' | 'settings';
+type GlobalTab = 'projects' | 'dashboard' | 'clients' | 'settings';
 // Settings lives in the sidebar footer (always-visible bottom row), not the top
 // nav. Keep it in the type union so existing routing/state code keeps working.
 const GLOBAL_TABS: { id: GlobalTab; label: string }[] = [
   { id: 'projects', label: 'Projects' },
+  { id: 'dashboard', label: 'Dashboard' },
   { id: 'clients', label: 'MCP Clients' },
 ];
 
-type ProjectTab = 'overview' | 'ask' | 'graph';
+type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory';
 const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'ask', label: 'Ask' },
   { id: 'graph', label: 'Graph' },
+  { id: 'activity', label: 'Activity' },
+  { id: 'memory', label: 'Memory' },
 ];
 
 function getUrlParams() {
@@ -635,6 +641,7 @@ function MenuContent({ tab }: { tab: GlobalTab }) {
   return (
     <>
       {tab === 'projects' && <Indexes onOpenProject={openProject} />}
+      {tab === 'dashboard' && <Dashboard />}
       {tab === 'clients' && <Clients />}
       {tab === 'settings' && <Settings />}
     </>
@@ -665,6 +672,10 @@ function ProjectContent({
       )}
       {/* Ask — chat interface, needs flex layout */}
       {tab === 'ask' && <AskTab root={root} />}
+      {/* Activity — live MCP tool-call feed for this project */}
+      {tab === 'activity' && <Activity root={root} />}
+      {/* Memory — decisions / corpora / sessions explorer */}
+      {tab === 'memory' && <MemoryExplorer root={root} />}
       {/* Graph — GPU-accelerated (cosmos.gl), edge-to-edge */}
       {tab === 'graph' && (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">

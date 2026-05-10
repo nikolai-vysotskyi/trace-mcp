@@ -194,6 +194,14 @@ function extractCompactResult(
 export interface ServerDeps {
   topoStore?: TopologyStore | null;
   decisionStore?: DecisionStore | null;
+  /**
+   * Optional per-session callback fired for every MCP tool call. Used by the
+   * Electron app to stream live activity over the /api/events SSE bus.
+   * cli.ts wires it to broadcastEvent.
+   */
+  onJournalEntry?: (data: import('./journal-broadcast.js').JournalEntryCallbackData) => void;
+  /** Session ID associated with `onJournalEntry`. Required when the callback is set. */
+  sessionId?: string;
 }
 
 /**
@@ -201,6 +209,12 @@ export interface ServerDeps {
  */
 export interface ServerHandle {
   server: McpServer;
+  /**
+   * SessionJournal of the MCP session this handle owns. Exposed so the daemon
+   * HTTP layer can serve a snapshot of recent tool calls to the Electron app
+   * (GET /api/projects/journal) without reaching into createServer internals.
+   */
+  journal: SessionJournal;
   /** Flush session data and close owned resources. Safe to call multiple times. */
   dispose: () => void;
 }
@@ -437,6 +451,8 @@ export function createServer(
     stripMetaFields,
     projectRoot,
     (success) => heartbeat.recordToolCall(success),
+    deps?.onJournalEntry,
+    deps?.sessionId,
   );
 
   if (presetName !== 'full') {
@@ -585,5 +601,5 @@ export function createServer(
   registerKnowledgeTools(server, ctx);
   registerSessionTools(server, metaCtx);
 
-  return { server, dispose };
+  return { server, journal, dispose };
 }

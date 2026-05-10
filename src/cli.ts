@@ -73,6 +73,10 @@ import {
 } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
+import { handleAskSessionsRequest } from './api/ask-sessions-routes.js';
+import { handleDashboardRequest } from './api/dashboard-routes.js';
+import { handleMemoryRequest } from './api/memory-routes.js';
+import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
 import { createServer } from './server/server.js';
 import { SubprojectManager } from './subproject/manager.js';
 import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
@@ -350,7 +354,19 @@ program
           name?: string;
         }
       | { type: 'client_update'; clientId: string; project?: string; name?: string }
-      | { type: 'client_disconnect'; clientId: string; project?: string };
+      | { type: 'client_disconnect'; clientId: string; project?: string }
+      | {
+          type: 'journal_entry';
+          project: string;
+          ts: number;
+          tool: string;
+          params_summary: string;
+          result_count: number;
+          result_tokens?: number;
+          latency_ms?: number;
+          is_error: boolean;
+          session_id: string;
+        };
 
     const sseConnections = new Set<http.ServerResponse>();
 
@@ -408,15 +424,29 @@ program
       const managed = projectManager.getProject(projectRoot);
       if (!managed) return null;
 
+      // Pre-allocate the session id so the journal callback below can stamp
+      // each emitted event with the same id the MCP transport will use.
+      const sessionId = randomUUID();
       const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
+        sessionIdGenerator: () => sessionId,
       });
 
       // Each session needs its own Server instance since the MCP SDK's Server
       // only supports one transport at a time. All sessions share the same
       // underlying Store/Pipeline/Registry via the managed project.
       // TopologyStore and DecisionStore are shared via resource pool.
-      const deps = resourcePool.acquire(projectRoot, managed.config);
+      const baseDeps = resourcePool.acquire(projectRoot, managed.config);
+      const deps = {
+        ...baseDeps,
+        sessionId,
+        onJournalEntry: (
+          data: import('./server/journal-broadcast.js').JournalEntryCallbackData,
+        ) => {
+          broadcastEvent(
+            buildJournalEvent({ ...data, project: projectRoot, session_id: sessionId }),
+          );
+        },
+      };
       const handle = createServer(
         managed.store,
         managed.registry,
@@ -2052,6 +2082,45 @@ program
         req.on('close', () => clearInterval(keepAlive));
         return;
       }
+
+      // ── Activity tab — snapshot of recent journal entries for a project ──
+      // Live updates flow through /api/events as `journal_entry` events; this
+      // endpoint returns the last N entries from the most-recently-active
+      // session's journal so the tab can populate on first mount.
+      if (req.method === 'GET' && url.pathname === '/api/projects/journal') {
+        const projectRoot = url.searchParams.get('project');
+        const limit = Math.min(
+          1000,
+          Math.max(1, parseInt(url.searchParams.get('limit') ?? '200', 10) || 200),
+        );
+        if (!projectRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'project query param is required' }));
+          return;
+        }
+        const sids = projectSessions.get(projectRoot);
+        let snapshot: ReturnType<typeof buildJournalSnapshot> = [];
+        if (sids && sids.size > 0) {
+          // Pick the most recently created session (last inserted into the Set).
+          const sid = [...sids].pop()!;
+          const handle = sessionHandles.get(sid);
+          if (handle) {
+            snapshot = buildJournalSnapshot(handle.journal, projectRoot, sid, limit);
+          }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(snapshot));
+        return;
+      }
+
+      // ── Memory explorer (decisions / corpora / sessions) ──────────────
+      if (handleMemoryRequest(req, res, url)) return;
+
+      // ── Dashboard — aggregate health across all registered projects ───
+      if (await handleDashboardRequest(req, res)) return;
+
+      // ── Ask v2 — persistent chat sessions with context transparency ───
+      if (await handleAskSessionsRequest(req, res, { projectManager, loadConfig })) return;
 
       res.writeHead(404);
       res.end();
