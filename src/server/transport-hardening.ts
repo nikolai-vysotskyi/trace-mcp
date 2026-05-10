@@ -26,8 +26,17 @@ let stdoutGuardArmed = false;
 let originalStdoutWrite: typeof process.stdout.write | null = null;
 
 /**
- * Force UTF-8 on the three standard streams. No-op when the environment
+ * Force UTF-8 on the *outbound* standard streams. No-op when the environment
  * already reports utf8 / utf-8.
+ *
+ * NOTE: stdin is intentionally left in raw Buffer mode. The MCP SDK's
+ * `ReadBuffer` (shared/stdio.js) assumes each chunk is a Buffer and calls
+ * `.subarray()` on the accumulated buffer. Calling `process.stdin.setEncoding`
+ * here would flip stdin into string-emitting mode, and the SDK's ReadBuffer
+ * would crash with "TypeError: this._buffer.subarray is not a function" on
+ * the very first frame — killing the session before any tool call lands.
+ * The SDK already decodes incoming bytes via `Buffer.toString('utf8', ...)`,
+ * so explicit utf-8 on stdin is both unnecessary and actively harmful.
  */
 export function forceUtf8Stdio(): void {
   // setDefaultEncoding throws on Windows when stdio is a Pipe (not a TTY) —
@@ -39,11 +48,6 @@ export function forceUtf8Stdio(): void {
   }
   try {
     process.stderr.setDefaultEncoding('utf8');
-  } catch {
-    // ignored
-  }
-  try {
-    process.stdin.setEncoding('utf8');
   } catch {
     // ignored
   }
