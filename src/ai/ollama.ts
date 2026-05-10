@@ -4,6 +4,7 @@
 
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
 import { parseOllamaChatStream } from './sse.js';
 
@@ -28,14 +29,19 @@ class OllamaEmbeddingService implements EmbeddingService {
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
+    const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
-        const resp = await fetch(`${this.baseUrl}/api/embed`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: this.model, input: texts }),
-          signal: AbortSignal.timeout(30_000),
-        });
+        const resp = await safeFetch(
+          `${this.baseUrl}/api/embed`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: this.model, input: texts }),
+            signal: AbortSignal.timeout(30_000),
+          },
+          { allowPrivateNetworks },
+        );
 
         if (!resp.ok) {
           throw new Error(`Ollama embed batch failed: ${resp.status} ${resp.statusText}`);
@@ -71,6 +77,7 @@ class OllamaInferenceService implements InferenceService {
     prompt: string,
     options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
+    const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
         const body: Record<string, unknown> = {
@@ -86,12 +93,16 @@ class OllamaInferenceService implements InferenceService {
           };
         }
 
-        const resp = await fetch(`${this.baseUrl}/api/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(60_000),
-        });
+        const resp = await safeFetch(
+          `${this.baseUrl}/api/generate`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(60_000),
+          },
+          { allowPrivateNetworks },
+        );
 
         if (!resp.ok) {
           throw new Error(`Ollama generate failed: ${resp.status} ${resp.statusText}`);
@@ -121,12 +132,16 @@ class OllamaInferenceService implements InferenceService {
       };
     }
 
-    const resp = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reqBody),
-      signal: AbortSignal.timeout(120_000),
-    });
+    const resp = await safeFetch(
+      `${this.baseUrl}/api/chat`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody),
+        signal: AbortSignal.timeout(120_000),
+      },
+      { allowPrivateNetworks: isExplicitlyLocalUrl(this.baseUrl) },
+    );
 
     if (!resp.ok) {
       throw new Error(`Ollama chat stream failed: ${resp.status} ${resp.statusText}`);
@@ -145,9 +160,11 @@ export class OllamaProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      const resp = await fetch(`${this.config.baseUrl}/api/tags`, {
-        signal: AbortSignal.timeout(2000),
-      });
+      const resp = await safeFetch(
+        `${this.config.baseUrl}/api/tags`,
+        { signal: AbortSignal.timeout(2000) },
+        { allowPrivateNetworks: isExplicitlyLocalUrl(this.config.baseUrl) },
+      );
       return resp.ok;
     } catch {
       logger.debug('Ollama not available');

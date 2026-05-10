@@ -20,6 +20,7 @@ import path from 'node:path';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { isSafeGitRef, safeGitEnv } from '../../utils/git-env.js';
+import { checkOutboundUrl, isExplicitlyLocalUrl } from '../../utils/ssrf-guard.js';
 
 /**
  * Accept three URL shapes:
@@ -83,15 +84,28 @@ export interface CloneResult {
 }
 
 /**
+ * Build an http(s) URL suitable for SSRF resolution from any git URL form.
+ * The ssrf-guard expects a parseable URL with an http/https scheme; ssh
+ * shorthand (`git@host:owner/repo`) does not parse, so we synthesize
+ * `https://host/` from the host part for the DNS check. The actual `git
+ * clone` call still uses the original ssh URL.
+ */
+function ssrfCheckUrl(gitUrl: string): string {
+  const ssh = gitUrl.match(/^git@([^:]+):/);
+  if (ssh) return `https://${ssh[1]}/`;
+  return gitUrl;
+}
+
+/**
  * Clone `gitUrl` into a deterministic path under `<projectRoot>/.trace-mcp/`.
  * Idempotent: when the destination already exists with the right remote we
  * just return its path. Run as `execFileSync` so the URL never touches a shell.
  */
-export function cloneRemoteRepo(
+export async function cloneRemoteRepo(
   projectRoot: string,
   gitUrl: string,
   opts: CloneOptions = {},
-): TraceMcpResult<CloneResult> {
+): Promise<TraceMcpResult<CloneResult>> {
   if (!isSafeGitUrl(gitUrl)) {
     return err(validationError(`Refusing to clone unsafe git URL: ${JSON.stringify(gitUrl)}`));
   }
@@ -99,6 +113,18 @@ export function cloneRemoteRepo(
     return err(
       validationError(`Refusing to clone with unsafe git ref: ${JSON.stringify(opts.ref)}`),
     );
+  }
+
+  // SSRF guard: refuse hosts that resolve to loopback / private / link-local
+  // (cloud-metadata) addresses. Honour an explicitly-local hostname as opt-in
+  // for `allowPrivateNetworks` so internal git mirrors at e.g.
+  // `https://10.0.0.5/git/repo` keep working when configured intentionally.
+  const checkUrl = ssrfCheckUrl(gitUrl);
+  const guard = await checkOutboundUrl(checkUrl, {
+    allowPrivateNetworks: isExplicitlyLocalUrl(checkUrl),
+  });
+  if (!guard.ok) {
+    return err(validationError(`SSRF guard refused git URL: ${guard.reason ?? 'blocked'}`));
   }
 
   let cloneDir: string;

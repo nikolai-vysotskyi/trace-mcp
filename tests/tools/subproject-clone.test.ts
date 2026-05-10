@@ -75,13 +75,13 @@ describe('cloneRemoteRepo ref validation', () => {
   // these calls return Err without touching disk.
   const safeUrl = 'https://github.com/owner/repo.git';
 
-  it('refuses refs that start with a dash (argv injection into --branch)', () => {
-    const r = cloneRemoteRepo('/tmp/p', safeUrl, { ref: '-c=core.sshCommand=evil' });
+  it('refuses refs that start with a dash (argv injection into --branch)', async () => {
+    const r = await cloneRemoteRepo('/tmp/p', safeUrl, { ref: '-c=core.sshCommand=evil' });
     expect(r.isErr()).toBe(true);
     if (r.isErr()) expect(r.error.message).toContain('unsafe git ref');
   });
 
-  it('refuses refs containing shell metacharacters and spaces', () => {
+  it('refuses refs containing shell metacharacters and spaces', async () => {
     for (const ref of [
       'main; rm -rf /',
       'main && id',
@@ -89,23 +89,41 @@ describe('cloneRemoteRepo ref validation', () => {
       'main`whoami`',
       'main$(id)',
     ]) {
-      const r = cloneRemoteRepo('/tmp/p', safeUrl, { ref });
+      const r = await cloneRemoteRepo('/tmp/p', safeUrl, { ref });
       expect(r.isErr(), `expected reject: ${ref}`).toBe(true);
     }
   });
 
-  it('refuses oversize refs', () => {
-    const r = cloneRemoteRepo('/tmp/p', safeUrl, { ref: 'a'.repeat(257) });
+  it('refuses oversize refs', async () => {
+    const r = await cloneRemoteRepo('/tmp/p', safeUrl, { ref: 'a'.repeat(257) });
     expect(r.isErr()).toBe(true);
   });
 
-  it('does not invoke ref validation when ref is undefined', () => {
-    // No ref means cloneRemoteRepo proceeds past the validator and would
-    // resolve a clone dir / call git; we expect either Ok (when destination
+  it('does not invoke ref validation when ref is undefined', async () => {
+    // No ref means cloneRemoteRepo proceeds past the validator into the SSRF
+    // check and (possibly) DNS / git. We expect either Ok (when destination
     // already exists from a prior run) or Err with a non-ref reason.
-    const r = cloneRemoteRepo('/tmp/p', safeUrl, {});
+    const r = await cloneRemoteRepo('/tmp/p', safeUrl, {});
     if (r.isErr()) {
       expect(r.error.message).not.toContain('unsafe git ref');
     }
+  });
+});
+
+describe('cloneRemoteRepo SSRF guard', () => {
+  it('refuses literal-private-IP git URLs without explicit allow-private intent', async () => {
+    // 169.254.169.254 = AWS/GCP/Azure metadata endpoint. Always blocked.
+    const r = await cloneRemoteRepo('/tmp/p', 'https://169.254.169.254/repo.git');
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error.message).toContain('SSRF');
+  });
+
+  it('refuses loopback git URLs without explicit allow-private (defense-in-depth)', async () => {
+    // 127.0.0.1 is private/loopback. isExplicitlyLocalUrl will return true,
+    // so allowPrivateNetworks=true, so loopback IS allowed. Use 0.0.0.0 which
+    // is unspecified — always blocked.
+    const r = await cloneRemoteRepo('/tmp/p', 'https://0.0.0.0/repo.git');
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) expect(r.error.message).toContain('SSRF');
   });
 });

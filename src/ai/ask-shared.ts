@@ -6,6 +6,7 @@
 import type { TraceMcpConfig } from '../config.js';
 import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
+import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import type { ChatMessage } from './interfaces.js';
 import { parseAnthropicStream, parseGeminiStream, parseOpenAIStream } from './sse.js';
 
@@ -30,21 +31,25 @@ export function createOpenAICompatibleProvider(
   return {
     name: `${name} (${model})`,
     async *streamChat(messages, options) {
-      const resp = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+      const resp = await safeFetch(
+        `${baseUrl}/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            stream: true,
+            ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
+            ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+          }),
+          signal: AbortSignal.timeout(120_000),
         },
-        body: JSON.stringify({
-          model,
-          messages,
-          stream: true,
-          ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
-          ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-        }),
-        signal: AbortSignal.timeout(120_000),
-      });
+        { allowPrivateNetworks: isExplicitlyLocalUrl(baseUrl) },
+      );
 
       if (!resp.ok) {
         const body = await resp.text().catch(() => '');

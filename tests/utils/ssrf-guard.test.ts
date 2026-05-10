@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { checkOutboundUrl, checkOutboundUrlSync } from '../../src/utils/ssrf-guard.js';
+import {
+  checkOutboundUrl,
+  checkOutboundUrlSync,
+  isExplicitlyLocalUrl,
+  safeFetch,
+} from '../../src/utils/ssrf-guard.js';
 
 describe('checkOutboundUrlSync — literal-IP shape checks', () => {
   it('accepts public IPv4 literals', () => {
@@ -104,5 +109,52 @@ describe('checkOutboundUrl — async with DNS', () => {
     const r = await checkOutboundUrl('https://does-not-exist.invalid./');
     expect(r.ok).toBe(false);
     expect(r.reason).toMatch(/DNS lookup failed/);
+  });
+});
+
+describe('isExplicitlyLocalUrl', () => {
+  it('treats `localhost` as explicitly local', () => {
+    expect(isExplicitlyLocalUrl('http://localhost:11434')).toBe(true);
+    expect(isExplicitlyLocalUrl('http://localhost')).toBe(true);
+  });
+
+  it('treats RFC 1918 / loopback / CGN literals as explicitly local', () => {
+    expect(isExplicitlyLocalUrl('http://127.0.0.1/')).toBe(true);
+    expect(isExplicitlyLocalUrl('http://192.168.1.5/')).toBe(true);
+    expect(isExplicitlyLocalUrl('http://10.0.0.1/')).toBe(true);
+    expect(isExplicitlyLocalUrl('http://100.64.0.1/')).toBe(true);
+    expect(isExplicitlyLocalUrl('http://[::1]/')).toBe(true);
+    expect(isExplicitlyLocalUrl('http://[fc00::1]/')).toBe(true);
+  });
+
+  it('returns false for public hosts', () => {
+    expect(isExplicitlyLocalUrl('https://api.openai.com/v1')).toBe(false);
+    expect(isExplicitlyLocalUrl('https://github.com/owner/repo')).toBe(false);
+    expect(isExplicitlyLocalUrl('https://1.1.1.1/')).toBe(false);
+  });
+
+  it('returns false for malformed input', () => {
+    expect(isExplicitlyLocalUrl('not a url')).toBe(false);
+    expect(isExplicitlyLocalUrl('')).toBe(false);
+  });
+
+  it('returns false for cloud-metadata link-local (always blocked, never "own network")', () => {
+    expect(isExplicitlyLocalUrl('http://169.254.169.254/')).toBe(false);
+  });
+});
+
+describe('safeFetch', () => {
+  it('throws before reaching the network when the URL is blocked', async () => {
+    // 0.0.0.0 is unspecified — always blocked by the guard, even with
+    // allowPrivateNetworks. fetch should never run.
+    await expect(safeFetch('http://0.0.0.0/x')).rejects.toThrow(/SSRF guard refused/);
+  });
+
+  it('throws on disallowed schemes', async () => {
+    await expect(safeFetch('file:///etc/passwd')).rejects.toThrow(/SSRF guard refused/);
+  });
+
+  it('does not invoke fetch when the URL is malformed', async () => {
+    await expect(safeFetch('not a url')).rejects.toThrow(/SSRF guard refused/);
   });
 });
