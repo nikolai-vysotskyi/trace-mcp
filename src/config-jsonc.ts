@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { applyEdits, type ModificationOptions, modify, parse } from 'jsonc-parser';
 import { DEFAULT_CONFIG_JSONC, ensureGlobalDirs, GLOBAL_CONFIG_PATH } from './global.js';
 import { logger } from './logger.js';
+import { atomicWriteString } from './utils/atomic-write.js';
 
 // Shared formatting options — match the 2-space indent used in DEFAULT_CONFIG_JSONC
 const FORMAT_OPTS: ModificationOptions = {
@@ -38,7 +39,7 @@ export function modifyGlobalConfigJsonc(jsonPath: (string | number)[], value: un
   const text = readGlobalConfigText();
   const edits = modify(text, jsonPath, value, FORMAT_OPTS);
   const updated = applyEdits(text, edits);
-  fs.writeFileSync(GLOBAL_CONFIG_PATH, updated);
+  atomicWriteString(GLOBAL_CONFIG_PATH, updated, { mode: 0o600 });
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +121,7 @@ export function migrateGlobalConfig(): MigrateResult {
   }
 
   if (text !== existingText) {
-    fs.writeFileSync(GLOBAL_CONFIG_PATH, text);
+    atomicWriteString(GLOBAL_CONFIG_PATH, text, { mode: 0o600 });
     result.changed = true;
     logger.info({ added: result.added }, 'Migrated global config — added new keys');
   }
