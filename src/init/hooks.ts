@@ -134,14 +134,14 @@ function clientExists(client: ClientDir): boolean {
  * prevents `process.cwd()`-relative fallbacks from picking up a malicious
  * script when trace-mcp init is run from a hostile working directory.
  */
-function isWithin(parent: string, child: string): boolean {
+export function isWithin(parent: string, child: string): boolean {
   const rel = path.relative(parent, child);
   if (rel === '') return true;
   if (rel.startsWith('..') || path.isAbsolute(rel)) return false;
   return true;
 }
 
-function isSafeFilename(basename: string): boolean {
+export function isSafeFilename(basename: string): boolean {
   // Reject path separators, parent-dir tokens, and absolute paths.
   if (basename.length === 0 || basename.length > 200) return false;
   if (basename.includes('/') || basename.includes('\\')) return false;
@@ -150,7 +150,7 @@ function isSafeFilename(basename: string): boolean {
   return true;
 }
 
-function findHookSource(scriptName: string): string {
+export function findHookSource(scriptName: string): string {
   if (!isSafeFilename(scriptName)) {
     throw new Error(
       `Refusing to install hook with unsafe script name: ${JSON.stringify(scriptName)}`,
