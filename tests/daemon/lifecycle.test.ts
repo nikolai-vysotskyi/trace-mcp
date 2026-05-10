@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the daemon client so we can control health responses without a real HTTP server.
@@ -150,5 +152,37 @@ describe('verifyPidFileOwnership', () => {
   it('handles trailing whitespace and empty token line gracefully', () => {
     const v = verifyPidFileOwnership(`${process.pid}\n   \n`);
     expect(v.ok).toBe(true);
+  });
+});
+
+/**
+ * Regression: the daemon PID file and the daemon spawn lock are state files
+ * shared between concurrent processes. They MUST be written via the atomic
+ * helper (open/fsync/rename), not plain fs.writeFileSync — otherwise a crash
+ * mid-write leaves a half-written file that defeats the PID-reuse guard, and
+ * the spawn-lock stale-recovery branch becomes a TOCTOU race where two
+ * processes can both believe they hold the lock.
+ */
+describe('lifecycle.ts atomic-write invariants', () => {
+  const SRC = path.resolve(__dirname, '..', '..', 'src', 'daemon', 'lifecycle.ts');
+  const source = fs.readFileSync(SRC, 'utf-8');
+
+  it('writePidFile writes via atomicWriteString', () => {
+    const m = source.match(/function writePidFile[\s\S]*?\n}/);
+    expect(m, 'writePidFile body not found').not.toBeNull();
+    const body = m?.[0] ?? '';
+    expect(body).toContain('atomicWriteString');
+    expect(body).not.toContain('fs.writeFileSync');
+  });
+
+  it('acquireSpawnLock recovery branch never falls back to fs.writeFileSync', () => {
+    const m = source.match(/function acquireSpawnLock[\s\S]*?\n}/);
+    expect(m, 'acquireSpawnLock body not found').not.toBeNull();
+    const body = m?.[0] ?? '';
+    // The recovery path must take over the lock by unlinking + atomically
+    // recreating with O_EXCL ('wx'), not by overwriting in place.
+    expect(body).not.toContain('fs.writeFileSync');
+    expect(body).toContain("'wx'");
+    expect(body).toContain('unlinkSync');
   });
 });
