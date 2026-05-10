@@ -17,6 +17,7 @@
  * intent at the MCP / CLI surface.
  */
 import type Database from 'better-sqlite3';
+import { createSymbolsFtsTable } from './schema.js';
 
 export type RepairMode = 'drop-orphans' | 'drop-vec' | 'rebuild-fts';
 
@@ -96,18 +97,9 @@ function rebuildFts(db: Database.Database): RepairResult {
     if (tableExists(db, 'symbols_fts')) {
       db.exec('DROP TABLE symbols_fts');
     }
-    // The canonical FTS schema lives in src/db/schema.ts. Rebuild it via the
-    // exact DDL so the column order matches.
-    db.exec(`
-      CREATE VIRTUAL TABLE symbols_fts USING fts5(
-        name,
-        fqn,
-        signature,
-        summary,
-        content='symbols',
-        content_rowid='id'
-      )
-    `);
+    // Canonical DDL lives in schema.ts; rebuilding through the helper means
+    // a future column addition in schema.ts is picked up here automatically.
+    createSymbolsFtsTable(db);
     const info = db
       .prepare(
         `INSERT INTO symbols_fts (rowid, name, fqn, signature, summary)

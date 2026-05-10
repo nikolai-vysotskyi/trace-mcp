@@ -4,6 +4,33 @@ import { logger } from '../logger.js';
 
 const SCHEMA_VERSION = 25;
 
+/**
+ * Canonical column list for the `symbols_fts` virtual table.
+ * Must stay in sync with the FTS5 block in the main DDL below (around
+ * `CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts`) AND the trigger payload
+ * in `INSERT INTO symbols_fts(rowid, name, fqn, signature, summary)`. The
+ * column-list integrity test in `tests/db/repair-fts-ddl.test.ts` greps
+ * `schema.ts` for the literal column tuple and fails the build if drift is
+ * introduced.
+ */
+const SYMBOLS_FTS_COLUMNS = 'name, fqn, signature, summary' as const;
+const SYMBOLS_FTS_OPTIONS = `content=symbols, content_rowid=id` as const;
+
+/**
+ * Create the `symbols_fts` virtual table using the canonical column list.
+ * Used by both the main schema bootstrap and `repair.ts::rebuildFts` so the
+ * table shape can never drift between the two paths.
+ */
+export function createSymbolsFtsTable(
+  db: Database.Database,
+  opts: { ifNotExists?: boolean } = {},
+): void {
+  const guard = opts.ifNotExists ? ' IF NOT EXISTS' : '';
+  db.exec(
+    `CREATE VIRTUAL TABLE${guard} symbols_fts USING fts5(${SYMBOLS_FTS_COLUMNS}, ${SYMBOLS_FTS_OPTIONS})`,
+  );
+}
+
 const DDL = `
 -- ============================================================
 -- UNIFIED ADDRESS SPACE
