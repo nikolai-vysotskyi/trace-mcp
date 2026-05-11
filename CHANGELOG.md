@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.35.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.35.0...v1.35.1) (2026-05-11)
+
+
+### Bug Fixes
+
+* **daemon:** normalize reindex paths to POSIX so Windows tests + cross-path dedup work ([7f61983](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7f61983a59a2df3fa36905820c3d1fe2a032eb14))
+
+
+### Performance
+
+* **indexer:** daemon-first reindex, AI-call coalescing, shared/warm worker pool, content-hash gate ([dfd8e4f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dfd8e4f62552971248919f28f876d610605f4dac))
+
 ## [1.35.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.34.2...v1.35.0) (2026-05-10)
 
 
