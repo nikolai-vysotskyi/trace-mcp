@@ -78,6 +78,10 @@ export class Store {
     this.files.updateFileHash(fileId, hash, byteLength, mtimeMs ?? null);
   }
 
+  updateFileMtime(fileId: number, mtimeMs: number | null): void {
+    this.files.updateFileMtime(fileId, mtimeMs);
+  }
+
   /** Find files whose content_hash matches — used by rename detection. */
   findFilesByContentHash(hash: string): FileRow[] {
     return this.files.findFilesByContentHash(hash);

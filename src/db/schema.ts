@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 25;
+const SCHEMA_VERSION = 26;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -1428,6 +1428,14 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
         WHERE id = NEW.id;
       END;
     `);
+  },
+  26: (db) => {
+    // WHY: Phase 2 swapped hashContent from MD5 (32 hex) to xxh64 (16 hex).
+    // Existing rows hold MD5 hex that will never match the new digests, so
+    // rename detection (pipeline.detectRenames) and the hash-equality gate
+    // in file-extractor would force a full reparse on first run. Wipe stale
+    // values once so the next index repopulates them with the new algo.
+    db.exec(`UPDATE files SET content_hash = NULL`);
   },
 };
 

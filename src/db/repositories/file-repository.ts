@@ -7,6 +7,7 @@ export class FileRepository {
     getFile: Database.Statement;
     getFileById: Database.Statement;
     updateFileHash: Database.Statement;
+    updateFileMtime: Database.Statement;
     updateFileStatus: Database.Statement;
     updateFileGitignored: Database.Statement;
     deleteFileById: Database.Statement;
@@ -32,6 +33,7 @@ export class FileRepository {
       updateFileHash: db.prepare(
         "UPDATE files SET content_hash = ?, byte_length = ?, mtime_ms = ?, indexed_at = datetime('now') WHERE id = ?",
       ),
+      updateFileMtime: db.prepare('UPDATE files SET mtime_ms = ? WHERE id = ?'),
       updateFileStatus: db.prepare(
         'UPDATE files SET status = ?, framework_role = COALESCE(?, framework_role) WHERE id = ?',
       ),
@@ -85,6 +87,10 @@ export class FileRepository {
 
   updateFileHash(fileId: number, hash: string, byteLength: number, mtimeMs: number | null): void {
     this._stmts.updateFileHash.run(hash, byteLength, mtimeMs, fileId);
+  }
+
+  updateFileMtime(fileId: number, mtimeMs: number | null): void {
+    this._stmts.updateFileMtime.run(mtimeMs, fileId);
   }
 
   updateFileStatus(fileId: number, status: string, frameworkRole: string | null): void {

@@ -8,6 +8,7 @@ import fg from 'fast-glob';
 import type { TraceMcpConfig } from '../config.js';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
+import { initContentHasher } from '../util/hash.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { hashContent } from '../utils/hasher.js';
 import { validatePath } from '../utils/security.js';
@@ -34,6 +35,7 @@ export class EnvIndexer {
   }
 
   async indexEnvFiles(force: boolean): Promise<void> {
+    await initContentHasher();
     // Default config.exclude contains `**/.env` / `**/.env.*` to keep env files out of
     // the code index. EnvIndexer only records keys + inferred types/formats (no values),
     // so those patterns would wrongly hide our input — filter them before globbing.

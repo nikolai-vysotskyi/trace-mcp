@@ -15,6 +15,7 @@ import type { TraceMcpConfig } from '../../config.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
 import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../../global.js';
+import { ExtractPool } from '../../indexer/extract-pool.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { FileWatcher } from '../../indexer/watcher.js';
 import { logger } from '../../logger.js';
@@ -24,7 +25,10 @@ import { clearServerPid, ProgressState, writeServerPid } from '../../progress.js
 import { createServer, type ServerHandle } from '../../server/server.js';
 import { SubprojectManager } from '../../subproject/manager.js';
 import { TopologyStore } from '../../topology/topology-db.js';
+import { trailingDebounce } from '../../util/debounce.js';
 import type { Backend } from './types.js';
+
+const AI_COALESCE_WAIT_MS = 5_000;
 
 export interface LocalBackendOptions {
   projectRoot: string; // absolute path watched/indexed
@@ -59,6 +63,7 @@ export class LocalBackend implements Backend {
   private progress: ProgressState | null = null;
   private pipeline: IndexingPipeline | null = null;
   private watcher: FileWatcher | null = null;
+  private extractPool: ExtractPool | null = null;
   private handle: ServerHandle | null = null;
   private topoStore: TopologyStore | null = null;
   private decisionStore: DecisionStore | null = null;
@@ -66,6 +71,7 @@ export class LocalBackend implements Backend {
   private indexingPromise: Promise<void> | null = null;
   private started = false;
   private stopping = false;
+  private cancelDebouncedAI: (() => void) | null = null;
 
   constructor(opts: LocalBackendOptions) {
     this.opts = opts;
@@ -83,12 +89,17 @@ export class LocalBackend implements Backend {
     this.store = new Store(this.db);
     this.registry = PluginRegistry.createWithDefaults();
     this.progress = new ProgressState(this.db);
+    this.extractPool = new ExtractPool({
+      keepAlive: true,
+      size: config.indexer?.workers,
+    });
     this.pipeline = new IndexingPipeline(
       this.store,
       this.registry,
       config,
       projectRoot,
       this.progress,
+      { extractPool: this.extractPool },
     );
     this.watcher = new FileWatcher();
 
@@ -143,6 +154,13 @@ export class LocalBackend implements Backend {
       });
     };
 
+    const debouncedSummarize = trailingDebounce(runSummarization, AI_COALESCE_WAIT_MS);
+    const debouncedEmbed = trailingDebounce(runEmbeddings, AI_COALESCE_WAIT_MS);
+    this.cancelDebouncedAI = () => {
+      debouncedSummarize.cancel();
+      debouncedEmbed.cancel();
+    };
+
     // Kick off initial indexing in the background — do not block start.
     // This promise is tracked so stop() can let it drain before closing the DB.
     this.indexingPromise = this.pipeline
@@ -180,8 +198,8 @@ export class LocalBackend implements Backend {
       async (paths) => {
         if (this.stopping) return;
         await this.pipeline!.indexFiles(paths);
-        runSummarization();
-        runEmbeddings();
+        debouncedSummarize();
+        debouncedEmbed();
       },
       undefined,
       async (deleted) => {
@@ -220,6 +238,14 @@ export class LocalBackend implements Backend {
   async stop(): Promise<void> {
     if (this.stopping || !this.started) return;
     this.stopping = true;
+
+    // Cancel any pending debounced AI fires so they don't run after stop.
+    try {
+      this.cancelDebouncedAI?.();
+    } catch {
+      /* best-effort */
+    }
+    this.cancelDebouncedAI = null;
 
     // Stop accepting new MCP messages immediately.
     // Detach our onmessage so router never receives stale output.
@@ -268,6 +294,12 @@ export class LocalBackend implements Backend {
       } catch {
         /* best-effort */
       }
+      try {
+        if (this.extractPool) await this.extractPool.terminate();
+      } catch {
+        /* best-effort */
+      }
+      this.extractPool = null;
       try {
         if (this.db) clearServerPid(this.db);
       } catch {

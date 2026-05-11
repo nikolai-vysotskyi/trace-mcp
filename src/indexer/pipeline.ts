@@ -13,6 +13,7 @@ import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { safeGitEnv } from '../utils/git-env.js';
+import { initContentHasher } from '../util/hash.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { hashContent } from '../utils/hasher.js';
 import { validatePath } from '../utils/security.js';
@@ -81,6 +82,17 @@ const SHRINK_MIN_BASELINE = 200;
  * git working tree, when git isn't available, or when the call fails for any
  * other reason — callers must treat freshness checks as best-effort.
  */
+/** In-place sort of a path list so files of the same extension cluster
+ *  together. Workers reuse their parser cache on runs of the same language. */
+export function sortByExtension(relPaths: string[]): string[] {
+  relPaths.sort((a, b) => {
+    const extA = path.extname(a);
+    const extB = path.extname(b);
+    return extA.localeCompare(extB) || a.localeCompare(b);
+  });
+  return relPaths;
+}
+
 function readGitHeadSha(rootPath: string): string | null {
   try {
     // execFileSync (no shell) — matches the boundary established in 3b08ed0
@@ -102,6 +114,12 @@ function readGitHeadSha(rootPath: string): string | null {
   }
 }
 
+export interface IndexingPipelineDeps {
+  /** Inject a daemon-shared ExtractPool. When provided, the pipeline never
+   *  creates its own pool and dispose() does NOT terminate the shared one. */
+  extractPool?: ExtractPool | null;
+}
+
 export class IndexingPipeline {
   constructor(
     private store: Store,
@@ -109,7 +127,13 @@ export class IndexingPipeline {
     private config: TraceMcpConfig,
     private rootPath: string,
     private progress?: ProgressState,
-  ) {}
+    deps?: IndexingPipelineDeps,
+  ) {
+    if (deps?.extractPool) {
+      this._extractPool = deps.extractPool;
+      this._poolIsOwned = false;
+    }
+  }
 
   private workspaces: WorkspaceInfo[] = [];
   private _lock: Promise<unknown> = Promise.resolve();
@@ -124,6 +148,10 @@ export class IndexingPipeline {
   private _changedFileIds = new Set<number>();
   private _isIncremental = false;
   private _extractPool: ExtractPool | undefined;
+  /** True when this pipeline owns its pool (lazy, per-instance) and must
+   *  terminate it on dispose(). False when the pool came in via DI from the
+   *  daemon — termination is the daemon's responsibility. */
+  private _poolIsOwned = true;
   /**
    * Postprocess level for the current run, set by indexAll/indexFiles. CRG
    * v2.2.0 made this configurable so CI builds and incremental updates
@@ -271,6 +299,10 @@ export class IndexingPipeline {
     force: boolean,
     startMs: number,
   ): Promise<IndexingResult> {
+    // Sync the xxhash-wasm module before any extract() runs so the
+    // content-hash gate is non-blocking on the hot path.
+    await initContentHasher();
+
     const result: IndexingResult = {
       totalFiles: relPaths.length,
       indexed: 0,
@@ -452,6 +484,10 @@ export class IndexingPipeline {
       forceIncludePaths,
     });
 
+    // Cluster same-language files so each worker hits its parser cache instead
+    // of paying ~50-100 ms WASM Language.load on every extension switch.
+    sortByExtension(relPaths);
+
     // FTS5 trigger disable+rebuild is only worth it on bulk indexing.
     // For small (incremental) batches the per-row trigger fire is cheaper than
     // rebuilding the entire FTS index from all symbols at the end.
@@ -498,6 +534,14 @@ export class IndexingPipeline {
                 result.skipped++;
                 continue;
               }
+              if (r.kind === 'mtime_updated') {
+                // WHY: workers have no DB handle — apply the deferred mtime
+                // update on the main thread so the next run hits the cheap
+                // mtime fast-path instead of re-hashing every file.
+                this.store.updateFileMtime(r.fileId, r.newMtimeMs);
+                result.skipped++;
+                continue;
+              }
               if (r.kind === 'error') {
                 result.errors++;
                 continue;
@@ -513,15 +557,23 @@ export class IndexingPipeline {
             chunk.map((relPath) => extractor.extract(relPath, force)),
           );
           for (const ext of results) {
-            if (ext === 'skipped') {
+            if (ext.kind === 'skipped') {
               result.skipped++;
               continue;
             }
-            if (ext === 'error') {
+            if (ext.kind === 'mtime_updated') {
+              // WHY: in-process path normally writes via the in-extractor
+              // store handle; this branch is defensive for callers that
+              // construct a FileExtractor without a store.
+              this.store.updateFileMtime(ext.fileId, ext.newMtimeMs);
+              result.skipped++;
+              continue;
+            }
+            if (ext.kind === 'error') {
               result.errors++;
               continue;
             }
-            extractions.push(ext);
+            extractions.push(ext.extraction);
           }
         }
       }
@@ -680,8 +732,13 @@ export class IndexingPipeline {
   private maybeGetExtractPool(batchSize: number): ExtractPool | null {
     if (batchSize < IndexingPipeline.WORKER_THRESHOLD) return null;
     if (process.env.TRACE_MCP_WORKERS === '0') return null;
+    // Pool was injected by the daemon — reuse without reconstructing.
+    if (this._extractPool && !this._poolIsOwned) {
+      return this._extractPool.available ? this._extractPool : null;
+    }
     if (!this._extractPool) {
       this._extractPool = new ExtractPool();
+      this._poolIsOwned = true;
       if (!this._extractPool.available) {
         logger.debug(
           'Extract worker pool unavailable in this runtime — using in-process extraction',
@@ -691,12 +748,13 @@ export class IndexingPipeline {
     return this._extractPool.available ? this._extractPool : null;
   }
 
-  /** Shut down the worker pool. Safe to call repeatedly. */
+  /** Shut down the worker pool. Safe to call repeatedly. Pools that were
+   *  injected (daemon-shared) are NOT terminated here — the daemon owns them. */
   async dispose(): Promise<void> {
-    if (this._extractPool) {
+    if (this._extractPool && this._poolIsOwned) {
       await this._extractPool.terminate();
-      this._extractPool = undefined;
     }
+    this._extractPool = undefined;
   }
 
   private async collectFiles(): Promise<string[]> {

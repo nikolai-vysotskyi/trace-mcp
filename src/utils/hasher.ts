@@ -1,9 +1,10 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { contentHash } from '../util/hash.js';
 
-/** Hash file content for change detection. MD5 for speed. */
+/** Hash file content for change detection. xxh64 (~3 GB/s) via xxhash-wasm.
+ *  Caller must have awaited initContentHasher() at pipeline startup. */
 export function hashContent(content: Buffer): string {
-  return crypto.createHash('md5').update(content).digest('hex');
+  return contentHash(content);
 }
 
 /** Convenience: read file and hash in one call. */

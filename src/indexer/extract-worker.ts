@@ -8,6 +8,7 @@
  */
 import { parentPort } from 'node:worker_threads';
 import { PluginRegistry } from '../plugin-api/registry.js';
+import { initContentHasher } from '../util/hash.js';
 import type { ExtractRequest, ExtractResponse } from './extract-pool.js';
 import { FileExtractor } from './file-extractor.js';
 import type { WorkspaceInfo } from './monorepo.js';
@@ -63,14 +64,15 @@ interface InternalRequest extends ExtractRequest {
 parentPort.on('message', async (req: InternalRequest) => {
   let result: ExtractResponse;
   try {
+    await initContentHasher();
     const extractor = getExtractor(req.rootPath, req.workspaces);
-    const r = await extractor.extract(req.relPath, req.force, {
+    // WHY: extract() now returns ExtractResponse directly — pass through.
+    // The 'mtime_updated' variant flows back to the main thread which holds
+    // the DB handle; the worker context has no store.
+    result = await extractor.extract(req.relPath, req.force, {
       existing: req.existing,
       gitignored: req.gitignored,
     });
-    if (r === 'skipped') result = { kind: 'skipped' };
-    else if (r === 'error') result = { kind: 'error' };
-    else result = { kind: 'ok', extraction: r };
   } catch {
     result = { kind: 'error' };
   }
