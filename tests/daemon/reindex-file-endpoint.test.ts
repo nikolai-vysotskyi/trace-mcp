@@ -170,4 +170,108 @@ describe('handleReindexFile', () => {
       expect(result.error).toMatch(/boom/);
     }
   });
+
+  // Phase 5.1: cold daemon serves HTTP from millisecond zero; in-flight
+  // requests against a still-warming project get 503 + Retry-After so the
+  // hook fallback path takes over transparently.
+  it('returns 503 with retryAfterSec when project status is indexing', async () => {
+    const indexFiles = vi.fn(async (_paths: string[]) => undefined);
+    const projectRoot = '/tmp/proj-cold';
+    const getProject = vi.fn((root: string) =>
+      root === projectRoot ? { pipeline: { indexFiles }, status: 'indexing' as const } : undefined,
+    );
+    const lock = vi.fn(async (_opts, fn: () => Promise<unknown>) => fn());
+
+    const result = await handleReindexFile(
+      { project: projectRoot, path: 'src/foo.ts' },
+      { getProject, lock },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(503);
+      if (result.status === 503) {
+        expect(result.retryAfterSec).toBe(5);
+        expect(result.error).toMatch(/not ready/);
+      }
+    }
+    expect(indexFiles).not.toHaveBeenCalled();
+    expect(lock).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 when project status is starting', async () => {
+    const projectRoot = '/tmp/proj-cold';
+    const getProject = vi.fn((root: string) =>
+      root === projectRoot
+        ? {
+            pipeline: { indexFiles: vi.fn(async () => undefined) },
+            status: 'starting' as const,
+          }
+        : undefined,
+    );
+
+    const result = await handleReindexFile(
+      { project: projectRoot, path: 'src/foo.ts' },
+      { getProject },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(503);
+  });
+
+  it('returns 503 when project status is error', async () => {
+    const projectRoot = '/tmp/proj-cold';
+    const getProject = vi.fn((root: string) =>
+      root === projectRoot
+        ? {
+            pipeline: { indexFiles: vi.fn(async () => undefined) },
+            status: 'error' as const,
+          }
+        : undefined,
+    );
+
+    const result = await handleReindexFile(
+      { project: projectRoot, path: 'src/foo.ts' },
+      { getProject },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(503);
+  });
+
+  it('processes normally when project status is ready', async () => {
+    const indexFiles = vi.fn(async (_paths: string[]) => undefined);
+    const projectRoot = '/tmp/proj-ready';
+    const getProject = vi.fn((root: string) =>
+      root === projectRoot ? { pipeline: { indexFiles }, status: 'ready' as const } : undefined,
+    );
+    const lock = vi.fn(async (_opts, fn: () => Promise<unknown>) => fn());
+
+    const result = await handleReindexFile(
+      { project: projectRoot, path: 'src/foo.ts' },
+      { getProject, lock },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.relPath).toBe('src/foo.ts');
+    expect(indexFiles).toHaveBeenCalledWith(['src/foo.ts']);
+  });
+
+  it('processes normally when status field is absent (back-compat)', async () => {
+    // Pre-Phase-5.1 fakes don't supply status; handler must not 503 them.
+    const indexFiles = vi.fn(async (_paths: string[]) => undefined);
+    const projectRoot = '/tmp/proj-no-status';
+    const getProject = vi.fn((root: string) =>
+      root === projectRoot ? { pipeline: { indexFiles } } : undefined,
+    );
+    const lock = vi.fn(async (_opts, fn: () => Promise<unknown>) => fn());
+
+    const result = await handleReindexFile(
+      { project: projectRoot, path: 'src/foo.ts' },
+      { getProject, lock },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(indexFiles).toHaveBeenCalledWith(['src/foo.ts']);
+  });
 });

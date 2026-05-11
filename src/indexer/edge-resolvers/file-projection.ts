@@ -21,9 +21,16 @@
  */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
-export function resolveFileProjectionEdges(state: PipelineState): void {
+export function resolveFileProjectionEdges(state: PipelineState, _scope?: ChangeScope): void {
+  // WHY: file projection is a SQL-side INSERT OR IGNORE from the edges table.
+  // Scoping the inserted source set to changed files alone is unsafe because
+  // a new symbol→symbol edge inserted in this run from an UNCHANGED file
+  // (e.g. heritage rebound to a new class) still needs a file projection.
+  // The SQL is idempotent and cheap enough to run full-pass.
+  void _scope;
   const { store } = state;
 
   const importsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('imports') as

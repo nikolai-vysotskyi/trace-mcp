@@ -13,9 +13,10 @@
  */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
-export function resolveMemberOfEdges(state: PipelineState): void {
+export function resolveMemberOfEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
 
   const memberOfType = store.db
@@ -29,14 +30,31 @@ export function resolveMemberOfEdges(state: PipelineState): void {
     return;
   }
 
-  // Load every symbol that has a parent_id (i.e., is a member of another symbol).
-  const rows = store.db
-    .prepare(`
-    SELECT s.id AS member_id, s.parent_id
-    FROM symbols s
-    WHERE s.parent_id IS NOT NULL
-  `)
-    .all() as Array<{ member_id: number; parent_id: number }>;
+  // member_of is purely intra-file (method→class in the same file). Scoping by
+  // changed files is exact — no phantom-rebind case.
+  const scopedIds = scope ? Array.from(scope.changedFileIds) : null;
+  let rows: Array<{ member_id: number; parent_id: number }>;
+  if (scopedIds && scopedIds.length > 0) {
+    const ph = scopedIds.map(() => '?').join(',');
+    rows = store.db
+      .prepare(`
+      SELECT s.id AS member_id, s.parent_id
+      FROM symbols s
+      WHERE s.parent_id IS NOT NULL
+        AND s.file_id IN (${ph})
+    `)
+      .all(...scopedIds) as Array<{ member_id: number; parent_id: number }>;
+  } else if (scopedIds && scopedIds.length === 0) {
+    return;
+  } else {
+    rows = store.db
+      .prepare(`
+      SELECT s.id AS member_id, s.parent_id
+      FROM symbols s
+      WHERE s.parent_id IS NOT NULL
+    `)
+      .all() as Array<{ member_id: number; parent_id: number }>;
+  }
 
   if (rows.length === 0) return;
 

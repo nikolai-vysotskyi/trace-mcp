@@ -1,10 +1,12 @@
 /** Pass 2b: Convert ORM associations into graph edges. */
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
-export function resolveOrmAssociationEdges(state: PipelineState): void {
+export function resolveOrmAssociationEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
-  const changedFileIds =
-    state.isIncremental && state.changedFileIds.size > 0
+  const changedFileIds = scope
+    ? Array.from(scope.changedFileIds)
+    : state.isIncremental && state.changedFileIds.size > 0
       ? Array.from(state.changedFileIds)
       : undefined;
   const associations = store.getAllOrmAssociations(changedFileIds);

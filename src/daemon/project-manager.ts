@@ -158,55 +158,77 @@ export class ProjectManager {
     });
     const watcher = new FileWatcher();
 
-    // AI pipelines (optional)
+    // AI pipelines (optional, lazy): construction is deferred until first use
+    // so AI-enabled but never-summarized/embedded projects don't pay the
+    // ~50-100 ms per-project setup cost at startup. See plan §5.3.
+    const aiEnabled = !!config.ai?.enabled;
     const aiProvider = createAIProvider(config);
-    const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
-    const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
-    const embeddingPipeline =
-      vectorStore && embeddingService
-        ? new EmbeddingPipeline(store, embeddingService, vectorStore, progress)
-        : null;
-
-    const inferenceCache = config.ai?.enabled ? new InferenceCache(store.db) : null;
+    const inferenceCache = aiEnabled ? new InferenceCache(store.db) : null;
+    // evictExpired is cheap (single SQL DELETE) — fine to do eagerly.
     inferenceCache?.evictExpired();
-    const summarizationPipeline =
-      config.ai?.enabled && config.ai.summarize_on_index !== false
-        ? new SummarizationPipeline(
-            store,
-            new CachedInferenceService(
-              aiProvider.fastInference(),
-              inferenceCache!,
-              config.ai.fast_model ?? 'fast',
-            ),
-            projectRoot,
-            {
-              batchSize: config.ai.summarize_batch_size ?? 20,
-              kinds: config.ai.summarize_kinds ?? [
-                'class',
-                'function',
-                'method',
-                'interface',
-                'trait',
-                'enum',
-                'type',
-              ],
-              concurrency: config.ai.concurrency ?? 1,
-            },
-            progress,
-            vectorStore,
-          )
-        : null;
+
+    let vectorStore: BlobVectorStore | null = null;
+    let embeddingPipeline: EmbeddingPipeline | null = null;
+    let summarizationPipeline: SummarizationPipeline | null = null;
+
+    const getVectorStore = (): BlobVectorStore | null => {
+      if (!aiEnabled) return null;
+      if (!vectorStore) vectorStore = new BlobVectorStore(store.db);
+      return vectorStore;
+    };
+
+    const getEmbeddingPipeline = (): EmbeddingPipeline | null => {
+      if (!aiEnabled) return null;
+      if (embeddingPipeline) return embeddingPipeline;
+      const vs = getVectorStore();
+      if (!vs) return null;
+      embeddingPipeline = new EmbeddingPipeline(store, aiProvider.embedding(), vs, progress);
+      return embeddingPipeline;
+    };
+
+    const getSummarizationPipeline = (): SummarizationPipeline | null => {
+      if (!aiEnabled) return null;
+      if (config.ai!.summarize_on_index === false) return null;
+      if (summarizationPipeline) return summarizationPipeline;
+      summarizationPipeline = new SummarizationPipeline(
+        store,
+        new CachedInferenceService(
+          aiProvider.fastInference(),
+          inferenceCache!,
+          config.ai!.fast_model ?? 'fast',
+        ),
+        projectRoot,
+        {
+          batchSize: config.ai!.summarize_batch_size ?? 20,
+          kinds: config.ai!.summarize_kinds ?? [
+            'class',
+            'function',
+            'method',
+            'interface',
+            'trait',
+            'enum',
+            'type',
+          ],
+          concurrency: config.ai!.concurrency ?? 1,
+        },
+        progress,
+        getVectorStore(),
+      );
+      return summarizationPipeline;
+    };
 
     const runEmbeddings = () => {
-      if (!embeddingPipeline) return;
-      embeddingPipeline.indexUnembedded().catch((err) => {
+      const p = getEmbeddingPipeline();
+      if (!p) return;
+      p.indexUnembedded().catch((err) => {
         logger.error({ error: err, projectRoot }, 'Embedding indexing failed');
       });
     };
 
     const runSummarization = () => {
-      if (!summarizationPipeline) return;
-      summarizationPipeline.summarizeUnsummarized().catch((err) => {
+      const p = getSummarizationPipeline();
+      if (!p) return;
+      p.summarizeUnsummarized().catch((err) => {
         logger.error({ error: err, projectRoot }, 'Summarization failed');
       });
     };
@@ -342,7 +364,14 @@ export class ProjectManager {
       }
       entries.push(entry);
     }
-    const results = await Promise.allSettled(entries.map((entry) => this.addProject(entry.root)));
+    // Phase 5+7 audit fix: addProject() runs synchronous setup (DB open, plugin
+    // registry, watcher start, ~250-500ms each) BEFORE reaching the
+    // semaphore-gated indexAll(). Without a gate, N parallel addProject() calls
+    // produce a thundering herd of disk I/O at boot. Cap parallel setup at 2.
+    const addLimit = pLimit(2);
+    const results = await Promise.allSettled(
+      entries.map((entry) => addLimit(() => this.addProject(entry.root))),
+    );
     for (let i = 0; i < results.length; i++) {
       if (results[i].status === 'rejected') {
         logger.error(

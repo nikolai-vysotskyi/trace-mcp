@@ -52,6 +52,7 @@ import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.
 import { isDaemonRunning } from './daemon/client.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { ProjectManager } from './daemon/project-manager.js';
+import type { ManagedProject } from './daemon/project-manager.js';
 import { handleReindexFile } from './daemon/reindex-file-handler.js';
 import { StdioSession } from './daemon/router/session.js';
 import { initializeDatabase } from './db/schema.js';
@@ -72,6 +73,7 @@ import {
   uninstallLifecycleHooks,
 } from './init/hooks.js';
 import { attachFileLogging, logger } from './logger.js';
+import { ensureInitialized, warmUpGrammars } from './parser/tree-sitter.js';
 import { PluginRegistry } from './plugin-api/registry.js';
 import {
   detectGitWorktree,
@@ -113,6 +115,60 @@ function resolveDbPath(projectRoot: string): string {
  * frontends, backends, shared libraries, CLI tools, etc.).
  * Runs when topology is enabled (default: true) and auto_discover is true (default: true).
  */
+/** Map common file extensions to tree-sitter grammar language IDs. WHY:
+ *  Phase 5.2 pre-warms grammars at daemon listen() so the first parse after
+ *  cold-start doesn't pay the WASM load cost (~30-80 ms per grammar). */
+const WARMUP_EXT_TO_LANG: Record<string, string> = {
+  ts: 'typescript',
+  tsx: 'tsx',
+  js: 'javascript',
+  jsx: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  py: 'python',
+  php: 'php',
+  rb: 'ruby',
+  go: 'go',
+  rs: 'rust',
+  java: 'java',
+  kt: 'kotlin',
+  swift: 'swift',
+  scala: 'scala',
+  cs: 'csharp',
+  c: 'c',
+  h: 'c',
+  cpp: 'cpp',
+  cc: 'cpp',
+  hpp: 'cpp',
+  vue: 'vue',
+  ex: 'elixir',
+  exs: 'elixir',
+};
+
+/** Probe each managed project's DB once for distinct file extensions and
+ *  return the resolved tree-sitter language IDs. Best-effort: a project whose
+ *  DB hasn't been opened yet contributes nothing and is silently skipped. */
+function collectKnownLanguages(projects: ManagedProject[]): string[] {
+  const langs = new Set<string>();
+  for (const proj of projects) {
+    try {
+      const rows = proj.db
+        .prepare(
+          "SELECT DISTINCT lower(substr(path, length(path) - instr(reverse(path), '.') + 2)) AS ext FROM files LIMIT 100",
+        )
+        .all() as Array<{ ext: string | null }>;
+      for (const row of rows) {
+        if (!row.ext) continue;
+        const lang = WARMUP_EXT_TO_LANG[row.ext];
+        if (lang) langs.add(lang);
+      }
+    } catch {
+      /* DB closed / not ready yet — skip */
+    }
+  }
+  return [...langs];
+}
+
 function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
   if (config.topology?.enabled === false) return;
   if (config.topology?.auto_discover === false) return;
@@ -317,22 +373,11 @@ program
     // Post-update migrations: hooks, CLAUDE.md, reindex — runs once after version change
     await runPostUpdateMigrations();
 
-    // Load and index ALL registered projects
+    // Phase 5.1: defer registered-project loading until AFTER httpServer.listen
+    // so the daemon is reachable from the first millisecond. Requests against
+    // a still-indexing project get 503 + Retry-After and the hook falls back
+    // to the local CLI path transparently. See plan-next-optimizations §5.1.
     const projectManager = new ProjectManager();
-    await projectManager.loadAllRegistered();
-
-    // If cwd is a project not yet registered, add it too
-    const cwd = process.cwd();
-    if (!projectManager.getProject(cwd)) {
-      try {
-        const root = findProjectRoot(cwd);
-        if (!projectManager.getProject(root)) {
-          await projectManager.addProject(root);
-        }
-      } catch {
-        /* cwd is not a project dir — fine */
-      }
-    }
 
     // ── Client tracking ─────────────────────────────────────────
     interface TrackedClient {
@@ -1678,12 +1723,52 @@ program
           getProject: (root) => projectManager.getProject(root),
         });
         if (!result.ok) {
-          res.writeHead(result.status, { 'Content-Type': 'application/json' });
+          // WHY Retry-After: the 503 branch fires when a project is still warming
+          // on a cold daemon. Hook clients honour Retry-After and fall back to the
+          // local CLI path transparently.
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (result.status === 503) {
+            headers['Retry-After'] = String(result.retryAfterSec);
+          }
+          res.writeHead(result.status, headers);
           res.end(JSON.stringify({ error: result.error }));
           return;
         }
         res.writeHead(204);
         res.end();
+        return;
+      }
+
+      // GET /api/stats — daemon reindex telemetry summary (optional ?since=1h)
+      if (req.method === 'GET' && url.pathname === '/api/stats') {
+        try {
+          const { getReindexStats } = await import('./daemon/reindex-stats.js');
+          const { parseDuration } = await import('./cli/daemon-stats.js');
+          const sinceParam = url.searchParams.get('since');
+          let sinceMs: number | undefined;
+          if (sinceParam) {
+            const parsed = parseDuration(sinceParam);
+            if (parsed == null) {
+              // Phase 5+7 audit fix: align with `daemon stats` CLI which exits
+              // non-zero on bad duration. Silently falling back to all-time
+              // hides a malformed query — return 400 instead.
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  error: `invalid 'since' duration: ${sinceParam}. Use s/m/h/d suffix (e.g. 1h, 24h, 7d).`,
+                }),
+              );
+              return;
+            }
+            sinceMs = parsed;
+          }
+          const summary = getReindexStats().summarize(sinceMs);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(summary));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
         return;
       }
 
@@ -2293,6 +2378,50 @@ program
         },
         'trace-mcp daemon started',
       );
+
+      // Phase 5.2: warm tree-sitter init eagerly so the first parse doesn't
+      // pay the WASM cold-start tax. Best-effort, fire-and-forget.
+      void ensureInitialized().catch(() => {
+        /* warm-up failure is non-fatal; lazy path still works */
+      });
+
+      // Phase 5.1: kick off registered-project loading in the background.
+      // HTTP server is already accepting; in-flight requests against a still-
+      // indexing project return 503 (Retry-After: 5) so the hook fallback
+      // takes over transparently until indexing completes.
+      void (async () => {
+        try {
+          await projectManager.loadAllRegistered();
+        } catch (err) {
+          logger.error({ err }, 'loadAllRegistered failed during cold-start');
+        }
+
+        // If cwd is a project not yet registered, add it too.
+        const cwd = process.cwd();
+        if (!projectManager.getProject(cwd)) {
+          try {
+            const root = findProjectRoot(cwd);
+            if (!projectManager.getProject(root)) {
+              await projectManager.addProject(root);
+            }
+          } catch {
+            /* cwd is not a project dir — fine */
+          }
+        }
+
+        // Phase 5.2: now that we have the language set from the registered
+        // project DBs, pre-warm the relevant tree-sitter grammars in parallel.
+        try {
+          const languages = collectKnownLanguages(projectManager.listProjects());
+          if (languages.length > 0) {
+            void warmUpGrammars(languages).catch(() => {
+              /* best-effort warm-up */
+            });
+          }
+        } catch {
+          /* never fatal */
+        }
+      })();
     });
   });
 

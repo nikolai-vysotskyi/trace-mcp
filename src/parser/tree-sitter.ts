@@ -62,11 +62,35 @@ const LANG_WASM_MAP: Record<string, string> = {
 
 const _require = createRequire(import.meta.url);
 
-function ensureInit(): Promise<void> {
+// WHY exported: daemon boot warms Parser.init() eagerly so the first request
+// after listen() doesn't pay the WASM cold-start tax.
+export function ensureInitialized(): Promise<void> {
   if (!initPromise) {
     initPromise = Parser.init();
   }
   return initPromise;
+}
+
+function ensureInit(): Promise<void> {
+  return ensureInitialized();
+}
+
+/**
+ * Pre-load tree-sitter grammars for the given languages in parallel.
+ * WHY: per-language WASM load is ~30-80 ms; doing it lazily on the first
+ * parse stalls the first reindex-file request after daemon cold-start.
+ * Unknown languages are silently skipped (no throw) — best-effort warm-up.
+ */
+export async function warmUpGrammars(languages: readonly string[]): Promise<void> {
+  await ensureInitialized();
+  const unique = Array.from(new Set(languages.filter((l) => l && LANG_WASM_MAP[l])));
+  await Promise.all(
+    unique.map((lang) =>
+      getParser(lang).catch(() => {
+        /* best-effort warm-up: a failed grammar load shouldn't abort the rest */
+      }),
+    ),
+  );
 }
 
 export async function getParser(language: string): Promise<Parser> {

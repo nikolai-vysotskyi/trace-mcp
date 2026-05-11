@@ -11,6 +11,7 @@
  */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
 interface CallSiteRow {
@@ -33,7 +34,7 @@ interface SymbolRow {
   metadata: string | null;
 }
 
-export function resolvePythonCallEdges(state: PipelineState): void {
+export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
 
   // 1. Get the 'calls' edge type
@@ -42,19 +43,43 @@ export function resolvePythonCallEdges(state: PipelineState): void {
     | undefined;
   if (!callsEdgeType) return;
 
-  // 2. Get all Python symbols that have callSites in metadata
-  const symbolsWithCalls = store.db
-    .prepare(`
-    SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
-           p.symbol_id AS parent_symbol_id, s.metadata
-    FROM symbols s
-    JOIN files f ON s.file_id = f.id
-    LEFT JOIN symbols p ON s.parent_id = p.id
-    WHERE f.language = 'python'
-      AND s.metadata IS NOT NULL
-      AND s.metadata LIKE '%"callSites"%'
-  `)
-    .all() as SymbolRow[];
+  // 2. Get all Python symbols that have callSites in metadata. Scope-aware:
+  // outgoing call edges are deleted from re-extracted files before resolution
+  // runs, so resolving only from changed files reproduces the full-pass output
+  // when the candidate target set hasn't shifted under it.
+  const scopedIds = scope ? Array.from(scope.changedFileIds) : null;
+  if (scopedIds && scopedIds.length === 0) return;
+
+  let symbolsWithCalls: SymbolRow[];
+  if (scopedIds && scopedIds.length > 0) {
+    const ph = scopedIds.map(() => '?').join(',');
+    symbolsWithCalls = store.db
+      .prepare(`
+      SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
+             p.symbol_id AS parent_symbol_id, s.metadata
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      LEFT JOIN symbols p ON s.parent_id = p.id
+      WHERE f.language = 'python'
+        AND s.metadata IS NOT NULL
+        AND s.metadata LIKE '%"callSites"%'
+        AND s.file_id IN (${ph})
+    `)
+      .all(...scopedIds) as SymbolRow[];
+  } else {
+    symbolsWithCalls = store.db
+      .prepare(`
+      SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
+             p.symbol_id AS parent_symbol_id, s.metadata
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      LEFT JOIN symbols p ON s.parent_id = p.id
+      WHERE f.language = 'python'
+        AND s.metadata IS NOT NULL
+        AND s.metadata LIKE '%"callSites"%'
+    `)
+      .all() as SymbolRow[];
+  }
 
   if (symbolsWithCalls.length === 0) return;
 

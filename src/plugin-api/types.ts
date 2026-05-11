@@ -253,4 +253,22 @@ export interface ResolveContext {
   createNodeIfNeeded(nodeType: string, refId: number): number;
   /** Read file content — uses Pass 1 cache when available, falls back to disk. */
   readFile(relPath: string): string | undefined;
+  /**
+   * Set when the pipeline is doing a scoped (incremental) re-resolve. Plugins
+   * MAY consult this to narrow their work to changed files. Plugins that
+   * can't reason incrementally just ignore it and continue full-pass —
+   * backward-compatible.
+   */
+  changeScope?: ChangeScope;
+}
+
+/**
+ * Resolver-scope hint shared between the pipeline and individual edge
+ * resolvers. Same shape as the internal `ChangeScope` from pipeline-state.ts,
+ * re-exported here so plugin authors don't need to reach into internal paths.
+ */
+export interface ChangeScope {
+  readonly changedFileIds: ReadonlySet<number>;
+  readonly newSymbolNames: ReadonlyMap<string, ReadonlySet<number>>;
+  readonly deletedSymbolNames: ReadonlyMap<string, ReadonlySet<number>>;
 }

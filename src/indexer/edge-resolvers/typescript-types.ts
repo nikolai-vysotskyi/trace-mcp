@@ -13,6 +13,7 @@
  */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
 const TS_JS_LANGS = "('typescript','javascript','tsx','jsx','vue')";
@@ -38,7 +39,7 @@ type TargetEntry = {
 
 const TARGET_KINDS = new Set(['class', 'interface', 'type', 'enum']);
 
-export function resolveTypeScriptTypeEdges(state: PipelineState): void {
+export function resolveTypeScriptTypeEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
 
   const refEdgeType = store.db
@@ -46,16 +47,38 @@ export function resolveTypeScriptTypeEdges(state: PipelineState): void {
     .get('references') as { id: number } | undefined;
   if (!refEdgeType) return;
 
-  const sources = store.db
-    .prepare(`
-    SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id, s.metadata, f.workspace
-      FROM symbols s
-      JOIN files f ON s.file_id = f.id
-     WHERE f.language IN ${TS_JS_LANGS}
-       AND s.metadata IS NOT NULL
-       AND s.metadata LIKE '%"typeRefs"%'
-  `)
-    .all() as SymbolRow[];
+  // Scope-aware source SELECT: only re-resolve type-reference edges OUT from
+  // files whose symbols were re-extracted in this run. Targets are still
+  // queried globally — cross-file resolution needs the full symbol set.
+  const scopedIds = scope ? Array.from(scope.changedFileIds) : null;
+  if (scopedIds && scopedIds.length === 0) return;
+
+  let sources: SymbolRow[];
+  if (scopedIds && scopedIds.length > 0) {
+    const ph = scopedIds.map(() => '?').join(',');
+    sources = store.db
+      .prepare(`
+      SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id, s.metadata, f.workspace
+        FROM symbols s
+        JOIN files f ON s.file_id = f.id
+       WHERE f.language IN ${TS_JS_LANGS}
+         AND s.metadata IS NOT NULL
+         AND s.metadata LIKE '%"typeRefs"%'
+         AND s.file_id IN (${ph})
+    `)
+      .all(...scopedIds) as SymbolRow[];
+  } else {
+    sources = store.db
+      .prepare(`
+      SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id, s.metadata, f.workspace
+        FROM symbols s
+        JOIN files f ON s.file_id = f.id
+       WHERE f.language IN ${TS_JS_LANGS}
+         AND s.metadata IS NOT NULL
+         AND s.metadata LIKE '%"typeRefs"%'
+    `)
+      .all() as SymbolRow[];
+  }
 
   if (sources.length === 0) return;
 

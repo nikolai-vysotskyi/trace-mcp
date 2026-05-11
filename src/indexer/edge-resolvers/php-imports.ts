@@ -12,6 +12,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { Psr4Resolver } from '../resolvers/psr4.js';
 import { PhantomPackageFactory, packageBucketFor } from './phantom-externals.js';
@@ -21,7 +22,9 @@ import { PhantomPackageFactory, packageBucketFor } from './phantom-externals.js'
  * Workspace-aware: only creates edges within the same workspace to prevent
  * false connections between independent projects under a common root.
  */
-export function resolvePhpImportEdges(state: PipelineState): void {
+export function resolvePhpImportEdges(state: PipelineState, _scope?: ChangeScope): void {
+  // WHY: driven by `state.pendingImports`, already scoped to re-extracted files.
+  void _scope;
   const { store } = state;
   if (state.pendingImports.size === 0) return;
 

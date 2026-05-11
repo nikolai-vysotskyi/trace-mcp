@@ -14,6 +14,7 @@
  */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
 interface TsCallSite {
@@ -55,7 +56,7 @@ type SymEntry = {
 
 const TS_JS_LANGS = "('typescript','javascript','tsx','jsx','vue')";
 
-export function resolveTypeScriptCallEdges(state: PipelineState): void {
+export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
 
   const callsEdgeType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
@@ -63,18 +64,43 @@ export function resolveTypeScriptCallEdges(state: PipelineState): void {
     | undefined;
   if (!callsEdgeType) return;
 
-  const symbolsWithCalls = store.db
-    .prepare(`
-    SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
-           p.symbol_id AS parent_symbol_id, s.metadata, f.workspace
-      FROM symbols s
-      JOIN files f ON s.file_id = f.id
-      LEFT JOIN symbols p ON s.parent_id = p.id
-     WHERE f.language IN ${TS_JS_LANGS}
-       AND s.metadata IS NOT NULL
-       AND s.metadata LIKE '%"callSites"%'
-  `)
-    .all() as SymbolRow[];
+  // Scope-aware source SELECT: only re-resolve call edges OUT from files
+  // whose symbols were re-extracted in this run. Targets are still queried
+  // globally (cross-file resolution needs the full symbol set). Outgoing
+  // edges from unchanged files were not deleted, so we don't recreate them.
+  const scopedIds = scope ? Array.from(scope.changedFileIds) : null;
+  if (scopedIds && scopedIds.length === 0) return;
+
+  let symbolsWithCalls: SymbolRow[];
+  if (scopedIds && scopedIds.length > 0) {
+    const ph = scopedIds.map(() => '?').join(',');
+    symbolsWithCalls = store.db
+      .prepare(`
+      SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
+             p.symbol_id AS parent_symbol_id, s.metadata, f.workspace
+        FROM symbols s
+        JOIN files f ON s.file_id = f.id
+        LEFT JOIN symbols p ON s.parent_id = p.id
+       WHERE f.language IN ${TS_JS_LANGS}
+         AND s.metadata IS NOT NULL
+         AND s.metadata LIKE '%"callSites"%'
+         AND s.file_id IN (${ph})
+    `)
+      .all(...scopedIds) as SymbolRow[];
+  } else {
+    symbolsWithCalls = store.db
+      .prepare(`
+      SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
+             p.symbol_id AS parent_symbol_id, s.metadata, f.workspace
+        FROM symbols s
+        JOIN files f ON s.file_id = f.id
+        LEFT JOIN symbols p ON s.parent_id = p.id
+       WHERE f.language IN ${TS_JS_LANGS}
+         AND s.metadata IS NOT NULL
+         AND s.metadata LIKE '%"callSites"%'
+    `)
+      .all() as SymbolRow[];
+  }
 
   if (symbolsWithCalls.length === 0) return;
 

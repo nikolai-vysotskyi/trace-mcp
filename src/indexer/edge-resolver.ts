@@ -4,9 +4,10 @@
  * Domain-specific resolvers live in ./edge-resolvers/.
  */
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { logger } from '../logger.js';
 import { executeFrameworkResolveEdges } from '../plugin-api/executor.js';
-import type { ProjectContext, RawEdge, ResolveContext } from '../plugin-api/types.js';
+import type { ChangeScope, ProjectContext, RawEdge, ResolveContext } from '../plugin-api/types.js';
 import {
   purgeForbiddenCrossWorkspaceEdges as _purgeCrossWs,
   resolveFileProjectionEdges as _resolveFileProjection,
@@ -28,6 +29,22 @@ import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
 
+/**
+ * Wrap a resolver call with debug-level timing. Off at info log level;
+ * visible via `TRACE_MCP_LOG_LEVEL=debug`. Used to verify Phase 4 scope-aware
+ * resolvers stay within their budget under real workloads.
+ */
+function timed<T>(name: string, fn: () => T): T {
+  if (!logger.isLevelEnabled?.('debug')) return fn();
+  const t0 = performance.now();
+  try {
+    return fn();
+  } finally {
+    const ms = performance.now() - t0;
+    logger.debug({ resolver: name, ms }, 'edge resolver complete');
+  }
+}
+
 export class EdgeResolver {
   constructor(private state: PipelineState) {}
 
@@ -35,6 +52,7 @@ export class EdgeResolver {
   async resolveEdges(
     projectContext: ProjectContext,
     resolveContext: ResolveContext,
+    _scope?: ChangeScope,
   ): Promise<void> {
     // Root-level plugins
     const activeResult = this.state.registry.getActiveFrameworkPlugins(projectContext);
@@ -87,78 +105,82 @@ export class EdgeResolver {
   }
 
   /** Pass 2b: ORM association edges. */
-  resolveOrmAssociationEdges(): void {
-    _resolveOrm(this.state);
+  resolveOrmAssociationEdges(scope?: ChangeScope): void {
+    timed('orm', () => _resolveOrm(this.state, scope));
   }
 
   /** Pass 2c: TypeScript extends/implements edges. */
-  resolveTypeScriptHeritageEdges(): void {
-    _resolveHeritage(this.state);
+  resolveTypeScriptHeritageEdges(scope?: ChangeScope): void {
+    timed('ts-heritage', () => _resolveHeritage(this.state, scope));
   }
 
   /** Pass 2d: ES module import edges. */
-  resolveEsmImportEdges(): void {
-    _resolveImports(this.state);
+  resolveEsmImportEdges(scope?: ChangeScope): void {
+    timed('esm-imports', () => _resolveImports(this.state, scope));
   }
 
   /** Pass 2e: Python import edges (dotted paths, relative imports). */
-  resolvePythonImportEdges(): void {
-    _resolvePyImports(this.state);
+  resolvePythonImportEdges(scope?: ChangeScope): void {
+    timed('py-imports', () => _resolvePyImports(this.state, scope));
   }
 
   /** Pass 2e2: PHP import edges (PSR-4 use statements). */
-  resolvePhpImportEdges(): void {
-    _resolvePhpImports(this.state);
+  resolvePhpImportEdges(scope?: ChangeScope): void {
+    timed('php-imports', () => _resolvePhpImports(this.state, scope));
   }
 
   /** Pass 2f: Python heritage edges (class inheritance). */
-  resolvePythonHeritageEdges(): void {
-    _resolvePyHeritage(this.state);
+  resolvePythonHeritageEdges(scope?: ChangeScope): void {
+    timed('py-heritage', () => _resolvePyHeritage(this.state, scope));
   }
 
   /** Pass 2g: Python call edges (function/method calls → definitions). */
-  resolvePythonCallEdges(): void {
-    _resolvePyCalls(this.state);
+  resolvePythonCallEdges(scope?: ChangeScope): void {
+    timed('py-calls', () => _resolvePyCalls(this.state, scope));
   }
 
   /** Pass 2g2: PHP call/heritage edges (method calls, extends, implements, uses_trait). */
-  resolvePhpCallEdges(): void {
-    _resolvePhpCalls(this.state);
+  resolvePhpCallEdges(scope?: ChangeScope): void {
+    timed('php-calls', () => _resolvePhpCalls(this.state, scope));
   }
 
   /** Pass 2g3: TypeScript/JavaScript call edges (function/method calls → definitions). */
-  resolveTypeScriptCallEdges(): void {
-    _resolveTsCalls(this.state);
+  resolveTypeScriptCallEdges(scope?: ChangeScope): void {
+    timed('ts-calls', () => _resolveTsCalls(this.state, scope));
   }
 
   /** Pass 2g4: TypeScript/JavaScript type-reference edges (types used in annotations). */
-  resolveTypeScriptTypeEdges(): void {
-    _resolveTsTypes(this.state);
+  resolveTypeScriptTypeEdges(scope?: ChangeScope): void {
+    timed('ts-types', () => _resolveTsTypes(this.state, scope));
   }
 
   /** Pass 2i: structural member_of edges for every nested symbol → its parent. */
-  resolveMemberOfEdges(): void {
-    _resolveMemberOf(this.state);
+  resolveMemberOfEdges(scope?: ChangeScope): void {
+    timed('member-of', () => _resolveMemberOf(this.state, scope));
   }
 
   /** Pass 2h: test_covers edges. */
-  resolveTestCoversEdges(): void {
-    _resolveTests(this.state);
+  resolveTestCoversEdges(scope?: ChangeScope): void {
+    timed('tests', () => _resolveTests(this.state, scope));
   }
 
   /** Pass 2j: file-level projection of cross-file symbol edges. */
-  resolveFileProjectionEdges(): void {
-    _resolveFileProjection(this.state);
+  resolveFileProjectionEdges(scope?: ChangeScope): void {
+    timed('file-projection', () => _resolveFileProjection(this.state, scope));
   }
 
   /** Pass 2m: Markdown wikilink + md-link edges between notes. */
-  resolveMarkdownWikilinkEdges(): void {
-    _resolveMarkdownLinks(this.state, (edges) => this.storeRawEdges(edges));
+  resolveMarkdownWikilinkEdges(scope?: ChangeScope): void {
+    timed('md-wikilinks', () =>
+      _resolveMarkdownLinks(this.state, (edges) => this.storeRawEdges(edges), scope),
+    );
   }
 
   /** Pass 2n: Markdown tag aggregation — note → canonical `tag:<name>` symbol. */
-  resolveMarkdownTagEdges(): void {
-    _resolveMarkdownTags(this.state, (edges) => this.storeRawEdges(edges));
+  resolveMarkdownTagEdges(scope?: ChangeScope): void {
+    timed('md-tags', () =>
+      _resolveMarkdownTags(this.state, (edges) => this.storeRawEdges(edges), scope),
+    );
   }
 
   /** Pass 2k (final sweep): remove forbidden cross-workspace edges. */
