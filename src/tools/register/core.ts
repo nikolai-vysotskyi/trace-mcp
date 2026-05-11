@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
@@ -275,7 +276,14 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       // Phase 1.3 dedup: skip when the PostToolUse hook (or another caller)
       // already reindexed this file in the last 500 ms. Journaling still runs
       // so observability is preserved.
-      if (shouldSkipRecentReindex(projectRoot, filePath)) {
+      // Key must match the HTTP handler's normalization (POSIX-relative)
+      // so the two paths collide on the same file regardless of input form.
+      const absForDedup = path.isAbsolute(filePath)
+        ? filePath
+        : path.resolve(projectRoot, filePath);
+      const relForDedup = path.relative(projectRoot, absForDedup);
+      const dedupKey = path.sep === '\\' ? relForDedup.split('\\').join('/') : relForDedup;
+      if (shouldSkipRecentReindex(projectRoot, dedupKey)) {
         journal.record('register_edit', { file_path: filePath, skipped_recent: true }, 1);
         return {
           content: [

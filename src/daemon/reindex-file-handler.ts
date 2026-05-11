@@ -48,10 +48,11 @@ export async function handleReindexFile(
   const absInput = path.isAbsolute(rawPath) ? rawPath : path.resolve(projectRoot, rawPath);
   const normalized = path.resolve(absInput);
 
-  const rel = path.relative(projectRoot, normalized);
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+  const relRaw = path.relative(projectRoot, normalized);
+  if (relRaw.startsWith('..') || path.isAbsolute(relRaw)) {
     return { ok: false, status: 400, error: 'path is outside project root' };
   }
+  const rel = path.sep === '\\' ? relRaw.split('\\').join('/') : relRaw;
 
   // Phase 1.3 dedup: when a single Edit causes both the PostToolUse hook
   // and Claude's register_edit MCP call to fire, the second arrival within
