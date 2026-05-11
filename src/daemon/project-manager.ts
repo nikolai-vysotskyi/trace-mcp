@@ -13,7 +13,9 @@ import { loadConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { ensureGlobalDirs, getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
+import { ExtractPool } from '../indexer/extract-pool.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
+import { clearProjectReindexCache } from '../indexer/recent-reindex-cache.js';
 import { FileWatcher } from '../indexer/watcher.js';
 import { logger } from '../logger.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
@@ -25,6 +27,9 @@ import type { ServerHandle } from '../server/server.js';
 import { createServer } from '../server/server.js';
 import { SubprojectManager } from '../subproject/manager.js';
 import { TopologyStore } from '../topology/topology-db.js';
+import { trailingDebounce } from '../util/debounce.js';
+
+const AI_COALESCE_WAIT_MS = 5_000;
 
 export interface ManagedProject {
   root: string;
@@ -39,6 +44,7 @@ export interface ManagedProject {
   serverHandle: ServerHandle;
   status: 'starting' | 'indexing' | 'ready' | 'error';
   error?: string;
+  cancelDebouncedAI?: () => void;
 }
 
 function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
@@ -56,8 +62,61 @@ function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): voi
   }
 }
 
+/**
+ * Minimal in-flight concurrency limiter. Returns a function that wraps an
+ * async fn so at most `n` calls run at once; subsequent calls queue.
+ * Inlined to avoid pulling p-limit for ~15 LOC. See plan-indexer-perf §2.3.
+ * Exported so tests can verify the cap independently of the daemon.
+ */
+export function pLimit(n: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  // WHY release(): a thrown resolver must not leak the slot — wrap in try/catch.
+  const release = () => {
+    active--;
+    const next = queue.shift();
+    if (next) {
+      try {
+        next();
+      } catch {
+        /* defensive: a thrown resolver must not leak the slot */
+      }
+    }
+  };
+  return async <T>(fn: () => Promise<T>): Promise<T> => {
+    if (active >= n) {
+      await new Promise<void>((r) => queue.push(r));
+    }
+    active++;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  };
+}
+
 export class ProjectManager {
   private projects = new Map<string, ManagedProject>();
+  /** Singleton, shared across every managed project. Bounds the daemon's
+   *  worker thread count regardless of project count. Lazy-init on the first
+   *  addProject() so we can read the project's config for sizing. */
+  private sharedPool: ExtractPool | null = null;
+  /** Configurable cap on concurrent initial indexAll() calls. Watcher-driven
+   *  indexFiles() is NOT gated. Lazy-init alongside sharedPool. */
+  private indexAllLimit: ReturnType<typeof pLimit> | null = null;
+
+  private ensureShared(config: TraceMcpConfig): void {
+    if (!this.sharedPool) {
+      this.sharedPool = new ExtractPool({
+        keepAlive: true,
+        size: config.indexer?.workers,
+      });
+    }
+    if (!this.indexAllLimit) {
+      this.indexAllLimit = pLimit(config.indexer?.parallel_initial_index ?? 2);
+    }
+  }
 
   /** Set up and start indexing for a single project. */
   async addProject(projectRoot: string): Promise<ManagedProject> {
@@ -91,8 +150,12 @@ export class ProjectManager {
     const store = new Store(db);
     const registry = PluginRegistry.createWithDefaults();
 
+    this.ensureShared(config);
+
     const progress = new ProgressState(db);
-    const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress);
+    const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress, {
+      extractPool: this.sharedPool,
+    });
     const watcher = new FileWatcher();
 
     // AI pipelines (optional)
@@ -148,6 +211,9 @@ export class ProjectManager {
       });
     };
 
+    const debouncedSummarize = trailingDebounce(runSummarization, AI_COALESCE_WAIT_MS);
+    const debouncedEmbed = trailingDebounce(runEmbeddings, AI_COALESCE_WAIT_MS);
+
     const serverHandle = createServer(store, registry, config, projectRoot, progress);
 
     const managed: ManagedProject = {
@@ -162,14 +228,18 @@ export class ProjectManager {
       server: serverHandle.server,
       serverHandle,
       status: 'starting',
+      cancelDebouncedAI: () => {
+        debouncedSummarize.cancel();
+        debouncedEmbed.cancel();
+      },
     };
 
     this.projects.set(projectRoot, managed);
 
-    // Start indexing in background
+    // Start indexing in background, gated by the shared semaphore so adding
+    // N projects at once doesn't fan out to N concurrent indexAll runs.
     managed.status = 'indexing';
-    pipeline
-      .indexAll()
+    this.indexAllLimit!(() => pipeline.indexAll())
       .then(() => {
         managed.status = 'ready';
         runSummarization();
@@ -189,8 +259,8 @@ export class ProjectManager {
       config,
       async (paths) => {
         await pipeline.indexFiles(paths);
-        runSummarization();
-        runEmbeddings();
+        debouncedSummarize();
+        debouncedEmbed();
       },
       undefined,
       async (deleted) => {
@@ -210,12 +280,14 @@ export class ProjectManager {
   private async stopProject(root: string): Promise<void> {
     const managed = this.projects.get(root);
     if (!managed) return;
+    managed.cancelDebouncedAI?.();
     await managed.watcher.stop();
     clearServerPid(managed.db);
     managed.serverHandle.dispose();
     await managed.server.close();
     managed.db.close();
     this.projects.delete(root);
+    clearProjectReindexCache(root);
   }
 
   /** Stop a project AND drop it from the persistent registry. */
@@ -243,6 +315,11 @@ export class ProjectManager {
   async shutdown(): Promise<void> {
     const roots = Array.from(this.projects.keys());
     await Promise.all(roots.map((root) => this.stopProject(root)));
+    if (this.sharedPool) {
+      await this.sharedPool.terminate();
+      this.sharedPool = null;
+    }
+    this.indexAllLimit = null;
     logger.info('ProjectManager shutdown complete');
   }
 

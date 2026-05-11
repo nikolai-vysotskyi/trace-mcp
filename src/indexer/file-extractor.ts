@@ -25,6 +25,7 @@ import {
   validateFileSize,
   validatePath,
 } from '../utils/security.js';
+import type { ExtractResponse } from './extract-pool.js';
 import type { WorkspaceInfo } from './monorepo.js';
 import type { FileExtraction } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
@@ -74,7 +75,7 @@ export class FileExtractor {
     relPath: string,
     force: boolean,
     opts: ExtractCallOptions = {},
-  ): Promise<FileExtraction | 'skipped' | 'error'> {
+  ): Promise<ExtractResponse> {
     const { registry, rootPath } = this.ctx;
     const absPath = path.resolve(rootPath, relPath);
 
@@ -82,7 +83,7 @@ export class FileExtractor {
     const pathCheck = validatePath(relPath, rootPath);
     if (pathCheck.isErr()) {
       logger.warn({ file: relPath }, 'Path traversal blocked');
-      return 'error';
+      return { kind: 'error' };
     }
 
     // Reject symlinks to prevent escaping the project root
@@ -91,7 +92,7 @@ export class FileExtractor {
       const stat = fs.lstatSync(absPath);
       if (stat.isSymbolicLink()) {
         logger.warn({ file: relPath }, 'Symlink skipped');
-        return 'error';
+        return { kind: 'error' };
       }
       fileMtimeMs = stat.mtimeMs;
     } catch {
@@ -101,7 +102,7 @@ export class FileExtractor {
     // Block sensitive files (credentials, keys, secrets) from indexing
     if (isSensitiveFile(relPath)) {
       logger.warn({ file: relPath }, 'Sensitive file blocked from indexing');
-      return 'skipped';
+      return { kind: 'skipped' };
     }
 
     // Existing-row lookup. Resolution order:
@@ -120,7 +121,7 @@ export class FileExtractor {
       existing.mtime_ms != null &&
       existing.mtime_ms === Math.floor(fileMtimeMs)
     ) {
-      return 'skipped';
+      return { kind: 'skipped' };
     }
 
     let content: Buffer;
@@ -128,13 +129,13 @@ export class FileExtractor {
       content = fs.readFileSync(absPath);
     } catch {
       logger.warn({ file: relPath }, 'Cannot read file');
-      return 'error';
+      return { kind: 'error' };
     }
 
     // Reject binary files (null-byte in first 8 KB)
     if (isBinaryBuffer(content)) {
       logger.warn({ file: relPath }, 'Binary file detected, skipping');
-      return 'skipped';
+      return { kind: 'skipped' };
     }
 
     // Reject oversized files (default 1 MB) to prevent OOM — UNLESS the
@@ -147,7 +148,7 @@ export class FileExtractor {
       const sizeCheck = validateFileSize(content.length);
       if (sizeCheck.isErr()) {
         logger.warn({ file: relPath, size: content.length }, 'File too large, skipping');
-        return 'error';
+        return { kind: 'error' };
       }
     } else if (content.length > 5 * 1024 * 1024) {
       // Above 5MB even a declared entry point is more likely a bundled
@@ -157,19 +158,33 @@ export class FileExtractor {
         { file: relPath, size: content.length },
         'force-included package entry exceeds 5 MB hard ceiling — skipping',
       );
-      return 'error';
+      return { kind: 'error' };
+    }
+
+    // mtime drifted but content might be identical (formatter-on-save, git
+    // checkout that touches mtime). Compare content_hash first — cheap
+    // xxh64 hash beats a full reparse. Persist the new mtime so subsequent
+    // runs hit the free mtime fast-path above.
+    const hash = hashContent(content);
+    if (!force && existing && existing.content_hash === hash) {
+      const newMtime = fileMtimeMs != null ? Math.floor(fileMtimeMs) : null;
+      if (newMtime != null && existing.mtime_ms !== newMtime) {
+        if (this.ctx.store) {
+          // In-process path: write directly.
+          this.ctx.store.updateFileMtime(existing.id, newMtime);
+          return { kind: 'skipped' };
+        }
+        // WHY: workers receive a fixture context with no DB handle — surface
+        // the update so the main thread can persist it. Without this the
+        // mtime fast-path never re-arms after a hash-hit in the worker path.
+        return { kind: 'mtime_updated', fileId: existing.id, newMtimeMs: newMtime };
+      }
+      return { kind: 'skipped' };
     }
 
     // Cache content for Pass 2 (resolveEdges reads files again)
     const contentStr = content.toString('utf-8');
     this.ctx.fileContentCache.set(relPath, contentStr);
-
-    const hash = hashContent(content);
-
-    // Skip if unchanged
-    if (!force && existing && existing.content_hash === hash) {
-      return 'skipped';
-    }
 
     // Find matching language plugin. Pass the file's first bytes so the
     // registry can fall back to a `#!` shebang when the extension match
@@ -177,14 +192,14 @@ export class FileExtractor {
     // would otherwise drop out of the index entirely.
     const plugin = registry.getLanguagePluginForFileWithFallback(relPath, content);
     if (!plugin) {
-      return 'skipped';
+      return { kind: 'skipped' };
     }
 
     // Execute language plugin
     const parseResult = await executeLanguagePlugin(plugin, relPath, content);
     if (parseResult.isErr()) {
       logger.error({ file: relPath, error: parseResult.error }, 'Language plugin failed');
-      return 'error';
+      return { kind: 'error' };
     }
 
     const parsed = parseResult.value;
@@ -222,7 +237,7 @@ export class FileExtractor {
     // plugins (e.g. ReactPlugin uses tree-sitter via async getParser).
     const frameworkExtracts = await this.collectFrameworkExtracts(relPath, content, language);
 
-    return {
+    const extraction: FileExtraction = {
       relPath,
       existingId: existing?.id ?? null,
       hash,
@@ -244,6 +259,7 @@ export class FileExtractor {
       rnScreens: parsed.rnScreens ?? [],
       frameworkExtracts,
     };
+    return { kind: 'ok', extraction };
   }
 
   private computeSymbolMetrics(

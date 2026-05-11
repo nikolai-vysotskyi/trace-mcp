@@ -49,8 +49,10 @@ import { upgradeCommand } from './cli/upgrade.js';
 import { visualizeCommand } from './cli/visualize.js';
 import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
+import { isDaemonRunning } from './daemon/client.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { ProjectManager } from './daemon/project-manager.js';
+import { handleReindexFile } from './daemon/reindex-file-handler.js';
 import { StdioSession } from './daemon/router/session.js';
 import { initializeDatabase } from './db/schema.js';
 import { Store } from './db/store.js';
@@ -1660,6 +1662,31 @@ program
         return;
       }
 
+      // REST API: incremental single-file reindex (called by the PostToolUse hook
+      // and by `trace-mcp index-file` once the daemon is up — see plan-indexer-perf §1.1).
+      if (req.method === 'POST' && url.pathname === '/api/projects/reindex-file') {
+        let parsed: { project?: string; path?: string };
+        try {
+          const body = await collectBody(req);
+          parsed = JSON.parse(body.toString()) as { project?: string; path?: string };
+        } catch (e) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: `invalid JSON body: ${(e as Error).message}` }));
+          return;
+        }
+        const result = await handleReindexFile(parsed, {
+          getProject: (root) => projectManager.getProject(root),
+        });
+        if (!result.ok) {
+          res.writeHead(result.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: result.error }));
+          return;
+        }
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       // REST API: add a project
       if (req.method === 'POST' && url.pathname === '/api/projects') {
         try {
@@ -2323,6 +2350,38 @@ program
       projectRoot = findProjectRoot(path.dirname(resolvedFile));
     } catch {
       process.exit(0); // not inside a known project — skip silently
+    }
+
+    // Daemon-first path: avoids a cold Node + WASM + plugin spawn (~300-500 ms)
+    // when the long-running daemon already has everything warm. See plan-indexer-perf §1.1.
+    if (await isDaemonRunning(DEFAULT_DAEMON_PORT).catch(() => false)) {
+      try {
+        const res = await fetch(
+          `http://127.0.0.1:${DEFAULT_DAEMON_PORT}/api/projects/reindex-file`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project: projectRoot, path: resolvedFile }),
+            signal: AbortSignal.timeout(2000),
+          },
+        );
+        if (res.ok) {
+          logger.debug(
+            { file: resolvedFile, projectRoot, status: res.status },
+            'index-file proxied to daemon',
+          );
+          process.exit(0);
+        }
+        logger.warn(
+          { file: resolvedFile, projectRoot, status: res.status },
+          'Daemon reindex-file rejected request — falling back to local indexing',
+        );
+      } catch (e) {
+        logger.warn(
+          { file: resolvedFile, projectRoot, err: (e as Error).message },
+          'Daemon reindex-file failed — falling back to local indexing',
+        );
+      }
     }
 
     const configResult = await loadConfig(projectRoot);

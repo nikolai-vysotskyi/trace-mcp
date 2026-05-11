@@ -81,6 +81,7 @@
     "pino": "^10.3.1",
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "^0.24.7",
+    "xxhash-wasm": "^1.1.0",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
   },

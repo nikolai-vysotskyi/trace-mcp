@@ -288,6 +288,18 @@ const LspConfigSchema = z
   })
   .optional();
 
+const IndexerConfigSchema = z
+  .object({
+    /** Daemon-shared ExtractPool size. Defaults to half cores capped at 4 in
+     *  daemon mode (see plan-indexer-perf §2.1). CLI/per-pipeline pools are
+     *  unaffected — they keep the legacy os.cpus()-1 default capped at 8. */
+    workers: z.number().int().min(1).max(32).optional(),
+    /** Max concurrent pipeline.indexAll() calls in the daemon. Watcher-driven
+     *  incremental indexFiles() is NOT gated. Default 2 — see §2.3. */
+    parallel_initial_index: z.number().int().min(1).max(16).optional(),
+  })
+  .optional();
+
 const TopologyConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
@@ -399,6 +411,7 @@ export const TraceMcpConfigSchema = z.object({
   runtime: RuntimeConfigSchema,
   lsp: LspConfigSchema,
   topology: TopologyConfigSchema,
+  indexer: IndexerConfigSchema,
   vault: VaultConfigSchema,
   decisions: DecisionsConfigSchema,
   quality_gates: QualityGatesConfigSchema,
@@ -499,6 +512,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
     runtime: RuntimeConfigSchema,
     lsp: LspConfigSchema,
     topology: TopologyConfigSchema,
+    indexer: IndexerConfigSchema,
     quality_gates: QualityGatesConfigSchema,
     decisions: DecisionsConfigSchema,
     telemetry: TelemetryConfigSchema,

@@ -33,6 +33,10 @@ export interface ExtractRequest {
 
 export type ExtractResponse =
   | { kind: 'skipped' }
+  // WHY: hash-hit in the worker path — main thread must update mtime since
+  // the worker has no DB handle. Without this the cheap mtime fast-path
+  // never kicks in on the next run after a hash-hit.
+  | { kind: 'mtime_updated'; fileId: number; newMtimeMs: number | null }
   | { kind: 'error' }
   | { kind: 'ok'; extraction: FileExtraction };
 
@@ -45,6 +49,17 @@ interface InternalResponse {
 }
 
 const DEFAULT_WORKER_COUNT = Math.max(1, Math.min(8, os.cpus().length - 1));
+
+/** Daemon-mode default: half cores, capped at 4. Lower than CLI because the
+ *  daemon shares one pool across N projects — see plan-indexer-perf §2.1. */
+const DEFAULT_KEEPALIVE_WORKER_COUNT = Math.max(1, Math.min(4, Math.floor(os.cpus().length / 2)));
+
+export interface ExtractPoolOptions {
+  size?: number;
+  /** When true, skip idle teardown — daemon mode. CLI/tests pass false so the
+   *  process can exit cleanly when the pool drains. */
+  keepAlive?: boolean;
+}
 
 /**
  * Resolve the bundled worker entry. tsup emits `dist/extract-worker.js`
@@ -83,8 +98,15 @@ export class ExtractPool {
   private terminated = false;
   private workerEntry: URL | null;
   private idleTimer: NodeJS.Timeout | null = null;
+  public readonly size: number;
+  public readonly keepAlive: boolean;
 
-  constructor(public readonly size = DEFAULT_WORKER_COUNT) {
+  constructor(opts: ExtractPoolOptions | number = {}) {
+    // Legacy positional-int signature kept so existing call sites that pass a
+    // raw size still work — collapse into the options shape internally.
+    const o: ExtractPoolOptions = typeof opts === 'number' ? { size: opts } : opts;
+    this.keepAlive = o.keepAlive ?? false;
+    this.size = o.size ?? (this.keepAlive ? DEFAULT_KEEPALIVE_WORKER_COUNT : DEFAULT_WORKER_COUNT);
     this.workerEntry = resolveWorkerEntry();
   }
 
@@ -131,6 +153,9 @@ export class ExtractPool {
    * extract() call re-spawns workers.
    */
   private scheduleIdleTeardown(): void {
+    // Daemon mode: workers stay warm so the next bursty edit doesn't pay the
+    // ~150-300 ms × N respawn cost. Explicit terminate() still works.
+    if (this.keepAlive) return;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null;

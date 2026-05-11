@@ -7,6 +7,7 @@ import { verifyIndex } from '../../db/verify.js';
 import { LOCKS_DIR, projectHash } from '../../global.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
+import { shouldSkipRecentReindex } from '../../indexer/recent-reindex-cache.js';
 import { logger } from '../../logger.js';
 import type { ServerContext } from '../../server/types.js';
 import { LockError, withLock } from '../../utils/pid-lock.js';
@@ -270,6 +271,25 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     async ({ file_path: filePath }) => {
       const blocked = guardPath(filePath);
       if (blocked) return blocked;
+
+      // Phase 1.3 dedup: skip when the PostToolUse hook (or another caller)
+      // already reindexed this file in the last 500 ms. Journaling still runs
+      // so observability is preserved.
+      if (shouldSkipRecentReindex(projectRoot, filePath)) {
+        journal.record('register_edit', { file_path: filePath, skipped_recent: true }, 1);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                status: 'skipped_recent',
+                file: filePath,
+                skipped_recent: true,
+              }),
+            },
+          ],
+        };
+      }
 
       const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
       let result: Awaited<ReturnType<typeof pipeline.indexFiles>>;
