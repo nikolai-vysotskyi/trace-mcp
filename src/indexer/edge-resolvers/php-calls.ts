@@ -14,6 +14,7 @@
  */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import type { PhpCallSite } from '../plugins/language/php/helpers.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
@@ -30,8 +31,15 @@ interface PhpSymbol {
   metadata: string | null;
 }
 
-export function resolvePhpCallEdges(state: PipelineState): void {
+export function resolvePhpCallEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
+
+  // Scope-aware iteration: outgoing edges from re-extracted files were already
+  // deleted, so we only need to re-resolve sources from changed files. The
+  // resolution indexes (byFqn/byName/symbolsByFile/symbolById) below still
+  // load every PHP symbol because cross-file resolution needs them.
+  const scopedFileIds = scope ? scope.changedFileIds : null;
+  if (scopedFileIds && scopedFileIds.size === 0) return;
 
   // Resolve edge type IDs
   const callsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
@@ -189,6 +197,9 @@ export function resolvePhpCallEdges(state: PipelineState): void {
 
   store.db.transaction(() => {
     for (const sym of allSymbols) {
+      // Scope-aware: skip symbols whose file was not re-extracted in this run.
+      // Their outgoing edges were not deleted, so don't recreate them.
+      if (scopedFileIds && !scopedFileIds.has(sym.file_id)) continue;
       if (!sym.metadata) continue;
       let meta: Record<string, unknown>;
       try {

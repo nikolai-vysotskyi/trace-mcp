@@ -13,7 +13,7 @@
  */
 
 import { logger } from '../../logger.js';
-import type { RawEdge } from '../../plugin-api/types.js';
+import type { ChangeScope, RawEdge } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import {
   type MdLinkRef,
@@ -49,7 +49,11 @@ function basenameOfPath(p: string): string {
 export function resolveMarkdownWikilinkEdges(
   state: PipelineState,
   storeRawEdges: (edges: RawEdge[]) => void,
+  _scope?: ChangeScope,
 ): void {
+  // WHY: markdown wikilink resolution is tiny (<1ms on this codebase). Scope
+  // is accepted for API symmetry; full pass is fine here.
+  void _scope;
   const { store } = state;
 
   const noteRows = store.db

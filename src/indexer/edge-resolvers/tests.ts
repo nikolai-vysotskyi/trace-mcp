@@ -1,6 +1,7 @@
 /** Pass 2e: Create test_covers edges from test files to their source files. */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
 // JS/TS: *.test.ts, *.spec.ts, __tests__/
@@ -8,10 +9,13 @@ import type { PipelineState } from '../pipeline-state.js';
 const TEST_PATH_RE =
   /\.(test|spec)\.[jt]sx?$|__tests__\/|(?:^|[/\\])test_[^/\\]+\.py$|(?:^|[/\\])[^/\\]+_test\.py$|conftest\.py$/;
 
-export function resolveTestCoversEdges(state: PipelineState): void {
+export function resolveTestCoversEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
   let allFiles: import('../../db/types.js').FileRow[];
-  if (state.isIncremental && state.changedFileIds.size > 0) {
+  if (scope) {
+    if (scope.changedFileIds.size === 0) return;
+    allFiles = [...store.getFilesByIds(Array.from(scope.changedFileIds)).values()];
+  } else if (state.isIncremental && state.changedFileIds.size > 0) {
     allFiles = [...store.getFilesByIds(Array.from(state.changedFileIds)).values()];
   } else {
     allFiles = store.getAllFiles();

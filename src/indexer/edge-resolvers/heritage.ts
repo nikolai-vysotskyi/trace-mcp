@@ -1,13 +1,15 @@
 /** Pass 2c: Resolve TypeScript extends/implements into graph edges. */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
 
-export function resolveTypeScriptHeritageEdges(state: PipelineState): void {
+export function resolveTypeScriptHeritageEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
-  const changedFileIds =
-    state.isIncremental && state.changedFileIds.size > 0
+  const changedFileIds = scope
+    ? Array.from(scope.changedFileIds)
+    : state.isIncremental && state.changedFileIds.size > 0
       ? Array.from(state.changedFileIds)
       : undefined;
   const symbolsWithHeritage = store.getSymbolsWithHeritage(changedFileIds);

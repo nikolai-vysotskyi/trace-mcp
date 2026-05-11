@@ -8,7 +8,12 @@ import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
-import type { FrameworkPlugin, ProjectContext, ResolveContext } from '../plugin-api/types.js';
+import type {
+  ChangeScope,
+  FrameworkPlugin,
+  ProjectContext,
+  ResolveContext,
+} from '../plugin-api/types.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
@@ -146,6 +151,12 @@ export class IndexingPipeline {
   private _gitignore: GitignoreMatcher | undefined;
   private _traceignore: TraceignoreMatcher | undefined;
   private _changedFileIds = new Set<number>();
+  // Phase 4 phantom-rebind: snapshot of persister's name churn after the
+  // most-recent extract phase. buildChangeScope() reads these so resolvers
+  // can rebind unresolved edges in OTHER files that match new symbol names,
+  // and unbind edges pointing at deleted symbols. Empty for full reindexes.
+  private _lastNewSymbolNames: Map<string, Set<number>> = new Map();
+  private _lastDeletedSymbolNames: Map<string, Set<number>> = new Map();
   private _isIncremental = false;
   private _extractPool: ExtractPool | undefined;
   /** True when this pipeline owns its pool (lazy, per-instance) and must
@@ -506,6 +517,10 @@ export class IndexingPipeline {
     const state = this.getPipelineState();
     const persistEdgeResolver = new EdgeResolver(state);
     const persister = new FilePersister(state, (edges) => persistEdgeResolver.storeRawEdges(edges));
+    // Phase 4 phantom-rebind: reset prior-run snapshot, then snapshot fresh
+    // maps once persistBatch has populated them across all batches.
+    this._lastNewSymbolNames = new Map();
+    this._lastDeletedSymbolNames = new Map();
 
     for (let i = 0; i < relPaths.length; i += BATCH_SIZE) {
       const batch = relPaths.slice(i, i + BATCH_SIZE);
@@ -588,29 +603,77 @@ export class IndexingPipeline {
     }
 
     if (useFtsRebuild) enableFts5Triggers(this.store.db);
+    // Phase 4 phantom-rebind: persistBatch has now populated the persister
+    // diff maps; expose them to buildChangeScope() via the pipeline fields.
+    this._lastNewSymbolNames = persister.newSymbolNames;
+    this._lastDeletedSymbolNames = persister.deletedSymbolNames;
   }
 
   /** Pass 2: resolve all edge types (imports, heritage, ORM, tests). */
   private async resolveAllEdges(): Promise<void> {
+    const scope = this.buildChangeScope();
+
+    // Short-circuit: incremental run with no actual content change (hash-gate
+    // hit on every file). Edges are stable, no need to re-resolve anything.
+    if (
+      scope &&
+      scope.changedFileIds.size === 0 &&
+      scope.newSymbolNames.size === 0 &&
+      scope.deletedSymbolNames.size === 0
+    ) {
+      logger.debug('No files or symbols changed — skipping edge resolution');
+      return;
+    }
+
     const edgeResolver = new EdgeResolver(this.getPipelineState());
-    await edgeResolver.resolveEdges(this.buildProjectContext(), this.buildResolveContext());
-    edgeResolver.resolveOrmAssociationEdges();
-    edgeResolver.resolveTypeScriptHeritageEdges();
-    edgeResolver.resolveEsmImportEdges();
-    edgeResolver.resolvePythonImportEdges();
-    edgeResolver.resolvePhpImportEdges();
-    edgeResolver.resolvePhpCallEdges();
-    edgeResolver.resolveTypeScriptCallEdges();
-    edgeResolver.resolveTypeScriptTypeEdges();
-    edgeResolver.resolveMemberOfEdges();
-    edgeResolver.resolvePythonHeritageEdges();
-    edgeResolver.resolvePythonCallEdges();
-    edgeResolver.resolveTestCoversEdges();
-    edgeResolver.resolveMarkdownWikilinkEdges();
-    edgeResolver.resolveMarkdownTagEdges();
+    await edgeResolver.resolveEdges(
+      this.buildProjectContext(),
+      this.buildResolveContext(scope),
+      scope,
+    );
+    edgeResolver.resolveOrmAssociationEdges(scope);
+    edgeResolver.resolveTypeScriptHeritageEdges(scope);
+    edgeResolver.resolveEsmImportEdges(scope);
+    edgeResolver.resolvePythonImportEdges(scope);
+    edgeResolver.resolvePhpImportEdges(scope);
+    edgeResolver.resolvePhpCallEdges(scope);
+    edgeResolver.resolveTypeScriptCallEdges(scope);
+    edgeResolver.resolveTypeScriptTypeEdges(scope);
+    edgeResolver.resolveMemberOfEdges(scope);
+    edgeResolver.resolvePythonHeritageEdges(scope);
+    edgeResolver.resolvePythonCallEdges(scope);
+    edgeResolver.resolveTestCoversEdges(scope);
+    edgeResolver.resolveMarkdownWikilinkEdges(scope);
+    edgeResolver.resolveMarkdownTagEdges(scope);
     // Must run last — projects cross-file symbol edges to file-level `imports`
     // edges so the file dependency graph is as rich as the symbol graph.
-    edgeResolver.resolveFileProjectionEdges();
+    edgeResolver.resolveFileProjectionEdges(scope);
+  }
+
+  /**
+   * Build a `ChangeScope` from pipeline state. Returns `undefined` for
+   * full-index runs (`indexAll(force=true)` or first index) so resolvers fall
+   * back to full-pass behaviour. Returns a populated scope for incremental
+   * runs, OR `undefined` when the watcher batch is so large (>200 files) that
+   * the incremental advantage is gone — full-pass is cheaper at that point.
+   */
+  private buildChangeScope(): ChangeScope | undefined {
+    if (!this._isIncremental) return undefined;
+    if (this._changedFileIds.size > IndexingPipeline.MAX_INCREMENTAL_FILES) return undefined;
+    // Phase 4 conservative correctness: when symbol names actually churn
+    // (rename / add / delete), fall back to full-pass resolve so unresolved
+    // edges in UNTOUCHED files can rebind to the new symbol, and edges
+    // pointing at deleted symbols get cleaned up. Pure-content cases
+    // (formatter-on-save, single-line tweak) leave both maps empty and
+    // keep the scoped fast path.
+    if (this._lastNewSymbolNames.size > 0 || this._lastDeletedSymbolNames.size > 0) {
+      return undefined;
+    }
+    return {
+      changedFileIds: this._changedFileIds,
+      newSymbolNames: this._lastNewSymbolNames,
+      deletedSymbolNames: this._lastDeletedSymbolNames,
+    };
   }
 
   /** Pass 3: LSP enrichment — upgrade call graph edges with compiler-grade resolution. */
@@ -669,10 +732,11 @@ export class IndexingPipeline {
     }
   }
 
-  private buildResolveContext(): ResolveContext {
+  private buildResolveContext(scope?: ChangeScope): ResolveContext {
     const store = this.store;
     return {
       rootPath: this.rootPath,
+      changeScope: scope,
       getAllFiles: () =>
         store.getAllFiles().map((f) => ({
           id: f.id,
@@ -722,6 +786,15 @@ export class IndexingPipeline {
    * below it, in-process is cheaper than spawn cost (~150-300 ms per worker).
    */
   private static readonly WORKER_THRESHOLD = 100;
+
+  /**
+   * Above this incremental-batch size, scoped edge resolution loses its
+   * advantage — the per-resolver indexing setup costs (full target SELECT,
+   * name index build, node-id batch load) dominate, so a full pass is
+   * cheaper. Empirically tuned: at ~200 changed files the scope filter saves
+   * less work than it costs in extra branching.
+   */
+  private static readonly MAX_INCREMENTAL_FILES = 200;
 
   /**
    * Lazy-init the extract worker pool, gated by batch size and the

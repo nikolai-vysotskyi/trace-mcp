@@ -1,11 +1,14 @@
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
 /**
  * Resolve Python import edges from pendingImports into file��file edges.
  * Similar to resolveEsmImportEdges but for Python's module system.
  */
-export function resolvePythonImportEdges(state: PipelineState): void {
+export function resolvePythonImportEdges(state: PipelineState, _scope?: ChangeScope): void {
+  // WHY: driven by `state.pendingImports`, already scoped to re-extracted files.
+  void _scope;
   const { store } = state;
   if (state.pendingImports.size === 0) return;
 

@@ -4,6 +4,14 @@ import { Command } from 'commander';
 import { getDaemonHealth } from '../daemon/client.js';
 import { ensureDaemon, restartDaemon, stopDaemon, waitForDaemonUp } from '../daemon/lifecycle.js';
 import { DAEMON_LOG_PATH, DEFAULT_DAEMON_PORT, LAUNCHD_PLIST_PATH } from '../global.js';
+import {
+  aggregateHookStats,
+  fetchDaemonStats,
+  parseDuration,
+  readHookStatsFile,
+  renderDaemonEvents,
+  renderHookStats,
+} from './daemon-stats.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 
@@ -144,4 +152,48 @@ daemonCommand
 
     const tail = spawn('tail', args, { stdio: 'inherit' });
     tail.on('exit', (code) => process.exit(code ?? 0));
+  });
+
+daemonCommand
+  .command('stats')
+  .description('Show hook dispatch + daemon reindex telemetry')
+  .option('--since <duration>', 'Time window (e.g. 1h, 24h, 7d)', '24h')
+  .option('--json', 'Emit machine-readable JSON instead of text')
+  .option('-p, --port <port>', 'Daemon port for /api/stats', String(DEFAULT_DAEMON_PORT))
+  .action(async (opts: { since: string; json?: boolean; port: string }) => {
+    const sinceMs = parseDuration(opts.since);
+    if (sinceMs === null) {
+      console.error(`Invalid --since value: ${opts.since}. Use forms like 1h, 24h, 7d.`);
+      process.exit(2);
+    }
+    const now = Date.now();
+    const lines = readHookStatsFile();
+    const hookAgg = aggregateHookStats(lines, { sinceMs: now - sinceMs, nowMs: now });
+    const port = parseInt(opts.port, 10);
+    const daemonStats = await fetchDaemonStats(port);
+
+    if (opts.json) {
+      console.log(
+        JSON.stringify(
+          {
+            window: opts.since,
+            hook: hookAgg,
+            daemon: daemonStats,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    console.log(renderHookStats(hookAgg, opts.since));
+    console.log('');
+    if (daemonStats) {
+      console.log(renderDaemonEvents(daemonStats));
+    } else {
+      console.log(
+        `=== Daemon reindex events (since startup) ===\n  daemon not reachable on port ${port}; skip section.`,
+      );
+    }
   });

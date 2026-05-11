@@ -1,8 +1,10 @@
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
+import { getReindexStats } from '../../daemon/reindex-stats.js';
 import { repairIndex, type RepairMode } from '../../db/repair.js';
 import { verifyIndex } from '../../db/verify.js';
 import { LOCKS_DIR, projectHash } from '../../global.js';
@@ -270,6 +272,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       file_path: z.string().min(1).max(512).describe('Relative path to the edited file'),
     },
     async ({ file_path: filePath }) => {
+      const startedAt = performance.now();
       const blocked = guardPath(filePath);
       if (blocked) return blocked;
 
@@ -285,6 +288,27 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       const dedupKey = path.sep === '\\' ? relForDedup.split('\\').join('/') : relForDedup;
       if (shouldSkipRecentReindex(projectRoot, dedupKey)) {
         journal.record('register_edit', { file_path: filePath, skipped_recent: true }, 1);
+        const elapsedMs = Math.round(performance.now() - startedAt);
+        logger.info(
+          {
+            event: 'reindex-file',
+            project: projectRoot,
+            path: dedupKey,
+            pathSource: 'mcp',
+            skippedRecent: true,
+            skippedHash: false,
+            indexed: 0,
+            elapsedMs,
+          },
+          'reindex-file telemetry',
+        );
+        getReindexStats().record({
+          pathSource: 'mcp',
+          skippedRecent: true,
+          skippedHash: false,
+          indexed: 0,
+          elapsedMs,
+        });
         return {
           content: [
             {
@@ -311,6 +335,31 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           () => pipeline.indexFiles([filePath]),
         );
       } catch (e) {
+        const elapsedMs = Math.round(performance.now() - startedAt);
+        // Phase 5+7 audit fix: telemetry must cover all exits — without this
+        // a failure becomes invisible to /api/stats and `daemon stats`.
+        logger.warn(
+          {
+            event: 'reindex-file',
+            project: projectRoot,
+            path: dedupKey,
+            pathSource: 'mcp',
+            skippedRecent: false,
+            skippedHash: false,
+            indexed: 0,
+            elapsedMs,
+            err: e,
+          },
+          'reindex-file telemetry (error)',
+        );
+        getReindexStats().record({
+          pathSource: 'mcp',
+          skippedRecent: false,
+          skippedHash: false,
+          indexed: 0,
+          elapsedMs,
+          error: true,
+        });
         if (e instanceof LockError) {
           return {
             content: [
@@ -332,6 +381,33 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
       // Record in journal so session knows this file was edited
       journal.record('register_edit', { file_path: filePath }, 1);
+
+      const indexed = result.indexed ?? 0;
+      const skipped = result.skipped ?? 0;
+      const skippedHash = indexed === 0 && skipped > 0;
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      logger.info(
+        {
+          event: 'reindex-file',
+          project: projectRoot,
+          path: dedupKey,
+          pathSource: 'mcp',
+          skippedRecent: false,
+          // Hash gate: indexFiles reports a skipped row when the content hash
+          // matched a previous run — extract + edge resolution were bypassed.
+          skippedHash,
+          indexed,
+          elapsedMs,
+        },
+        'reindex-file telemetry',
+      );
+      getReindexStats().record({
+        pathSource: 'mcp',
+        skippedRecent: false,
+        skippedHash,
+        indexed,
+        elapsedMs,
+      });
 
       // Best-effort duplication check — never fails register_edit
       let dupWarnings: {

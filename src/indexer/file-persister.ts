@@ -14,6 +14,26 @@ import type { FileExtraction, PipelineState } from './pipeline-state.js';
 type StoreRawEdgesFn = (edges: RawEdge[]) => void;
 
 export class FilePersister {
+  /**
+   * Per-batch tracking of new symbol names (name → set of symbol ids). Populated
+   * during persistBatch by diffing old vs new symbol rows per file. Read by the
+   * pipeline to build ChangeScope.newSymbolNames so resolvers can rebind
+   * previously-dangling text-name references that NOW match a real symbol.
+   */
+  newSymbolNames = new Map<string, Set<number>>();
+  /**
+   * Per-batch tracking of deleted symbol names (name → set of symbol ids).
+   * The ids are the OLD row ids that no longer exist after this batch — useful
+   * for phantom-unbind: edges resolved to one of these ids must be cleared.
+   */
+  deletedSymbolNames = new Map<string, Set<number>>();
+  /**
+   * Scratch map: file_id → pre-delete (name, id) pairs. Captured before the
+   * file's symbols are deleted; consumed right after persistSymbolsAndEntities
+   * inserts the new symbols, so we can diff old vs new names per file.
+   */
+  private _pendingOldNames = new Map<number, Array<{ name: string; id: number }>>();
+
   constructor(
     private state: PipelineState,
     private storeRawEdges: StoreRawEdgesFn,
@@ -21,14 +41,69 @@ export class FilePersister {
 
   /**
    * Persist phase: write a batch of extractions to DB in a single transaction.
-   * Reduces SQLite journal syncs from N to 1 per batch.
+   * Reduces SQLite journal syncs from N to 1 per batch. Resets symbol-name
+   * churn tracking at the start so each call's ChangeScope reflects only the
+   * current batch.
    */
   persistBatch(extractions: FileExtraction[]): void {
+    this.newSymbolNames.clear();
+    this.deletedSymbolNames.clear();
+    this._pendingOldNames.clear();
     this.state.store.db.transaction(() => {
       for (const ext of extractions) {
         this.persistExtraction(ext);
       }
     })();
+  }
+
+  /**
+   * Diff the pre-delete name snapshot vs the post-insert symbol set, pushing
+   * each name into newSymbolNames / deletedSymbolNames. Called once per
+   * persistExtraction after persistSymbolsAndEntities has populated the DB.
+   */
+  private commitNameChurn(fileId: number): void {
+    // For brand-new files (no existingId path) _pendingOldNames has no entry —
+    // treat oldNames as empty so every inserted symbol counts as new.
+    const oldNames = this._pendingOldNames.get(fileId) ?? [];
+    this._pendingOldNames.delete(fileId);
+    const oldByName = new Map<string, Set<number>>();
+    for (const { name, id } of oldNames) {
+      let s = oldByName.get(name);
+      if (!s) {
+        s = new Set();
+        oldByName.set(name, s);
+      }
+      s.add(id);
+    }
+    const newSyms = this.state.store.getSymbolsByFile(fileId);
+    const newNames = new Set<string>();
+    for (const s of newSyms) {
+      newNames.add(s.name);
+      if (!oldByName.has(s.name)) this.trackNewName(s.name, s.id);
+    }
+    for (const { name, id } of oldNames) {
+      if (!newNames.has(name)) this.trackDeletedName(name, id);
+    }
+  }
+
+  /** Record a name → id pair as a new symbol (created this batch). */
+  private trackNewName(name: string, id: number): void {
+    let s = this.newSymbolNames.get(name);
+    if (!s) {
+      s = new Set();
+      this.newSymbolNames.set(name, s);
+    }
+    s.add(id);
+  }
+
+  /** Record a name → id pair as a deleted symbol (removed this batch). */
+  private trackDeletedName(name: string, id: number): void {
+    let s = this.deletedSymbolNames.get(name);
+    if (!s) {
+      s = new Set();
+      this.deletedSymbolNames.set(name, s);
+    }
+    s.add(id);
   }
 
   /** Write a single file extraction to DB (must be called inside a transaction). */
@@ -57,10 +132,16 @@ export class FilePersister {
         return;
       }
 
-      // Full reindex path
+      // Full reindex path — capture pre-delete names so we can diff against
+      // the post-insert names and surface newSymbolNames / deletedSymbolNames
+      // for phantom-rebind/unbind.
+      const oldNames = store.getSymbolsByFile(fileId).map((s) => ({ name: s.name, id: s.id }));
       this.state.changedFileIds.add(fileId);
       deleteTrigramsByFile(store.db, fileId);
       store.deleteSymbolsByFile(fileId);
+      // Stash for post-insert diffing — applied after persistSymbolsAndEntities
+      // populates the new symbol rows.
+      this._pendingOldNames.set(fileId, oldNames);
       // Incremental: only delete outgoing edges — incoming edges from other files
       // stay intact (e.g. imports from A→B survive when B is re-indexed).
       if (this.state.isIncremental) {
@@ -94,6 +175,9 @@ export class FilePersister {
 
     // Persist base extraction symbols, edges, and entities
     this.persistSymbolsAndEntities(fileId, ext.relPath, ext.symbols, ext.otherEdges, ext);
+    // Phase 4 phantom-rebind: diff old vs new symbol names for this file now
+    // that both states are visible in the DB.
+    this.commitNameChurn(fileId);
     if (ext.importEdges.length > 0) {
       this.state.pendingImports.set(fileId, ext.importEdges);
     }

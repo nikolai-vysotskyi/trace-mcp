@@ -1,6 +1,7 @@
 /** Pass 2d: Resolve ES module import specifiers to file→file graph edges. */
 import path from 'node:path';
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { EsModuleResolver } from '../resolvers/es-modules.js';
 import { PhantomPackageFactory } from './phantom-externals.js';
@@ -24,7 +25,11 @@ function npmBucketFor(specifier: string): string | null {
   return specifier.split('/')[0];
 }
 
-export function resolveEsmImportEdges(state: PipelineState): void {
+export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope): void {
+  // WHY: ESM imports are driven entirely by `state.pendingImports`, which is
+  // already populated only for re-extracted files. Scope is accepted for API
+  // symmetry but adds nothing.
+  void _scope;
   const { store } = state;
   if (state.pendingImports.size === 0) return;
 

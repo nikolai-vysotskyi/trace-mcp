@@ -7,14 +7,16 @@
  */
 
 import { logger } from '../../logger.js';
+import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
-export function resolvePythonHeritageEdges(state: PipelineState): void {
+export function resolvePythonHeritageEdges(state: PipelineState, scope?: ChangeScope): void {
   const { store } = state;
 
   // Get all Python class symbols with bases metadata
-  const changedFileIds =
-    state.isIncremental && state.changedFileIds.size > 0
+  const changedFileIds = scope
+    ? Array.from(scope.changedFileIds)
+    : state.isIncremental && state.changedFileIds.size > 0
       ? Array.from(state.changedFileIds)
       : undefined;
 

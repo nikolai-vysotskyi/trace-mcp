@@ -9,7 +9,7 @@
  */
 
 import { logger } from '../../logger.js';
-import type { RawEdge } from '../../plugin-api/types.js';
+import type { ChangeScope, RawEdge } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
 interface TagSymbolRow {
@@ -30,7 +30,10 @@ interface ParsedNoteMeta {
 export function resolveMarkdownTagEdges(
   state: PipelineState,
   storeRawEdges: (edges: RawEdge[]) => void,
+  _scope?: ChangeScope,
 ): void {
+  // WHY: tiny tag aggregation pass; scope kept for API symmetry only.
+  void _scope;
   const { store } = state;
 
   const tagRows = store.db
