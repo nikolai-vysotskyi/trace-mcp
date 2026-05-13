@@ -43,7 +43,8 @@ import {
 } from '../analysis/predictive-intelligence.js';
 import { getDependencyDiagram, visualizeGraph } from '../analysis/visualize.js';
 import { visualizeSubprojectTopology } from '../analysis/visualize-subproject.js';
-import { searchText } from '../navigation/search-text.js';
+import { createSearchTextRetriever } from '../../retrieval/retrievers/search-text-retriever.js';
+import { runRetriever } from '../../retrieval/index.js';
 import {
   getApiContract,
   getContractDrift,
@@ -1152,7 +1153,8 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       case_sensitive,
       timeout_ms,
     }) => {
-      const result = searchText(store, projectRoot, {
+      const retriever = createSearchTextRetriever({ store, projectRoot });
+      const [result] = await runRetriever(retriever, {
         query,
         isRegex: is_regex,
         filePattern: file_pattern,
