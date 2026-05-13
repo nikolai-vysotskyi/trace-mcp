@@ -13,6 +13,7 @@ import {
 } from './tabs/GraphExplorerGPU';
 import { Indexes } from './tabs/Indexes';
 import { MemoryExplorer } from './tabs/MemoryExplorer';
+import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
 
@@ -29,13 +30,14 @@ const GLOBAL_TABS: { id: GlobalTab; label: string }[] = [
   { id: 'clients', label: 'MCP Clients' },
 ];
 
-type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory';
+type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory' | 'notebook';
 const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'ask', label: 'Ask' },
   { id: 'graph', label: 'Graph' },
   { id: 'activity', label: 'Activity' },
   { id: 'memory', label: 'Memory' },
+  { id: 'notebook', label: 'Notebook' },
 ];
 
 function getUrlParams() {
@@ -676,6 +678,8 @@ function ProjectContent({
       {tab === 'activity' && <Activity root={root} />}
       {/* Memory — decisions / corpora / sessions explorer */}
       {tab === 'memory' && <MemoryExplorer root={root} />}
+      {/* Notebook — ad-hoc trace-mcp tool runner (read-only) */}
+      {tab === 'notebook' && <Notebook root={root} />}
       {/* Graph — GPU-accelerated (cosmos.gl), edge-to-edge */}
       {tab === 'graph' && (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
