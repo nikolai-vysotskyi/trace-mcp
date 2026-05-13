@@ -32,6 +32,19 @@ import { FilePersister } from './file-persister.js';
 import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
+// P02 Task DAG migration: 3 passes are scheduled through a TaskDag instead
+// of being called imperatively from `runPipeline`. The Task wrappers live in
+// `src/pipeline/tasks/*` and delegate to the existing private methods on
+// this class. See plans/plan-cognee-pipeline-migration-IMPL.md.
+import {
+  createGraphSnapshotsTask,
+  createLspEnrichmentTask,
+  createResolveEdgesTask,
+  GRAPH_SNAPSHOTS_TASK_NAME,
+  LSP_ENRICHMENT_TASK_NAME,
+  RESOLVE_EDGES_TASK_NAME,
+  TaskDag,
+} from '../pipeline/index.js';
 
 export type { FileExtraction } from './pipeline-state.js';
 
@@ -138,6 +151,14 @@ export class IndexingPipeline {
       this._extractPool = deps.extractPool;
       this._poolIsOwned = false;
     }
+    // P02 Task DAG: register the migrated passes once per pipeline instance.
+    // Each Task is a thin adapter — the actual work still happens in the
+    // private methods on this class (or in `captureGraphSnapshots`); the
+    // Task layer only changes how those methods are scheduled.
+    this._dag = new TaskDag();
+    this._dag.register(createResolveEdgesTask());
+    this._dag.register(createLspEnrichmentTask());
+    this._dag.register(createGraphSnapshotsTask());
   }
 
   private workspaces: WorkspaceInfo[] = [];
@@ -171,6 +192,19 @@ export class IndexingPipeline {
    * also skips git-history snapshots and the registry-side capture.
    */
   private _postprocessLevel: PostprocessLevel = 'full';
+
+  /**
+   * P02 Task DAG holding the migrated pipeline passes (resolve-edges,
+   * lsp-enrichment, graph-snapshots). Registered once per pipeline
+   * instance in the constructor. Internal API — production callers stay on
+   * `indexAll` / `indexFiles`.
+   */
+  private readonly _dag: TaskDag;
+
+  /** Internal accessor for tests that want to inspect / drive the DAG directly. */
+  getTaskDag(): TaskDag {
+    return this._dag;
+  }
 
   getPipelineState(): PipelineState {
     return {
@@ -341,11 +375,19 @@ export class IndexingPipeline {
       await this.extractAndPersist(relPaths, force, result);
       // Postprocess-level gating: 'none' stops after raw symbol extraction;
       // 'minimal' resolves edges but skips LSP + env scan; 'full' runs all.
+      // P02 Task DAG: resolve-edges + lsp-enrichment are scheduled via
+      // this._dag. The Task wrappers are pure adapters — they call back
+      // into the private methods below. Telemetry / progress callbacks are
+      // unchanged because the underlying methods own them.
       if (this._postprocessLevel !== 'none') {
-        await this.resolveAllEdges();
+        await this._dag.run(RESOLVE_EDGES_TASK_NAME, {
+          runResolveAllEdges: () => this.resolveAllEdges(),
+        });
       }
       if (this._postprocessLevel === 'full') {
-        await this.runLspEnrichment();
+        await this._dag.run(LSP_ENRICHMENT_TASK_NAME, {
+          runLspEnrichment: () => this.runLspEnrichment(),
+        });
         await this.indexEnvFiles(force);
       }
     } finally {
@@ -358,7 +400,13 @@ export class IndexingPipeline {
 
     if (this._postprocessLevel === 'full' && !this._isIncremental && result.indexed > 0) {
       try {
-        captureGraphSnapshots(this.store, this.rootPath);
+        // P02 Task DAG: graph-snapshots is scheduled via this._dag. The Task
+        // wrapper is a pure adapter — it calls `captureGraphSnapshots(store,
+        // rootPath)`. The outer try/catch stays here because the original
+        // contract is "log the failure, never abort indexing".
+        await this._dag.run(GRAPH_SNAPSHOTS_TASK_NAME, {
+          captureSnapshots: () => captureGraphSnapshots(this.store, this.rootPath),
+        });
       } catch (e) {
         logger.warn({ error: e }, 'Graph snapshot capture failed');
       }
