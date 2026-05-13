@@ -1,0 +1,91 @@
+{
+  "id": "default",
+  "description": "Hand-crafted code-intelligence queries against the trace-mcp source tree. Each case has a verified ground-truth file; expected files were checked against the live index at slice time.",
+  "project_root": ".",
+  "cases": [
+    {
+      "id": "decision-store-class",
+      "description": "Locate the DecisionStore class that backs the decision knowledge graph.",
+      "query": "DecisionStore",
+      "expected_files": ["src/memory/decision-store.ts"],
+      "filters": { "kind": "class", "language": "typescript" }
+    },
+    {
+      "id": "store-class-db",
+      "description": "Locate the primary Store class that wraps the SQLite index.",
+      "query": "Store",
+      "expected_files": ["src/db/store.ts"],
+      "filters": { "kind": "class", "language": "typescript", "filePattern": "src/db" }
+    },
+    {
+      "id": "indexing-pipeline-class",
+      "description": "Find the IndexingPipeline orchestrator that drives reindex passes.",
+      "query": "IndexingPipeline",
+      "expected_files": ["src/indexer/pipeline.ts"],
+      "filters": { "kind": "class", "language": "typescript" }
+    },
+    {
+      "id": "plugin-registry-class",
+      "description": "Find the PluginRegistry that holds language + framework plugins.",
+      "query": "PluginRegistry",
+      "expected_files": ["src/plugin-api/registry.ts"],
+      "filters": { "kind": "class", "language": "typescript" }
+    },
+    {
+      "id": "register-project-fn",
+      "description": "Find the registerProject function used by `trace-mcp add`.",
+      "query": "registerProject",
+      "expected_files": ["src/registry.ts"],
+      "filters": { "kind": "function", "language": "typescript" }
+    },
+    {
+      "id": "load-config-fn",
+      "description": "Find the loadConfig entry point in the project config module (must distinguish from same-named fixtures).",
+      "query": "loadConfig TraceMcpConfig cosmiconfig",
+      "expected_files": ["src/config.ts"],
+      "filters": { "kind": "function", "language": "typescript", "filePattern": "src" }
+    },
+    {
+      "id": "tree-sitter-init",
+      "description": "Find the tree-sitter ensureInitialized helper used during parser warm-up.",
+      "query": "ensureInitialized",
+      "expected_files": ["src/parser/tree-sitter.ts"],
+      "filters": { "kind": "function", "language": "typescript" }
+    },
+    {
+      "id": "harden-stdio",
+      "description": "Find the hardenStdio function that guards the MCP stdio transport.",
+      "query": "hardenStdio",
+      "expected_files": ["src/server/transport-hardening.ts"],
+      "filters": { "kind": "function", "language": "typescript" }
+    },
+    {
+      "id": "fts-search-fn",
+      "description": "Find the searchFts function that runs raw FTS5 queries.",
+      "query": "searchFts",
+      "expected_files": ["src/db/fts.ts"],
+      "filters": { "kind": "function", "language": "typescript" }
+    },
+    {
+      "id": "check-command-cli",
+      "description": "Find the CLI check command wiring (quality gates entry point).",
+      "query": "checkCommand",
+      "expected_files": ["src/cli/check.ts"],
+      "filters": { "language": "typescript", "filePattern": "src/cli" }
+    },
+    {
+      "id": "scan-code-smells",
+      "description": "Find the scanCodeSmells implementation under quality tools.",
+      "query": "scanCodeSmells",
+      "expected_files": ["src/tools/quality/code-smells.ts"],
+      "filters": { "kind": "function", "language": "typescript" }
+    },
+    {
+      "id": "atomic-write-json",
+      "description": "Find the atomicWriteJson utility under utils.",
+      "query": "atomicWriteJson",
+      "expected_files": ["src/utils/atomic-write.ts"],
+      "filters": { "kind": "function", "language": "typescript" }
+    }
+  ]
+}
