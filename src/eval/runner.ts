@@ -236,3 +236,168 @@ function formatNum(n: number): string {
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : `${s.slice(0, n - 1)}…`;
 }
+
+/**
+ * Baseline shape persisted under `src/eval/datasets/<slug>.baseline.json`.
+ * Captures the previously-recorded rollup numbers for a dataset plus the
+ * per-metric tolerance window (additive to the baseline before declaring a
+ * regression). All metric keys are optional so a partial baseline file is
+ * still valid — missing keys are simply skipped.
+ */
+export interface BaselineFile {
+  dataset: string;
+  captured_at?: string;
+  commit?: string;
+  metrics: {
+    precision_at_5_mean?: number;
+    mrr?: number;
+    first_hit_rank_mean?: number;
+  };
+  tolerance: {
+    precision_at_5_mean?: number;
+    mrr?: number;
+    first_hit_rank_mean?: number;
+  };
+}
+
+/**
+ * One metric line of a baseline comparison.
+ *
+ * For `higher_is_better` metrics (precision, MRR), a regression is
+ * `current < baseline - tolerance`. For `lower_is_better` metrics
+ * (first_hit_rank), a regression is `current > baseline + tolerance`.
+ */
+export interface BaselineCheckLine {
+  metric: 'precision_at_5_mean' | 'mrr' | 'first_hit_rank_mean';
+  direction: 'higher_is_better' | 'lower_is_better';
+  baseline: number;
+  current: number;
+  tolerance: number;
+  delta: number;
+  passed: boolean;
+  reason?: string;
+}
+
+export interface BaselineCheckResult {
+  passed: boolean;
+  lines: BaselineCheckLine[];
+}
+
+function rollupMean(report: BenchmarkReport, metric: string): number | null {
+  const r = report.rollup.find((x) => x.metric === metric);
+  return r ? r.mean : null;
+}
+
+/**
+ * Compare a freshly-computed `BenchmarkReport` against a stored baseline.
+ *
+ * Pure function — no I/O. CLI/test callers do the file load and exit
+ * handling. Returns one line per metric defined on the baseline plus an
+ * aggregate pass/fail.
+ */
+export function compareToBaseline(
+  report: BenchmarkReport,
+  baseline: BaselineFile,
+): BaselineCheckResult {
+  const lines: BaselineCheckLine[] = [];
+
+  // precision@K — k=5 by convention in this slice. If the runner was invoked
+  // with a non-5 K, the metric simply won't be present and we skip.
+  const pK = `precision@${report.k}`;
+  const currentPrecision = rollupMean(report, pK);
+  if (
+    baseline.metrics.precision_at_5_mean !== undefined &&
+    baseline.tolerance.precision_at_5_mean !== undefined &&
+    currentPrecision !== null
+  ) {
+    const base = baseline.metrics.precision_at_5_mean;
+    const tol = baseline.tolerance.precision_at_5_mean;
+    const delta = currentPrecision - base;
+    const passed = currentPrecision >= base - tol;
+    lines.push({
+      metric: 'precision_at_5_mean',
+      direction: 'higher_is_better',
+      baseline: base,
+      current: currentPrecision,
+      tolerance: tol,
+      delta,
+      passed,
+      reason: passed
+        ? undefined
+        : `current ${currentPrecision} < baseline ${base} - tolerance ${tol}`,
+    });
+  }
+
+  const currentMrr = rollupMean(report, 'mrr');
+  if (
+    baseline.metrics.mrr !== undefined &&
+    baseline.tolerance.mrr !== undefined &&
+    currentMrr !== null
+  ) {
+    const base = baseline.metrics.mrr;
+    const tol = baseline.tolerance.mrr;
+    const delta = currentMrr - base;
+    const passed = currentMrr >= base - tol;
+    lines.push({
+      metric: 'mrr',
+      direction: 'higher_is_better',
+      baseline: base,
+      current: currentMrr,
+      tolerance: tol,
+      delta,
+      passed,
+      reason: passed ? undefined : `current ${currentMrr} < baseline ${base} - tolerance ${tol}`,
+    });
+  }
+
+  const currentRank = rollupMean(report, 'first_hit_rank');
+  if (
+    baseline.metrics.first_hit_rank_mean !== undefined &&
+    baseline.tolerance.first_hit_rank_mean !== undefined &&
+    currentRank !== null
+  ) {
+    const base = baseline.metrics.first_hit_rank_mean;
+    const tol = baseline.tolerance.first_hit_rank_mean;
+    const delta = currentRank - base;
+    // Lower is better for rank: regression when current > baseline + tol.
+    const passed = currentRank <= base + tol;
+    lines.push({
+      metric: 'first_hit_rank_mean',
+      direction: 'lower_is_better',
+      baseline: base,
+      current: currentRank,
+      tolerance: tol,
+      delta,
+      passed,
+      reason: passed ? undefined : `current ${currentRank} > baseline ${base} + tolerance ${tol}`,
+    });
+  }
+
+  return {
+    passed: lines.every((l) => l.passed),
+    lines,
+  };
+}
+
+/**
+ * Render the baseline comparison as a Markdown table. Designed to be
+ * appended to the eval report so CI logs / PR comments include a clear
+ * pass/fail summary per metric.
+ */
+export function formatBaselineCheckMarkdown(check: BaselineCheckResult): string {
+  const lines: string[] = [];
+  lines.push('## Baseline check');
+  lines.push('');
+  lines.push(`Status: ${check.passed ? 'PASS' : 'FAIL'}`);
+  lines.push('');
+  lines.push('| Metric | Direction | Baseline | Current | Tolerance | Delta | Result |');
+  lines.push('|---|---|---|---|---|---|---|');
+  for (const l of check.lines) {
+    const arrow = l.delta >= 0 ? '+' : '';
+    lines.push(
+      `| ${l.metric} | ${l.direction} | ${formatNum(l.baseline)} | ${formatNum(l.current)} | ${formatNum(l.tolerance)} | ${arrow}${formatNum(l.delta)} | ${l.passed ? 'PASS' : 'FAIL'} |`,
+    );
+  }
+  lines.push('');
+  return lines.join('\n');
+}
