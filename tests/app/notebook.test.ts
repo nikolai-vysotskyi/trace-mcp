@@ -11,7 +11,7 @@ import {
   NOTEBOOK_TOOLS,
   defaultNotebookClient,
   type NotebookClient,
-} from '../../packages/app/src/renderer/tabs/Notebook';
+} from '../../packages/app/src/renderer/tabs/notebook-runtime';
 
 describe('Notebook scratchpad', () => {
   describe('tool catalog', () => {
